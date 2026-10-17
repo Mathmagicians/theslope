@@ -1,6 +1,6 @@
 # Release 0.9.0
 
-**Status:** In progress | **Date:** 2026-10-05 | **Updated:** 2026-10-13 | **Branch:** `feature/work-roster`
+**Status:** In progress | **Date:** 2026-10-05 | **Updated:** 2026-10-17 | **Branch:** `feature/work-roster`
 
 The packages of release 0.9, where each one lives and the decisions behind them. Work after this release lives in
 `../chores-0.9.1.md`.
@@ -22,7 +22,7 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Joker slot | `JokerSlot` on a team with the slot form in the team card | `../archived/feature-joker-slot.md` | committed (c62dd6b, 427a625, 3cdb77c) |
 | Calendar legend | one `CalendarLegend` for the chef, dinner and team calendars | `CalendarLegend.vue`, `ALERTS.legend` | committed (541fc01) |
 | Team wanted poster | a dinner without a chef shows the wanted poster on the chef card | `ChefMenuCard.vue`, `COMPONENTS.wantedPoster` | committed (ba5604c) |
-| Waitlist | queue, assignment on release, extra portions, one booking path, UI | `../archived/feature-waitlist.md`, ADR-016 | committed (5eedd34, 5f50af2, c151d74, f4892ad) |
+| Waitlist | queue, assignment on release, extra portions, one booking path, UI, the calendar chips | `../archived/feature-waitlist.md`, ADR-016 | committed (5eedd34, 5f50af2, c151d74, f4892ad, 0a37cc4, 9cad84a, 627f2f6) |
 | Waitlist notifications | the serial e2e asserting each of the four kinds writes its Delivery row | § Waitlist notifications | planned |
 | Chef spending | expense rows per dinner, the chef endpoints, the Budget pane with the ticket changes | § Chef spending | committed (49ece5e, 24e9a3f, fd41213, c65feae) |
 | Kitchen allergy line | the dining-mode panels show the allergy kuverter; the expanded list opens with the allergen breakdown | § Kitchen allergy line | committed (5eedd34, 49ece5e, 42b380f) |
@@ -39,16 +39,21 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Team delete returns the deleted id | `DELETE /api/admin/team/[id]` answers the id of the deleted team | ADR-009 rule 7 | committed (afadb83) |
 | Joker slot delete returns the deleted id | `DELETE /api/admin/team/[id]/joker-slot/[slotId]` answers the id of the deleted slot; a slot of another team answers 404 | ADR-009 rule 7 | committed (679fc8f) |
 | Validation owns the types | `TicketType` and the booking row action (`BookingRowActionSchema`) come from `useBookingValidation` | ADR-001 | committed (1cc6b5e, fdff39e) |
+| Ticket portions | a ticket price row carries `portions` from the config's default prices | ADR-010 rule 7, `useTicket().withPortions` | committed (fdff39e) |
+| Table loading | a loading table shows the spinning glyph in its `#loading` slot | ADR-018, `COMPONENTS.table.loadingRow` | committed (4e7d174) |
+| Security patches | wrangler, `@nuxt/devtools` and prisma 7.10.1 patched; `nitro-cloudflare-dev` removed | `package.json` | committed (326ca63, b36d01d, 8c83700, 04d4fbd, 3629473, 861771d) |
+| Heal endpoint removed | `heal-user-bookings`, its spec and make targets are removed; `sellTicketsToWaitlist` settles the waiting list | ADR-016 | committed (6ed207b) |
+| Test sweep | dead and duplicate cases removed; cleanup fails early; factories, `gotoHydrated` and web-first waits replace raw sleeps; the `setup-season` project creates the active season once per run | `docs/testing.md` | packages 1–4 committed (5b1616b, b7d238d, 2d17d64, 45c1f83, 084ea42); 5 and 6 in progress |
 | DRY sweep | dead code and duplicate token paths removed; the specs share their mount, endpoint and session helpers | `tests/component/testHelpers.ts`, `tests/component/hoistedMocks.ts` | committed (72cf9d9, 6b65a70, b456b2f, 999bdbd, c0beb62, 43876aa) |
 | PRF spike | passkey and PRF research with the device protocol | `../feature-proposal-relogin-faceid.md`, `../archived/feature-mobile-native-feel.md` | committed |
-| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–5 committed (2ad1429 to 7b6a622); 6 and 7 open |
+| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–5 committed (2ad1429 to 7b6a622); 6 and 6b in progress; 7 awaiting signoff |
 | Docs and tooling | the user, chef and admin guides; `docs/ui.md` and the compliance tables compacted; `docs/testing.md` Rule 0; the ui skill and the frontend agent | `docs/`, `.claude/skills/`, `.claude/agents/` | committed (b82852e, 38804ef, 0dfd8eb, 450bcc8) |
 
 ## Open before the release
 
 | Item | State |
 |---|---|
-| One booking path, end to end | points 6 and 7, § One booking path, end to end |
+| One booking path, end to end | points 6, 6b and 7, § One booking path, end to end |
 | Waitlist notifications | planned, § Waitlist notifications |
 | CI summary | read on the Actions run page: categories, counts, red ui failures, report links |
 | Visual check per UI package | the route → viewport → element tables, carried into the PR description |
@@ -130,8 +135,9 @@ Each point is presented with its files and code, and signed off on its own.
 | 4b. The views show each line | The chef's alert, the booking form and the kitchen box name the waiting list per ticket type; the kitchen box holds the tickets for sale and the waiting list together | kitchen box ✅ signed off 2026-10-16, implemented (§ Mockup — kitchen box); the chef's alert ✅ signed off 2026-10-17, implemented (`SUPPLY_WORDS.queuedCount`, mockup in `ChefMenuCard.vue`) |
 | 4c. The preview sells each ticket once | The save preview settles the claims in order as the save does: the first claims of a ticket type buy that type's tickets for sale, the rest join its waiting list (`bookingOutcomes` takes one order or a list, `supplyOfType`); the guest form opens on Voksen and its button names the guests | ✅ signed off 2026-10-16, implemented |
 | 5. One client write | Every write that changes bookings goes through `bookingsStore.writeBookings`: the request, then the household's orders, the upcoming orders, the tickets for sale, the waiting list and the dinner on view re-read once; the waiting list per locked dinner derives from the one waiting-list read; the households store keeps its own household re-reads | ✅ signed off 2026-10-17, implemented |
-| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise | toast look implemented 2026-10-16 (`scaffoldToastLook`: the ticket, red on a failed order); the words ✅ signed off 2026-10-17 (§ Mockup — toast and preview) |
-| 7. The ticket history follows kuverter | Every audit row replays, system or member alike; a line for each change of kuverter; a system run and the nightly close are one line for the dinner; the replay ends equal to state | ⏳ awaiting signoff |
+| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise | toast look implemented 2026-10-16 (`scaffoldToastLook`); the words ✅ signed off 2026-10-17 (§ Mockup — toast and preview) |
+| 6b. The mails speak the booking words | The waiting-list mails greet the user who booked, name the person as the toast does, carry the ticket line of the booking page and the badge's help text, and link to the dinner's booking page | mockup ✅ signed off 2026-10-17 (§ Mockup — waiting-list mails) |
+| 7. The ticket history follows kuverter | Every audit row replays, system or member alike; a line for each change of kuverter; a system run and the nightly close are one line for the dinner; the replay ends equal to state | mockup ✅ signed off 2026-10-17 (§ Mockup — ticket history) |
 
 ### Coverage
 
@@ -161,13 +167,13 @@ Toast    Bookinger processeret                                    (green)
            Gæst af Anna: 1 på ventelisten (Voksen #6)
 
 Grid power mode: Takeaway on Thursday (open), Ingen on Friday (past the deadline)
-Preview  [edit badge]      Anna skifter til Takeaway: 22/10/2026
-         [edit badge]      Lars skifter til Takeaway: 22/10/2026
+Preview  [edit badge]      Anna ændrer spisemåde til Takeaway: 22/10/2026
+         [edit badge]      Lars ændrer spisemåde til Takeaway: 22/10/2026
          [released badge]  Anna frigiver sin billet: 23/10/2026
          [released badge]  Lars frigiver sin billet: 23/10/2026
 Toast    Bookinger processeret                                    (green)
-           Anna: 1 ny spisemåde, 1 frigivet
-           Lars: 1 ny spisemåde, 1 frigivet
+           Anna: 1 ændret spisemåde, 1 frigivet
+           Lars: 1 ændret spisemåde, 1 frigivet
 
 Preference power mode: Monday to Ingen, one order fails
 Toast    Alle præferencer opdateret                               (red)
@@ -190,9 +196,81 @@ waiting list and the unchanged orders count for the household.
 | BUY | køber en billet til salg | købt |
 | QUEUE | skrives på ventelisten | på ventelisten (Voksen #3) |
 | LEAVE | forlader ventelisten | forlod ventelisten |
-| REQUEUE | ændrer ønsket tilmelding til Takeaway, beholder ventelisteplads Voksen #2 | ønske ændret |
-| CHANGE_MODE | skifter til Takeaway | ny spisemåde |
-| CHANGE_PRICE | får ny pris | ny pris |
+| REQUEUE | ændrer spisemåde til <spisemåde> (venteliste) | ændret spisemåde (venteliste) |
+| CHANGE_MODE | ændrer spisemåde til <spisemåde> | ændret spisemåde |
+| CHANGE_PRICE | ændrer billettype | ændret billettype |
+
+`<spisemåde>` is the person's eating mode, `MODE_WORDS[dinnerMode].label`: Spisesal, Sen or Takeaway.
+
+### Mockup — waiting-list mails ✅ signed off 2026-10-17
+
+```
+WAITLIST_JOINED  → the user who booked
+Emne: Skråningen: Emil står på ventelisten til 20/10/2026 · Lasagne
+  Kære Lene,
+
+  20/10/2026 · Lasagne
+  Emil: 1 på ventelisten (Barn #1)
+  Barn · 35 kr · Spisesal
+
+  Du får automatisk tildelt en billet, hvis en kommer til salg, eller chefkokken frigiver portioner.
+  Du betaler, når du får en billet fra ventelisten.
+  Du kan altid afmelde din ventelisteplads, hvis du ikke har brug for den alligevel.
+
+  Se bookingen: https://skraaningen.dk/dinner?date=20/10/26
+
+WAITLIST_TICKET_ASSIGNED  → the user who booked
+Emne: Skråningen: Emil har fået en billet til 20/10/2026 · Lasagne
+  20/10/2026 · Lasagne
+  Emil: 1 købt
+  Barn · 35 kr · Spisesal · fra Hansen
+  Du betaler for billetten. Vi glæder os til at se jer.
+  Se bookingen: …
+
+WAITLIST_EXTRA_PORTION  → the user who booked
+  20/10/2026 · Lasagne
+  Emil: 1 tilmeldt
+  Barn · 35 kr · Spisesal
+  Køkkenholdet laver flere portioner, og en af dem er til Emil. Vi glæder os til at se jer.
+  Se bookingen: …
+
+TICKET_SOLD  → each user in the selling household
+Emne: Skråningen: 1 billet til 20/10/2026 · Lasagne er solgt
+  20/10/2026 · Lasagne
+  1 billet solgt til ventelisten        (1 billet solgt til Jensen, when a user bought it)
+  Voksen · 55 kr
+  I betaler ikke længere for den.
+  Se bookingen: …
+
+WAITLIST_BUILDUP  → the chef, in the words of the chef's alert
+Emne: Skråningen: 3V 1B på venteliste til 20/10/2026 · Lasagne
+  3V 1B på venteliste · 5 portioner
+  Mange skrånere mangler en billet til din middag — har du mulighed for at mætte flere munde?
+  Det gør du under Flere på middagen: https://skraaningen.dk/chef
+```
+
+A guest reads "Gæst af Anna". The booking page's waiting-list badge carries the same help text. The join outcome
+carries the guest flag, the ticket price and the eating mode; a sale carries the buyer's booking user, eating mode and
+guest flag.
+
+### Mockup — ticket history ✅ signed off 2026-10-17
+
+```
+Se billetændringer                                                                          [v]
+Dato              Husstand  Ændring                     Billetter · kuverter     Indtægter
+21/10/2026 02:00  System    lukket                      29V 11B 3b · 34,5        2.035 kr
+20/10/2026 19:10  S_14      købt               +1V      29V 11B 3b · 34,5        2.035 kr
+20/10/2026 12:40  S_31      frigivet           −2V      28V 11B 3b · 33,5        2.035 kr
+20/10/2026 09:05  S_22      ændret billettype  −1B +1V  30V 11B 3b · 35,5        2.035 kr
+── Framelding lukker · 19/10/2026 18:00 ─────────────────────────────────────────────────────
+[Vis fuld historik]
+```
+
+Every audit row replays, user or system. A line appears when the tickets at the table change; a switch between eating
+modes changes none. Billetter counts the tickets that eat; a released ticket leaves them and keeps its revenue until
+someone buys it. A system run is one line for the dinner, named by its household when it touched one, else System; the
+nightly close is one line, "lukket". The Ændring column reads the toast words of § Mockup — toast and preview. The last
+line equals the dinner's counts in the kitchen box.
 
 ### Mockup — kitchen box ✅ signed off 2026-10-16
 
@@ -355,9 +433,9 @@ crosses the buildup threshold and asserts each event writes its Delivery row.
 | ADR-006 | § URL Parameters and § URL Writes |
 | ADR-007 | `storeAsyncData` and `apiRequest`, rules 7 to 10 |
 | ADR-009 | rule 7, what a delete returns |
-| ADR-010 | rule 6, a deprecated column's value |
+| ADR-010 | rule 6, a deprecated column's value; rule 7, `portions` filled on read |
 | ADR-012 | conditional spread in `where`, `Prisma.skip` in `data` |
 | ADR-014 | `writeBatchOrEach` |
-| ADR-015 | the waitlist clear in daily maintenance; the scaffold's idempotency through the generator |
-| ADR-016 | the claim bucket, the queue entry rows, the two deadline sets; rule 9, notification after the action; rule 10, a failed batch retried order by order |
-| ADR-018 | separators; the usage rules |
+| ADR-015 | the waitlist clear in daily maintenance; the scaffold's idempotency through the generator; `sellTicketsToWaitlist` |
+| ADR-016 | the claim bucket, the queue entry rows, the two deadline sets; rule 9, notification after the action; rule 10, a failed batch retried order by order; rule 11, one line per ticket type |
+| ADR-018 | separators; table loading; the usage rules |

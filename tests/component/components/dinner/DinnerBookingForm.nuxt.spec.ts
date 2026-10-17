@@ -285,7 +285,7 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
   const adultPrice = baseProps.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
   const [anna, bo] = householdWithInhabitants.inhabitants
   const dinnerEventId = baseProps.dinnerEvent.id
-  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY})
+  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY, ticketPriceId: adultPrice.id})
 
   const mountClosed = (props: {orders?: OrderDisplay[], waitlistEntries?: ReturnType<typeof WaitlistFactory.defaultEntry>[]} = {}) =>
     mountMemberForm(false, props)
@@ -314,7 +314,7 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
   it('GIVEN a queued member THEN the row shows the position badge and the ticket shows the wished mode ghosted', async () => {
     const wrapper = await mountClosed({waitlistEntries: [boQueued]})
 
-    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(bo!.id)).text()).toContain('#2 i kø')
+    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(bo!.id)).text()).toContain('Voksen #2')
     const queuedTickets = wrapper.findAllComponents(DinnerTicket).filter(ticket => ticket.props('isQueued'))
     expect(queuedTickets.length).toBeGreaterThan(0)
     queuedTickets.forEach(ticket => expect(ticket.props('dinnerMode')).toBe(DinnerMode.TAKEAWAY))
@@ -389,7 +389,7 @@ describe('DinnerBookingForm on a queued guest row', () => {
   it('renders the marks of a queued inhabitant: the position badge, the hourglass ticket with the guest glyph and the ghosted wish', async () => {
     const wrapper = await mountQueuedGuest()
 
-    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(guestRowId)).text()).toContain('#3 i kø')
+    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(guestRowId)).text()).toContain('Barn #3')
     const ticket = wrapper.findAllComponents(DinnerTicket).find(candidate => candidate.props('isQueued') && candidate.props('guestCount') !== undefined)
     expect(ticket?.props()).toMatchObject({dinnerMode: DinnerMode.DINEIN, guestCount: 1})
   })
@@ -445,14 +445,15 @@ describe('DinnerBookingForm previews the outcome of a save by the supply', () =>
     expect(findByTestId(wrapper, 'guest-form-save').text()).toContain('Tilmeld gæst')
   })
 
-  it('after the deadline with 3V 1B for sale: ten adult guests preview three buys and seven on the waiting list, and save as "Tilmeld gæster"', async () => {
+  // The guests share one name, so the buys read as one line and the places on the waiting list as another
+  it('after the deadline with 3V 1B for sale: ten adult guests preview a buy line and a waiting-list line, and save as "Tilmeld gæster"', async () => {
     const wrapper = await mountMemberForm(false, {releasedTicketCounts: {
       ...EMPTY_RELEASED_TICKET_COUNTS, total: 4, formatted: '3V 1B', byType: {[TicketTypeSchema.enum.ADULT]: 3, [TicketTypeSchema.enum.CHILD]: 1}
     }})
     await clickByTestId(wrapper, 'guest-add-guest-toggle')
     await wrapper.findComponent(GuestBookingForm).find('input[name="count"]').setValue(10)
 
-    expect(guestPreview(wrapper)).toEqual([...Array.from({length: 3}, () => Action.BUY), ...Array.from({length: 7}, () => Action.QUEUE)])
+    expect(guestPreview(wrapper)).toEqual([Action.BUY, Action.QUEUE])
     expect(findByTestId(wrapper, 'guest-form-save').text()).toContain('Tilmeld gæster')
   })
 })
@@ -490,7 +491,7 @@ describe('DinnerBookingForm previews a requeue', () => {
     await clickByTestId(wrapper, `inhabitant-${bo.id}-mode-edit-${DinnerModeSchema.enum.DINEINLATE}`)
 
     expect(findByTestId(wrapper, `inhabitant-${bo.id}-save`).text()).toContain(bookingSaveLabel(Action.REQUEUE))
-    expect(wrapper.text()).toContain(`ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder pladsen Voksen: #${boQueued.position} i kø`)
+    expect(wrapper.text()).toContain(`ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder ventelisteplads Voksen #${boQueued.position}`)
   })
 })
 

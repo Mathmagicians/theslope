@@ -44,42 +44,28 @@ describe('admin/allergies/pdf (allergy poster)', () => {
     })
 
     // Factory canon: Anna adult (V), Bob child (B), Clara baby (b)
-    it('marks each person with their age category - children and babies are not adults', async () => {
+    it('marks each person with their age category, children and babies not adults, and counts the categories via the shared formatTicketCounts formatter', async () => {
         const wrapper = await mountPage()
         const text = wrapper.text()
 
         expect(text).toMatch(/Anna\s*\(V\)/)
         expect(text).toMatch(/Bob\s*\(B\)/)
         expect(text).toMatch(/Clara\s*\(b\)/)
-    })
-
-    it('renders category counts via the shared formatTicketCounts formatter', async () => {
-        const wrapper = await mountPage()
-        const text = wrapper.text()
-
         expect(text).toContain('[1V 1B]')  // Mælk: Anna + Bob
         expect(text).toContain('[1b]')     // Jordnødder: Clara
     })
 
-    // Same component and same text source (the Setting row) as the catalog footer on /admin/allergies
-    it('renders the notes box with the stored notes', async () => {
+    // Same component and same text source (the Setting row) as the catalog footer on /admin/allergies;
+    // the poster is read-only (the notes are edited on /admin/allergies) and renders the QR itself
+    // (no external image service), so it survives offline and prints
+    it('renders the notes box with the stored notes and no pencil, and the QR code for the poster URL', async () => {
         const wrapper = await mountPage()
 
         expect(findByTestId(wrapper, ALLERGY_TEST_IDS.notes).text()).toContain('Vigtige bemærkninger')
         expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.notesItem).map(item => item.text()))
             .toEqual(STORED_NOTES.split('\n'))
-    })
-
-    // The poster is read-only: the notes are edited on /admin/allergies
-    it('renders no pencil on the notes', async () => {
-        const wrapper = await mountPage()
-
         expect(findByTestId(wrapper, ALLERGY_TEST_IDS.editNotes).exists()).toBe(false)
-    })
 
-    // The poster renders the QR itself (no external image service), so it survives offline and prints
-    it('renders the QR code for the poster URL', async () => {
-        const wrapper = await mountPage()
         const qr = findByTestId(wrapper, ALLERGY_TEST_IDS.qr)
 
         expect(qr.exists()).toBe(true)

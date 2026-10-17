@@ -33,16 +33,13 @@ describe.each(VIEWPORTS)('HouseholdCard on $viewport', ({isMd}) => {
         resetStores()
     })
 
-    it('the name and ticket type columns bind their column tokens', async () => {
+    it('the name and ticket type columns bind their column tokens, and an open member row groups its actions at the card field group size', async () => {
         const wrapper = await mountCard(isMd)
         const columns = wrapper.findComponent({name: 'UTable'}).props('columns') as Array<{id: string}>
         const tokens = createTableColumns(ref(isMd))
         expect(columns.find(column => column.id === 'name')).toEqual({id: 'name', ...tokens.householdMemberName})
         expect(columns.find(column => column.id === 'ticketType')).toEqual({id: 'ticketType', ...tokens.householdTicketType})
-    })
 
-    it('an open member row groups its actions at the card field group size', async () => {
-        const wrapper = await mountCard(isMd)
         await clickByTestId(wrapper, `inhabitant-${inhabitant.id}-edit-preferences`)
         const actions = wrapper.findAllComponents({name: 'UFieldGroup'})
             .find(group => group.find('[data-testid="cancel-preferences"]').exists())

@@ -101,9 +101,15 @@ Klik **Bliv chefkok**, bekræft — og dit ansigt pryder portrættet. Tjansen er
 - Allergenerne øverst, med antal kuverter for hvert
 - Hvilke husstande der har tilmeldt sig, og billettyper per husstand (voksen/barn/baby)
 - Hvem der har et af menuens allergener - allergenets ikon står ud for navnet
-- Under **Til salg**: ventelisten, én linje per billettype med billettypens mærkat, i den rækkefølge naboerne skrev sig på (#1 i kø får den næste billet)
+- Under **Til salg**: billetterne til salg, og under **VENTELISTE** én linje per husstand i den rækkefølge de skrev sig på - hver person med sin plads i billettypens kø, fx *Emil (B #1)*. #1 i kø får den næste billet af sin type
 
 > **Tip:** Brug husstandsoversigten til at planlægge portionsstørrelser og allergihensyn.
+
+**Står der naboer på ventelisten?** Så viser middagen en boks med ![Venteliste](https://api.iconify.design/hugeicons:hourglass.svg?height=16&color=%23737373) hvor mange der venter, og hvor mange portioner de mangler - og vokser køen, får du en mail. Kan du lave lidt ekstra:
+
+1. Klik **Frigiv portioner** i boksen - eller find den under **tandhjulet** i knaprækken
+2. Skriv hvor mange portioner du kan frigive (feltet er udfyldt med det, ventelisten mangler)
+3. Klik **Frigiv** - portionerne går til de første i køen, og de får en mail
 
 ---
 
@@ -133,7 +139,7 @@ Alle beløb står som **ex / inkl. moms**. Fold sektionen ud for **Billetter** (
 ### 7. På madlavningsdagen
 
 1. Tjek tilmeldinger en sidste gang for eventuelle ændringer
-2. Afbud efter deadline vises i oversigten - beboeren betaler stadig
+2. Afbud efter deadline står under **Til salg** - beboeren betaler, medmindre billetten bliver solgt
 
 ---
 
@@ -175,4 +181,4 @@ Se dine holdmedlemmer på [Chef](https://www.skraaningen.dk/chef).
 
 ---
 
-*Sidst opdateret: Oktober 2026 (madbestilling og budget, overtag tjansen, allergener per kuvert)*
+*Sidst opdateret: Oktober 2026 (ventelisten og frigiv portioner, madbestilling og budget, overtag tjansen, allergener per kuvert)*

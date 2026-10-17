@@ -264,7 +264,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // A scaffold result toast: the title names the view, the suffix the dinner (guest bookings)
     type ScaffoldToast = {title: string, suffix?: string}
     const describeScaffoldResult = (scaffoldResult: ScaffoldResult, suffix = '') =>
-        `${formatScaffoldResult(scaffoldResult, 'past')}${suffix}`
+        `${formatBookingResult(scaffoldResult)}${suffix}`
 
     /**
      * ADR-016: Scaffold endpoint call shared by the single- and multi-event entry points;
@@ -283,7 +283,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             schema: ScaffoldOrdersResponseSchema,
             action: 'processBookings', errorMessage: 'Kunne ikke gemme bookinger'
         }))
-        console.info(CTX, `${label}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
+        console.info(CTX, `${label}: ${formatScaffoldResult(result.scaffoldResult)}`)
         if (report) toast.add({
             title: report.title,
             description: describeScaffoldResult(result.scaffoldResult, report.suffix),

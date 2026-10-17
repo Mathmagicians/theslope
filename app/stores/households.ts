@@ -168,7 +168,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
         // Store result for persistent UI display
         lastPreferenceResult.value = result.scaffoldResult
-        console.info(`🏠 > HOUSEHOLDS_STORE > Preferences updated for inhabitant ${inhabitantId}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
+        console.info(`🏠 > HOUSEHOLDS_STORE > Preferences updated for inhabitant ${inhabitantId}: ${formatScaffoldResult(result.scaffoldResult)}`)
 
         // Refresh the selected household to get updated data
         if (selectedHouseholdId.value) {
@@ -217,7 +217,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
         // Store result for persistent UI display
         lastPreferenceResult.value = aggregatedResult
-        console.info(`🏠 > HOUSEHOLDS_STORE > Power mode complete: ${household.inhabitants.length} inhabitants, scaffold: ${formatScaffoldResult(aggregatedResult, 'compact')}`)
+        console.info(`🏠 > HOUSEHOLDS_STORE > Power mode complete: ${household.inhabitants.length} inhabitants, scaffold: ${formatScaffoldResult(aggregatedResult)}`)
 
         return aggregatedResult
     }
@@ -241,7 +241,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
         // Store scaffold result for persistent UI display
         lastMoveOutResult.value = result.scaffoldResult
-        console.info(`🏠 > HOUSEHOLDS_STORE > moveOutDate updated for household ${householdId}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
+        console.info(`🏠 > HOUSEHOLDS_STORE > moveOutDate updated for household ${householdId}: ${formatScaffoldResult(result.scaffoldResult)}`)
 
         // Refresh selected household to get updated data
         if (selectedHouseholdId.value === householdId) {
@@ -272,7 +272,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         if (!result) return
 
         lastMoveResult.value = result.scaffoldResult
-        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Inhabitant moved: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
+        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Inhabitant moved: ${formatScaffoldResult(result.scaffoldResult)}`)
 
         if (selectedHouseholdId.value) {
             await refreshSelectedHousehold()
@@ -281,12 +281,13 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
         const targetHousehold = households.value.find(h => h.id === targetHouseholdId)
         const targetLabel = targetHousehold ? `${targetHousehold.shortName} (PBS ${targetHousehold.pbsId})` : `husstand ${targetHouseholdId}`
-        const scaffoldSummary = formatScaffoldResult(result.scaffoldResult)
+        const scaffoldSummary = formatBookingResult(result.scaffoldResult)
         const {BookingActionSchema} = useBookingValidation()
         const Action = BookingActionSchema.enum
         const hasOrderChanges = [Action.BOOK, Action.CANCEL, Action.RELEASE].some(action => result.scaffoldResult.totals[action] > 0)
 
-        toastSaved(`${result.inhabitant.name} ${result.inhabitant.lastName} flyttet til ${targetLabel}`, hasOrderChanges ? scaffoldSummary : undefined)
+        toastSaved(`${result.inhabitant.name} ${result.inhabitant.lastName} flyttet til ${targetLabel}`, hasOrderChanges ? scaffoldSummary : undefined,
+            scaffoldToastLook(result.scaffoldResult).ui)
 
         return result
     }

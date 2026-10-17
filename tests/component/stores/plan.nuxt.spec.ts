@@ -131,9 +131,10 @@ describe('Plan Store - Basic Initialization', () => {
         const store = await setupStore()
 
         expect(store.isSeasonsInitialized).toBe(true)
+        expect(store.isNoSeasons).toBe(false)
         expect(store.seasons).toHaveLength(2)
     })
-    
+
 
     it('exposes seasons error when fetch fails', async () => {
         seasonIndexEndpoint.mockImplementation(() => {
@@ -153,16 +154,13 @@ describe('Plan Store - Basic Initialization', () => {
         expect(store.seasonsError?.statusCode).toBe(500)
     })
 
-    it.each([
-        { data: [], expected: true, description: 'empty array' },
-        { data: mockSeasons, expected: false, description: 'with data' }
-    ])('isNoSeasons detects $description', async ({ data, expected }) => {
-        seasonIndexEndpoint.mockReturnValue(data)
+    it('isNoSeasons detects an empty season list', async () => {
+        seasonIndexEndpoint.mockReturnValue([])
 
         const store = await setupStore()
 
-        expect(store.isNoSeasons).toBe(expected)
-        expect(store.seasons).toHaveLength(data.length)
+        expect(store.isNoSeasons).toBe(true)
+        expect(store.seasons).toHaveLength(0)
     })
 })
 
@@ -176,7 +174,8 @@ describe('Plan Store - Team creation', () => {
         createTeamsEndpoint.mockReturnValue({ teams: createdTeams, eventsAssigned: 6 })
     })
 
-    it('createTeam returns the {teams, eventsAssigned} envelope', async () => {
+    it('createTeam returns the {teams, eventsAssigned} envelope and reports the created teams and assigned dinners in a toast', async () => {
+        useToast().clear()
         const store = await setupStore()
 
         const result = await store.createTeam([
@@ -186,14 +185,6 @@ describe('Plan Store - Team creation', () => {
 
         expect(result.teams.map(team => team.id)).toEqual([11, 12])
         expect(result.eventsAssigned).toBe(6)
-    })
-
-    it('createTeam reports the created teams and assigned dinners in a toast', async () => {
-        useToast().clear()
-        const store = await setupStore()
-
-        await store.createTeam([{ seasonId: 1, name: 'Hold 1' }, { seasonId: 1, name: 'Hold 2' }])
-
         expect(useToast().toasts.value.at(-1)).toMatchObject({
             title: 'Madhold oprettet',
             description: '2 madhold oprettet · 6 madlavninger tildelt'
@@ -216,7 +207,9 @@ describe('Plan Store - Season save and activation', () => {
         createSeasonEndpoint.mockImplementation(() => season2)
     })
 
-    it('updateSeason returns the SeasonUpdateResponse envelope and reloads the seasons', async () => {
+    // createSeason's return, reload and toast are a row of the write actions below
+    it('updateSeason returns the SeasonUpdateResponse envelope, reloads the seasons and reports the reconciliation in a toast', async () => {
+        useToast().clear()
         const store = await setupStore()
         const seasonFetchesBefore = seasonIndexEndpoint.mock.calls.length
 
@@ -225,57 +218,23 @@ describe('Plan Store - Season save and activation', () => {
         expect(result?.reconciliation).toEqual(seasonUpdate.reconciliation)
         expect(seasonIndexEndpoint.mock.calls.length).toBeGreaterThan(seasonFetchesBefore)
         expect(store.isSavingSeasonFlowInProgress).toBe(false)
-    })
-
-    it('createSeason returns the season and reloads the seasons', async () => {
-        const store = await setupStore()
-        const seasonFetchesBefore = seasonIndexEndpoint.mock.calls.length
-
-        expect(await store.createSeason(season2)).toEqual(season2)
-        expect(seasonIndexEndpoint.mock.calls.length).toBeGreaterThan(seasonFetchesBefore)
+        expect(useToast().toasts.value.at(-1)).toMatchObject({
+            title: 'Sæson opdateret',
+            description: '3 datoer tilføjet, 1 fjernet. Husk at tildele madhold til nye datoer.'
+        })
     })
 
     it.each([
-        {action: 'updateSeason', endpoint: updateSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.updateSeason(season1)},
-        {action: 'createSeason', endpoint: createSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.createSeason(season2)}
-    ])('$action resolves null when the save fails', async ({endpoint, save}) => {
+        {action: 'updateSeason', endpoint: updateSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.updateSeason(season1), title: 'Sæson opdateret'},
+        {action: 'createSeason', endpoint: createSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.createSeason(season2), title: 'Sæson oprettet'}
+    ])('$action resolves null when the save fails, with no success toast', async ({endpoint, save, title}) => {
+        useToast().clear()
         endpoint.mockImplementation(failure)
         const store = await setupStore()
 
         expect(await save(store)).toBeNull()
         expect(store.isSavingSeasonFlowInProgress).toBe(false)
-    })
-
-    it.each([
-        {
-            action: 'createSeason',
-            save: (store: ReturnType<typeof usePlanStore>) => store.createSeason(season2),
-            title: 'Sæson oprettet',
-            description: undefined
-        },
-        {
-            action: 'updateSeason',
-            save: (store: ReturnType<typeof usePlanStore>) => store.updateSeason(season1),
-            title: 'Sæson opdateret',
-            description: '3 datoer tilføjet, 1 fjernet. Husk at tildele madhold til nye datoer.'
-        }
-    ])('$action reports the save in a toast', async ({save, title, description}) => {
-        useToast().clear()
-        const store = await setupStore()
-
-        await save(store)
-
-        expect(useToast().toasts.value.at(-1)).toMatchObject({title, description})
-    })
-
-    it('a failed save shows no success toast', async () => {
-        useToast().clear()
-        updateSeasonEndpoint.mockImplementation(failure)
-        const store = await setupStore()
-
-        await store.updateSeason(season1)
-
-        expect(useToast().toasts.value.map(toast => toast.title)).not.toContain('Sæson opdateret')
+        expect(useToast().toasts.value.map(toast => toast.title)).not.toContain(title)
     })
 
     it('activateSeason posts the season and reloads the active season', async () => {

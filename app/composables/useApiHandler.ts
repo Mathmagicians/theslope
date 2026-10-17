@@ -301,9 +301,9 @@ export const useApiHandler = () => {
         }
     }
 
-    /** Reports a write `apiRequest` resolved */
-    const toastSaved = (title: string, description?: string) =>
-        toast.add({title, description, icon: ICONS.checkCircle, color: COLOR.success})
+    /** Reports a write `apiRequest` resolved; `ui` styles a description the write words in lines */
+    const toastSaved = (title: string, description?: string, ui?: {description: string}) =>
+        toast.add({title, description, icon: ICONS.checkCircle, color: COLOR.success, ui})
     /** The warning toast of a failed request stays ten seconds */
     const warnToast = (title: string, description?: string) =>
         toast.add({title, description, icon: ICONS.warning, color: COLOR.warning, duration: 10000})

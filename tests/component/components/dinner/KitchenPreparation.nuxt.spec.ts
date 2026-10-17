@@ -220,7 +220,7 @@ describe('KitchenPreparation TIL SALG box', () => {
 
         const list = findByTestId(wrapper, HOUSEHOLD_LIST)
         const lines = findByTestId(list, WAITLIST_LINES)
-        expect(householdRowsIn(lines)).toEqual([[OWN, '·', '2B', '·', `${QUEUED.emil.name} (B #1), ${QUEUED.liva.name} (B #2)`]])
+        expect(householdRowsIn(lines)).toEqual([[OWN, '·', '2B', '·', `${QUEUED.emil.name} (Barn #1), ${QUEUED.liva.name} (Barn #2)`]])
         const text = list.text()
         expect(text.indexOf('TIL SALG')).toBeLessThan(text.indexOf(SALE_ORDER.inhabitant.name))
         expect(text.indexOf(SALE_ORDER.inhabitant.name)).toBeLessThan(text.indexOf('VENTELISTE'))
@@ -232,8 +232,8 @@ describe('KitchenPreparation TIL SALG box', () => {
 
         const list = findByTestId(wrapper, HOUSEHOLD_LIST)
         expect(householdRowsIn(findByTestId(list, WAITLIST_LINES))).toEqual([
-            [OWN, '·', '2B', '·', `${QUEUED.emil.name} (B #1), ${QUEUED.liva.name} (B #2)`],
-            [NEIGHBOUR, '·', '1V', '·', `${QUEUED.knud.name} (V #1)`]
+            [OWN, '·', '2B', '·', `${QUEUED.emil.name} (Barn #1), ${QUEUED.liva.name} (Barn #2)`],
+            [NEIGHBOUR, '·', '1V', '·', `${QUEUED.knud.name} (Voksen #1)`]
         ])
         expect(list.text()).not.toContain('Anna')
     })

@@ -6,7 +6,6 @@ import {reconcileDinnerEventsForSeason} from "~~/server/utils/reconcileDinnerEve
 import {clipPreferences} from "~~/server/utils/initializePreferences"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {useBooking} from "~/composables/useBooking"
-import {useBookingValidation} from "~/composables/useBookingValidation"
 import {emailChannel} from "~~/server/utils/sender/config"
 import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
 import {idParams} from '~/composables/useCoreValidation'
@@ -94,7 +93,7 @@ export default defineEventHandler(async (event): Promise<SeasonUpdateResponse> =
 
             scaffold = await scaffoldPrebookings(d1Client, {seasonId: id})
             await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffold.outcomes)
-            console.info(`🌞 > SEASON > [POST] Scaffolded: ${useBooking().formatScaffoldResult(scaffold, useBookingValidation().ScaffoldResultFormatSchema.enum.compact)}`)
+            console.info(`🌞 > SEASON > [POST] Scaffolded: ${useBooking().formatScaffoldResult(scaffold)}`)
         }
 
         // Return full season with dinnerEvents (ADR-009: detail endpoint)

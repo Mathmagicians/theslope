@@ -47,7 +47,7 @@ describe('AdminEconomy - the billing selection in the URL', () => {
             mockRoute.query = {period: String(period.id), invoice: String(invoice.id)}
         }
 
-        it('hands the store the URL\'s selection once at setup, and the store follows the URL with no further setter call', async () => {
+        it('hands the store the URL\'s selection once at setup, and the store follows the URL with no further setter call: a cleared param deselects', async () => {
             landOn()
             const select = vi.spyOn(mountedStore(useBookingsStore), setter)
 
@@ -58,21 +58,12 @@ describe('AdminEconomy - the billing selection in the URL', () => {
             expect(toValue(choice)).toBe(id)
             await vi.waitFor(() => expect(selectedId(useBookingsStore())).toBe(id))
 
-            mockRoute.query = {}
-
-            expect(toValue(choice)).toBeNull()
-            expect(select).toHaveBeenCalledTimes(1)
-        })
-
-        it('a cleared param deselects', async () => {
-            landOn()
-            await mountWithTooltipProvider(AdminEconomy)
-            await vi.waitFor(() => expect(selectedId(useBookingsStore())).toBe(id))
-
             const {[param]: _cleared, ...rest} = mockRoute.query
             mockRoute.query = rest
 
+            expect(toValue(choice)).toBeNull()
             await vi.waitFor(() => expect(selectedId(useBookingsStore())).toBeNull())
+            expect(select).toHaveBeenCalledTimes(1)
         })
     })
 })

@@ -6,7 +6,6 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {clipPreferences} from "~~/server/utils/initializePreferences"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {useBooking} from "~/composables/useBooking"
-import {useBookingValidation} from "~/composables/useBookingValidation"
 import {emailChannel} from "~~/server/utils/sender/config"
 import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
 
@@ -46,7 +45,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
 
         const scaffoldResult = await scaffoldPrebookings(d1Client, {seasonId: activatedSeason.id!})
         await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffoldResult.outcomes)
-        console.info(`🌞 > SEASON > [POST /active] Scaffolded: ${useBooking().formatScaffoldResult(scaffoldResult, useBookingValidation().ScaffoldResultFormatSchema.enum.compact)}`)
+        console.info(`🌞 > SEASON > [POST /active] Scaffolded: ${useBooking().formatScaffoldResult(scaffoldResult)}`)
 
         setResponseStatus(event, 200)
         return activatedSeason

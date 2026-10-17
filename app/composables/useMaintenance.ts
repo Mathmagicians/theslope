@@ -159,7 +159,7 @@ export const useMaintenance = () => {
             { label: 'Præferencer klippet', value: `${result.initPrefs.initialized}` }
         ]
         if (result.scaffold) {
-            stats.push({ label: 'Bookinger', value: formatScaffoldResult(result.scaffold, 'compact') })
+            stats.push({ label: 'Bookinger', value: formatScaffoldResult(result.scaffold) })
         }
         return stats
     }

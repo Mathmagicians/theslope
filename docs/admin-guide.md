@@ -76,13 +76,13 @@ Når du aktiverer en sæson, bliver den synlig for alle brugere, og automatiske 
 
 1. Gå til [Planlægning](https://www.skraaningen.dk/admin/planning)
 2. Brug sæsonvælgeren til at finde sæsonen
-3. Find sæsoner med 🌱 (fremtidig) status
+3. Find sæsoner med ![Fremtidig](https://api.iconify.design/mdi:sprout.svg?height=16&color=%2322c55e) (fremtidig) eller ![Inaktiv](https://api.iconify.design/mdi:circle.svg?height=16&color=%23facc15) (inaktiv) status
 4. Klik **Aktiver Sæson**
 
 ![Fremtidig sæson](screenshots/admin/season-status-display-future-season.png)
 
 **Hvad sker der ved aktivering:**
-- Sæsonen bliver synlig for alle (🟢 status)
+- Sæsonen bliver synlig for alle (![Aktiv](https://api.iconify.design/mdi:circle.svg?height=16&color=%2322c55e) status)
 - Tilmeldinger oprettes ud fra beboernes præferencer
 - Kun middage inden for 60 dage bliver booket
 - Afmeldinger respekteres (systemet genskaber ikke afmeldte billetter)
@@ -100,11 +100,14 @@ Skal sæsonen af igen, finder du **Deaktiver Sæson** i samme redigeringsvisning
 
 ### Sæsonstatusikoner
 
+Sæsonvælgeren viser sæsonerne i rækkefølgen aktiv, inaktiv, fremtidig, arkiveret og vælger den sæson, der er i gang.
+
 | Ikon | Status | Betydning |
-|------|--------|-----------|
-| 🟢 | Aktiv | Synlig for brugere, tilmeldinger aktive |
-| 🌱 | Fremtidig | Kan aktiveres, datoer er i fremtiden |
-| ⚪ | Afsluttet | Arkiveret, kan ikke genaktiveres |
+|:----:|--------|-----------|
+| ![Aktiv](https://api.iconify.design/mdi:circle.svg?height=20&color=%2322c55e) | Aktiv | Synlig for brugere, tilmeldinger aktive |
+| ![Inaktiv](https://api.iconify.design/mdi:circle.svg?height=20&color=%23facc15) | Inaktiv | Datoerne er nu, men sæsonen er ikke aktiveret |
+| ![Fremtidig](https://api.iconify.design/mdi:sprout.svg?height=20&color=%2322c55e) | Fremtidig | Kan aktiveres, datoer er i fremtiden |
+| ![Arkiveret](https://api.iconify.design/mdi:circle.svg?height=20&color=%236b7280) | Arkiveret | Afsluttet, kan ikke genaktiveres |
 
 ![Sæsonvælger](screenshots/admin/season-selector-dropdown-status-indicators.png)
 
@@ -407,7 +410,7 @@ Som admin kan du rette bookinger for alle husstande - også efter deadline er pa
 | Job | Kørsel | Beskrivelse |
 |-----|--------|-------------|
 | Heynabo import | Dagligt kl. 02:00 | Synkroniser husstande og beboere fra Heynabo |
-| Daglig vedligeholdelse | Dagligt kl. 03:00 | Afslut middage, luk ordrer, opret transaktioner, tilmeldinger (rolling window 60 dage) |
+| Daglig vedligeholdelse | Dagligt kl. 03:00 | Afslut middage, luk ordrer, opret transaktioner, ryd ventelister på afholdte middage, tilmeldinger (rolling window 60 dage), sælg billetter til salg til ventelisten |
 | Månedlig fakturering | D. 18. hver måned kl. 04:00 | Luk perioden, send CSV til bogholderen, arkivér |
 
 ### Sådan kører du et job manuelt
@@ -427,4 +430,4 @@ Alle jobs er idempotente og kan køres igen uden problemer.
 
 ---
 
-*Sidst opdateret: Oktober 2026 (madhold-fanen og jokere, sæsonredigering, allergiplakat, mail til bogholder, ny husstand)*
+*Sidst opdateret: Oktober 2026 (sæsonmærker, ventelisten i den daglige vedligeholdelse, madhold-fanen og jokere, sæsonredigering, allergiplakat, mail til bogholder, ny husstand)*

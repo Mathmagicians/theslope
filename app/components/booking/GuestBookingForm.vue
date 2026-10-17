@@ -122,7 +122,7 @@ const actionPreviewItems = computed(() => {
   )
 
   // Format preview items - use booker name for guest label
-  return formatActionPreview(buckets, [], () => props.bookerName, supply)
+  return formatActionPreview(buckets, [], [props.dinnerEvent], () => props.bookerName, supply)
 })
 
 // The button names the guests; the preview lines name what saving does for each

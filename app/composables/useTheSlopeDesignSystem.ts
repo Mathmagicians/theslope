@@ -1095,6 +1095,26 @@ export const COMPONENTS = {
         hintIcon: 'size-4'
     },
 
+    /**
+     * HouseholdSettings: the `root` stack, a `sectionTitle`, the household's `facts` (each `fact` a glyph, `factIcon`, and a
+     * line), the move-out card's `cardHeader` and `cardBody`, the `sectionGap` under a section divider, the calendar
+     * `intro`, and the `feedBox` with its `feedLabel` and `feedLink`
+     */
+    householdSettings: {
+        root: 'space-y-6 px-2 md:px-0',
+        sectionTitle: `${TYPOGRAPHY.cardTitle} mb-4`,
+        facts: 'space-y-2',
+        fact: 'flex items-center gap-2',
+        factIcon: 'opacity-60',
+        cardHeader: 'flex items-center justify-between',
+        cardBody: 'space-y-4',
+        sectionGap: 'pt-6',
+        intro: `${TYPOGRAPHY.bodyTextMuted} mb-4`,
+        feedBox: `mt-4 p-4 rounded ${BG.inset}`,
+        feedLabel: `${TYPOGRAPHY.bodyTextMuted} mb-2`,
+        feedLink: 'text-primary hover:underline text-sm'
+    },
+
     /** HouseholdBookings: the calendar column beside the booking panel from md, stacked on a phone */
     householdBookings: {
         layout: 'flex flex-col md:flex-row gap-6',
@@ -1369,6 +1389,18 @@ export const COMPONENTS = {
         actionCell: 'px-2 py-2 border-t border-default',
         actionStack: 'flex flex-col gap-2',
         legend: 'mt-4'
+    },
+
+    /** ActionPreview: the `list` of preview lines under the title, each `item` a badge with its `icon` */
+    actionPreview: {
+        list: 'mt-2 space-y-1',
+        item: 'flex items-center gap-2',
+        icon: 'mr-1'
+    },
+
+    /** A booking result's `lines`, one per person, in a toast's description and in the "Sidste ændring" alerts */
+    bookingResult: {
+        lines: 'whitespace-pre-line'
     },
 
     /**
@@ -1926,6 +1958,7 @@ export const ICONS = {
     logout: 'i-tdesign-wave-bye',
     moveIn: 'i-guidance-entry',
     moveOut: 'i-guidance-exit',
+    noMoveOutPlans: 'i-heroicons-sun',
     admin: 'i-pajamas-admin',
     menu: 'i-heroicons-bars-3',
     help: 'i-heroicons-question-mark-circle',

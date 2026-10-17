@@ -1,11 +1,11 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewOutcome, scaffoldToastLook, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewOutcome, scaffoldToastLook, formatBookingResult, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, EMPTY_RELEASED_TICKET_COUNTS, emptyOrderBuckets, type OrderBucketResult, type ReleasedTicketCounts} from '~/composables/useBooking'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, type BookingAction, type BookingResult, type QueuePosition} from '~/composables/useBookingValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -16,7 +16,7 @@ const {DinnerStateSchema, DinnerModeSchema, BookingActionSchema, OrderStateSchem
 const Action = BookingActionSchema.enum
 const DinnerState = DinnerStateSchema.enum
 const OrderState = OrderStateSchema.enum
-const {ICONS, COLOR, BOOKING_LOCK_STATUS, ORDER_STATE_COLORS} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, COMPONENTS, BOOKING_LOCK_STATUS, ORDER_STATE_COLORS} = useTheSlopeDesignSystem()
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: useSeason runs there, not at module level
 let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
 beforeAll(() => {
@@ -106,9 +106,12 @@ describe('useBookingUi', () => {
     })
 
     describe('createWaitlistBadge', () => {
-        it.each([1, 3])('names queue position %i in the glyph and colour of the queued order state', (position) => {
+        it.each([
+            {position: 2, ticketType: TicketTypeSchema.enum.ADULT, value: 'Voksen #2'},
+            {position: 3, ticketType: TicketTypeSchema.enum.CHILD, value: 'Barn #3'}
+        ])('names the place $value in the glyph and colour of the queued order state', ({position, ticketType, value}) => {
             const {icon, color} = ORDER_STATE_LABELS.queued
-            expect(createWaitlistBadge(position)).toMatchObject({icon, color, value: `#${position} i kø`})
+            expect(createWaitlistBadge(position, ticketType)).toMatchObject({icon, color, value})
         })
     })
 
@@ -166,18 +169,39 @@ describe('useBookingUi', () => {
     })
 
     describe('outcome words', () => {
-        // The words a requeue names: the mode, from the one mode-words table, and the queue place it keeps in its ticket type's line
-        const LATE_AT_TWO = {mode: MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label, position: 2, ticketType: TicketTypeSchema.enum.CHILD}
+        // One word table: the preview line's words after the name, the toast's words after the count. The mode comes from
+        // the one mode-words table; a requeue keeps its place in its ticket type's line
+        const LATE = MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label
         it.each([
-            {outcome: Action.BOOK, save: 'Book', preview: 'Anna tilmeldes'},
-            {outcome: Action.BUY, save: 'Køb billet', preview: 'Anna køber en billet til salg'},
-            {outcome: Action.QUEUE, save: 'Skriv på venteliste', preview: 'Anna skrives på ventelisten'},
-            {outcome: Action.LEAVE, save: 'Forlad ventelisten', preview: 'Anna forlader ventelisten'},
-            {outcome: Action.REQUEUE, save: 'Opdater', preview: `Anna ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder pladsen Barn: #2 i kø`},
-            {outcome: Action.CHANGE_MODE, save: 'Opdater', preview: 'Anna opdaterer spisning'}
-        ])('$outcome → save "$save", preview "$preview"', ({outcome, save, preview}) => {
+            {action: Action.BOOK, preview: 'tilmeldes', toast: 'tilmeldt'},
+            {action: Action.CANCEL, preview: 'frameldes', toast: 'frameldt'},
+            {action: Action.RELEASE, preview: 'frigiver sin billet', toast: 'frigivet'},
+            {action: Action.RECLAIM, preview: 'tilmeldes igen', toast: 'tilmeldt igen'},
+            {action: Action.BUY, preview: 'køber en billet til salg', toast: 'købt'},
+            {action: Action.QUEUE, preview: 'skrives på ventelisten', toast: 'på ventelisten'},
+            {action: Action.LEAVE, preview: 'forlader ventelisten', toast: 'forlod ventelisten'},
+            {action: Action.REQUEUE, preview: `ændrer ønsket tilmelding til ${LATE}, beholder ventelisteplads Voksen #2`, toast: 'ønske ændret'},
+            {action: Action.CHANGE_MODE, preview: `ændrer spisemåde til ${LATE}`, toast: 'ændret spisemåde'},
+            {action: Action.CHANGE_PRICE, preview: 'ændrer billettype', toast: 'ændret billettype'}
+        ])('$action previews "$preview" and toasts "$toast"', ({action, preview, toast}) => {
+            const words = {mode: LATE, place: 'Voksen #2'}
+            expect(ACTION_WORDS[action].preview(words)).toBe(preview)
+            expect(ACTION_WORDS[action].toast).toBe(toast)
+        })
+
+        it('a requeue whose place is unknown names the new mode alone', () => {
+            expect(ACTION_WORDS[Action.REQUEUE].preview({mode: LATE})).toBe(`ændrer ønsket tilmelding til ${LATE}`)
+        })
+
+        it.each([
+            {outcome: Action.BOOK, save: 'Book'},
+            {outcome: Action.BUY, save: 'Køb billet'},
+            {outcome: Action.QUEUE, save: 'Skriv på venteliste'},
+            {outcome: Action.LEAVE, save: 'Forlad ventelisten'},
+            {outcome: Action.REQUEUE, save: 'Opdater'},
+            {outcome: Action.CHANGE_MODE, save: 'Opdater'}
+        ])('$outcome saves as "$save"', ({outcome, save}) => {
             expect(bookingSaveLabel(outcome)).toBe(save)
-            expect(ACTION_WORDS[outcome].template('Anna', LATE_AT_TWO)).toBe(preview)
         })
 
         // The guest form's button names the guests; its preview lines name each guest's outcome
@@ -294,12 +318,78 @@ describe('ticket type presentation', () => {
     })
 })
 
-// Every toast that reports a booking result: the ticket, red as soon as one order failed
+// Every toast that reports a booking result: the ticket, red as soon as one order failed, one line per person
 describe('scaffoldToastLook', () => {
     it.each([
         {desc: 'a run with a failed order', errored: 1, color: COLOR.error},
         {desc: 'a run where every order landed', errored: 0, color: COLOR.success}
-    ])('$desc toasts in $color with the ticket', ({errored, color}) => {
-        expect(scaffoldToastLook({errored})).toEqual({color, icon: ICONS.ticket})
+    ])('$desc toasts in $color with the ticket and breaks its lines', ({errored, color}) => {
+        expect(scaffoldToastLook({errored})).toEqual({color, icon: ICONS.ticket, ui: {description: COMPONENTS.bookingResult.lines}})
+    })
+})
+
+describe('formatBookingResult', () => {
+    const ADULT = TicketTypeSchema.enum.ADULT
+    const ANNA = {inhabitantId: 1, inhabitantName: 'Anna'}
+    const GUEST_OF_ANNA = {...ANNA, isGuestTicket: true}
+    const LARS = {inhabitantId: 2, inhabitantName: 'Lars'}
+    const KNUD = {inhabitantId: 3, inhabitantName: 'Knud'}
+    const LENE = {inhabitantId: 4, inhabitantName: 'Lene'}
+    type Person = Pick<BookingResult, 'inhabitantId' | 'inhabitantName'> & {isGuestTicket?: boolean}
+
+    // One order's result per action listed, each on its own dinner
+    const resultsOf = (person: Person, ...actions: BookingAction[]): BookingResult[] =>
+        actions.map((action, index) => OrderFactory.defaultBookingResult({...person, dinnerEventId: index + 1, action}))
+    const times = (count: number, action: BookingAction): BookingAction[] => Array.from({length: count}, () => action)
+    const placeOf = (person: Person, position: number): QueuePosition =>
+        ({inhabitantId: person.inhabitantId, dinnerEventId: 1, isGuestTicket: !!person.isGuestTicket, position, ticketType: ADULT})
+    const soldToWaitlist = (count: number) =>
+        Array.from({length: count}, () => ({dinnerEventId: 1, ticketPriceId: 1, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1}))
+    const run = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => OrderFactory.defaultScaffoldResult(overrides)
+
+    it.each([
+        {
+            // People in the order they first appear, their counts in the order of the actions, the places ascending
+            desc: 'the grid save after the deadline',
+            result: run({
+                results: [...resultsOf(ANNA, Action.QUEUE), ...resultsOf(GUEST_OF_ANNA, Action.QUEUE), ...resultsOf(ANNA, Action.BUY, Action.QUEUE)],
+                positions: [placeOf(ANNA, 5), placeOf(GUEST_OF_ANNA, 6), placeOf(ANNA, 3)]
+            }),
+            text: 'Anna: 1 købt, 2 på ventelisten (Voksen #3, Voksen #5)\nGæst af Anna: 1 på ventelisten (Voksen #6)'
+        },
+        {
+            desc: 'the grid power mode',
+            result: run({results: [...resultsOf(ANNA, Action.CHANGE_MODE), ...resultsOf(LARS, Action.CHANGE_MODE), ...resultsOf(ANNA, Action.RELEASE), ...resultsOf(LARS, Action.RELEASE)]}),
+            text: 'Anna: 1 frigivet, 1 ændret spisemåde\nLars: 1 frigivet, 1 ændret spisemåde'
+        },
+        {
+            // The failures close a person's line; the household lines follow the people
+            desc: 'the preference power mode with a failed order',
+            result: run({
+                results: [...resultsOf(KNUD, ...times(7, Action.CANCEL), ...times(2, Action.RELEASE)), ...resultsOf(LENE, ...times(6, Action.CANCEL), ...times(2, Action.RELEASE))],
+                failed: resultsOf(LENE, Action.RELEASE),
+                errored: 1,
+                unchanged: 42,
+                outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: soldToWaitlist(1)}
+            }),
+            text: 'Knud: 7 frameldt, 2 frigivet\nLene: 6 frameldt, 2 frigivet, 1 fejlede\n1 billet solgt til ventelisten\n42 uændret'
+        },
+        {
+            desc: 'a person with only failed orders',
+            result: run({results: resultsOf(KNUD, Action.BOOK), failed: resultsOf(LENE, Action.BOOK), errored: 1}),
+            text: 'Knud: 1 tilmeldt\nLene: 1 fejlede'
+        },
+        {
+            desc: 'tickets sold to the waiting list and nothing else changed',
+            result: run({unchanged: 5, outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: soldToWaitlist(2)}}),
+            text: '2 billetter solgt til ventelisten\n5 uændret'
+        },
+        {
+            desc: 'nothing changed',
+            result: run({}),
+            text: 'Der var ingen ændringer i dine bookinger'
+        }
+    ])('$desc', ({result, text}) => {
+        expect(formatBookingResult(result)).toBe(text)
     })
 })

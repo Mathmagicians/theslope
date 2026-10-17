@@ -360,6 +360,17 @@ describe('useBookingValidation', () => {
         expect(ScaffoldResultSchema.parse(bare)).toMatchObject({positions: [], errored: 0, outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: []}})
       })
 
+      // A queue place names the line of its ticket type; an entry whose ticket price is gone names none
+      it.each([TicketTypeSchema.enum.ADULT, null])('GIVEN a queue place in the line of %s WHEN parsing THEN it keeps its ticket type', (ticketType) => {
+        const position = {inhabitantId: 1, dinnerEventId: 1, isGuestTicket: false, position: 2, ticketType}
+        expect(ScaffoldResultSchema.parse({...validScaffoldResult, positions: [position]}).positions).toEqual([position])
+      })
+
+      it('GIVEN a queue place without its ticket type WHEN parsing THEN throws', () => {
+        const {ticketType: _t, ...untyped} = {inhabitantId: 1, dinnerEventId: 1, isGuestTicket: false, position: 2, ticketType: null}
+        expect(() => ScaffoldResultSchema.parse({...validScaffoldResult, positions: [untyped]})).toThrow()
+      })
+
       // The totals count every action, a zero included
       it('GIVEN a total missing an action WHEN parsing THEN throws', () => {
         expect(() => ScaffoldResultSchema.parse({...validScaffoldResult, totals: {[Action.BOOK]: 1}})).toThrow()

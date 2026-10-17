@@ -96,9 +96,9 @@
  *
  * AFTER THE DEADLINE, SOLD OUT - the waiting list (a row without a ticket):
  *   Anna    [  ][  ][  ] [VOKSEN · 55kr]   [mode] Spisesal   [Skriv på venteliste]   picks the mode, then saves
- *   Bo      [wl][  ][  ] [VOKSEN · 55kr]   (mode) Spisesal   [hourglass #2 i køen]    the wish, ghosted
+ *   Bo      [wl][  ][  ] [VOKSEN · 55kr]   (mode) Spisesal   [hourglass Voksen #2]    the wish, ghosted
  *   Emil    [  ][  ][  ] [VOKSEN · 55kr]   [mode] Spisesal   (har billet)
- *   (+) GÆST AF Bo  [wl][gu][  ] [BARN · 35kr]   (mode) Spisesal   [hourglass #3 i køen]   a queued guest, same marks
+ *   (+) GÆST AF Bo  [wl][gu][  ] [BARN · 35kr]   (mode) Spisesal   [hourglass Barn #3]   a queued guest, same marks
  *   (+) Tilføj gæst                                                [Skriv gæst på venteliste]   sold out
  *                                                                  [Køb billet til gæst]        a ticket for sale
  *   ...ticket assigned -> Bo: Spisesal for real (badge gone, a normal order)
@@ -107,11 +107,11 @@
  * Placed guest groups and queued guests come from one guest row builder; a queued guest row carries its entry.
  *
  * The collapsed row: DinnerTicket queued (the hourglass, the wish ghosted) and the position badge on the line under
- * the name (createWaitlistBadge through DeadlineBadge). One booking path: the save sends the desired order through the scaffold,
- * which books, buys a ticket for sale or queues by supply; the save label previews the outcome (bookingSaveLabel over
- * previewOutcome: Book, Køb billet, Skriv på venteliste, Forlad ventelisten, Opdater); a requeue previews "X ændrer ønsket
- * tilmelding til Sen, beholder plads #2 i køen". A queued row edits its wish (requeued) or picks Ingen to leave; Tilføj gæst saves the
- * same way.
+ * the name, the place in the line of the entry's ticket type (createWaitlistBadge through DeadlineBadge). One booking
+ * path: the save sends the desired order through the scaffold, which books, buys a ticket for sale or queues by supply;
+ * the save label previews the outcome (bookingSaveLabel over previewOutcome: Book, Køb billet, Skriv på venteliste,
+ * Forlad ventelisten, Opdater); a requeue previews "X ændrer spisemåde til Sen (venteliste): 20/10/2026". A queued
+ * row edits its wish (requeued) or picks Ingen to leave; Tilføj gæst saves the same way.
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDisplay, OrderDisplay, DinnerMode, OrderState, DesiredOrder, BookingRowAction} from '~/composables/useBookingValidation'
@@ -581,7 +581,10 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
 // ============================================================================
 
 const {groupGuestOrders, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
-const {createBookingBadges, createWaitlistBadge, bookingSaveLabel, previewOutcome, formatActionPreview, waitlistPositionOf} = useBookingUi()
+const {createBookingBadges, createWaitlistBadge, bookingSaveLabel, previewOutcome, formatActionPreview} = useBookingUi()
+
+// A queue entry's place names the line of the ticket type its price holds
+const ticketTypeOfEntry = computed(() => useWaitlist().ticketTypeOfEntry(props.ticketPrices))
 
 // Deadline badges
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
@@ -611,7 +614,7 @@ const editingBuckets = computed(() => {
 })
 
 const actionPreviewItems = computed(() =>
-  editingBuckets.value ? formatActionPreview(editingBuckets.value, eventOrders.value, getInhabitantName, supply, waitlistPositionOf(eventWaitlistEntries.value)) : [])
+  editingBuckets.value ? formatActionPreview(editingBuckets.value, eventOrders.value, [props.dinnerEvent], getInhabitantName, supply) : [])
 const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? previewOutcome(editingBuckets.value, supply) : BookingActionSchema.enum.CHANGE_MODE))
 </script>
 
@@ -791,7 +794,7 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
 
           <!-- Queue position of an inhabitant or a guest: the deadline badges' path, on the line under the name -->
           <div v-if="row.original.waitlistEntry" :class="COMPONENTS.bookingForm.guestProvenance" :data-testid="`waitlist-position-${row.original.id}`">
-            <DeadlineBadge :badge="createWaitlistBadge(row.original.waitlistEntry.position)" compact />
+            <DeadlineBadge :badge="createWaitlistBadge(row.original.waitlistEntry.position, ticketTypeOfEntry(row.original.waitlistEntry))" compact />
           </div>
 
           <!-- Mobile: Ticket inline (for inhabitant/guest-order rows only) -->

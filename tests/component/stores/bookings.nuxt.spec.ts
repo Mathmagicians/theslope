@@ -16,8 +16,7 @@ import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {useBookingsStore} from '~/stores/bookings'
 import {usePlanStore} from '~/stores/plan'
 import {useCookingTeam} from '~/composables/useCookingTeam'
-import {useBooking} from '~/composables/useBooking'
-import {COLOR, EMPTY_STATE_MESSAGES} from '~/composables/useTheSlopeDesignSystem'
+import {COLOR, COMPONENTS, EMPTY_STATE_MESSAGES} from '~/composables/useTheSlopeDesignSystem'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
@@ -130,13 +129,11 @@ const me = UserFactory.defaultUserWithInhabitant('bookings-store')
 const ME = me.Inhabitant!.id
 
 let getTeamShortName: ReturnType<typeof useCookingTeam>['getTeamShortName']
-let formatScaffoldResult: ReturnType<typeof useBooking>['formatScaffoldResult']
 beforeAll(() => {
     // One pinia for the file: the Nuxt app keeps one asyncData entry per key across store instances
     setActivePinia(createPinia())
     session.user.value = me
     ;({getTeamShortName} = useCookingTeam())
-    ;({formatScaffoldResult} = useBooking())
 })
 
 beforeEach(() => {
@@ -287,16 +284,17 @@ describe('Bookings store — scaffold bookings', () => {
         {view: 'day', errored: 0, color: COLOR.success},
         {view: 'grid', errored: 1, color: COLOR.error}
     ])('reports the result in the toast it is given ($view view, errored $errored)', async ({view, errored, color}) => {
-        const response = OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.BOOK]: 2}, errored})
-        scaffoldEndpoint.mockImplementation(() => response)
+        const results = [1, 2].map(dinnerEventId => OrderFactory.defaultBookingResult({inhabitantName: 'Anna', dinnerEventId, action: Action.BOOK}))
+        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.BOOK]: 2}, results, errored}))
         const store = useBookingsStore()
 
         await store.processSingleEventBookings(1, DINNER_ID, [], false, {title: view, suffix: ' d. 01/01/2026'})
 
         expect(useToast().toasts.value.at(-1)).toMatchObject({
             title: view,
-            description: `${formatScaffoldResult(response.scaffoldResult, 'past')} d. 01/01/2026`,
-            color
+            description: 'Anna: 2 tilmeldt d. 01/01/2026',
+            color,
+            ui: {description: COMPONENTS.bookingResult.lines}
         })
     })
 
@@ -308,14 +306,24 @@ describe('Bookings store — scaffold bookings', () => {
         expect(useToast().toasts.value).toHaveLength(0)
     })
 
-    it('reports the queued places and the queue left in the toast', async () => {
-        const positions = [3, 1].map(position => ({inhabitantId: position, dinnerEventId: DINNER_ID, isGuestTicket: false, position}))
-        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.QUEUE]: 2, [Action.LEAVE]: 1}, positions}))
+    it('reports each person\'s queued places and the queue they left in the toast, one line per person', async () => {
+        const anna = {inhabitantId: 1, inhabitantName: 'Anna'}
+        const bo = {inhabitantId: 2, inhabitantName: 'Bo'}
+        const results = [
+            OrderFactory.defaultBookingResult({...anna, dinnerEventId: DINNER_ID, action: Action.QUEUE}),
+            OrderFactory.defaultBookingResult({...bo, dinnerEventId: DINNER_ID, action: Action.QUEUE}),
+            OrderFactory.defaultBookingResult({...anna, dinnerEventId: DINNER_ID + 1, action: Action.LEAVE})
+        ]
+        const positions = [
+            {inhabitantId: anna.inhabitantId, dinnerEventId: DINNER_ID, isGuestTicket: false, position: 3, ticketType: TicketType.ADULT},
+            {inhabitantId: bo.inhabitantId, dinnerEventId: DINNER_ID, isGuestTicket: false, position: 1, ticketType: TicketType.CHILD}
+        ]
+        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.QUEUE]: 2, [Action.LEAVE]: 1}, results, positions}))
         const store = useBookingsStore()
 
         await store.processSingleEventBookings(1, DINNER_ID, [], false, {title: 'day'})
 
-        expect(useToast().toasts.value.at(-1)!.description).toBe('2 kom på ventelisten (nr. 1, 3), 1 forlod ventelisten')
+        expect(useToast().toasts.value.at(-1)!.description).toBe('Anna: 1 på ventelisten (Voksen #3), 1 forlod ventelisten\nBo: 1 på ventelisten (Barn #1)')
     })
 
     it('sends an admin correction as one scaffold with adminBypass, a new guest booked on the household\'s inhabitant', async () => {
@@ -599,7 +607,7 @@ describe('Bookings store — the billing selection a getter names', () => {
             listWith([ID])
         })
 
-        it('a getter naming it loads it', async () => {
+        it('a getter naming it loads it, and the choice stays out of the store state', async () => {
             const store = useBookingsStore()
 
             select(store, () => ID)
@@ -607,6 +615,7 @@ describe('Bookings store — the billing selection a getter names', () => {
             await vi.waitFor(() => expect(asyncDataStatus(key)).toBe('success'))
             expect(selectedId(store)).toBe(ID)
             expect(detailEndpoint).toHaveBeenCalled()
+            expect(Object.values(store.$state)).not.toContain(ID)
         })
 
         it.each([
@@ -661,15 +670,6 @@ describe('Bookings store — the billing selection a getter names', () => {
 
             await vi.waitFor(() => expect(asyncDataStatus(key)).toBe('success'))
             expect(selectedId(store)).toBe(ID)
-        })
-
-        it('keeps the choice out of the store state', async () => {
-            const store = useBookingsStore()
-
-            select(store, () => ID)
-
-            await vi.waitFor(() => expect(selectedId(store)).toBe(ID))
-            expect(Object.values(store.$state)).not.toContain(ID)
         })
     })
 })
@@ -817,7 +817,7 @@ describe('Bookings store — waiting list', () => {
         })
     })
 
-    it('reads every household\'s entries on the dinners the page shows, parsed to domain types', async () => {
+    it('reads every household\'s entries on the dinners the page shows, parsed to domain types, and derives the household\'s place within its ticket type\'s line: the adult ahead waits in another line', async () => {
         const store = useBookingsStore()
 
         store.loadOrdersForDinners({dinnerEventIds: [WAITLIST_DINNER_ID]})
@@ -825,6 +825,8 @@ describe('Bookings store — waiting list', () => {
         await vi.waitFor(() => expect(store.waitlistEntries).toHaveLength(QUEUE.length))
         expect(store.waitlistEntries[0]!.createdAt).toBeInstanceOf(Date)
         expect(lastQuery(waitlistEntriesEndpoint)).toEqual({dinnerEventIds: String(WAITLIST_DINNER_ID)})
+        await vi.waitFor(() => expect(store.householdWaitlist).toHaveLength(1))
+        expect(store.householdWaitlist[0]).toMatchObject({id: 22, position: 1})
     })
 
     it('stays idle and unrequested while the page shows no dinners', async () => {
@@ -836,15 +838,6 @@ describe('Bookings store — waiting list', () => {
         await flushPromises()
         expect(asyncDataStatus(ENTRIES_KEY)).toBe('idle')
         expect(waitlistEntriesEndpoint).not.toHaveBeenCalled()
-    })
-
-    it('derives the household\'s place within its ticket type\'s line: the adult ahead waits in another line', async () => {
-        const store = useBookingsStore()
-
-        store.loadOrdersForDinners({dinnerEventIds: [WAITLIST_DINNER_ID]})
-
-        await vi.waitFor(() => expect(store.householdWaitlist).toHaveLength(1))
-        expect(store.householdWaitlist[0]).toMatchObject({id: 22, position: 1})
     })
 
     it('derives the queue on the dinner on view: its size, its portion need and one line per ticket type', async () => {

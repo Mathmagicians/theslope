@@ -36,7 +36,7 @@ Står dit barn som **Voksen** selvom de er under 12 år? Så mangler fødselsdat
 | Sektion | Link | Beskrivelse |
 |---------|------|-------------|
 | **Forside** | [skraaningen.dk](https://www.skraaningen.dk) | Log ind for at se kommende middage, booke pladser, administrere din husstand og vælge dine egne indstillinger |
-| **Middagskalender** | [skraaningen.dk/dinner](https://www.skraaningen.dk/dinner) | Se alle kommende fællesspisninger. Klik på en dato for at se menu, tilmeldinger og madhold. Du kan også ændre mellem spisesal, takeaway og sen spisning, ændre tilmelding for en dato, tilmelde en gæst, eller købe andres billetter som er sat til salg |
+| **Middagskalender** | [skraaningen.dk/dinner](https://www.skraaningen.dk/dinner) | Se alle kommende fællesspisninger. Klik på en dato for at se menu, tilmeldinger og madhold. Du kan også ændre mellem spisesal, takeaway og sen spisning, ændre tilmelding for en dato, tilmelde en gæst, købe en billet til salg, eller skrive dig på ventelisten |
 | **Chef-side** | [skraaningen.dk/chef](https://www.skraaningen.dk/chef) | Din oversigt som chefkok. Se dine kommende madlavningsdage, annoncer menuer og hold styr på tilmeldinger, allergier og budget |
 | | | |
 | **Husstand** | | |
@@ -60,9 +60,11 @@ I appen bruges følgende symboler til at vise spisningsform og status:
 | ![Ingen](https://api.iconify.design/heroicons:x-circle.svg?height=20&color=%23ef4444) | **Ingen** | Ikke tilmeldt denne dag |
 | ![Blandet](https://api.iconify.design/heroicons:question-mark-circle.svg?height=20&color=%23737373) | **Blandet** | Familiemedlemmer har forskellige valg |
 | ![Power](https://api.iconify.design/heroicons:bolt.svg?height=20&color=%23f59e0b) | **Power mode** | Ændr alle familiemedlemmer på én gang |
-| ![Frigiv](https://api.iconify.design/heroicons:lock-open.svg?height=20&color=%23f59e0b) | **Frigiv** | Sæt din billet til salg efter deadline |
-| ![Låst](https://api.iconify.design/heroicons:lock-closed.svg?height=20&color=%23ef4444) | **Låst** | Deadline passeret - kun frigiv mulig |
-| ![Overtag](https://api.iconify.design/heroicons:hand-raised.svg?height=20&color=%2322c55e) | **Overtag** | Køb en frigivet billet fra en anden |
+| ![Åben](https://api.iconify.design/heroicons:lock-open.svg?height=20&color=%2322c55e) | **Åben** | Før fristen - du kan frit tilmelde og framelde dig |
+| ![Lukket](https://api.iconify.design/heroicons:lock-closed.svg?height=20&color=%23ef4444) | **Lukket** | Fristen er passeret - du kan frigive, købe eller skrive dig på ventelisten |
+| ![Frigivet](https://api.iconify.design/heroicons:arrow-up-tray.svg?height=20&color=%23ef4444) | **Frigivet** | Billetten er sat til salg |
+| ![Køb](https://api.iconify.design/heroicons:arrows-right-left.svg?height=20&color=%238b5cf6) | **Køb billet** | Køb en billet, som en anden har sat til salg |
+| ![Venteliste](https://api.iconify.design/hugeicons:hourglass.svg?height=20&color=%23737373) | **Venteliste** | Du står i kø til en billet af din billettype |
 
 Kalenderne har også en **Forklaring** nederst, der viser symbolerne for netop den visning.
 
@@ -130,7 +132,7 @@ Ugentlige præferencer bestemmer, hvornår du automatisk bliver tilmeldt fælles
 
 > **Afmeldinger respekteres:** Har du afmeldt en specifik middag (f.eks. mandag den 15.), vil den IKKE blive genskabt når du ændrer præferencer. Dine manuelle afmeldinger bevares altid.
 
-> **Sletning af bookinger:** Ændrer du en dag til "Ingen", slettes dine fremtidige bookinger på den dag automatisk.
+> **Ingen:** Ændrer du en dag til "Ingen", bliver du frameldt de kommende middage på den dag. Er frameldingsfristen passeret, frigives billetten i stedet og sættes til salg.
 
 1. Gå til **Husstanden** (fanen med hus-ikon)
 2. Find den person du vil redigere
@@ -178,7 +180,7 @@ På [Middagskalenderen](https://www.skraaningen.dk/dinner) kan du se hvem der er
 | **Takeaway** | Hvem der henter mad |
 | **Spisesal** | Hvem der spiser i salen |
 | **Sen spisning** | Hvem der kommer sent |
-| **Til salg** | Frigivne billetter du kan overtage |
+| **Til salg** | Billetter til salg, du kan købe - og ventelisten, når nogen venter |
 | **Allergier** | Hvor mange kuverter i hver kategori der har en af menuens allergener |
 
 **Klik på en kategori** for at se hvilke husstande der er tilmeldt, og hvem der har hvilke af menuens allergener.
@@ -188,7 +190,7 @@ Har et medlem af din husstand allergier, bærer billetten et **allergi-ikon**. K
 ![Allergier på billetten](screenshots/dinner/ticket-allergies.png)
 *Middagskalenderen: billetten viser medlemmets allergier*
 
-> **Tip:** Brug oversigten til at koordinere med naboer om at hente hinandens takeaway, eller se om der er frigivne billetter du kan overtage.
+> **Tip:** Brug oversigten til at koordinere med naboer om at hente hinandens takeaway, eller se om der er billetter til salg.
 
 #### Uge- og månedsvisning (Grid booking)
 
@@ -198,11 +200,11 @@ I uge- eller månedsvisning kan du hurtigt ændre tilmeldinger for flere dage:
 2. Klik på en celle for at skifte, hvordan du spiser: Spisesal → Sen → Takeaway → Ingen
 3. Brug **Power-rækken** øverst til at ændre alle medlemmer på én gang - dine gæster følger med
 4. Se **forhåndsvisning** af ændringer før du gemmer
-5. Klik **Gem** når du er færdig - eller **Annullér** for at fortryde
+5. Klik **Opdater** når du er færdig - eller **Annuller** for at fortryde
 
 Gæster har deres egen række i gitteret, så du kan ændre deres spisningsform på samme måde som familiens.
 
-> **Tip:** Ændringer gemmes først når du klikker Gem. Du kan frit eksperimentere og annullere.
+> **Tip:** Ændringer gemmes først når du klikker Opdater. Du kan frit eksperimentere og annullere.
 
 #### Forhåndsvisning af ændringer
 
@@ -214,7 +216,9 @@ Før du gemmer dine bookingændringer, viser systemet en oversigt over hvad der 
 | ![Minus](https://api.iconify.design/heroicons:x-mark.svg?height=20&color=%23ef4444) | **Peter frameldes** | Personen bliver frameldt (før deadline) |
 | ![Frigiv](https://api.iconify.design/heroicons:arrow-up-tray.svg?height=20&color=%23f59e0b) | **Peters billet frigives** | Billetten sættes til salg (efter deadline) |
 | ![Fortryd](https://api.iconify.design/heroicons:arrow-uturn-left.svg?height=20&color=%233b82f6) | **Anna tilmeldes igen** | Frigivet billet tages tilbage |
-| ![Køb](https://api.iconify.design/heroicons:arrows-right-left.svg?height=20&color=%238b5cf6) | **Emil køber fra andre** | Overtager en frigivet billet |
+| ![Køb](https://api.iconify.design/heroicons:arrows-right-left.svg?height=20&color=%238b5cf6) | **Emil køber en billet til salg** | Køber en billet, som en anden har frigivet |
+| ![Venteliste](https://api.iconify.design/hugeicons:hourglass.svg?height=20&color=%23737373) | **Emil skrives på ventelisten** | Ingen billet af den type til salg - Emil stiller sig i kø |
+| ![Forlad](https://api.iconify.design/heroicons:x-mark.svg?height=20&color=%23ef4444) | **Emil forlader ventelisten** | Pladsen i køen opgives |
 
 Forhåndsvisningen hjælper dig med at:
 - Se præcis hvilke ændringer du er ved at lave
@@ -239,17 +243,19 @@ Hver middag har tre frister. Du ser dem som badges på middagen, når du åbner 
   - Du kan skifte mellem Spisesal, Sen og Takeaway indtil 90 min før
   - Madholdet skal vide, hvor mange der spiser i salen vs. henter takeaway
 
-### Efter deadline - frigiv din billet
+### Efter deadline - frigiv, køb eller skriv dig på ventelisten
 
-Kan du ikke komme alligevel? Du kan **frigive** din billet, så den sættes til salg på appens markedsplads. Andre beboere kan så overtage den.
+Kan du ikke komme alligevel? **Frigiv** din billet, så sættes den til salg. Vil du med alligevel, **køber** du en billet til salg - og er der ingen af din billettype, skriver du dig på **ventelisten**.
 
-| Symbol | Handling | Betydning |
-|:------:|----------|-----------|
-| ![Frigiv](https://api.iconify.design/heroicons:lock-open.svg?height=20&color=%23f59e0b) | **Frigiv** | Sæt din billet til salg - en anden kan overtage den |
-| ![Låst](https://api.iconify.design/heroicons:lock-closed.svg?height=20&color=%23ef4444) | **Låst** | Deadline er passeret - du kan kun frigive, ikke afmelde |
-| ![Overtag](https://api.iconify.design/heroicons:hand-raised.svg?height=20&color=%2322c55e) | **Overtag** | Køb en frigivet billet fra en anden beboer |
+| Symbol | Valg | Betydning |
+|:------:|------|-----------|
+| ![Frigivet](https://api.iconify.design/heroicons:arrow-up-tray.svg?height=20&color=%23ef4444) | **Ingen** | Din billet frigives og sættes til salg |
+| ![Køb](https://api.iconify.design/heroicons:arrows-right-left.svg?height=20&color=%238b5cf6) | **Køb billet** | Du køber en billet af din billettype, som en anden har frigivet |
+| ![Venteliste](https://api.iconify.design/hugeicons:hourglass.svg?height=20&color=%23737373) | **Skriv på venteliste** | Ingen billet til salg - du står i kø, fx **Barn: #1 i kø** |
 
-> **Bemærk:** Når du frigiver en billet, betaler du kun hvis ingen overtager den. Bliver billetten overtaget, slipper du for at betale.
+Ventelisten er én kø per billettype (voksen, barn og baby): først til mølle. Frigiver en anden en billet af din type, eller laver køkkenholdet ekstra portioner, går billetten til den første i køen - og du får en mail. Vælg **Ingen** på din plads i køen og klik **Forlad ventelisten**, hvis du alligevel ikke skal med.
+
+> **Bemærk:** Når du frigiver en billet, betaler du kun hvis ingen køber den. Bliver billetten solgt, slipper du for at betale - og du får en mail om det.
 
 ### Sådan bestiller du takeaway
 
@@ -274,7 +280,7 @@ Du kan tilmelde gæster til fællesspisning - de tilknyttes dig som vært.
 5. Tilføj evt. gæstens allergier
 6. Vælg antal gæster (hvis flere af samme type)
 7. Vælg spisningsform (Spisesal, Sen eller Takeaway)
-8. Klik **Tilføj gæst**
+8. Klik **Tilmeld gæst** (eller **Tilmeld gæster**) - efter fristen hedder knappen **Køb billet til gæst** eller **Skriv gæst på venteliste**
 
 Gæsten vises i tabellen som "Gæst af [dit navn]" med den valgte billettype.
 
@@ -298,7 +304,7 @@ Skal familien flytte? Angiv en fraflytningsdato så alle jeres bookinger efter d
 1. Gå til **Indstillinger** på jeres husstand
 2. Klik på **blyanten** i Fraflytning-sektionen
 3. Vælg dato i kalenderen
-4. Klik **Gem** — systemet sletter fremtidige bookinger efter datoen og viser en kvittering ("3 bookinger slettet, 12 uændret")
+4. Klik **Gem** — systemet framelder bookingerne efter datoen og viser en kvittering med hvor mange der er frameldt, og hvor mange der er uændret
 
 Har I skiftet mening? Åbn samme sektion og klik **Fortryd flytning** (to-klik bekræftelse) — bookinger genoprettes efter jeres ugentlige præferencer.
 
@@ -363,4 +369,4 @@ Kontakt en administrator eller opret et issue på [GitHub](https://github.com/Ma
 
 ---
 
-*Sidst opdateret: Oktober 2026 (appen på telefonen, Mine indstillinger, allergier på billetten)*
+*Sidst opdateret: Oktober 2026 (ventelisten, køb og frigiv efter fristen, appen på telefonen, Mine indstillinger, allergier på billetten)*

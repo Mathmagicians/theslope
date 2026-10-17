@@ -81,9 +81,6 @@ const {activeSeason} = storeToRefs(planStore)
 // Household business logic
 const {computeAggregatedPreferences} = useHousehold()
 
-// Booking business logic
-const {formatScaffoldResult} = useBooking()
-
 // Design system
 const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES, ALERTS, NOISE, ORIENTATIONS, TABLE_COLUMNS } = useTheSlopeDesignSystem()
 const { powerMode } = COMPONENTS
@@ -160,7 +157,7 @@ const savePreferences = async () => {
 
     toast.add({
       title: isPowerMode ? 'Alle præferencer opdateret' : 'Præferencer opdateret',
-      description: formatScaffoldResult(result, 'past'),
+      description: formatBookingResult(result),
       ...scaffoldToastLook(result)
     })
 
@@ -380,9 +377,12 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
           v-bind="lastPreferenceResult.errored > 0 ? ALERTS.error : ALERTS.neutral"
           :icon="lastPreferenceResult.errored > 0 ? ICONS.robotDead : ICONS.robotHappy"
           title="Sidste ændring"
-          :description="`Du har ændret præferencer, og familiens bookinger har ændret sig: ${formatScaffoldResult(lastPreferenceResult, 'past')}`"
           data-testid="last-result-alert"
-      />
+      >
+        <template #description>
+          <p :class="COMPONENTS.bookingResult.lines">{{ `Du har ændret præferencer, og familiens bookinger har ændret sig:\n${formatBookingResult(lastPreferenceResult)}` }}</p>
+        </template>
+      </UAlert>
 
       <!-- Info alert -->
       <UAlert

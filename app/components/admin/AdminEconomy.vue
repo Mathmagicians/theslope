@@ -419,7 +419,6 @@ const ticketPrices = computed((): TicketPrice[] =>
 
 // Handle save from DinnerBookingForm
 const toast = useToast()
-const {formatScaffoldResult} = useBooking()
 const {processAdminCorrection} = bookingsStore
 
 const handleAdminSave = async (orders: DesiredOrder[]) => {
@@ -433,7 +432,7 @@ const handleAdminSave = async (orders: DesiredOrder[]) => {
     )
     toast.add({
         title: 'Administrator Korrektion',
-        description: `${editingHousehold.value.address}: ${formatScaffoldResult(result, 'past')}`,
+        description: `${editingHousehold.value.address}\n${formatBookingResult(result)}`,
         ...scaffoldToastLook(result)
     })
     cancelEditing()

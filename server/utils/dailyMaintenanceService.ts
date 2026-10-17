@@ -16,7 +16,7 @@ import {fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {deleteWaitlistForConsumedDinners} from '~~/server/data/waitlistRepository'
-import {useBookingValidation, type DailyMaintenanceResult} from '~/composables/useBookingValidation'
+import type {DailyMaintenanceResult} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 
 const LOG = '🔧 > DAILY > [MAINTENANCE]'
@@ -59,7 +59,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             console.info(`${LOG} initPrefs: initialized ${initPrefsResult.initialized} inhabitants`)
 
             scaffoldResult = await scaffoldPrebookings(d1Client, {seasonId: activeSeasonId})
-            console.info(`${LOG} scaffold: ${useBooking().formatScaffoldResult(scaffoldResult, useBookingValidation().ScaffoldResultFormatSchema.enum.compact)}`)
+            console.info(`${LOG} scaffold: ${useBooking().formatScaffoldResult(scaffoldResult)}`)
         } else {
             console.info(`${LOG} initPrefs/scaffold skipped: no active season`)
         }

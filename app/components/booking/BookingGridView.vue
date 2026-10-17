@@ -137,7 +137,7 @@ const {formatPrice, resolveTicketPrice} = useTicket()
 
 // Booking helpers (shared with DinnerBookingForm)
 const {groupGuestOrders, getDayBillSummary, resolveUserBookingBuckets, getBookingOptions, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
-const {formatActionPreview, waitlistPositionOf, lockChip} = useBookingUi()
+const {formatActionPreview, lockChip} = useBookingUi()
 
 // Inhabitant name lookup (used by actionPreviewItems)
 const getInhabitantName = (id: number) =>
@@ -186,7 +186,7 @@ const actionPreviewItems = computed(() => {
   )
 
   // Each dinner settles a claim against its own tickets for sale (the lock status)
-  return formatActionPreview(buckets, props.orders, getInhabitantName, order => supplyOfType(props.lockStatus.get(order.dinnerEventId), props.ticketPrices, order.ticketPriceId), waitlistPositionOf(props.waitlistEntries))
+  return formatActionPreview(buckets, props.orders, props.dinnerEvents, getInhabitantName, order => supplyOfType(props.lockStatus.get(order.dinnerEventId), props.ticketPrices, order.ticketPriceId))
 })
 
 // Effective form mode - VIEW when saving to prevent cell edits

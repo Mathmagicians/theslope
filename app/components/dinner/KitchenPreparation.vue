@@ -30,7 +30,7 @@
  * TIL SALG while anyone waits: the waiting-list part follows a gap, its portions and its ticket count
  * without a share. Each part's kuverter carry its icon, as the allergy line does; in the list each part
  * has its heading, and the waiting-list rows read like the other boxes' household rows, each person with
- * the place in the line of the ticket type, as the booking form numbers it:
+ * the place in the line of the ticket type, in the booking form's words (formatPlace):
  * ┌────────────┬────────────┬────────────┬────────────────────────┐
  * │  TAKEAWAY  │  SPISESAL  │ SPIS SENT  │        TIL SALG        │
  * │    38%     │    33%     │    19%     │          10%           │
@@ -50,8 +50,8 @@
  * │  N_12 · 2V · Maria, Jens                                      │
  * │                                                               │
  * │  VENTELISTE                                                   │
- * │  T_04 · 1V 1B · Knud (V #1), Emil (B #1)                      │
- * │  S_12 · 1B · Liva (B #2)                                      │
+ * │  T_04 · 1V 1B · Knud (Voksen #1), Emil (Barn #1)              │
+ * │  S_12 · 1B · Liva (Barn #2)                                   │
  * └───────────────────────────────────────────────────────────────┘
  *
  * Phone, the boxes stacked and TIL SALG open:
@@ -74,9 +74,9 @@
  * │ N_12 · 2V · Maria, Jens             │
  * │                                     │
  * │ VENTELISTE                          │
- * │ T_04 · 1V 1B · Knud (V #1),         │
- * │                Emil (B #1)          │
- * │ S_12 · 1B · Liva (B #2)             │
+ * │ T_04 · 1V 1B · Knud (Voksen #1),    │
+ * │                Emil (Barn #1)       │
+ * │ S_12 · 1B · Liva (Barn #2)          │
  * └─────────────────────────────────────┘
  *
  * Each panel: % + kuverter + ticket breakdown (Voksen/Barn/Baby + total) + the kuverter of its
@@ -135,6 +135,7 @@ const OrderState = OrderStateSchema.enum
 const {computeAllergenOverview} = useAllergy()
 const {formatTicketCounts, countTicketTypes} = useBilling()
 const {ticketTypeWords} = useTicket()
+const {formatPlace} = useBooking()
 const {getHouseholdForInhabitant} = useHouseholdsStore()
 
 const ticketFiguresOf = (counts: Partial<Record<TicketType, number>>): TicketFigures => ({
@@ -249,7 +250,7 @@ const selectedQueueRows = computed(() => {
     shortName: getHouseholdShortName(household.address),
     ticketCounts: formatTicketCounts(people),
     places: people.map(({entry, ticketType, place}) =>
-      `${household.inhabitants.find(inhabitant => inhabitant.id === entry.inhabitantId)?.name ?? ''} (${ticketTypeWords[ticketType].compactLabel} #${place})`).join(', ')
+      `${household.inhabitants.find(inhabitant => inhabitant.id === entry.inhabitantId)?.name ?? ''} (${formatPlace(place, ticketType)})`).join(', ')
   }))
 })
 

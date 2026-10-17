@@ -666,7 +666,9 @@ export const useBookingValidation = () => {
         inhabitantId: IdSchema,
         dinnerEventId: IdSchema,
         isGuestTicket: z.boolean(),
-        position: z.number().int().positive()
+        position: z.number().int().positive(),
+        // The line the place is in; null for an entry whose ticket price is gone
+        ticketType: TicketTypeSchema.nullable()
     })
 
     // A wish joined a dinner's waiting list
@@ -718,8 +720,6 @@ export const useBookingValidation = () => {
 
     // The orders of a run per action, every action present
     const BookingTotalsSchema = z.record(BookingActionSchema, z.number().int().nonnegative())
-
-    const ScaffoldResultFormatSchema = z.enum(['compact', 'verbose', 'past'])
 
     const ScaffoldResultSchema = z.object({
         seasonId: IdSchema.nullable(),
@@ -1025,7 +1025,6 @@ export const useBookingValidation = () => {
         BookingOutcomeSchema,
         BookingResultSchema,
         BookingTotalsSchema,
-        ScaffoldResultFormatSchema,
 
         // Query Parameter Normalization
         IdOrIdsSchema
@@ -1114,4 +1113,3 @@ export type BookingAction = z.infer<ReturnType<typeof useBookingValidation>['Boo
 export type BookingOutcome = z.infer<ReturnType<typeof useBookingValidation>['BookingOutcomeSchema']>
 export type BookingResult = z.infer<ReturnType<typeof useBookingValidation>['BookingResultSchema']>
 export type BookingTotals = z.infer<ReturnType<typeof useBookingValidation>['BookingTotalsSchema']>
-export type ScaffoldResultFormat = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldResultFormatSchema']>

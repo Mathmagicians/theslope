@@ -60,7 +60,7 @@ export default defineEventHandler<Promise<ScaffoldOrdersResponse>>(async (event)
         })
         await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), result.outcomes)
 
-        console.info(`${LOG} Scaffold complete: ${useBooking().formatScaffoldResult(result, useBookingValidation().ScaffoldResultFormatSchema.enum.compact)}`)
+        console.info(`${LOG} Scaffold complete: ${useBooking().formatScaffoldResult(result)}`)
 
         setResponseStatus(event, 200)
         return ScaffoldOrdersResponseSchema.parse({

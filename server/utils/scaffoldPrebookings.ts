@@ -363,7 +363,7 @@ export async function scaffoldPrebookings(
                         })
                         outcomes.joined.push(joined)
                         landed.push(resultOf(toClaim, Action.QUEUE))
-                        positions.push({inhabitantId: toClaim.inhabitantId, dinnerEventId: toClaim.dinnerEventId, isGuestTicket: toClaim.isGuestTicket, position})
+                        positions.push({inhabitantId: toClaim.inhabitantId, dinnerEventId: toClaim.dinnerEventId, isGuestTicket: toClaim.isGuestTicket, position, ticketType: joined.ticketType})
                     } catch (error) {
                         // The partial unique index holds one regular entry per inhabitant per dinner: a concurrent join already queued it
                         if (!eventHandlerHelper.isConflict(error)) throw error

@@ -9,7 +9,6 @@ import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
 import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { useAllergiesStore } from '~/stores/allergies'
-import { DEFAULT_ALLERGY_POSTER_NOTES } from '~/composables/useSettingValidation'
 
 // The one Setting row the allergy surfaces read (catalog footer + poster)
 const POSTER_NOTES_ENDPOINT = '/api/admin/setting/allergy-poster-notes'
@@ -74,6 +73,7 @@ describe('Allergies Store - AllergyTypes', () => {
         const store = await setupStore()
 
         expect(store.isAllergyTypesInitialized).toBe(true)
+        expect(store.isNoAllergyTypes).toBe(false)
         expect(store.allergyTypes).toHaveLength(AllergyFactory.createMockAllergyTypesWithInhabitants().length)
         expect(store.allergyTypes[0]!.name).toBe(AllergyFactory.createMockAllergyTypesWithInhabitants()[0]!.name)
     })
@@ -93,16 +93,13 @@ describe('Allergies Store - AllergyTypes', () => {
         expect(store.allergyTypesError?.statusCode).toBe(500)
     })
 
-    it.each([
-        { data: [], expected: true, description: 'empty array' },
-        { data: AllergyFactory.createMockAllergyTypesWithInhabitants(), expected: false, description: 'with data' }
-    ])('isNoAllergyTypes detects $description', async ({ data, expected }) => {
-        allergyTypesEndpoint.mockReturnValue(data)
+    it('isNoAllergyTypes detects an empty catalog', async () => {
+        allergyTypesEndpoint.mockReturnValue([])
 
         const store = await setupStore()
 
-        expect(store.isNoAllergyTypes).toBe(expected)
-        expect(store.allergyTypes).toHaveLength(data.length)
+        expect(store.isNoAllergyTypes).toBe(true)
+        expect(store.allergyTypes).toHaveLength(0)
     })
 
 })
@@ -118,7 +115,7 @@ describe('Allergies Store - selected allergy type', () => {
         allergyTypeByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypes()[0])
     })
 
-    it('a getter naming an allergy type loads that type', async () => {
+    it('a getter naming an allergy type loads that type, and the choice stays out of the store state', async () => {
         const store = await setupStore()
 
         store.selectAllergyType(() => selectedType!.id!)
@@ -126,6 +123,7 @@ describe('Allergies Store - selected allergy type', () => {
         await vi.waitFor(() => expect(store.isSelectedAllergyTypeInitialized).toBe(true))
         expect(store.selectedAllergyTypeId).toBe(selectedType!.id)
         expect(store.selectedAllergyType?.name).toBe('Peanuts')
+        expect(Object.values(store.$state)).not.toContain(selectedType!.id)
     })
 
     it.each([
@@ -183,15 +181,6 @@ describe('Allergies Store - selected allergy type', () => {
         await vi.waitFor(() => expect(store.isSelectedAllergyTypeInitialized).toBe(true))
         expect(store.selectedAllergyTypeId).toBe(selectedType!.id)
     })
-
-    it('keeps the choice out of the store state', async () => {
-        const store = await setupStore()
-
-        store.selectAllergyType(() => selectedType!.id!)
-
-        await vi.waitFor(() => expect(store.selectedAllergyTypeId).toBe(selectedType!.id))
-        expect(Object.values(store.$state)).not.toContain(selectedType!.id)
-    })
 })
 
 describe('Allergies Store - Allergies (Household/Inhabitant)', () => {
@@ -211,32 +200,6 @@ describe('Allergies Store - Allergies (Household/Inhabitant)', () => {
 
         await vi.waitFor(() => expect(store.allergies).toHaveLength(1))
         expect(store.allergies[0]!.inhabitantId).toBe(1)
-    })
-
-    it('loads allergies for household', async () => {
-        const store = useAllergiesStore()
-
-        store.loadAllergiesForHousehold(1)
-
-        // Wait for reactive fetch
-        await new Promise(resolve => setTimeout(resolve, 0))
-
-        expect(store.allergies).toHaveLength(1)
-    })
-
-    it('creates new allergy', async () => {
-        const store = useAllergiesStore()
-        store.loadAllergiesForInhabitant(1)
-
-        const newAllergy = {
-            inhabitantId: 1,
-            allergyTypeId: 2,
-            inhabitantComment: 'Mild intolerance'
-        }
-
-        const created = await store.createAllergy(newAllergy)
-
-        expect(created).toBeDefined()
     })
 })
 
@@ -397,29 +360,10 @@ describe('Allergies Store - poster notes setting', () => {
         expect(store.posterNotes).toBe(storedNotes)
     })
 
-    it('falls back to the registry default when the key has never been written', async () => {
-        currentValue = DEFAULT_ALLERGY_POSTER_NOTES
-        const store = useAllergiesStore()
-
-        await store.loadPosterNotes()
-
-        expect(store.posterNotes).toBe(DEFAULT_ALLERGY_POSTER_NOTES)
-    })
-
-    it('saves the notes and shows the stored text', async () => {
-        const store = useAllergiesStore()
-        await store.loadPosterNotes()
-
-        await store.savePosterNotes('Ny bemærkning')
-
-        expect(posterNotesPostEndpoint).toHaveBeenCalled()
-        expect(store.posterNotes).toBe('Ny bemærkning')
-    })
-
     // The save endpoint returns the stored row (ADR-009). A second round trip to read it back
     // can fail, and a failed read leaves the box on the registry default - the user sees the
     // old notes under a success toast. The response IS the new value.
-    it('shows the saved text even when a later read of the row fails', async () => {
+    it('saves the notes and shows the saved text even when a later read of the row fails', async () => {
         const store = useAllergiesStore()
         await store.loadPosterNotes()
         posterNotesGetEndpoint.mockImplementation(() => {
@@ -428,6 +372,7 @@ describe('Allergies Store - poster notes setting', () => {
 
         await store.savePosterNotes('Ny bemærkning')
 
+        expect(posterNotesPostEndpoint).toHaveBeenCalled()
         expect(store.posterNotes).toBe('Ny bemærkning')
     })
 

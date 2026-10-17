@@ -1,4 +1,4 @@
-import {useBookingValidation, type TicketType, type BookingRowAction, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type ScaffoldResultFormat, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketCounts, type AuditTicket, type OrderAuditAction} from '~/composables/useBookingValidation'
+import {useBookingValidation, type TicketType, type BookingRowAction, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketCounts, type AuditTicket, type OrderAuditAction} from '~/composables/useBookingValidation'
 import {useBillingValidation, type TransactionCreateData} from '~/composables/useBillingValidation'
 import {useBilling} from '~/composables/useBilling'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
@@ -15,11 +15,10 @@ import {chunkArray, groupBy, partition} from '~/utils/batchUtils'
 import {sumBy} from '~/utils/ledger'
 import {differenceInCalendarDays} from 'date-fns'
 
-const {BookingRowActionSchema, OrderBucketSchema, BookingActionSchema, ScaffoldResultFormatSchema} = useBookingValidation()
+const {BookingRowActionSchema, OrderBucketSchema, BookingActionSchema} = useBookingValidation()
 const ROW_ACTION = BookingRowActionSchema.enum
 const Bucket = OrderBucketSchema.enum
 const Action = BookingActionSchema.enum
-const Format = ScaffoldResultFormatSchema.enum
 
 /**
  * Field set that reverts a dinner to a clean chef-less SCHEDULED state.
@@ -667,7 +666,7 @@ export const useBooking = () => {
     const {getDefaultDinnerStartTime, getDefaultDinnerDuration, getDinnerTimeRange, splitDinnerEvents} = useSeason()
     const {DinnerStateSchema, OrderSnapshotSchema} = useBookingValidation()
     const {formatNameWithInitials, computeConsensus} = useHousehold()
-    const {resolveTicketPrice} = useTicket()
+    const {resolveTicketPrice, ticketTypeWords} = useTicket()
     const DinnerState = DinnerStateSchema.enum
 
     // ============================================================================
@@ -1115,6 +1114,10 @@ export const useBooking = () => {
         }
     }
 
+    /** A place on a dinner's waiting list, in the line of its ticket type; an entry whose ticket price is gone has its number alone */
+    const formatPlace = (position: number, ticketType?: TicketType | null): string =>
+        `${ticketType ? `${ticketTypeWords[ticketType].label} ` : ''}#${position}`
+
     // ============================================================================
     // Booking Toast Titles - Consistent UX across pages
     // ============================================================================
@@ -1128,55 +1131,33 @@ export const useBooking = () => {
     } as const
 
     // ============================================================================
-    // Scaffold Result Formatting - Consistent display across UI and logs
+    // Scaffold Result Formatting - the log line; the toast words live in useBookingUi
     // ============================================================================
 
-    // The words of each total, in the enum's order: a symbol for the logs, a label, a past-tense label for the toast
-    const TOTAL_WORDS: Record<BookingAction, {symbol: string, label: string, pastLabel: string}> = {
-        [Action.BOOK]: {symbol: '+', label: 'oprettet', pastLabel: 'blev tilmeldt'},
-        [Action.CANCEL]: {symbol: '-', label: 'slettet', pastLabel: 'blev frameldt'},
-        [Action.RELEASE]: {symbol: '↑', label: 'frigivet', pastLabel: 'blev frigivet'},
-        [Action.RECLAIM]: {symbol: '↓', label: 'tilmeldt igen', pastLabel: 'blev tilmeldt igen'},
-        [Action.BUY]: {symbol: '⇅', label: 'købt fra andre', pastLabel: 'købt fra andre'},
-        [Action.QUEUE]: {symbol: 'w', label: 'på venteliste', pastLabel: 'kom på ventelisten'},
-        [Action.LEAVE]: {symbol: 'l', label: 'forlader ventelisten', pastLabel: 'forlod ventelisten'},
-        [Action.REQUEUE]: {symbol: 'r', label: 'ønske på ventelisten opdateret', pastLabel: 'fik ønsket på ventelisten opdateret'},
-        [Action.CHANGE_PRICE]: {symbol: '$', label: 'pris opdateret', pastLabel: 'fik pris opdateret'},
-        [Action.CHANGE_MODE]: {symbol: 'm', label: 'spisemåde opdateret', pastLabel: 'fik spisemåde opdateret'}
+    // The symbol of each total in a log line, in the enum's order
+    const LOG_SYMBOLS: Record<BookingAction, string> = {
+        [Action.BOOK]: '+',
+        [Action.CANCEL]: '-',
+        [Action.RELEASE]: '↑',
+        [Action.RECLAIM]: '↓',
+        [Action.BUY]: '⇅',
+        [Action.QUEUE]: 'w',
+        [Action.LEAVE]: 'l',
+        [Action.REQUEUE]: 'r',
+        [Action.CHANGE_PRICE]: '$',
+        [Action.CHANGE_MODE]: 'm'
     }
-    const UNCHANGED_WORDS = {symbol: '=', label: 'uændret', pastLabel: 'uændret'}
-    const ERRORED_WORDS = {symbol: '!', label: 'fejlet', pastLabel: 'fejlede'}
 
-    /**
-     * Format scaffold result for display (toast, logs)
-     * - verbose (default): Danish labels for user toasts - "7 oprettet, 179 uændret"
-     * - compact: Technical symbols for admin/logs - "+7 =179"
-     * - past: Past tense for confirmation toasts - "7 blev tilmeldt, 2 blev frameldt"
-     * Only includes non-zero counts for cleaner output; queued entries carry their places in the queue in words
-     */
-    const formatScaffoldResult = (
-        result: ScaffoldResult,
-        format: ScaffoldResultFormat = Format.verbose
-    ): string => {
-        const places = result.positions.map(p => p.position).sort((a, b) => a - b)
-        const placesSuffix = places.length > 0 ? ` (nr. ${places.join(', ')})` : ''
-        const counts = [
-            ...BookingActionSchema.options.map(action => ({words: TOTAL_WORDS[action], count: result.totals[action], suffix: action === Action.QUEUE ? placesSuffix : ''})),
-            {words: UNCHANGED_WORDS, count: result.unchanged, suffix: ''},
-            {words: ERRORED_WORDS, count: result.errored, suffix: ''}
+    /** A scaffold result as a log line, the non-zero counts only: "+7 =179" */
+    const formatScaffoldResult = (result: ScaffoldResult): string => {
+        const parts = [
+            ...BookingActionSchema.options.map(action => ({symbol: LOG_SYMBOLS[action], count: result.totals[action]})),
+            {symbol: '=', count: result.unchanged},
+            {symbol: '!', count: result.errored}
         ]
-        const parts = counts
             .filter(({count}) => count > 0)
-            .map(({words, count, suffix}) => {
-                if (format === Format.compact) return `${words.symbol}${count}`
-                if (format === Format.past) return `${count} ${words.pastLabel}${suffix}`
-                return `${count} ${words.label}${suffix}`
-            })
-
-        if (parts.length === 0) {
-            return format === Format.compact ? '(ingen)' : 'Der var ingen ændringer i dine bookinger'
-        }
-        return parts.join(format === Format.compact ? ' ' : ', ')
+            .map(({symbol, count}) => `${symbol}${count}`)
+        return parts.length > 0 ? parts.join(' ') : '(ingen)'
     }
 
     // Sums the results of several scaffold runs; the season is the last run's
@@ -1543,6 +1524,7 @@ export const useBooking = () => {
         getBookingOptions,
         // Day Bill Summary
         getDayBillSummary,
+        formatPlace,
         // Toast Titles
         BOOKING_TOAST_TITLES,
         // Action Preview (show users what will happen before save)
