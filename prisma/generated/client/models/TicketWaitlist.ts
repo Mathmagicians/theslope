@@ -30,12 +30,14 @@ export type TicketWaitlistAvgAggregateOutputType = {
   id: number | null
   dinnerEventId: number | null
   inhabitantId: number | null
+  placingOrderId: number | null
 }
 
 export type TicketWaitlistSumAggregateOutputType = {
   id: number | null
   dinnerEventId: number | null
   inhabitantId: number | null
+  placingOrderId: number | null
 }
 
 export type TicketWaitlistMinAggregateOutputType = {
@@ -45,6 +47,8 @@ export type TicketWaitlistMinAggregateOutputType = {
   isGuestTicket: boolean | null
   order: string | null
   createdAt: Date | null
+  placingAt: Date | null
+  placingOrderId: number | null
 }
 
 export type TicketWaitlistMaxAggregateOutputType = {
@@ -54,6 +58,8 @@ export type TicketWaitlistMaxAggregateOutputType = {
   isGuestTicket: boolean | null
   order: string | null
   createdAt: Date | null
+  placingAt: Date | null
+  placingOrderId: number | null
 }
 
 export type TicketWaitlistCountAggregateOutputType = {
@@ -63,6 +69,8 @@ export type TicketWaitlistCountAggregateOutputType = {
   isGuestTicket: number
   order: number
   createdAt: number
+  placingAt: number
+  placingOrderId: number
   _all: number
 }
 
@@ -71,12 +79,14 @@ export type TicketWaitlistAvgAggregateInputType = {
   id?: true | runtime.Types.Skip
   dinnerEventId?: true | runtime.Types.Skip
   inhabitantId?: true | runtime.Types.Skip
+  placingOrderId?: true | runtime.Types.Skip
 }
 
 export type TicketWaitlistSumAggregateInputType = {
   id?: true | runtime.Types.Skip
   dinnerEventId?: true | runtime.Types.Skip
   inhabitantId?: true | runtime.Types.Skip
+  placingOrderId?: true | runtime.Types.Skip
 }
 
 export type TicketWaitlistMinAggregateInputType = {
@@ -86,6 +96,8 @@ export type TicketWaitlistMinAggregateInputType = {
   isGuestTicket?: true | runtime.Types.Skip
   order?: true | runtime.Types.Skip
   createdAt?: true | runtime.Types.Skip
+  placingAt?: true | runtime.Types.Skip
+  placingOrderId?: true | runtime.Types.Skip
 }
 
 export type TicketWaitlistMaxAggregateInputType = {
@@ -95,6 +107,8 @@ export type TicketWaitlistMaxAggregateInputType = {
   isGuestTicket?: true | runtime.Types.Skip
   order?: true | runtime.Types.Skip
   createdAt?: true | runtime.Types.Skip
+  placingAt?: true | runtime.Types.Skip
+  placingOrderId?: true | runtime.Types.Skip
 }
 
 export type TicketWaitlistCountAggregateInputType = {
@@ -104,6 +118,8 @@ export type TicketWaitlistCountAggregateInputType = {
   isGuestTicket?: true | runtime.Types.Skip
   order?: true | runtime.Types.Skip
   createdAt?: true | runtime.Types.Skip
+  placingAt?: true | runtime.Types.Skip
+  placingOrderId?: true | runtime.Types.Skip
   _all?: true | runtime.Types.Skip
 }
 
@@ -200,6 +216,8 @@ export type TicketWaitlistGroupByOutputType = {
   isGuestTicket: boolean
   order: string
   createdAt: Date
+  placingAt: Date | null
+  placingOrderId: number | null
   _count: TicketWaitlistCountAggregateOutputType | null
   _avg: TicketWaitlistAvgAggregateOutputType | null
   _sum: TicketWaitlistSumAggregateOutputType | null
@@ -232,6 +250,8 @@ export type TicketWaitlistWhereInput = {
   isGuestTicket?: Prisma.BoolFilter<"TicketWaitlist"> | boolean | runtime.Types.Skip
   order?: Prisma.StringFilter<"TicketWaitlist"> | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFilter<"TicketWaitlist"> | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.DateTimeNullableFilter<"TicketWaitlist"> | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.IntNullableFilter<"TicketWaitlist"> | number | null | runtime.Types.Skip
   dinnerEvent?: Prisma.XOR<Prisma.DinnerEventScalarRelationFilter, Prisma.DinnerEventWhereInput> | runtime.Types.Skip
   inhabitant?: Prisma.XOR<Prisma.InhabitantScalarRelationFilter, Prisma.InhabitantWhereInput> | runtime.Types.Skip
 }
@@ -243,6 +263,8 @@ export type TicketWaitlistOrderByWithRelationInput = {
   isGuestTicket?: Prisma.SortOrder | runtime.Types.Skip
   order?: Prisma.SortOrder | runtime.Types.Skip
   createdAt?: Prisma.SortOrder | runtime.Types.Skip
+  placingAt?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
+  placingOrderId?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
   dinnerEvent?: Prisma.DinnerEventOrderByWithRelationInput | runtime.Types.Skip
   inhabitant?: Prisma.InhabitantOrderByWithRelationInput | runtime.Types.Skip
 }
@@ -258,6 +280,8 @@ export type TicketWaitlistWhereUniqueInput = Prisma.AtLeast<{
   isGuestTicket?: Prisma.BoolFilter<"TicketWaitlist"> | boolean | runtime.Types.Skip
   order?: Prisma.StringFilter<"TicketWaitlist"> | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFilter<"TicketWaitlist"> | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.DateTimeNullableFilter<"TicketWaitlist"> | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.IntNullableFilter<"TicketWaitlist"> | number | null | runtime.Types.Skip
   dinnerEvent?: Prisma.XOR<Prisma.DinnerEventScalarRelationFilter, Prisma.DinnerEventWhereInput> | runtime.Types.Skip
   inhabitant?: Prisma.XOR<Prisma.InhabitantScalarRelationFilter, Prisma.InhabitantWhereInput> | runtime.Types.Skip
 }, "id" | "dinnerEventId_inhabitantId">
@@ -269,6 +293,8 @@ export type TicketWaitlistOrderByWithAggregationInput = {
   isGuestTicket?: Prisma.SortOrder | runtime.Types.Skip
   order?: Prisma.SortOrder | runtime.Types.Skip
   createdAt?: Prisma.SortOrder | runtime.Types.Skip
+  placingAt?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
+  placingOrderId?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
   _count?: Prisma.TicketWaitlistCountOrderByAggregateInput | runtime.Types.Skip
   _avg?: Prisma.TicketWaitlistAvgOrderByAggregateInput | runtime.Types.Skip
   _max?: Prisma.TicketWaitlistMaxOrderByAggregateInput | runtime.Types.Skip
@@ -286,12 +312,16 @@ export type TicketWaitlistScalarWhereWithAggregatesInput = {
   isGuestTicket?: Prisma.BoolWithAggregatesFilter<"TicketWaitlist"> | boolean | runtime.Types.Skip
   order?: Prisma.StringWithAggregatesFilter<"TicketWaitlist"> | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"TicketWaitlist"> | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.DateTimeNullableWithAggregatesFilter<"TicketWaitlist"> | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.IntNullableWithAggregatesFilter<"TicketWaitlist"> | number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistCreateInput = {
   isGuestTicket?: boolean | runtime.Types.Skip
   order: string
   createdAt?: Date | string | runtime.Types.Skip
+  placingAt?: Date | string | null | runtime.Types.Skip
+  placingOrderId?: number | null | runtime.Types.Skip
   dinnerEvent: Prisma.DinnerEventCreateNestedOneWithoutWaitlistInput
   inhabitant: Prisma.InhabitantCreateNestedOneWithoutWaitlistEntriesInput
 }
@@ -303,12 +333,16 @@ export type TicketWaitlistUncheckedCreateInput = {
   isGuestTicket?: boolean | runtime.Types.Skip
   order: string
   createdAt?: Date | string | runtime.Types.Skip
+  placingAt?: Date | string | null | runtime.Types.Skip
+  placingOrderId?: number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistUpdateInput = {
   isGuestTicket?: Prisma.BoolFieldUpdateOperationsInput | boolean | runtime.Types.Skip
   order?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   dinnerEvent?: Prisma.DinnerEventUpdateOneRequiredWithoutWaitlistNestedInput | runtime.Types.Skip
   inhabitant?: Prisma.InhabitantUpdateOneRequiredWithoutWaitlistEntriesNestedInput | runtime.Types.Skip
 }
@@ -320,6 +354,8 @@ export type TicketWaitlistUncheckedUpdateInput = {
   isGuestTicket?: Prisma.BoolFieldUpdateOperationsInput | boolean | runtime.Types.Skip
   order?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistCreateManyInput = {
@@ -329,12 +365,16 @@ export type TicketWaitlistCreateManyInput = {
   isGuestTicket?: boolean | runtime.Types.Skip
   order: string
   createdAt?: Date | string | runtime.Types.Skip
+  placingAt?: Date | string | null | runtime.Types.Skip
+  placingOrderId?: number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistUpdateManyMutationInput = {
   isGuestTicket?: Prisma.BoolFieldUpdateOperationsInput | boolean | runtime.Types.Skip
   order?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistUncheckedUpdateManyInput = {
@@ -344,6 +384,8 @@ export type TicketWaitlistUncheckedUpdateManyInput = {
   isGuestTicket?: Prisma.BoolFieldUpdateOperationsInput | boolean | runtime.Types.Skip
   order?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistListRelationFilter = {
@@ -368,12 +410,15 @@ export type TicketWaitlistCountOrderByAggregateInput = {
   isGuestTicket?: Prisma.SortOrder | runtime.Types.Skip
   order?: Prisma.SortOrder | runtime.Types.Skip
   createdAt?: Prisma.SortOrder | runtime.Types.Skip
+  placingAt?: Prisma.SortOrder | runtime.Types.Skip
+  placingOrderId?: Prisma.SortOrder | runtime.Types.Skip
 }
 
 export type TicketWaitlistAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder | runtime.Types.Skip
   dinnerEventId?: Prisma.SortOrder | runtime.Types.Skip
   inhabitantId?: Prisma.SortOrder | runtime.Types.Skip
+  placingOrderId?: Prisma.SortOrder | runtime.Types.Skip
 }
 
 export type TicketWaitlistMaxOrderByAggregateInput = {
@@ -383,6 +428,8 @@ export type TicketWaitlistMaxOrderByAggregateInput = {
   isGuestTicket?: Prisma.SortOrder | runtime.Types.Skip
   order?: Prisma.SortOrder | runtime.Types.Skip
   createdAt?: Prisma.SortOrder | runtime.Types.Skip
+  placingAt?: Prisma.SortOrder | runtime.Types.Skip
+  placingOrderId?: Prisma.SortOrder | runtime.Types.Skip
 }
 
 export type TicketWaitlistMinOrderByAggregateInput = {
@@ -392,12 +439,15 @@ export type TicketWaitlistMinOrderByAggregateInput = {
   isGuestTicket?: Prisma.SortOrder | runtime.Types.Skip
   order?: Prisma.SortOrder | runtime.Types.Skip
   createdAt?: Prisma.SortOrder | runtime.Types.Skip
+  placingAt?: Prisma.SortOrder | runtime.Types.Skip
+  placingOrderId?: Prisma.SortOrder | runtime.Types.Skip
 }
 
 export type TicketWaitlistSumOrderByAggregateInput = {
   id?: Prisma.SortOrder | runtime.Types.Skip
   dinnerEventId?: Prisma.SortOrder | runtime.Types.Skip
   inhabitantId?: Prisma.SortOrder | runtime.Types.Skip
+  placingOrderId?: Prisma.SortOrder | runtime.Types.Skip
 }
 
 export type TicketWaitlistCreateNestedManyWithoutInhabitantInput = {
@@ -488,6 +538,8 @@ export type TicketWaitlistCreateWithoutInhabitantInput = {
   isGuestTicket?: boolean | runtime.Types.Skip
   order: string
   createdAt?: Date | string | runtime.Types.Skip
+  placingAt?: Date | string | null | runtime.Types.Skip
+  placingOrderId?: number | null | runtime.Types.Skip
   dinnerEvent: Prisma.DinnerEventCreateNestedOneWithoutWaitlistInput
 }
 
@@ -497,6 +549,8 @@ export type TicketWaitlistUncheckedCreateWithoutInhabitantInput = {
   isGuestTicket?: boolean | runtime.Types.Skip
   order: string
   createdAt?: Date | string | runtime.Types.Skip
+  placingAt?: Date | string | null | runtime.Types.Skip
+  placingOrderId?: number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistCreateOrConnectWithoutInhabitantInput = {
@@ -534,12 +588,16 @@ export type TicketWaitlistScalarWhereInput = {
   isGuestTicket?: Prisma.BoolFilter<"TicketWaitlist"> | boolean | runtime.Types.Skip
   order?: Prisma.StringFilter<"TicketWaitlist"> | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFilter<"TicketWaitlist"> | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.DateTimeNullableFilter<"TicketWaitlist"> | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.IntNullableFilter<"TicketWaitlist"> | number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistCreateWithoutDinnerEventInput = {
   isGuestTicket?: boolean | runtime.Types.Skip
   order: string
   createdAt?: Date | string | runtime.Types.Skip
+  placingAt?: Date | string | null | runtime.Types.Skip
+  placingOrderId?: number | null | runtime.Types.Skip
   inhabitant: Prisma.InhabitantCreateNestedOneWithoutWaitlistEntriesInput
 }
 
@@ -549,6 +607,8 @@ export type TicketWaitlistUncheckedCreateWithoutDinnerEventInput = {
   isGuestTicket?: boolean | runtime.Types.Skip
   order: string
   createdAt?: Date | string | runtime.Types.Skip
+  placingAt?: Date | string | null | runtime.Types.Skip
+  placingOrderId?: number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistCreateOrConnectWithoutDinnerEventInput = {
@@ -582,12 +642,16 @@ export type TicketWaitlistCreateManyInhabitantInput = {
   isGuestTicket?: boolean | runtime.Types.Skip
   order: string
   createdAt?: Date | string | runtime.Types.Skip
+  placingAt?: Date | string | null | runtime.Types.Skip
+  placingOrderId?: number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistUpdateWithoutInhabitantInput = {
   isGuestTicket?: Prisma.BoolFieldUpdateOperationsInput | boolean | runtime.Types.Skip
   order?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   dinnerEvent?: Prisma.DinnerEventUpdateOneRequiredWithoutWaitlistNestedInput | runtime.Types.Skip
 }
 
@@ -597,6 +661,8 @@ export type TicketWaitlistUncheckedUpdateWithoutInhabitantInput = {
   isGuestTicket?: Prisma.BoolFieldUpdateOperationsInput | boolean | runtime.Types.Skip
   order?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistUncheckedUpdateManyWithoutInhabitantInput = {
@@ -605,6 +671,8 @@ export type TicketWaitlistUncheckedUpdateManyWithoutInhabitantInput = {
   isGuestTicket?: Prisma.BoolFieldUpdateOperationsInput | boolean | runtime.Types.Skip
   order?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistCreateManyDinnerEventInput = {
@@ -613,12 +681,16 @@ export type TicketWaitlistCreateManyDinnerEventInput = {
   isGuestTicket?: boolean | runtime.Types.Skip
   order: string
   createdAt?: Date | string | runtime.Types.Skip
+  placingAt?: Date | string | null | runtime.Types.Skip
+  placingOrderId?: number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistUpdateWithoutDinnerEventInput = {
   isGuestTicket?: Prisma.BoolFieldUpdateOperationsInput | boolean | runtime.Types.Skip
   order?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   inhabitant?: Prisma.InhabitantUpdateOneRequiredWithoutWaitlistEntriesNestedInput | runtime.Types.Skip
 }
 
@@ -628,6 +700,8 @@ export type TicketWaitlistUncheckedUpdateWithoutDinnerEventInput = {
   isGuestTicket?: Prisma.BoolFieldUpdateOperationsInput | boolean | runtime.Types.Skip
   order?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
 }
 
 export type TicketWaitlistUncheckedUpdateManyWithoutDinnerEventInput = {
@@ -636,6 +710,8 @@ export type TicketWaitlistUncheckedUpdateManyWithoutDinnerEventInput = {
   isGuestTicket?: Prisma.BoolFieldUpdateOperationsInput | boolean | runtime.Types.Skip
   order?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  placingAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null | runtime.Types.Skip
+  placingOrderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
 }
 
 
@@ -647,6 +723,8 @@ export type TicketWaitlistSelect<ExtArgs extends runtime.Types.Extensions.Intern
   isGuestTicket?: boolean | runtime.Types.Skip
   order?: boolean | runtime.Types.Skip
   createdAt?: boolean | runtime.Types.Skip
+  placingAt?: boolean | runtime.Types.Skip
+  placingOrderId?: boolean | runtime.Types.Skip
   dinnerEvent?: boolean | Prisma.DinnerEventDefaultArgs<ExtArgs> | runtime.Types.Skip
   inhabitant?: boolean | Prisma.InhabitantDefaultArgs<ExtArgs> | runtime.Types.Skip
 }, ExtArgs["result"]["ticketWaitlist"]>
@@ -658,6 +736,8 @@ export type TicketWaitlistSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   isGuestTicket?: boolean | runtime.Types.Skip
   order?: boolean | runtime.Types.Skip
   createdAt?: boolean | runtime.Types.Skip
+  placingAt?: boolean | runtime.Types.Skip
+  placingOrderId?: boolean | runtime.Types.Skip
   dinnerEvent?: boolean | Prisma.DinnerEventDefaultArgs<ExtArgs> | runtime.Types.Skip
   inhabitant?: boolean | Prisma.InhabitantDefaultArgs<ExtArgs> | runtime.Types.Skip
 }, ExtArgs["result"]["ticketWaitlist"]>
@@ -669,6 +749,8 @@ export type TicketWaitlistSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   isGuestTicket?: boolean | runtime.Types.Skip
   order?: boolean | runtime.Types.Skip
   createdAt?: boolean | runtime.Types.Skip
+  placingAt?: boolean | runtime.Types.Skip
+  placingOrderId?: boolean | runtime.Types.Skip
   dinnerEvent?: boolean | Prisma.DinnerEventDefaultArgs<ExtArgs> | runtime.Types.Skip
   inhabitant?: boolean | Prisma.InhabitantDefaultArgs<ExtArgs> | runtime.Types.Skip
 }, ExtArgs["result"]["ticketWaitlist"]>
@@ -680,9 +762,11 @@ export type TicketWaitlistSelectScalar = {
   isGuestTicket?: boolean | runtime.Types.Skip
   order?: boolean | runtime.Types.Skip
   createdAt?: boolean | runtime.Types.Skip
+  placingAt?: boolean | runtime.Types.Skip
+  placingOrderId?: boolean | runtime.Types.Skip
 }
 
-export type TicketWaitlistOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "dinnerEventId" | "inhabitantId" | "isGuestTicket" | "order" | "createdAt", ExtArgs["result"]["ticketWaitlist"], runtime.Types.Skip>
+export type TicketWaitlistOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "dinnerEventId" | "inhabitantId" | "isGuestTicket" | "order" | "createdAt" | "placingAt" | "placingOrderId", ExtArgs["result"]["ticketWaitlist"], runtime.Types.Skip>
 export type TicketWaitlistInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   dinnerEvent?: boolean | Prisma.DinnerEventDefaultArgs<ExtArgs> | runtime.Types.Skip
   inhabitant?: boolean | Prisma.InhabitantDefaultArgs<ExtArgs> | runtime.Types.Skip
@@ -709,6 +793,8 @@ export type $TicketWaitlistPayload<ExtArgs extends runtime.Types.Extensions.Inte
     isGuestTicket: boolean
     order: string
     createdAt: Date
+    placingAt: Date | null
+    placingOrderId: number | null
   }, ExtArgs["result"]["ticketWaitlist"]>
   composites: {}
 }
@@ -1140,6 +1226,8 @@ export interface TicketWaitlistFieldRefs {
   readonly isGuestTicket: Prisma.FieldRef<"TicketWaitlist", 'Boolean'>
   readonly order: Prisma.FieldRef<"TicketWaitlist", 'String'>
   readonly createdAt: Prisma.FieldRef<"TicketWaitlist", 'DateTime'>
+  readonly placingAt: Prisma.FieldRef<"TicketWaitlist", 'DateTime'>
+  readonly placingOrderId: Prisma.FieldRef<"TicketWaitlist", 'Int'>
 }
     
 

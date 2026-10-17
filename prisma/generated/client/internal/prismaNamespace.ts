@@ -2665,7 +2665,9 @@ export const TicketWaitlistScalarFieldEnum = {
   inhabitantId: 'inhabitantId',
   isGuestTicket: 'isGuestTicket',
   order: 'order',
-  createdAt: 'createdAt'
+  createdAt: 'createdAt',
+  placingAt: 'placingAt',
+  placingOrderId: 'placingOrderId'
 } as const
 
 export type TicketWaitlistScalarFieldEnum = (typeof TicketWaitlistScalarFieldEnum)[keyof typeof TicketWaitlistScalarFieldEnum]

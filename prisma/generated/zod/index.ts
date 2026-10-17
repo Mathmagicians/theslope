@@ -58,7 +58,7 @@ export const DinnerDutyScalarFieldEnumSchema = z.enum(['id','dinnerEventId','inh
 
 export const DutyHistoryScalarFieldEnumSchema = z.enum(['id','dinnerDutyId','action','performedByUserId','auditData','timestamp','swapGroupId','inhabitantId','dinnerEventId','seasonId']);
 
-export const TicketWaitlistScalarFieldEnumSchema = z.enum(['id','dinnerEventId','inhabitantId','isGuestTicket','order','createdAt']);
+export const TicketWaitlistScalarFieldEnumSchema = z.enum(['id','dinnerEventId','inhabitantId','isGuestTicket','order','createdAt','placingAt','placingOrderId']);
 
 export const ExpenseScalarFieldEnumSchema = z.enum(['id','type','dinnerEventId','paidByUserId','userSnapshot','amount','description','createdAt','updatedAt']);
 
