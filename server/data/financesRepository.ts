@@ -30,7 +30,7 @@ import {useBooking} from '~/composables/useBooking'
 import {byTimeThenId} from '~/composables/useWaitlist'
 import {useHousehold} from '~/composables/useHousehold'
 import {getHouseholdShortName} from '~/composables/useCoreValidation'
-import {fetchActiveSeasonId, costRowsInclude} from '~~/server/data/prismaRepository'
+import {fetchActiveSeasonId, costRowsInclude, readByIds} from '~~/server/data/prismaRepository'
 import {useBilling} from '~/composables/useBilling'
 import {
     useBillingValidation,
@@ -282,7 +282,7 @@ export async function fetchUserIntentKeys(
  * @param householdId - Household ID (for result tracking)
  * @param ordersData - Single order or array of orders
  * @param auditContext - Audit context for OrderHistory entries
- * @returns CreateOrdersResult with householdId and created order IDs
+ * @returns CreateOrdersResult with householdId and the created order IDs; returns the rows in insert order
  */
 export async function createOrders(
     d1Client: D1Database,
@@ -329,7 +329,8 @@ export async function createOrders(
             select: { id: true }
         })
 
-        const createdIds = createdOrders.map(o => o.id)
+        // SQLite's RETURNING hands the rows back in no set order; the ids count up in insert order, across Prisma's split inserts too
+        const createdIds = createdOrders.map(o => o.id).sort((a, b) => a - b)
         console.info(`🎟️ > ORDER > [BATCH CREATE] Created order IDs: ${createdIds.join(', ')}`)
 
         // Create audit trail entries with denormalized fields for user intent tracking
@@ -402,14 +403,20 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
     }
 }
 
-// The released tickets of a ticket type for sale on a dinner, at this instant
-export async function countReleasedTickets(d1Client: D1Database, dinnerEventId: number, ticketType: TicketType): Promise<number> {
+// The released tickets for sale on a dinner at this instant, per ticket type, in one statement: the price rows with their
+// released orders counted, summed per type as a season may hold two prices of a type
+export async function countReleasedTicketsByType(d1Client: D1Database, dinnerEventId: number): Promise<Map<TicketType, number>> {
     const {OrderStateSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
+    const released = {dinnerEventId, state: OrderStateSchema.enum.RELEASED}
     try {
-        return await prisma.order.count({where: {dinnerEventId, ticketPrice: {ticketType}, state: OrderStateSchema.enum.RELEASED}})
+        const prices = await prisma.ticketPrice.findMany({
+            where: {orders: {some: released}},
+            select: {ticketType: true, _count: {select: {orders: {where: released}}}}
+        })
+        return prices.reduce((counts, {ticketType, _count}) => counts.set(ticketType, (counts.get(ticketType) ?? 0) + _count.orders), new Map<TicketType, number>())
     } catch (error) {
-        return throwH3Error(`🎟️ > ORDER > [SUPPLY] Error counting released ${ticketType} tickets of dinner ${dinnerEventId}`, error)
+        return throwH3Error(`🎟️ > ORDER > [SUPPLY] Error counting the released tickets of dinner ${dinnerEventId}`, error)
     }
 }
 
@@ -592,8 +599,8 @@ export async function recordCancellation(
  * - Non-null: USER_CANCELLED (user deleted their own booking, respected by scaffolder)
  * - Null: SYSTEM_DELETED (system/admin deleted, may be re-created by scaffolder)
  *
- * ADR-011: Creates OrderHistory entries with denormalized fields before deletion.
- * When order is deleted, orderId becomes NULL but inhabitantId/dinnerEventId/seasonId persist.
+ * ADR-011: reads each order's snapshot, deletes the orders, then writes their CANCEL rows. A row names no order, as its
+ * order is gone; the snapshot keeps the order's id, and inhabitantId/dinnerEventId/seasonId persist.
  *
  * @param orderIds - Single ID or array of IDs
  * @param performedByUserId - User ID if user-initiated, null for admin/system
@@ -628,20 +635,20 @@ export async function deleteOrder(
             return []
         }
 
-        // 2. Create audit entries with provenance fields BEFORE deletion (allergies omitted - captured at CREATE)
+        // 2. Delete orders
+        await prisma.order.deleteMany({
+            where: { id: { in: ids } }
+        })
+
+        // 3. Audit entries with provenance fields after the delete (allergies omitted - captured at CREATE)
         await recordCancellation(d1Client, ordersToDelete.map(order => ({
-            orderId: order.id,
+            orderId: null,
             performedByUserId,
             inhabitantId: order.inhabitantId,
             dinnerEventId: order.dinnerEventId,
             seasonId: order.dinnerEvent?.seasonId ?? null,
             snapshot: orderSnapshotOf(order, order.inhabitant)
         })))
-
-        // 3. Delete orders
-        await prisma.order.deleteMany({
-            where: { id: { in: ids } }
-        })
 
         console.info(`${LOG} Successfully deleted ${ordersToDelete.length} order(s) with their cancellation audit entries`)
 
@@ -664,20 +671,14 @@ export const getOrderSortComparator = (sortBy: 'createdAt' | 'releasedAt') =>
     byTimeThenId<OrderDisplay>(sortBy === 'releasedAt' ? order => order.releasedAt?.getTime() ?? 0 : order => order.createdAt.getTime())
 
 /**
- * ADR-014: Batch size for dinner event ID queries.
- * D1 limit is 100 bound params. 90 reserves ~10 for other params (householdId, state, etc.)
- */
-const DINNER_EVENT_ID_BATCH_SIZE = 90
-
-/**
  * Fetch orders, optionally filtered by dinner event ID(s) and/or household.
  *
  * WORKAROUND: Uses raw SQL instead of Prisma nested includes because Prisma D1 adapter
  * doesn't support relationJoins, and nested includes with WHERE clauses exceed D1's
  * 100 SQL variable limit when fetching many orders.
  *
- * ADR-014: When dinnerEventIds exceeds DINNER_EVENT_ID_BATCH_SIZE (90), the query is
- * chunked into multiple batches to stay within D1's 100 parameter limit.
+ * ADR-014: the dinner event IDs read in chunks of 90 through readByIds, one after another: a chunk binds its ids,
+ * householdId and state, within D1's 100 parameter limit.
  *
  * Prisma issues tracking this limitation:
  * - https://github.com/prisma/prisma/issues/23348 (relationJoins for SQLite - not supported)
@@ -712,30 +713,15 @@ export async function fetchOrders(
     ].join(', ')
     console.info(`🎟️ > ORDER > [GET] Fetching orders for ${filterDesc}`)
 
-    // ADR-014: Chunk large ID arrays to stay within D1's 100 param limit
-    if (ids && ids.length > DINNER_EVENT_ID_BATCH_SIZE) {
-        console.info(`🎟️ > ORDER > [GET] Chunking ${ids.length} IDs into batches of ${DINNER_EVENT_ID_BATCH_SIZE}`)
-        const chunkIds = chunkArray<number>(DINNER_EVENT_ID_BATCH_SIZE)
-        const batches = chunkIds(ids)
+    if (ids === undefined) return fetchOrdersBatch(d1Client, undefined, householdId, state, sortBy, includeProvenance, includeDinnerContext)
 
-        // Execute batches in parallel and merge results
-        const batchResults = await Promise.all(
-            batches.map(batch => fetchOrdersBatch(d1Client, batch, householdId, state, sortBy, includeProvenance, includeDinnerContext))
-        )
-
-        // Flatten and sort by the requested field
-        const allOrders = batchResults.flat()
-        const sorted = allOrders.sort(getOrderSortComparator(sortBy))
-        console.info(`🎟️ > ORDER > [GET] Merged ${sorted.length} orders from ${batches.length} batches`)
-        return sorted
-    }
-
-    return fetchOrdersBatch(d1Client, ids, householdId, state, sortBy, includeProvenance, includeDinnerContext)
+    // The chunks' orders merge in the requested order
+    const orders = await readByIds(ids, batch => fetchOrdersBatch(d1Client, batch, householdId, state, sortBy, includeProvenance, includeDinnerContext))
+    return orders.sort(getOrderSortComparator(sortBy))
 }
 
 /**
- * Internal: Fetch orders for a single batch of dinner event IDs.
- * Called directly when IDs fit in one batch, or repeatedly for chunked queries.
+ * Internal: Fetch orders for a single batch of dinner event IDs, or for every event.
  */
 async function fetchOrdersBatch(
     d1Client: D1Database,
@@ -938,6 +924,20 @@ export async function fetchDinnerEvents(d1Client: D1Database, filter: DinnerEven
         return dinnerEvents.map(de => deserializeDinnerEvent(de))
     } catch (error) {
         return throwH3Error(`🍽️ > DINNER_EVENT > [GET]: Error fetching dinner events`, error)
+    }
+}
+
+/** The dinners of the ids, each as its Display with the cost of its expenses, by date; the ids read in chunks (ADR-014) */
+export async function fetchDinnerEventsByIds(d1Client: D1Database, ids: number[]): Promise<DinnerEventDisplay[]> {
+    console.info(`🍽️ > DINNER_EVENT > [GET] Fetching ${ids.length} dinner events by id`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    const {deserializeDinnerEvent} = useBookingValidation()
+
+    try {
+        const dinnerEvents = await readByIds(ids, batch => prisma.dinnerEvent.findMany({where: {id: {in: batch}}, include: costRowsInclude}))
+        return dinnerEvents.map(dinnerEvent => deserializeDinnerEvent(dinnerEvent)).sort((a, b) => a.date.getTime() - b.date.getTime())
+    } catch (error) {
+        return throwH3Error(`🍽️ > DINNER_EVENT > [GET]: Error fetching dinner events ${ids.join(', ')}`, error)
     }
 }
 
@@ -1295,12 +1295,12 @@ export const updateOrdersBatch = (chunkSize: number = 90) =>
         const updatesWithAudit = updates.flatMap(({orderId, audit}) => audit ? [{orderId, audit}] : [])
         if (updatesWithAudit.length > 0) {
             console.info(`${LOG} Creating ${updatesWithAudit.length} audit entries`)
-            const {chunkFetchIds, createOrderAuditData} = useBookingValidation()
-            const audited = await Promise.all(chunkFetchIds(updatesWithAudit.map(({orderId}) => orderId)).map(idChunk => prisma.order.findMany({
+            const {createOrderAuditData} = useBookingValidation()
+            const audited = await readByIds(updatesWithAudit.map(({orderId}) => orderId), idChunk => prisma.order.findMany({
                 where: {id: {in: idChunk}},
                 include: {inhabitant: {select: snapshotInhabitantSelect}}
-            })))
-            const orderById = new Map(audited.flat().map(order => [order.id, order]))
+            }))
+            const orderById = new Map(audited.map(order => [order.id, order]))
             const auditEntries = updatesWithAudit.flatMap(({orderId, audit: {change, ...row}}) => {
                 const order = orderById.get(orderId)
                 return order ? [{orderId, ...row, auditData: createOrderAuditData(change, orderSnapshotOf(order, order.inhabitant))}] : []

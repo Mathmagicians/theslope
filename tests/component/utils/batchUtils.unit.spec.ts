@@ -1,5 +1,5 @@
 import {describe, it, expect, vi} from 'vitest'
-import {chunkArray, groupBy, linesBy, partition, pruneAndCreate, writeBatchOrEach} from '~/utils/batchUtils'
+import {chunkArray, groupBy, linesBy, partition, pruneAndCreate, writeBatchOnce, writeBatchOrEach} from '~/utils/batchUtils'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 
 const {OrderStateSchema, DinnerModeSchema} = useBookingValidation()
@@ -120,7 +120,11 @@ describe('batchUtils', () => {
     })
 })
 
-describe('writeBatchOrEach', () => {
+// A batch writer: writeBatchOrEach retries a failed batch item by item, writeBatchOnce fails every item of it
+describe.each([
+    {writer: 'writeBatchOrEach', writeBatch: writeBatchOrEach, onFailure: 'writes the items one by one and reports only the failing item', writes: 4, report: {done: [1, 3], failed: [2]}},
+    {writer: 'writeBatchOnce', writeBatch: writeBatchOnce, onFailure: 'writes nothing more and reports every item failed', writes: 1, report: {done: [], failed: [1, 2, 3]}}
+])('$writer', ({writeBatch, onFailure, writes, report}) => {
     const collect = () => {
         const done: number[] = []
         const failed: number[] = []
@@ -131,21 +135,21 @@ describe('writeBatchOrEach', () => {
         const write = vi.fn().mockResolvedValue(undefined)
         const {done, failed, onDone, onFailed} = collect()
 
-        await writeBatchOrEach([1, 2, 3], write, onDone, onFailed)
+        await writeBatch([1, 2, 3], write, onDone, onFailed)
 
         expect(write).toHaveBeenCalledTimes(1)
         expect({done, failed}).toEqual({done: [1, 2, 3], failed: []})
     })
 
-    it('writes the items one by one when the batch fails, and reports only the failing item', async () => {
+    it(`GIVEN a batch the database refuses for one item WHEN written THEN it ${onFailure}`, async () => {
         const write = vi.fn(async (items: number[]) => {
             if (items.includes(2)) throw new Error('UNIQUE constraint failed')
         })
         const {done, failed, onDone, onFailed} = collect()
 
-        await writeBatchOrEach([1, 2, 3], write, onDone, onFailed)
+        await writeBatch([1, 2, 3], write, onDone, onFailed)
 
-        expect(write).toHaveBeenCalledTimes(4)
-        expect({done, failed}).toEqual({done: [1, 3], failed: [2]})
+        expect(write).toHaveBeenCalledTimes(writes)
+        expect({done, failed}).toEqual(report)
     })
 })

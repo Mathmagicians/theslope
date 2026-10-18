@@ -7,138 +7,124 @@ import {
     type WaitlistAuditContext, type WaitlistOrder
 } from '~/composables/useWaitlistValidation'
 import {useBookingValidation, OrderAuditAction, type ClearWaitlistResult, type OrderAuditChange, type OrderSnapshot} from '~/composables/useBookingValidation'
-import {orderSnapshotOf, recordCancellation, snapshotInhabitantSelect} from '~~/server/data/financesRepository'
+import {recordCancellation} from '~~/server/data/financesRepository'
+import {readByIds} from '~~/server/data/prismaRepository'
+import {byTimeThenId} from '~/composables/useWaitlist'
 import {groupBy} from '~/utils/batchUtils'
 
 const {throwH3Error, isPrismaNotFound} = eventHandlerHelper
 const LOG = '⏳ > WAITLIST'
 
-type PrismaClient = Awaited<ReturnType<typeof getPrismaClientConnection>>
-
 // The conflict a leave or a change meets on an entry a run holds or has placed
-const beingPlaced = (id: number) => createError({statusCode: 409, message: `Queue entry ${id} is being placed`})
+const beingPlaced = (ids: number[]) => createError({statusCode: 409, message: `Queue entry ${ids.join(', ')} is being placed`})
 
-// An entry's wish as the history keeps it: an order without an id, with the name and the household the history shows
-const snapshotOfEntry = async (prisma: PrismaClient, entry: Pick<TicketWaitlistDisplay, 'inhabitantId' | 'dinnerEventId' | 'isGuestTicket' | 'order'>): Promise<OrderSnapshot> => {
-    const inhabitant = await prisma.inhabitant.findUniqueOrThrow({where: {id: entry.inhabitantId}, select: snapshotInhabitantSelect})
-    const {ticketPriceId, priceAtBooking, dinnerMode, state} = entry.order
-    return orderSnapshotOf({
-        id: null, inhabitantId: entry.inhabitantId, dinnerEventId: entry.dinnerEventId, ticketPriceId, priceAtBooking, dinnerMode, state,
-        isGuestTicket: entry.isGuestTicket
-    }, inhabitant)
-}
+// The history row of a write to an entry: no order, the person and the dinner its snapshot names
+const entryHistoryRow = (audit: WaitlistAuditContext, change: OrderAuditChange) => (snapshot: OrderSnapshot) => ({
+    orderId: null, ...audit, inhabitantId: snapshot.inhabitantId, dinnerEventId: snapshot.dinnerEventId,
+    auditData: useBookingValidation().createOrderAuditData(change, snapshot)
+})
 
-// The history row of a join (QUEUE) or a change (REQUEUE), written before the write as deleteOrder writes its row before
-// the delete
-const recordEntryWrite = async (prisma: PrismaClient, entry: Parameters<typeof snapshotOfEntry>[1], audit: WaitlistAuditContext, change: OrderAuditChange): Promise<void> => {
-    const {createOrderAuditData} = useBookingValidation()
-    await prisma.orderHistory.create({
-        data: {
-            orderId: null, ...audit, inhabitantId: entry.inhabitantId, dinnerEventId: entry.dinnerEventId,
-            auditData: createOrderAuditData(change, await snapshotOfEntry(prisma, entry))
-        }
-    })
-}
+/** A wish that joins a queue, and the order its history row keeps, built from the household the caller holds */
+export type WaitlistJoin = {entry: TicketWaitlistCreate, snapshot: OrderSnapshot}
 
-// The entry a leave or a change writes to; one a run holds or has placed refuses with a conflict
-const unheldEntry = async (prisma: PrismaClient, id: number): Promise<TicketWaitlistDisplay> => {
-    const {deserializeTicketWaitlist} = useWaitlistValidation()
-    const row = await prisma.ticketWaitlist.findFirst({where: {id, placingAt: null}})
-    if (!row) throw beingPlaced(id)
-    return deserializeTicketWaitlist(row)
-}
+/** A place that leaves its queue, and the order its LEAVE row keeps, built from the household the caller holds */
+export type WaitlistLeave = {id: number, snapshot: OrderSnapshot}
+
+/** A place with a new wish, and the order its REQUEUE row keeps, built from the household the caller holds */
+export type WaitlistRequeue = {id: number, order: WaitlistOrder, snapshot: OrderSnapshot}
 
 /**
  * The waiting list rows: an entry per unplaced order, read FIFO by `createdAt`. The `order` column carries the
  * order-create shape as JSON (ADR-010); the partial unique index on (dinnerEventId, inhabitantId) for regular
  * entries answers a second regular entry with the unique-violation code, which the error floor maps to 409.
- * Each write to an entry writes its OrderHistory row with no order, which fetchUserIntentKeys reads as the person's act.
+ * Each write to an entry writes its OrderHistory row with no order after the write (ADR-011), which
+ * fetchUserIntentKeys reads as the person's act.
+ * The joins write their entries in one insert and their QUEUE rows in another (ADR-014); returns the entries in insert
+ * order, and the caller pairs each with its join by the entry's person, dinner and guest flag.
  */
-export async function createWaitlistEntry(d1Client: D1Database, entry: TicketWaitlistCreate, audit: WaitlistAuditContext): Promise<TicketWaitlistDisplay> {
+export async function createWaitlistEntries(d1Client: D1Database, joins: WaitlistJoin[], audit: WaitlistAuditContext): Promise<TicketWaitlistDisplay[]> {
+    if (joins.length === 0) return []
     const {serializeTicketWaitlist, deserializeTicketWaitlist} = useWaitlistValidation()
     const {OrderAuditChangeSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
-    console.info(`${LOG} > [JOIN] Inhabitant ${entry.inhabitantId} joins the queue of dinner ${entry.dinnerEventId}${entry.isGuestTicket ? ' with a guest ticket' : ''}`)
+    const dinners = [...new Set(joins.map(({entry}) => entry.dinnerEventId))].join(', ')
+    console.info(`${LOG} > [JOIN] ${joins.length} wish(es) join the queue of dinner ${dinners}`)
     try {
-        await recordEntryWrite(prisma, entry, audit, OrderAuditChangeSchema.enum.QUEUE)
-        const row = await prisma.ticketWaitlist.create({
-            data: serializeTicketWaitlist(entry)
-        })
-        return deserializeTicketWaitlist(row)
+        const rows = await prisma.ticketWaitlist.createManyAndReturn({data: joins.map(({entry}) => serializeTicketWaitlist(entry))})
+        await prisma.orderHistory.createMany({data: joins.map(({snapshot}) => entryHistoryRow(audit, OrderAuditChangeSchema.enum.QUEUE)(snapshot))})
+        // SQLite's RETURNING hands the rows back in no set order; the ids count up in insert order
+        return rows.map(deserializeTicketWaitlist).sort((a, b) => a.id - b.id)
     } catch (error) {
-        return throwH3Error(`${LOG} > [JOIN] Error adding inhabitant ${entry.inhabitantId} to the queue of dinner ${entry.dinnerEventId}`, error)
+        return throwH3Error(`${LOG} > [JOIN] Error adding ${joins.length} wish(es) to the queue of dinner ${dinners}`, error)
     }
 }
 
-// The queues of the dinners, first joined first; the entries of the dinners interleave by join time
+// The queues of the dinners, first joined first; the entries of the dinners interleave by join time. The dinner ids read
+// in chunks, one after another (ADR-014)
 export async function fetchWaitlistForDinners(d1Client: D1Database, dinnerEventIds: number[]): Promise<TicketWaitlistDisplay[]> {
     const {deserializeTicketWaitlist} = useWaitlistValidation()
     const prisma = await getPrismaClientConnection(d1Client)
     try {
-        const rows = await prisma.ticketWaitlist.findMany({
-            where: {dinnerEventId: {in: dinnerEventIds}},
+        const rows = await readByIds(dinnerEventIds, batch => prisma.ticketWaitlist.findMany({
+            where: {dinnerEventId: {in: batch}},
             orderBy: [{createdAt: 'asc'}, {id: 'asc'}]
-        })
-        return rows.map(deserializeTicketWaitlist)
+        }))
+        return rows.map(deserializeTicketWaitlist).sort(byTimeThenId(entry => entry.createdAt.getTime()))
     } catch (error) {
         return throwH3Error(`${LOG} > [GET] Error fetching the queues of dinners ${dinnerEventIds.join(', ')}`, error)
     }
 }
 
-// A household's entries, across the given dinners or all of them
-export async function fetchWaitlistForHousehold(d1Client: D1Database, householdId: number, dinnerEventIds?: number[]): Promise<TicketWaitlistDisplay[]> {
-    const {deserializeTicketWaitlist} = useWaitlistValidation()
+/**
+ * The household's places with a new wish: one update per place, one after another, each writing its own `order`, then
+ * their REQUEUE rows in one insert (ADR-011). `createdAt` stays, so each keeps its place in its line. A place a run holds
+ * or has placed refuses the write with a conflict; the places before it keep their new wish and no row is written
+ */
+export async function updateWaitlistEntryOrders(d1Client: D1Database, requeues: WaitlistRequeue[], audit: WaitlistAuditContext): Promise<number> {
+    if (requeues.length === 0) return 0
+    const {serializeTicketWaitlist} = useWaitlistValidation()
+    const {OrderAuditChangeSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
+    const ids = requeues.map(({id}) => id)
+    console.info(`${LOG} > [REQUEUE] Queue entries ${ids.join(', ')} get their new wishes`)
     try {
-        const rows = await prisma.ticketWaitlist.findMany({
-            where: {
-                inhabitant: {householdId},
-                ...(dinnerEventIds !== undefined && {dinnerEventId: {in: dinnerEventIds}})
-            },
-            orderBy: [{createdAt: 'asc'}, {id: 'asc'}]
-        })
-        return rows.map(deserializeTicketWaitlist)
+        for (const {id, order} of requeues) {
+            try {
+                await prisma.ticketWaitlist.update({where: {id, placingAt: null}, data: serializeTicketWaitlist({order})})
+            } catch (error) {
+                throw isPrismaNotFound(error) ? beingPlaced([id]) : error
+            }
+        }
+        await prisma.orderHistory.createMany({data: requeues.map(({snapshot}) => entryHistoryRow(audit, OrderAuditChangeSchema.enum.REQUEUE)(snapshot))})
+        return requeues.length
     } catch (error) {
-        return throwH3Error(`${LOG} > [GET] Error fetching the queue entries of household ${householdId}`, error)
+        return throwH3Error(`${LOG} > [REQUEUE] Error rewriting queue entries ${ids.join(', ')}`, error)
     }
 }
 
-// A new wish on an entry: `createdAt` stays, so the entry keeps its place in the queue. An entry a run holds or has
-// placed refuses the change with a conflict
-export async function updateWaitlistEntryOrder(d1Client: D1Database, id: number, order: WaitlistOrder, audit: WaitlistAuditContext): Promise<TicketWaitlistDisplay> {
-    const {serializeTicketWaitlist, deserializeTicketWaitlist} = useWaitlistValidation()
+/**
+ * The household's places leave their queues in one delete, then their cancellations (recordCancellation) whose change is
+ * LEAVE (ADR-011). The caller hands at most 90 places, D1's bound parameters. A place a run holds or has placed stays,
+ * and the batch answers 409 with no row
+ */
+export async function deleteWaitlistEntries(d1Client: D1Database, leaves: WaitlistLeave[], audit: WaitlistAuditContext): Promise<number> {
+    if (leaves.length === 0) return 0
     const {OrderAuditChangeSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
-    console.info(`${LOG} > [REQUEUE] Queue entry ${id} now wishes ${order.dinnerMode} at ticket price ${order.ticketPriceId}`)
+    const ids = leaves.map(({id}) => id)
+    console.info(`${LOG} > [LEAVE] Removing queue entries ${ids.join(', ')}`)
     try {
-        await recordEntryWrite(prisma, {...await unheldEntry(prisma, id), order}, audit, OrderAuditChangeSchema.enum.REQUEUE)
-        const row = await prisma.ticketWaitlist.update({where: {id, placingAt: null}, data: serializeTicketWaitlist({order})})
-        return deserializeTicketWaitlist(row)
-    } catch (error) {
-        if (isPrismaNotFound(error)) throw beingPlaced(id)
-        return throwH3Error(`${LOG} > [REQUEUE] Error rewriting queue entry ${id}`, error)
-    }
-}
-
-// The member leaves the queue, a cancellation (recordCancellation) whose change is LEAVE; an entry a run holds or has
-// placed refuses the leave with a conflict
-export async function deleteWaitlistEntry(d1Client: D1Database, id: number, audit: WaitlistAuditContext): Promise<number> {
-    const {OrderAuditChangeSchema} = useBookingValidation()
-    const prisma = await getPrismaClientConnection(d1Client)
-    console.info(`${LOG} > [LEAVE] Removing queue entry ${id}`)
-    try {
-        const entry = await unheldEntry(prisma, id)
-        await recordCancellation(d1Client, {
-            orderId: null, inhabitantId: entry.inhabitantId, dinnerEventId: entry.dinnerEventId, seasonId: audit.seasonId,
+        const {count} = await prisma.ticketWaitlist.deleteMany({where: {id: {in: ids}, placingAt: null}})
+        if (count < ids.length) throw beingPlaced(ids)
+        await recordCancellation(d1Client, leaves.map(({snapshot}) => ({
+            orderId: null, inhabitantId: snapshot.inhabitantId, dinnerEventId: snapshot.dinnerEventId, seasonId: audit.seasonId,
             // A cancellation names its member; the system's carries none
             performedByUserId: audit.action === OrderAuditAction.USER_CANCELLED ? audit.performedByUserId : null,
-            snapshot: await snapshotOfEntry(prisma, entry)
-        }, OrderAuditChangeSchema.enum.LEAVE)
-        const deleted = await prisma.ticketWaitlist.delete({where: {id, placingAt: null}, select: {id: true}})
-        return deleted.id
+            snapshot
+        })), OrderAuditChangeSchema.enum.LEAVE)
+        return count
     } catch (error) {
-        if (isPrismaNotFound(error)) throw beingPlaced(id)
-        return throwH3Error(`${LOG} > [LEAVE] Error removing queue entry ${id}`, error)
+        return throwH3Error(`${LOG} > [LEAVE] Error removing queue entries ${ids.join(', ')}`, error)
     }
 }
 

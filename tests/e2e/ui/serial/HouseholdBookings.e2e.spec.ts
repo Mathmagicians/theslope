@@ -174,9 +174,10 @@ const isScaffold = (response: Response) => response.url().includes('/api/househo
 // The grid's own read of a month: a preview without orders, answered with what the preferences would book there
 const isExpectedRead = (response: Response) => isScaffold(response) && response.url().includes('preview=true') && response.request().postDataJSON().orders.length === 0
 
-// A person of the member's household eating in the dining hall every weekday, and the member's page on the month past
-// the scaffold window, open once the grid's read of it has answered
-const openExpectedMonth = async (browser: Browser, name: string) => {
+// A person of the member's household eating in the dining hall every weekday, and the member's page on a week past
+// the scaffold window, open once the grid's read of it has answered; the week has a fraction of the month's cells to
+// re-render on each change
+const openExpectedWeek = async (browser: Browser, name: string) => {
     const adminContext = await validatedBrowserContext(browser)
     const memberContext = await memberValidatedBrowserContext(browser)
     const {householdId: memberHouseholdId, householdShortname, householdPbsId} = await getSessionUserInfo(memberContext)
@@ -188,29 +189,27 @@ const openExpectedMonth = async (browser: Browser, name: string) => {
     const dinnerEvent: DinnerEventDisplay = [...testSeason.dinnerEvents].sort((a, b) => a.date.getTime() - b.date.getTime())[0]!
     const page = await memberContext.newPage()
     const expectedRead = page.waitForResponse(isExpectedRead)
-    await gotoHydrated(page, buildBookingsUrl(BookingViewSchema.enum.month, dinnerEvent.date, {shortName: householdShortname, pbsId: householdPbsId}))
+    await gotoHydrated(page, buildBookingsUrl(BookingViewSchema.enum.week, dinnerEvent.date, {shortName: householdShortname, pbsId: householdPbsId}))
     const {scaffoldResult: expected} = await (await expectedRead).json() as ScaffoldOrdersResponse
     return {page, inhabitant, dinnerEvent, expected, theInhabitantOn: {inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id}}
 }
 
-test('GIVEN a member whose preferences book Spisesal on a month past the scaffold window WHEN the month opens THEN the dry run expects the member on its dinners and the grid explains the expected cells', async ({browser}) => {
-    const {page, expected, theInhabitantOn} = await openExpectedMonth(browser, 'Expected')
+test('GIVEN a member whose preferences book Spisesal on a week past the scaffold window WHEN the week opens THEN the dry run expects the member on its dinners and the grid explains the expected cells', async ({browser}) => {
+    const {page, expected, theInhabitantOn} = await openExpectedWeek(browser, 'Expected')
 
     expect(expected.results).toContainEqual(expect.objectContaining({...theInhabitantOn, dinnerMode: DinnerMode.DINEIN}))
     await expect(page.getByTestId('dinner-mode-legend-expected')).toBeVisible()
     await page.close()
 })
 
-test('GIVEN an expected cell on a month past the scaffold window WHEN the member sets it to Ingen and saves THEN the save cancels it and the re-read expects nothing there', async ({browser}) => {
-    const {page, inhabitant, dinnerEvent, theInhabitantOn} = await openExpectedMonth(browser, 'Cancelled')
+test('GIVEN an expected cell on a week past the scaffold window WHEN the member sets it to Ingen and saves THEN the save cancels it and the re-read expects nothing there', async ({browser}) => {
+    const {page, inhabitant, dinnerEvent, theInhabitantOn} = await openExpectedWeek(browser, 'Cancelled')
 
-    // WHEN: the member turns the cell through the modes to Ingen and saves once the preview has answered
+    // WHEN: the member turns the cell through the modes to Ingen and saves; the save sends the draft, the preview plays no part
     await page.getByTestId('grid-edit').click()
-    const preview = page.waitForResponse(response => isScaffold(response) && response.url().includes('preview=true') && response.request().postDataJSON().orders.length > 0)
     for (const _mode of [DinnerMode.DINEINLATE, DinnerMode.TAKEAWAY, DinnerMode.NONE]) {
         await page.getByTestId(`cell-${inhabitant.id}-${dinnerEvent.id}`).click()
     }
-    await preview
     const saved = page.waitForResponse(response => isScaffold(response) && !response.url().includes('preview=true'))
     const reRead = page.waitForResponse(isExpectedRead)
     await page.getByTestId('grid-save').click()

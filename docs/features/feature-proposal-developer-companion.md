@@ -14,7 +14,7 @@ One package, built by the test-engineer session in idle slices; the sections bel
 
 | Part | State |
 |---|---|
-| Developer companion: the site, its workflow, the `playwright-results-<suite>` artifacts | in the tree; the VitePress build runs once `vitepress` is installed |
+| Developer companion: the site, its workflow, the `playwright-results-<suite>`, `deployment` and `openapi` artifacts | in the tree; `make developer-build` generates 28 routes; the first publish waits for the merge to main |
 | BDD foundation | not started |
 | API reference | not started |
 | Feature migration | a standing rule: a spec migrates when next touched, idle batches after |
@@ -70,8 +70,9 @@ eslint config, the tsconfigs, `Makefile`, `.github/workflows/cicd.yml` (artifact
 
 **Problem.** A result is an artifact zip, and nothing shows what a server runs and how it behaved.
 
-**Solution.** A VitePress site in `developer/` (`vitepress` a root devDependency), published to the `gh-pages` branch by
-`.github/workflows/developer.yml`, served by GitHub Pages at `developer.skraaningen.dk`.
+**Solution.** A second Nuxt app in `developer/` (Nuxt Content over `docs/*.md` in place, Nuxt UI for the pages),
+generated static into `.output/developer/`, published to the `gh-pages` branch by `.github/workflows/developer.yml`,
+served by GitHub Pages at `developer.skraaningen.dk`.
 
 - Trigger: `workflow_run` on the pipeline's completion. A pipeline run that deploys hands over the artifact
   `deployment` (`deployment.env`: the `make version-info` lines, `ENV`, `URL`); `make developer-resolve run=<id>`
@@ -149,7 +150,7 @@ renders every feature with each scenario's latest result from the environment's 
 | playwright-bdd wiring and a migrated feature | the feature green in CI; the old → new case table in the package report |
 | make targets and workflows | run on the branch; the summary table and the published page in the browser check |
 | Nitro OpenAPI | the architecture unit spec: every handler in the spec |
-| Site pages | the VitePress build in the workflow; the browser check table per package |
+| Site pages | `nuxi generate developer` in the workflow; the browser check table per package |
 
 ## Decisions (2026-10-18)
 
@@ -174,7 +175,10 @@ renders every feature with each scenario's latest result from the environment's 
 - One site holds every environment as a path; a third environment is one more manifest.
 - API reference: `openAPI.production: 'prerender'`, so every build, prod included, writes its spec and each
   environment page shows its own; the route list is public in the repo already.
-- Hostname `developer.skraaningen.dk`; VitePress; API reference inventory first, schemas domain by domain; the work
+- Site: a second Nuxt app in `developer/` with Nuxt Content and Nuxt UI, generated static; the docs collection reads
+  `docs/*.md` in place, the environment pages render from the manifests in the browser. VitePress was built first and
+  replaced the same day: one stack, one look, no staged copy of the docs.
+- Hostname `developer.skraaningen.dk`; API reference inventory first, schemas domain by domain; the work
   starts on its own branch after 0.9.0 ships; the smoke report publishes without screenshots.
 
 **OPEN**

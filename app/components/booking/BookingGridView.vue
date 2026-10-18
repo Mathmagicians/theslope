@@ -540,8 +540,22 @@ const getDisabledModes = (order: OrderDisplay | undefined, event: DinnerEventDis
   return ALL_MODES.filter(m => !enabledModes.includes(m))
 }
 
-const getCellDisabledModes = (inhabitantId: number, event: DinnerEventDisplay): DinnerMode[] =>
-  getDisabledModes(getOrderForCell(inhabitantId, event.id), event)
+// The cell slots render inside UTable's render: a fresh array per render makes every selector patch on every click, one array per cell lets Vue skip the untouched ones
+const disabledModesByCell = computed(() => new Map(
+  flatEvents.value.flatMap(event => props.household.inhabitants.map(inhabitant =>
+    [expectedBookingKey(inhabitant.id, event.id), getDisabledModes(getOrderForCell(inhabitant.id, event.id), event)] as const))
+))
+const getCellDisabledModes = (inhabitantId: number, eventId: number): DinnerMode[] =>
+  disabledModesByCell.value.get(expectedBookingKey(inhabitantId, eventId))!
+
+const disabledModesByGuestGroup = computed(() => new Map(
+  Object.values(groupGuestOrders(props.orders)).flatMap(guestOrders => {
+    const event = flatEvents.value.find(e => e.id === guestOrders[0]!.dinnerEventId)
+    return event ? [[guestDraftKey(guestOrders), getDisabledModes(guestOrders[0], event)] as const] : []
+  })
+))
+const getGuestDisabledModes = (guestOrders: OrderDisplay[]): DinnerMode[] =>
+  disabledModesByGuestGroup.value.get(guestDraftKey(guestOrders))!
 
 // Residency alert: shown when any visible event falls outside residency
 const residencyAlert = computed(() => {
@@ -553,7 +567,7 @@ const residencyAlert = computed(() => {
 const getPowerDisabledModes = (event: DinnerEventDisplay): DinnerMode[] => {
   const firstInhabitant = props.household.inhabitants[0]
   if (!firstInhabitant) return ALL_MODES
-  return getCellDisabledModes(firstInhabitant.id, event)
+  return getCellDisabledModes(firstInhabitant.id, event.id)
 }
 
 // The column header's lock chip on a locked dinner counts the household's own released tickets: it waits with the rows
@@ -805,7 +819,7 @@ const getEventSummary = (eventId: number) => {
           :model-value="getCellMode(row.original.inhabitant.id, event.id)"
           :form-mode="isEventDisabled(event) ? FORM_MODES.VIEW : effectiveFormMode"
           :interaction="effectiveFormMode === FORM_MODES.EDIT && !isEventDisabled(event) ? 'toggle' : 'buttons'"
-          :disabled-modes="getCellDisabledModes(row.original.inhabitant.id, event)"
+          :disabled-modes="getCellDisabledModes(row.original.inhabitant.id, event.id)"
           :size="SIZES.standard"
           :name="`cell-${row.original.inhabitant.id}-${event.id}`"
           :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
@@ -818,7 +832,7 @@ const getEventSummary = (eventId: number) => {
           :model-value="getGuestCellMode(row.original.guestOrders)"
           :form-mode="isEventDisabled(event) ? FORM_MODES.VIEW : effectiveFormMode"
           :interaction="effectiveFormMode === FORM_MODES.EDIT && !isEventDisabled(event) ? 'toggle' : 'buttons'"
-          :disabled-modes="getDisabledModes(row.original.guestOrders[0], event)"
+          :disabled-modes="getGuestDisabledModes(row.original.guestOrders)"
           :size="SIZES.standard"
           :name="`guest-${row.original.id}-${event.id}`"
           :is-modified="isGuestCellModified(row.original.guestOrders)"

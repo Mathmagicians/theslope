@@ -520,6 +520,8 @@ where: { ...(householdId && { id: householdId }) }
    booking action or CLOSE; the snapshot is the order after the change, or as it stood before a sale or a deletion;
    a row of no order (a place on the waiting list, a cancellation of nothing booked) writes `id: null`. Written by
    `createOrderAuditData`, read by `readOrderAudit`, which also reads the earlier shapes and null for what a row cannot tell
+6. The data write comes first, the audit row after it: the audit is evidence, never the truth. A delete reads its
+   snapshot, deletes, then writes the row. A missing audit row is the write-failure dashboard's; a stale one must not exist
 
 ---
 

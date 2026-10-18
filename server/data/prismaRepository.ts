@@ -13,6 +13,7 @@ import type {
     InhabitantCreate,
     InhabitantUpdate,
     InhabitantDetail,
+    InhabitantDisplay,
     HouseholdCreate,
     HouseholdDisplay,
     HouseholdDetail,
@@ -40,6 +41,16 @@ import {useBillingValidation} from '~/composables/useBillingValidation'
 // Repository transforms Prisma results to domain types before returning
 
 const {throwH3Error, h3eFromCatch} = eventHandlerHelper
+
+// ADR-014: an id list reads in chunks under D1's bound-parameter limit, one chunk at a time, as D1 resets connections
+// under a flood of concurrent queries
+const chunkIds = chunkArray<number>(90)
+/** Reads a list of ids in chunks of 90, one chunk after another; each id once, the rows in chunk order */
+export const readByIds = async <T>(ids: number[], read: (batch: number[]) => Promise<T[]>): Promise<T[]> => {
+    const rows: T[] = []
+    for (const batch of chunkIds([...new Set(ids)])) rows.push(...await read(batch))
+    return rows
+}
 
 /*** USERS ***/
 
@@ -305,6 +316,18 @@ export async function fetchUser(d1Client: D1Database, filter: { email?: string; 
     }
 }
 
+export async function fetchUsersByIds(d1Client: D1Database, ids: number[]): Promise<UserDisplay[]> {
+    if (ids.length === 0) return []
+    console.info(`🪪 > USER > [GET] Fetching ${ids.length} users by id`)
+    try {
+        const prisma = await getPrismaClientConnection(d1Client)
+        const users = await readByIds(ids, batch => prisma.user.findMany({where: {id: {in: batch}}, select: USER_DISPLAY_SELECT}))
+        return users.map(deserializeToUserDisplay)
+    } catch (error) {
+        return throwH3Error(`🪪 > USERS > [GET]: Error fetching ${ids.length} users by id`, error)
+    }
+}
+
 /*** INHABITANTS ***/
 
 export async function saveInhabitant(d1Client: D1Database, inhabitant: Omit<InhabitantCreate, 'householdId'>, householdId: number, skipRefetch?: boolean): Promise<InhabitantDetail | null> {
@@ -531,6 +554,32 @@ export async function fetchInhabitant(d1Client: D1Database, id: number): Promise
     }
 }
 
+// ADR-009: InhabitantDisplay, the scalar fields
+const INHABITANT_DISPLAY_SELECT = {
+    id: true,
+    heynaboId: true,
+    userId: true,
+    householdId: true,
+    name: true,
+    lastName: true,
+    pictureUrl: true,
+    birthDate: true,
+    dinnerPreferences: true
+} as const
+
+export async function fetchInhabitantsByIds(d1Client: D1Database, ids: number[]): Promise<InhabitantDisplay[]> {
+    if (ids.length === 0) return []
+    console.info(`👩‍🏠 > INHABITANT > [GET] Fetching ${ids.length} inhabitants by id`)
+    const {deserializeInhabitantDisplay} = useCoreValidation()
+    try {
+        const prisma = await getPrismaClientConnection(d1Client)
+        const inhabitants = await readByIds(ids, batch => prisma.inhabitant.findMany({where: {id: {in: batch}}, select: INHABITANT_DISPLAY_SELECT}))
+        return inhabitants.map(deserializeInhabitantDisplay)
+    } catch (error) {
+        return throwH3Error(`👩‍🏠 > INHABITANTS > [GET]: Error fetching ${ids.length} inhabitants by id`, error)
+    }
+}
+
 
 export async function updateInhabitant(d1Client: D1Database, id: number, inhabitantData: Partial<InhabitantUpdate>): Promise<InhabitantDetail> {
     console.info(`👩‍🏠 > INHABITANT > [UPDATE] Updating inhabitant with ID ${id}`)
@@ -747,19 +796,7 @@ const findHouseholdDisplays = async (d1Client: D1Database, where: Prisma.Househo
     const households = await prisma.household.findMany({
         where,
         include: {
-            inhabitants: {
-                select: {
-                    id: true,
-                    heynaboId: true,
-                    userId: true,
-                    householdId: true,
-                    name: true,
-                    lastName: true,
-                    pictureUrl: true,
-                    birthDate: true,
-                    dinnerPreferences: true
-                }
-            }
+            inhabitants: {select: INHABITANT_DISPLAY_SELECT}
         },
         orderBy: {
             address: 'asc'  // Sort alphabetically by address for consistent UI ordering
@@ -780,10 +817,8 @@ export async function fetchHouseholds(d1Client: D1Database, householdId?: number
     }
 }
 
-// ADR-014: an id list reads in chunks under D1's bound-parameter limit
-const chunkIds = chunkArray<number>(90)
 const findHouseholdDisplaysByIds = async (d1Client: D1Database, ids: number[], whereOf: (batch: number[]) => Prisma.HouseholdWhereInput): Promise<HouseholdDisplay[]> =>
-    (await Promise.all(chunkIds([...new Set(ids)]).map(batch => findHouseholdDisplays(d1Client, whereOf(batch))))).flat()
+    readByIds(ids, batch => findHouseholdDisplays(d1Client, whereOf(batch)))
 
 export async function fetchHouseholdsByIds(d1Client: D1Database, ids: number[]): Promise<HouseholdDisplay[]> {
     console.info(`🏠 > HOUSEHOLD > [GET] Fetching ${ids.length} households by id`)

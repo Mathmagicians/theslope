@@ -30,8 +30,10 @@ export const groupBy = <T, K extends string | number>(getKey: (item: T) => K) =>
     (items: T[]): Map<K, T[]> =>
         items.reduce((map, item) => {
             const key = getKey(item)
-            const group = map.get(key) ?? []
-            return map.set(key, [...group, item])
+            const group = map.get(key)
+            if (group) group.push(item)
+            else map.set(key, [item])
+            return map
         }, new Map<K, T[]>())
 
 /** Lines from rows: the rows with one key make one line, the lines in the given order */
@@ -164,4 +166,24 @@ export const writeBatchOrEach = async <T>(
             }
         }
     }
+}
+
+/**
+ * Writes a batch in one attempt: when the call fails, every item of the batch lands in onFailed with its error and
+ * nothing is written again
+ */
+export const writeBatchOnce = async <T>(
+    items: T[],
+    write: (batch: T[]) => Promise<unknown>,
+    onDone: (items: T[]) => void,
+    onFailed: (item: T, error: unknown) => void
+): Promise<void> => {
+    if (items.length === 0) return
+    try {
+        await write(items)
+    } catch (error) {
+        for (const item of items) onFailed(item, error)
+        return
+    }
+    onDone(items)
 }

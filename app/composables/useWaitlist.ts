@@ -50,7 +50,10 @@ export const useWaitlist = () => {
         const lines = new Map<TicketType, TicketWaitlistDisplay[]>()
         for (const entry of inQueueOrder(entries)) {
             const ticketType = ticketTypeOf(entry)
-            if (ticketType) lines.set(ticketType, [...(lines.get(ticketType) ?? []), entry])
+            if (!ticketType) continue
+            const line = lines.get(ticketType)
+            if (line) line.push(entry)
+            else lines.set(ticketType, [entry])
         }
         return lines
     }
@@ -106,21 +109,36 @@ export const useWaitlist = () => {
     const portionNeed = (entries: TicketWaitlistDisplay[], portionsOf: PortionsOf): number =>
         sumBy(entries, portionsOf)
 
-    // An entry that joined: its place in its ticket type's line, and what the joined mail and the chef's buildup read, on
-    // the queue that holds it
+    // The entries that joined behind the line, in join order: each at its place in its ticket type's line, with what the
+    // joined mail and the chef's buildup read on the queue that holds it at its join. One pass, so a dinner's joins cost
+    // the length of its queue
     const joinedOf = (
-        queue: TicketWaitlistDisplay[], entry: TicketWaitlistDisplay, ticketPrices: Pick<TicketPrice, 'id' | 'ticketType' | 'portions'>[], bookedByUserId: number
-    ): {position: number, joined: WaitlistJoined} => {
+        line: TicketWaitlistDisplay[], joined: TicketWaitlistDisplay[], ticketPrices: Pick<TicketPrice, 'id' | 'ticketType' | 'portions'>[], bookedByUserId: number
+    ): {position: number, joined: WaitlistJoined}[] => {
         const ticketTypeOf = ticketTypeOfEntry(ticketPrices)
-        const position = positionOf(queue, entry.id, ticketTypeOf) ?? queue.length
-        return {
-            position,
-            joined: {
-                dinnerEventId: entry.dinnerEventId, inhabitantId: entry.inhabitantId, bookedByUserId,
-                position, ticketType: ticketTypeOf(entry) ?? null,
-                queueSize: queue.length, portionNeed: portionNeed(queue, portionsOfEntryFor(ticketPrices))
-            }
+        const portionsOf = portionsOfEntryFor(ticketPrices)
+        const lineLengths = new Map<TicketType, number>()
+        let queueSize = 0
+        let need = 0
+        const stand = (entry: TicketWaitlistDisplay): TicketType | undefined => {
+            const ticketType = ticketTypeOf(entry)
+            if (ticketType) lineLengths.set(ticketType, (lineLengths.get(ticketType) ?? 0) + 1)
+            queueSize++
+            need += portionsOf(entry)
+            return ticketType
         }
+        line.forEach(stand)
+        return joined.map(entry => {
+            const ticketType = stand(entry)
+            const position = ticketType ? lineLengths.get(ticketType)! : queueSize
+            return {
+                position,
+                joined: {
+                    dinnerEventId: entry.dinnerEventId, inhabitantId: entry.inhabitantId, bookedByUserId,
+                    position, ticketType: ticketType ?? null, queueSize, portionNeed: need
+                }
+            }
+        })
     }
 
     // Strict FIFO: the walk stops at the first entry that does not fit the remaining supply or that another run holds,

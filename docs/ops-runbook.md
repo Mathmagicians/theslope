@@ -422,15 +422,17 @@ curl https://www.skraaningen.dk/api/public/health | jq '.version'
 
 | Item | Value |
 |------|-------|
-| Workflow | `.github/workflows/developer.yml` — runs on `deployment_status` of `dev` and `prod` (states success and failure) and on `workflow_dispatch` |
-| Make targets | `make developer-assemble env= run= version= sha=`, `make developer-build`, `make developer-publish` |
+| Workflow | `.github/workflows/developer.yml` — runs when the CI/CD pipeline completes and publishes the run that uploaded the artifact `deployment` (a deploy to `dev` or `prod`), and on `workflow_dispatch` |
+| Make targets | `make developer-resolve run=`, `make developer-assemble env= run= version= sha= [url=]`, `make developer-build`, `make developer-publish` |
+| Site build | `make developer-build` runs `npx nuxi generate developer` and copies `.output/developer/public/` into the `gh-pages` checkout |
+| Local preview | `npx nuxi dev developer` |
 | Pages setting | Source: branch `gh-pages`, folder `/ (root)`; custom domain `developer.skraaningen.dk` |
 | DNS (zone `skraaningen.dk`) | `CNAME developer → mathmagicians.github.io`, DNS only |
 
 Republish an environment from a CI/CD run:
 
 ```bash
-gh workflow run developer.yml -f environment=dev -f run_id=<id>   # <id>: the CI/CD run that deployed
+gh workflow run developer.yml -f run_id=<id>   # <id>: the CI/CD run that deployed; the environment comes from its artifact
 gh run watch
 ```
 

@@ -4,8 +4,10 @@ import {
     bookingMails, emitTicketSold, emitWaitlistBuildup, emitWaitlistExtraPortion, emitWaitlistJoined, emitWaitlistTicketAssigned,
     NO_BOOKING_MAILS, notifyBookingOutcomes, notifyExtraPortions, type BookingMails
 } from '~~/server/utils/sender/events/waitlist'
-import {fetchHousehold, fetchInhabitantsByIds, fetchSeason, fetchUsersByIds} from '~~/server/data/prismaRepository'
-import {fetchDinnerEvent} from '~~/server/data/financesRepository'
+import * as peopleReads from '~~/server/data/prismaRepository'
+import * as dinnerReads from '~~/server/data/financesRepository'
+import {fetchHouseholdsByIds, fetchInhabitantsByIds, fetchSeason, fetchUsersByIds} from '~~/server/data/prismaRepository'
+import {fetchDinnerEventsByIds} from '~~/server/data/financesRepository'
 import type {EmailChannel} from '~~/server/utils/sender/config'
 import type {EmailMessage, SenderEmitResult} from '~/composables/useNotificationValidation'
 import type {HouseholdDetail, InhabitantDisplay, UserDisplay} from '~/composables/useCoreValidation'
@@ -21,10 +23,10 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 
 // The unit runtime has no D1: the lookups answer from the test
 vi.mock('~~/server/data/prismaRepository', () => ({
-    fetchHousehold: vi.fn(), fetchInhabitantsByIds: vi.fn(), fetchSeason: vi.fn(), fetchUsersByIds: vi.fn()
+    fetchHouseholdsByIds: vi.fn(), fetchInhabitantsByIds: vi.fn(), fetchSeason: vi.fn(), fetchUsersByIds: vi.fn()
 }))
 vi.mock('~~/server/data/financesRepository', () => ({
-    createOrders: vi.fn(), findReleasedOrderId: vi.fn(), claimReleasedOrder: vi.fn(), fetchDinnerEvent: vi.fn()
+    createOrders: vi.fn(), findReleasedOrderId: vi.fn(), claimReleasedOrder: vi.fn(), fetchDinnerEventsByIds: vi.fn()
 }))
 // The events read the config and log through createError from the Nitro auto-import scope
 vi.stubGlobal('useAppConfig', () => ({theslope: {waitlistBuildupThreshold: 3}}))
@@ -46,18 +48,23 @@ const events = [
 const fakeQueue = () => ({send: vi.fn().mockResolvedValue(undefined)}) as unknown as Queue & {send: ReturnType<typeof vi.fn>}
 const sentMessages = (queue: {send: ReturnType<typeof vi.fn>}): EmailMessage[] => queue.send.mock.calls.map(([message]) => message as EmailMessage)
 
-// The dinner of the mails, in season 9, cooked by the chef
-const mockDinner = (chefId: number | null) => {
-    vi.mocked(fetchDinnerEvent).mockResolvedValue({...DinnerEventFactory.defaultDinnerEventDetail(), id: dinner.dinnerEventId, seasonId: 9, chefId})
-    vi.mocked(fetchSeason).mockResolvedValue({...SeasonFactory.defaultSeason(), id: 9, ticketPrices: TicketFactory.defaultTicketPrices({seasonId: 9})})
+// The dinners of the mails, the dinner above in season 9 unless named, cooked by the chef; each season holds its prices
+const mockDinners = (chefId: number | null, dinners: {id: number, seasonId: number}[] = [{id: dinner.dinnerEventId, seasonId: 9}]) => {
+    const rows = dinners.map(({id, seasonId}) => ({...DinnerEventFactory.defaultDinnerEventDetail(), id, seasonId, chefId}))
+    vi.mocked(fetchDinnerEventsByIds).mockImplementation(async (_, ids) => rows.filter(row => ids.includes(row.id)))
+    vi.mocked(fetchSeason).mockImplementation(async (_, id) => ({...SeasonFactory.defaultSeason(), id, ticketPrices: TicketFactory.defaultTicketPrices({seasonId: id})}))
 }
 
 // The repository answers each read by id from the people of the run
 const mockPeople = (inhabitants: InhabitantDisplay[], users: UserDisplay[], households: HouseholdDetail[]) => {
-    vi.mocked(fetchHousehold).mockImplementation(async (_, id) => households.find(household => household.id === id) ?? null)
+    vi.mocked(fetchHouseholdsByIds).mockImplementation(async (_, ids) => households.filter(household => ids.includes(household.id)))
     vi.mocked(fetchInhabitantsByIds).mockImplementation(async (_, ids) => inhabitants.filter(inhabitant => ids.includes(inhabitant.id)))
     vi.mocked(fetchUsersByIds).mockImplementation(async (_, ids) => users.filter(user => ids.includes(user.id)))
 }
+
+// The repository reads the mails make, each by name with its count
+const readsOf = () => Object.fromEntries([...Object.entries(dinnerReads), ...Object.entries(peopleReads)]
+    .flatMap(([name, read]) => vi.isMockFunction(read) && read.mock.calls.length > 0 ? [[name, read.mock.calls.length]] : []))
 
 const outcomesOf = (outcomes: Partial<BookingOutcomes>): BookingOutcomes => ({...OrderFactory.defaultScaffoldResult().outcomes, ...outcomes})
 
@@ -156,10 +163,9 @@ describe('bookingMails', () => {
 // The mails follow a booking that is already saved: a failed lookup leaves the booking standing and sends nothing
 describe('booking notifications after the action', () => {
     const logs = {error: vi.spyOn(console, 'error'), warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
-    const lookups = [fetchDinnerEvent, fetchSeason, fetchHousehold, fetchInhabitantsByIds, fetchUsersByIds]
     beforeEach(() => {
         Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
-        lookups.forEach(lookup => vi.mocked(lookup).mockRejectedValue(new Error('D1 down')))
+        Object.values({...dinnerReads, ...peopleReads}).filter(read => vi.isMockFunction(read)).forEach(read => read.mockRejectedValue(new Error('D1 down')))
     })
     afterEach(() => vi.clearAllMocks())
 
@@ -169,7 +175,7 @@ describe('booking notifications after the action', () => {
         {operation: 'notifyBookingOutcomes', notify: (channel: EmailChannel) =>
             notifyBookingOutcomes({} as D1Database, channel, {joined: [], ticketsSold: [sale], waitlistTicketsSold: [sale], waitlistPortionsAssigned: []})},
         {operation: 'notifyExtraPortions', notify: (channel: EmailChannel) =>
-            notifyExtraPortions({} as D1Database, channel, WaitlistFactory.defaultAssignmentResult({dinnerEventId: 7}))}
+            notifyExtraPortions({} as D1Database, channel, WaitlistFactory.defaultAssignmentResult({dinnerEventId: 7, waitlistTicketsSold: [sale]}))}
     ])('$operation logs a failed lookup and reports no mails', async ({notify}) => {
         const queue = fakeQueue()
 
@@ -187,7 +193,7 @@ describe('the mails of the waiting list\'s placements', () => {
     const member = {...household.inhabitants[0]!, userId: 6}
     beforeEach(() => {
         Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
-        mockDinner(null)
+        mockDinners(null)
         mockPeople([member], [UserFactory.defaultUserWithInhabitant('member', {id: member.userId, email: to})], [{...household, inhabitants: [member]}])
     })
     afterEach(() => vi.clearAllMocks())
@@ -227,7 +233,7 @@ describe('the people a run\'s mails name', () => {
     const logins = people.flatMap(member => member.userId ? [UserFactory.defaultUserWithInhabitant(`u${member.id}`, {id: member.userId, email: addressOf(member)})] : [])
     beforeEach(() => {
         Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
-        mockDinner(chef.id)
+        mockDinners(chef.id)
         mockPeople(people, logins, [sellers, buyers])
     })
     afterEach(() => vi.clearAllMocks())
@@ -243,21 +249,31 @@ describe('the people a run\'s mails name', () => {
     // The parent joins and books the child; the neighbour's place reaches the threshold
     const joined = [joinedEvent(parent, parent.userId!, 1), joinedEvent(child, parent.userId!, 2), joinedEvent(neighbour, neighbour.userId!, 3)]
 
-    const readsOf = () => ({
-        dinner: vi.mocked(fetchDinnerEvent).mock.calls.length,
-        inhabitants: vi.mocked(fetchInhabitantsByIds).mock.calls.length,
-        users: vi.mocked(fetchUsersByIds).mock.calls.length
-    })
     // A mail's kind, its recipient and the people and households of the run its text names
     const names = [...people.map(member => member.name), sellers.shortName!, buyers.shortName!]
     const mailOf = (message: EmailMessage) => JSON.stringify({kind: message.meta.kind, to: message.to, names: names.filter(name => message.text.includes(name))})
     // A result's dedupe key leads with its kind
     const kindOf = (result: SenderEmitResult): string => result.dedupeKey.split(':')[0]!
 
-    it('GIVEN a run that joins people to one dinner WHEN its mails resolve THEN one inhabitants read, one users read and one dinner read serve them all', async () => {
-        await notifyBookingOutcomes({} as D1Database, NotificationFactory.channel(fakeQueue()), outcomesOf({joined}))
+    // 40 dinners, the first 20 in season 9 and the others in season 10
+    const fortyDinners = Array.from({length: 40}, (_, index) => ({id: 100 + index, seasonId: index < 20 ? 9 : 10}))
 
-        expect(readsOf()).toEqual({dinner: 1, inhabitants: 1, users: 1})
+    it.each([
+        {
+            run: 'joins people to one dinner', dinners: [{id: dinner.dinnerEventId, seasonId: 9}], outcomes: outcomesOf({joined}),
+            reads: {fetchDinnerEventsByIds: 1, fetchSeason: 1, fetchInhabitantsByIds: 1, fetchUsersByIds: 1}
+        },
+        {
+            run: 'sells a ticket to the first in line on each of 40 dinners of two seasons', dinners: fortyDinners,
+            outcomes: outcomesOf({waitlistTicketsSold: fortyDinners.map(({id}) => ({...saleTo(buyer), dinnerEventId: id}))}),
+            reads: {fetchDinnerEventsByIds: 1, fetchSeason: 2, fetchHouseholdsByIds: 1, fetchInhabitantsByIds: 1, fetchUsersByIds: 1}
+        }
+    ])('GIVEN a run that $run WHEN its mails resolve THEN one read of each kind serves them all, and one season read per season', async ({dinners, outcomes, reads}) => {
+        mockDinners(chef.id, dinners)
+
+        await notifyBookingOutcomes({} as D1Database, NotificationFactory.channel(fakeQueue()), outcomes)
+
+        expect(readsOf()).toEqual(reads)
     })
 
     it('GIVEN a run with every kind of mail WHEN its mails resolve THEN each reaches its recipient and names its people', async () => {
@@ -286,7 +302,7 @@ describe('the people a run\'s mails name', () => {
         {person: 'an extra portion\'s owner without a login', chefId: chef.id, outcomes: outcomesOf({waitlistPortionsAssigned: [portionTo(buyerWithoutLogin)]}), unaddressed: 'WAITLIST_EXTRA_PORTION'},
         {person: 'a chef without a login', chefId: chefWithoutLogin.id, outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}), unaddressed: 'WAITLIST_BUILDUP'}
     ])('GIVEN $person WHEN the mails resolve THEN that mail is reported unaddressed and the others go out', async ({chefId, outcomes, unaddressed}) => {
-        mockDinner(chefId)
+        mockDinners(chefId)
 
         const results = await notifyBookingOutcomes({} as D1Database, NotificationFactory.channel(fakeQueue()), outcomes)
 

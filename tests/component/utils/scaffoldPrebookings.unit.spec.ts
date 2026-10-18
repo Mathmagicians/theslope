@@ -5,16 +5,17 @@ import {scaffoldPrebookings, type ScaffoldOptions} from '~~/server/utils/scaffol
 import {joinWaitlist, sellTicketsToWaitlist} from '~~/server/utils/waitlistAssignment'
 import {fetchHouseholds, fetchHouseholdsByInhabitantIds, fetchSeason} from '~~/server/data/prismaRepository'
 import {
-    claimOrder, claimReleasedOrder, countReleasedTickets, createOrders, deleteOrder, fetchOrders, fetchUserIntentKeys, findReleasedOrderId, recordCancellation,
+    claimOrder, claimReleasedOrder, countReleasedTicketsByType, createOrders, deleteOrder, fetchOrders, fetchUserIntentKeys, findReleasedOrderId, recordCancellation,
     updateOrdersBatch, type OrderBatchUpdate
 } from '~~/server/data/financesRepository'
 import {
-    createWaitlistEntries, deleteWaitlistEntry, fetchWaitlistForDinners, grabWaitlistEntry, removePlacedWaitlistEntry, updateWaitlistEntryOrder
+    createWaitlistEntries, deleteWaitlistEntries, fetchWaitlistForDinners, grabWaitlistEntry, removePlacedWaitlistEntry, updateWaitlistEntryOrders
 } from '~~/server/data/waitlistRepository'
 import {useBookingValidation, OrderAuditAction as AuditActions, type DesiredOrder, type DinnerMode, type OrderAuditAction, type OrderDisplay, type TicketType} from '~/composables/useBookingValidation'
 import type {TicketWaitlistCreate, TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
-import {useCoreValidation} from '~/composables/useCoreValidation'
+import {getHouseholdShortName, useCoreValidation} from '~/composables/useCoreValidation'
+import {callsInFlight} from '~~/tests/component/data/fakePrismaClient'
 import type {WeekDayMap} from '~/types/dateTypes'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {OPEN_DEADLINES} from '~/composables/useSeason'
@@ -34,16 +35,19 @@ const appConfig = await vi.hoisted(async () => {
 vi.stubGlobal('useAppConfig', () => appConfig)
 vi.stubGlobal('createError', createError)
 
-// The repositories stand for the database the unit runtime lacks
-vi.mock('~~/server/data/prismaRepository', () => ({
+// The repositories stand for the database the unit runtime lacks; the snapshot builder runs as written, and with it the
+// repository modules it is defined beside
+vi.mock('~~/server/data/prismaRepository', async importOriginal => ({
+    ...await importOriginal<typeof import('~~/server/data/prismaRepository')>(),
     fetchHouseholds: vi.fn(), fetchHouseholdsByInhabitantIds: vi.fn(), fetchSeason: vi.fn(), fetchActiveSeasonId: vi.fn(), fetchUser: vi.fn()
 }))
-vi.mock('~~/server/data/financesRepository', () => ({
+vi.mock('~~/server/data/financesRepository', async importOriginal => ({
+    orderSnapshotOf: (await importOriginal<typeof import('~~/server/data/financesRepository')>()).orderSnapshotOf,
     fetchOrders: vi.fn(), fetchUserIntentKeys: vi.fn(), createOrders: vi.fn(), deleteOrder: vi.fn(), updateOrdersBatch: vi.fn(),
-    claimOrder: vi.fn(), countReleasedTickets: vi.fn(), fetchDinnerEvent: vi.fn(), findReleasedOrderId: vi.fn(), claimReleasedOrder: vi.fn(), recordCancellation: vi.fn()
+    claimOrder: vi.fn(), countReleasedTicketsByType: vi.fn(), findReleasedOrderId: vi.fn(), claimReleasedOrder: vi.fn(), recordCancellation: vi.fn()
 }))
 vi.mock('~~/server/data/waitlistRepository', () => ({
-    fetchWaitlistForDinners: vi.fn(), deleteWaitlistEntry: vi.fn(), updateWaitlistEntryOrder: vi.fn(), createWaitlistEntries: vi.fn(), grabWaitlistEntry: vi.fn(), removePlacedWaitlistEntry: vi.fn(), releaseWaitlistEntry: vi.fn(), recordWaitlistPlacingOrder: vi.fn(), fetchOrdersServingEntry: vi.fn()
+    fetchWaitlistForDinners: vi.fn(), deleteWaitlistEntries: vi.fn(), updateWaitlistEntryOrders: vi.fn(), createWaitlistEntries: vi.fn(), grabWaitlistEntry: vi.fn(), removePlacedWaitlistEntry: vi.fn(), releaseWaitlistEntry: vi.fn(), recordWaitlistPlacingOrder: vi.fn(), fetchOrdersServingEntry: vi.fn()
 }))
 // The system account is a seeded user the unit runtime lacks
 vi.mock('~~/server/utils/systemUser', () => ({getSystemUserId: vi.fn(async () => 1)}))
@@ -62,7 +66,7 @@ const {ADULT, CHILD} = TicketTypeSchema.enum
 
 // The writes a run makes; a preview makes none
 const writeUpdates = vi.fn(async (_d1: D1Database, updates: OrderBatchUpdate[]) => updates.length)
-const writers = {createOrders, writeUpdates, deleteOrder, claimOrder, joinWaitlist, deleteWaitlistEntry, updateWaitlistEntryOrder, sellTicketsToWaitlist}
+const writers = {createOrders, writeUpdates, deleteOrder, claimOrder, joinWaitlist, deleteWaitlistEntries, updateWaitlistEntryOrders, sellTicketsToWaitlist}
 const writersCalled = () => Object.entries(writers).filter(([, writer]) => vi.mocked(writer).mock.calls.length > 0).map(([name]) => name)
 
 // A household of two on a dinner where Bo holds an order; the household waits for nothing until a test says so
@@ -161,8 +165,12 @@ const givenSupply = (ticketPrices: TicketPrice[], tickets: TicketOnSale[], entri
         ...HouseholdFactory.defaultHouseholdDetail('seller'), id: OTHER_HOUSEHOLD_ID,
         inhabitants: [{...HouseholdFactory.defaultInhabitantData('seller'), id: OTHER_INHABITANT_ID, householdId: OTHER_HOUSEHOLD_ID}]
     }])
-    vi.mocked(countReleasedTickets).mockImplementation(async (_d1, dinnerEventId, ticketType) =>
-        tickets.filter(({order}) => order.dinnerEventId === dinnerEventId && ticketTypeOf(order.ticketPriceId) === ticketType).length)
+    vi.mocked(countReleasedTicketsByType).mockImplementation(async (_d1, dinnerEventId) => tickets
+        .filter(({order}) => order.dinnerEventId === dinnerEventId)
+        .reduce((counts, {order}) => {
+            const ticketType = ticketTypeOf(order.ticketPriceId)
+            return ticketType ? counts.set(ticketType, (counts.get(ticketType) ?? 0) + 1) : counts
+        }, new Map<TicketType, number>()))
     vi.mocked(claimOrder).mockImplementation(async (_d1, dinnerEventId, ticketType) => {
         const ticket = oldestOfType(dinnerEventId, ticketType)
         return ticket ? sell(ticket) : null
@@ -314,8 +322,8 @@ describe('scaffoldPrebookings', () => {
 
     // Anna waits on the dinner's waiting list for a takeaway; the save leaves her place or changes it to dine in
     describe.each([
-        {change: 'leave', action: BookingActionSchema.enum.LEAVE, dinnerMode: DinnerModeSchema.enum.NONE, refuse: (error: Error) => vi.mocked(deleteWaitlistEntry).mockRejectedValue(error)},
-        {change: 'change', action: BookingActionSchema.enum.REQUEUE, dinnerMode: DinnerModeSchema.enum.DINEIN, refuse: (error: Error) => vi.mocked(updateWaitlistEntryOrder).mockRejectedValue(error)}
+        {change: 'leave', action: BookingActionSchema.enum.LEAVE, dinnerMode: DinnerModeSchema.enum.NONE, refuse: (error: Error) => vi.mocked(deleteWaitlistEntries).mockRejectedValue(error)},
+        {change: 'change', action: BookingActionSchema.enum.REQUEUE, dinnerMode: DinnerModeSchema.enum.DINEIN, refuse: (error: Error) => vi.mocked(updateWaitlistEntryOrders).mockRejectedValue(error)}
     ])('a refused $change of a place on the waiting list', ({action, dinnerMode, refuse}) => {
         it.each([
             {refusal: 'a run placing the entry', error: () => createError({statusCode: 409, message: 'Queue entry 21 is being placed'}), reason: BookingFailureSchema.enum.CONFLICT},
@@ -438,7 +446,10 @@ describe('scaffoldPrebookings', () => {
                 expect(deleteOrder).toHaveBeenCalledWith(d1Client, [boOrder.id], 7)
                 expect(recordCancellation).toHaveBeenCalledWith(d1Client, [{
                     orderId: null, inhabitantId: anna.id, dinnerEventId: dinner.id, seasonId: season.id, performedByUserId: 7,
-                    snapshot: expect.objectContaining({id: null, inhabitantId: anna.id, dinnerEventId: dinner.id, dinnerMode: Mode.NONE, isGuestTicket: false, householdId: household.id})
+                    snapshot: expect.objectContaining({
+                        id: null, inhabitantId: anna.id, dinnerEventId: dinner.id, dinnerMode: Mode.NONE, isGuestTicket: false,
+                        householdId: household.id, householdShortname: getHouseholdShortName(household.address)
+                    })
                 }])
             }
         })
@@ -482,8 +493,8 @@ describe('scaffoldPrebookings', () => {
                 WaitlistFactory.defaultEntry({id, inhabitantId, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, householdId: household.id})
             const [annaPlace, boPlace] = [place(21, anna.id), place(22, bo.id)]
             givenSupply(season.ticketPrices, [], [annaPlace, boPlace])
-            vi.mocked(deleteWaitlistEntry).mockResolvedValue(annaPlace.id)
-            vi.mocked(updateWaitlistEntryOrder).mockImplementation(async (_d1, _id, order) => ({...boPlace, order}))
+            vi.mocked(deleteWaitlistEntries).mockImplementation(async (_d1, leaves) => leaves.length)
+            vi.mocked(updateWaitlistEntryOrders).mockImplementation(async (_d1, requeues) => requeues.length)
             const runs = {
                 member: () => scaffoldPrebookings(d1Client, {seasonId: season.id, householdId: household.id, userId: 7, desiredOrders: [
                     WaitlistFactory.wishOf(annaPlace, {dinnerMode: Mode.NONE}), WaitlistFactory.wishOf(boPlace, {dinnerMode: Mode.TAKEAWAY}),
@@ -496,27 +507,60 @@ describe('scaffoldPrebookings', () => {
                     return scaffoldPrebookings(d1Client, {seasonId: season.id, householdId: household.id})
                 }
             }
-            return {runs, annaPlace, boPlace, bo, dayAfter, seasonId: season.id!}
+            return {runs, annaPlace, boPlace, anna, bo, dayAfter, seasonId: season.id!, household}
         }
 
         it.each([
             {run: 'member', performedByUserId: 7, leave: AuditActions.USER_CANCELLED, requeue: AuditActions.USER_BOOKED, join: AuditActions.USER_BOOKED},
             {run: 'preferences', performedByUserId: 1, leave: AuditActions.SYSTEM_DELETED, requeue: AuditActions.SYSTEM_UPDATED, join: AuditActions.SYSTEM_CREATED}
-        ] as const)('GIVEN the $run run WHEN it leaves, changes and joins THEN each write carries its audit', async ({run, performedByUserId, leave, requeue, join}) => {
-            const {runs, annaPlace, boPlace, bo, dayAfter, seasonId} = givenPlaces()
+        ] as const)('GIVEN the $run run WHEN it leaves, changes and joins THEN each write carries its audit and the snapshot of the person and the household the run holds', async ({run, performedByUserId, leave, requeue, join}) => {
+            const {runs, annaPlace, boPlace, anna, bo, dayAfter, seasonId, household} = givenPlaces()
             const audit = (action: OrderAuditAction) => ({action, performedByUserId, seasonId})
+            const snapshotOf = (inhabitantId: number, dinnerEventId: number, wish: {dinnerMode?: DinnerMode} = {}) => expect.objectContaining({
+                id: null, inhabitantId, dinnerEventId, ...wish, householdId: household.id, householdShortname: getHouseholdShortName(household.address)
+            })
 
             const result = await runs[run]()
 
             expect(result.totals).toMatchObject({[Action.LEAVE]: 1, [Action.REQUEUE]: 1, [Action.QUEUE]: 1})
-            expect(deleteWaitlistEntry).toHaveBeenCalledWith(d1Client, annaPlace.id, audit(leave))
-            expect(updateWaitlistEntryOrder).toHaveBeenCalledWith(d1Client, boPlace.id, expect.objectContaining({dinnerMode: Mode.TAKEAWAY}), audit(requeue))
-            expect(createWaitlistEntries).toHaveBeenCalledWith(d1Client, [expect.objectContaining({entry: expect.objectContaining({inhabitantId: bo.id, dinnerEventId: dayAfter.id})})], audit(join))
+            expect(deleteWaitlistEntries).toHaveBeenCalledWith(d1Client, [{id: annaPlace.id, snapshot: snapshotOf(anna.id, annaPlace.dinnerEventId)}], audit(leave))
+            expect(updateWaitlistEntryOrders).toHaveBeenCalledWith(d1Client, [{
+                id: boPlace.id, order: expect.objectContaining({dinnerMode: Mode.TAKEAWAY}),
+                snapshot: snapshotOf(bo.id, boPlace.dinnerEventId, {dinnerMode: Mode.TAKEAWAY})
+            }], audit(requeue))
+            expect(createWaitlistEntries).toHaveBeenCalledWith(d1Client, [{
+                entry: expect.objectContaining({inhabitantId: bo.id, dinnerEventId: dayAfter.id}), snapshot: snapshotOf(bo.id, dayAfter.id)
+            }], audit(join))
+        })
+
+        // A household's leaves are one write and its changes another, whatever the number of places (ADR-014)
+        it.each([
+            {change: 'leave', dinnerMode: Mode.NONE, action: Action.LEAVE, written: () => vi.mocked(deleteWaitlistEntries).mock.calls.map(([, leaves]) => leaves)},
+            {change: 'change', dinnerMode: Mode.TAKEAWAY, action: Action.REQUEUE, written: () => vi.mocked(updateWaitlistEntryOrders).mock.calls.map(([, requeues]) => requeues)}
+        ])('GIVEN Anna and Bo waiting on two dinners WHEN the household saves a $change of all four places THEN one write carries the four, each with the snapshot of its person', async ({dinnerMode, action, written}) => {
+            const {season, household, anna, bo, dinner, adultPrice} = givenSave()
+            const dayAfter = DinnerEventFactory.dinnerEventAt(6, 2)
+            vi.mocked(fetchSeason).mockResolvedValue({...season, dinnerEvents: [dinner, dayAfter]})
+            vi.mocked(fetchOrders).mockResolvedValue([])
+            const places = [dinner, dayAfter].flatMap(({id: dinnerEventId}, day) => [anna, bo].map((person, index) => WaitlistFactory.defaultEntry({
+                id: 21 + 2 * day + index, inhabitantId: person.id, dinnerEventId, ticketPriceId: adultPrice.id, householdId: household.id
+            })))
+            givenSupply(season.ticketPrices, [], places)
+            vi.mocked(deleteWaitlistEntries).mockImplementation(async (_d1, leaves) => leaves.length)
+            vi.mocked(updateWaitlistEntryOrders).mockImplementation(async (_d1, requeues) => requeues.length)
+
+            const result = await scaffoldPrebookings(d1Client, {
+                seasonId: season.id, householdId: household.id, userId: 7, desiredOrders: places.map(place => WaitlistFactory.wishOf(place, {dinnerMode}))
+            })
+
+            expect(result.totals[action]).toBe(places.length)
+            expect(written().map(batch => batch.map(({id, snapshot}) => [id, snapshot.inhabitantId, snapshot.householdShortname])))
+                .toEqual([places.map(place => [place.id, place.inhabitantId, getHouseholdShortName(household.address)])])
         })
     })
 
-    // A run settles every household's claims per dinner, after the households' runs: one read of the line and of each
-    // ticket type's tickets for sale, one write of the joins (ADR-014)
+    // A run settles every household's claims per dinner, after the households' runs: one read of the line and of the
+    // dinner's tickets for sale, one write of the joins (ADR-014)
     describe('claims on closed dinners', () => {
         beforeEach(() => {
             vi.clearAllMocks()
@@ -535,12 +579,13 @@ describe('scaffoldPrebookings', () => {
             expect(result.unchanged).toBe(claimers.length * dinners.length)
         })
 
-        // The waiting list is read for the run's entries, each dinner's line and the sale; a ticket type with a line reads
-        // no tickets for sale. A batch and a place name the claimer by their index across the households, in run order
+        // The waiting list is read for the run's entries, each dinner's line and the sale; a dinner whose every claimed
+        // ticket type has a line reads no tickets for sale. A batch and a place name the claimer by their index across the
+        // households, in run order
         const CLAIMS = [
             {
                 supply: 'nothing for sale on two dinners', households: [[ADULT, ADULT, ADULT, CHILD]], run: 'the household\'s run', scoped: true, dinners: 2, forSale: 0, waiting: 0,
-                calls: {waitlistReads: 4, forSaleReads: 4, buys: 0, joinBatches: [[0, 1, 2, 3], [0, 1, 2, 3]]},
+                calls: {waitlistReads: 4, forSaleReads: 2, buys: 0, joinBatches: [[0, 1, 2, 3], [0, 1, 2, 3]]},
                 places: [[0, 1], [1, 2], [2, 3], [3, 1], [0, 1], [1, 2], [2, 3], [3, 1]]
             },
             {
@@ -560,7 +605,7 @@ describe('scaffoldPrebookings', () => {
             },
             {
                 supply: 'one adult ticket for sale claimed by three households', households: [[ADULT, CHILD], [ADULT], [CHILD]], run: 'a season-wide run', scoped: false, dinners: 1, forSale: 1, waiting: 0,
-                calls: {waitlistReads: 3, forSaleReads: 2, buys: 1, joinBatches: [[1, 2, 3]]},
+                calls: {waitlistReads: 3, forSaleReads: 1, buys: 1, joinBatches: [[1, 2, 3]]},
                 places: [[1, 1], [2, 1], [3, 2]]
             },
             {
@@ -570,7 +615,7 @@ describe('scaffoldPrebookings', () => {
             }
         ] as const
 
-        it.each(CLAIMS)('GIVEN $supply WHEN $run settles its claims THEN it reads the supply once per dinner and ticket type, joins in one write per dinner behind the line, and its preview settles alike', async ({households, scoped, dinners, forSale, waiting, calls, places}) => {
+        it.each(CLAIMS)('GIVEN $supply WHEN $run settles its claims THEN it reads the line and the tickets for sale once per dinner, joins in one write per dinner behind the line, and its preview settles alike', async ({households, scoped, dinners, forSale, waiting, calls, places}) => {
             const {claimers, householdId, scaffold} = givenClaims({households: households.map(people => [...people]), dinners, forSale, waiting})
             const indexOf = (inhabitantId: number) => claimers.findIndex(claimer => claimer.id === inhabitantId)
             const scope = scoped ? {householdId} : {}
@@ -583,7 +628,7 @@ describe('scaffoldPrebookings', () => {
 
             expect({
                 waitlistReads: vi.mocked(fetchWaitlistForDinners).mock.calls.length,
-                forSaleReads: vi.mocked(countReleasedTickets).mock.calls.length,
+                forSaleReads: vi.mocked(countReleasedTicketsByType).mock.calls.length,
                 buys: vi.mocked(claimOrder).mock.calls.length,
                 joinBatches: vi.mocked(createWaitlistEntries).mock.calls.map(([, joins]) => joins.map(({entry}) => indexOf(entry.inhabitantId)))
             }).toEqual(calls)
@@ -607,5 +652,57 @@ describe('scaffoldPrebookings', () => {
             expect(saved.outcomes.waitlistTicketsSold).toEqual([])
             expect(previewed).toEqual(saved)
         })
+
+        // A dinner's joins are written in one attempt: a refused write lists each join failed and is not retried
+        it.each([
+            {refusal: 'a concurrent join of the same person', error: () => createError({statusCode: 409, message: 'One regular entry per person and dinner'}), reason: BookingFailureSchema.enum.CONFLICT},
+            {refusal: 'a server error', error: () => createError({statusCode: 500, message: 'D1 down'}), reason: undefined}
+        ])('GIVEN $refusal WHEN the household\'s claims join a closed dinner\'s waiting list THEN the write is tried once and each join is listed failed with its reason', async ({error, reason}) => {
+            const {claimers, householdId, scaffold} = givenClaims({households: [[ADULT, ADULT]], dinners: 1})
+            vi.mocked(createWaitlistEntries).mockRejectedValue(error())
+
+            const result = await scaffold({householdId})
+
+            expect(createWaitlistEntries).toHaveBeenCalledOnce()
+            expect(result.failed.map(line => [line.inhabitantId, line.action, line.reason])).toEqual(claimers.map(({id}) => [id, Action.QUEUE, reason]))
+            expect(result.positions).toEqual([])
+        })
+
+        // The run pairs each join with the entry written for its person, dinner and guest flag, whatever order the write
+        // hands the entries back in
+        it('GIVEN the joins\' entries handed back in reverse WHEN the household\'s claims join a closed dinner\'s waiting list THEN every place and every joined outcome names its own person', async () => {
+            const {claimers, householdId, scaffold} = givenClaims({households: [[ADULT, ADULT, CHILD]], dinners: 1})
+            const insertOrder = vi.mocked(createWaitlistEntries).getMockImplementation()!
+            vi.mocked(createWaitlistEntries).mockImplementation(async (...write) => (await insertOrder(...write)).reverse())
+            const indexOf = (inhabitantId: number) => claimers.findIndex(claimer => claimer.id === inhabitantId)
+
+            const result = await scaffold({householdId})
+
+            const places = [[0, ADULT, 1], [1, ADULT, 2], [2, CHILD, 1]]
+            expect(result.positions.map(place => [indexOf(place.inhabitantId), place.ticketType, place.position])).toEqual(places)
+            expect(result.outcomes.joined.map(event => [indexOf(event.inhabitantId), event.ticketType, event.position])).toEqual(places)
+        })
+    })
+
+    // The run's first reads take every dinner of the run at once and run one after another; the repositories chunk the ids
+    it('GIVEN a run over 40 dinners WHEN it reads the orders, the waiting lists and the members\' acts THEN each read names all 40 dinners, one read in flight at a time', async () => {
+        vi.clearAllMocks()
+        const {season, household} = givenSave()
+        const dinners = Array.from({length: 40}, (_, index) => DinnerEventFactory.dinnerEventAt(100 + index, 1 + index))
+        vi.mocked(fetchSeason).mockResolvedValue({...season, dinnerEvents: dinners})
+        vi.mocked(fetchHouseholds).mockResolvedValue([{
+            ...household, inhabitants: household.inhabitants.map(inhabitant => ({...inhabitant, dinnerPreferences: createDefaultWeekdayMap(Mode.NONE)}))
+        }])
+        const reads = callsInFlight()
+        reads.answer(vi.mocked(fetchOrders), () => [])
+        reads.answer(vi.mocked(fetchWaitlistForDinners), () => [])
+        reads.answer(vi.mocked(fetchUserIntentKeys), () => ({confirmedKeys: new Set<string>(), cancelledKeys: new Set<string>()}))
+
+        await scaffoldPrebookings(d1Client, {seasonId: season.id, householdId: household.id})
+
+        const dinnerIds = dinners.map(({id}) => id)
+        expect(vi.mocked(fetchOrders).mock.calls).toEqual([[d1Client, dinnerIds]])
+        expect(vi.mocked(fetchWaitlistForDinners).mock.calls[0]).toEqual([d1Client, dinnerIds])
+        expect(reads.peak).toBe(1)
     })
 })

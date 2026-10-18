@@ -4,6 +4,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {isBeforeDeadline, getDinnerTimeRange, dateToWeekDay} from '~/utils/season'
@@ -180,8 +181,10 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
 
     test('GIVEN a member holding a ticket on a dinner past its deadline WHEN the member sets that day to Ingen THEN the bookings tab\'s calendar chip shows the ticket for sale without a reload', async ({page, browser}) => {
         const adminContext = await validatedBrowserContext(browser)
-        const lockedDinner = [...testSeason.dinnerEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]!
-        const lockedDay = new Date(lockedDinner.date)
+        const lockedDay = new Date([...testSeason.dinnerEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]!.date)
+        // The case's own dinner on the first day: the lines the earlier cases queued on that day go with the dinner it replaces,
+        // so the released ticket finds nobody waiting (ADR-016 rule 11 sells it to the first in line otherwise)
+        await DinnerEventFactory.createDinnerEventAloneOnDay(adminContext, testSeason.season, lockedDay, {menuTitle: salt('Frigivet', testSalt)})
         const inhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {
             name: salt('Frida', testSalt),
             lastName: salt('Frigiver', testSalt),
