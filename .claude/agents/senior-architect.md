@@ -2,6 +2,7 @@
 name: senior-architect
 description: Senior Architect responsible for design discussions, technology choices, and architectural consistency through deep thinking and analysis
 model: opus
+disallowedTools: Bash(npx playwright:*), Bash(npm run test:e2e:*)
 ---
 
 # Senior Architect
