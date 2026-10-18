@@ -127,7 +127,7 @@ const {result: preview, pending: isPreviewPending} = useScaffoldPreview(
   () => previewRequest.value,
   request => bookingsStore.previewBookings(request, props.adminBypass)
 )
-const previewDays = computed(() => preview.value ? formatPreviewLines(preview.value, [props.dinnerEvent], [props.bookerId]) : [])
+const previewDays = computed(() => preview.value ? formatPreviewLines(preview.value, [props.bookerId]) : [])
 
 // The button names the guests; the preview lines name what saving does for them, one line per outcome
 const saveLabel = computed(() => guestSaveLabel(formState.count))

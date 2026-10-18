@@ -119,10 +119,15 @@
  * (venteliste)". A queued row edits its wish (requeued) or picks Ingen to leave; Tilføj gæst saves the same way.
  *
  * EXPECTED BOOKINGS - a row without an order or a queue entry shows the booking the preferences give it, read from the
- * dry run with no orders, its mode ghosted (COMPONENTS.bookingGrid.expectedBadge); a person the run leaves out reads
- * Ingen; the legend gains "Forventet efter præferencer" and the table's loading bar runs while the read loads:
- *   Anna    [  ][  ][  ] [VOKSEN · 55kr]   (mode) Spisesal    expected, ghosted
- *   Bo      [  ][  ][  ] [VOKSEN · 55kr]   [mode] Ingen       cancelled earlier: not expected
+ * dry run with no orders: its ticket reads as a queued one with the sliders [ex] in place of the hourglass, the mode
+ * ghosted on neutral (DinnerTicket expected, COMPONENTS.bookingGrid.expectedBadge); a person the run leaves out reads
+ * Ingen. The power row takes the consensus of the modes the rows show and is expected while every inhabitant row is.
+ * The legend gains "Forventet bestilling ifølge præferencer" and the table's loading bar runs while the read loads:
+ *   Hele familien  [  ][  ][  ] [ALLE]            [mixed] Blandet    Anna expected, Bo not: the mix of what the rows show
+ *   Anna           [ex][  ][  ] [VOKSEN · 55kr]   (mode) Takeaway    expected, ghosted
+ *   Bo             [  ][  ][  ] [VOKSEN · 55kr]   [mode] Ingen       cancelled earlier: not expected
+ * every inhabitant row expected:
+ *   Hele familien  [ex][  ][  ] [ALLE]            (mode) Takeaway    the power row ghosted too
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, BookingRowAction, ScaffoldOrdersRequest, TicketState as TicketStateValue} from '~/composables/useBookingValidation'
@@ -345,6 +350,11 @@ const {result: expectedRun, pending: isExpectedPending} = useScaffoldPreview(
   {refreshOn: [() => props.orders]}
 )
 const expectedModes = computed(() => expectedBookings(expectedRun.value))
+// A row without an order or a queue entry shows the booking the preferences give it
+const expectedModeOf = (inhabitantId: number): DinnerMode | undefined =>
+  findRegularOrder(eventOrders.value, inhabitantId, props.dinnerEvent.id) || findRegularOrder(eventWaitlistEntries.value, inhabitantId, props.dinnerEvent.id)
+    ? undefined
+    : expectedModes.value.get(expectedBookingKey(inhabitantId, props.dinnerEvent.id))
 
 // The household's own notes on a closed dinner: the tickets it released and its places on the waiting list
 const householdReleasedNote = computed(() =>
@@ -377,8 +387,7 @@ const tableData = computed((): TableRow[] => {
     const order = findRegularOrder(eventOrders.value, inhabitant.id, props.dinnerEvent.id) ?? null
     // An order supersedes a queue entry: the assignment deletes the entry it placed
     const waitlistEntry = order ? undefined : findRegularOrder(eventWaitlistEntries.value, inhabitant.id, props.dinnerEvent.id)
-    // A row with neither shows the booking the preferences give it
-    const expectedMode = order || waitlistEntry ? undefined : expectedModes.value.get(expectedBookingKey(inhabitant.id, props.dinnerEvent.id))
+    const expectedMode = expectedModeOf(inhabitant.id)
 
     // Single DRY code path: resolveTicketPrice → ticketTypePresentation
     const ticketPrice = resolveTicketPrice(
@@ -448,7 +457,10 @@ const tableData = computed((): TableRow[] => {
     }
   })
 
-  const {value: consensusMode, consensus: hasConsensus} = getPowerConsensus(allInhabitants.map(i => i.id), eventOrders.value, props.dinnerEvent.id)
+  // The consensus of the modes the rows show: an expected row counts its expected mode
+  const {value: consensusMode, consensus: hasConsensus} = getPowerConsensus(allInhabitants.map(i => i.id), eventOrders.value, props.dinnerEvent.id, {
+    inhabitant: expectedModeOf
+  })
 
   // Default synthetic row template
   const defaultSyntheticRow = {
@@ -475,7 +487,8 @@ const tableData = computed((): TableRow[] => {
     dinnerMode: consensusMode,
     disabledModes: inhabitantRows[0]?.disabledModes ?? [],
     bookingAction: inhabitantRows[0]?.bookingAction ?? null,
-    consensus: hasConsensus
+    consensus: hasConsensus,
+    expected: inhabitantRows.length > 0 && inhabitantRows.every(row => row.expected)
   }
 
   // VIEW mode: power + inhabitants + guest orders
@@ -623,7 +636,7 @@ const {result: preview, pending: isPreviewPending} = useScaffoldPreview(
   () => previewRequest.value,
   request => bookingsStore.previewBookings(request, props.adminBypass)
 )
-const previewDays = computed(() => preview.value ? formatPreviewLines(preview.value, [props.dinnerEvent], householdOrder.value) : [])
+const previewDays = computed(() => preview.value ? formatPreviewLines(preview.value, householdOrder.value) : [])
 const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOutcome(preview.value) : BookingActionSchema.enum.CHANGE_MODE))
 
 // The legend explains a ghosted mode while a row shows one
@@ -732,6 +745,7 @@ const hasExpectedRow = computed(() => tableData.value.some(row => row.expected))
                 :price="row.original.price"
                 :dinner-mode="row.original.dinnerMode"
                 :consensus="row.original.consensus"
+                :expected="row.original.expected"
               />
             </div>
           </div>
@@ -832,6 +846,7 @@ const hasExpectedRow = computed(() => tableData.value.some(row => row.expected))
             :price="row.original.price"
             :dinner-mode="row.original.dinnerMode"
             :consensus="row.original.consensus"
+            :expected="row.original.expected"
           />
         </div>
         <!-- Inhabitant/Guest rows: show ticket -->

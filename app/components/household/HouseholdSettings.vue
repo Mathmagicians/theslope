@@ -5,7 +5,7 @@
  * Sections:
  * 1. Husstandsoplysninger - Read-only display: address, movedInDate, PBS ID
  * 2. Fraflytning - UCard with pencil-gate edit flow (gated by canEdit)
- *    - Toast on save: the booking result, one line per person (formatBookingResult)
+ *    - Toast on save: the booking result, one line per day (formatResultLines)
  *    - Persistent alert below card (robotHappy/robotDead), the same lines
  * 3. Kalenderabonnement - Calendar feed subscription
  *
@@ -59,6 +59,8 @@ const {householdSettings} = COMPONENTS
 // Store integration
 const householdsStore = useHouseholdsStore()
 const {lastMoveOutResult} = storeToRefs(householdsStore)
+// The order the toast and the "Sidste ændring" alert name the people in
+const householdOrder = computed(() => props.household.inhabitants.map(({id}) => id))
 
 // Toast notifications
 const toast = useToast()
@@ -99,11 +101,7 @@ const setMoveOutDate = async () => {
   isSaving.value = true
   try {
     const result = await householdsStore.setMoveOutDate(props.household.id, moveOutDate.value, props.adminBypass)
-    toast.add({
-      title: 'Fraflytningsdato sat',
-      description: formatBookingResult(result),
-      ...scaffoldToastLook(result)
-    })
+    toast.add(scaffoldToast('Fraflytningsdato sat', result, householdOrder.value))
   } catch (error) {
     console.error('Failed to set move-out date:', error)
     toast.add({
@@ -121,11 +119,7 @@ const clearMoveOutDate = async () => {
   isSaving.value = true
   try {
     const result = await householdsStore.setMoveOutDate(props.household.id, null, props.adminBypass)
-    toast.add({
-      title: 'Fraflytning fortrudt',
-      description: formatBookingResult(result),
-      ...scaffoldToastLook(result)
-    })
+    toast.add(scaffoldToast('Fraflytning fortrudt', result, householdOrder.value))
   } catch (error) {
     console.error('Failed to clear move-out date:', error)
     toast.add({
@@ -271,7 +265,7 @@ const getCalendarFeedForUser = async () => {
       data-testid="last-move-out-result-alert"
     >
       <template #description>
-        <p :class="COMPONENTS.bookingResult.lines">{{ `Fraflytningsdato ændret, og familiens bookinger har ændret sig:\n${formatBookingResult(lastMoveOutResult)}` }}</p>
+        <p :class="COMPONENTS.bookingResult.lines">{{ `Fraflytningsdato ændret, og familiens bookinger har ændret sig:\n${formatResultLines(lastMoveOutResult, householdOrder)}` }}</p>
       </template>
     </UAlert>
 

@@ -28,7 +28,7 @@
  *
  * SELECTOR VIEW MODE, expected (no order yet: the booking the preferences give the cell):
  * ┌ ─ ─ ┐
- *   [mode]   - The glyph on the mode's own colour, outlined (COMPONENTS.bookingGrid.expectedBadge), in its muted ink
+ *   [mode]   - The glyph ghosted on the waiting list's neutral (COMPONENTS.bookingGrid.expectedBadge), in its muted ink
  * └ ─ ─ ┘
  * Spisesal   - The label in the same ink
  *
@@ -44,6 +44,7 @@
  * └─────┘   Compact for grid cells (no label)
  */
 import {DinnerMode} from '~/composables/useBookingValidation'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 import {WEEKDAYS, type WeekDay} from '~/types/dateTypes'
 import {FORM_MODES, type FormMode} from '~/types/form'
 import type {BadgeProps, ButtonProps} from '@nuxt/ui'
@@ -173,7 +174,7 @@ const dinnerModeConfig: Record<DinnerMode, ModeDisplayConfig> = {
 
 // Mixed/no consensus config (used when consensus === false)
 const mixedModeConfig: ModeDisplayConfig = {
-  label: 'Blandet',
+  label: BOOKING_WORDS.mixedModes,
   icon: ICONS.help,
   activeColor: COLOR.neutral,
   viewVariant: NOISE.medium,
@@ -221,8 +222,11 @@ const getViewConfig = (): ModeDisplayConfig => {
 // Get icon for current mode (VIEW mode uses mixedModeConfig when no consensus)
 const getModeIcon = (): string => getViewConfig().icon
 
-// VIEW mode badge: the mode's colour and variant, the ghost of a wish on the waiting list, or an expected booking outlined
-const getBadgeColor = (): BadgeColor => props.ghost ? waitlistFace.ghostBadge.color : getViewConfig().activeColor
+// VIEW mode badge: the mode's colour and variant, the ghost of a wish on the waiting list, or an expected booking's ghost
+const getBadgeColor = (): BadgeColor => {
+  if (props.ghost) return waitlistFace.ghostBadge.color
+  return props.expected ? expectedFace.color : getViewConfig().activeColor
+}
 const getBadgeVariant = (): BadgeVariant => {
   if (props.ghost) return waitlistFace.ghostBadge.variant
   return props.expected ? expectedFace.variant : getViewConfig().viewVariant
@@ -296,7 +300,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
       :size="responsiveSize"
       :name="name"
       :data-testid="name"
-      :ui="{ leadingIcon: iconSizeClass }"
+      :ui="selector.buttonUi(iconSizeClass)"
       @click="toggleMode"
     />
 
@@ -319,7 +323,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
           :size="responsiveSize"
           :data-testid="`${name}-${mode}`"
           :class="[selector.segment, shouldPulse(mode) && selector.pulse]"
-          :ui="{ leadingIcon: iconSizeClass }"
+          :ui="selector.buttonUi(iconSizeClass)"
           @click="updateMode(mode)"
         />
       </UFieldGroup>

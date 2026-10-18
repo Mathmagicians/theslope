@@ -441,7 +441,7 @@ export const bookingSaveLabel = (outcome: BookingOutcome): string => OUTCOME_WOR
 /** The guest form's button names the guests; its preview lines name the guests per outcome */
 export const guestSaveLabel = (count: number): string => BOOKING_WORDS.guests.save(count)
 
-/** The look of a toast that reports a booking result: the ticket, red as soon as one order failed, green otherwise; a line per person */
+/** The look of a toast that reports a booking result: the ticket, red as soon as one order failed, green otherwise; a line per day */
 export const scaffoldToastLook = (result: Pick<ScaffoldResult, 'errored'>) => ({
     color: result.errored > 0 ? COLOR.error : COLOR.success,
     icon: ICONS.ticket,
@@ -467,55 +467,12 @@ const personOf = ({inhabitantId, isGuestTicket, ticketType}: Pick<BookingResult,
 const queuePlaces = (positions: QueuePosition[]): string[] =>
     [...positions].sort((a, b) => a.position - b.position).map(place => formatPlace(place.position, place.ticketType))
 
-/** A line's queue places after its words: "2 på ventelisten (Voksen #3, Voksen #5)" */
+/** Queue places after a text: "Anna skrives på ventelisten (Voksen #3)", "Anna (Voksen #3)" */
 const withPlaces = (text: string, places: string[]): string => places.length > 0 ? `${text} (${places.join(', ')})` : text
-
-/** The order a result first names its people in: the sort is stable, so equal lines keep the order of their rows */
-const asFirstNamed = (): number => 0
 
 const CONFLICT_WORDS: Partial<Record<BookingAction, string>> = BOOKING_WORDS.result.conflict
 const conflictWordsOf = ({reason, action}: Pick<BookingResult, 'reason' | 'action'>): string | undefined =>
     reason === BookingFailureEnum.CONFLICT ? CONFLICT_WORDS[action] : undefined
-
-/**
- * A booking result in lines, for the toast and the "Sidste ændring" alerts: each person, and a booker's guests of one
- * ticket type with the most of them at one dinner, in the order the result first names them; the counts in the order
- * of the actions with the queue places ascending, then a refused leave or change of a place being assigned, and the
- * failed orders last. Then the tickets sold to the waiting list, the unchanged orders, and a household whose run failed
- * as a whole, which the result counts without a person
- */
-export const formatBookingResult = (result: ScaffoldResult): string => {
-    const byGroup = groupBy<BookingResult, string>(personOf)
-    const landedBy = byGroup(result.results)
-    const failedBy = byGroup(result.failed)
-    const placesBy = groupBy<QueuePosition, string>(personOf)(result.positions)
-    const {failed: failedWords, unchanged, householdFailed, nothingChanged} = BOOKING_WORDS.result
-
-    const groupLines = linesBy<BookingResult, string, string>(personOf, (items, group) => {
-        const {inhabitantName, isGuestTicket, ticketType} = items[0]!
-        const guestsAtOneDinner = Math.max(...Array.from(groupBy<BookingResult, number>(item => item.dinnerEventId)(items).values(), orders => orders.length))
-        const landed = landedBy.get(group) ?? []
-        const places = queuePlaces(placesBy.get(group) ?? [])
-        const counts = BookingActionSchema.options
-            .map(action => ({action, count: landed.filter(item => item.action === action).length}))
-            .filter(({count}) => count > 0)
-            .map(({action, count}) => withPlaces(`${count} ${ACTION_WORDS[action].toast}`, action === Action.QUEUE ? places : []))
-        const failedItems = failedBy.get(group) ?? []
-        const conflicts = [...new Set(failedItems.map(conflictWordsOf).filter((words): words is string => words !== undefined))]
-        const failed = failedItems.filter(item => conflictWordsOf(item) === undefined).length
-        const parts = [...counts, ...conflicts, ...(failed > 0 ? [failedWords(failed)] : [])]
-        return `${isGuestTicket ? guestGroupName(inhabitantName, ticketType, guestsAtOneDinner) : inhabitantName}: ${parts.join(', ')}`
-    }, asFirstNamed)([...result.results, ...result.failed])
-    const sold = result.outcomes.waitlistTicketsSold.length
-    const householdLines = [
-        {count: sold, line: `${BOOKING_WORDS.ticketCount(sold)} ${BOOKING_WORDS.waitlistSale.toast}`},
-        {count: result.unchanged, line: unchanged(result.unchanged)},
-        {count: result.errored - result.failed.length, line: householdFailed}
-    ].filter(({count}) => count > 0).map(({line}) => line)
-
-    const lines = [...groupLines, ...householdLines]
-    return lines.length > 0 ? lines.join('\n') : nothingChanged
-}
 
 /** A place on the waiting list of a sold-out dinner, in the line of its ticket type, rendered compact beside the name */
 export const createWaitlistBadge = (position: number, ticketType?: TicketType | null): DeadlineBadgeData => ({
@@ -570,78 +527,163 @@ const previewItem = (name: string, action: BookingAction, words: string, places:
     text: withPlaces(`${name} ${words}`, places)
 })
 
-/** A row of a preview day: one order's result, or one ticket sold to the waiting list */
-type PreviewRow = {dinnerEventId: number} & ({result: BookingResult} | {sale: TicketSale})
+/** A line of a result's day: an action's person, or a booker's guests of one ticket type, with the rows it names */
+type DayLine = {row: BookingResult, rows: BookingResult[], name: string, places: string[]}
+
+/** A dinner's part of a booking result: its lines and its failed orders, and the tickets sold on it, to the waiting list or to a claim */
+type ResultDay = {dinnerEventId: number, date: Date, lines: DayLine[], failed: DayLine[], soldToWaitlist: TicketSale[], sold: TicketSale[]}
+
+/** A row of a result's day: one order's result, one failed order, or one ticket sold */
+type DayRow = {dinnerEventId: number} & ({result: BookingResult} | {failed: BookingResult} | {sale: TicketSale, toWaitlist: boolean})
 
 /**
- * The preview's days: a day per dinner, ascending. Within a day a line per action in the word table's order, then per
- * person in the household's order, a booker's guests after the booker; a person outside that order keeps the place the
- * results first give them. A booker's guests of one ticket type are one group, counted as the guest row counts them.
- * A queue line carries its places on the dinner; the tickets sold to the waiting list close their day in one line
+ * The days of a booking result, one per dinner the run decided, ascending: the preview and the toast read their lines
+ * from them. Within a day a line per action in the word table's order, then per person in the household's order, a
+ * booker's guests after the booker; a person outside that order keeps the place the results first give them. A booker's
+ * guests of one ticket type are one group, counted as the guest row counts them. A queue line carries its places on the
+ * dinner
  */
-const previewLines = (
-    rows: BookingResult[],
-    dinnerEvents: Pick<DinnerEventDisplay, 'id' | 'date'>[],
-    positions: QueuePosition[] = [],
-    waitlistTicketsSold: TicketSale[] = [],
-    householdOrder: number[] = []
-): ActionPreviewDay[] => {
-    const dateById = new Map(dinnerEvents.map(({id, date}) => [id, date]))
-    const wordsOf = (row: BookingResult) => ACTION_WORDS[row.action].preview({mode: MODE_WORDS[row.dinnerMode].label})
+const resultDays = (result: Pick<ScaffoldResult, 'dinners' | 'results' | 'failed' | 'positions' | 'outcomes'>, householdOrder: number[]): ResultDay[] => {
+    const dateById = new Map(result.dinners.map(({id, date}) => [id, date]))
     const placeKey = (place: Pick<QueuePosition, 'inhabitantId' | 'isGuestTicket' | 'ticketType' | 'dinnerEventId'>) => `${personOf(place)}:${place.dinnerEventId}`
-    const placesBy = groupBy<QueuePosition, string>(placeKey)(positions)
+    const placesBy = groupBy<QueuePosition, string>(placeKey)(result.positions)
     const personRank = ({inhabitantId}: BookingResult) => {
         const rank = householdOrder.indexOf(inhabitantId)
         return rank === -1 ? householdOrder.length : rank
     }
 
-    type RankedLine = {row: BookingResult, item: ActionPreviewItem}
-    const linesOfDay = linesBy<BookingResult, RankedLine, string>(
+    const linesOfDay = linesBy<BookingResult, DayLine, string>(
         row => `${row.action}:${personOf(row)}`,
-        (results) => {
-            const row = results[0]!
-            const name = row.isGuestTicket ? guestGroupName(row.inhabitantName, row.ticketType, results.length) : row.inhabitantName
-            const places = row.action === Action.QUEUE ? queuePlaces(placesBy.get(placeKey(row)) ?? []) : []
-            return {row, item: previewItem(name, row.action, wordsOf(row), places)}
+        (rows) => {
+            const row = rows[0]!
+            return {
+                row,
+                rows,
+                name: row.isGuestTicket ? guestGroupName(row.inhabitantName, row.ticketType, rows.length) : row.inhabitantName,
+                places: row.action === Action.QUEUE ? queuePlaces(placesBy.get(placeKey(row)) ?? []) : []
+            }
         },
         (a, b) => BookingActionSchema.options.indexOf(a.row.action) - BookingActionSchema.options.indexOf(b.row.action)
             || personRank(a.row) - personRank(b.row)
             || Number(a.row.isGuestTicket) - Number(b.row.isGuestTicket)
     )
 
-    const saleLine = (sold: number): ActionPreviewItem[] =>
-        sold > 0 ? [previewItem(BOOKING_WORDS.ticketCount(sold), Action.BUY, BOOKING_WORDS.waitlistSale.preview)] : []
-
-    const days = linesBy<PreviewRow, ActionPreviewDay, number>(
+    const days = linesBy<DayRow, ResultDay, number>(
         row => row.dinnerEventId,
         (dayRows, dinnerEventId) => {
-            const date = dateById.get(dinnerEventId)!
-            const results = dayRows.flatMap(row => 'result' in row ? [row.result] : [])
+            const sales = dayRows.flatMap(row => 'sale' in row ? [row] : [])
             return {
                 dinnerEventId,
-                date,
-                label: previewDayLabel(date),
-                lines: [...linesOfDay(results).map(({item}) => item), ...saleLine(dayRows.length - results.length)]
+                date: dateById.get(dinnerEventId)!,
+                lines: linesOfDay(dayRows.flatMap(row => 'result' in row ? [row.result] : [])),
+                failed: linesOfDay(dayRows.flatMap(row => 'failed' in row ? [row.failed] : [])),
+                soldToWaitlist: sales.filter(({toWaitlist}) => toWaitlist).map(({sale}) => sale),
+                sold: sales.map(({sale}) => sale)
             }
         },
         (a, b) => compareAsc(a.date, b.date)
     )
-    // A day shows under its dinner's date: a dinner outside the dinners given has none
+    const {ticketsSold, waitlistTicketsSold} = result.outcomes
+    // A day shows under its dinner's date: a dinner outside the run's dinners has none
     return days([
-        ...rows.map(result => ({dinnerEventId: result.dinnerEventId, result})),
-        ...waitlistTicketsSold.map(sale => ({dinnerEventId: sale.dinnerEventId, sale}))
+        ...result.results.map((row): DayRow => ({dinnerEventId: row.dinnerEventId, result: row})),
+        ...result.failed.map((row): DayRow => ({dinnerEventId: row.dinnerEventId, failed: row})),
+        ...waitlistTicketsSold.map((sale): DayRow => ({dinnerEventId: sale.dinnerEventId, sale, toWaitlist: true})),
+        ...ticketsSold.map((sale): DayRow => ({dinnerEventId: sale.dinnerEventId, sale, toWaitlist: false}))
     ].filter(row => dateById.has(row.dinnerEventId)))
 }
 
 /**
  * A booking's result as the preview reads it, a day per dinner; `householdOrder` (inhabitant ids) orders the people
- * within a day
+ * within a day. The tickets sold to the waiting list close their day in one line
  */
 export const formatPreviewLines = (
-    result: Pick<ScaffoldResult, 'results' | 'positions' | 'outcomes'>,
-    dinnerEvents: Pick<DinnerEventDisplay, 'id' | 'date'>[],
+    result: Pick<ScaffoldResult, 'dinners' | 'results' | 'failed' | 'positions' | 'outcomes'>,
     householdOrder: number[] = []
-): ActionPreviewDay[] => previewLines(result.results, dinnerEvents, result.positions, result.outcomes.waitlistTicketsSold, householdOrder)
+): ActionPreviewDay[] => {
+    const wordsOf = (row: BookingResult) => ACTION_WORDS[row.action].preview({mode: MODE_WORDS[row.dinnerMode].label})
+    const saleLine = (sold: number): ActionPreviewItem[] =>
+        sold > 0 ? [previewItem(BOOKING_WORDS.ticketCount(sold), Action.BUY, BOOKING_WORDS.waitlistSale.preview)] : []
+    return resultDays(result, householdOrder)
+        .map(({dinnerEventId, date, lines, soldToWaitlist}) => ({
+            dinnerEventId,
+            date,
+            label: previewDayLabel(date),
+            lines: [...lines.map(line => previewItem(line.name, line.row.action, wordsOf(line.row), line.places)), ...saleLine(soldToWaitlist.length)]
+        }))
+        .filter(day => day.lines.length > 0)
+}
+
+const RESULT_WORDS = BOOKING_WORDS.result
+const FATE_WORDS = BOOKING_WORDS.releaseFate
+
+/** A group of a day's toast line: its word, a colon, its people: "frameldt: Skraaningen, Marie" */
+const groupOf = (word: string, names: string[]): string => `${word}: ${names.join(', ')}`
+
+/**
+ * The groups of one action in a day's toast line: a queue place after its person's name; a released ticket's fate in
+ * the word of the run of names that share it, sold when the day's sales of the person's tickets cover every ticket the
+ * line released, the person's own before the guests'
+ */
+const actionGroupsOf = (action: BookingAction, lines: DayLine[], sold: TicketSale[]): string[] => {
+    const word = ACTION_WORDS[action].toast
+    switch (action) {
+        case Action.QUEUE:
+            return [groupOf(word, lines.map(line => withPlaces(line.name, line.places)))]
+        case Action.RELEASE: {
+            const unsold = new Map<number, number>()
+            for (const {sellerInhabitantId} of sold) {
+                if (sellerInhabitantId !== null) unsold.set(sellerInhabitantId, (unsold.get(sellerInhabitantId) ?? 0) + 1)
+            }
+            const fated = lines.map(({name, rows, row: {inhabitantId}}) => {
+                const covered = Math.min(rows.length, unsold.get(inhabitantId) ?? 0)
+                unsold.set(inhabitantId, (unsold.get(inhabitantId) ?? 0) - covered)
+                return {name, fate: covered === rows.length ? FATE_WORDS.sold : FATE_WORDS.forSale}
+            })
+            const runs = fated.reduce<{names: string[], fate: string}[]>((all, {name, fate}) => {
+                const last = all.at(-1)
+                if (last?.fate === fate) last.names.push(name)
+                else all.push({names: [name], fate})
+                return all
+            }, [])
+            return runs.map(({names, fate}) => groupOf(`${word} (${fate})`, names))
+        }
+        default:
+            return [groupOf(word, lines.map(line => line.name))]
+    }
+}
+
+/** A failed order's people: a refused leave or change of a place being assigned says so after the name */
+const failedNameOf = ({name, row}: DayLine): string => {
+    const conflict = conflictWordsOf(row)
+    return conflict ? `${name} (${conflict})` : name
+}
+
+/**
+ * A booking result in lines, for the toast and the "Sidste ændring" alerts: the preview compacted, a line per day. A day
+ * reads its date, then its groups apart by " · ": each action's past word with its people, then the failed orders; the
+ * unchanged orders and a household whose run failed as a whole, which the result counts without a person, close the lines
+ */
+export const formatResultLines = (result: ScaffoldResult, householdOrder: number[] = []): string => {
+    const dayLines = resultDays(result, householdOrder).flatMap(({date, lines, failed, sold}) => {
+        const actions = Array.from(groupBy<DayLine, BookingAction>(line => line.row.action)(lines))
+            .flatMap(([action, actionLines]) => actionGroupsOf(action, actionLines, sold))
+        const failures = failed.length > 0 ? [groupOf(RESULT_WORDS.failed, [...new Set(failed.map(failedNameOf))])] : []
+        const groups = [...actions, ...failures]
+        return groups.length > 0 ? [`${formatDate(date, DATE_SETTINGS.DAY_MONTH_MASK)}  ${groups.join(' · ')}`] : []
+    })
+    const householdLines = [
+        {count: result.unchanged, line: RESULT_WORDS.unchanged(result.unchanged)},
+        {count: result.errored - result.failed.length, line: RESULT_WORDS.householdFailed}
+    ].filter(({count}) => count > 0).map(({line}) => line)
+
+    const allLines = [...dayLines, ...householdLines]
+    return allLines.length > 0 ? allLines.join('\n') : RESULT_WORDS.nothingChanged
+}
+
+/** The toast that reports a booking result: the view's title, the result's lines in the result's look */
+export const scaffoldToast = (title: string, result: ScaffoldResult, householdOrder: number[] = []) =>
+    ({title, description: formatResultLines(result, householdOrder), ...scaffoldToastLook(result)})
 
 /** A person's own cell on a dinner: the key of a grid cell's draft and of its expected booking */
 export const expectedBookingKey = (inhabitantId: number, dinnerEventId: number): string => `${inhabitantId}-${dinnerEventId}`

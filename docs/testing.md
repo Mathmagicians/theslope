@@ -101,9 +101,26 @@ const season = await SeasonFactory.createSeason(context, SeasonFactory.defaultSe
 const season = { shortName: 'Season-2025' }  // Will conflict in parallel
 
 // ✅ REQUIRED: Salted unique data
-const testSalt = Date.now().toString()
-const season = SeasonFactory.defaultSeason(testSalt)  // Season-2025-1733650000000
+const testSalt = temporaryAndRandom()
+const season = SeasonFactory.defaultSeason(testSalt)  // TestSeason-<uuid>
 ```
+
+**Salt:** `temporaryAndRandom()` (`tests/e2e/testHelpers.ts`, a UUID) gives a spec its salt; `salt(base, testSalt)` writes `<base>-<testSalt>`.
+
+**Names:** the rows a spec or a factory creates match the LIKE patterns of the Makefile's `d1-nuke-*` targets, which
+`make d1-nuke-all` deletes. A person in a shared session household (the admin's or the member's, from
+`getSessionUserInfo`) is named `salt('Anders', testSalt)`, and the role the spec reads goes into `lastName`; a person in a
+spec's own household goes with the household.
+
+| Entity | Pattern | Factory default |
+|---|---|---|
+| Season | `shortName LIKE '%Test%'` | `SeasonFactory.defaultSeason`, `SeasonFactory.E2E_SINGLETON_NAME` |
+| Household | `name LIKE 'Test%' OR address LIKE 'Andeby%'` | `HouseholdFactory.defaultHouseholdData` |
+| Inhabitant | `name LIKE 'Anders-%-%-%-%-%'` | `HouseholdFactory.defaultInhabitantName` (`defaultInhabitantData`, `createInhabitantForHousehold`) |
+| User | `email LIKE '%@andeby.dk'` | `UserFactory.defaultUser` |
+| AllergyType | `name LIKE 'Peanuts-%' OR name LIKE 'Test %' OR name LIKE 'Updated %'` | `AllergyFactory.defaultAllergyTypeData` |
+
+`testDataNaming.unit.spec.ts` (Architecture Tests) checks the factory defaults against the patterns.
 
 **ALWAYS verify:** `npx playwright test path/to/test.e2e.spec.ts --workers=4`
 
@@ -458,9 +475,9 @@ it('does not emit save when validation fails', async () => {
 ## Architecture Tests
 
 `tests/component/architecture/*.unit.spec.ts` read sources — the `.vue` files under `app/`, the SQL under `migrations/`,
-the palettes under `app/assets/css/palettes/` — and fail on a *pattern*, not on a render. They are how a design-system
-sweep stays swept: once every `<UAlert>` binds an `ALERTS` kind, the test is what stops the 57th one from being written
-with a raw `:color` (ADR-018). Violations are reported as `file:line`, so a failure names the sites to fix.
+the palettes under `app/assets/css/palettes/`, the `Makefile` — and fail on a *pattern*, not on a render. They are how a
+design-system sweep stays swept: once every `<UAlert>` binds an `ALERTS` kind, the test is what stops the 57th one from
+being written with a raw `:color` (ADR-018). Violations are reported as `file:line`, so a failure names the sites to fix.
 
 | Spec | Reads | Rule |
 |------|-------|------|
@@ -469,6 +486,7 @@ with a raw `:color` (ADR-018). Violations are reported as `file:line`, so a fail
 | `migrations.unit.spec.ts` | `migrations/*.sql` from `0015` on | A migration adds a column with `ALTER TABLE … ADD COLUMN` and keeps every table: D1 runs a migration inside a transaction where `PRAGMA foreign_keys=OFF` is a no-op, so a table rebuild (`DROP TABLE`, `-- RedefineTables`) fires the children's ON DELETE actions |
 | `designSystemContrast.unit.spec.ts` | the tokens and the palettes | EN 301 549 / WCAG 2.1 contrast of every pair the tokens define (next section) |
 | `designSystemColourVision.unit.spec.ts` | the palettes and `designSystemMeanings.ts` | WCAG 2.1 §1.4.1: the meaning pairs stay apart under colour vision deficiency (next section) |
+| `testDataNaming.unit.spec.ts` | the `d1-nuke-*` targets of the `Makefile` and the e2e factories | Rule 3: each factory default matches a LIKE pattern of its entity |
 
 `contrast.ts`, `colourVision.ts`, `designSystemPairs.ts`, `designSystemMeanings.ts` and `palettes.ts` hold the colour
 maths, the simulation, the pair inventory, the meaning inventory and the palette list, shared with the palette generator.
@@ -602,7 +620,7 @@ registerEndpoint('/api/admin/season/1', { handler: () => mockObject })  // Never
 ```typescript
 test('GIVEN create mode WHEN submit THEN created', async ({ page, browser }) => {
   const context = await validatedBrowserContext(browser)
-  const testSalt = Date.now().toString()
+  const testSalt = testHelpers.temporaryAndRandom()
 
   // GIVEN: Setup via factory (fast)
   // WHEN: Interact via UI

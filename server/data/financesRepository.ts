@@ -421,7 +421,7 @@ export async function countReleasedTicketsByType(d1Client: D1Database, dinnerEve
 }
 
 /** A claimed order, the price row its ticket keeps and the household whose released ticket it was */
-export type ClaimedOrder = {order: OrderDetail, ticketPriceId: number, sellerHouseholdId: number}
+export type ClaimedOrder = {order: OrderDetail, ticketPriceId: number, sellerHouseholdId: number, sellerInhabitantId: number}
 
 // The oldest released order of a ticket type on a dinner, first released first; null when none is for sale
 export async function findReleasedOrderId(d1Client: D1Database, dinnerEventId: number, ticketType: TicketType): Promise<number | null> {
@@ -445,7 +445,7 @@ export async function findReleasedOrderId(d1Client: D1Database, dinnerEventId: n
  *
  * Race-safe: the update's WHERE holds state=RELEASED, so of two concurrent claims on the order one lands.
  *
- * @returns Claimed order with the household that sold it, or null when the order is no longer for sale
+ * @returns Claimed order with the household and the inhabitant that sold it, or null when the order is no longer for sale
  *
  * ADR-011: Creates USER_CLAIMED audit entry with original household provenance
  */
@@ -503,7 +503,10 @@ export async function claimReleasedOrder(
 
         console.info(`${LOG} Successfully claimed order ${orderId}`)
 
-        return {order: toOrderDetail(claimedOrder), ticketPriceId: existingOrder.ticketPriceId, sellerHouseholdId: existingOrder.inhabitant.householdId}
+        return {
+            order: toOrderDetail(claimedOrder), ticketPriceId: existingOrder.ticketPriceId,
+            sellerHouseholdId: existingOrder.inhabitant.householdId, sellerInhabitantId: existingOrder.inhabitantId
+        }
     } catch (error) {
         // P2025: another claim took the order between the read and the update
         if (isPrismaNotFound(error)) {
@@ -518,7 +521,7 @@ export async function claimReleasedOrder(
  * Claim the oldest released ticket of a ticket type on a dinner for an inhabitant (FIFO by releasedAt). A lost race
  * tries the next ticket for sale, up to `maxRetries` attempts.
  *
- * @returns Claimed order with the household that sold it, or null if no matching ticket available
+ * @returns Claimed order with the household and the inhabitant that sold it, or null if no matching ticket available
  */
 export async function claimOrder(
     d1Client: D1Database,

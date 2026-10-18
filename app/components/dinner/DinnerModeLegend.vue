@@ -3,17 +3,23 @@ DinnerModeLegend - the dinner-mode entries of the "Forklaring" panel (CalendarLe
 
 Shared by the booking grid (week/month) and the single-dinner form, which differ only
 in which extras they explain: the grid also has a modified-cell marker, the queue marker and a hint; both explain an
-expected booking while a cell without an order shows one.
+expected booking while a cell without an order shows one. One entry per row (COMPONENTS.legend.list): the sample in a
+fixed-width column (COMPONENTS.legend.sample), its explanation beside it, so every explanation starts on one vertical line.
 
-┌ ⓘ Forklaring ────────────────────────────────────────────────────────────────┐
-│  [🍽️]      [🌙]    [🛍️]      [❌]     [❓]      ┃[🍽️]      (mode)°hourglass       │
-│  Spisesal   Sen     Takeaway   Ingen    Blandet   Ændret    På venteliste (#n)   │
-│  (mode)                                                                       │
-│  Forventet efter præferencer                                                  │
-│  Klik på en celle for at ændre din booking …  (hint, grid)                    │
-└──────────────────────────────────────────────────────────────────────────────┘
-(mode)°hourglass = the wish ghosted (COMPONENTS.waitlist) under the corner chip, grid only
-(mode) = an expected booking outlined (COMPONENTS.bookingGrid.expectedBadge), while one shows
+┌ ⓘ Forklaring ────────────────────────────────────────────┐
+│  [🍽️]         Spisesal                                   │
+│  [🌙]         Sen                                        │
+│  [🛍️]         Takeaway                                   │
+│  [❌]         Ingen                                      │
+│  [❓]         Blandet                                    │
+│  ┃[🍽️]        Ændret                                     │
+│  (mode)°⌛    På venteliste (#n)                          │
+│  [ex] (mode)  Forventet bestilling ifølge præferencer     │
+│  Klik på en celle for at ændre din booking … (hint)      │
+└──────────────────────────────────────────────────────────┘
+(mode)°⌛ = the wish ghosted (COMPONENTS.waitlist) under the corner chip, grid only
+[ex] (mode) = the sliders the day form's ticket carries (ICONS.preferences at COMPONENTS.ticket.stateIcon.expected)
+beside an expected booking ghosted on neutral (COMPONENTS.bookingGrid.expectedBadge), while one shows
 -->
 <script setup lang="ts">
 import {DinnerMode} from '~/composables/useBookingValidation'
@@ -47,53 +53,67 @@ const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
 
 <template>
   <CalendarLegend :hint="hint" data-testid="dinner-mode-legend">
-    <DinnerModeSelector
-        v-for="mode in modes"
-        :key="mode"
-        :model-value="mode"
-        :form-mode="FORM_MODES.VIEW"
-        show-label
-        :size="SIZES.xs"
-    />
-    <DinnerModeSelector
-        v-if="showNoConsensus"
-        :model-value="DinnerMode.DINEIN"
-        :form-mode="FORM_MODES.VIEW"
-        show-label
-        :size="SIZES.xs"
-        :consensus="false"
-    />
-    <div v-if="showModified" :class="COMPONENTS.legend.stackedEntry" data-testid="dinner-mode-legend-modified">
-      <DinnerModeSelector
-          :model-value="DinnerMode.DINEIN"
-          :form-mode="FORM_MODES.VIEW"
-          :size="SIZES.xs"
-          is-modified
-      />
-      <span :class="TYPOGRAPHY.finePrint">Ændret</span>
-    </div>
-    <div v-if="showWaitlist" :class="COMPONENTS.legend.stackedEntry" data-testid="dinner-mode-legend-waitlist">
-      <UChip v-bind="COMPONENTS.waitlist.chip">
-        <DinnerModeSelector
-            :model-value="DinnerMode.DINEIN"
-            :form-mode="FORM_MODES.VIEW"
-            :size="SIZES.xs"
-            ghost
-        />
-        <template #content>
-          <UIcon :name="ICONS.waitlist" :class="COMPONENTS.waitlist.chipIcon" />
-        </template>
-      </UChip>
-      <span :class="TYPOGRAPHY.finePrint">På venteliste (#n)</span>
-    </div>
-    <div v-if="showExpected" :class="COMPONENTS.legend.stackedEntry" data-testid="dinner-mode-legend-expected">
-      <DinnerModeSelector
-          :model-value="DinnerMode.DINEIN"
-          :form-mode="FORM_MODES.VIEW"
-          :size="SIZES.xs"
-          expected
-      />
-      <span :class="TYPOGRAPHY.finePrint">{{ BOOKING_WORDS.expectedBooking }}</span>
+    <div :class="COMPONENTS.legend.list" data-testid="dinner-mode-legend-list">
+      <div v-for="mode in modes" :key="mode" :class="COMPONENTS.legend.entry">
+        <div :class="COMPONENTS.legend.sample">
+          <DinnerModeSelector
+              :model-value="mode"
+              :form-mode="FORM_MODES.VIEW"
+              :size="SIZES.xs"
+          />
+        </div>
+        <span :class="TYPOGRAPHY.finePrint">{{ MODE_WORDS[mode].label }}</span>
+      </div>
+      <div v-if="showNoConsensus" :class="COMPONENTS.legend.entry">
+        <div :class="COMPONENTS.legend.sample">
+          <DinnerModeSelector
+              :model-value="DinnerMode.DINEIN"
+              :form-mode="FORM_MODES.VIEW"
+              :size="SIZES.xs"
+              :consensus="false"
+          />
+        </div>
+        <span :class="TYPOGRAPHY.finePrint">{{ BOOKING_WORDS.mixedModes }}</span>
+      </div>
+      <div v-if="showModified" :class="COMPONENTS.legend.entry" data-testid="dinner-mode-legend-modified">
+        <div :class="COMPONENTS.legend.sample">
+          <DinnerModeSelector
+              :model-value="DinnerMode.DINEIN"
+              :form-mode="FORM_MODES.VIEW"
+              :size="SIZES.xs"
+              is-modified
+          />
+        </div>
+        <span :class="TYPOGRAPHY.finePrint">{{ BOOKING_WORDS.legend.modified }}</span>
+      </div>
+      <div v-if="showWaitlist" :class="COMPONENTS.legend.entry" data-testid="dinner-mode-legend-waitlist">
+        <div :class="COMPONENTS.legend.sample">
+          <UChip v-bind="COMPONENTS.waitlist.chip">
+            <DinnerModeSelector
+                :model-value="DinnerMode.DINEIN"
+                :form-mode="FORM_MODES.VIEW"
+                :size="SIZES.xs"
+                ghost
+            />
+            <template #content>
+              <UIcon :name="ICONS.waitlist" :class="COMPONENTS.waitlist.chipIcon" />
+            </template>
+          </UChip>
+        </div>
+        <span :class="TYPOGRAPHY.finePrint">{{ BOOKING_WORDS.legend.waitlist }}</span>
+      </div>
+      <div v-if="showExpected" :class="COMPONENTS.legend.entry" data-testid="dinner-mode-legend-expected">
+        <div :class="COMPONENTS.legend.sample">
+          <UIcon :name="ICONS.preferences" :class="COMPONENTS.ticket.stateIcon.expected" />
+          <DinnerModeSelector
+              :model-value="DinnerMode.DINEIN"
+              :form-mode="FORM_MODES.VIEW"
+              :size="SIZES.xs"
+              expected
+          />
+        </div>
+        <span :class="TYPOGRAPHY.finePrint">{{ BOOKING_WORDS.expectedBooking }}</span>
+      </div>
     </div>
   </CalendarLegend>
 </template>

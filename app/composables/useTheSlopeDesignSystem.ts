@@ -1305,16 +1305,21 @@ export const COMPONENTS = {
      * three fixed `cell`s (state | guest | allergy) whose state glyph takes the state colour (`stateIcon`) and whose
      * guest and allergy glyphs take the type badge's colour (`infoIcon`), the type `badge`, and `modeSlot` (how you
      * eat, right-aligned); `subRow` starts row 2 under the badge with its `provenance` line or a ticket price's `note`. A queued
-     * ticket's edge takes the waiting list's colour (`ORDER_STATE_COLORS.queued`); its glyph (`stateIcon.queued`) takes the toned ink
+     * ticket's edge takes the waiting list's colour (`ORDER_STATE_COLORS.queued`); its glyph (`stateIcon.queued`) takes the toned ink.
+     * An expected booking (no order yet) is no ticket state: its `face.expected` and `stateIcon.expected` sit beside the
+     * queued ones, on the same neutral edge and toned ink
      */
     ticket: {
         // The edge is the Nuxt UI slot utility of `ORDER_STATE_COLORS[state]`, spelled out for the Tailwind scanner
         face: {
-            normal: `${TICKET_FACE} border-primary`,
-            released: `${TICKET_FACE} border-error`,
-            claimed: `${TICKET_FACE} border-info`,
-            queued: `${TICKET_FACE} border-neutral`
-        } satisfies Record<TicketState, string>,
+            ...({
+                normal: `${TICKET_FACE} border-primary`,
+                released: `${TICKET_FACE} border-error`,
+                claimed: `${TICKET_FACE} border-info`,
+                queued: `${TICKET_FACE} border-neutral`
+            } satisfies Record<TicketState, string>),
+            expected: `${TICKET_FACE} border-neutral`
+        },
         watermark: 'absolute inset-0 flex items-center justify-center pointer-events-none',
         watermarkIcon: `w-full h-[140%] opacity-[0.12] ${TEXT.dimmed}`,
         content: 'relative z-10 space-y-1',
@@ -1323,10 +1328,13 @@ export const COMPONENTS = {
         // 20px, the badge's height; an empty cell keeps the width so the badges share one left edge
         cell: 'size-5 flex-shrink-0 flex items-center justify-center',
         stateIcon: {
-            released: `size-5 ${TEXT.error}`,
-            claimed: 'size-5 text-info',
-            queued: `size-5 ${TEXT.toned}`
-        } satisfies Record<Exclude<TicketState, 'normal'>, string>,
+            ...({
+                released: `size-5 ${TEXT.error}`,
+                claimed: 'size-5 text-info',
+                queued: `size-5 ${TEXT.toned}`
+            } satisfies Record<Exclude<TicketState, 'normal'>, string>),
+            expected: `size-5 ${TEXT.toned}`
+        },
         // Keyed by the ticket type colours (TICKET_TYPE_COLORS)
         infoIcon: {
             [COLOR.primary]: 'size-5 text-primary-800 dark:text-primary-300',
@@ -1432,8 +1440,9 @@ export const COMPONENTS = {
      * `guestUnknown`, `guestAddName` with `guestAddLabel`) and the count badges' `countIcon`; the guest-add
      * button, turning through `COMPONENTS.openTurn` while its form is open; the footer `summary` with its `summaryPrice`, the
      * edit footer's `actionCell` and `actionStack`, and the `legend` gap. A cell without an order shows the booking the
-     * preferences give it as `expectedBadge`: the mode in its own colour, outlined, its glyph and label in the muted ink,
-     * beside the waiting list's ghost (`COMPONENTS.waitlist.ghostBadge`); the day form's ticket binds it too
+     * preferences give it as `expectedBadge`: the mode ghosted on the waiting list's neutral (`ORDER_STATE_COLORS.queued`),
+     * outlined, its glyph and label in the muted ink, as the waiting list's ghost (`COMPONENTS.waitlist.ghostBadge`) shows
+     * a wish; the day form's ticket binds it too
      */
     bookingGrid: {
         root: 'flex flex-col',
@@ -1461,7 +1470,7 @@ export const COMPONENTS = {
         actionCell: 'px-2 py-2 border-t border-default',
         actionStack: 'flex flex-col gap-2',
         legend: 'mt-4',
-        expectedBadge: {variant: NOISE.medium, ink: TEXT.muted}
+        expectedBadge: {color: ORDER_STATE_COLORS.queued, variant: NOISE.medium, ink: TEXT.muted}
     },
 
     /** ActionPreview: the `list` of preview lines under the title, each `item` a badge with its `icon` */
@@ -1515,7 +1524,8 @@ export const COMPONENTS = {
      * DinnerModeSelector: the weekday title's `weekdayLabel`, the view and edit faces' `stack` (the badge or the
      * button group over its label), the edit face's `fieldGroup` and each mode's square `segment` on a phone, the
      * grid's unsaved-cell accent (`modified`), the DINEIN button's `pulse` while a household disagrees, and the
-     * glyph size per Nuxt UI size (`iconSize`); without a size the glyph follows `WEEKDAY.badgeContentSize`
+     * glyph size per Nuxt UI size (`iconSize`); without a size the glyph follows `WEEKDAY.badgeContentSize`. The edit
+     * faces' buttons carry that size in their leading icon slot (`buttonUi`)
      */
     dinnerModeSelector: {
         weekdayLabel: `flex items-center justify-center ${TYPOGRAPHY.caption} ${TEXT.ink}`,
@@ -1525,7 +1535,8 @@ export const COMPONENTS = {
         segment: 'rounded-none md:rounded-md',
         modified: 'border-l-2 border-warning pl-0.5',
         pulse: 'animate-pulse',
-        iconSize: {xs: 'size-3', sm: 'size-3', md: 'size-4', lg: 'size-5', xl: 'size-6'}
+        iconSize: {xs: 'size-3', sm: 'size-3', md: 'size-4', lg: 'size-5', xl: 'size-6'},
+        buttonUi: (iconSize: string) => ({leadingIcon: iconSize})
     },
 
     // Card action buttons - positioned in card corners or footers
@@ -1602,13 +1613,15 @@ export const COMPONENTS = {
         }
     },
 
-    // Entries inside an ALERTS.legend panel (CalendarLegend, DinnerModeLegend): the samples wrap
-    // in a row, each sample sits beside its name; a team badge sample is the calendar's size
+    // Entries inside an ALERTS.legend panel, each sample beside its name (`entry`): CalendarLegend's entries wrap in a
+    // row (`entries`); DinnerModeLegend lists one entry per row (`list`), its sample in a fixed-width column (`sample`)
+    // so every name starts on one vertical line; a team badge sample is the calendar's size
     legend: {
         entries: 'flex flex-wrap gap-x-6 gap-y-2',
         entry: 'flex items-center gap-2',
-        // A sample with its name under it (the booking grid's modified-cell marker)
-        stackedEntry: 'flex flex-col items-center gap-0.5',
+        list: 'flex flex-col gap-2',
+        // Holds the widest sample, the expected booking's sliders beside its mode badge
+        sample: 'w-14 shrink-0 flex items-center gap-2',
         badge: 'w-8 h-8 flex items-center justify-center shrink-0',
         // A chip sample with a glyph mirrors the dinner calendar's waiting-list lock chip
         iconChip: QUEUE_LOCK_CHIP,

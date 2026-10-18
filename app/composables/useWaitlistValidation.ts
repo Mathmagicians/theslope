@@ -33,9 +33,9 @@ export const useWaitlistValidation = () => {
 
     const TicketWaitlistCreateSchema = TicketWaitlistDisplaySchema.omit({id: true, createdAt: true, placingAt: true, placingOrderId: true})
 
-    // The order a placement claimed or wrote, as the recovery reads it; a claim names the household it bought from
+    // The order a placement claimed or wrote, as the recovery reads it; a claim names the household and the inhabitant it bought from
     const PlacementOrderSchema = OrderDisplaySchema.pick({id: true, state: true, inhabitantId: true, isGuestTicket: true, ticketPriceId: true, createdAt: true})
-        .extend({sellerHouseholdId: IdSchema.nullable()})
+        .extend({sellerHouseholdId: IdSchema.nullable(), sellerInhabitantId: IdSchema.nullable()})
 
     // Database row: the order travels as JSON (ADR-010)
     const SerializedTicketWaitlistSchema = TicketWaitlistDisplaySchema.extend({

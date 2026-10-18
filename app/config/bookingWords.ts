@@ -46,6 +46,8 @@ export const BOOKING_WORDS = {
         [DinnerMode.TAKEAWAY]: 'Takeaway',
         [DinnerMode.NONE]: 'Ingen'
     } satisfies Record<DinnerMode, string>,
+    /** The eating mode of a household whose rows disagree: DinnerModeSelector's label in power mode and its legend entry */
+    mixedModes: 'Blandet',
     /** A booking action: the preview line's words after the name, the toast's words after the count */
     actions: {
         [Action.BOOK]: {preview: () => 'tilmeldes', toast: 'tilmeldt'},
@@ -105,9 +107,9 @@ export const BOOKING_WORDS = {
     unknownHousehold: '?',
     /** A place on the waiting list as a badge beside the name */
     waitlistBadge: {label: 'Venteliste', helpText: 'Du får en billet, når en kommer til salg, eller kokken frigiver portioner'},
-    /** A booking result's lines in the toast and the "Sidste ændring" alerts */
+    /** A booking result's lines in the toast and the "Sidste ændring" alerts: the word of a day's failed orders */
     result: {
-        failed: (count: number) => `${count} ${count === 1 ? 'opdatering' : 'opdateringer'} fejlede`,
+        failed: 'FEJLET',
         /** A leave or a change the waiting list refuses while a run assigns the place */
         conflict: {
             [Action.LEAVE]: 'pladsen er ved at blive tildelt',
@@ -117,14 +119,18 @@ export const BOOKING_WORDS = {
         householdFailed: 'Bookingen fejlede',
         nothingChanged: 'Der var ingen ændringer i dine bookinger'
     },
-    /** Tickets sold to the waiting list: the preview's words before the save, the toast's after it */
-    waitlistSale: {preview: 'sælges til ventelisten', toast: 'solgt til ventelisten'},
+    /** Tickets sold to the waiting list: the preview's words before the save */
+    waitlistSale: {preview: 'sælges til ventelisten'},
+    /** What became of a released ticket in the toast: sold in the run, or still for sale */
+    releaseFate: {sold: 'solgt', forSale: 'til salg'},
     /** The preview of a save: its title, and the guest form's */
     preview: {title: 'Du er ved at ændre familiens booking', guestTitle: 'Du er ved at tilføje gæster'},
     /** Every preview while the server works out what the save does */
     preferencePreviewLoading: 'Prøver at beregne hvad I skal spise hvornår...',
     /** The legend entry of a cell without an order, showing the booking the preferences give it */
-    expectedBooking: 'Forventet efter præferencer',
+    expectedBooking: 'Forventet bestilling ifølge præferencer',
+    /** The booking grid's legend entries: a cell with unsaved changes, and a place on the waiting list with its number */
+    legend: {modified: 'Ændret', waitlist: 'På venteliste (#n)'},
     /**
      * A dinner's deadline badges and steps, the chef's and the household's. "Framelding", as the preferences sign everybody
      * up and the deadline is the one for cancelling

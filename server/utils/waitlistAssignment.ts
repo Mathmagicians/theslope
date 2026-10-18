@@ -224,7 +224,8 @@ const sellToEntry = async (d1Client: D1Database, entry: TicketWaitlistDisplay, t
         stop: false,
         placed: {
             dinnerEventId: entry.dinnerEventId, ticketPriceId: claimed.ticketPriceId,
-            buyerInhabitantId: entry.inhabitantId, buyerHouseholdId: entry.order.householdId, sellerHouseholdId: claimed.sellerHouseholdId
+            buyerInhabitantId: entry.inhabitantId, buyerHouseholdId: entry.order.householdId, sellerHouseholdId: claimed.sellerHouseholdId,
+            sellerInhabitantId: claimed.sellerInhabitantId
         }
     }
 }

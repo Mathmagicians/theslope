@@ -15,8 +15,8 @@ type PortionsOf = (entry: TicketWaitlistDisplay) => number
 type TicketTypeOf = (entry: TicketWaitlistDisplay) => TicketType | undefined
 type IsHeld = (entry: TicketWaitlistDisplay) => boolean
 
-/** A ticket for sale: a released order and the household that sells it */
-export type TicketForSale = Pick<OrderDisplay, 'id' | 'dinnerEventId' | 'ticketPriceId' | 'releasedAt'> & {householdId: number}
+/** A ticket for sale: a released order, its inhabitant and the household that sells it */
+export type TicketForSale = Pick<OrderDisplay, 'id' | 'dinnerEventId' | 'ticketPriceId' | 'releasedAt' | 'inhabitantId'> & {householdId: number}
 
 interface WaitlistTake {
     entry: TicketWaitlistDisplay
@@ -88,7 +88,7 @@ export const useWaitlist = () => {
                 const forSale = oldestFirst.filter(ticket => ticket.dinnerEventId === dinnerEventId && typeOfPrice(ticket.ticketPriceId) === ticketType)
                 return line.slice(0, forSale.length).map((buyer, index): TicketSale => ({
                     dinnerEventId, ticketPriceId: forSale[index]!.ticketPriceId!, buyerInhabitantId: buyer.inhabitantId,
-                    buyerHouseholdId: buyer.order.householdId, sellerHouseholdId: forSale[index]!.householdId
+                    buyerHouseholdId: buyer.order.householdId, sellerHouseholdId: forSale[index]!.householdId, sellerInhabitantId: forSale[index]!.inhabitantId
                 }))
             }))
         return {waitlistTicketsSold}
@@ -201,7 +201,7 @@ export const useWaitlist = () => {
             case order.ticketPriceId !== null && order.sellerHouseholdId !== null: return {
                 waitlistTicketsSold: [{
                     dinnerEventId, ticketPriceId: order.ticketPriceId, buyerInhabitantId: inhabitantId,
-                    buyerHouseholdId: entry.order.householdId, sellerHouseholdId: order.sellerHouseholdId
+                    buyerHouseholdId: entry.order.householdId, sellerHouseholdId: order.sellerHouseholdId, sellerInhabitantId: order.sellerInhabitantId
                 }],
                 waitlistPortionsAssigned: []
             }

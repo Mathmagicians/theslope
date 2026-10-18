@@ -83,7 +83,7 @@ history (`TicketChanges.vue`) is the reference.
 | `info` | prose, banners |
 | `neutral` | quiet system feedback: empty, read-only, last result |
 | `success`, `warning`, `error` | an outcome or a state to act on |
-| `legend` | "Forklaring" panels (`CalendarLegend`, `DinnerModeLegend`, entries in `COMPONENTS.legend`), the notes box |
+| `legend` | "Forklaring" panels (`CalendarLegend`, `DinnerModeLegend`, entries in `COMPONENTS.legend`: a calendar's entries wrap in a row, the dinner modes stand one per row with every explanation on one vertical line), the notes box |
 | `emptyState`, `emptyStateCompact` | empty states, centred |
 
 Modifiers spread after a kind: `withActions` (buttons beside the text from md, below it on a phone), `withCornerAction` (one

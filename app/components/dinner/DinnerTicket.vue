@@ -13,24 +13,27 @@
  * ┃                fra Hansen                                        ░░░░░░░░┃
  * ┃  [cl][gu][al]  [BARN · 35kr · 2 Gæster]       [mode] Spisesal   ░░[tk]░░┃  claimed guest, allergic   gu + al green
  * ┃  [wl][  ][  ]  [VOKSEN · 55kr]                (mode) Spisesal   ░░[tk]░░┃  queued   wl toned, edge neutral, (mode) the wish ghosted
- * ┃  [  ][  ][  ]  [VOKSEN · 55kr]                (mode) Spisesal   ░░[tk]░░┃  expected: no order yet, (mode) the booking the preferences give, outlined
+ * ┃  [ex][  ][  ]  [VOKSEN · 55kr]                (mode) Takeaway   ░░[tk]░░┃  expected: no order yet, ex toned, edge neutral, (mode) ghosted on neutral
+ * ┃  [ex][  ][  ]  [ALLE]                         (mode) Takeaway   ░░[tk]░░┃  power row when every row is expected: the consensus of what the rows show
  * ┃  [  ][  ][  ]  [BARN · 17kr]                  [remove]          ░░[tk]░░┃  a season's ticket price (TicketPriceListEditor)
  * ┃                Under 12 år · Barn                                ░░░░░░░░┃
  *
  * special = ticket.special: three ticket.cell (state | guest | allergy), an empty cell keeps its width
  *   [rl] ICONS.released, [cl] ICONS.claim, [wl] ICONS.waitlist at ticket.stateIcon[state]
+ *   [ex] ICONS.preferences at ticket.stateIcon.expected
  *   [gu] ICONS.userPlus, [al] ICONS.allergy at ticket.infoIcon[ticketConfig.color]
  * type = the badge (ticket.badge) in the ticket type's colour
  * how you eat = ticket.modeSlot: DinnerModeSelector in view mode, right-aligned; a queued ticket shows the wished mode as
  *   its ghost (COMPONENTS.waitlist)
- *   an expected booking (no order yet) shows the mode outlined (COMPONENTS.bookingGrid.expectedBadge)
+ *   an expected booking (no order yet) shows the mode ghosted on neutral (COMPONENTS.bookingGrid.expectedBadge)
  *   or the caller's control through the end slot (a ticket price's remove button)
  * row 2 = ticket.subRow, starting under the badge: the household a claimed ticket came from, or a ticket price's note
  * [tk] = ICONS.ticketSolid at ticket.watermarkIcon
  *
  * Two hues per card: the state colour paints the edge (ticket.face[state]) and the state glyph, the type colour
  * paints the badge and the guest and allergy glyphs. A queued ticket's edge takes the waiting list's neutral
- * (ORDER_STATE_COLORS.queued); its hourglass takes the toned ink
+ * (ORDER_STATE_COLORS.queued); its hourglass takes the toned ink. An expected ticket reads as a queued one with the
+ * sliders in place of the hourglass (ticket.face.expected, ticket.stateIcon.expected)
  * Mode labels: Spisesal | Sen | Takeaway | Ingen
  */
 import type {DinnerMode, TicketState as TicketStateValue} from '~/composables/useBookingValidation'
@@ -75,7 +78,11 @@ const STATE_GLYPHS: Record<TicketStateValue, {name: string, class: string} | nul
   [TicketState.queued]: {name: ICONS.waitlist, class: ticket.stateIcon.queued},
   [TicketState.normal]: null
 }
-const stateGlyph = computed(() => STATE_GLYPHS[props.ticketState])
+// An expected booking is a prop, not a ticket state: it takes the face and the glyph before the state does
+const stateGlyph = computed(() => props.expected
+  ? {name: ICONS.preferences, class: ticket.stateIcon.expected}
+  : STATE_GLYPHS[props.ticketState])
+const face = computed(() => props.expected ? ticket.face.expected : ticket.face[props.ticketState])
 // On the waiting list the mode is the wish, shown as its ghost
 const isWish = computed(() => props.ticketState === TicketState.queued)
 
@@ -100,7 +107,7 @@ const badgeText = computed(() => {
 </script>
 
 <template>
-  <div :class="ticket.face[ticketState]">
+  <div :class="face">
     <!-- Watermark - sized to look like the ticket border -->
     <div :class="ticket.watermark">
       <UIcon :name="ICONS.ticketSolid" :class="ticket.watermarkIcon" />

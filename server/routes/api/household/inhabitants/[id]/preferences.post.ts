@@ -8,7 +8,7 @@ import {fetchInhabitant, updateInhabitant} from "~~/server/data/prismaRepository
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {emailChannel} from "~~/server/utils/sender/config"
 import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
-import type {WeekDayMap} from "~/types/dateTypes"
+import {changedWeekdays, type WeekDayMap} from "~/types/dateTypes"
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -62,11 +62,14 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
         console.info(`${LOG} User ${user.email} ${preview ? 'previewing' : 'updating'} preferences for inhabitant ${inhabitant.name} ${inhabitant.lastName}`)
         const storedInhabitant = preview ? inhabitant : await updateInhabitant(d1Client, id, {dinnerPreferences})
 
-        // Re-scaffold bookings for this household; a preview runs the same scaffold on the draft and writes nothing
-        console.info(`${LOG} Re-scaffolding household ${storedInhabitant.householdId}`)
+        // Re-scaffold the household on the weekdays the draft changes, the nightly run keeps the rest in step (ADR-015);
+        // a preview runs the same scaffold on the draft and writes nothing
+        const weekdays = changedWeekdays(inhabitant.dinnerPreferences, dinnerPreferences)
+        console.info(`${LOG} Re-scaffolding household ${storedInhabitant.householdId} on ${weekdays.join(', ') || 'no weekday'}`)
         const scaffoldResult: ScaffoldResult = await scaffoldPrebookings(d1Client, {
             seasonId,
             householdId: storedInhabitant.householdId,
+            weekdays,
             preferences: preview ? [{inhabitantId: id, dinnerPreferences}] : undefined,
             preview
         })

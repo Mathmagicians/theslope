@@ -35,6 +35,8 @@ const toast = useToast()
 // Auth store for current user info (used in booking handlers)
 const authStore = useAuthStore()
 const {user} = storeToRefs(authStore)
+// The household the booking form books for: its order names the people in the save's toast
+const {selectedHousehold} = storeToRefs(useHouseholdsStore())
 
 // Booking validation and helpers
 const {BOOKING_TOAST_TITLES} = useBooking()
@@ -114,11 +116,7 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
 
   try {
     const response = await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders)
-    toast.add({
-      title: toastTitle,
-      description: formatBookingResult(response.scaffoldResult),
-      ...scaffoldToastLook(response.scaffoldResult)
-    })
+    toast.add(scaffoldToast(toastTitle, response.scaffoldResult, selectedHousehold.value?.inhabitants.map(({id}) => id)))
   } catch {
     // The request has toasted the failure
   }

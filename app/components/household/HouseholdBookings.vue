@@ -112,6 +112,9 @@ const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selec
 // Grid view form mode
 const gridFormMode = ref<'view' | 'edit'>('view')
 
+// The order a save's toast names the people in
+const householdOrder = computed(() => household.value.inhabitants.map(({id}) => id))
+
 const handleGridSave = async (changes: BookingChanges) => {
   const desiredOrders = buildBookingChanges(changes, orders.value, household.value.inhabitants, dinnerEvents.value, ticketPrices.value)
   if (!selectedSeason.value || desiredOrders.length === 0) return
@@ -124,7 +127,7 @@ const handleGridSave = async (changes: BookingChanges) => {
     changedEventIds,
     desiredOrders,
     props.adminBypass,
-    {title: BOOKING_TOAST_TITLES.grid}
+    {title: BOOKING_TOAST_TITLES.grid, householdOrder: householdOrder.value}
   )
 }
 
@@ -138,7 +141,7 @@ const handleDayViewSave = async (desiredOrders: DesiredOrder[]) => {
     dinnerEventId,
     desiredOrders,
     props.adminBypass,
-    {title: BOOKING_TOAST_TITLES.day}
+    {title: BOOKING_TOAST_TITLES.day, householdOrder: householdOrder.value}
   )
 }
 
@@ -157,7 +160,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
     eventId,
     guestOrders,
     props.adminBypass,
-    {title: BOOKING_TOAST_TITLES.guest, suffix: ` d. ${dateStr}`}
+    {title: BOOKING_TOAST_TITLES.guest, suffix: ` d. ${dateStr}`, householdOrder: householdOrder.value}
   )
 }
 </script>

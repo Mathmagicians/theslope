@@ -5,7 +5,8 @@ import {useBookingValidation, OrderState, type ScaffoldResult, type DesiredOrder
 import type {HouseholdDisplay} from "~/composables/useCoreValidation"
 import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import type {TicketWaitlistDisplay, WaitlistAuditContext, WaitlistOrder, WaitlistPlacementOutcomes} from "~/composables/useWaitlistValidation"
-import type {WeekDayMap} from "~/types/dateTypes"
+import type {WeekDay, WeekDayMap} from "~/types/dateTypes"
+import {dateToWeekDay} from "~/utils/season"
 import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets, bookingOutcomes, actionOfUpdate, countTotals} from "~/composables/useBooking"
 import {groupBy, partition, writeBatchOnce, writeBatchOrEach} from "~/utils/batchUtils"
 import {sellTicketsToWaitlist, joinWaitlist, previewJoinWaitlist, type DinnerForWaitlist} from "~~/server/utils/waitlistAssignment"
@@ -47,6 +48,8 @@ export type ScaffoldOptions = {
     householdId?: number
     /** If provided, filter to these dinner events. Otherwise uses rolling window. */
     dinnerEventIds?: number[]
+    /** If provided, the rolling window's dinners on these weekdays */
+    weekdays?: WeekDay[]
     /** If provided, use these instead of generating from preferences. */
     desiredOrders?: DesiredOrder[]
     /** If provided, use USER_* audit actions. Otherwise SYSTEM_*. */
@@ -59,8 +62,8 @@ export type ScaffoldOptions = {
     preview?: boolean
 }
 
-/** A ticket a claim bought: the price row it keeps and the household that sold it */
-type BoughtTicket = {ticketPriceId: number, sellerHouseholdId: number}
+/** A ticket a claim bought: the price row it keeps and the household and the inhabitant that sold it */
+type BoughtTicket = {ticketPriceId: number, sellerHouseholdId: number, sellerInhabitantId: number}
 
 // The key a written queue entry pairs with its join by: its person, its dinner and its guest flag
 const entryKeyOf = ({inhabitantId, dinnerEventId, isGuestTicket}: Pick<TicketWaitlistDisplay, 'inhabitantId' | 'dinnerEventId' | 'isGuestTicket'>): string =>
@@ -124,7 +127,7 @@ const previewSupply = (d1Client: D1Database, ticketPrices: TicketPrice[], ticket
             const [oldest] = ofType(claim.dinnerEventId, ticketType)
             if (!oldest?.ticketPriceId) return null
             tickets.delete(oldest.id)
-            return {ticketPriceId: oldest.ticketPriceId, sellerHouseholdId: oldest.householdId}
+            return {ticketPriceId: oldest.ticketPriceId, sellerHouseholdId: oldest.householdId, sellerInhabitantId: oldest.inhabitantId}
         },
         // The entries the preview joins line up after the stored ones, in the order they join
         join: async (joins, dinner) => {
@@ -161,7 +164,7 @@ const ticketsForSaleOf = async (d1Client: D1Database, orders: OrderDisplay[], ho
     }
     return released.flatMap(({id, dinnerEventId, ticketPriceId, releasedAt, inhabitantId}) => {
         const householdId = householdOf.get(inhabitantId)
-        return householdId === undefined ? [] : [{id, dinnerEventId, ticketPriceId, releasedAt, householdId}]
+        return householdId === undefined ? [] : [{id, dinnerEventId, ticketPriceId, releasedAt, inhabitantId, householdId}]
     })
 }
 
@@ -170,6 +173,7 @@ const ticketsForSaleOf = async (d1Client: D1Database, orders: OrderDisplay[], ho
  */
 const skippedResult = (): ScaffoldResult => ({
     seasonId: null,
+    dinners: [],
     totals: countTotals([]),
     positions: [],
     unchanged: 0,
@@ -261,12 +265,13 @@ export async function scaffoldPrebookings(
     const auditOf = (action: BookingAction): WaitlistAuditContext => ({action: getAuditAction(isUserTriggered, action), performedByUserId: effectiveUserId, seasonId: effectiveSeasonId})
 
     // Filter dinner events: user mode uses IDs from desiredOrders, system uses rolling window
+    const onWeekdays = (dinnerEvent: {date: Date}) => !options.weekdays || options.weekdays.includes(dateToWeekDay(dinnerEvent.date))
     const allDinnerEvents = season.dinnerEvents ?? []
     const dinnerEventIds = isUserMode
         ? [...new Set(options.desiredOrders!.map(o => o.dinnerEventId))]
         : (options.dinnerEventIds
             ? options.dinnerEventIds
-            : getScaffoldableDinnerEvents(allDinnerEvents).map(e => e.id))
+            : getScaffoldableDinnerEvents(allDinnerEvents).filter(onWeekdays).map(e => e.id))
     const dinnerEvents = allDinnerEvents.filter(de => dinnerEventIds.includes(de.id))
 
     const draftOf = new Map((options.preferences ?? []).map(({inhabitantId, dinnerPreferences}) => [inhabitantId, dinnerPreferences]))
@@ -450,7 +455,7 @@ export async function scaffoldPrebookings(
             const forSaleAfter = (desired: DesiredOrder, action: BookingAction): TicketForSale | null => {
                 const existing = orderById.get(desired.orderId!)!
                 return desired.state === OrderState.RELEASED
-                    ? {id: existing.id, dinnerEventId: existing.dinnerEventId, ticketPriceId: desired.ticketPriceId, releasedAt: action === Action.RELEASE ? new Date() : existing.releasedAt, householdId: household.id}
+                    ? {id: existing.id, dinnerEventId: existing.dinnerEventId, ticketPriceId: desired.ticketPriceId, releasedAt: action === Action.RELEASE ? new Date() : existing.releasedAt, inhabitantId: existing.inhabitantId, householdId: household.id}
                     : null
             }
             await execute(updates, entries => executeBatchUpdates(d1Client, entries.map(({update}) => update)),
@@ -580,7 +585,8 @@ export async function scaffoldPrebookings(
                 if (bought) {
                     outcomes.ticketsSold.push({
                         dinnerEventId, ticketPriceId: bought.ticketPriceId,
-                        buyerInhabitantId: claim.inhabitantId, buyerHouseholdId: run.household.id, sellerHouseholdId: bought.sellerHouseholdId
+                        buyerInhabitantId: claim.inhabitantId, buyerHouseholdId: run.household.id, sellerHouseholdId: bought.sellerHouseholdId,
+                        sellerInhabitantId: bought.sellerInhabitantId
                     })
                     landed.push(run.resultOf(claim, Action.BUY))
                 } else {
@@ -647,6 +653,7 @@ export async function scaffoldPrebookings(
 
     return ScaffoldResultSchema.parse({
         seasonId: effectiveSeasonId,
+        dinners: dinnerEvents.map(({id, date}) => ({id, date})),
         totals,
         positions,
         unchanged: totalUnchanged,

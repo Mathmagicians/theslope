@@ -307,7 +307,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
         const targetHousehold = households.value.find(h => h.id === targetHouseholdId)
         const targetLabel = targetHousehold ? `${targetHousehold.shortName} (PBS ${targetHousehold.pbsId})` : `husstand ${targetHouseholdId}`
-        const scaffoldSummary = formatBookingResult(result.scaffoldResult)
+        const scaffoldSummary = formatResultLines(result.scaffoldResult, targetHousehold?.inhabitants.map(({id}) => id))
         const {BookingActionSchema} = useBookingValidation()
         const Action = BookingActionSchema.enum
         const hasOrderChanges = [Action.BOOK, Action.CANCEL, Action.RELEASE].some(action => result.scaffoldResult.totals[action] > 0)

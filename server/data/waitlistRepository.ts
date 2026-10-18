@@ -214,10 +214,11 @@ export async function fetchOrdersServingEntry(d1Client: D1Database, entry: Grabb
                 orderBy: [{createdAt: 'asc'}, {id: 'asc'}],
                 select
             })
-        return orders.map(({orderHistory: [claim], ...order}) => PlacementOrderSchema.parse({
-            ...order,
-            sellerHouseholdId: claim ? readOrderAudit(claim)?.householdId ?? null : null
-        }))
+        return orders.map(({orderHistory: [claim], ...order}) => {
+            // The claim's row keeps the order as it stood before the claim: the seller's household and inhabitant
+            const sold = claim ? readOrderAudit(claim) : null
+            return PlacementOrderSchema.parse({...order, sellerHouseholdId: sold?.householdId ?? null, sellerInhabitantId: sold?.inhabitantId ?? null})
+        })
     } catch (error) {
         return throwH3Error(`${LOG} > [RECOVER] Error reading the orders that may serve queue entry ${entry.id}`, error)
     }

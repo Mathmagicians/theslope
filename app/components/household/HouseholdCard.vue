@@ -106,7 +106,9 @@ const props = withDefaults(defineProps<Props>(), {
 const householdsStore = useHouseholdsStore()
 const {lastPreferenceResult} = storeToRefs(householdsStore)
 const planStore = usePlanStore()
-const {activeSeason, selectedSeason} = storeToRefs(planStore)
+const {activeSeason} = storeToRefs(planStore)
+// The order the preview, the toast and the "Sidste ændring" alert name the people in
+const householdOrder = computed(() => props.household.inhabitants.map(({id}) => id))
 
 // Ticket business logic
 
@@ -178,7 +180,7 @@ const {result: preview, pending: isPreviewPending} = useScaffoldPreview(
   ({inhabitantIds, preferences}) => householdsStore.previewPreferences(inhabitantIds, preferences, props.adminBypass)
 )
 const previewDays = computed(() => preview.value
-  ? formatPreviewLines(preview.value, selectedSeason.value?.dinnerEvents ?? [], props.household.inhabitants.map(({id}) => id))
+  ? formatPreviewLines(preview.value, householdOrder.value)
   : [])
 
 // Toast notifications
@@ -203,11 +205,7 @@ const savePreferences = async () => {
       result = await householdsStore.updateInhabitantPreferences(editingInhabitantId.value, draftPreferences.value, props.adminBypass)
     }
 
-    toast.add({
-      title: isPowerMode ? 'Alle præferencer opdateret' : 'Præferencer opdateret',
-      description: formatBookingResult(result),
-      ...scaffoldToastLook(result)
-    })
+    toast.add(scaffoldToast(isPowerMode ? 'Alle præferencer opdateret' : 'Præferencer opdateret', result, householdOrder.value))
 
     // Close the row after save
     expanded.value = {}
@@ -430,7 +428,7 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
           data-testid="last-result-alert"
       >
         <template #description>
-          <p :class="COMPONENTS.bookingResult.lines">{{ `Du har ændret præferencer, og familiens bookinger har ændret sig:\n${formatBookingResult(lastPreferenceResult)}` }}</p>
+          <p :class="COMPONENTS.bookingResult.lines">{{ `Du har ændret præferencer, og familiens bookinger har ændret sig:\n${formatResultLines(lastPreferenceResult, householdOrder)}` }}</p>
         </template>
       </UAlert>
 

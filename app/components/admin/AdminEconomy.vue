@@ -430,11 +430,8 @@ const handleAdminSave = async (orders: DesiredOrder[]) => {
         orders,
         guestBookerInhabitantId
     )
-    toast.add({
-        title: 'Administrator Korrektion',
-        description: `${editingHousehold.value.address}\n${formatBookingResult(result)}`,
-        ...scaffoldToastLook(result)
-    })
+    const reported = scaffoldToast('Administrator Korrektion', result, editingHousehold.value.inhabitants?.map(({id}) => id))
+    toast.add({...reported, description: `${editingHousehold.value.address}\n${reported.description}`})
     cancelEditing()
 }
 

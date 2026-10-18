@@ -610,7 +610,8 @@ export const useBookingValidation = () => {
         ticketPriceId: IdSchema,
         buyerInhabitantId: IdSchema,
         buyerHouseholdId: IdSchema,
-        sellerHouseholdId: IdSchema
+        sellerHouseholdId: IdSchema,
+        sellerInhabitantId: IdSchema.nullable()                      // The released order's inhabitant; null when a recovered sale's history row names none
     })
 
     // The chef's extra portion went to a waiting entry: a regular order at the price written at join
@@ -815,6 +816,7 @@ export const useBookingValidation = () => {
     // What a scaffold run did, as the endpoints that scaffold reply it
     const ScaffoldResultSchema = z.object({
         seasonId: IdSchema.nullable(),
+        dinners: z.array(DinnerEventDisplaySchema.pick({id: true, date: true})).default([]),  // The dinners the run decided
         totals: BookingTotalsSchema,
         positions: z.array(QueuePositionSchema).default([]),        // The place in the dinner's queue of each queued entry
         unchanged: z.number().int().nonnegative(),

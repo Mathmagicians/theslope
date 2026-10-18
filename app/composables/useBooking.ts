@@ -1143,6 +1143,7 @@ export const useBooking = () => {
     // Sums the results of several scaffold runs; the season is the last run's
     const sumScaffoldResults = (results: readonly ScaffoldResult[]): ScaffoldResult => ({
         seasonId: results.at(-1)?.seasonId ?? null,
+        dinners: [...new Map(results.flatMap(result => result.dinners).map(dinner => [dinner.id, dinner])).values()],
         totals: Object.fromEntries(BookingActionSchema.options.map(action => [action, sumBy(results, result => result.totals[action])])) as BookingTotals,
         positions: results.flatMap(result => result.positions),
         unchanged: sumBy(results, result => result.unchanged),

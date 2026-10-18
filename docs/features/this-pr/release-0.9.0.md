@@ -24,7 +24,7 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Team wanted poster | a dinner without a chef shows the wanted poster on the chef card | `ChefMenuCard.vue`, `COMPONENTS.wantedPoster` | committed (ba5604c) |
 | Waitlist | queue, assignment on release, extra portions, one booking path, UI, the calendar chips | `../archived/feature-waitlist.md`, ADR-016 | committed (5eedd34, 5f50af2, c151d74, f4892ad, 0a37cc4, 9cad84a, 627f2f6) |
 | Waitlist notifications | the serial e2e asserting each of the four kinds writes its Delivery row | § Waitlist notifications | planned, after point 6b |
-| Chef spending | expense rows per dinner, the chef endpoints, the Budget pane with the ticket changes | § Chef spending | committed (49ece5e, 24e9a3f, fd41213, c65feae); reopened 2026-10-18 from the user's test of the Budget pane; signed off 2026-10-18 (c90fa33); reopened 2026-10-18 on #16, the dates in the spending tables read dd/MM: implemented 2026-10-18 (`DAY_MONTH_MASK` in `app/utils/date.ts`), uncommitted, in your test |
+| Chef spending | expense rows per dinner, the chef endpoints, the Budget pane with the ticket changes | § Chef spending | committed (49ece5e, 24e9a3f, fd41213, c65feae); reopened 2026-10-18 from the user's test of the Budget pane; signed off 2026-10-18 (c90fa33; the dd/MM dates, `DAY_MONTH_MASK` in `app/utils/date.ts`, uncommitted) |
 | Kitchen allergy line | the dining-mode panels show the allergy kuverter; the expanded list opens with the allergen breakdown | § Kitchen allergy line | committed (5eedd34, 49ece5e, 42b380f) |
 | Chef allergen line | the chef's allergen row counts the dinner's diners in kuverter per menu allergen | § Chef allergen line | committed (49ece5e) |
 | Chef calendar header | the Agenda/Kalender tabs and the collapse chevron share one header row | § Chef calendar header | committed (42b380f) |
@@ -45,7 +45,7 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Test sweep | dead and duplicate cases removed; cleanup fails early; factories, `gotoHydrated` and web-first waits replace raw sleeps; the `setup-season` project creates the active season once per run | `docs/testing.md` | packages 1–6 committed (5b1616b, b7d238d, 2d17d64, 45c1f83, 084ea42, 614cec0) |
 | DRY sweep | dead code and duplicate token paths removed; the specs share their mount, endpoint and session helpers | `tests/component/testHelpers.ts`, `tests/component/hoistedMocks.ts` | committed (72cf9d9, 6b65a70, b456b2f, 999bdbd, c0beb62, 43876aa) |
 | PRF spike | passkey and PRF research with the device protocol | `../feature-proposal-relogin-faceid.md`, `../archived/feature-mobile-native-feel.md` | committed |
-| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–7 committed (2ad1429 to bf7bc75), in your test: #18, #20–#23; reopened 2026-10-18 on #19 (the preference save's reply) and #24 (the ticket history) (§ Verifications with human eyes); 6 reopened for the preference preview, part 1 committed (c90fa33); 6b brief signed, runs after One audit format for the order history |
+| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–7 committed (2ad1429 to bf7bc75), in your test: #18–#23, #19's fix implemented 2026-10-18, uncommitted; reopened 2026-10-18 on #24 (the ticket history) (§ Verifications with human eyes); 6 reopened for the preference preview, part 1 committed (c90fa33); 6b brief signed, runs after One audit format for the order history |
 | Docs and tooling | the user, chef and admin guides; `docs/ui.md` and the compliance tables compacted; `docs/testing.md` Rule 0; the ui skill and the frontend agent; the architecture skill, listed by the architect, Nuxt and frontend agents | `docs/`, `.claude/skills/`, `.claude/agents/` | committed (b82852e, 38804ef, 0dfd8eb, 450bcc8); the architecture skill and the agent files in the working tree |
 | Close keeps the eating mode | the nightly close writes each order's own eating mode | `server/utils/closeOrders.ts`, `fetchPendingOrdersOnConsumedDinners` | committed (16b4035) |
 | One released predicate (the kitchen box) | a released ticket nobody bought stays released after the close; the kitchen panels add up and TIL SALG keeps its title | `app/composables/useOrder.ts`, `KitchenPreparation.vue` | committed (56f8e12) |
@@ -54,7 +54,7 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Table loading | a table bound to a dataset that reloads binds that dataset's `loading`: Nuxt UI's loading bar runs while the rows stay, a write's re-read included; `#loading` fills a table with no rows yet; the day bill, the household's notes and the grid's lock chips wait for the bookings (ADR-018 § Table loading) | ADR-018 § Table loading | signed off 2026-10-18 (4e7d174, cf767b1, 558d7a4) |
 | One audit format for the order history | one `auditData` schema, written and read through one pair of functions | § One audit format for the order history | brief signed 2026-10-17; implemented 2026-10-18 in One intent path's commit; e2e (`orderHistory`, `preferences`, `scaffold`, `maintenance`, `waitlistAssignment`) after UI step 2 |
 | One intent path: batching and audit order | the nine review findings: the insert order as the repository's contract, bulk reads for the mails, the waiting-list read in 90-id chunks, leaves and requeues batched, one `orderSnapshotOf`, no `Promise.all` against D1, `countReleasedTickets` in one query, the join pairing contract tested; the push fix in `groupBy` and `waitingLines`; the deletes data first (ADR-011 rule 6) | § One intent path, Batching and audit order | brief signed 2026-10-18, running |
-| One intent path | one generator for the preference path and the grid: past the deadline a preference change buys a ticket for sale or joins its line; the nightly job runs the same rules; the preferences endpoint and the scaffold endpoint answer `?preview=true`, and every preview in the app comes from that dry run | § One intent path | brief signed 2026-10-18; implemented 2026-10-18 (d894021, e510f83); reopened 2026-10-18 from the e2e slot (a season-wide run claimed the queued people again), the fix with its steps 2 (claims settled once per dinner) and 3 (the notification step reads in bulk, one PrismaClient per binding) implemented 2026-10-18, uncommitted; e2e running; the day form's and the preference editor's checks ✅ 2026-10-18; the guest form ✅ 2026-10-18; reopened 2026-10-18 on #7 (the expected cell in the day view); #3–#6, #11 and #12 open (§ Verifications with human eyes) |
+| One intent path | one generator for the preference path and the grid: past the deadline a preference change buys a ticket for sale or joins its line; the nightly job runs the same rules; the preferences endpoint and the scaffold endpoint answer `?preview=true`, and every preview in the app comes from that dry run | § One intent path | brief signed 2026-10-18; implemented 2026-10-18 (d894021, e510f83); reopened 2026-10-18 from the e2e slot (a season-wide run claimed the queued people again), the fix with its steps 2 (claims settled once per dinner) and 3 (the notification step reads in bulk, one PrismaClient per binding) implemented 2026-10-18, uncommitted; e2e running; the day form's and the preference editor's checks ✅ 2026-10-18; the guest form ✅ 2026-10-18; #7 (the expected ticket) reopened and fixed 2026-10-18, uncommitted, in your test; #3–#6 and #11 open (§ Verifications with human eyes) |
 
 ## Open before the release
 
@@ -150,7 +150,7 @@ Each point is presented with its files and code, and signed off on its own.
 | 4b. The views show each line | The chef's alert, the booking form and the kitchen box name the waiting list per ticket type; the kitchen box holds the tickets for sale and the waiting list together | kitchen box ✅ signed off 2026-10-16, implemented (§ Mockup — kitchen box); the chef's alert ✅ signed off 2026-10-17, implemented (`SUPPLY_WORDS.queuedCount`, mockup in `ChefMenuCard.vue`); its ask in singular and plural (`SUPPLY_WORDS.chefAsk`) ✅ signed off 2026-10-18, checks 10 and 11 |
 | 4c. The preview sells each ticket once | The save preview settles the claims in order as the save does: the first claims of a ticket type buy that type's tickets for sale, the rest join its waiting list (`bookingOutcomes` takes one order or a list, `supplyOfType`); the guest form opens on Voksen and its button names the guests | ✅ signed off 2026-10-16, implemented; the settlement moved to the server's dry run 2026-10-18, words unchanged (One intent path, e510f83) |
 | 5. One client write | Every write that changes bookings goes through `bookingsStore.writeBookings`: the request, then the household's orders, the upcoming orders, the tickets for sale, the waiting list and the dinner on view re-read once; the waiting list per locked dinner derives from the one waiting-list read; the households store keeps its own household re-reads | ✅ signed off 2026-10-17, implemented |
-| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise. A preference change, one person or power mode, previews what Gem does above the buttons, in the grid's words and badges; the preference endpoint answers `?preview=true` with the save's own run without its writes; a small loader shows while the preview loads | reopened 2026-10-18: the preference preview, mockup ✅ signed off 2026-10-17, revised ✅ 2026-10-18 (§ Mockup — preference preview); implemented 2026-10-18 through One intent path (`useScaffoldPreview`, `ActionPreview`; e510f83); toast look implemented 2026-10-16 (`scaffoldToastLook`); the words ✅ signed off 2026-10-17, implemented (5165b4f) (§ Mockup — toast and preview); the toast and "Sidste ændring" grouped per day like the preview, decided 2026-10-18 (#25), mockup to redraw |
+| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise. A preference change, one person or power mode, previews what Gem does above the buttons, in the grid's words and badges; the preference endpoint answers `?preview=true` with the save's own run without its writes; a small loader shows while the preview loads | reopened 2026-10-18: the preference preview, mockup ✅ signed off 2026-10-17, revised ✅ 2026-10-18 (§ Mockup — preference preview); implemented 2026-10-18 through One intent path (`useScaffoldPreview`, `ActionPreview`; e510f83); toast look implemented 2026-10-16 (`scaffoldToastLook`); the words ✅ signed off 2026-10-17, implemented (5165b4f) (§ Mockup — toast and preview); the toast is the preview compacted, one line per day, and "Sidste ændring" shows the same lines, signed and implemented 2026-10-18 (#25), uncommitted |
 | 6b. The mails speak the booking words | The waiting-list mails greet the one who hears and name the person they are about, carry the ticket line of the booking page and the badge's help text, and link to the dinner's booking page; a mail is sent once per subject, version, kind and recipient (`sendOnce`), right after the action, and daily maintenance resends the missing ones over the dinners to come | mockup ✅ signed off 2026-10-17 (§ Mockup — waiting-list mails); the words in `app/config/bookingWords.ts`, the mail and toast lines from them in `useBooking.ts`, the icons in `useBookingUi.ts` ✅ signed off 2026-10-18; the recipient rule and the delivery ✅ signed off 2026-10-18; brief signed, runs after One audit format for the order history |
 | 7. The ticket history follows kuverter | Every audit row replays, user or system alike; a line for each change of kuverter; a system run and the nightly close are one line for the dinner; the replay ends equal to state | mockup and brief ✅ signed off 2026-10-17 (§ Mockup — ticket history), implemented; reopened 2026-10-18 from the user's test (#24) |
 
@@ -234,9 +234,11 @@ Toast    Alle præferencer opdateret                               (red)
 ```
 
 Revised 2026-10-18 ✅: the preview lines are grouped per day and carry no date in the text (§ One intent path, Mockup —
-preview lines); the words stand. Decided 2026-10-18 (#25): the toast reads like the preview, its lines grouped per day
-under the day separators, per action then per person, and "Sidste ændring" reads the same way; the toast block above
-is redrawn for its sign-off.
+preview lines); the words stand. Signed 2026-10-18 (#25), the toast lines of the block above superseded: the toast is
+the preview compacted, one line per day, "dd/MM  word: names · word: names"; a released ticket's fate reads
+"frigivet (solgt): …" or "frigivet (til salg): …" from the sale's `sellerInhabitantId`; the failed group reads
+"FEJLET: names" and turns the toast red; "Sidste ændring" shows the same lines, what happened, never the preview; the
+per-person counts are gone.
 
 | Action | Preview, after the name | Toast, after the count |
 |---|---|---|
@@ -449,14 +451,19 @@ change respect the row through `fetchUserIntentKeys`.
 
 A cell without an order shows what the scaffold will do: the grid and the day form read the household's expected
 bookings from the dry run with an empty draft (`?preview=true`, `orders: []`, system mode on the dinners in view),
-render the mode ghosted (`COMPONENTS.bookingGrid.expectedBadge`), carry the legend entry "Forventet efter
-præferencer" and bind the table's loading to the read. A preview with an empty draft answers the household's expected
+render the mode ghosted (`COMPONENTS.bookingGrid.expectedBadge`), carry the legend entry "Forventet bestilling ifølge
+præferencer" and bind the table's loading to the read. An expected ticket in the day view looks like a waiting-list
+ticket: the sliders glyph (`ICONS.preferences`) in the special slot, a neutral edge, the mode ghosted on neutral; the
+power row's consensus counts the expected modes and reads ghosted when every row is expected. A preview with an empty draft answers the household's expected
 bookings.
 
 One component, `ActionPreview`, renders every preview, the preference editor included: the lines grouped per day under
 a `USeparator` on `COMPONENTS.separator.moment` with weekday and date, within a day per action in the word table's
 order, then per person, a sale to the waiting list last in its day; the separator shows on a one-day surface too, and
-a line carries no date in its text. The toast and "Sidste ændring" read the same way (decided 2026-10-18, #25). One grouping builder,
+a line carries no date in its text. The toast is the preview compacted, one line per day, and "Sidste ændring" shows
+the same lines (#25). A preference save runs on the weekdays its draft changes (`ScaffoldOptions.weekdays`); the
+nightly run keeps the other weekdays in step; the preview has the same scope, and the result names its dinners
+(`ScaffoldResult.dinners`). One grouping builder,
 `linesBy(keyOf, toLine, order)` in `app/utils/batchUtils.ts` beside `groupBy`, `chunkArray` and `pruneAndCreate`
 (ADR-014), groups the preview's days and lines and the toast's per-person lines; Billetændringer's `collapseByKey`
 adopts it in One audit format for the order history.
@@ -534,7 +541,7 @@ ADR-016, ADR-015, ADR-014 and ADR-011 carry the package's rules since 2026-10-18
 ### Mockup — expected bookings ✅ signed off 2026-10-18
 
 Implemented 2026-10-18; the mockup lives in the `BookingGridView.vue` header. A ghosted mode is the dry run's expected
-booking (`COMPONENTS.bookingGrid.expectedBadge`, the legend entry "Forventet efter præferencer"); a draft on it
+booking (`COMPONENTS.bookingGrid.expectedBadge`, the legend entry "Forventet bestilling ifølge præferencer"); a draft on it
 previews as a cancellation or a booking.
 
 ## A waiting-list placement happens once
@@ -729,7 +736,14 @@ sign-off.
   `recordCancellation`; the waiting-list writes carry their OrderHistory row. cc05ea9's bare-NONE skip and its matrix
   row were unsigned and go.
 - A cell without an order shows the scaffold's expected booking, ghosted, from the dry run with an empty draft; the
-  legend reads "Forventet efter præferencer".
+  legend reads "Forventet bestilling ifølge præferencer".
+- #7, signed 2026-10-18: an expected ticket looks like a waiting-list ticket, the sliders glyph (`ICONS.preferences`)
+  in the special slot, a neutral edge, the mode ghosted on neutral; the legend entry carries the glyph beside the
+  ghosted mode; the power row's consensus counts the expected modes and reads ghosted when every row is expected; the
+  grid's expected cells are grey-ghosted like a queued wish without the hourglass (this settles #12).
+- The booking legend reads "sharply vertical, icon then explanation": one entry per row, the sample in a fixed
+  column (`COMPONENTS.legend.list`, `legend.sample`), the hint last; "Blandet", "Ændret" and "På venteliste (#n)" live
+  in `bookingWords.ts`.
 - A preview with an empty draft answers the household's expected bookings.
 - The preview lines on every surface are grouped per day (a `USeparator` on `COMPONENTS.separator.moment` with weekday
   and date), within a day per action in the word table's order, then per person, a sale to the waiting list last in
@@ -778,8 +792,13 @@ sign-off.
   that surfaces the partial batches to the admin goes to 0.9.2 (`../feature-0.9.2.md` § Write-failure dashboard).
 - The C4 diagrams in the README (`docs/architecture/`, `make c4`, `make c4-check` in `pre:all`) are experimental and
   outside the release: no sign-off, no row.
-- #25: one look for the preview, the toast and "Sidste ændring": lines grouped per day under the day separators,
-  per action then per person; the toast's per-person counts go, and "Sidste ændring" has no look of its own. The toast block of § Mockup — toast and preview is
+- #25: one look for the preview, the toast and "Sidste ændring"; signed as: the toast is the preview compacted, one
+  line per day "dd/MM  word: names · word: names", a released ticket's fate "frigivet (solgt)" or "frigivet (til
+  salg)", the failed group "FEJLET: names" with the toast red; "Sidste ændring" shows the same lines (what happened);
+  the preview stands; the per-person counts go.
+- A preference save runs on the weekdays its draft changes (`ScaffoldOptions.weekdays`, `changedWeekdays`); the
+  nightly run keeps the other weekdays in step; `?preview=true` has the same scope. The result names its dinners
+  (`ScaffoldResult.dinners`). The toast block of § Mockup — toast and preview is
   redrawn for its sign-off.
 - **OPEN** #3 One intent path: confirmed keys. `userIntentKeys` takes every confirmed key, so an order the
   system deleted on a key the person once confirmed stays deleted after a preference change. a) the confirmation is the
@@ -824,25 +843,25 @@ sign-off.
 | Chef spending: the Madbestilling editor's round heading | `/chef?date=2026-11-10`, the editor open: "Hele <team>, periode …" | ✅ 2026-10-18 |
 | Chef spending: a dinner with a menu title | `/chef`: the title in the heading, the total row and the Middag cell | ✅ 2026-10-18 |
 | Chef spending: the spending tables on a phone | both tables scroll sideways inside their box, the page stays | ✅ 2026-10-18 |
-| #16 Chef spending: dd/MM dates in the spending tables | `/chef`, Budget open, phone and desktop: this dinner's heading "Risotto, 14/04" and its receipts' Dato "12/04"; the team's "Hele Madhold 2, periode 03/11-10/11" with dd/MM per day; "Fællesspisning, 10/11" without a title; the same heading under Madbestilling's "Rediger madbestilling" | open |
+| Chef spending: dd/MM dates in the spending tables | `/chef`, Budget open, phone and desktop: this dinner's heading "Risotto, 14/04" and its receipts' Dato "12/04"; the team's "Hele Madhold 2, periode 03/11-10/11" with dd/MM per day; "Fællesspisning, 10/11" without a title; the same heading under Madbestilling's "Rediger madbestilling" | ✅ 2026-10-18 |
 | #18 One booking path: the mail after a join (points 1 and 2) | `/dinner`, a locked dinner with no ticket for sale: book a person; the toast reads "på ventelisten (Voksen #n)" and the WAITLIST_JOINED mail reaches the booking user's mailbox after it | open |
-| #19 One booking path: the reply per person (point 3) | the household page, a person's preferences in power mode, a day to Ingen: the toast lists each person with counts ("Knud: 7 frameldt, 2 frigivet") and closes with the sales to the waiting list and the unchanged orders | reopened 2026-10-18: Monday to Ingen answered "Skråningen meldes på venteliste (Voksen #1)" five times and the same for Martin, on days unrelated to the click; the toast and "Sidste ændring" name no dates |
+| #19 One booking path: the reply per person (point 3) | the household page, a person's preferences in power mode, a day to Ingen: the toast lists each person with counts ("Knud: 7 frameldt, 2 frigivet") and closes with the sales to the waiting list and the unchanged orders. Revised 2026-10-18: `/household/<S>/members`, one person, one weekday to Ingen: the toast and "Sidste ændring" list that weekday's dates only, one line per day "dd/MM  word: names"; a released ticket reads "(solgt)" or "(til salg)"; the preview as before | reopened 2026-10-18 (five repeats on unrelated days, no dates); the fix implemented 2026-10-18, uncommitted, open |
 | #20 One booking path: the button names the outcome (point 4) | `/dinner`, a locked dinner with a Voksen ticket for sale and none for Barn: a Barn row's button reads "Skriv på venteliste", a Voksen row's "Køb billet" | open |
 | #21 One booking path: the line in the form (point 4b) | `/dinner`, a locked dinner where a person of the household waits: the row shows the hourglass and the badge with the type and the place, "Voksen #3", the help text on the badge | open |
 | One booking path: the guest form (point 4c) | `/dinner`, a locked dinner with one Voksen ticket for sale: the guest form opens on Voksen; two guests make the button "Tilmeld gæster", and the preview shows one guest buying and one joining the line | ✅ 2026-10-18, with the guest form of One intent path |
 | #22 One booking path: one client write (point 5) | `/dinner` after a save: the kitchen box, the calendar chips and the form show the new state with no reload; `/household/<S>/bookings`: the grid and Dag show the save with no reload | open |
 | #23 One booking path: the toast words (point 6) | `/household/<S>/bookings`, a grid save past the deadline that queues: the toast "Bookinger processeret", green, with "Anna: 1 på ventelisten (Voksen #3)" per person; the preview lines are #4 | open |
 | #4 One intent path: the week-view preview | `/household/<S>/bookings?view=week`, a dinner inside the window, edit, one cell clicked: under the grid the loader line (spinning sync, "Prøver at beregne hvad I skal spise hvornår..."), then "Du er ved at ændre familiens booking", a separator "ti 20/10/2026", lines in action order then household order; the longest line inside the panel | open |
-| #5 One intent path: a month beyond the window | `?view=month` on a month beyond the 60-day window: cells without an order outlined in the mode's colour with a muted glyph; a person who cancelled reads plain Ingen; the legend entry "Forventet efter præferencer"; the loading bar under the headers while the read loads | open |
+| #5 One intent path: a month beyond the window | `?view=month` on a month beyond the 60-day window: cells without an order outlined in the mode's colour with a muted glyph; a person who cancelled reads plain Ingen; the legend entry "Forventet bestilling ifølge præferencer"; the loading bar under the headers while the read loads | open |
 | #6 One intent path: an expected cell set to Ingen | the same month, edit, an expected cell set to Ingen: the cell reads Ingen with the modified accent; the preview reads "Anna frameldes" under that day | open |
-| #7 One intent path: a day-view row without an order | day view, an open dinner, a row without an order: the ticket's mode outlined and muted; the legend entry; the bar while the read loads | reopened 2026-10-18: on a far-future dinner Ingen renders red and Takeaway grey with a green border, so the expected mode is only half muted; everyone's preference is Takeaway, yet power mode shows Ingen; the expected state carries no accent on the tab, as the waiting list's does |
+| #7 One intent path: a day-view row without an order | `/dinner` on a far-future dinner with no orders, phone and desktop: each row's ticket with the sliders glyph, a neutral edge and the mode ghosted grey; the power row ghosted Takeaway when everyone is expected, "Blandet" when one row differs; the legend entry "Forventet bestilling ifølge præferencer"; `/household/<S>/bookings` month beyond the window: the expected cells grey-ghosted like a queued wish without the hourglass. The legend, one entry per row with the sample in a fixed column and the hint last: the grid's Forklaring shows eight rows (the four modes, Blandet, Ændret, På venteliste, Forventet) with every explanation starting on one vertical line; the day form's shows the modes, Blandet and Forventet | reopened 2026-10-18 (half-muted modes, power mode showing Ingen, no accent on the tab; the legend "sharply vertical, icon then explanation"); the fixes implemented 2026-10-18, uncommitted, open |
 | One intent path: the day form's preview on an open dinner | day view, an open dinner, a row expanded: the loader, then one separator with the line; the save label reads Book, Køb billet, Skriv på venteliste or Opdater from the reply | ✅ 2026-10-18 |
 | One intent path: the day form's preview on a closed dinner | day view, a closed dinner, a row expanded, and a queued row: "Anna skrives på ventelisten (Voksen #3)", "… (venteliste)"; the label follows | ✅ 2026-10-18 |
 | One intent path: the guest form | the guest form, from the grid and from the day form: title "Du er ved at tilføje gæster", one separator, a line per outcome ("Gæst af Anna (Voksen ×2) …"), button "Tilmeld gæst(er)" | ✅ 2026-10-18 |
 | One intent path: one person's preference editor | `/household/<S>/members`, one person's editor, a day changed: the loader, then the lines under day separators with no date in the text; nothing while the draft equals the saved preferences | ✅ 2026-10-18 |
 | One intent path: power mode | the same, power mode: lines for every member under each day, in household order | ✅ 2026-10-18 |
 | #11 One intent path: the expected cell in edit mode (a look) | the cell shows the mode solid; the view face alone is outlined | the user's call in #5–#7 |
-| #12 One intent path: the expected badge's colour (a look) | the mode's colour at `NOISE.medium` with muted ink, apart from the waiting list's neutral ghost | the user's call in #5–#7 |
+| One intent path: the expected badge's colour (a look) | settled with #7 on 2026-10-18: a neutral ghost like a queued wish, without the hourglass | ✅ 2026-10-18 |
 | #24 One booking path: the ticket history (point 7) | `/chef`, a dinner with a release and a sale: Billetændringer lists "frigivet 1V" and "købt 1V" lines, a nightly close as one System "lukket" line; the last row's Billetter · kuverter equals the kitchen box's paid tickets; "Vis fuld historik" opens the rest | reopened 2026-10-18: the line names no actor; a "tilmeldt" after the deadline without its reason (admin bypass, the chef's extra portions); columns out of line; the "lukket" line gone once the full history loads; cramped on a phone instead of scrolling |
 
 ## ADR notes

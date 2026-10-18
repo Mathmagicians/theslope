@@ -66,12 +66,13 @@
  *             (sync, spinning)  Henter bookinger...
  *
  * EXPECTED CELLS (a cell without an order or a queue entry): the booking the preferences give it, read from the
- * server's dry run with no orders on the dinners on view, its mode outlined (COMPONENTS.bookingGrid.expectedBadge);
- * a person the run leaves out reads Ingen; the legend gains "Forventet efter præferencer" while one shows, and the
- * table's loading bar runs while the read loads. A draft on an expected cell previews as a cancellation or a booking:
- * Januar 2027, S_31                         Forklaring: (mode) Forventet efter præferencer
+ * server's dry run with no orders on the dinners on view, its mode ghosted on the waiting list's neutral
+ * (COMPONENTS.bookingGrid.expectedBadge), as a queued wish without its hourglass; a person the run leaves out reads
+ * Ingen; the legend gains "Forventet bestilling ifølge præferencer" while one shows, and the table's loading bar runs
+ * while the read loads. A draft on an expected cell previews as a cancellation or a booking:
+ * Januar 2027, S_31                         Forklaring: [ex] (mode) Forventet bestilling ifølge præferencer
  *             ti 05/01   on 06/01   ti 12/01   on 13/01
- * Anna        (Spis)     (Spis)     (Spis)     (Spis)       <- outlined: no order yet, the next run books Spisesal
+ * Anna        (Spis)     (Spis)     (Spis)     (Spis)       <- ghosted: no order yet, the next run books Spisesal
  * Bo          (Take)     Ingen      (Take)     Ingen        <- Bo's Wednesday preference is Ingen: plain Ingen
  * Emil        Ingen      (Spis)     (Spis)     (Spis)       <- Emil cancelled 05/01 earlier: Ingen, not expected
  *
@@ -79,7 +80,7 @@
  * renders through ActionPreview, a day per dinner; the loader shows while the reply is on the way.
  *
  * CELL STATES: 🍽️=dine-in, 🕐=late, 🛍️=takeaway, ❌=none, ?=no consensus, °=modified, ⌛=queued (the wish ghosted),
- * (mode)=expected (outlined)
+ * (mode)=expected (ghosted on neutral), [ex]=the sliders in the legend
  * HEADER CHIPS: (🟠)=locked, (🟡N)=locked with N tickets available
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
@@ -222,7 +223,7 @@ const getCellMode = (inhabitantId: number, eventId: number): DinnerMode =>
 const isCellModified = (inhabitantId: number, eventId: number): boolean =>
   draftChanges.value.has(expectedBookingKey(inhabitantId, eventId))
 
-// A cell shows its expected booking outlined until a draft takes its place
+// A cell shows its expected booking ghosted until a draft takes its place
 const isCellExpected = (inhabitantId: number, eventId: number): boolean =>
   !isCellModified(inhabitantId, eventId) && getExpectedMode(inhabitantId, eventId) !== undefined
 
@@ -373,9 +374,9 @@ const {result: preview, pending: isPreviewPending} = useScaffoldPreview(
   request => bookingsStore.previewBookings(request, props.adminBypass),
   {debounced: true}
 )
-const previewDays = computed(() => preview.value ? formatPreviewLines(preview.value, props.dinnerEvents, householdOrder.value) : [])
+const previewDays = computed(() => preview.value ? formatPreviewLines(preview.value, householdOrder.value) : [])
 
-// The legend explains an outlined cell while one shows
+// The legend explains a ghosted expected cell while one shows
 const hasExpectedCell = computed(() => flatEvents.value.some(event =>
   props.household.inhabitants.some(inhabitant => isCellExpected(inhabitant.id, event.id))))
 

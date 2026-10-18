@@ -258,10 +258,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
     }
 
-    // A scaffold result toast: the title names the view, the suffix the dinner (guest bookings)
-    type ScaffoldToast = {title: string, suffix?: string}
-    const describeScaffoldResult = (scaffoldResult: ScaffoldResult, suffix = '') =>
-        `${formatBookingResult(scaffoldResult)}${suffix}`
+    // A scaffold result toast: the title names the view, the suffix the dinner (guest bookings), the household's order its people
+    type ScaffoldToast = {title: string, suffix?: string, householdOrder?: number[]}
 
     /**
      * ADR-016: Scaffold endpoint call shared by the single- and multi-event entry points;
@@ -281,11 +279,10 @@ export const useBookingsStore = defineStore("Bookings", () => {
             action: 'processBookings', errorMessage: 'Kunne ikke gemme bookinger'
         }))
         console.info(CTX, `${label}: ${formatScaffoldResult(result.scaffoldResult)}`)
-        if (report) toast.add({
-            title: report.title,
-            description: describeScaffoldResult(result.scaffoldResult, report.suffix),
-            ...scaffoldToastLook(result.scaffoldResult)
-        })
+        if (report) {
+            const reported = scaffoldToast(report.title, result.scaffoldResult, report.householdOrder)
+            toast.add({...reported, description: `${reported.description}${report.suffix ?? ''}`})
+        }
         return result
     }
 
