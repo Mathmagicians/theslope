@@ -10,12 +10,14 @@ the e2e suite as living documentation. The e2e specs become Gherkin features run
 
 ## Package inventory
 
-| Package | State | Goal |
-|---|---|---|
-| BDD foundation | not started | playwright-bdd wired, `make bdd-report` in the summaries, one api and one ui feature migrated |
-| Developer companion | not started | the site on GitHub Pages, published by its own workflow on a publish to an environment |
-| API reference | not started | the OpenAPI spec of the deployed version, a Scalar page |
-| Feature migration | not started | every suite as features, `test-report` retired, the features section with live results |
+One package, built by the test-engineer session in idle slices; the sections below are its parts, in build order.
+
+| Part | State |
+|---|---|
+| Developer companion: the site, its workflow, the `playwright-results-<suite>` artifacts | in the tree; the VitePress build runs once `vitepress` is installed |
+| BDD foundation | not started |
+| API reference | not started |
+| Feature migration | a standing rule: a spec migrates when next touched, idle batches after |
 
 ## Mockup — Site map ✅ 2026-10-18
 
@@ -68,14 +70,15 @@ eslint config, the tsconfigs, `Makefile`, `.github/workflows/cicd.yml` (artifact
 
 **Problem.** A result is an artifact zip, and nothing shows what a server runs and how it behaved.
 
-**Solution.** A VitePress site in `developer/` with its own `package.json`, published to the `gh-pages` branch by
+**Solution.** A VitePress site in `developer/` (`vitepress` a root devDependency), published to the `gh-pages` branch by
 `.github/workflows/developer.yml`, served by GitHub Pages at `developer.skraaningen.dk`.
 
-- Trigger: `deployment_status` of the smoke job's `environment` (`dev`, `prod`), states success and failure;
-  `workflow_dispatch` with `environment` and `run_id` republishes by hand; `concurrency: developer-site`. The CICD
-  job's `CLOUDFLARE_THESLOPE` deployment is filtered out by name.
+- Trigger: `workflow_run` on the pipeline's completion. A pipeline run that deploys hands over the artifact
+  `deployment` (`deployment.env`: the `make version-info` lines, `ENV`, `URL`); `make developer-resolve run=<id>`
+  reads it, and a run without it ends in one skipped job. `workflow_dispatch` with `run_id` republishes by hand;
+  `concurrency: developer-site`.
 - Steps: checkout `main`; checkout `gh-pages` into the output, so the other environments' content stays;
-  `gh run download` of `bdd-api`, `bdd-ui`, `bdd-smoke` of the pipeline run named in the status's log URL;
+  `gh run download` of `playwright-results-<suite>` (the Playwright JSON until the BDD foundation lands, then `bdd-<suite>`);
   `make developer-assemble env=<env> run=<id> version=<v> sha=<sha>` lays `environments/<env>/<suite>/` and writes
   `environments/<env>.json` (environment, version, sha, deployed at, run, result per suite); `make developer-build`
   renders the site; `make developer-publish` commits once and force-pushes, so the branch stays the size of its content.
@@ -161,22 +164,23 @@ renders every feature with each scenario's latest result from the environment's 
   bypass header.
 - Retention: the latest per environment, replaced by the next publish; no PR folders, a PR run's results are in its
   step summary; no pruning.
-- Trigger: the site's own workflow on `deployment_status` of the smoke job's environment, success and failure, plus
-  `workflow_dispatch` to republish. `workflow_run` fires on every pipeline run and needs a manifest artifact;
-  `workflow_dispatch` from the pipeline couples the pipeline to the site.
+- Trigger: `workflow_run` on the pipeline; the pipeline publishes what the next stage needs, the artifact
+  `deployment` with the build's `version-info` lines, `ENV` and `URL`, and the companion reads it. Step and job
+  outputs stay inside a run, and the build system owns the version, so the companion computes none of it.
+  `deployment_status` was signed first and dropped: GitHub documents it for third-party statuses only.
+- The summary filters are jq programs under `scripts/` (`test-report.jq`, `bdd-report.jq`, `bdd-steps.jq`).
+- One package in idle slices of the test-engineer session; the spike features are `orderHistory.e2e.spec.ts` (api) and
+  `DinnerBookingForm.e2e.spec.ts` (ui serial, one Scenario Outline), both green today.
 - One site holds every environment as a path; a third environment is one more manifest.
+- API reference: `openAPI.production: 'prerender'`, so every build, prod included, writes its spec and each
+  environment page shows its own; the route list is public in the repo already.
 - Hostname `developer.skraaningen.dk`; VitePress; API reference inventory first, schemas domain by domain; the work
   starts on its own branch after 0.9.0 ships; the smoke report publishes without screenshots.
 
 **OPEN**
 
-- Package order: BDD foundation first, so the companion publishes Cucumber reports from its first run (as listed) /
-  Developer companion first with the Playwright JSON standing in.
-- The two features of the BDD foundation: `preferences.e2e.spec.ts` (api, holds a Scenario Outline) and
-  `Waitlist.e2e.spec.ts` (ui serial, three cases, exercises the serial tag) (as drawn) / another pair.
 - Feature language: English with the Danish domain words, as the spec titles today (as drawn) / Danish Gherkin
   (`# language: da`: Egenskab, Scenarie, Givet, Når, Så).
-- Prod kept per release version in addition to the latest: later, when a release needs looking back.
 
 ## ADR notes
 

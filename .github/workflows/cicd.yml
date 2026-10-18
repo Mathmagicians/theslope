@@ -17,6 +17,12 @@ on:
         required: false
         type: string
 
+# Test artifacts: a suite <s> uploads playwright-report-<s> (the html report) and playwright-results-<s>
+# (its json, written by the test:e2e:<s> script as $E2E_RESULTS_DIR/e2e-<s>-results.json)
+env:
+  ARTIFACT_RETENTION_DAYS: 30
+  E2E_RESULTS_DIR: test-results
+
 jobs:
   CICD:
     runs-on: ubuntu-latest
@@ -55,20 +61,22 @@ jobs:
       - name: Calculate version
         id: version
         run: |
+          # The version lines go to the step outputs and to deployment.env, the record a deploying run hands on
+          version_info() { mkdir -p "$E2E_RESULTS_DIR"; RELEASE_VERSION="$1" make version-info | tee -a "$GITHUB_OUTPUT" > "$E2E_RESULTS_DIR/deployment.env"; }
           if [ -n "${{ inputs.rollback_to }}" ]; then
             echo "🔄 Rollback mode to commit: ${{ inputs.rollback_to }}"
-            RELEASE_VERSION="" make version-info >> $GITHUB_OUTPUT
+            version_info ""
           elif [ -n "${{ inputs.release_version }}" ]; then
             echo "🎉 Release mode (workflow_dispatch): ${{ inputs.release_version }}"
-            RELEASE_VERSION="${{ inputs.release_version }}" make version-info >> $GITHUB_OUTPUT
+            version_info "${{ inputs.release_version }}"
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             TAG_VERSION="${{ github.ref_name }}"
             TAG_VERSION="${TAG_VERSION#v}"  # Strip 'v' prefix
             echo "🏷️ Release mode (git tag): $TAG_VERSION"
-            RELEASE_VERSION="$TAG_VERSION" make version-info >> $GITHUB_OUTPUT
+            version_info "$TAG_VERSION"
           else
             echo "🔨 RC build mode"
-            RELEASE_VERSION="" make version-info >> $GITHUB_OUTPUT
+            version_info ""
           fi
           cat $GITHUB_OUTPUT
       - name: Generated Prisma layer matches the schema
@@ -100,12 +108,18 @@ jobs:
         with:
           name: playwright-report-api
           path: playwright-report/
-          retention-days: 30
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-results-api
+          path: ${{ env.E2E_RESULTS_DIR }}/e2e-api-results.json
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: E2E api test summary
         if: ${{ !cancelled() && steps.e2e_api_tests.outcome != 'skipped' }}
         env:
           ARTIFACT_URL: ${{ steps.upload_api_report.outputs.artifact-url }}
-        run: make test-report report=test-results/e2e-api-results.json title="E2E api tests" link="$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+        run: make test-report report=$E2E_RESULTS_DIR/e2e-api-results.json title="E2E api tests" link="$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
       - name: Run e2e ui tests
         id: e2e_ui_tests
         run: npm run test:e2e:ui
@@ -116,12 +130,18 @@ jobs:
         with:
           name: playwright-report-ui
           path: playwright-report/
-          retention-days: 30
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-results-ui
+          path: ${{ env.E2E_RESULTS_DIR }}/e2e-ui-results.json
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: E2E ui test summary
         if: ${{ !cancelled() && steps.e2e_ui_tests.outcome != 'skipped' }}
         env:
           ARTIFACT_URL: ${{ steps.upload_ui_report.outputs.artifact-url }}
-        run: make test-report report=test-results/e2e-ui-results.json title="E2E ui tests" link="$ARTIFACT_URL" note="UI test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
+        run: make test-report report=$E2E_RESULTS_DIR/e2e-ui-results.json title="E2E ui tests" link="$ARTIFACT_URL" note="UI test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
       - name: Determine deployment target
         id: target
         run: |
@@ -153,7 +173,14 @@ jobs:
             OUTPUT=$(make deploy-dev 2>&1)
           fi
           echo "$OUTPUT"
-          echo "url=$(echo "$OUTPUT" | grep 'DEPLOY_URL' | grep -oE 'https://[^")]+')" >> $GITHUB_OUTPUT
+          URL=$(echo "$OUTPUT" | grep 'DEPLOY_URL' | grep -oE 'https://[^")]+')
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          printf 'ENV=%s\nURL=%s\n' "${{ steps.target.outputs.env }}" "$URL" >> "$E2E_RESULTS_DIR/deployment.env"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: deployment
+          path: ${{ env.E2E_RESULTS_DIR }}/deployment.env
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: Deployment summary
         run: |
           echo "## 🚀 Deployed to ${{ steps.target.outputs.env }}" >> $GITHUB_STEP_SUMMARY
@@ -264,12 +291,18 @@ jobs:
         with:
           name: playwright-report-smoke
           path: playwright-report/
-          retention-days: 30
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-results-smoke
+          path: ${{ env.E2E_RESULTS_DIR }}/e2e-smoke-results.json
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: Summary
         if: ${{ !cancelled() && steps.smoke_tests.outcome != 'skipped' }}
         env:
           ARTIFACT_URL: ${{ steps.upload_smoke_report.outputs.artifact-url }}
         run: |
-          make test-report report=test-results/e2e-smoke-results.json title="Smoke tests" link="$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+          make test-report report=$E2E_RESULTS_DIR/e2e-smoke-results.json title="Smoke tests" link="$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
           echo "Verified: ${{ needs.CICD.outputs.deployed_url }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Version: \`${{ needs.CICD.outputs.release_version }}\`" >> "$GITHUB_STEP_SUMMARY"

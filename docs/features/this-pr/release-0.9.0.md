@@ -53,7 +53,8 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | A waiting-list placement happens once | the queue keeps its own placement state (`placingAt`, `placingOrderId`); migration `0018_protocol`; recovery reports what it finishes; a held entry refuses leave and change with a conflict | § A waiting-list placement happens once | in your test since 2026-10-18 (009c54c, c5a74c8, cf767b1): checks 13 and 14 ✅ 2026-10-18; reopened 2026-10-18: `household/preferences.e2e.spec.ts:296` red, a released ticket to the first in line (check 12) |
 | Table loading | a table bound to a dataset that reloads binds that dataset's `loading`: Nuxt UI's loading bar runs while the rows stay, a write's re-read included; `#loading` fills a table with no rows yet; the day bill, the household's notes and the grid's lock chips wait for the bookings (ADR-018 § Table loading) | ADR-018 § Table loading | signed off 2026-10-18 (4e7d174, cf767b1, 558d7a4) |
 | One audit format for the order history | one `auditData` schema, written and read through one pair of functions | § One audit format for the order history | brief signed 2026-10-17; implemented 2026-10-18 in One intent path's commit; e2e (`orderHistory`, `preferences`, `scaffold`, `maintenance`, `waitlistAssignment`) after UI step 2 |
-| One intent path | one generator for the preference path and the grid: past the deadline a preference change buys a ticket for sale or joins its line; the nightly job runs the same rules; the preferences endpoint and the scaffold endpoint answer `?preview=true`, and every preview in the app comes from that dry run | § One intent path | brief signed 2026-10-18; implemented 2026-10-18 (d894021, e510f83); e2e running; browser checks 1–9 open (§ Verifications with human eyes) |
+| C4 diagrams in the README | `README.md` § Architecture: the context view drawn by hand, the container view generated from `wrangler.toml`, `workers/sender/wrangler.toml` and `nuxt.config.ts`; `make c4` renders both `.mmd` through Kroki to SVG; `pre:all` fails on a stale diagram (`make c4-check`) | `scripts/c4/`, `docs/architecture/`, `Makefile`, `tests/component/scripts/c4.unit.spec.ts` | implemented 2026-10-18, uncommitted; in your test: the README's two diagrams |
+| One intent path | one generator for the preference path and the grid: past the deadline a preference change buys a ticket for sale or joins its line; the nightly job runs the same rules; the preferences endpoint and the scaffold endpoint answer `?preview=true`, and every preview in the app comes from that dry run | § One intent path | brief signed 2026-10-18; implemented 2026-10-18 (d894021, e510f83); reopened 2026-10-18 from the e2e slot (a season-wide run claimed the queued people again), the fix with its steps 2 (claims settled once per dinner) and 3 (the notification step reads in bulk, one PrismaClient per binding) implemented 2026-10-18, uncommitted; e2e running; browser checks 1–9 open (§ Verifications with human eyes) |
 
 ## Open before the release
 
@@ -440,7 +441,7 @@ per-inhabitant dry run and the power-mode filter stay as the shape. Mockup: § M
 
 An Ingen from the booking page is recorded as a cancellation, with an order, a waiting entry or nothing:
 `decideOrderAction` puts a bare NONE in the delete bucket; one writer, `recordCancellation` in `financesRepository.ts`,
-writes the OrderHistory row (`orderId` null without an order); `createWaitlistEntry`, `updateWaitlistEntryOrder` and
+writes the OrderHistory row (`orderId` null without an order); `createWaitlistEntries`, `updateWaitlistEntryOrder` and
 `deleteWaitlistEntry` write their OrderHistory row with the audit context; the nightly run and a later preference
 change respect the row through `fetchUserIntentKeys`.
 
@@ -458,6 +459,43 @@ a line carries no date in its text. The toast keeps its per-person counts. One g
 (ADR-014), groups the preview's days and lines and the toast's per-person lines; Billetændringer's `collapseByKey`
 adopts it in One audit format for the order history.
 
+Reopened 2026-10-18 from the e2e slot: the season activation ran past 30 s with D1 constraint errors. A season-wide
+run read the waiting-list entries only with a `householdId`, so the queued people were claimed again on every run
+(ADR-015), and a claim cost about five statements per person, about a thousand per closed dinner, past D1's limit.
+Fix, signed: every run reads its dinners' entries and hands each household its own; the claims settle per dinner and
+ticket type on one supply read and join as one batch (`createWaitlistEntries`: the entries and their history rows in
+two bulk writes). A season-wide run claims for everyone whose preference eats on a closed dinner; the e2e singleton
+season is closed on every dinner at activation (`ticketIsCancellableDaysBefore` 8, start tomorrow), so the activation
+queues every inhabitant with an eating preference on it.
+
+The fix, implemented 2026-10-18: a household's claims on a dinner settle in one pass (one line read, one
+tickets-for-sale count per type while nobody waits, the buys one by one, the joins as one batch); `joinWaitlist` is the
+batch and `createWaitlistEntries` writes the entries and their QUEUE rows in two bulk writes; `createWaitlistEntry` and
+`fetchWaitlistForHousehold` are gone. A later chunk of a batch that fails leaves the earlier entries without their
+QUEUE row and mail, as a failed `createOrders` chunk does; the retry one by one counts them unchanged (decided
+2026-10-18: writes carry no retries; a write-failure dashboard for the admin is `../feature-0.9.2.md` § Write-failure
+dashboard). Specs:
+`scaffoldPrebookings.unit`, `waitlistAssignment.unit`; the `setup-season` e2e project is the proof.
+
+Step 2, signed and implemented 2026-10-18: the household loop writes its books, cancels, releases, leaves and requeues
+and collects its claims; after the loop each dinner settles once (one line read, one tickets-for-sale count per type
+nobody waits for, the claims settled in memory across the households in run order, the buys one by one, one join
+batch, the places from one `joinedOf` pass over the batch), so a claim sees every release, leave and requeue the run
+made before it, whichever household made it; "a claim buys while nobody waits in its line" and the final sale stand
+(ADR-016). Within a household's `results` the BUY and QUEUE lines follow its LEAVE and REQUEUE lines; the shapes stand
+and the UI sorts. The e2e activation went from about 1,300 repository calls to about 9, and the line is read and
+parsed once per dinner. Specs: `scaffoldPrebookings.unit`, `useWaitlist.unit`; the `setup-season` e2e project is the
+proof.
+
+Step 3, implemented 2026-10-18: after step 2 the e2e activation still ran past a minute and hung the dev server in
+`notifyBookingOutcomes`, which resolved each of several hundred joined events with three reads in one `Promise.all`,
+a new PrismaClient per call. The notification step reads once per run: the dinners and households memoised one at a
+time, one inhabitants read (`fetchInhabitantsByIds`) and one users read (`fetchUsersByIds`) in 90-id chunks one after
+another, and composes from maps; the mails, recipients and words stand, pinned by new cases. `getPrismaClientConnection`
+makes one client per D1 binding (a WeakMap keyed by the binding, holding the connecting promise; a failed connect is
+dropped). A read over a list is one chunked query (the ADR-014 line is with the user). Specs: `sender/events/waitlist.unit`,
+`database.unit`.
+
 ### Mockup — preview lines ✅ signed off 2026-10-18
 
 Implemented 2026-10-18; the mockup lives in the `ActionPreview.vue` header. Code: `useScaffoldPreview`,
@@ -465,9 +503,7 @@ Implemented 2026-10-18; the mockup lives in the `ActionPreview.vue` header. Code
 `dinner-mode-legend-expected`. Specs: `ActionPreview.nuxt.spec`, `BookingGridView.nuxt.spec`,
 `DinnerBookingForm.nuxt.spec`, `useBookingUi.nuxt.spec`, `batchUtils.unit.spec`, with `registerScaffoldEndpoint`.
 
-ADR-016 follows at landing: one path with the audit source as the difference, `?preview=true` on both endpoints, the
-empty-draft preview, the matrix row `absent, = NONE → CANCEL (recorded)` and the queue-entry row `found, = NONE →
-LEAVE (recorded)`. ADR-011: the waiting-list writes carry an OrderHistory row.
+ADR-016, ADR-015, ADR-014 and ADR-011 carry the package's rules since 2026-10-18 (§ ADR notes).
 
 ### Mockup — expected bookings ✅ signed off 2026-10-18
 
@@ -684,6 +720,17 @@ sign-off.
   column); `sendOnce` sends once per subject, version, kind and recipient, the version from the history; every booking
   mail goes right after the action and daily maintenance resends the missing ones over the dinners to come. The chef's
   deadline reminders go to daily maintenance in the notification-triggers proposal.
+- A season-wide run claims for everyone whose preference eats on a closed dinner; every run reads its dinners'
+  waiting-list entries and hands each household its own, settles the claims per dinner and ticket type on one supply
+  read and joins as one batch (`createWaitlistEntries`). The e2e singleton season is closed on every dinner at
+  activation, so the activation queues every inhabitant with an eating preference on it.
+- The run's claims settle once per dinner after the household loop, one join batch across the households, so a claim
+  sees every release the run made before it; a longer setup budget for the e2e activation was rejected.
+- Writes carry no retries for now; a failed later chunk of a join batch stays as `createOrders`' shape. A dashboard
+  that surfaces the partial batches to the admin goes to 0.9.2 (`../feature-0.9.2.md` § Write-failure dashboard).
+- C4 diagrams in the README, a backburner package: the context view by hand (`docs/architecture/c4-context.mmd`), the
+  container view generated from the Worker and Nuxt configs (`c4-container.mmd`), both rendered to SVG by `make c4`
+  through Kroki; `pre:all` fails on a stale diagram.
 - The architecture skill (`.claude/skills/architecture/SKILL.md`) is signed; senior-architect,
   nuxt-typescript-developer and frontend-engineer list it. The five non-test agents drop `disallowedTools` (option b);
   "no Playwright outside the test engineer" stays a rule of the briefs and the peer-sessions skill.
@@ -736,6 +783,7 @@ sign-off.
 | One intent path, check 7 | the guest form, from the grid and from the day form: title "Du er ved at tilføje gæster", one separator, a line per outcome ("Gæst af Anna (Voksen ×2) …"), button "Tilmeld gæst(er)" | open |
 | One intent path, check 8 | `/household/<S>/members`, one person's editor, a day changed: the loader, then the lines under day separators with no date in the text; nothing while the draft equals the saved preferences | open |
 | One intent path, check 9 | the same, power mode: lines for every member under each day, in household order | open |
+| C4 diagrams in the README | `README.md` § Architecture in a Markdown preview or on GitHub after the push: the context view (the users by role, TheSlope, Heynabo, e-mail, GitHub, the accountant) and the container view (both workers' bindings, the cron tasks) render; the ARCHIVE arrow crosses the D1 cylinder in the container view | open |
 | One intent path, two looks | the expected cell in edit mode shows the mode solid (the view face alone is outlined); the expected badge is the mode's colour at `NOISE.medium` with muted ink, apart from the waiting list's neutral ghost | your call in the check |
 | One booking path, check 8 (point 7) | `/chef`, a dinner with a release and a sale: Billetændringer lists "frigivet 1V" and "købt 1V" lines, a nightly close as one System "lukket" line; the last row's Billetter · kuverter equals the kitchen box's paid tickets; "Vis fuld historik" opens the rest | open |
 
@@ -748,10 +796,10 @@ sign-off.
 | ADR-007 | `storeAsyncData` and `apiRequest`, rules 7 to 10 |
 | ADR-009 | rule 7, what a delete returns |
 | ADR-010 | rule 6, a deprecated column's value; rule 7, `portions` filled on read |
-| ADR-011 | rule 5, the `auditData` format `{change, orderSnapshot, source?}` (One audit format for the order history); at One intent path's landing, the waiting-list writes carry an OrderHistory row |
+| ADR-011 | rule 5, the `auditData` format `{change, orderSnapshot, source?}` |
 | ADR-012 | conditional spread in `where`, `Prisma.skip` in `data` |
-| ADR-014 | `writeBatchOrEach`; at One intent path's landing, `linesBy` |
-| ADR-015 | the waitlist clear in daily maintenance; the scaffold's idempotency through the generator; `sellTicketsToWaitlist` |
-| ADR-016 | the claim bucket, the queue entry rows, the two deadline sets; rule 9, notification after the action; rule 10, a failed batch retried order by order; rule 11, one line per ticket type; at One intent path's landing, one path with `?preview=true` on both endpoints, the empty-draft preview, the matrix rows `absent, = NONE → CANCEL (recorded)` and `found, = NONE → LEAVE (recorded)` |
+| ADR-014 | `writeBatchOrEach`, `linesBy` |
+| ADR-015 | the waitlist clear in daily maintenance; the scaffold's idempotency through the generator, reading the entries and the claim, leave and requeue buckets; `sellTicketsToWaitlist` |
+| ADR-016 | the claim bucket, the queue entry rows, the two deadline sets; rule 9, notification after the action; rule 10, a failed batch retried order by order; rule 11, one line per ticket type; § One path with `?preview=true` on both endpoints and the empty-draft preview; the matrix rows `absent, = NONE → CANCEL (recorded)` and `found, = NONE → LEAVE (recorded)`; rule 5, a person's own acts are intent; rule 12, a waiting entry's write writes its OrderHistory row; key files `previewSale`, `joinedOf`, `recordCancellation` |
 | ADR-017 | rules 6 and 7, texts in config modules under `app/config/` |
 | ADR-018 | separators; table loading; the usage rules |

@@ -130,7 +130,7 @@ Abstract composite keys (`inhabitantId-dinnerEventId`) caused bugs:
 | Stage | File | Role |
 |-------|------|------|
 | **Generator** | `useBooking.ts` | `decideOrderAction(input) → { bucket, order } \| null` — pure function, returns bucket `create \| update \| delete \| idempotent \| claim \| leave \| requeue`, sets `state` (BOOKED/RELEASED) and `dinnerMode`. Entry points: `resolveDesiredOrdersToBuckets` (user mode, with the household's queue entries), `resolveOrdersFromPreferencesToBuckets` (system mode) |
-| **Scaffolder** | `scaffoldPrebookings.ts` | Transforms `DesiredOrder → OrderCreateWithPrice` (adds `bookedByUserId`, `priceAtBooking`, `householdId`) and executes the buckets: `createOrders()`, `updateOrdersBatch()` + `releasedAt` for releases, `deleteOrder()`, `claimOrder()` else `joinWaitlist()` for claims, `deleteWaitlistEntry()` for leave, `updateWaitlistEntryOrder()` for requeue, skip idempotent; after the households, `sellTicketsToWaitlist()` |
+| **Scaffolder** | `scaffoldPrebookings.ts` | Transforms `DesiredOrder → OrderCreateWithPrice` (adds `bookedByUserId`, `priceAtBooking`, `householdId`) and executes the buckets: `createOrders()`, `updateOrdersBatch()` + `releasedAt` for releases, `deleteOrder()` or `recordCancellation()` alone when nothing is booked, `claimOrder()` else the waiting-list join for claims, `deleteWaitlistEntry()` for leave, `updateWaitlistEntryOrder()` for requeue, skip idempotent; after the households, `sellTicketsToWaitlist()`. With `preview` the same run settles against the supply it reads and writes nothing |
 
 ### Decision Matrix
 
@@ -138,7 +138,7 @@ Abstract composite keys (`inhabitantId-dinnerEventId`) caused bugs:
 |-----------|--------------|------------|------------|----------|
 | absent | ≠ NONE | N/A | before | **CREATE** (state=BOOKED) |
 | absent | ≠ NONE | N/A | after | **CLAIM** (state=BOOKED) |
-| absent | = NONE | N/A | any | SKIP |
+| absent | = NONE | N/A | any | **CANCEL** (recorded, nothing to delete) |
 | present | = NONE | found | before | **DELETE** |
 | present | = NONE | found | after | **UPDATE** (state=RELEASED) |
 | present | ≠ NONE | RELEASED | any | **UPDATE** (state=BOOKED, reclaim) |
@@ -162,7 +162,7 @@ own regular entry on the dinner.
 
 | Queue entry | `dinnerMode` / price | → Action |
 |-------------|----------------------|----------|
-| found | = NONE | **LEAVE** (deletes the entry) |
+| found | = NONE | **LEAVE** (deletes the entry, recorded) |
 | found | another mode or price | **REQUEUE** (rewrites the entry's order, position kept) |
 | found | unchanged | **IDEMPOTENT** |
 | not found | any | SKIP (placed or swept) |
@@ -191,16 +191,21 @@ DesiredOrderSchema = {
 
 `rescaffoldOnFieldChange` triggers immediate re-scaffold when `dinnerPreferences`, `birthDate`, `moveOutDate`, or `movedInDate` change.
 
-### Two Modes
+### One path
 
-| Mode | Trigger | Generator | Use Case |
-|------|---------|-----------|----------|
-| **System** | Preference change, cron, field change | `resolveOrdersFromPreferencesToBuckets` | Scaffolding, preference updates, residency changes |
-| **User** | UI booking, admin correction | `resolveDesiredOrdersToBuckets` | Grid view, single booking, claim and queue, the admin's correction |
+| Source of the desired orders | Trigger | Audit |
+|---|---|---|
+| A draft (`desiredOrders`) | the booking page, the admin's correction | `USER_*` |
+| The preferences, stored or the drafts in `preferences` | a preference change, the nightly run, a season activation or update, a residency change | `SYSTEM_*` |
 
-System mode never reaches the claim bucket. `POST /api/household/order/scaffold` is the member's booking write; the
-endpoint hands the scaffolder its deadlines: the season's (`deadlinesForSeason`) for a member, `OPEN_DEADLINES`
-(`useSeason.ts`) for an admin's request with `?adminBypass=true`.
+Both go through `resolveDesiredOrdersToBuckets`: before the deadline they book and cancel; after it they buy a ticket
+for sale or join its type's line, release, leave or requeue. A person's own earlier act outranks the preference:
+`fetchUserIntentKeys` reads the season's `USER_*` rows (bookings, cancellations, the waiting-list acts) and the
+generator skips those dinners. `POST /api/household/order/scaffold` is the member's booking write and
+`POST /api/household/inhabitants/[id]/preferences` the preference write; both answer `?preview=true` with the same
+run settled against the supply read and nothing written (`preview`); the scaffold's preview with no orders answers
+the household's next run on the dinners asked. The endpoint hands the scaffolder its deadlines: the season's
+(`deadlinesForSeason`) for a member, `OPEN_DEADLINES` (`useSeason.ts`) for an admin's request with `?adminBypass=true`.
 
 ### Compliance
 
@@ -208,19 +213,22 @@ endpoint hands the scaffolder its deadlines: the season's (`deadlinesForSeason`)
 2. Scaffolder enriches (`priceAtBooking`, `bookedByUserId`, `releasedAt`) and settles supply for the claim bucket (a released ticket, else a queue entry)
 3. UI MUST include `orderId` from existing orders for updates
 4. Guest orders preserved (not managed by preferences), each by its own `orderId`: a guest ticket booked on a person is neither the person's order nor the person's intent (`fetchUserIntentKeys` leaves guest history out)
-5. User cancellations tracked in `cancelledKeys` set
+5. A person's own acts are intent: bookings, cancellations and waiting-list acts, read by `fetchUserIntentKeys` (`confirmedKeys`, `cancelledKeys`); an Ingen with nothing to delete is recorded as a cancellation (`recordCancellation`)
 6. Generators MUST receive dinner events filtered by `isHouseholdActiveOnDay`
 7. Booking-relevant field changes MUST trigger immediate re-scaffold via `rescaffoldOnFieldChange`
 8. UI MUST include `waitlistEntryId` from the household's queue entries to leave or requeue
 9. The scaffold and the waiting-list steps send no notification: they return their outcomes (joined, sold, sold to the waiting list, the chef's extra portions), and the caller hands them to the notification service after the action (`notifyBookingOutcomes`, `notifyExtraPortions`)
 10. A failed write batch is retried order by order; the reply counts the orders that landed per action (`totals`), lists them per person for a run scoped to one household (`results`) and lists the orders that failed (`failed`)
 11. A claim buys a released ticket of its type only while nobody waits in that type's line; every run ends with `sellTicketsToWaitlist` on its dinners
+12. Every write to a waiting entry writes its `OrderHistory` row (`orderId` null) with the run's audit context
 
 ### Key Files
 
 | File | Role |
 |------|------|
 | `app/composables/useBooking.ts` | Generator: `decideOrderAction`, bucket resolvers |
+| `app/composables/useWaitlist.ts` | `previewSale`, the sale as the preview settles it; `joinedOf`, the join outcome of a save and a preview |
+| `server/data/financesRepository.ts` | `recordCancellation`, the one writer of a cancellation row |
 | `app/composables/useBookingValidation.ts` | Schemas: `DesiredOrderSchema`, `ScaffoldResultSchema`; enums `OrderBucketSchema`, `BookingActionSchema` |
 | `app/composables/useSeason.ts` | `deadlinesForSeason`, `OPEN_DEADLINES` |
 | `app/composables/useHousehold.ts` | `isHouseholdActiveOnDay` residency predicate |
@@ -263,7 +271,7 @@ Daily maintenance consumes past dinners (SCHEDULED/ANNOUNCED → CONSUMED), clos
 
 | Job | Idempotency Mechanism |
 |-----|----------------------|
-| **scaffoldPrebookings** | Reads the existing orders of the window's dinner events and lets the generator (`resolveOrdersFromPreferencesToBuckets`) decide per `orderId` which bucket each order falls in — `create`, `update`, `delete` or `idempotent` — so a re-run finds its orders in `idempotent` (ADR-016) |
+| **scaffoldPrebookings** | Reads the existing orders and the waiting-list entries of the window's dinner events and lets the generator (`resolveOrdersFromPreferencesToBuckets`) decide per `orderId` and entry which bucket each falls in — `create`, `update`, `delete`, `claim`, `leave`, `requeue` or `idempotent` — so a re-run finds its orders and its places in `idempotent` (ADR-016) |
 | **consumeDinners** | Only updates dinners with `state NOT IN (CONSUMED, CANCELLED)` that are past (already consumed = no-op) |
 | **closeOrders** | Only updates orders with `state IN (BOOKED, RELEASED)` on CONSUMED dinners (already closed = no-op) |
 | **createTransactions** | Only creates for orders with `Transaction: null` (existing transaction = skipped) |
@@ -306,13 +314,13 @@ seasonDates: { start: tomorrow, end: threeDaysFromNow }
 
 ## ADR-014: Batch Operations and Utility Functions
 
-**Status:** Accepted | **Date:** 2025-12-06 | **Updated:** 2026-01-15
+**Status:** Accepted | **Date:** 2025-12-06 | **Updated:** 2026-10-18
 
 ### Decision
 
 **Batch operations use curried chunking utilities and Prisma bulk methods to stay within D1 limits.**
 
-D1 limits: **1,000 queries/invocation**, **100 bound parameters/statement**.
+D1 limits: **1,000 queries/invocation**, **100 bound parameters/statement**, **6 simultaneous connections/invocation**.
 
 ### Prisma D1 Adapter Auto-Chunking
 
@@ -368,6 +376,12 @@ const reconcile = pruneAndCreate<TicketPrice, number>(
 const { create, update, idempotent, delete: toDelete } = reconcile(existing)(incoming)
 ```
 
+**`linesBy<Row, Line, Key>(keyOf, toLine, order)`** - Lines from rows: the rows with one key make one line, in the given
+order; the preview's days and lines, the toast's lines per person and Billetændringer's lines per actor and minute:
+```typescript
+const previewDays = linesBy<BookingResult, ActionPreviewDay, number>(row => row.dinnerEventId, (rows, id) => ({date: dateOf(id), lines: linesOfDay(rows)}), byDate)
+```
+
 **`writeBatchOrEach(items, write, onDone, onFailed)`** - Writes a batch; when the batch fails, writes item by item and reports each failed item:
 ```typescript
 await writeBatchOrEach(batch, orders => createOrders(d1Client, householdId, orders, audit), landed => results.push(...landed), order => failed.push(order))
@@ -379,6 +393,7 @@ await writeBatchOrEach(batch, orders => createOrders(d1Client, householdId, orde
 2. Manual chunking is defense-in-depth; Prisma auto-chunks for D1
 3. Curried chunkers MUST be defined in composables, not endpoints
 4. Single mutations returning Detail MUST fetch after bulk create (ADR-009)
+5. A read over a list of ids is one chunked query (`fetchHouseholdsByIds`, `fetchInhabitantsByIds`, `fetchUsersByIds`: 90 ids per chunk, the chunks one after another or in one `batch()`, never a `Promise.all` fan-out past D1's six connections), never one query per item; a step that scales with the rows of a run reads once and works from maps
 
 ---
 

@@ -27,6 +27,14 @@ description: Use before proposing or briefing a change to an endpoint, a reposit
 - Words users read live in `app/config/*.ts` (`bookingWords.ts`, `notificationTemplates.ts`); a composable formats, a
   store reads and writes through `useApiHandler`, a component binds tokens (ADR-007, ADR-017, ADR-018).
 
+## Reads and writes over a list
+
+- A read over a list of ids is one chunked query (`fetchHouseholdsByIds` in `server/data/prismaRepository.ts`), never one
+  query per item; a step that scales with the rows of a run (the scaffold's claims, the mails of its outcomes) reads once
+  and works from maps. Writes go through `createManyAndReturn` and `writeBatchOrEach` (ADR-014).
+- D1 allows six simultaneous connections per invocation, 1,000 queries and 100 bound parameters per statement: the
+  chunks of a read run one after another or in one `batch()`; a `Promise.all` over rows or chunks against D1 is a fault.
+
 ## One of each
 
 - One generator (`resolveDesiredOrdersToBuckets`), one line builder (`previewLines` in `useBookingUi.ts`), one audit

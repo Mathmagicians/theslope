@@ -50,8 +50,10 @@ documentar drives the user's sign-off.
    the orchestrator hears it.
 4. A finding the user reports goes to the orchestrator with the user's words and the check number; the package reopens
    there.
-5. A test-only package is signed off by the user's yes on its results; a package built in parts gets its check when its
-   last part is implemented.
+5. A test-only package has no sign-off: its green run and the user's commit close it, and it stays out of the
+   sign-off table. A package built in parts gets its check when its last part is implemented.
+6. A sign-off row is a check: route and state, phone or desktop, what to see. A point whose browser check is unknown
+   gets one written from its mockup and its words; a question whether something was checked is no row.
 
 ## Ship matches the spec
 

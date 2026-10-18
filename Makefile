@@ -67,6 +67,22 @@ help: ## Show this help
 palettes: ## Regenerate the palette presets from the design system (rerun after a change to main.css scales, app.config ui.colors or a fill/ink token)
 	@JITI_ALIAS='{"~~":"$(CURDIR)","~":"$(CURDIR)/app"}' npx jiti scripts/palettes/generate.ts
 
+# --- Wrangler configs → C4 diagrams (docs/architecture: the container .mmd generated, every .svg rendered, committed)
+.PHONY: c4 c4-check
+
+C4_CONTAINER := docs/architecture/c4-container.mmd
+# wrangler loads through Node: jiti's CommonJS interop breaks the miniflare bundle it requires
+C4_GENERATE = JITI_NATIVE_MODULES='["wrangler"]' npx jiti scripts/c4/generate.ts
+
+c4: ## Generate the C4 container diagram from the wrangler configs and render docs/architecture/*.mmd to SVG through kroki.io
+	@$(C4_GENERATE) $(C4_CONTAINER)
+	@for mmd in docs/architecture/*.mmd; do \
+		curl -sSf -X POST https://kroki.io/mermaid/svg -H 'Content-Type: text/plain' --data-binary @$$mmd -o $${mmd%.mmd}.svg || exit 1; \
+	done
+
+c4-check: ## Fail when the C4 container diagram differs from the wrangler configs
+	@$(C4_GENERATE) | diff -u $(C4_CONTAINER) - || { echo "$(C4_CONTAINER) is stale - run make c4"; exit 1; }
+
 # --- Schema → migration files → Prisma client + zod (prisma/generated, committed)
 .PHONY: d1-prisma-zod d1-prisma d1-prisma-check d1-create-migration d1-flatten-migrations
 
@@ -285,26 +301,104 @@ d1-copy-dev-to-local: ## Replace the local D1 with a copy of dev (schema, data, 
 # ============================================================================
 # TESTING
 # ============================================================================
-.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod test-report
+.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod test-report bdd-report bdd-steps developer-resolve developer-assemble developer-stage developer-build developer-publish
 
-TEST_REPORT_JQ = def failed($$path): (.specs[]? | . as $$s | .tests[] | select(.status == "unexpected") | "- `\($$s.file):\($$s.line)` \(($$path + [$$s.title]) | join(" › ")) (\(.projectName))"), (.suites[]? | failed($$path + [.title])); \
-	{passed: (.stats.expected // 0), failed: (.stats.unexpected // 0), flaky: (.stats.flaky // 0), skipped: (.stats.skipped // 0)} as $$r \
-	| (if $$r.failed > 0 then "❌" else "✅" end) as $$icon \
-	| "\#\# \($$icon) \($$title)\n\n| Passed | Failed | Flaky | Skipped |\n|---:|---:|---:|---:|\n| \($$r.passed) | \($$r.failed) | \($$r.flaky) | \($$r.skipped) |\n" \
-	+ (if $$r.failed > 0 then "\n**Failing tests**\n\n" + ([.suites[]? | failed([])] | join("\n")) + "\n" else "" end) \
-	+ (if ($$r.failed > 0) and (($$note | length) > 0) then "\n> ⚠️ \($$note)\n" else "" end) \
-	+ (if ($$link | length) > 0 then "\n[Playwright report (artifact)](\($$link))\n" else "" end)
-
+# The summary tables are jq programs under scripts/ (test-report.jq, bdd-report.jq, bdd-steps.jq)
 TEST_REPORT_USAGE := usage: make test-report report=<playwright json> title=<text> [link=<url>] [note=<warning shown when failed > 0>]
 
 test-report: ## Markdown summary of a Playwright suite - report=<json> title=<text> [link=<url>] [note=<text>]
 	@test -n "$(report)" -a -n "$(title)" || { echo "$(TEST_REPORT_USAGE)"; exit 1; }
 	@if [ -f "$(report)" ]; then \
-		jq -r --arg title "$(title)" --arg link "$(link)" --arg note "$(note)" '$(TEST_REPORT_JQ)' "$(report)" \
+		jq -r -f scripts/test-report.jq --arg title "$(title)" --arg link "$(link)" --arg note "$(note)" "$(report)" \
 			|| echo "## ⚠️ $(title) — could not parse $(report)"; \
 	else \
 		echo "## ⚠️ $(title) — no results file at $(report)"; \
 	fi
+
+# The suite's Cucumber JSON, as npm run test:e2e:<suite> writes it
+suite ?= api
+bdd_report = test-results/e2e-$(suite)-bdd.json
+
+bdd-report: ## BDD summary of a suite - [suite=api|ui|smoke] [report=<cucumber json>] [title=<text>] [link=<url>] [note=<text>]
+	@report="$(or $(report),$(bdd_report))"; title="$(or $(title),BDD $(suite) tests)"; \
+	if [ -f "$$report" ]; then \
+		jq -r -f scripts/bdd-report.jq --arg title "$$title" --arg link "$(link)" --arg note "$(note)" "$$report" \
+			|| echo "## ⚠️ $$title — could not parse $$report"; \
+	else \
+		echo "## ⚠️ $$title — no results file at $$report (npm run test:e2e:$(suite) writes it)"; \
+	fi
+
+bdd-steps: ## Step reuse across the suites' Cucumber JSON - [report=<json …>] [summary=1 for the one line alone]
+	@reports="$(or $(report),$(wildcard test-results/e2e-*-bdd.json))"; \
+	if [ -n "$$reports" ]; then \
+		jq -rs -f scripts/bdd-steps.jq --arg summary "$(summary)" $$reports \
+			|| echo "⚠️ Steps — could not parse $$reports"; \
+	else \
+		echo "⚠️ Steps — no Cucumber JSON under test-results/ (npm run test:e2e writes e2e-<suite>-bdd.json)"; \
+	fi
+
+# Developer companion (docs/features/feature-proposal-developer-companion.md): everything generated lives under
+# .output/developer — the downloaded artifacts, the staged VitePress source, its cache and build, the gh-pages checkout
+DEVELOPER_OUT := .output/developer
+DEVELOPER_SRC := $(DEVELOPER_OUT)/src
+site ?= $(DEVELOPER_OUT)/site
+artifacts ?= $(DEVELOPER_OUT)/artifacts
+pages ?= $(DEVELOPER_SRC)/environments
+DEVELOPER_SUITES := api ui smoke
+DEVELOPER_ASSEMBLE_USAGE := usage: make developer-assemble env=<dev|prod> run=<pipeline run id> version=<version> sha=<commit> [url=<app url>] [site=] [artifacts=] [pages=]
+# A pipeline run that deploys uploads the artifact `deployment`: its version-info lines plus ENV and URL
+developer-resolve: ## What a pipeline run published, from its deployment artifact, as env lines - run=<pipeline run id> [artifacts=]
+	@test -n "$(run)" || { echo "usage: make developer-resolve run=<pipeline run id> [artifacts=artifacts]"; exit 1; }
+	@rm -rf "$(artifacts)/deployment"; \
+	if gh run download "$(run)" -n deployment -D "$(artifacts)/deployment" > /dev/null 2>&1 && [ -f "$(artifacts)/deployment/deployment.env" ]; then \
+		echo "PUBLISH=true"; echo "RUN_ID=$(run)"; cat "$(artifacts)/deployment/deployment.env"; \
+	else \
+		echo "PUBLISH=false"; \
+	fi
+
+developer-assemble: ## Lay a run's results and manifest under site/environments and write the environment pages - env= run= version= sha= [url=] [site=] [artifacts=] [pages=]
+	@test -n "$(env)" -a -n "$(run)" -a -n "$(version)" -a -n "$(sha)" || { echo "$(DEVELOPER_ASSEMBLE_USAGE)"; exit 1; }
+	@rm -rf "$(site)/environments/$(env)" && mkdir -p "$(site)/environments/$(env)" "$(pages)"
+	@suites='{}'; for suite in $(DEVELOPER_SUITES); do \
+		src="$(artifacts)/playwright-results-$$suite"; results="$$src/e2e-$$suite-results.json"; \
+		[ -f "$$results" ] || { echo "developer-assemble: no $$results"; continue; }; \
+		mkdir -p "$(site)/environments/$(env)/$$suite" && cp -R "$$src/." "$(site)/environments/$(env)/$$suite/"; \
+		published="$(site)/environments/$(env)/$$suite/$$(basename "$$results")"; \
+		[ "$$suite" != smoke ] || { jq 'walk(if type == "object" then del(.errors, .error, .stdout, .stderr, .attachments) else . end)' "$$published" > "$$published.tmp" && mv "$$published.tmp" "$$published"; }; \
+		report=$$( [ -f "$$src/index.html" ] && echo index.html || basename "$$results" ); \
+		suites=$$(jq -c --arg suite "$$suite" --arg report "$$report" --slurpfile r "$$results" \
+			'. + {($$suite): {passed: ($$r[0].stats.expected // 0), failed: ($$r[0].stats.unexpected // 0), flaky: ($$r[0].stats.flaky // 0), skipped: ($$r[0].stats.skipped // 0), report: $$report}}' <<< "$$suites"); \
+	done; \
+	jq -n --arg environment "$(env)" --arg version "$(version)" --arg sha "$(sha)" --arg url "$(url)" --arg run "$(run)" --arg deployedAt "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson suites "$$suites" \
+		'{environment: $$environment, version: $$version, sha: $$sha, deployedAt: $$deployedAt, run: ($$run | tonumber? // $$run), suites: $$suites} + (if ($$url | length) > 0 then {url: $$url} else {} end)' > "$(site)/environments/$(env).json"
+	@for manifest in "$(site)"/environments/*.json; do name=$$(basename "$$manifest" .json); [ "$$name" = index ] || echo "$$name"; done | sort | jq -R . | jq -s . > "$(site)/environments/index.json"
+	@find "$(pages)" -name '*.md' ! -name index.md -delete; \
+	for name in $$(jq -r '.[]' "$(site)/environments/index.json"); do \
+		printf '# %s\n\n<EnvironmentPage name="%s" />\n' "$$name" "$$name" > "$(pages)/$$name.md"; \
+	done
+	@cat "$(site)/environments/$(env).json"
+
+developer-stage: ## Stage the VitePress source under .output/developer/src - the pages and the docs mirror
+	@mkdir -p "$(DEVELOPER_SRC)/environments" && rm -rf "$(DEVELOPER_SRC)/docs" && mkdir -p "$(DEVELOPER_SRC)/docs" && \
+	cp developer/index.md "$(DEVELOPER_SRC)/" && cp developer/environments/index.md "$(DEVELOPER_SRC)/environments/" && \
+	cp docs/*.md "$(DEVELOPER_SRC)/docs/" && cp -R docs/screenshots "$(DEVELOPER_SRC)/docs/screenshots"
+
+developer-build: developer-stage ## Render the site into the gh-pages checkout - the VitePress build, CNAME and .nojekyll [site=]
+	@npx vitepress build developer
+	@mkdir -p "$(site)" && rm -rf "$(site)/assets" && cp -R "$(DEVELOPER_OUT)/dist/." "$(site)/" && \
+	echo developer.skraaningen.dk > "$(site)/CNAME" && touch "$(site)/.nojekyll"
+
+developer-publish: ## Force-push site/ as the single commit of gh-pages - [env=<env>] [site=]
+	@test -d "$(site)" || { echo "usage: make developer-publish [env=<env>] [site=site] (run developer-build first)"; exit 1; }
+	@cd "$(site)" && \
+	{ [ -d .git ] || git init -q; } && \
+	{ git remote get-url origin > /dev/null 2>&1 || git remote add origin "https://github.com/$${GITHUB_REPOSITORY:?GITHUB_REPOSITORY missing and $(site) has no origin}.git"; } && \
+	{ [ -z "$$GITHUB_TOKEN" ] || git config http.https://github.com/.extraheader "AUTHORIZATION: basic $$(printf 'x-access-token:%s' "$$GITHUB_TOKEN" | base64 | tr -d '\n')"; } && \
+	git add -A && \
+	commit=$$(git -c user.name="$$(git config user.name || echo 'github-actions[bot]')" -c user.email="$$(git config user.email || echo 'github-actions[bot]@users.noreply.github.com')" \
+		commit-tree "$$(git write-tree)" -m "Developer companion $$(date -u +%Y-%m-%dT%H:%MZ) $(env)") && \
+	git update-ref refs/heads/gh-pages "$$commit" && \
+	git push -q --force origin refs/heads/gh-pages:refs/heads/gh-pages
 
 unit-test: ## Run all unit tests
 	@npx vitest --run

@@ -33,6 +33,15 @@ Utility targets (Heynabo calls, imports, deploys) live in the [Makefile](Makefil
 
 Deploy, release, the sender worker, secrets and the Cloudflare resources: [docs/ops-runbook.md](docs/ops-runbook.md).
 
+## Architecture
+
+C4, two levels. The context is drawn by hand; the containers come from `wrangler.toml`, `workers/sender/wrangler.toml` and
+`nuxt.config.ts` through `make c4`, which also renders both diagrams to SVG (`docs/architecture/`).
+
+![C4 system context](docs/architecture/c4-context.svg)
+
+![C4 containers](docs/architecture/c4-container.svg)
+
 ## Database
 
 D1 (SQLite) through Prisma. The model is `prisma/schema.prisma`; schema and migration work follows

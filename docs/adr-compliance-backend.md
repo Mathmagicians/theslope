@@ -26,8 +26,8 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/order/waitlist.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `server/utils/waitlistAssignment.ts` | ✅ | N/A | ✅ | ✅ serial; recovery unit | ✅ a placement grabs, writes, records and removes; the recovery settles a grab past `waitlistPlacingLeaseMinutes` and reports the sale or extra portion it finishes |
-| `server/data/waitlistRepository.ts` | ✅ | N/A | ✅ | ✅ | ✅ a leave or a change of an entry a run holds or has placed answers 409 |
+| `server/utils/waitlistAssignment.ts` | ✅ | N/A | ✅ | ✅ serial; recovery unit | ✅ `joinWaitlist` joins a household's claims on a dinner as one batch, idempotent on a later run; a placement grabs, writes, records and removes; the recovery settles a grab past `waitlistPlacingLeaseMinutes` and reports the sale or extra portion it finishes |
+| `server/data/waitlistRepository.ts` | ✅ | N/A | ✅ | ✅ | ✅ a leave or a change of an entry a run holds or has placed answers 409; `createWaitlistEntries` writes the entries and their QUEUE rows in two bulk writes |
 | **Admin - dinner events** | | | | | |
 | `/api/admin/dinner-event/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/dinner-event/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |

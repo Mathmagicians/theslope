@@ -9,6 +9,9 @@
 | E2E | `*.e2e.spec.ts` | Playwright | **Factories REQUIRED** |
 | Smoke | `@smoke` tag in title | Playwright | Post-deployment verification |
 
+A build-time script under `scripts/` has its unit spec in `tests/component/scripts/` (`c4.unit.spec.ts` for
+`scripts/c4/`).
+
 ## Smoke Tests
 
 Smoke tests run after CI/CD deployment to verify the deployed environment works.
