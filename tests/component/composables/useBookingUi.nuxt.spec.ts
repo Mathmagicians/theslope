@@ -12,7 +12,7 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {ticketTypeLabel} from '~/composables/useTicket'
-import {formatDate} from '~/utils/date'
+import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import appConfig from '~/app.config'
 
 const {DinnerStateSchema, DinnerModeSchema, BookingActionSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
@@ -53,7 +53,7 @@ describe('spending fragments', () => {
     it('builds this dinner\'s fragment: heading with title and date, the receipts as rows, its figures in the total', () => {
         const receipts = [ExpenseFactory.defaultExpense({id: 7, amount: 101200, description: '"Ret 2" 12/04/2026, Anna H. bestiller for Madhold 2'})]
         const fragment = dinnerSpendingFragment(dinner(2, true), receipts)
-        expect(fragment.heading).toBe('Ret 2, 12/04/2026')
+        expect(fragment.heading).toBe(`Ret 2, ${formatDate(dinner(2, true).date, DATE_SETTINGS.DAY_MONTH_MASK)}`)
         expect(fragment.rows).toHaveLength(1)
         // The receipt row reads the line's note
         expect(fragment.rows[0]).toMatchObject({kind: 'receipt', label: '"Ret 2" 12/04/2026, Anna H. bestiller for Madhold 2', amount: 101200})
@@ -63,7 +63,7 @@ describe('spending fragments', () => {
     it('GIVEN a dinner without a menu title THEN its heading and its total row read Fællesspisning', () => {
         const untitled = {...dinner(2, true), menuTitle: ''}
         const fragment = dinnerSpendingFragment(untitled, [])
-        expect(fragment.heading).toBe(`Fællesspisning, ${formatDate(untitled.date)}`)
+        expect(fragment.heading).toBe(`Fællesspisning, ${formatDate(untitled.date, DATE_SETTINGS.DAY_MONTH_MASK)}`)
         expect(fragment.total.label).toBe('Fællesspisning')
     })
 

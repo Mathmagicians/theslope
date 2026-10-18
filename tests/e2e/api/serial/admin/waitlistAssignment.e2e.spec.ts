@@ -67,8 +67,9 @@ test.describe('Waiting list assignment', () => {
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
-        // The spec's own season, closed for its first days: the dinners it queues on lie 2 and 3 days out
-        ;({season: activeSeason} = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 10, deadline: 4}))
+        // The spec's own season starts beyond its deadline, so its activation books and queues nobody; the dinners the
+        // spec queues on lie 2 and 3 days out, inside the deadline
+        ;({season: activeSeason} = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 10, deadline: 4, startInDays: 5}))
         createdSeasonIds.push(activeSeason.id!)
         adultPrice = activeSeason.ticketPrices.find(price => price.ticketType === TicketType.ADULT)!
         childPrice = activeSeason.ticketPrices.find(price => price.ticketType === TicketType.CHILD)!

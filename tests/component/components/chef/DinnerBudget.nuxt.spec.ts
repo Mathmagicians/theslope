@@ -10,6 +10,7 @@ import {useTicket, ticketTypeLabel} from '~/composables/useTicket'
 import {useBookingValidation, type OrderDetail, type OrderState, type TicketType} from '~/composables/useBookingValidation'
 import {dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, registerEmptyStoreEndpoints, kitchenConfig, resetStores} from '~~/tests/component/testHelpers'
+import {formatDate, DATE_SETTINGS} from '~/utils/date'
 
 /**
  * DinnerBudget: the three boxes in both units, the RÅDIGHEDSBELØB box with start, Brugt and Tilbage, and under the
@@ -38,6 +39,7 @@ const round: CookingRoundRow[] = [
     {dinnerEventId: 7, date: new Date('2026-04-12T18:00:00'), menuTitle: 'Lasagne', isCurrent: true, budgetGross: 11875, spentGross: 4000},
     {dinnerEventId: 8, date: new Date('2026-04-13T18:00:00'), menuTitle: 'Risotto', isCurrent: false, budgetGross: 15000, spentGross: 0}
 ]
+const ownHeading = `Lasagne, ${formatDate(round[0]!.date, DATE_SETTINGS.DAY_MONTH_MASK)}`
 
 // The ticket changes pane reaches the bookings store; its datasets answer empty here
 registerEmptyStoreEndpoints()
@@ -86,7 +88,7 @@ describe('DinnerBudget', () => {
         expect(findAllByTestId(wrapper, 'cooking-round')).toHaveLength(2)
         // This dinner: its heading, its one receipt as a row, its figures in the total row; the arrow only in the team's
         const own = findAllByTestId(wrapper, 'cooking-round')[0]!
-        expect(own.find('[data-testid="cooking-round-heading"]').text()).toBe('Lasagne, 12/04/2026')
+        expect(own.find('[data-testid="cooking-round-heading"]').text()).toBe(ownHeading)
         expect(own.text()).toContain(`/ ${formatPrice(4000)} kr`)
         expect(own.find('[data-testid="cooking-round-marker"]').exists()).toBe(false)
         expect(findAllByTestId(wrapper, 'cooking-round')[1]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(true)
@@ -109,7 +111,7 @@ describe('DinnerBudget', () => {
         await wrapper.find('button[name="toggle-budget-details"]').trigger('click')
         await wrapper.vm.$nextTick()
         expect(findAllByTestId(wrapper, 'cooking-round')).toHaveLength(1)
-        expect(findByTestId(wrapper, 'cooking-round-heading').text()).toBe('Lasagne, 12/04/2026')
+        expect(findByTestId(wrapper, 'cooking-round-heading').text()).toBe(ownHeading)
         expect(findByTestId(wrapper, 'cooking-round-total').text()).toContain('Lasagne')
     })
 

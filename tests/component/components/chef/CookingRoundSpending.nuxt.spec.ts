@@ -6,7 +6,7 @@ import CookingRoundSpending from '~/components/chef/CookingRoundSpending.vue'
 import {dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow, type SpendingFragment} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useTicket} from '~/composables/useTicket'
-import {formatDate} from '~/utils/date'
+import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {mountWithTooltipProvider, findByTestId, resetStores, registerEmptyStoreEndpoints, holdEndpoint, isTableLoading, untilTrue} from '~~/tests/component/testHelpers'
 import {useBookingsStore} from '~/stores/bookings'
 
@@ -36,6 +36,7 @@ const words = {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, periode 12/04â€
 const mount = (props: {fragment: SpendingFragment}) => mountWithTooltipProvider(CookingRoundSpending, {props, isMd: true})
 // The table's body rows without the total row the body-bottom slot adds
 const dataRows = (wrapper: Awaited<ReturnType<typeof mount>>) => wrapper.findAll('tbody tr').filter(tr => tr.attributes('data-testid') !== 'cooking-round-total')
+const dayMonth = (date: Date) => formatDate(date, DATE_SETTINGS.DAY_MONTH_MASK)
 
 describe('CookingRoundSpending, the team\'s round', () => {
     it('renders the heading, one row per dinner in order with date and menu, the arrow on the dinner on view, each row\'s figures, and the team\'s total row', async () => {
@@ -44,7 +45,7 @@ describe('CookingRoundSpending, the team\'s round', () => {
         const rendered = dataRows(wrapper)
         expect(rendered).toHaveLength(3)
         rows.forEach((row, index) => {
-            expect(rendered[index]!.text()).toContain(formatDate(row.date))
+            expect(rendered[index]!.findAll('td')[0]!.text()).toBe(dayMonth(row.date))
             expect(rendered[index]!.text()).toContain(row.menuTitle)
         })
         expect(rendered[2]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(true)
@@ -89,10 +90,10 @@ describe('CookingRoundSpending, this dinner', () => {
 
     it('heads with the menu title and date, lists the receipts with their note and amount, and carries the figures in the total row', async () => {
         const wrapper = await mount({fragment: dinnerSpendingFragment(rows[2]!, [receipt])})
-        expect(findByTestId(wrapper, 'cooking-round-heading').text()).toBe('Risotto, 14/04/2026')
+        expect(findByTestId(wrapper, 'cooking-round-heading').text()).toBe(`Risotto, ${dayMonth(rows[2]!.date)}`)
         const rendered = dataRows(wrapper)
         expect(rendered).toHaveLength(1)
-        expect(rendered[0]!.text()).toContain('12/04/2026')
+        expect(rendered[0]!.findAll('td')[0]!.text()).toBe(dayMonth(receipt.createdAt))
         expect(rendered[0]!.text()).toContain(NOTE)
         expect(rendered[0]!.text()).toContain(`/ ${formatPrice(126500)} kr`)
         expect(rendered[0]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(false)

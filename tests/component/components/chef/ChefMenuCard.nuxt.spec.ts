@@ -14,6 +14,7 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {formatPortions} from '~/utils/utils'
+import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {FORM_MODES} from '~/types/form'
 import {ICONS, getRandomEmptyMessage} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from '../dinner/waitlistTestIds'
@@ -249,18 +250,20 @@ describe('ChefMenuCard — Madbestilling', () => {
 
     it('GIVEN a round of several dinners WHEN the editor opens THEN the hint reads Rådighedsbeløb and the round as a sentence', async () => {
         const team = SeasonFactory.defaultCookingTeamDisplay({name: 'Madhold 2'})
+        const roundRows = [
+            {dinnerEventId: 1, date: new Date('2026-04-12T18:00:00'), menuTitle: 'Lasagne', isCurrent: true, budgetGross: 10000, spentGross: 4000},
+            {dinnerEventId: 2, date: new Date('2026-04-13T18:00:00'), menuTitle: 'Risotto', isCurrent: false, budgetGross: 10000, spentGross: 0}
+        ]
         const wrapper = await mountChefCard({
             dinnerEvent: {...DinnerEventFactory.defaultDinnerEventDetail(), cookingTeam: team, cookingTeamId: team.id},
-            roundRows: [
-                {dinnerEventId: 1, date: new Date('2026-04-12T18:00:00'), menuTitle: 'Lasagne', isCurrent: true, budgetGross: 10000, spentGross: 4000},
-                {dinnerEventId: 2, date: new Date('2026-04-13T18:00:00'), menuTitle: 'Risotto', isCurrent: false, budgetGross: 10000, spentGross: 0}
-            ]
+            roundRows
         })
         await clickByTestId(wrapper, 'expense-edit')
         await flushPromises()
         await wrapper.vm.$nextTick()
         expect(findByTestId(wrapper, 'expense-table').text()).toContain('Rådighedsbeløb')
-        expect(findByTestId(wrapper, 'expense-hint-heading').text()).toBe(`Hele ${useCookingTeam().getTeamShortName('Madhold 2')}, periode 12/04/2026-13/04/2026`)
+        const [first, last] = roundRows.map(row => formatDate(row.date, DATE_SETTINGS.DAY_MONTH_MASK))
+        expect(findByTestId(wrapper, 'expense-hint-heading').text()).toBe(`Hele ${useCookingTeam().getTeamShortName('Madhold 2')}, periode ${first}-${last}`)
         expect(findAllByTestId(wrapper, 'expense-hint-row')).toHaveLength(6)
     })
 })

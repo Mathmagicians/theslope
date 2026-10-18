@@ -3,7 +3,7 @@ import {useBookingValidation, type DailyMaintenanceResult} from '~/composables/u
 import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 import {useBillingValidation, type MonthlyBillingJobResult} from '~/composables/useBillingValidation'
 import {useBooking} from '~/composables/useBooking'
-import {formatDate} from '~/utils/date'
+import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {COLOR, ICONS} from '~/composables/useTheSlopeDesignSystem'
 
 /**
@@ -149,7 +149,7 @@ export const useMaintenance = () => {
      */
     /** The scaffold's compact symbols per dinner: the date and `-n` entries removed */
     const formatClearedWaitlists = ({dinners}: DailyMaintenanceResult['clearWaitlist']): string =>
-        dinners.length > 0 ? dinners.map(d => `${formatDate(d.date, 'dd/MM')} -${d.cleared}`).join(', ') : '0'
+        dinners.length > 0 ? dinners.map(d => `${formatDate(d.date, DATE_SETTINGS.DAY_MONTH_MASK)} -${d.cleared}`).join(', ') : '0'
 
     const formatDailyMaintenanceStats = (result: DailyMaintenanceResult): { label: string; value: string }[] => {
         const stats = [

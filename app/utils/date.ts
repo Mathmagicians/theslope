@@ -13,6 +13,7 @@ import {CalendarDate, type DateValue, toZoned, toCalendarDateTime, Time} from '@
 export const DATE_SETTINGS =
     {
         DATE_MASK: 'dd/MM/yyyy',
+        DAY_MONTH_MASK: 'dd/MM',
         locale: da,
         localeString: 'da-DK',
         USER_MASK: 'dd/mm/åååå',
@@ -286,7 +287,7 @@ export function formatMonthYear(date: Date): string {
  */
 export function formatWeekRange(start: Date, end: Date): string {
     const weekNum = getISOWeek(start)
-    return `Uge ${weekNum}: ${formatDate(start, 'dd/MM')}-${formatDate(end, 'dd/MM')}`
+    return `Uge ${weekNum}: ${formatDate(start, DATE_SETTINGS.DAY_MONTH_MASK)}-${formatDate(end, DATE_SETTINGS.DAY_MONTH_MASK)}`
 }
 
 /**

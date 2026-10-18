@@ -17,7 +17,7 @@
  *   Hele Madhold 2          2.923 / 3.654 kr  2.850 / 3.563 kr   +73 /  +91 kr (check)
  *
  * A dinner without a menu title reads Fællesspisning (formatDinnerName) in its heading, its total row and its Middag cell:
- *   Fællesspisning, 10/11/2026                                ex / inkl. moms
+ *   Fællesspisning, 10/11                                     ex / inkl. moms
  *   Dato   Middag            Rådighedsbeløb      Brugt         Tilbage
  *   Fællesspisning           1.498 / 1.873 kr       0 /    0 kr  ...
  *
@@ -69,7 +69,7 @@ const columns: TableColumn<SpendingTableRow>[] = [
       <span :class="COMPONENTS.vatAmount.unitHeader">ex / inkl. moms</span>
     </div>
     <UTable :data="fragment.rows" :columns="columns" :loading="loading" :ui="COMPONENTS.table.ui">
-      <template #date-cell="{ row }">{{ formatDate(row.original.date) }}</template>
+      <template #date-cell="{ row }">{{ formatDate(row.original.date, DATE_SETTINGS.DAY_MONTH_MASK) }}</template>
       <template #label-cell="{ row }">
         <template v-if="row.original.kind === 'dinner'">
           <UIcon v-if="row.original.isCurrent" :name="ICONS.arrowRight" :class="COMPONENTS.table.currentMarker" data-testid="cooking-round-marker" />
