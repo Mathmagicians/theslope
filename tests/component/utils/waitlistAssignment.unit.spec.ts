@@ -4,8 +4,7 @@ import {subMinutes} from 'date-fns'
 import {createOrders, claimReleasedOrder, findReleasedOrderId, fetchDinnerEvent} from '~~/server/data/financesRepository'
 import {fetchSeason} from '~~/server/data/prismaRepository'
 import {
-    createWaitlistEntry, fetchOrdersServingEntry, fetchWaitlistForDinners, grabWaitlistEntry, recordWaitlistPlacingOrder,
-    releaseWaitlistEntry, removePlacedWaitlistEntry
+    fetchOrdersServingEntry, fetchWaitlistForDinners, grabWaitlistEntry, recordWaitlistPlacingOrder, releaseWaitlistEntry, removePlacedWaitlistEntry
 } from '~~/server/data/waitlistRepository'
 import {assignWaitlistPortions, joinWaitlist, sellTicketsToWaitlist} from '~~/server/utils/waitlistAssignment'
 import {useBookingValidation, OrderAuditAction} from '~/composables/useBookingValidation'
@@ -30,8 +29,18 @@ vi.mock('~~/server/data/financesRepository', () => ({
 vi.mock('~~/server/data/prismaRepository', () => ({
     fetchSeason: vi.fn()
 }))
-vi.mock('~~/server/data/waitlistRepository', () => ({
-    createWaitlistEntry: vi.fn(),
+// The joins write through the repository to a client standing for the D1 binding; the queue's other reads and writes
+// answer from the test
+const fakePrisma = vi.hoisted(() => ({
+    // The insert's RETURNING hands the rows back in an order of its own
+    ticketWaitlist: {createManyAndReturn: vi.fn(async ({data}: {data: object[]}) =>
+        data.map((row, index) => ({...row, id: 61 + index, createdAt: new Date(), placingAt: null, placingOrderId: null})).reverse())},
+    orderHistory: {createMany: vi.fn(async ({data}: {data: object[]}) => ({count: data.length}))},
+    inhabitant: {findMany: vi.fn(), findUniqueOrThrow: vi.fn()}
+}))
+vi.mock('~~/server/utils/database', () => ({getPrismaClientConnection: async () => fakePrisma}))
+vi.mock('~~/server/data/waitlistRepository', async importOriginal => ({
+    ...await importOriginal<typeof import('~~/server/data/waitlistRepository')>(),
     fetchWaitlistForDinners: vi.fn(),
     grabWaitlistEntry: vi.fn(),
     releaseWaitlistEntry: vi.fn(),
@@ -40,8 +49,8 @@ vi.mock('~~/server/data/waitlistRepository', () => ({
     fetchOrdersServingEntry: vi.fn()
 }))
 
-const {DinnerStateSchema, TicketTypeSchema} = useBookingValidation()
-const {TicketWaitlistCreateSchema} = useWaitlistValidation()
+const {DinnerStateSchema, TicketTypeSchema, OrderAuditChangeSchema, createOrderAuditData} = useBookingValidation()
+const {TicketWaitlistCreateSchema, serializeTicketWaitlist} = useWaitlistValidation()
 const DinnerState = DinnerStateSchema.enum
 
 const d1Client = {} as D1Database
@@ -91,26 +100,32 @@ beforeEach(() => {
 })
 
 describe('joinWaitlist', () => {
-    const {position: _position, ...request} = second!
-    const wish = TicketWaitlistCreateSchema.parse(request)
-    // The member who joins, as the join's history row names them
+    // The wishes of the dinner's adult line in join order, each with the snapshot its history row keeps
+    const joins = [first!, second!].map(({position: _position, ...entry}) => ({
+        entry: TicketWaitlistCreateSchema.parse(entry),
+        snapshot: OrderFactory.defaultOrderSnapshot({id: null, inhabitantId: entry.inhabitantId, dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID})
+    }))
+    // The member who joins, as the join's history rows name them
     const audit = {action: OrderAuditAction.USER_BOOKED, performedByUserId: 7, seasonId: SEASON_ID}
 
-    it('decides by the dinner it is handed, reads neither the dinner nor its season, and writes the entry with its audit', async () => {
-        vi.mocked(createWaitlistEntry).mockResolvedValue(second!)
+    it('decides by the dinner it is handed and writes the entries and their QUEUE rows once each, reading neither a holder, the dinner nor its season; the entries come back in join order', async () => {
+        const entries = await joinWaitlist(d1Client, joins, {state: DinnerState.SCHEDULED}, audit)
 
-        const {position, joined} = await joinWaitlist(d1Client, wish, {state: DinnerState.SCHEDULED, ticketPrices}, audit)
-
-        expect(createWaitlistEntry).toHaveBeenCalledWith(d1Client, wish, audit)
-        expect(position).toBe(2)
-        expect(joined).toMatchObject({position: 2, ticketType: TicketTypeSchema.enum.ADULT, queueSize: 2})
-        expect(fetchDinnerEvent).not.toHaveBeenCalled()
-        expect(fetchSeason).not.toHaveBeenCalled()
+        expect(fakePrisma.ticketWaitlist.createManyAndReturn).toHaveBeenCalledTimes(1)
+        expect(fakePrisma.ticketWaitlist.createManyAndReturn).toHaveBeenCalledWith({data: joins.map(({entry}) => serializeTicketWaitlist(entry))})
+        expect(fakePrisma.orderHistory.createMany).toHaveBeenCalledTimes(1)
+        expect(fakePrisma.orderHistory.createMany).toHaveBeenCalledWith({data: joins.map(({entry, snapshot}) => ({
+            orderId: null, ...audit, inhabitantId: entry.inhabitantId, dinnerEventId: DINNER_ID,
+            auditData: createOrderAuditData(OrderAuditChangeSchema.enum.QUEUE, snapshot)
+        }))})
+        expect(entries.map(entry => entry.inhabitantId)).toEqual(joins.map(({entry}) => entry.inhabitantId))
+        expect([fakePrisma.inhabitant.findMany, fakePrisma.inhabitant.findUniqueOrThrow, fetchDinnerEvent, fetchSeason].filter(read => vi.mocked(read).mock.calls.length > 0)).toEqual([])
     })
 
-    it.each([DinnerState.CONSUMED, DinnerState.CANCELLED])('refuses a %s dinner', async (state) => {
-        await expect(joinWaitlist(d1Client, wish, {state, ticketPrices}, audit)).rejects.toMatchObject({statusCode: 400})
-        expect(createWaitlistEntry).not.toHaveBeenCalled()
+    it.each([DinnerState.CONSUMED, DinnerState.CANCELLED])('refuses a %s dinner and writes nothing', async (state) => {
+        await expect(joinWaitlist(d1Client, joins, {state}, audit)).rejects.toMatchObject({statusCode: 400})
+        expect(fakePrisma.ticketWaitlist.createManyAndReturn).not.toHaveBeenCalled()
+        expect(fakePrisma.orderHistory.createMany).not.toHaveBeenCalled()
     })
 })
 

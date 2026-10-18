@@ -54,6 +54,8 @@ export class SeasonFactory {
 
     // Fixed singleton name for parallel-safe active season (shared across all test workers)
     static readonly E2E_SINGLETON_NAME = 'TestSeason-E2E-Singleton'
+    // The booking deadline of a serial spec's own season (app.config.ts default)
+    static readonly DEFAULT_BOOKING_DEADLINE_DAYS = 8
     // createActiveSeason retries once: the list→activate window races with workers recreating or cleaning the singleton
     static readonly CREATE_ACTIVE_SEASON_RETRIES = 1
 
@@ -128,7 +130,8 @@ export class SeasonFactory {
         cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
         consecutiveCookingDays: 1,
         ticketPrices: TicketFactory.defaultTicketPrices(),
-        ticketIsCancellableDaysBefore: 8,  // Booking deadline (matches app.config.ts)
+        // The singleton season is open: every dinner books as before the deadline; a closed season is a spec's own
+        ticketIsCancellableDaysBefore: 0,
         diningModeIsEditableMinutesBefore: 90
     }
 
@@ -829,7 +832,7 @@ export class SeasonFactory {
         const created = await this.createSeasonWithDinnerEvents(context, testSalt, {
             seasonDates: {start, end},
             cookingDays: cookingDays === undefined ? this.defaultSeasonData.cookingDays : cookingDayMaps[cookingDays],
-            ticketIsCancellableDaysBefore: deadline ?? this.defaultSeasonData.ticketIsCancellableDaysBefore
+            ticketIsCancellableDaysBefore: deadline ?? this.DEFAULT_BOOKING_DEADLINE_DAYS
         })
         await this.activateSeason(context, created.season.id!)
         return created

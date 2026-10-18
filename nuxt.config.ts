@@ -49,7 +49,13 @@ export default defineNuxtConfig({
         },
         experimental: {
             wasm: true,
-            tasks: true  // Enable Nitro scheduled tasks (still experimental)
+            tasks: true,  // Enable Nitro scheduled tasks (still experimental)
+            openAPI: true  // The route inventory as an OpenAPI spec, for the developer companion
+        },
+        // Every build writes its spec as a static file, so each environment's companion page shows its own version
+        openAPI: {
+            production: 'prerender',
+            meta: {title: 'TheSlope API', description: 'The routes under /api of the deployed version'}
         },
         // Scheduled tasks - Cloudflare Cron Triggers invoke these
         // Tasks call HTTP endpoints which have D1 access

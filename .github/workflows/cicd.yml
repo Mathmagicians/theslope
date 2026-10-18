@@ -181,6 +181,12 @@ jobs:
           name: deployment
           path: ${{ env.E2E_RESULTS_DIR }}/deployment.env
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      # The OpenAPI spec the build prerendered (nuxt.config.ts nitro.openAPI), for the developer companion's API reference
+      - uses: actions/upload-artifact@v7
+        with:
+          name: openapi
+          path: .output/public/_openapi.json
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: Deployment summary
         run: |
           echo "## 🚀 Deployed to ${{ steps.target.outputs.env }}" >> $GITHUB_STEP_SUMMARY

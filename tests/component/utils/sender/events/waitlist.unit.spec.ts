@@ -4,10 +4,12 @@ import {
     bookingMails, emitTicketSold, emitWaitlistBuildup, emitWaitlistExtraPortion, emitWaitlistJoined, emitWaitlistTicketAssigned,
     NO_BOOKING_MAILS, notifyBookingOutcomes, notifyExtraPortions, type BookingMails
 } from '~~/server/utils/sender/events/waitlist'
-import {fetchHousehold, fetchInhabitant, fetchSeason, fetchUser} from '~~/server/data/prismaRepository'
+import {fetchHousehold, fetchInhabitantsByIds, fetchSeason, fetchUsersByIds} from '~~/server/data/prismaRepository'
 import {fetchDinnerEvent} from '~~/server/data/financesRepository'
 import type {EmailChannel} from '~~/server/utils/sender/config'
-import type {EmailMessage} from '~/composables/useNotificationValidation'
+import type {EmailMessage, SenderEmitResult} from '~/composables/useNotificationValidation'
+import type {HouseholdDetail, InhabitantDisplay, UserDisplay} from '~/composables/useCoreValidation'
+import {useBookingValidation, type BookingOutcomes, type TicketSale, type WaitlistJoined} from '~/composables/useBookingValidation'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -15,10 +17,11 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 
 // The unit runtime has no D1: the lookups answer from the test
 vi.mock('~~/server/data/prismaRepository', () => ({
-    fetchHousehold: vi.fn(), fetchInhabitant: vi.fn(), fetchSeason: vi.fn(), fetchUser: vi.fn()
+    fetchHousehold: vi.fn(), fetchInhabitantsByIds: vi.fn(), fetchSeason: vi.fn(), fetchUsersByIds: vi.fn()
 }))
 vi.mock('~~/server/data/financesRepository', () => ({
     createOrders: vi.fn(), findReleasedOrderId: vi.fn(), claimReleasedOrder: vi.fn(), fetchDinnerEvent: vi.fn()
@@ -42,6 +45,21 @@ const events = [
 
 const fakeQueue = () => ({send: vi.fn().mockResolvedValue(undefined)}) as unknown as Queue & {send: ReturnType<typeof vi.fn>}
 const sentMessages = (queue: {send: ReturnType<typeof vi.fn>}): EmailMessage[] => queue.send.mock.calls.map(([message]) => message as EmailMessage)
+
+// The dinner of the mails, in season 9, cooked by the chef
+const mockDinner = (chefId: number | null) => {
+    vi.mocked(fetchDinnerEvent).mockResolvedValue({...DinnerEventFactory.defaultDinnerEventDetail(), id: dinner.dinnerEventId, seasonId: 9, chefId})
+    vi.mocked(fetchSeason).mockResolvedValue({...SeasonFactory.defaultSeason(), id: 9, ticketPrices: TicketFactory.defaultTicketPrices({seasonId: 9})})
+}
+
+// The repository answers each read by id from the people of the run
+const mockPeople = (inhabitants: InhabitantDisplay[], users: UserDisplay[], households: HouseholdDetail[]) => {
+    vi.mocked(fetchHousehold).mockImplementation(async (_, id) => households.find(household => household.id === id) ?? null)
+    vi.mocked(fetchInhabitantsByIds).mockImplementation(async (_, ids) => inhabitants.filter(inhabitant => ids.includes(inhabitant.id)))
+    vi.mocked(fetchUsersByIds).mockImplementation(async (_, ids) => users.filter(user => ids.includes(user.id)))
+}
+
+const outcomesOf = (outcomes: Partial<BookingOutcomes>): BookingOutcomes => ({...OrderFactory.defaultScaffoldResult().outcomes, ...outcomes})
 
 describe('booking mails', () => {
     const logs = {warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
@@ -138,7 +156,7 @@ describe('bookingMails', () => {
 // The mails follow a booking that is already saved: a failed lookup leaves the booking standing and sends nothing
 describe('booking notifications after the action', () => {
     const logs = {error: vi.spyOn(console, 'error'), warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
-    const lookups = [fetchDinnerEvent, fetchSeason, fetchHousehold, fetchInhabitant, fetchUser]
+    const lookups = [fetchDinnerEvent, fetchSeason, fetchHousehold, fetchInhabitantsByIds, fetchUsersByIds]
     beforeEach(() => {
         Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
         lookups.forEach(lookup => vi.mocked(lookup).mockRejectedValue(new Error('D1 down')))
@@ -169,11 +187,8 @@ describe('the mails of the waiting list\'s placements', () => {
     const member = {...household.inhabitants[0]!, userId: 6}
     beforeEach(() => {
         Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
-        vi.mocked(fetchDinnerEvent).mockResolvedValue({...DinnerEventFactory.defaultDinnerEventDetail(), id: dinner.dinnerEventId, seasonId: 9, chefId: null})
-        vi.mocked(fetchSeason).mockResolvedValue({...SeasonFactory.defaultSeason(), id: 9, ticketPrices: TicketFactory.defaultTicketPrices({seasonId: 9})})
-        vi.mocked(fetchHousehold).mockResolvedValue({...household, inhabitants: [member]})
-        vi.mocked(fetchInhabitant).mockResolvedValue(member)
-        vi.mocked(fetchUser).mockResolvedValue(UserFactory.defaultUserWithInhabitant('member', {id: member.userId, email: to}))
+        mockDinner(null)
+        mockPeople([member], [UserFactory.defaultUserWithInhabitant('member', {id: member.userId, email: to})], [{...household, inhabitants: [member]}])
     })
     afterEach(() => vi.clearAllMocks())
 
@@ -191,5 +206,90 @@ describe('the mails of the waiting list\'s placements', () => {
         await notify(NotificationFactory.channel(queue))
 
         expect(sentMessages(queue).map(message => message.meta.kind).sort()).toEqual(kinds)
+    })
+})
+
+// A run's mails read the people they name in bulk: one inhabitants read and one users read, whatever the number of events
+describe('the people a run\'s mails name', () => {
+    const logs = {warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
+    const {TicketTypeSchema} = useBookingValidation()
+    type Member = HouseholdDetail['inhabitants'][number]
+    const template = HouseholdFactory.defaultHouseholdDetail().inhabitants[0]!
+    // A person of the run with a name of its own, a login when userId is given
+    const person = (id: number, householdId: number, userId: number | null): Member => ({...template, id, householdId, userId, name: `Skråner ${id}`})
+    const [seller, sellerWithoutLogin, buyer, buyerWithoutLogin] = [person(301, 30, 3010), person(302, 30, null), person(201, 20, 2010), person(202, 20, null)]
+    const [parent, child, neighbour] = [person(101, 10, 1010), person(102, 10, null), person(111, 11, 1110)]
+    const [chef, chefWithoutLogin] = [person(501, 50, 5010), person(502, 50, null)]
+    const householdOf = (id: number, members: Member[]): HouseholdDetail => ({...HouseholdFactory.defaultHouseholdDetail(`h${id}`), id, inhabitants: members})
+    const [sellers, buyers] = [householdOf(30, [seller, sellerWithoutLogin]), householdOf(20, [buyer, buyerWithoutLogin])]
+    const people = [seller, sellerWithoutLogin, buyer, buyerWithoutLogin, parent, child, neighbour, chef, chefWithoutLogin]
+    const addressOf = ({id}: Member): string => `${id}@example.com`
+    const logins = people.flatMap(member => member.userId ? [UserFactory.defaultUserWithInhabitant(`u${member.id}`, {id: member.userId, email: addressOf(member)})] : [])
+    beforeEach(() => {
+        Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
+        mockDinner(chef.id)
+        mockPeople(people, logins, [sellers, buyers])
+    })
+    afterEach(() => vi.clearAllMocks())
+
+    // A place in the dinner's adult line; the buildup threshold is 3
+    const joinedEvent = (joiner: Member, bookedByUserId: number, position: number): WaitlistJoined => ({
+        dinnerEventId: dinner.dinnerEventId, inhabitantId: joiner.id, bookedByUserId, position, ticketType: TicketTypeSchema.enum.ADULT, queueSize: position, portionNeed: position
+    })
+    const saleTo = (owner: Member): TicketSale =>
+        ({dinnerEventId: dinner.dinnerEventId, ticketPriceId: 4, buyerInhabitantId: owner.id, buyerHouseholdId: owner.householdId, sellerHouseholdId: sellers.id})
+    const portionTo = (owner: Member) =>
+        ({dinnerEventId: dinner.dinnerEventId, entryId: owner.id, inhabitantId: owner.id, isGuestTicket: false, portions: 1, orderId: 77, ticketPriceId: 4})
+    // The parent joins and books the child; the neighbour's place reaches the threshold
+    const joined = [joinedEvent(parent, parent.userId!, 1), joinedEvent(child, parent.userId!, 2), joinedEvent(neighbour, neighbour.userId!, 3)]
+
+    const readsOf = () => ({
+        dinner: vi.mocked(fetchDinnerEvent).mock.calls.length,
+        inhabitants: vi.mocked(fetchInhabitantsByIds).mock.calls.length,
+        users: vi.mocked(fetchUsersByIds).mock.calls.length
+    })
+    // A mail's kind, its recipient and the people and households of the run its text names
+    const names = [...people.map(member => member.name), sellers.shortName!, buyers.shortName!]
+    const mailOf = (message: EmailMessage) => JSON.stringify({kind: message.meta.kind, to: message.to, names: names.filter(name => message.text.includes(name))})
+    // A result's dedupe key leads with its kind
+    const kindOf = (result: SenderEmitResult): string => result.dedupeKey.split(':')[0]!
+
+    it('GIVEN a run that joins people to one dinner WHEN its mails resolve THEN one inhabitants read, one users read and one dinner read serve them all', async () => {
+        await notifyBookingOutcomes({} as D1Database, NotificationFactory.channel(fakeQueue()), outcomesOf({joined}))
+
+        expect(readsOf()).toEqual({dinner: 1, inhabitants: 1, users: 1})
+    })
+
+    it('GIVEN a run with every kind of mail WHEN its mails resolve THEN each reaches its recipient and names its people', async () => {
+        const queue = fakeQueue()
+
+        const results = await notifyBookingOutcomes({} as D1Database, NotificationFactory.channel(queue), outcomesOf({
+            joined, ticketsSold: [saleTo(buyer)], waitlistTicketsSold: [saleTo(buyer)], waitlistPortionsAssigned: [portionTo(buyer)]
+        }))
+
+        expect(results.every(result => result.queued)).toBe(true)
+        expect(sentMessages(queue).map(mailOf).sort()).toEqual([
+            {kind: 'WAITLIST_JOINED', to: addressOf(parent), names: [parent.name]},
+            {kind: 'WAITLIST_JOINED', to: addressOf(parent), names: [child.name]},
+            {kind: 'WAITLIST_JOINED', to: addressOf(neighbour), names: [neighbour.name]},
+            {kind: 'WAITLIST_BUILDUP', to: addressOf(chef), names: [chef.name]},
+            {kind: 'TICKET_SOLD', to: addressOf(seller), names: [seller.name, sellers.shortName, buyers.shortName]},
+            {kind: 'TICKET_SOLD', to: addressOf(seller), names: [seller.name, sellers.shortName, buyers.shortName]},
+            {kind: 'WAITLIST_TICKET_ASSIGNED', to: addressOf(buyer), names: [buyer.name, sellers.shortName, buyers.shortName]},
+            {kind: 'WAITLIST_EXTRA_PORTION', to: addressOf(buyer), names: [buyer.name, buyers.shortName]}
+        ].map(mail => JSON.stringify(mail)).sort())
+    })
+
+    it.each([
+        {person: 'a booker the users read does not return', chefId: chef.id, outcomes: outcomesOf({joined: [joinedEvent(parent, 9999, 1)]}), unaddressed: 'WAITLIST_JOINED'},
+        {person: 'a buyer without a login', chefId: chef.id, outcomes: outcomesOf({waitlistTicketsSold: [saleTo(buyerWithoutLogin)]}), unaddressed: 'WAITLIST_TICKET_ASSIGNED'},
+        {person: 'an extra portion\'s owner without a login', chefId: chef.id, outcomes: outcomesOf({waitlistPortionsAssigned: [portionTo(buyerWithoutLogin)]}), unaddressed: 'WAITLIST_EXTRA_PORTION'},
+        {person: 'a chef without a login', chefId: chefWithoutLogin.id, outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}), unaddressed: 'WAITLIST_BUILDUP'}
+    ])('GIVEN $person WHEN the mails resolve THEN that mail is reported unaddressed and the others go out', async ({chefId, outcomes, unaddressed}) => {
+        mockDinner(chefId)
+
+        const results = await notifyBookingOutcomes({} as D1Database, NotificationFactory.channel(fakeQueue()), outcomes)
+
+        expect(results.filter(result => !result.queued).map(kindOf)).toEqual([unaddressed])
     })
 })

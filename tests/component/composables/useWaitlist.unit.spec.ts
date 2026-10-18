@@ -73,13 +73,17 @@ describe('useWaitlist', () => {
         expect(portionNeed(queue, portionsOf)).toBe(3)
     })
 
-    it('reports a joined entry at its place in its ticket type\'s line, with the size and the portion need of the queue that holds it', () => {
+    it('reports the entries that joined behind the line in join order, each at its place in its ticket type\'s line, with the size and the portion need of the queue that holds it at its join', () => {
         const {joinedOf} = useWaitlist()
-
-        expect(joinedOf(queue, queue[2]!, TICKET_PRICES, 7)).toEqual({
-            position: 2,
-            joined: {dinnerEventId: 100, inhabitantId: queue[2]!.inhabitantId, bookedByUserId: 7, position: 2, ticketType: TicketType.ADULT, queueSize: 4, portionNeed: 3}
+        const [adult1, child2, adult3, child4] = queue
+        const joined = (entry: TicketWaitlistDisplay, ticketType: keyof typeof PRICE_ID, position: number, queueSize: number, portionNeed: number) => ({
+            position, joined: {dinnerEventId: 100, inhabitantId: entry.inhabitantId, bookedByUserId: 7, position, ticketType, queueSize, portionNeed}
         })
+
+        expect(joinedOf([adult1!, child2!], [adult3!, child4!], TICKET_PRICES, 7)).toEqual([
+            joined(adult3!, TicketType.ADULT, 2, 3, 2.5),
+            joined(child4!, TicketType.CHILD, 2, 4, 3)
+        ])
     })
 
     // What the sale to the waiting list would sell, read without writing; sellers are households 5, 6 and 7

@@ -54,6 +54,13 @@ documentar drives the user's sign-off.
    sign-off table. A package built in parts gets its check when its last part is implemented.
 6. A sign-off row is a check: route and state, phone or desktop, what to see. A point whose browser check is unknown
    gets one written from its mockup and its words; a question whether something was checked is no row.
+7. Every row carries one number from a single running sequence across the whole table (`#1`, `#2`, …), then its
+   package title and what it is; a number is given once and never reused, a new item takes the next one, and the user
+   answers by number ("#5 y"). The spec carries the same numbers (§ Verifications with human eyes, an OPEN decision in
+   Decisions); a passed item keeps its row without the number.
+8. The table is a walk through the app: the decisions to answer in chat first, then one block per route in the order
+   a session visits them (the bookings grid, the dinner page, the household members, the chef page, the README), each
+   block headed by its route and its count, so the user opens a page once and ticks its checks.
 
 ## Ship matches the spec
 

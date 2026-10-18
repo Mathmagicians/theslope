@@ -11,5 +11,12 @@ export default withNuxt(
       // Factory pattern is acceptable for test data factories (ADR-003)
       '@typescript-eslint/no-extraneous-class': 'off'
     }
+  },
+  {
+    // The companion app's pages (developer/nuxt.config.ts) follow Nuxt's file-based route names, as app/pages do
+    files: ['developer/app/pages/**/*.vue'],
+    rules: {
+      'vue/multi-word-component-names': 'off'
+    }
   }
 )

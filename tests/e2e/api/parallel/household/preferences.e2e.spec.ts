@@ -371,12 +371,14 @@ test.describe('Preferences on a closed dinner', () => {
 
     test.afterAll(({browser}) => removeOwnSeasons(browser, created))
 
+    // The person shares the member's household with the persons of the parallel specs, whose claims may stand in the
+    // same line, so a place is read from the line rather than named
     const examples = [
-        {supply: 'a ticket for sale and nobody waiting', outcome: 'buys it', action: Action.BUY, sellerReleases: true, place: null, holds: 1},
-        {supply: 'a waiting line of one', outcome: 'joins at the end of the line', action: Action.QUEUE, sellerReleases: false, place: 2, holds: 0}
+        {supply: 'a ticket for sale and nobody waiting', outcome: 'buys it', action: Action.BUY, sellerReleases: true, holds: 1},
+        {supply: 'a waiting line of one', outcome: 'joins at the end of the line', action: Action.QUEUE, sellerReleases: false, holds: 0}
     ]
 
-    examples.forEach(({supply, outcome, action, sellerReleases, place, holds}) => {
+    examples.forEach(({supply, outcome, action, sellerReleases, holds}) => {
         test(`GIVEN a closed dinner with ${supply} WHEN the preference turns Spisesal THEN the preview lists the save's actions and changes nothing, and the person ${outcome}`, async ({browser}) => {
             const {adminContext, memberContext, householdId, season, dinnerEvents, dinner, inhabitant, dineIn} = await personBookedOnOwnSeason(browser, 'Closed-Dinner', created)
             const adultPriceId = season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!.id!
@@ -406,16 +408,21 @@ test.describe('Preferences on a closed dinner', () => {
             const preview = await HouseholdFactory.previewInhabitantPreferences(memberContext, inhabitant.id, dineIn, season.id)
 
             expect(linesOf(preview)).toContainEqual(expect.objectContaining({dinnerEventId: dinner.id, action}))
-            expect(placeOf(preview)).toBe(place)
+            const previewPlace = placeOf(preview)
+            if (action === Action.QUEUE) expect(previewPlace).toBeGreaterThanOrEqual(2)
+            else expect(previewPlace).toBeNull()
             expect(await supplyOf()).toEqual(before)
 
             const saved = await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, dineIn, 200, season.id)
 
             expect(linesOf(saved)).toEqual(linesOf(preview))
-            expect(placeOf(saved)).toBe(place)
+            const savedPlace = placeOf(saved)
             const {orders, entries} = await supplyOf()
             expect(orders.filter(order => order.dinnerEventId === dinner.id && order.inhabitantId === inhabitant.id && order.state === OrderStateSchema.enum.BOOKED)).toHaveLength(holds)
-            expect(entries.findIndex(entry => entry.inhabitantId === inhabitant.id && !entry.isGuestTicket) + 1 || null).toBe(place)
+            expect(entries.findIndex(entry => entry.inhabitantId === inhabitant.id && !entry.isGuestTicket) + 1 || null).toBe(savedPlace)
+            // The line only grows between the preview and the save
+            if (action === Action.QUEUE) expect(savedPlace).toBeGreaterThanOrEqual(previewPlace!)
+            else expect(savedPlace).toBeNull()
         })
     })
 })

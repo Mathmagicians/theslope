@@ -301,7 +301,7 @@ d1-copy-dev-to-local: ## Replace the local D1 with a copy of dev (schema, data, 
 # ============================================================================
 # TESTING
 # ============================================================================
-.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod test-report bdd-report bdd-steps developer-resolve developer-assemble developer-stage developer-build developer-publish
+.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod test-report bdd-report bdd-steps developer-resolve developer-assemble developer-build developer-publish
 
 # The summary tables are jq programs under scripts/ (test-report.jq, bdd-report.jq, bdd-steps.jq)
 TEST_REPORT_USAGE := usage: make test-report report=<playwright json> title=<text> [link=<url>] [note=<warning shown when failed > 0>]
@@ -338,14 +338,13 @@ bdd-steps: ## Step reuse across the suites' Cucumber JSON - [report=<json …>] 
 	fi
 
 # Developer companion (docs/features/feature-proposal-developer-companion.md): everything generated lives under
-# .output/developer — the downloaded artifacts, the staged VitePress source, its cache and build, the gh-pages checkout
+# .output/developer — the downloaded artifacts, the Nuxt build (.nuxt, nitro, public; developer/nuxt.config.ts), the gh-pages checkout
 DEVELOPER_OUT := .output/developer
-DEVELOPER_SRC := $(DEVELOPER_OUT)/src
+DEVELOPER_PUBLIC := $(DEVELOPER_OUT)/public
 site ?= $(DEVELOPER_OUT)/site
 artifacts ?= $(DEVELOPER_OUT)/artifacts
-pages ?= $(DEVELOPER_SRC)/environments
 DEVELOPER_SUITES := api ui smoke
-DEVELOPER_ASSEMBLE_USAGE := usage: make developer-assemble env=<dev|prod> run=<pipeline run id> version=<version> sha=<commit> [url=<app url>] [site=] [artifacts=] [pages=]
+DEVELOPER_ASSEMBLE_USAGE := usage: make developer-assemble env=<dev|prod> run=<pipeline run id> version=<version> sha=<commit> [url=<app url>] [site=] [artifacts=]
 # A pipeline run that deploys uploads the artifact `deployment`: its version-info lines plus ENV and URL
 developer-resolve: ## What a pipeline run published, from its deployment artifact, as env lines - run=<pipeline run id> [artifacts=]
 	@test -n "$(run)" || { echo "usage: make developer-resolve run=<pipeline run id> [artifacts=artifacts]"; exit 1; }
@@ -356,9 +355,9 @@ developer-resolve: ## What a pipeline run published, from its deployment artifac
 		echo "PUBLISH=false"; \
 	fi
 
-developer-assemble: ## Lay a run's results and manifest under site/environments and write the environment pages - env= run= version= sha= [url=] [site=] [artifacts=] [pages=]
+developer-assemble: ## Lay a run's results and manifest under site/environments - env= run= version= sha= [url=] [site=] [artifacts=]
 	@test -n "$(env)" -a -n "$(run)" -a -n "$(version)" -a -n "$(sha)" || { echo "$(DEVELOPER_ASSEMBLE_USAGE)"; exit 1; }
-	@rm -rf "$(site)/environments/$(env)" && mkdir -p "$(site)/environments/$(env)" "$(pages)"
+	@rm -rf "$(site)/environments/$(env)" && mkdir -p "$(site)/environments/$(env)"
 	@suites='{}'; for suite in $(DEVELOPER_SUITES); do \
 		src="$(artifacts)/playwright-results-$$suite"; results="$$src/e2e-$$suite-results.json"; \
 		[ -f "$$results" ] || { echo "developer-assemble: no $$results"; continue; }; \
@@ -372,20 +371,13 @@ developer-assemble: ## Lay a run's results and manifest under site/environments 
 	jq -n --arg environment "$(env)" --arg version "$(version)" --arg sha "$(sha)" --arg url "$(url)" --arg run "$(run)" --arg deployedAt "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson suites "$$suites" \
 		'{environment: $$environment, version: $$version, sha: $$sha, deployedAt: $$deployedAt, run: ($$run | tonumber? // $$run), suites: $$suites} + (if ($$url | length) > 0 then {url: $$url} else {} end)' > "$(site)/environments/$(env).json"
 	@for manifest in "$(site)"/environments/*.json; do name=$$(basename "$$manifest" .json); [ "$$name" = index ] || echo "$$name"; done | sort | jq -R . | jq -s . > "$(site)/environments/index.json"
-	@find "$(pages)" -name '*.md' ! -name index.md -delete; \
-	for name in $$(jq -r '.[]' "$(site)/environments/index.json"); do \
-		printf '# %s\n\n<EnvironmentPage name="%s" />\n' "$$name" "$$name" > "$(pages)/$$name.md"; \
-	done
+	@[ ! -f "$(artifacts)/openapi/_openapi.json" ] || cp "$(artifacts)/openapi/_openapi.json" "$(site)/environments/$(env)/openapi.json"
 	@cat "$(site)/environments/$(env).json"
 
-developer-stage: ## Stage the VitePress source under .output/developer/src - the pages and the docs mirror
-	@mkdir -p "$(DEVELOPER_SRC)/environments" && rm -rf "$(DEVELOPER_SRC)/docs" && mkdir -p "$(DEVELOPER_SRC)/docs" && \
-	cp developer/index.md "$(DEVELOPER_SRC)/" && cp developer/environments/index.md "$(DEVELOPER_SRC)/environments/" && \
-	cp docs/*.md "$(DEVELOPER_SRC)/docs/" && cp -R docs/screenshots "$(DEVELOPER_SRC)/docs/screenshots"
-
-developer-build: developer-stage ## Render the site into the gh-pages checkout - the VitePress build, CNAME and .nojekyll [site=]
-	@npx vitepress build developer
-	@mkdir -p "$(site)" && rm -rf "$(site)/assets" && cp -R "$(DEVELOPER_OUT)/dist/." "$(site)/" && \
+# The hashed chunks live under _nuxt; the previous build's go before the copy so they do not pile up on gh-pages
+developer-build: ## Generate the site into the gh-pages checkout - nuxi generate, CNAME and .nojekyll [site=]
+	@npx nuxi generate developer
+	@mkdir -p "$(site)" && rm -rf "$(site)/_nuxt" && cp -R "$(DEVELOPER_PUBLIC)/." "$(site)/" && \
 	echo developer.skraaningen.dk > "$(site)/CNAME" && touch "$(site)/.nojekyll"
 
 developer-publish: ## Force-push site/ as the single commit of gh-pages - [env=<env>] [site=]

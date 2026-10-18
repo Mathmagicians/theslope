@@ -37,6 +37,7 @@ test.describe('Waiting list assignment', () => {
     let householdId: number
     const inhabitants: InhabitantDisplay[] = []
     const teamIds: number[] = []
+    const createdSeasonIds: number[] = []
     let adultPrice: TicketPrice
     let childPrice: TicketPrice
     // Four inhabitants of the admin's household queue on dinners past their booking deadline
@@ -66,7 +67,9 @@ test.describe('Waiting list assignment', () => {
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
-        activeSeason = await SeasonFactory.createActiveSeason(context)
+        // The spec's own season, closed for its first days: the dinners it queues on lie 2 and 3 days out
+        ;({season: activeSeason} = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 10, deadline: 4}))
+        createdSeasonIds.push(activeSeason.id!)
         adultPrice = activeSeason.ticketPrices.find(price => price.ticketType === TicketType.ADULT)!
         childPrice = activeSeason.ticketPrices.find(price => price.ticketType === TicketType.CHILD)!
         activeSeasonId = activeSeason.id!
@@ -91,6 +94,9 @@ test.describe('Waiting list assignment', () => {
         await HouseholdFactory.deleteHousehold(context, sellerHouseholdIds)
         for (const id of dinnerIds) await DinnerEventFactory.deleteDinnerEvent(context, id)
         for (const id of teamIds) await SeasonFactory.deleteCookingTeam(context, id)
+        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        // Hand the singleton active season back to the suites that follow
+        await SeasonFactory.createActiveSeason(context)
     })
 
     test('GIVEN voksen, barn, voksen, barn in the queue WHEN the chef releases 2.5 portions THEN the first three get their tickets and the last barn waits', async ({browser}) => {
@@ -185,12 +191,15 @@ test.describe('Waiting list assignment', () => {
 
     test('GIVEN that sale WHEN daily maintenance runs THEN it sells nothing more on that dinner', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const adult = inhabitants[1]!
+        const [, adult, child] = inhabitants as [InhabitantDisplay, InhabitantDisplay, InhabitantDisplay]
 
         const maintenance = await SeasonFactory.runDailyMaintenance(context)
 
         expect(maintenance.scaffold?.outcomes.waitlistTicketsSold.filter(sale => sale.dinnerEventId === childSaleDinnerId)).toEqual([])
-        expect((await householdEntries(context, childSaleDinnerId)).map(entry => entry.inhabitantId)).toEqual([adult.id])
+        // The nightly run queues the household's other members on the closed dinner; the adult still waits, the child holds its ticket
+        const waiting = (await householdEntries(context, childSaleDinnerId)).map(entry => entry.inhabitantId)
+        expect(waiting).toContain(adult.id)
+        expect(waiting).not.toContain(child.id)
     })
 
     test('GIVEN a child waiting WHEN a household releases one child\'s ticket and claims one for its other child in one save THEN the waiting child holds the released ticket and the claimer joins the child line', async ({browser}) => {

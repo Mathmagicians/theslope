@@ -739,7 +739,8 @@ export class OrderFactory {
     isTestHousehold: boolean
   }> => {
     // Create season with ticket prices
-    const season = await SeasonFactory.createSeason(context, SeasonFactory.defaultSeason(testSalt))
+    // The fixture's deadline is fixed: a dinner more than DEFAULT_BOOKING_DEADLINE_DAYS out is open, a nearer one closed
+    const season = await SeasonFactory.createSeason(context, {...SeasonFactory.defaultSeason(testSalt), ticketIsCancellableDaysBefore: SeasonFactory.DEFAULT_BOOKING_DEADLINE_DAYS})
 
     // Create dinner event at specified days from now
     const eventDate = new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000)

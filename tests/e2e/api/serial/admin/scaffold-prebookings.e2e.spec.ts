@@ -556,7 +556,11 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             name: salt('Ingen', testSalt), dinnerPreferences: createDefaultDinnerModeMap(DinnerMode.DINEIN)
         })
         createdInhabitantIds.push(inhabitant.id)
-        const beyondWindow = await DinnerEventFactory.createDinnerEvent(context, {seasonId: season.id!, date: daysFromNow(70), menuTitle: salt('Beyond the window', testSalt)})
+        // The dinner moves later through the chef route, which answers its team's chef only
+        const {inhabitantId: adminInhabitantId} = await getSessionUserInfo(context)
+        const {dinner: beyondWindow} = await SeasonFactory.createCookingTeamWithChefAndDinner(context, season, adminInhabitantId, {
+            teamName: salt('Beyond', testSalt), dinner: {date: daysFromNow(70), menuTitle: salt('Beyond the window', testSalt)}
+        })
         const adultPriceId = season.ticketPrices.find(price => price.ticketType === useBookingValidation().TicketTypeSchema.enum.ADULT)!.id!
 
         const cancelled = await OrderFactory.scaffoldOrders(memberContext, {

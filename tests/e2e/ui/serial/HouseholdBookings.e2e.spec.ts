@@ -1,4 +1,4 @@
-import {test, expect, type Response} from '@playwright/test'
+import {test, expect, type Browser, type Response} from '@playwright/test'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -170,31 +170,39 @@ test('GIVEN a member holding a regular order and a guest ticket on a dinner WHEN
     expect(after.find(o => o.id === regularOrder.id)).toMatchObject({isGuestTicket: false, dinnerMode: DinnerMode.DINEIN, state: OrderState.BOOKED})
 })
 
-test('GIVEN a member whose preferences book Spisesal on a month past the scaffold window WHEN the month opens THEN the dry run expects the member on its dinners; WHEN one is set to Ingen and saved THEN the save cancels it and the re-read expects nothing there', async ({browser}) => {
+const isScaffold = (response: Response) => response.url().includes('/api/household/order/scaffold') && response.request().method() === 'POST'
+// The grid's own read of a month: a preview without orders, answered with what the preferences would book there
+const isExpectedRead = (response: Response) => isScaffold(response) && response.url().includes('preview=true') && response.request().postDataJSON().orders.length === 0
+
+// A person of the member's household eating in the dining hall every weekday, and the member's page on the month past
+// the scaffold window, open once the grid's read of it has answered
+const openExpectedMonth = async (browser: Browser, name: string) => {
     const adminContext = await validatedBrowserContext(browser)
     const memberContext = await memberValidatedBrowserContext(browser)
     const {householdId: memberHouseholdId, householdShortname, householdPbsId} = await getSessionUserInfo(memberContext)
-
-    // GIVEN: an inhabitant of the member's household eating in the dining hall every weekday
     const inhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, memberHouseholdId, {
-        name: salt('Expected', testSalt),
+        name: salt(name, testSalt),
         dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.DINEIN)
     })
     createdInhabitantIds.push(inhabitant.id)
     const dinnerEvent: DinnerEventDisplay = [...testSeason.dinnerEvents].sort((a, b) => a.date.getTime() - b.date.getTime())[0]!
-    const isScaffold = (response: Response) => response.url().includes('/api/household/order/scaffold') && response.request().method() === 'POST'
-    const isExpectedRead = (response: Response) => isScaffold(response) && response.url().includes('preview=true') && response.request().postDataJSON().orders.length === 0
-    const theInhabitantOn = {inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id}
-
-    // WHEN: the member opens the month of the season
     const page = await memberContext.newPage()
     const expectedRead = page.waitForResponse(isExpectedRead)
     await gotoHydrated(page, buildBookingsUrl(BookingViewSchema.enum.month, dinnerEvent.date, {shortName: householdShortname, pbsId: householdPbsId}))
-
-    // THEN: the dry run expects the inhabitant on the dinner, and the grid explains the expected cells
     const {scaffoldResult: expected} = await (await expectedRead).json() as ScaffoldOrdersResponse
+    return {page, inhabitant, dinnerEvent, expected, theInhabitantOn: {inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id}}
+}
+
+test('GIVEN a member whose preferences book Spisesal on a month past the scaffold window WHEN the month opens THEN the dry run expects the member on its dinners and the grid explains the expected cells', async ({browser}) => {
+    const {page, expected, theInhabitantOn} = await openExpectedMonth(browser, 'Expected')
+
     expect(expected.results).toContainEqual(expect.objectContaining({...theInhabitantOn, dinnerMode: DinnerMode.DINEIN}))
     await expect(page.getByTestId('dinner-mode-legend-expected')).toBeVisible()
+    await page.close()
+})
+
+test('GIVEN an expected cell on a month past the scaffold window WHEN the member sets it to Ingen and saves THEN the save cancels it and the re-read expects nothing there', async ({browser}) => {
+    const {page, inhabitant, dinnerEvent, theInhabitantOn} = await openExpectedMonth(browser, 'Cancelled')
 
     // WHEN: the member turns the cell through the modes to Ingen and saves once the preview has answered
     await page.getByTestId('grid-edit').click()

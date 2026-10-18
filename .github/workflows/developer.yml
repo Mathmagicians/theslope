@@ -45,11 +45,11 @@ jobs:
           ref: gh-pages
           path: .output/developer/site
           fetch-depth: 1
-      - name: Download the suite results
+      - name: Download the suite results and the API spec
         if: env.PUBLISH == 'true'
         run: |
-          for suite in api ui smoke; do
-            gh run download "$RUN_ID" -n "playwright-results-$suite" -D "artifacts/playwright-results-$suite" || echo "no playwright-results-$suite artifact on run $RUN_ID"
+          for name in playwright-results-api playwright-results-ui playwright-results-smoke openapi; do
+            gh run download "$RUN_ID" -n "$name" -D ".output/developer/artifacts/$name" || echo "no $name artifact on run $RUN_ID"
           done
       - run: make developer-assemble env="$ENV" run="$RUN_ID" version="$RELEASE_VERSION" sha="$COMMIT_SHA" url="$URL"
         if: env.PUBLISH == 'true'

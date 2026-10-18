@@ -46,7 +46,7 @@
     "db:migrate:dev": "npx wrangler d1 migrations apply theslope --remote --env=dev",
     "db:migrate:prod": "npx wrangler d1 migrations apply theslope-prod --env=prod --remote",
     "db:generate-client": "npx prisma generate",
-    "developer:dev": "vitepress dev developer",
+    "developer:dev": "nuxi dev developer",
     "developer:build": "make developer-build"
   },
   "dependencies": {
@@ -76,6 +76,7 @@
     "@iconify-json/pajamas": "~1.2.15",
     "@iconify-json/streamline": "~1.2.5",
     "@iconify-json/tdesign": "~1.2.19",
+    "@nuxt/content": "~3.16.2",
     "@nuxt/eslint": "~1.17.0",
     "@nuxt/test-utils": "~4.3.3",
     "@playwright/test": "~1.63.0",
