@@ -76,7 +76,14 @@ jobs:
       - name: Lint and typecheck
         run: npm run pre:all
       - name: Run unit tests
+        id: unit_tests
         run: npm run test:unit
+      - name: Unit test failure summary
+        if: ${{ failure() && steps.unit_tests.outcome == 'failure' }}
+        run: |
+          echo "## ❌ Unit tests failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Vitest exited with an error: a failed test, or an unhandled error outside the tests (the Vitest table counts tests only). The annotations and the step log name it." >> "$GITHUB_STEP_SUMMARY"
       - name: Install Playwright and browser friends
         run: npx playwright install chromium
       - name: Prepare local D1 database for testing

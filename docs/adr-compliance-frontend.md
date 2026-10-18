@@ -84,7 +84,7 @@ Status.
 | `AdminHouseholds.vue` | `/admin/households` | households | ⚠️ loading row only | ✅ | ⚠️ partial unit |
 | `HouseholdCreateForm.vue` | `/admin/households` | households | ✅ | ✅ parent | ❓ audit needed |
 | `HouseholdEditPanel.vue` | `/admin/households` | none | ✅ | ✅ parent | ✅ |
-| `HouseholdCard.vue` | `/admin/households`, `/household/[shortname]` | none | ✅ | ✅ parent | ⚠️ partial unit |
+| `HouseholdCard.vue` | `/admin/households`, `/household/[shortname]` | households, plan | ✅ | ✅ parent | ⚠️ partial unit |
 | `InhabitantCard.vue` | `/admin/households`, `/household/[shortname]` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `HouseholdListItem.vue` | `/admin/households` | none | ❌ | N/A | ⚠️ missing unit |
 | `HouseholdSettings.vue` | `/household/[shortname]/settings` | households | ❌ | ✅ | ⚠️ e2e only |
@@ -146,9 +146,9 @@ Status.
 | Component | Routes | Stores | Component spec | E2E | Status |
 |---|---|---|---|---|---|
 | `HouseholdBookings.vue` | `/household/[shortname]/bookings` | plan, households, bookings | ✅ | ✅ | ⚠️ partial unit |
-| `BookingGridView.vue` | `/household/[shortname]/bookings` | none | ✅ | ✅ serial | ✅ |
+| `BookingGridView.vue` | `/household/[shortname]/bookings` | bookings | ✅ | ✅ serial | ✅ |
 | `BookingViewSwitcher.vue` | `/household/[shortname]/bookings` | none | ❌ | ✅ parent | ⚠️ missing unit |
-| `ActionPreview.vue` | `/household/[shortname]/bookings`, `/admin/economy` | none | ✅ | ✅ parent | ✅ |
+| `ActionPreview.vue` | `/household/[shortname]/bookings`, `/household/[shortname]`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ |
 | `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ parent | ✅ parent | ✅ via `DinnerBookingForm` |
 | `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | allergies, auth, households | ✅ | ✅ serial, incl. `Waitlist` | ✅ |
 | `DinnerModeLegend.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ renders through `CalendarLegend` |

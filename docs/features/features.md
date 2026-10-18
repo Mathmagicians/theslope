@@ -93,6 +93,7 @@ User (Bruger)
 | **Season Spending** | Sæsontrend per chef, admin Forbrug with scopes, basisvarer entry (`feature-proposal-season-spending.md`) |
 | **Ad-hoc Charges** | Admin charges on a household, reversal, the spending views (`feature-proposal-adhoc-admin-billing.md`) |
 | **Notification Triggers** | Chef deadlines, roster and shift reminders, job failed, dinner cancelled, duty swapped (`feature-proposal-notification-triggers.md`) |
+| **Developer Companion** | E2E as Gherkin features with playwright-bdd, `make bdd-report` in the summaries, `developer.skraaningen.dk` with the living documentation and the API reference per environment (`feature-proposal-developer-companion.md`) |
 
 ---
 

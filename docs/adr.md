@@ -480,7 +480,7 @@ where: { ...(householdId && { id: householdId }) }
 
 ## ADR-011: Booking System Schema Design
 
-**Status:** Accepted | **Date:** 2025-11-08
+**Status:** Accepted | **Date:** 2025-11-08 | **Updated:** 2026-10-18
 
 ### Decision
 
@@ -501,6 +501,10 @@ where: { ...(householdId && { id: householdId }) }
 2. Audit entries MUST survive order/user deletion (SET NULL)
 3. Deleted orders MUST capture `orderSnapshot` before removal
 4. State transitions MUST create audit entries
+5. An `OrderHistory` row's `auditData` is `{change, orderSnapshot, source?}` (`OrderAuditDataSchema`): `change` is a
+   booking action or CLOSE; the snapshot is the order after the change, or as it stood before a sale or a deletion;
+   a row of no order (a place on the waiting list, a cancellation of nothing booked) writes `id: null`. Written by
+   `createOrderAuditData`, read by `readOrderAudit`, which also reads the earlier shapes and null for what a row cannot tell
 
 ---
 

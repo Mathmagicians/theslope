@@ -265,6 +265,7 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 | `findByTestId(wrapper, id)` / `findAllByTestId(wrapper, id)` | `data-testid` lookups - never hand-build the selector string |
 | `findLoadingRow(wrapper)` / `findAllLoadingRows(wrapper)` | The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows |
 | `isTableLoading(wrapper)` | Whether the UTable under the wrapper binds `loading`: its loading bar runs under the column headers and carries no attribute to find |
+| `registerScaffoldEndpoint()` | The scaffold endpoint for a component that previews: `answers.preview` and `answers.expected` set the replies of the dry run and the empty-draft read (`OrderFactory.defaultScaffoldOrdersResponse()` until set), and `sent` records each request's query and body |
 | `holdEndpoint(url, body)` | An endpoint that answers `body` once the test calls `release()`: the window in which a dataset is pending; `unregister()` in `afterEach` hands the url back to the registration before it |
 | `untilTrue(condition)` | Resolves once a reactive condition holds (store state, a flag), watching it rather than polling; the test's own timeout bounds it |
 | `clickByTestId(wrapper, id)` | Click + `await nextTick()` |
