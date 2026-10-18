@@ -63,6 +63,9 @@ Per package, at landing:
    row.
 4. The cases its coverage table names exist, and the landing note's results cover them.
 5. A shipped part without documentation is a gap.
+6. An ADR line, a decision-matrix row or a bucket's path the package's commits add or change has a dated decision in
+   the spec; one without is unsigned and goes to the user as a breach, with the commit and `file:line` of the rule, the
+   code and the test that asserts it.
 
 A gap goes to the user with `file:line`.
 

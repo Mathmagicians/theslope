@@ -287,9 +287,11 @@ d1-copy-dev-to-local: ## Replace the local D1 with a copy of dev (schema, data, 
 # ============================================================================
 .PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod test-report
 
-TEST_REPORT_JQ = {passed: (.stats.expected // 0), failed: (.stats.unexpected // 0), flaky: (.stats.flaky // 0), skipped: (.stats.skipped // 0)} as $$r \
+TEST_REPORT_JQ = def failed($$path): (.specs[]? | . as $$s | .tests[] | select(.status == "unexpected") | "- `\($$s.file):\($$s.line)` \(($$path + [$$s.title]) | join(" › ")) (\(.projectName))"), (.suites[]? | failed($$path + [.title])); \
+	{passed: (.stats.expected // 0), failed: (.stats.unexpected // 0), flaky: (.stats.flaky // 0), skipped: (.stats.skipped // 0)} as $$r \
 	| (if $$r.failed > 0 then "❌" else "✅" end) as $$icon \
 	| "\#\# \($$icon) \($$title)\n\n| Passed | Failed | Flaky | Skipped |\n|---:|---:|---:|---:|\n| \($$r.passed) | \($$r.failed) | \($$r.flaky) | \($$r.skipped) |\n" \
+	+ (if $$r.failed > 0 then "\n**Failing tests**\n\n" + ([.suites[]? | failed([])] | join("\n")) + "\n" else "" end) \
 	+ (if ($$r.failed > 0) and (($$note | length) > 0) then "\n> ⚠️ \($$note)\n" else "" end) \
 	+ (if ($$link | length) > 0 then "\n[Playwright report (artifact)](\($$link))\n" else "" end)
 

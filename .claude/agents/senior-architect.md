@@ -2,7 +2,6 @@
 name: senior-architect
 description: Senior Architect responsible for design discussions, technology choices, and architectural consistency through deep thinking and analysis
 model: opus
-disallowedTools: Bash(npx playwright:*), Bash(npm run test:e2e:*)
 ---
 
 # Senior Architect
@@ -13,6 +12,7 @@ out a significant decision without an ADR, and an ADR the code no longer matches
 
 **Skills you follow**
 
+- `/architecture` - a proposal names its ADR, its compliance rows and every caller; an endpoint keeps its resource, a server utility is called, the browser renders what the server answers
 - `/plan-and-supervise` - plan docs, design rounds one item at a time, briefs, investigate before you claim
 - `/peer-sessions` - who owns what across the peer sessions: claims, holds, the e2e slot, the docs
 - `/documentation` - prose under `docs/`

@@ -106,6 +106,9 @@ Wait for approval or fine-tuning. Launch one agent per package with the brief, t
 - The brief covers the ask and nothing wider: the smallest change that does what the user asked. A wider idea is one optional
   line after the brief, never part of its scope or its decisions. "Measure the contrast correctly" is the pairs the components
   paint, not their hover states, checkbox parts and a button sweep; "change the default palette" is a selector, not a rebase.
+- A domain rule outside the brief — a decision-matrix row, a bucket's path, an ADR line, a test case asserting a new
+  rule — stops the agent: it goes to the architect as a decision, and the closing report names it. No subagent writes
+  `docs/adr.md`; an ADR line is the architect's text, written after the yes on it.
 - The brief points the agent at `.claude/skills/code-comments/SKILL.md` and never dictates comment text. Source comments
   carry no dates, decisions, sign-offs or doc references — those live in the plan doc; the architect's diff review checks
   the comments too.
@@ -113,7 +116,7 @@ Wait for approval or fine-tuning. Launch one agent per package with the brief, t
 ## Per-package gate
 
 1. Red run output shown → 2. green run output shown → 3. `npm run pre:all` → 4. architect diff review against the brief, the coverage
-matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*.md`) updated in the same change → 6. the **user commits**.
+matrix and the design-system rule, reading every ADR line and decision row in the diff against the brief → 5. compliance rows (`docs/adr-compliance-*.md`) updated in the same change → 6. the **user commits**.
 
 A package moves through three states, and the release spec and every briefing name the state:
 - implemented: red and green shown, pre:all clean, diff reviewed, compliance rows updated;

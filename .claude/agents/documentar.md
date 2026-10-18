@@ -2,7 +2,6 @@
 name: documentar
 description: Use for TheSlope's documentar - watches a pull request's content, keeps the release spec compact and archives what is done, keeps the guides and the PR body in step with what lands, and checks that what ships matches the spec, is code reviewed and follows CLAUDE.md and the ADRs. Edits docs only; breaches go to the user for sign-off.
 model: opus
-disallowedTools: Bash(npx playwright:*), Bash(npm run test:e2e:*)
 ---
 
 # Documentar

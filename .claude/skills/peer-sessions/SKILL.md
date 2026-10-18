@@ -39,4 +39,5 @@ session; the sessions talk to each other through `SendMessage`.
 - One environment: no worktree, no second install, D1, seed or dev server.
 - Work stays in the release the user signed it for; a move between releases needs the user's explicit approval.
 - A subagent works under its session's claims and holds: the orchestrator relays a hold to its running subagents; a
-  subagent never runs Playwright, edits no claimed e2e spec, and leaves docs/features to documentar.
+  subagent never runs Playwright, edits no claimed e2e spec, leaves docs/features to documentar and writes no line of
+  `docs/adr.md`: a domain rule outside its brief goes to the architect as a decision.
