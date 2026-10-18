@@ -391,11 +391,9 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       })
 
       // Create second inhabitant in same household for the claim target
-      const claimingInhabitant = await HouseholdFactory.createInhabitantForHousehold(
-        context,
-        testHouseholdId,
-        salt('Test ClaimTarget', temporaryAndRandom())
-      )
+      const claimingInhabitant = await HouseholdFactory.createInhabitantWithConfig(context, testHouseholdId, {
+        name: salt('Anders', temporaryAndRandom()), lastName: 'ClaimTarget', birthDate: null
+      })
       createdInhabitantIds.push(claimingInhabitant.id)
 
       // Create order for testInhabitantId (will be released)
@@ -443,7 +441,9 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       const dinner = await DinnerEventFactory.createDinnerEvent(context, {
         seasonId: testSeason.id!, date: daysFromNow(20), menuTitle: salt('Test StaleOrder', temporaryAndRandom())
       })
-      const otherInhabitant = await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, salt('Test StaleOther', temporaryAndRandom()))
+      const otherInhabitant = await HouseholdFactory.createInhabitantWithConfig(context, testHouseholdId, {
+        name: salt('Anders', temporaryAndRandom()), lastName: 'StaleOther', birthDate: null
+      })
       createdInhabitantIds.push(otherInhabitant.id)
 
       const created = await OrderFactory.createOrder(context, {
@@ -481,8 +481,10 @@ test.describe('Household Scaffold API (ADR-016)', () => {
         date: daysFromNow(2),
         menuTitle: salt(title, temporaryAndRandom())
       })).id
-    const queuedInhabitant = async (context: Parameters<typeof HouseholdFactory.createInhabitantForHousehold>[0], name: string) => {
-      const inhabitant = await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, salt(name, temporaryAndRandom()))
+    const queuedInhabitant = async (context: Parameters<typeof HouseholdFactory.createInhabitantWithConfig>[0], lastName: string) => {
+      const inhabitant = await HouseholdFactory.createInhabitantWithConfig(context, testHouseholdId, {
+        name: salt('Anders', temporaryAndRandom()), lastName, birthDate: null
+      })
       createdInhabitantIds.push(inhabitant.id)
       return inhabitant.id
     }

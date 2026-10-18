@@ -8,7 +8,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot, gotoHydrated, waitForApi} = testHelpers
+const {validatedBrowserContext, pollUntil, doScreenshot, gotoHydrated, waitForApi, temporaryAndRandom} = testHelpers
 
 test.describe('AdminTeams Form UI', () => {
     const adminTeamsUrl = '/admin/teams'
@@ -244,7 +244,7 @@ test.describe('AdminTeams Form UI', () => {
 
         test('GIVEN user in edit mode WHEN adding a member to a team THEN the assignment is saved', async ({browser: _browser}) => {
             // GIVEN: a team and an inhabitant to add
-            const testSalt = Date.now().toString()
+            const testSalt = temporaryAndRandom()
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Medlem')
             const household = await HouseholdFactory.createHousehold(context)
             createdHouseholdIds.push(household.id)

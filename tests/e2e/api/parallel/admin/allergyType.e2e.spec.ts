@@ -4,7 +4,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 
-const {validatedBrowserContext} = testHelpers
+const {validatedBrowserContext, salt} = testHelpers
 
 // Variables to store IDs for cleanup
 const createdAllergyTypeIds: number[] = []
@@ -112,7 +112,7 @@ test.describe('AllergyType API - CRUD Operations', () => {
 
         // WHEN: Create allergy type without icon (explicitly set to undefined to override default)
         const allergyTypeData = {
-            name: 'Lactose (no icon)',
+            name: salt('Test Lactose (no icon)'),
             description: 'Lactose intolerance without icon',
             icon: undefined
         }

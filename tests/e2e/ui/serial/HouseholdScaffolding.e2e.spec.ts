@@ -186,8 +186,8 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         // so the released ticket finds nobody waiting (ADR-016 rule 11 sells it to the first in line otherwise)
         await DinnerEventFactory.createDinnerEventAloneOnDay(adminContext, testSeason.season, lockedDay, {menuTitle: salt('Frigivet', testSalt)})
         const inhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {
-            name: salt('Frida', testSalt),
-            lastName: salt('Frigiver', testSalt),
+            name: salt('Anders', testSalt),
+            lastName: 'Frida Frigiver',
             dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
         })
         createdInhabitantIds.push(inhabitant.id)

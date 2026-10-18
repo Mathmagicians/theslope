@@ -3,7 +3,7 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
-const {validatedBrowserContext} = testHelpers
+const {validatedBrowserContext, salt} = testHelpers
 
 // Variables to store IDs for cleanup
 // Only track root entities - CASCADE will delete children
@@ -21,7 +21,7 @@ test.describe('Allergy API - CRUD Operations', () => {
 
         const inhabitant = await HouseholdFactory.createInhabitantForHousehold(context, household.id, 'Bob Jensen')
 
-        const allergyType = await AllergyFactory.createAllergyType(context, {name: 'Gluten', icon: '🌾'})
+        const allergyType = await AllergyFactory.createAllergyType(context, {name: salt('Test Gluten'), icon: '🌾'})
         createdAllergyTypeIds.push(allergyType.id)
 
         // WHEN: Create allergy
@@ -51,7 +51,7 @@ test.describe('Allergy API - CRUD Operations', () => {
 
         // Verify nested relations are included
         expect(fetched!.allergyType).toBeDefined()
-        expect(fetched!.allergyType.name).toBe('Gluten')
+        expect(fetched!.allergyType.name).toBe(allergyType.name)
         expect(fetched!.inhabitant).toBeDefined()
         expect(fetched!.inhabitant.name).toBe('Bob')
     })
@@ -65,8 +65,8 @@ test.describe('Allergy API - CRUD Operations', () => {
 
         const inhabitant = await HouseholdFactory.createInhabitantForHousehold(context, household.id, 'Test Person')
 
-        const allergyType1 = await AllergyFactory.createAllergyType(context, {name: 'Peanuts', icon: '🥜'})
-        const allergyType2 = await AllergyFactory.createAllergyType(context, {name: 'Shellfish', icon: '🦐'})
+        const allergyType1 = await AllergyFactory.createAllergyType(context, {name: salt('Test Peanuts'), icon: '🥜'})
+        const allergyType2 = await AllergyFactory.createAllergyType(context, {name: salt('Test Shellfish'), icon: '🦐'})
         createdAllergyTypeIds.push(allergyType1.id, allergyType2.id)
 
         await AllergyFactory.createAllergy(context, {
@@ -106,7 +106,7 @@ test.describe('Allergy API - CRUD Operations', () => {
         const inhabitant1 = await HouseholdFactory.createInhabitantForHousehold(context, household.id, 'Person One')
         const inhabitant2 = await HouseholdFactory.createInhabitantForHousehold(context, household.id, 'Person Two')
 
-        const allergyType = await AllergyFactory.createAllergyType(context, {name: 'Lactose', icon: '🥛'})
+        const allergyType = await AllergyFactory.createAllergyType(context, {name: salt('Test Lactose'), icon: '🥛'})
         createdAllergyTypeIds.push(allergyType.id)
 
         await AllergyFactory.createAllergy(context, {
@@ -282,7 +282,7 @@ test.describe('Allergy API - CASCADE Deletion', () => {
 
         const inhabitant = await HouseholdFactory.createInhabitantForHousehold(context, household.id)
 
-        const allergyType = await AllergyFactory.createAllergyType(context, {name: 'Cascade Test', icon: '🧪'})
+        const allergyType = await AllergyFactory.createAllergyType(context, {name: salt('Test Cascade'), icon: '🧪'})
         createdAllergyTypeIds.push(allergyType.id)
 
         const allergy = await AllergyFactory.createAllergy(context, {

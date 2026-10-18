@@ -82,16 +82,19 @@ test.describe('Waiting list assignment', () => {
         teamId = team.id!
         dinnerEventId = dinner.id!
         dinnerIds.push(dinnerEventId)
-        for (const name of ['Et', 'To', 'Tre', 'Fire']) {
-            inhabitants.push(await HouseholdFactory.createInhabitantForHousehold(context, householdId, salt(`Venter ${name}`, testSalt)))
+        for (const place of ['Et', 'To', 'Tre', 'Fire']) {
+            inhabitants.push(await HouseholdFactory.createInhabitantWithConfig(context, householdId, {
+                name: salt('Anders', testSalt), lastName: `Venter ${place}`, birthDate: null
+            }))
         }
     })
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+        // The persons go first, their orders and entries with them: a hook that runs out of time leaves none in the shared household
+        for (const inhabitant of inhabitants) await HouseholdFactory.deleteInhabitant(context, inhabitant.id!)
         await WaitlistFactory.cleanupEntries(context, activeSeasonId, dinnerIds)
         await OrderFactory.cleanupOrders(context, orderIds)
-        for (const inhabitant of inhabitants) await HouseholdFactory.deleteInhabitant(context, inhabitant.id!)
         await HouseholdFactory.deleteHousehold(context, sellerHouseholdIds)
         for (const id of dinnerIds) await DinnerEventFactory.deleteDinnerEvent(context, id)
         for (const id of teamIds) await SeasonFactory.deleteCookingTeam(context, id)
@@ -183,7 +186,7 @@ test.describe('Waiting list assignment', () => {
         expect(released.totals[Action.RELEASE]).toBe(1)
         expect(released.outcomes.waitlistTicketsSold).toEqual([{
             dinnerEventId: childSaleDinnerId, ticketPriceId: childPrice.id,
-            buyerInhabitantId: child.id, buyerHouseholdId: householdId, sellerHouseholdId: householdId
+            buyerInhabitantId: child.id, buyerHouseholdId: householdId, sellerHouseholdId: householdId, sellerInhabitantId: holder.id
         }])
         const bought = (await OrderFactory.getOrdersForDinnerEvent(context, childSaleDinnerId)).filter(order => order.inhabitantId === child.id)
         expect(bought.map(order => order.state)).toEqual([OrderStateSchema.enum.BOOKED])
@@ -260,7 +263,7 @@ test.describe('Waiting list assignment', () => {
         const salesOnDinner = response!.scaffoldResult.outcomes.waitlistTicketsSold.filter(sale => sale.dinnerEventId === closedDinner.id)
         expect(salesOnDinner).toEqual([{
             dinnerEventId: closedDinner.id, ticketPriceId: adultPrice.id,
-            buyerInhabitantId: waiting.id, buyerHouseholdId: householdId, sellerHouseholdId: seller.id
+            buyerInhabitantId: waiting.id, buyerHouseholdId: householdId, sellerHouseholdId: seller.id, sellerInhabitantId: sellerInhabitant!.id
         }])
         const bought = (await OrderFactory.getOrdersForDinnerEvent(context, closedDinner.id!)).filter(order => order.inhabitantId === waiting.id)
         expect(bought.map(order => order.state)).toEqual([OrderStateSchema.enum.BOOKED])
@@ -277,8 +280,9 @@ test.describe('Waiting list assignment', () => {
 
 /**
  * A preference decides a place on the waiting list as a member's change does, and a member's own act on a place outranks
- * it: a leave on the booking page records a cancellation, a join a booking. The household's preference run stands in
- * for the nightly one: both decide by the same rules. Each case runs on its own season, every dinner past its deadline.
+ * it: a leave on the booking page records a cancellation, a join a booking. The household's preference run on every
+ * weekday stands in for the nightly one: both decide by the same rules, and a save runs on the weekdays it changes. Each
+ * case runs on its own season, every dinner past its deadline.
  */
 test.describe('Preferences and the waiting list', () => {
     const CLOSED_PERIOD = 10
@@ -293,12 +297,12 @@ test.describe('Preferences and the waiting list', () => {
     })
 
     // A person of the admin's household who eats on no day, on a season whose dinners are all past the deadline
-    const givenClosedSeason = async (context: Parameters<typeof WaitlistFactory.entries>[0], name: string) => {
+    const givenClosedSeason = async (context: Parameters<typeof WaitlistFactory.entries>[0], lastName: string) => {
         const testSalt = temporaryAndRandom()
         const {householdId} = await getSessionUserInfo(context)
         const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {ticketIsCancellableDaysBefore: CLOSED_PERIOD})
         createdSeasonIds.push(season.id!)
-        const person = await HouseholdFactory.createInhabitantWithConfig(context, householdId, {name: salt(name, testSalt), dinnerPreferences: createDefaultWeekdayMap(Mode.NONE)})
+        const person = await HouseholdFactory.createInhabitantWithConfig(context, householdId, {name: salt('Anders', testSalt), lastName, dinnerPreferences: createDefaultWeekdayMap(Mode.NONE)})
         createdInhabitantIds.push(person.id)
         const preferences = (dinnerPreferences: WeekDayMap<DinnerMode>) =>
             HouseholdFactory.updateInhabitantPreferences(context, person.id, dinnerPreferences, 200, season.id)
@@ -319,7 +323,7 @@ test.describe('Preferences and the waiting list', () => {
         expect(left.totals[Action.LEAVE]).toBe(1)
         expect(await placeOnDinner()).toBeUndefined()
 
-        const nextRun = await preferences(createDefaultWeekdayMap(Mode.DINEIN))
+        const nextRun = await preferences(createDefaultWeekdayMap(Mode.TAKEAWAY))
 
         expect(nextRun!.scaffoldResult.results.filter(line => line.inhabitantId === person.id && line.dinnerEventId === dinner.id)).toEqual([])
         expect(await placeOnDinner()).toBeUndefined()
@@ -339,7 +343,7 @@ test.describe('Preferences and the waiting list', () => {
         expect(places.map(entry => entry.order.dinnerMode)).toEqual(places.map(() => Mode.TAKEAWAY))
     })
 
-    test('GIVEN a person who joined the waiting list on the booking page WHEN preference runs say Ingen and then takeaway THEN the place stands as the person left it', async ({browser}) => {
+    test('GIVEN a person who joined the waiting list on the booking page WHEN preference runs say takeaway and then Ingen THEN the place stands as the person left it', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const {householdId, season, dinner, person, preferences, placeOnDinner} = await givenClosedSeason(context, 'Står')
         const adultPriceId = season.ticketPrices.find(price => price.ticketType === TicketType.ADULT)!.id!
@@ -347,10 +351,10 @@ test.describe('Preferences and the waiting list', () => {
         expect(joined.totals[Action.QUEUE]).toBe(1)
         const place = await placeOnDinner()
 
-        await preferences(createDefaultWeekdayMap(Mode.NONE))
+        await preferences(createDefaultWeekdayMap(Mode.TAKEAWAY))
         expect(await placeOnDinner()).toEqual(place)
 
-        await preferences(createDefaultWeekdayMap(Mode.TAKEAWAY))
+        await preferences(createDefaultWeekdayMap(Mode.NONE))
         expect(await placeOnDinner()).toEqual(place)
     })
 })

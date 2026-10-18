@@ -169,7 +169,7 @@ describe('booking notifications after the action', () => {
     })
     afterEach(() => vi.clearAllMocks())
 
-    const sale = {dinnerEventId: 7, ticketPriceId: 4, buyerInhabitantId: 41, buyerHouseholdId: 2, sellerHouseholdId: 3}
+    const sale = {dinnerEventId: 7, ticketPriceId: 4, buyerInhabitantId: 41, buyerHouseholdId: 2, sellerHouseholdId: 3, sellerInhabitantId: 31}
 
     it.each([
         {operation: 'notifyBookingOutcomes', notify: (channel: EmailChannel) =>
@@ -198,7 +198,7 @@ describe('the mails of the waiting list\'s placements', () => {
     })
     afterEach(() => vi.clearAllMocks())
 
-    const sale = {dinnerEventId: dinner.dinnerEventId, ticketPriceId: 4, buyerInhabitantId: member.id, buyerHouseholdId: household.id, sellerHouseholdId: household.id}
+    const sale = {dinnerEventId: dinner.dinnerEventId, ticketPriceId: 4, buyerInhabitantId: member.id, buyerHouseholdId: household.id, sellerHouseholdId: household.id, sellerInhabitantId: member.id}
     const portion = {dinnerEventId: dinner.dinnerEventId, entryId: 1, inhabitantId: member.id, isGuestTicket: false, portions: 1, orderId: 77, ticketPriceId: 4}
 
     it.each([
@@ -243,7 +243,7 @@ describe('the people a run\'s mails name', () => {
         dinnerEventId: dinner.dinnerEventId, inhabitantId: joiner.id, bookedByUserId, position, ticketType: TicketTypeSchema.enum.ADULT, queueSize: position, portionNeed: position
     })
     const saleTo = (owner: Member): TicketSale =>
-        ({dinnerEventId: dinner.dinnerEventId, ticketPriceId: 4, buyerInhabitantId: owner.id, buyerHouseholdId: owner.householdId, sellerHouseholdId: sellers.id})
+        ({dinnerEventId: dinner.dinnerEventId, ticketPriceId: 4, buyerInhabitantId: owner.id, buyerHouseholdId: owner.householdId, sellerHouseholdId: sellers.id, sellerInhabitantId: null})
     const portionTo = (owner: Member) =>
         ({dinnerEventId: dinner.dinnerEventId, entryId: owner.id, inhabitantId: owner.id, isGuestTicket: false, portions: 1, orderId: 77, ticketPriceId: 4})
     // The parent joins and books the child; the neighbour's place reaches the threshold

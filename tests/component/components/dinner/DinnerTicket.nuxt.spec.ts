@@ -152,6 +152,21 @@ describe('DinnerTicket on the waiting list', () => {
     })
 })
 
+// No order yet: the ticket reads as a waiting-list ticket with the sliders in place of the hourglass
+describe('DinnerTicket for an expected booking', () => {
+    it.each([
+        {desc: 'a row\'s ticket', props: {}},
+        {desc: 'the power ticket', props: {ticketConfig: COMPONENTS.powerMode.ticketConfig, consensus: true}}
+    ])('GIVEN $desc expected THEN the sliders sit in the state cell, the card wears the expected face and the mode reads expected', async ({props}) => {
+        const wrapper = await mountTicket({...props, expected: true})
+
+        expect(iconNamesIn(wrapper, 'ticket-state-cell')).toEqual([ICONS.preferences])
+        bindsToken(wrapper, ICONS.preferences, COMPONENTS.ticket.stateIcon.expected)
+        expect(wrapper.classes()).toEqual(COMPONENTS.ticket.face.expected.split(' '))
+        expect(wrapper.findComponent({name: 'DinnerModeSelector'}).props()).toMatchObject({modelValue: baseProps.dinnerMode, expected: true, ghost: false})
+    })
+})
+
 describe('DinnerTicket for a queued guest', () => {
     it('GIVEN a queued guest THEN the state cell carries the hourglass and the guest cell the guest glyph', async () => {
         const wrapper = await mountTicket({ticketState: TicketState.queued, guestCount: 1})

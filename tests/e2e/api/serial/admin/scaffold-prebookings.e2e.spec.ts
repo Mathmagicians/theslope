@@ -553,7 +553,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
         const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {ticketIsCancellableDaysBefore: 0})
         createdSeasonIds.push(season.id!)
         const inhabitant = await HouseholdFactory.createInhabitantWithConfig(context, householdId, {
-            name: salt('Ingen', testSalt), dinnerPreferences: createDefaultDinnerModeMap(DinnerMode.DINEIN)
+            name: salt('Anders', testSalt), lastName: 'Ingen', dinnerPreferences: createDefaultDinnerModeMap(DinnerMode.DINEIN)
         })
         createdInhabitantIds.push(inhabitant.id)
         // The dinner moves later through the chef route, which answers its team's chef only

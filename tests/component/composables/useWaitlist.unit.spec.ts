@@ -86,14 +86,14 @@ describe('useWaitlist', () => {
         ])
     })
 
-    // What the sale to the waiting list would sell, read without writing; sellers are households 5, 6 and 7
+    // What the sale to the waiting list would sell, read without writing; sellers are households 5, 6 and 7, each by its inhabitant 50, 60 and 70
     describe('previewSale', () => {
         const {previewSale} = useWaitlist()
         const ticket = (id: number, ticketType: keyof typeof PRICE_ID, minute: number, householdId: number, dinnerEventId = 100): TicketForSale =>
-            ({id, dinnerEventId, ticketPriceId: PRICE_ID[ticketType], releasedAt: new Date(2026, 9, 1, 14, minute), householdId})
+            ({id, dinnerEventId, ticketPriceId: PRICE_ID[ticketType], releasedAt: new Date(2026, 9, 1, 14, minute), inhabitantId: 10 * householdId, householdId})
         const sale = (buyer: TicketWaitlistDisplay, ticketType: keyof typeof PRICE_ID, sellerHouseholdId: number) => ({
             dinnerEventId: buyer.dinnerEventId, ticketPriceId: PRICE_ID[ticketType], buyerInhabitantId: buyer.inhabitantId,
-            buyerHouseholdId: buyer.order.householdId, sellerHouseholdId
+            buyerHouseholdId: buyer.order.householdId, sellerHouseholdId, sellerInhabitantId: 10 * sellerHouseholdId
         })
         const [adult1, child2, adult3] = queue
 
@@ -199,6 +199,7 @@ describe('useWaitlist', () => {
                 ticketPriceId: PRICE_ID[TicketType.ADULT], createdAt
             }),
             sellerHouseholdId: null,
+            sellerInhabitantId: null,
             ...overrides
         })
 
@@ -228,8 +229,8 @@ describe('useWaitlist', () => {
                 },
                 {
                     description: 'the released ticket older than the grab is sold to the entry by the household its claim names',
-                    found: order(releasedBeforeGrab, {ticketPriceId: PRICE_ID[TicketType.CHILD], sellerHouseholdId: 3}),
-                    outcomes: {waitlistTicketsSold: [{dinnerEventId, ticketPriceId: PRICE_ID[TicketType.CHILD], buyerInhabitantId: inhabitantId, buyerHouseholdId: householdId, sellerHouseholdId: 3}], waitlistPortionsAssigned: []}
+                    found: order(releasedBeforeGrab, {ticketPriceId: PRICE_ID[TicketType.CHILD], sellerHouseholdId: 3, sellerInhabitantId: 30}),
+                    outcomes: {waitlistTicketsSold: [{dinnerEventId, ticketPriceId: PRICE_ID[TicketType.CHILD], buyerInhabitantId: inhabitantId, buyerHouseholdId: householdId, sellerHouseholdId: 3, sellerInhabitantId: 30}], waitlistPortionsAssigned: []}
                 },
                 {
                     description: 'a sold ticket whose claim names no household reports nothing',

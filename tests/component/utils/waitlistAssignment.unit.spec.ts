@@ -73,7 +73,7 @@ const STALE = subMinutes(new Date(), 3 * LEASE_MINUTES)
 const HELD = subMinutes(new Date(), 1)
 // The Order unique index answers a second regular order for an inhabitant on a dinner
 const uniqueViolation = () => createError({statusCode: 409, statusMessage: 'Conflict'})
-const sold = {order: {} as never, ticketPriceId: ADULT_PRICE_ID, sellerHouseholdId: 3}
+const sold = {order: {} as never, ticketPriceId: ADULT_PRICE_ID, sellerHouseholdId: 3, sellerInhabitantId: 30}
 
 // The protocol's writes in the order the run makes them
 const PROTOCOL = {
@@ -138,7 +138,7 @@ describe('sellTicketsToWaitlist', () => {
 
         expect(sales).toEqual([{
             dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID,
-            buyerInhabitantId: first!.inhabitantId, buyerHouseholdId: first!.order.householdId, sellerHouseholdId: 3
+            buyerInhabitantId: first!.inhabitantId, buyerHouseholdId: first!.order.householdId, sellerHouseholdId: 3, sellerInhabitantId: 30
         }])
         expect(protocolSteps()).toEqual(['grab', 'claim', 'remove'])
         expect(grabWaitlistEntry).toHaveBeenCalledWith(d1Client, first!.id, expect.any(Date), RELEASED_ORDER_ID)
@@ -210,7 +210,7 @@ describe('an entry whose regular order is already placed', () => {
 
         expect(sales).toEqual([{
             dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID,
-            buyerInhabitantId: second!.inhabitantId, buyerHouseholdId: second!.order.householdId, sellerHouseholdId: 3
+            buyerInhabitantId: second!.inhabitantId, buyerHouseholdId: second!.order.householdId, sellerHouseholdId: 3, sellerInhabitantId: 30
         }])
         expect(removedIds()).toEqual([first!.id, second!.id])
     })
@@ -248,6 +248,7 @@ const releasedBeforeGrab = subMinutes(new Date(), 6 * LEASE_MINUTES)
 const servingOrder = (createdAt: Date, overrides: Partial<PlacementOrder> = {}): PlacementOrder => ({
     ...OrderFactory.defaultOrder(undefined, {id: CREATED_ORDER_ID, inhabitantId: first!.inhabitantId, ticketPriceId: ADULT_PRICE_ID, createdAt}),
     sellerHouseholdId: null,
+    sellerInhabitantId: null,
     ...overrides
 })
 
@@ -272,7 +273,7 @@ describe.each([
         {evidence: 'the search finds the order the stopped extra portion wrote', placingOrderId: null, found: [servingOrder(writtenAfterGrab)],
             steps: ['record', 'remove'], reported: {sold: [], assigned: [first!.id]}},
         {evidence: 'the recorded released ticket went to the entry', placingOrderId: RELEASED_ORDER_ID,
-            found: [servingOrder(releasedBeforeGrab, {id: RELEASED_ORDER_ID, sellerHouseholdId: 3})],
+            found: [servingOrder(releasedBeforeGrab, {id: RELEASED_ORDER_ID, sellerHouseholdId: 3, sellerInhabitantId: 30})],
             steps: ['remove'], reported: {sold: [first!.inhabitantId], assigned: []}},
         {evidence: 'nothing serves the entry', placingOrderId: null, found: [], steps: ['release'], reported: {sold: [], assigned: []}}
     ])('recovers a grab older than the lease before it places, and reports what it finished: $evidence', async ({placingOrderId, found, steps, reported}) => {

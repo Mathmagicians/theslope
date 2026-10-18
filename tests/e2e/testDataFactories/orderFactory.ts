@@ -579,7 +579,7 @@ export class OrderFactory {
   static readonly defaultScaffoldResult = (
     {totals, ...overrides}: Partial<Omit<ScaffoldResult, 'totals'>> & {totals?: Partial<BookingTotals>} = {}
   ): ScaffoldResult => ({
-    seasonId: 1, positions: [], unchanged: 0, households: 1, errored: 0,
+    seasonId: 1, dinners: [], positions: [], unchanged: 0, households: 1, errored: 0,
     totals: {...Object.fromEntries(BookingActionSchema.options.map(action => [action, 0])) as BookingTotals, ...totals},
     results: [], failed: [],
     outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: [], waitlistPortionsAssigned: []},

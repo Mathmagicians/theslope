@@ -189,8 +189,10 @@ test.describe('Dinner Page URL Navigation', () => {
             dinnerDate = testData.dates.second
 
             const adultBirthDate = addDays(new Date(), -30 * 365)
-            const [allergic, notAllergic] = await Promise.all(['Anders', 'Anders2'].map(async name => {
-                const inhabitant = await HouseholdFactory.createInhabitantForHousehold(adminContext, householdId, salt(name, testSalt), adultBirthDate)
+            const [allergic, notAllergic] = await Promise.all(['Allergic', 'Not Allergic'].map(async lastName => {
+                const inhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {
+                    name: salt('Anders', testSalt), lastName, birthDate: adultBirthDate
+                })
                 createdInhabitantIds.push(inhabitant.id)
                 return inhabitant
             }))

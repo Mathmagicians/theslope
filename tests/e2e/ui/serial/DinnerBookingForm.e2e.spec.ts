@@ -11,7 +11,7 @@ import {EMPTY_STATE_MESSAGES} from '~/composables/useTheSlopeDesignSystem'
 import {BookingViewSchema} from '~/composables/useBookingView'
 
 const {memberUIFile, adminUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, getSessionUserInfo, gotoHydrated, selectDropdownOption} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, getSessionUserInfo, gotoHydrated, selectDropdownOption, temporaryAndRandom} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -35,7 +35,7 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
     let householdPbsId: number
     let testSeason: Awaited<ReturnType<typeof SeasonFactory.createSeasonWithDinnerEvents>>
     let adminContext: BrowserContext
-    const testSalt = `booking-form-${Date.now()}`
+    const testSalt = temporaryAndRandom()
     const createdSeasonIds: number[] = []
 
     test.use({storageState: memberUIFile})
@@ -255,7 +255,7 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
             test.use({storageState: adminUIFile})
 
             test('GIVEN /admin/planning WHEN a listed season is deleted and then chosen THEN a toast names it and the default season loads', async ({page}) => {
-                const goneSeason = await SeasonFactory.createSeason(adminContext, SeasonFactory.defaultSeason(`${testSalt}-gone`))
+                const goneSeason = await SeasonFactory.createSeason(adminContext, SeasonFactory.defaultSeason(temporaryAndRandom()))
                 createdSeasonIds.push(goneSeason.id!)
                 await gotoHydrated(page, '/admin/planning')
                 await expect(page.getByTestId('season-selector')).toContainText(testSeason.season.shortName)

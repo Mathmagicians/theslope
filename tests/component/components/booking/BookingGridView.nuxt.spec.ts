@@ -14,7 +14,7 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {formatPreviewLines} from '~/composables/useBookingUi'
 import {addDays, startOfDay} from 'date-fns'
@@ -455,6 +455,17 @@ describe('BookingGridView and the server\'s dry run', () => {
       expect(findByTestId(wrapper, 'dinner-mode-legend-expected').exists()).toBe(true)
     })
 
+    it('an expected cell ghosts its mode on the expected token: outlined on the waiting list\'s neutral, in the muted ink', async () => {
+      scaffold.answers.expected = annaExpected
+      const wrapper = await mountWeek()
+      await landed(wrapper)
+
+      const {color, variant, ink} = COMPONENTS.bookingGrid.expectedBadge
+      const expectedCell = cell(wrapper, anna.id, future.id)
+      expect(expectedCell.findComponent({name: 'UBadge'}).props()).toMatchObject({color, variant})
+      expect(expectedCell.findComponent({name: 'UIcon'}).classes()).toEqual(expect.arrayContaining(ink.split(' ')))
+    })
+
     it('an order supersedes the expected booking, and without an expected cell the legend carries no entry for it', async () => {
       scaffold.answers.expected = () => OrderFactory.defaultScaffoldOrdersResponse({results: [resultOf(anna, future.id, Action.BOOK)]})
       const annaOrder = OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: anna.id, dinnerEventId: future.id, dinnerMode: DinnerMode.TAKEAWAY})
@@ -493,7 +504,7 @@ describe('BookingGridView and the server\'s dry run', () => {
     })
 
     it('WHEN a cell changes THEN the draft goes to the dry run once the clicks rest, the loader shows meanwhile, and the reply renders a day per dinner', async () => {
-      const reply = OrderFactory.defaultScaffoldOrdersResponse({results: [resultOf(lars, future.id, Action.BOOK, DinnerMode.DINEINLATE)]})
+      const reply = OrderFactory.defaultScaffoldOrdersResponse({dinners: [{id: future.id, date: future.date}], results: [resultOf(lars, future.id, Action.BOOK, DinnerMode.DINEINLATE)]})
       scaffold.answers.preview = () => reply
       const wrapper = await mountWeek(FORM_MODES.EDIT)
       await landed(wrapper)
@@ -501,7 +512,7 @@ describe('BookingGridView and the server\'s dry run', () => {
       await clickByTestId(wrapper, `cell-${lars.id}-${future.id}`)
       expect(wrapper.findComponent(ActionPreview).props('pending')).toBe(true)
 
-      await vi.waitFor(() => expect(wrapper.findComponent(ActionPreview).props('days')).toEqual(formatPreviewLines(reply.scaffoldResult, dinnerEvents, householdOrder)))
+      await vi.waitFor(() => expect(wrapper.findComponent(ActionPreview).props('days')).toEqual(formatPreviewLines(reply.scaffoldResult, householdOrder)))
       expect(previews()).toEqual([{
         query: {adminBypass: 'false', preview: 'true'},
         body: {householdId: mockHousehold.id, dinnerEventIds: [future.id], orders: [expect.objectContaining({inhabitantId: lars.id, dinnerEventId: future.id, dinnerMode: cell(wrapper, lars.id, future.id).props('modelValue')})]}
@@ -510,7 +521,7 @@ describe('BookingGridView and the server\'s dry run', () => {
 
     it('WHEN an expected cell is set to Ingen THEN the draft sends the bare Ingen and the reply previews the cancellation', async () => {
       scaffold.answers.expected = annaExpected
-      scaffold.answers.preview = () => OrderFactory.defaultScaffoldOrdersResponse({results: [resultOf(anna, future.id, Action.CANCEL, DinnerMode.NONE)]})
+      scaffold.answers.preview = () => OrderFactory.defaultScaffoldOrdersResponse({dinners: [{id: future.id, date: future.date}], results: [resultOf(anna, future.id, Action.CANCEL, DinnerMode.NONE)]})
       const wrapper = await mountWeek(FORM_MODES.EDIT)
       await landed(wrapper)
 

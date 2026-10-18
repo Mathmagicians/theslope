@@ -177,12 +177,13 @@ const isExpectedRead = (response: Response) => isScaffold(response) && response.
 // A person of the member's household eating in the dining hall every weekday, and the member's page on a week past
 // the scaffold window, open once the grid's read of it has answered; the week has a fraction of the month's cells to
 // re-render on each change
-const openExpectedWeek = async (browser: Browser, name: string) => {
+const openExpectedWeek = async (browser: Browser, lastName: string) => {
     const adminContext = await validatedBrowserContext(browser)
     const memberContext = await memberValidatedBrowserContext(browser)
     const {householdId: memberHouseholdId, householdShortname, householdPbsId} = await getSessionUserInfo(memberContext)
     const inhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, memberHouseholdId, {
-        name: salt(name, testSalt),
+        name: salt('Anders', testSalt),
+        lastName,
         dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.DINEIN)
     })
     createdInhabitantIds.push(inhabitant.id)

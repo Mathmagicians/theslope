@@ -150,7 +150,7 @@ const givenSupply = (ticketPrices: TicketPrice[], tickets: TicketOnSale[], entri
         .sort((a, b) => a.order.releasedAt!.getTime() - b.order.releasedAt!.getTime())[0]
     const sell = (ticket: TicketOnSale) => {
         tickets.splice(tickets.indexOf(ticket), 1)
-        return {order: OrderFactory.defaultOrderDetail(undefined, {id: ticket.order.id}), ticketPriceId: ticket.order.ticketPriceId!, sellerHouseholdId: ticket.householdId}
+        return {order: OrderFactory.defaultOrderDetail(undefined, {id: ticket.order.id}), ticketPriceId: ticket.order.ticketPriceId!, sellerHouseholdId: ticket.householdId, sellerInhabitantId: ticket.order.inhabitantId}
     }
     let nextEntryId = 500
     const join = (requests: TicketWaitlistCreate[]): TicketWaitlistDisplay[] => {
@@ -295,7 +295,7 @@ const givenClaims = ({households: people, dinners, forSale = 0, waiting = 0, que
     vi.mocked(fetchOrders).mockResolvedValue([...held.map(({order}) => order), ...tickets.map(({order}) => order)])
     givenSupply(season.ticketPrices, tickets, entries, held)
     const scaffold = (options: Omit<ScaffoldOptions, 'seasonId'> = {}) => scaffoldPrebookings(d1Client, {seasonId: season.id, ...options})
-    return {claimers, dinners: closedDinners, householdId: household.id, sellerHouseholdId: sellers.id, scaffold}
+    return {claimers, sellerPeople, dinners: closedDinners, householdId: household.id, sellerHouseholdId: sellers.id, scaffold}
 }
 
 
@@ -387,15 +387,15 @@ describe('scaffoldPrebookings', () => {
         ] as const)('of $intent', ({key}) => {
             it.each(CLOSED_DINNER)('GIVEN $supply on a closed dinner WHEN previewed THEN it settles as the save, writes nothing, and the save writes', async ({forSale, waiting, annaHolds, modes, lines, places, soldToLine, writes}) => {
                 const {intents, idOf, householdId} = givenClosedDinner({forSale, waiting, annaHolds})
-                const sellerOf = {other: OTHER_HOUSEHOLD_ID, own: householdId}
+                const sellerOf = {other: [OTHER_HOUSEHOLD_ID, OTHER_INHABITANT_ID], own: [householdId, idOf.anna]}
 
                 const previewed = await intents[key].preview(modes)
 
                 expect(writersCalled()).toEqual([])
                 expect(previewed.results.map(line => [line.inhabitantId, line.action])).toEqual(lines.map(([who, action]) => [idOf[who], action]))
                 expect(previewed.positions.map(place => [place.inhabitantId, place.position])).toEqual(places.map(([who, position]) => [idOf[who], position]))
-                expect(previewed.outcomes.waitlistTicketsSold.map(sale => [sale.buyerInhabitantId, sale.sellerHouseholdId]))
-                    .toEqual(soldToLine.map(seller => [OTHER_INHABITANT_ID, sellerOf[seller]]))
+                expect(previewed.outcomes.waitlistTicketsSold.map(sale => [sale.buyerInhabitantId, sale.sellerHouseholdId, sale.sellerInhabitantId]))
+                    .toEqual(soldToLine.map(seller => [OTHER_INHABITANT_ID, ...sellerOf[seller]]))
 
                 const saved = await intents[key].save(modes)
 
@@ -637,7 +637,7 @@ describe('scaffoldPrebookings', () => {
         })
 
         it('GIVEN a later household whose preferences release its ticket on a closed dinner WHEN a season-wide run settles THEN the earlier household\'s claim buys that ticket, the waiting list has nothing to sell, and its preview settles alike', async () => {
-            const {claimers, householdId, sellerHouseholdId, scaffold} = givenClaims({households: [[ADULT]], dinners: 1, releasing: 1})
+            const {claimers, sellerPeople, householdId, sellerHouseholdId, scaffold} = givenClaims({households: [[ADULT]], dinners: 1, releasing: 1})
 
             const previewed = await scaffold({preview: true})
             expect(writersCalled()).toEqual([])
@@ -647,8 +647,8 @@ describe('scaffoldPrebookings', () => {
 
             expect(writersCalled()).toEqual(['writeUpdates', 'claimOrder', 'sellTicketsToWaitlist'])
             expect(saved.totals).toMatchObject({[Action.RELEASE]: 1, [Action.BUY]: 1, [Action.QUEUE]: 0})
-            expect(saved.outcomes.ticketsSold.map(sale => [sale.buyerInhabitantId, sale.buyerHouseholdId, sale.sellerHouseholdId]))
-                .toEqual([[claimers[0]!.id, householdId, sellerHouseholdId]])
+            expect(saved.outcomes.ticketsSold.map(sale => [sale.buyerInhabitantId, sale.buyerHouseholdId, sale.sellerHouseholdId, sale.sellerInhabitantId]))
+                .toEqual([[claimers[0]!.id, householdId, sellerHouseholdId, sellerPeople[0]!.id]])
             expect(saved.outcomes.waitlistTicketsSold).toEqual([])
             expect(previewed).toEqual(saved)
         })
@@ -666,6 +666,36 @@ describe('scaffoldPrebookings', () => {
             expect(createWaitlistEntries).toHaveBeenCalledOnce()
             expect(result.failed.map(line => [line.inhabitantId, line.action, line.reason])).toEqual(claimers.map(({id}) => [id, Action.QUEUE, reason]))
             expect(result.positions).toEqual([])
+        })
+
+        // A preference save runs on the weekdays it changes; the result names the dinners the run decides
+        it('GIVEN a household of five eating on a closed dinner\'s weekday WHEN the household\'s run on that weekday settles THEN it names that dinner alone and writes five entries, one per person, each at its own place', async () => {
+            const {claimers, dinners, householdId, scaffold} = givenClaims({households: [[ADULT, ADULT, ADULT, ADULT, ADULT]], dinners: 2})
+            const day = dinners[0]!
+
+            const result = await scaffold({householdId, weekdays: [dateToWeekDay(day.date)]})
+
+            expect(result.dinners).toEqual([{id: day.id, date: day.date}])
+            expect(vi.mocked(createWaitlistEntries).mock.calls.map(([, joins]) => joins.map(({entry}) => [entry.inhabitantId, entry.dinnerEventId])))
+                .toEqual([claimers.map(({id}) => [id, day.id])])
+            expect(result.positions.map(place => [place.inhabitantId, place.dinnerEventId, place.position])).toEqual(claimers.map(({id}, index) => [id, day.id, index + 1]))
+            expect(result.outcomes.joined.map(event => event.inhabitantId)).toEqual(claimers.map(({id}) => id))
+        })
+
+        // A booker's guests each hold their own entry and place: several guests per booker wait side by side
+        it('GIVEN a booker with five guest wishes on a closed dinner WHEN the save settles THEN five guest entries are written at places 1 to 5 and the result has a line for each', async () => {
+            const {season, household, anna, dinner, adultPrice} = givenSave()
+            vi.mocked(fetchOrders).mockResolvedValue([])
+            givenSupply(season.ticketPrices, [], [])
+            const guestWish = () => OrderFactory.defaultDesiredOrder({inhabitantId: anna.id, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, isGuestTicket: true})
+            const guests = [1, 2, 3, 4, 5]
+
+            const result = await scaffoldPrebookings(d1Client, {seasonId: season.id, householdId: household.id, userId: 7, desiredOrders: guests.map(guestWish)})
+
+            expect(vi.mocked(createWaitlistEntries).mock.calls.map(([, joins]) => joins.map(({entry}) => [entry.inhabitantId, entry.isGuestTicket])))
+                .toEqual([guests.map(() => [anna.id, true])])
+            expect(result.positions.map(place => [place.inhabitantId, place.isGuestTicket, place.position])).toEqual(guests.map(position => [anna.id, true, position]))
+            expect(result.results.map(line => [line.inhabitantId, line.isGuestTicket, line.action])).toEqual(guests.map(() => [anna.id, true, Action.QUEUE]))
         })
 
         // The run pairs each join with the entry written for its person, dinner and guest flag, whatever order the write

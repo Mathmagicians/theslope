@@ -21,7 +21,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
-import {ICONS, createTableColumns, useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, ICONS, createTableColumns, useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from './waitlistTestIds'
 import {useBookingValidation as useActionValidation, TicketState} from '~/composables/useBookingValidation'
 const Action = useActionValidation().BookingActionSchema.enum
@@ -454,7 +454,7 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
   const resultOf = (action: BookingAction, overrides: Partial<BookingResult> = {}): BookingResult => OrderFactory.defaultBookingResult({
     inhabitantId: anna!.id, inhabitantName: anna!.name, dinnerEventId: dinnerEvent.id, action, ...overrides
   })
-  const answer = (...results: BookingResult[]) => OrderFactory.defaultScaffoldOrdersResponse({results})
+  const answer = (...results: BookingResult[]) => OrderFactory.defaultScaffoldOrdersResponse({dinners: [{id: dinnerEvent.id, date: dinnerEvent.date}], results})
   const previews = () => scaffold.sent.filter(({body}) => body.orders.length > 0)
   type Mounted = Awaited<ReturnType<typeof mountMemberForm>>
   const rowPreview = (wrapper: Mounted) => wrapper.findComponent(ActionPreview)
@@ -473,7 +473,7 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
     const wrapper = await mountMemberForm(true, {adminBypass})
     await openRow(wrapper, anna!.id, DinnerMode.TAKEAWAY)
 
-    await vi.waitFor(() => expect(rowPreview(wrapper).props('days')).toEqual(formatPreviewLines(reply.scaffoldResult, [dinnerEvent], householdOrder)))
+    await vi.waitFor(() => expect(rowPreview(wrapper).props('days')).toEqual(formatPreviewLines(reply.scaffoldResult, householdOrder)))
     expect(previews().at(-1)).toEqual({
       query: {adminBypass: String(adminBypass), preview: 'true'},
       body: {
@@ -575,27 +575,47 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
     return wrapper.findAllComponents(DinnerTicket).filter(ticket => row.element.contains(ticket.element))
   }
 
-  it.each([
-    {desc: 'a row without an order shows the expected mode ghosted', orders: [], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.DINEIN, expected: true}, legend: true},
-    {desc: 'an order supersedes the expected booking', orders: [annaOrder], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.TAKEAWAY, expected: false}, legend: false},
-    {desc: 'a run that expects nothing leaves the row on Ingen', orders: [], expected: [], annaTicket: {dinnerMode: DinnerMode.NONE, expected: false}, legend: false}
-  ])('$desc', async ({orders, expected, annaTicket, legend}) => {
-    scaffold.answers.expected = () => OrderFactory.defaultScaffoldOrdersResponse({results: expected})
+  const mountExpected = async (results: BookingResult[], orders: OrderDisplay[] = []) => {
+    scaffold.answers.expected = () => OrderFactory.defaultScaffoldOrdersResponse({results})
     const wrapper = await mountMemberForm(true, {orders})
-
     await vi.waitFor(() => expect(scaffold.sent.find(({body}) => body.orders.length === 0)).toEqual({
       query: {adminBypass: 'false', preview: 'true'},
       body: {householdId: householdWithInhabitants.id, dinnerEventIds: [dinnerEventId], orders: []}
     }))
     // The table's loading bar runs until the read lands
     await vi.waitFor(() => expect(isTableLoading(wrapper)).toBe(false))
+    return wrapper
+  }
+
+  it.each([
+    {desc: 'a row without an order shows the expected mode ghosted', orders: [], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.DINEIN, expected: true}, annaFace: COMPONENTS.ticket.face.expected, legend: true},
+    {desc: 'an order supersedes the expected booking', orders: [annaOrder], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.TAKEAWAY, expected: false}, annaFace: COMPONENTS.ticket.face.normal, legend: false},
+    {desc: 'a run that expects nothing leaves the row on Ingen', orders: [], expected: [], annaTicket: {dinnerMode: DinnerMode.NONE, expected: false}, annaFace: COMPONENTS.ticket.face.normal, legend: false}
+  ])('$desc', async ({orders, expected, annaTicket, annaFace, legend}) => {
+    const wrapper = await mountExpected(expected, orders)
+
     const ticketProps = (inhabitantId: number) => ticketsOf(wrapper, inhabitantId).map(ticket => ticket.props())
     expect(ticketProps(anna!.id)).not.toHaveLength(0)
     ticketProps(anna!.id).forEach(props => expect(props).toMatchObject(annaTicket))
+    ticketsOf(wrapper, anna!.id).forEach(ticket => expect(ticket.classes()).toEqual(annaFace.split(' ')))
     // Bo has no result: the run leaves him out, as it leaves out a person who cancelled the dinner
     expect(ticketProps(bo!.id)).not.toHaveLength(0)
     ticketProps(bo!.id).forEach(props => expect(props).toMatchObject({dinnerMode: DinnerMode.NONE, expected: false}))
     expect(findByTestId(wrapper, 'dinner-mode-legend-expected').exists()).toBe(legend)
+  })
+
+  // The power row reads the modes the rows show; it is expected while every inhabitant row is
+  it.each([
+    {desc: 'every row expected on Takeaway', expected: [DinnerMode.TAKEAWAY, DinnerMode.TAKEAWAY], power: {dinnerMode: DinnerMode.TAKEAWAY, consensus: true, expected: true}},
+    {desc: 'Anna expected on Takeaway and Bo left out', expected: [DinnerMode.TAKEAWAY], power: {consensus: false, expected: false}}
+  ])('GIVEN $desc THEN the power ticket reads the modes the rows show', async ({expected, power}) => {
+    const results = householdWithInhabitants.inhabitants.slice(0, expected.length).map((inhabitant, index) =>
+      OrderFactory.defaultBookingResult({inhabitantId: inhabitant.id, inhabitantName: inhabitant.name, dinnerEventId, dinnerMode: expected[index]!, action: Action.BOOK}))
+    const wrapper = await mountExpected(results)
+
+    const powerTickets = wrapper.findAllComponents(DinnerTicket).filter(ticket => ticket.props('consensus') !== undefined)
+    expect(powerTickets).not.toHaveLength(0)
+    powerTickets.forEach(ticket => expect(ticket.props()).toMatchObject(power))
   })
 })
 

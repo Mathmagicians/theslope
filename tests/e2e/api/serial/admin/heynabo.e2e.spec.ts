@@ -9,7 +9,7 @@ import {useCoreValidation, type InhabitantDisplay, type HouseholdDetail} from '~
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 
-const {validatedBrowserContext, saltedId, salt, headers} = testHelpers
+const {validatedBrowserContext, saltedId, salt, temporaryAndRandom, headers} = testHelpers
 const {SystemRoleSchema} = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum
 const {DinnerStateSchema} = useBookingValidation()
@@ -154,7 +154,7 @@ test.describe.serial('Heynabo Integration API', () => {
 
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const testSalt = Date.now().toString()
+        const testSalt = temporaryAndRandom()
 
         // ========================================================================
         // STEP 1: Run initial Heynabo import (CREATE - populates DB from Heynabo)
@@ -183,7 +183,7 @@ test.describe.serial('Heynabo Integration API', () => {
         const sibling = await HouseholdFactory.createHousehold(context, {
             heynaboId: TEST_HOUSEHOLD_HEYNABO_ID,
             pbsId: saltedId(800000, testSalt),
-            name: salt('Sibling Leaving', testSalt),
+            name: salt('Test Sibling Leaving', testSalt),
             address: household!.address,
             movedInDate: new Date('2018-01-01'),
             moveOutDate: new Date('2026-06-01')
@@ -217,7 +217,7 @@ test.describe.serial('Heynabo Integration API', () => {
         const fakeHousehold = await HouseholdFactory.createHousehold(context, {
             heynaboId: saltedId(888000, testSalt),
             pbsId: saltedId(888001, testSalt),
-            name: `FakeHousehold-${testSalt}`,
+            name: salt('Test FakeHousehold', testSalt),
             address: `Fake Address ${testSalt}`,
             movedInDate: new Date('2020-01-01')
         })
@@ -243,9 +243,9 @@ test.describe.serial('Heynabo Integration API', () => {
         })
 
         // DELETE: Create fake inhabitant not in Heynabo
-        const fakeInhabitant = await HouseholdFactory.createInhabitantForHousehold(
-            context, testData.householdId, `FakeInhabitant-${testSalt}`
-        )
+        const fakeInhabitant = await HouseholdFactory.createInhabitantWithConfig(context, testData.householdId, {
+            name: salt('Anders', testSalt), lastName: 'FakeInhabitant', birthDate: null
+        })
         testData.inhabitant.fakeId = fakeInhabitant.id
 
         // ========================================================================
@@ -276,7 +276,7 @@ test.describe.serial('Heynabo Integration API', () => {
         expect(mutateResponse.status(), 'Setup precondition: admin POST accepts partial {systemRoles, email, phone}').toBe(200)
 
         // DELETE: Create orphan user on limited-role inhabitant
-        testData.user.orphanEmail = `orphan-${testSalt}@test.dk`
+        testData.user.orphanEmail = `${salt('orphan', testSalt)}@andeby.dk`
         const orphanUser = await UserFactory.createUser(context, {...UserFactory.defaultUser(), email: testData.user.orphanEmail})
         testData.user.orphanId = orphanUser.id
         createdUserIds.push(orphanUser.id)
@@ -550,14 +550,14 @@ test.describe.serial('Heynabo Integration API', () => {
         test('deletes an inhabitant of the old household and its user when deleted in Heynabo', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const oldHousehold = getOldHousehold()
-            const testSalt = Date.now().toString()
+            const testSalt = temporaryAndRandom()
 
             // GIVEN: an inhabitant in the old household, linked to a user, neither known to Heynabo
-            const inhabitant = await HouseholdFactory.createInhabitantForHousehold(
-                context, oldHousehold.id, `DepartedUser-${testSalt}`
-            )
+            const inhabitant = await HouseholdFactory.createInhabitantWithConfig(context, oldHousehold.id, {
+                name: salt('Anders', testSalt), lastName: 'DepartedUser', birthDate: null
+            })
             expect(inhabitant.householdId, 'Setup: inhabitant is in the old household').toBe(oldHousehold.id)
-            const email = `departed-${testSalt}@test.dk`
+            const email = `${salt('departed', testSalt)}@andeby.dk`
             const user = await UserFactory.createUser(context, {...UserFactory.defaultUser(), email})
             createdUserIds.push(user.id)
             await HouseholdFactory.updateInhabitant(context, inhabitant.id, {userId: user.id})
@@ -608,7 +608,8 @@ test.describe.serial('Heynabo Integration API', () => {
             await HouseholdFactory.deleteInhabitant(context, babyyoda!.id, 200)
             const driftedInhabitant = await HouseholdFactory.createInhabitantWithConfig(context, householdAtDifferentAddress!.id, {
                 heynaboId: INHABITANTS.BABYYODA.heynaboId,
-                name: `Drifted-${Date.now()}`
+                name: salt('Anders', temporaryAndRandom()),
+                lastName: 'Drifted'
             })
 
             // WHEN: import runs
@@ -640,12 +641,12 @@ test.describe.serial('Heynabo Integration API', () => {
 
         test('reverts the dinner to a clean SCHEDULED state', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-            const testSalt = Date.now().toString()
+            const testSalt = temporaryAndRandom()
 
             // GIVEN: an inhabitant unknown to Heynabo is chef on an ANNOUNCED dinner with a menu
-            const departingChef = await HouseholdFactory.createInhabitantForHousehold(
-                context, testData.householdId, `DepartingChef-${testSalt}`
-            )
+            const departingChef = await HouseholdFactory.createInhabitantWithConfig(context, testData.householdId, {
+                name: salt('Anders', testSalt), lastName: 'DepartingChef', birthDate: null
+            })
             const season = await SeasonFactory.createSeason(context)
             chefLossSeasonIds.push(season.id!)
             const dinner = await DinnerEventFactory.createDinnerEvent(context, {

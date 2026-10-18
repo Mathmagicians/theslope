@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, formatBookingResult, formatPreviewLines, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS} from '~/composables/useBooking'
@@ -350,7 +350,7 @@ describe('ticket type presentation', () => {
     })
 })
 
-// Every toast that reports a booking result: the ticket, red as soon as one order failed, one line per person
+// Every toast that reports a booking result: the ticket, red as soon as one order failed, one line per day
 describe('scaffoldToastLook', () => {
     it.each([
         {desc: 'a run with a failed order', errored: 1, color: COLOR.error},
@@ -368,111 +368,136 @@ const KNUD = {inhabitantId: 3, inhabitantName: 'Knud', ticketType: ADULT}
 const LENE = {inhabitantId: 4, inhabitantName: 'Lene', ticketType: ADULT}
 type Person = Pick<BookingResult, 'inhabitantId' | 'inhabitantName' | 'ticketType'> & {isGuestTicket?: boolean}
 
-// One order's result per action listed, each on its own dinner
-const resultsOf = (person: Person, ...actions: BookingAction[]): BookingResult[] =>
-    actions.map((action, index) => OrderFactory.defaultBookingResult({...person, dinnerEventId: index + 1, action}))
 // One order's result per action listed, all on one dinner: a booker's guests at one table
 const resultsOnDinner = (dinnerEventId: number, person: Person, ...actions: BookingAction[]): BookingResult[] =>
     actions.map(action => OrderFactory.defaultBookingResult({...person, dinnerEventId, action}))
 // One order's result per dinner listed, all with one action
 const resultsAt = (person: Person, action: BookingAction, ...dinnerEventIds: number[]): BookingResult[] =>
     dinnerEventIds.map(dinnerEventId => OrderFactory.defaultBookingResult({...person, dinnerEventId, action}))
-const times = (count: number, action: BookingAction): BookingAction[] => Array.from({length: count}, () => action)
 const placeOf = (person: Person, position: number, dinnerEventId = 1): QueuePosition =>
     ({inhabitantId: person.inhabitantId, dinnerEventId, isGuestTicket: !!person.isGuestTicket, position, ticketType: person.ticketType})
 const soldToWaitlist = (count: number, dinnerEventId = 1) =>
-    Array.from({length: count}, () => ({dinnerEventId, ticketPriceId: 1, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1}))
+    Array.from({length: count}, () => ({dinnerEventId, ticketPriceId: 1, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1, sellerInhabitantId: 8}))
 const run = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => OrderFactory.defaultScaffoldResult(overrides)
 // A run's outcomes with the tickets it sold to the waiting list
 const withSold = (waitlistTicketsSold: ReturnType<typeof soldToWaitlist>) => ({...run({}).outcomes, waitlistTicketsSold})
 
-describe('formatBookingResult', () => {
-    // Failed orders the queue refused because a run is placing the entry
-    const conflictsOf = (person: Person, ...actions: BookingAction[]): BookingResult[] =>
-        resultsOf(person, ...actions).map(result => ({...result, reason: useBookingValidation().BookingFailureSchema.enum.CONFLICT}))
+// The dinners a booking result names: one a week from Monday 19/10/2026, and 13/01/2027; the day each line starts with
+const RESULT_DINNERS = [...[19, 26, 33, 40].map((day, index) => ({id: 11 + index, date: new Date(2026, 9, day)})), {id: 15, date: new Date(2027, 0, 13)}]
+const dayOf = (dinnerEventId: number) => formatDate(RESULT_DINNERS.find(({id}) => id === dinnerEventId)!.date, DATE_SETTINGS.DAY_MONTH_MASK)
+const inResultDays = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => run({dinners: RESULT_DINNERS, ...overrides})
+// A ticket the person released, sold on the dinner: to the waiting list or to a claim
+const saleOf = (seller: Person, dinnerEventId: number) =>
+    ({dinnerEventId, ticketPriceId: 1, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1, sellerInhabitantId: seller.inhabitantId})
+
+// The toast and the "Sidste ændring" alerts: the preview compacted, a line per day
+describe('formatResultLines', () => {
+    const SKRAANINGEN = {inhabitantId: 5, inhabitantName: 'Skraaningen', ticketType: ADULT}
+    const MARIE = {inhabitantId: 6, inhabitantName: 'Marie', ticketType: ADULT}
+    const BO = {inhabitantId: 7, inhabitantName: 'Bo', ticketType: ADULT}
+    const CARL = {inhabitantId: 8, inhabitantName: 'Carl', ticketType: ADULT}
+    const HOUSEHOLD = [ANNA, LARS, KNUD, LENE, SKRAANINGEN, MARIE, BO, CARL].map(person => person.inhabitantId)
+    const conflictsAt = (person: Person, action: BookingAction, dinnerEventId: number): BookingResult[] =>
+        resultsAt(person, action, dinnerEventId).map(result => ({...result, reason: useBookingValidation().BookingFailureSchema.enum.CONFLICT}))
 
     it.each([
         {
-            // People in the order they first appear, their counts in the order of the actions, the places ascending
-            desc: 'the grid save after the deadline',
-            result: run({
-                results: [...resultsOf(ANNA, Action.QUEUE), ...resultsOnDinner(1, guestsOfAnna(ADULT), Action.QUEUE), ...resultsOf(ANNA, Action.BUY, Action.QUEUE)],
-                positions: [placeOf(ANNA, 5), placeOf(guestsOfAnna(ADULT), 6), placeOf(ANNA, 3)]
+            // The mockup's preference change: the results name each person's dinners in turn, the days gather them; a
+            // released ticket carries its fate in the word of the names that share it; a line's groups stand apart by " · "
+            desc: 'released tickets sold or still for sale, and cancellations, a line per day',
+            result: inResultDays({
+                results: [...resultsAt(SKRAANINGEN, Action.RELEASE, 11, 12), ...resultsAt(SKRAANINGEN, Action.CANCEL, 13, 14), ...resultsAt(MARIE, Action.RELEASE, 11, 12), ...resultsAt(MARIE, Action.CANCEL, 13, 14)],
+                outcomes: {...run({}).outcomes, waitlistTicketsSold: [saleOf(SKRAANINGEN, 11), saleOf(MARIE, 11), saleOf(SKRAANINGEN, 12)]}
             }),
-            text: 'Anna: 1 købt, 2 på ventelisten (Voksen #3, Voksen #5)\nGæst af Anna (Voksen): 1 på ventelisten (Voksen #6)'
+            text: () => [
+                `${dayOf(11)}  frigivet (solgt): Skraaningen, Marie`,
+                `${dayOf(12)}  frigivet (solgt): Skraaningen · frigivet (til salg): Marie`,
+                `${dayOf(13)}  frameldt: Skraaningen, Marie`,
+                `${dayOf(14)}  frameldt: Skraaningen, Marie`
+            ].join('\n')
         },
         {
-            // A booker's guests of one ticket type are one line, named with the count, as the guest row badges them
-            desc: 'two guests of one ticket type at one dinner',
-            result: run({results: resultsOnDinner(1, guestsOfAnna(CHILD), Action.BUY, Action.QUEUE), positions: [placeOf(guestsOfAnna(CHILD), 3)]}),
-            text: 'Gæst af Anna (Barn ×2): 1 købt, 1 på ventelisten (Barn #3)'
-        },
-        {
-            // The count is the guests at one dinner; another ticket type is another line
-            desc: 'guests of two ticket types over two dinners',
-            result: run({results: [
-                ...resultsOnDinner(1, guestsOfAnna(CHILD), Action.BOOK, Action.BOOK),
-                ...resultsOnDinner(2, guestsOfAnna(CHILD), Action.BOOK, Action.BOOK),
-                ...resultsOnDinner(1, guestsOfAnna(ADULT), Action.BOOK)
-            ]}),
-            text: 'Gæst af Anna (Barn ×2): 4 tilmeldt\nGæst af Anna (Voksen): 1 tilmeldt'
-        },
-        {
-            desc: 'guests whose ticket price is gone',
-            result: run({results: resultsOnDinner(1, guestsOfAnna(null), Action.BOOK, Action.BOOK)}),
-            text: 'Gæst af Anna (×2): 2 tilmeldt'
-        },
-        {
-            desc: 'the grid power mode',
-            result: run({results: [...resultsOf(ANNA, Action.CHANGE_MODE), ...resultsOf(LARS, Action.CHANGE_MODE), ...resultsOf(ANNA, Action.RELEASE), ...resultsOf(LARS, Action.RELEASE)]}),
-            text: 'Anna: 1 frigivet, 1 ændret spisemåde\nLars: 1 frigivet, 1 ændret spisemåde'
-        },
-        {
-            // The failures close a person's line; the household lines follow the people
-            desc: 'the preference power mode with a failed order',
-            result: run({
-                results: [...resultsOf(KNUD, ...times(7, Action.CANCEL), ...times(2, Action.RELEASE)), ...resultsOf(LENE, ...times(6, Action.CANCEL), ...times(2, Action.RELEASE))],
-                failed: resultsOf(LENE, Action.RELEASE),
-                errored: 1,
-                unchanged: 42,
-                outcomes: withSold(soldToWaitlist(1))
+            // The mockup's red toast: the failed orders are the day's last group, under their word
+            desc: 'a mode change beside a failed order',
+            result: inResultDays({
+                results: [...resultsAt(BO, Action.CHANGE_MODE, 15), ...resultsAt(ANNA, Action.CHANGE_MODE, 15)],
+                failed: resultsAt(CARL, Action.CHANGE_MODE, 15),
+                errored: 1
             }),
-            text: 'Knud: 7 frameldt, 2 frigivet\nLene: 6 frameldt, 2 frigivet, 1 opdatering fejlede\n1 billet solgt til ventelisten\n42 uændret'
+            text: () => `${dayOf(15)}  ændret spisemåde: Anna, Bo · FEJLET: Carl`
         },
         {
-            // A place a run is assigning refuses its leave and its change: the words say so in place of the failed count
-            desc: 'a leave and a change of places being assigned',
-            result: run({results: resultsOf(ANNA, Action.BOOK), failed: [...conflictsOf(ANNA, Action.LEAVE), ...conflictsOf(LARS, Action.REQUEUE)], errored: 2}),
-            text: 'Anna: 1 tilmeldt, pladsen er ved at blive tildelt\nLars: pladsen er ved at blive tildelt'
+            // A claim of the same run buys the released ticket: sold, as to the waiting list
+            desc: 'a released ticket bought by a claim',
+            result: inResultDays({
+                results: [...resultsAt(LARS, Action.BUY, 11), ...resultsAt(ANNA, Action.RELEASE, 11)],
+                outcomes: {...run({}).outcomes, ticketsSold: [saleOf(ANNA, 11)]}
+            }),
+            text: () => `${dayOf(11)}  frigivet (solgt): Anna · købt: Lars`
         },
         {
-            desc: 'a booking refused by a conflict reads as any failure',
-            result: run({failed: conflictsOf(LENE, Action.BOOK), errored: 1}),
-            text: 'Lene: 1 opdatering fejlede'
+            desc: 'a day\'s actions in the word table\'s order, the people in the household\'s order',
+            result: inResultDays({results: [...resultsAt(LARS, Action.CANCEL, 11), ...resultsAt(KNUD, Action.BOOK, 11), ...resultsAt(ANNA, Action.BOOK, 11)]}),
+            text: () => `${dayOf(11)}  tilmeldt: Anna, Knud · frameldt: Lars`
         },
         {
-            desc: 'a person with only failed orders',
-            result: run({results: resultsOf(KNUD, Action.BOOK), failed: resultsOf(LENE, Action.BOOK, Action.BOOK), errored: 2}),
-            text: 'Knud: 1 tilmeldt\nLene: 2 opdateringer fejlede'
+            // A booker's guests of one ticket type at one dinner are one name, counted as the guest row counts them
+            desc: 'a booker\'s guests after the booker',
+            result: inResultDays({results: [...resultsOnDinner(11, guestsOfAnna(CHILD), Action.BOOK, Action.BOOK), ...resultsAt(ANNA, Action.BOOK, 11)]}),
+            text: () => `${dayOf(11)}  tilmeldt: Anna, Gæst af Anna (Barn ×2)`
         },
         {
-            // A household whose run failed as a whole names no person
-            desc: 'a household that failed beside the orders that landed',
-            result: run({results: resultsOf(KNUD, Action.BOOK), unchanged: 3, errored: 1}),
-            text: 'Knud: 1 tilmeldt\n3 uændret\nBookingen fejlede'
+            // A place on the waiting list follows its person's name
+            desc: 'places on the waiting list',
+            result: inResultDays({
+                results: [...resultsAt(ANNA, Action.QUEUE, 11, 12), ...resultsAt(guestsOfAnna(ADULT), Action.QUEUE, 12)],
+                positions: [placeOf(ANNA, 5, 12), placeOf(guestsOfAnna(ADULT), 6, 12), placeOf(ANNA, 3, 11)]
+            }),
+            text: () => [
+                `${dayOf(11)}  på ventelisten: Anna (Voksen #3)`,
+                `${dayOf(12)}  på ventelisten: Anna (Voksen #5), Gæst af Anna (Voksen) (Voksen #6)`
+            ].join('\n')
         },
         {
+            // The failed orders close their day; a place being assigned refuses its leave and says so
+            desc: 'failed orders and a refused leave of a place being assigned',
+            result: inResultDays({
+                results: resultsAt(KNUD, Action.BOOK, 11),
+                failed: [...resultsAt(LENE, Action.BOOK, 11), ...conflictsAt(ANNA, Action.LEAVE, 12)],
+                errored: 2
+            }),
+            text: () => [`${dayOf(11)}  tilmeldt: Knud · FEJLET: Lene`, `${dayOf(12)}  FEJLET: Anna (pladsen er ved at blive tildelt)`].join('\n')
+        },
+        {
+            // A household whose run failed as a whole names no person; the household lines follow the days
+            desc: 'unchanged orders and a household that failed beside the orders that landed',
+            result: inResultDays({results: resultsAt(KNUD, Action.BOOK, 11), unchanged: 3, errored: 1}),
+            text: () => `${dayOf(11)}  tilmeldt: Knud\n3 uændret\nBookingen fejlede`
+        },
+        {
+            // A ticket sold that the run did not release has no line of its own
             desc: 'tickets sold to the waiting list and nothing else changed',
-            result: run({unchanged: 5, outcomes: withSold(soldToWaitlist(2))}),
-            text: '2 billetter solgt til ventelisten\n5 uændret'
+            result: inResultDays({unchanged: 5, outcomes: withSold(soldToWaitlist(2, 11))}),
+            text: () => '5 uændret'
         },
         {
             desc: 'nothing changed',
-            result: run({}),
-            text: 'Der var ingen ændringer i dine bookinger'
+            result: inResultDays({}),
+            text: () => 'Der var ingen ændringer i dine bookinger'
         }
     ])('$desc', ({result, text}) => {
-        expect(formatBookingResult(result)).toBe(text)
+        expect(formatResultLines(result, HOUSEHOLD)).toBe(text())
+    })
+})
+
+// Every toast that reports a booking result: the view's title, the result's lines, the look of the result
+describe('scaffoldToast', () => {
+    it.each([
+        {desc: 'a run where every order landed', result: inResultDays({results: resultsAt(ANNA, Action.BOOK, 11)})},
+        {desc: 'a run with a failed order', result: inResultDays({failed: resultsAt(ANNA, Action.BOOK, 11), errored: 1})}
+    ])('$desc toasts the view\'s title with the result\'s lines in the result\'s look', ({result}) => {
+        expect(scaffoldToast('Præferencer opdateret', result, [ANNA.inhabitantId]))
+            .toEqual({title: 'Præferencer opdateret', description: formatResultLines(result, [ANNA.inhabitantId]), ...scaffoldToastLook(result)})
     })
 })
 
@@ -480,10 +505,10 @@ describe('formatBookingResult', () => {
 // then per person in the household's order; the tickets sold to the waiting list last in their day
 describe('formatPreviewLines', () => {
     const {TAKEAWAY} = DinnerModeSchema.enum
-    // The dinners a preview names, one a day from 19/10/2026
-    const dinners = Array.from({length: 8}, (_, index) =>
-        ({...DinnerEventFactory.defaultDinnerEventDisplay(), id: index + 1, date: new Date(2026, 9, 19 + index)}))
+    // The dinners a preview's run decided, one a day from 19/10/2026
+    const dinners = Array.from({length: 8}, (_, index) => ({id: index + 1, date: new Date(2026, 9, 19 + index)}))
     const dateOf = (dinnerEventId: number) => dinners[dinnerEventId - 1]!.date
+    const inDays = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => run({dinners, ...overrides})
     const HOUSEHOLD = [ANNA, LARS, KNUD].map(person => person.inhabitantId)
     // Each day's lines, keyed by its dinner
     const daysOf = (days: ReturnType<typeof formatPreviewLines>) => days.map(({dinnerEventId, lines}) => ({dinnerEventId, lines: lines.map(line => line.text)}))
@@ -565,7 +590,7 @@ describe('formatPreviewLines', () => {
             days: []
         }
     ])('$desc', ({results, positions = [], sold = [], days}) => {
-        expect(daysOf(formatPreviewLines(run({results, positions, outcomes: withSold(sold)}), dinners, HOUSEHOLD))).toEqual(days)
+        expect(daysOf(formatPreviewLines(inDays({results, positions, outcomes: withSold(sold)}), HOUSEHOLD))).toEqual(days)
     })
 
     // Each action's line: the person and the action's words, in the action's glyph and the colour of the order state it
@@ -583,7 +608,7 @@ describe('formatPreviewLines', () => {
         [Action.CHANGE_MODE]: OrderState.CLOSED
     } as const satisfies Record<BookingAction, keyof typeof ORDER_STATE_LABELS>
     it.each(BookingActionSchema.options)('a %s line reads the person and the action\'s words in its glyph and colour', (action) => {
-        const [day] = formatPreviewLines(run({results: resultsAt(ANNA, action, 1)}), dinners)
+        const [day] = formatPreviewLines(inDays({results: resultsAt(ANNA, action, 1)}))
         expect(day!.lines).toEqual([{
             name: ANNA.inhabitantName,
             action,
@@ -594,17 +619,17 @@ describe('formatPreviewLines', () => {
     })
 
     it('without the household\'s order the people keep the order the results first name them', () => {
-        const days = formatPreviewLines(run({results: [...resultsAt(LARS, Action.BOOK, 1), ...resultsAt(ANNA, Action.BOOK, 1)]}), dinners)
+        const days = formatPreviewLines(inDays({results: [...resultsAt(LARS, Action.BOOK, 1), ...resultsAt(ANNA, Action.BOOK, 1)]}))
         expect(daysOf(days)).toEqual([{dinnerEventId: 1, lines: ['Lars tilmeldes', 'Anna tilmeldes']}])
     })
 
     it('a day carries its dinner\'s date and its weekday with the date as the separator reads it', () => {
-        const [day] = formatPreviewLines(run({results: resultsAt(ANNA, Action.BOOK, 4)}), dinners)
+        const [day] = formatPreviewLines(inDays({results: resultsAt(ANNA, Action.BOOK, 4)}))
         expect(day).toMatchObject({date: dateOf(4), label: `${formatDate(dateOf(4), 'EEEEEE')} ${formatDate(dateOf(4))}`})
     })
 
     it('a ticket sold to the waiting list wears the glyph and the colour of a ticket bought', () => {
-        const [day] = formatPreviewLines(run({results: resultsAt(ANNA, Action.BUY, 1), outcomes: withSold(soldToWaitlist(1, 1))}), dinners)
+        const [day] = formatPreviewLines(inDays({results: resultsAt(ANNA, Action.BUY, 1), outcomes: withSold(soldToWaitlist(1, 1))}))
         const [bought, sold] = day!.lines
         expect(bought).toMatchObject({name: ANNA.inhabitantName, action: Action.BUY, icon: ACTION_WORDS[Action.BUY].icon})
         expect(sold).toMatchObject({action: Action.BUY, icon: bought!.icon, color: bought!.color})

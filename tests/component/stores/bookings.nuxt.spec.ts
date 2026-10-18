@@ -21,7 +21,7 @@ import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
-import {formatDate} from '~/utils/date'
+import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {addDays} from 'date-fns'
 import {flushPromises} from '@vue/test-utils'
 import {asyncDataStatus, resetStores, registerEmptyStoreEndpoints, holdEndpoint} from '~~/tests/component/testHelpers'
@@ -279,20 +279,24 @@ describe('Bookings store — scaffold bookings', () => {
         expect(store.isProcessingBookings).toBe(false)
     })
 
+    // The run's dinners, one a day from Monday 19/10/2026, each named by its day in the toast
+    const runDinners = [1, 2, 3].map(id => ({id, date: new Date(2026, 9, 18 + id)}))
+    const dayOf = (dinnerEventId: number) => formatDate(runDinners.find(({id}) => id === dinnerEventId)!.date, DATE_SETTINGS.DAY_MONTH_MASK)
+
     it.each([
-        {view: 'day', failedOrders: 0, color: COLOR.success, description: 'Anna: 2 tilmeldt d. 01/01/2026'},
-        {view: 'grid', failedOrders: 1, color: COLOR.error, description: 'Anna: 2 tilmeldt, 1 opdatering fejlede d. 01/01/2026'}
-    ])('reports the result in the toast it is given ($view view, $failedOrders failed)', async ({view, failedOrders, color, description}) => {
+        {view: 'day', failedOrders: 0, color: COLOR.success, description: () => `${dayOf(1)}  tilmeldt: Anna\n${dayOf(2)}  tilmeldt: Anna d. 01/01/2026`},
+        {view: 'grid', failedOrders: 1, color: COLOR.error, description: () => `${dayOf(1)}  tilmeldt: Anna\n${dayOf(2)}  tilmeldt: Anna\n${dayOf(3)}  FEJLET: Anna d. 01/01/2026`}
+    ])('reports the result in the toast it is given, a line per day ($view view, $failedOrders failed)', async ({view, failedOrders, color, description}) => {
         const results = [1, 2].map(dinnerEventId => OrderFactory.defaultBookingResult({inhabitantName: 'Anna', dinnerEventId, action: Action.BOOK}))
         const failed = Array.from({length: failedOrders}, () => OrderFactory.defaultBookingResult({inhabitantName: 'Anna', dinnerEventId: 3, action: Action.BOOK}))
-        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.BOOK]: 2}, results, failed, errored: failed.length}))
+        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({dinners: runDinners, totals: {[Action.BOOK]: 2}, results, failed, errored: failed.length}))
         const store = useBookingsStore()
 
         await store.processSingleEventBookings(1, DINNER_ID, [], false, {title: view, suffix: ' d. 01/01/2026'})
 
         expect(useToast().toasts.value.at(-1)).toMatchObject({
             title: view,
-            description,
+            description: description(),
             color,
             ui: {description: COMPONENTS.bookingResult.lines}
         })
@@ -306,24 +310,24 @@ describe('Bookings store — scaffold bookings', () => {
         expect(useToast().toasts.value).toHaveLength(0)
     })
 
-    it('reports each person\'s queued places and the queue they left in the toast, one line per person', async () => {
+    it('reports the queued places after the names and the queue left, a line per day, the people in the household\'s order', async () => {
         const anna = {inhabitantId: 1, inhabitantName: 'Anna'}
         const bo = {inhabitantId: 2, inhabitantName: 'Bo'}
         const results = [
-            OrderFactory.defaultBookingResult({...anna, dinnerEventId: DINNER_ID, action: Action.QUEUE}),
-            OrderFactory.defaultBookingResult({...bo, dinnerEventId: DINNER_ID, action: Action.QUEUE}),
-            OrderFactory.defaultBookingResult({...anna, dinnerEventId: DINNER_ID + 1, action: Action.LEAVE})
+            OrderFactory.defaultBookingResult({...bo, dinnerEventId: 1, action: Action.QUEUE}),
+            OrderFactory.defaultBookingResult({...anna, dinnerEventId: 1, action: Action.QUEUE}),
+            OrderFactory.defaultBookingResult({...anna, dinnerEventId: 2, action: Action.LEAVE})
         ]
         const positions = [
-            {inhabitantId: anna.inhabitantId, dinnerEventId: DINNER_ID, isGuestTicket: false, position: 3, ticketType: TicketType.ADULT},
-            {inhabitantId: bo.inhabitantId, dinnerEventId: DINNER_ID, isGuestTicket: false, position: 1, ticketType: TicketType.CHILD}
+            {inhabitantId: anna.inhabitantId, dinnerEventId: 1, isGuestTicket: false, position: 3, ticketType: TicketType.ADULT},
+            {inhabitantId: bo.inhabitantId, dinnerEventId: 1, isGuestTicket: false, position: 1, ticketType: TicketType.CHILD}
         ]
-        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.QUEUE]: 2, [Action.LEAVE]: 1}, results, positions}))
+        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({dinners: runDinners, totals: {[Action.QUEUE]: 2, [Action.LEAVE]: 1}, results, positions}))
         const store = useBookingsStore()
 
-        await store.processSingleEventBookings(1, DINNER_ID, [], false, {title: 'day'})
+        await store.processSingleEventBookings(1, DINNER_ID, [], false, {title: 'day', householdOrder: [anna.inhabitantId, bo.inhabitantId]})
 
-        expect(useToast().toasts.value.at(-1)!.description).toBe('Anna: 1 på ventelisten (Voksen #3), 1 forlod ventelisten\nBo: 1 på ventelisten (Barn #1)')
+        expect(useToast().toasts.value.at(-1)!.description).toBe(`${dayOf(1)}  på ventelisten: Anna (Voksen #3), Bo (Barn #1)\n${dayOf(2)}  forlod ventelisten: Anna`)
     })
 
     it('sends an admin correction as one scaffold with adminBypass, a new guest booked on the household\'s inhabitant', async () => {

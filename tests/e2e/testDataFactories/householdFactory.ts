@@ -131,7 +131,7 @@ export class HouseholdFactory {
         const household = await this.createHousehold(context, partialHousehold)
         const inhabitants = []
         for (let i = 0; i < inhabitantCount; i++) {
-            const inhabitant = await this.createInhabitantForHousehold(context, household.id, `Donald${i} Duck`)
+            const inhabitant = await this.createInhabitantForHousehold(context, household.id)
             inhabitants.push(inhabitant)
         }
 
@@ -227,11 +227,14 @@ export class HouseholdFactory {
 
     // === INHABITANT METHODS ===
 
+    /** The first name of a person the factory creates without one: `Anders-<uuid>`, the pattern d1-nuke-households removes */
+    static readonly defaultInhabitantName = (testSalt: string = temporaryAndRandom()): string => salt('Anders', testSalt)
+
     static readonly defaultInhabitantData = (testSalt: string = temporaryAndRandom()): InhabitantCreate => {
         return {
             heynaboId: saltedId(TEST_DATA_ID_BASE, testSalt),
             householdId: 1,  // Default household ID for test data
-            name: salt('Anders', testSalt),
+            name: this.defaultInhabitantName(testSalt),
             lastName: salt('And', testSalt),
             pictureUrl: null,
             birthDate: new Date('1990-01-15'),
@@ -281,14 +284,14 @@ export class HouseholdFactory {
     static readonly createInhabitantForHousehold = async (
         context: BrowserContext,
         householdId: number,
-        inhabitantName: string = "Pluto Hund",
+        inhabitantName: string = this.defaultInhabitantName(),
         birthDate?: Date | null,
         expectedStatus: number = 201
     ): Promise<InhabitantDetail> => {
         // Split name into first and last
         const nameParts = inhabitantName.split(' ')
         // Only use defaults for success cases (201) - validation tests need exact invalid data
-        const firstName = expectedStatus === 201 ? (nameParts[0] || 'Pluto') : (nameParts[0] || '')
+        const firstName = expectedStatus === 201 ? (nameParts[0] || this.defaultInhabitantName()) : (nameParts[0] || '')
         const lastName = expectedStatus === 201 ? (nameParts.slice(1).join(' ') || 'Hund') : (nameParts.slice(1).join(' ') || '')
 
         return this.createInhabitantWithConfig(context, householdId, {

@@ -212,7 +212,7 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         // GIVEN: a seed household at an address
         const seed = await HouseholdFactory.createHousehold(context, {
             ...HouseholdFactory.defaultHouseholdData(testSalt),
-            name: salt('Leaving', testSalt),
+            name: salt('Test Leaving', testSalt),
             address: salt('Shared Lane 7', testSalt),
             moveOutDate: new Date('2026-09-01')
         })

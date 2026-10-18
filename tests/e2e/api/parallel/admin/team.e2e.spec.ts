@@ -8,7 +8,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 
 const {validateCookingTeam, getTeamMemberCounts, CreateTeamsResponseSchema} = useCookingTeamValidation()
 const {createWeekDayMapFromSelection} = useWeekDayMapValidation()
-const {headers, validatedBrowserContext, salt} = testHelpers
+const {headers, validatedBrowserContext, salt, temporaryAndRandom} = testHelpers
 
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
@@ -51,7 +51,7 @@ test.describe('Admin Teams API', () => {
         test('PUT /api/admin/team returns the {teams, eventsAssigned} envelope (ADR-009)', async ({browser}) => {
             // GIVEN: an own season with auto-generated dinner events (parallel-safe: no shared season)
             const context = await validatedBrowserContext(browser)
-            const testSalt = Date.now().toString()
+            const testSalt = temporaryAndRandom()
             const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
             createdSeasonIds.push(season.id as number)
             expect(dinnerEvents.length).toBeGreaterThan(0)

@@ -36,8 +36,10 @@ test.describe('Waiting list entries API', () => {
         })
         dinnerEventId = dinner.id!
         const householdId = (await getSessionUserInfo(context)).householdId
-        for (const [name, price] of [['Venter Et', adultPrice], ['Venter To', childPrice]] as const) {
-            const inhabitant = await HouseholdFactory.createInhabitantForHousehold(context, householdId, salt(name, testSalt))
+        for (const [lastName, price] of [['Venter Et', adultPrice], ['Venter To', childPrice]] as const) {
+            const inhabitant = await HouseholdFactory.createInhabitantWithConfig(context, householdId, {
+                name: salt('Anders', testSalt), lastName, birthDate: null
+            })
             inhabitantIds.push(inhabitant.id)
             await WaitlistFactory.queue(context, householdId, seasonId, OrderFactory.createBookingOrder(inhabitant.id, dinnerEventId, price.id!))
         }

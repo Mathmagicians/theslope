@@ -8,7 +8,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {getHouseholdUrl} from '~/utils/household'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated} = testHelpers
+const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated, temporaryAndRandom} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -27,7 +27,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
     let householdAddress: string
     let householdPbsId: number
     let householdEconomyUrl: string
-    const testSalt = `admin-economy-${Date.now()}`
+    const testSalt = temporaryAndRandom()
     const createdSeasonIds: number[] = []
 
     test.use({storageState: adminUIFile})

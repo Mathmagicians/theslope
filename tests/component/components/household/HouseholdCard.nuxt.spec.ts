@@ -4,7 +4,7 @@ import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {getQuery, readBody, type H3Event} from 'h3'
 import {ref} from 'vue'
-import {mountWithTooltipProvider, clickByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, clickByTestId, findByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
 import HouseholdCard from '~/components/household/HouseholdCard.vue'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -15,6 +15,7 @@ import {createResponsiveSizes, createTableColumns} from '~/composables/useTheSlo
 import {formatPreviewLines} from '~/composables/useBookingUi'
 import {useBookingValidation, type InhabitantUpdateResponse, type ScaffoldResult} from '~/composables/useBookingValidation'
 import {WEEKDAYS} from '~/types/dateTypes'
+import {formatDate, DATE_SETTINGS} from '~/utils/date'
 
 const {BookingActionSchema, DinnerModeSchema} = useBookingValidation()
 const Action = BookingActionSchema.enum
@@ -23,7 +24,7 @@ const DinnerMode = DinnerModeSchema.enum
 const household = HouseholdFactory.defaultHouseholdDetail('household-card')
 const inhabitant = household.inhabitants[0]!
 
-// Only HTTP is faked (testing.md Rule 6); the preview names the season's dinners by their dates
+// Only HTTP is faked (testing.md Rule 6); the preview and the toast name the run's dinners by their dates
 const dinner = DinnerEventFactory.dinnerEventAt(1, 10)
 const season = {...SeasonFactory.defaultSeason('household-card'), id: 1, dinnerEvents: [dinner]}
 registerEndpoint('/api/admin/season/active', () => season.id)
@@ -33,7 +34,7 @@ registerEndpoint('/api/admin/household', () => [])
 
 // Each member's preference endpoint answers its preview: the member's Ingen cancels their dinner
 const sent: {inhabitantId: number, query: Record<string, unknown>, body: unknown}[] = []
-const previewOf = (inhabitantId: number): ScaffoldResult => OrderFactory.defaultScaffoldResult({results: [OrderFactory.defaultBookingResult({
+const previewOf = (inhabitantId: number): ScaffoldResult => OrderFactory.defaultScaffoldResult({dinners: [{id: dinner.id, date: dinner.date}], results: [OrderFactory.defaultBookingResult({
     inhabitantId, inhabitantName: household.inhabitants.find(({id}) => id === inhabitantId)!.name, dinnerEventId: dinner.id, dinnerMode: DinnerMode.NONE, action: Action.CANCEL
 })]})
 let answerPreview = (inhabitantId: number): InhabitantUpdateResponse | Promise<InhabitantUpdateResponse> =>
@@ -97,7 +98,7 @@ describe('HouseholdCard previews a preference change', () => {
         await clickByTestId(wrapper, `${editor}-${MONDAY}-${DinnerMode.NONE}`)
 
         const expected = formatPreviewLines(
-            OrderFactory.defaultScaffoldResult({results: inhabitantIds.flatMap(id => previewOf(id).results)}), season.dinnerEvents, householdOrder)
+            OrderFactory.defaultScaffoldResult({dinners: previewOf(inhabitant.id).dinners, results: inhabitantIds.flatMap(id => previewOf(id).results)}), householdOrder)
         await vi.waitFor(() => expect(previewTexts(wrapper)).toEqual(expected.map(day => day.lines.map(line => line.text))))
         expect(sent.map(({inhabitantId, query}) => ({inhabitantId, query}))).toEqual(inhabitantIds.map(inhabitantId => ({inhabitantId, query: {preview: 'true'}})))
         sent.forEach(({body}) => expect(body).toMatchObject({dinnerPreferences: {[MONDAY]: DinnerMode.NONE}}))
@@ -130,5 +131,33 @@ describe('HouseholdCard previews a preference change', () => {
         land()
         await vi.waitFor(() => expect(wrapper.findComponent(ActionPreview).props('pending')).toBe(false))
         expect(previewTexts(wrapper)).toHaveLength(1)
+    })
+})
+
+// Gem reports what the save did: the toast's lines, a line per day, and the same lines in the "Sidste ændring" alert
+describe('HouseholdCard reports a saved preference change', () => {
+    const MONDAY = WEEKDAYS[0]
+    const [first, second] = household.inhabitants
+
+    beforeEach(() => {
+        resetStores()
+        sent.length = 0
+        useToast().clear()
+        // The save's run covers the household: the other member's line comes back first beside the person's own
+        answerPreview = inhabitantId => ({
+            inhabitant: {...household.inhabitants.find(({id}) => id === inhabitantId)!, userId: null},
+            scaffoldResult: OrderFactory.defaultScaffoldResult({dinners: previewOf(inhabitantId).dinners, results: [second!.id, first!.id].flatMap(id => previewOf(id).results)})
+        })
+    })
+
+    it('the toast and the alert read the day\'s line, the people in the household\'s order', async () => {
+        const wrapper = await mountCard(false)
+        await clickByTestId(wrapper, `inhabitant-${first!.id}-edit-preferences`)
+        await clickByTestId(wrapper, `inhabitant-${first!.id}-preferences-edit-${MONDAY}-${DinnerMode.NONE}`)
+        await clickByTestId(wrapper, 'save-preferences')
+
+        const line = `${formatDate(dinner.date, DATE_SETTINGS.DAY_MONTH_MASK)}  frameldt: ${first!.name}, ${second!.name}`
+        await vi.waitFor(() => expect(useToast().toasts.value.at(-1)).toMatchObject({title: 'Præferencer opdateret', description: line}))
+        expect(findByTestId(wrapper, 'last-result-alert').text()).toContain(`Du har ændret præferencer, og familiens bookinger har ændret sig:\n${line}`)
     })
 })
