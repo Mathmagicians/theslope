@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears} from 'date-fns'
-import {useBooking, formatPlace, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
+import {useBooking, formatPlace, formatDinnerName, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {MODE_WORDS, ORDER_STATE_LABELS} from '~/composables/useBookingUi'
 import {formatDate} from '~/utils/date'
@@ -1837,6 +1837,18 @@ describe('formatPlace', () => {
         {position: 4, ticketType: null, place: '#4'}
     ])('place $position in the line of $ticketType reads "$place"', ({position, ticketType, place}) => {
         expect(formatPlace(position, ticketType)).toBe(place)
+    })
+})
+
+// A dinner's name: its menu title, else the dinner itself while the chef has written no menu
+describe('formatDinnerName', () => {
+    it.each([
+        {desc: 'a menu title', menuTitle: 'Lasagne', name: 'Lasagne'},
+        {desc: 'a menu title with spaces around it', menuTitle: '  Lasagne ', name: 'Lasagne'},
+        {desc: 'an empty menu title', menuTitle: '', name: 'Fællesspisning'},
+        {desc: 'a menu title of spaces', menuTitle: '   ', name: 'Fællesspisning'}
+    ])('GIVEN $desc THEN the dinner reads "$name"', ({menuTitle, name}) => {
+        expect(formatDinnerName({menuTitle})).toBe(name)
     })
 })
 

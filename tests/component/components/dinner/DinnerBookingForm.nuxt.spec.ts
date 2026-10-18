@@ -2,7 +2,7 @@
 import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS, lockedDinnerSupply, findLoadingRow, isTableLoading} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS, lockedDinnerSupply, isTableLoading} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
@@ -287,7 +287,6 @@ describe('DinnerBookingForm', () => {
       expect(isTableLoading(wrapper)).toBe(loading)
       expect(findByTestId(wrapper, 'power-power-mode-toggle').exists()).toBe(true)
       expect(wrapper.findAllComponents(DinnerTicket).length > 0).toBe(true)
-      expect(findLoadingRow(wrapper).exists()).toBe(false)
     })
 
     // The day bill and the household's notes count the orders: they wait while the orders load

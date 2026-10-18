@@ -647,7 +647,7 @@ generate-session-secret: ## Generate a session secret
 # ============================================================================
 # CLAUDE MODES - each mode starts its agent from .claude/agents/
 # ============================================================================
-.PHONY: claude-senior-dev claude-test claude-adr claude-ux claude-doc claude-pair claude-devops claude-code-review
+.PHONY: claude-senior-dev claude-test claude-adr claude-ux claude-doc claude-pair claude-devops claude-code-review claude-orchestrator
 
 claude-senior-dev: ## Claude as senior dev
 	@claude --agent nuxt-typescript-developer
@@ -672,3 +672,6 @@ claude-devops: ## Claude as DevOps engineer
 
 claude-code-review: ## Claude PR review against ADRs
 	@claude --agent documentar "/code-review"
+
+claude-orchestrator: ## Claude orchestrator for multi-agent collaboration
+	@claude --agent senior-architect --append-system-prompt "You are in charge of peer sesssions, use the /orchestrator skill to interact with the human Architect, and my sure what is produced lives up to the standards /dry, and is adr compliant"

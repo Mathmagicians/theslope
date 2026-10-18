@@ -1,7 +1,8 @@
 import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, claimOrder, countReleasedTickets, type OrderBatchUpdate, fetchUserIntentKeys} from "~~/server/data/financesRepository"
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 import {useSeason, type BookingDeadlines} from "~/composables/useSeason"
-import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, type QueuePosition, type BookingOutcomes, type BookingAction, type BookingResult, OrderAuditAction as AuditActions, BookingFailure} from "~/composables/useBookingValidation"
+import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type DinnerMode, type OrderAuditAction, type QueuePosition, type BookingOutcomes, type BookingAction, type BookingResult, OrderAuditAction as AuditActions, BookingFailure} from "~/composables/useBookingValidation"
+import type {WeekDayMap} from "~/types/dateTypes"
 import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets, bookingOutcomes, actionOfUpdate, countTotals} from "~/composables/useBooking"
 import {writeBatchOrEach} from "~/utils/batchUtils"
 import {sellTicketsToWaitlist, joinWaitlist} from "~~/server/utils/waitlistAssignment"
@@ -51,6 +52,8 @@ export type ScaffoldOptions = {
     userId?: number
     /** The deadlines user mode decides by; the season's when absent */
     deadlines?: BookingDeadlines
+    /** System mode on one inhabitant's draft preferences: the run decides as the save would and writes nothing */
+    dryRun?: {inhabitantId: number, dinnerPreferences: WeekDayMap<DinnerMode>}
 }
 
 /**
@@ -121,9 +124,14 @@ export async function scaffoldPrebookings(
 
     const isUserTriggered = options.userId !== undefined
     const isUserMode = options.desiredOrders !== undefined
+    const {dryRun} = options
 
     if (isUserMode && (!options.householdId || !options.userId)) {
         throw new Error(`${LOG} User mode (desiredOrders provided) requires both householdId and userId`)
+    }
+    // User mode claims and queues, which a dry run has no stand-in for
+    if (isUserMode && dryRun) {
+        throw new Error(`${LOG} A dry run decides from preferences: user mode (desiredOrders provided) takes none`)
     }
 
     // Resolve season ID - use provided or fall back to active season
@@ -153,7 +161,14 @@ export async function scaffoldPrebookings(
             : getScaffoldableDinnerEvents(allDinnerEvents).map(e => e.id))
     const dinnerEvents = allDinnerEvents.filter(de => dinnerEventIds.includes(de.id))
 
-    const households = await fetchHouseholds(d1Client, options.householdId)
+    const storedHouseholds = await fetchHouseholds(d1Client, options.householdId)
+    // A dry run decides with its inhabitant's draft in place of the stored preferences
+    const households = dryRun
+        ? storedHouseholds.map(household => ({...household, inhabitants: household.inhabitants.map(inhabitant =>
+            inhabitant.id === dryRun.inhabitantId ? {...inhabitant, dinnerPreferences: dryRun.dinnerPreferences} : inhabitant)}))
+        : storedHouseholds
+    // A dry run lands each write it would make without touching a row
+    const execute: typeof writeBatchOrEach = dryRun ? async (items, _write, onDone) => onDone(items) : writeBatchOrEach
 
     // Fetch orders (chunked), user intent keys and, in user mode, the household's queue entries in parallel
     const [orderBatches, userIntentKeys, existingEntries] = await Promise.all([
@@ -168,7 +183,7 @@ export async function scaffoldPrebookings(
     const ticketPriceById = new Map(season.ticketPrices.map(tp => [tp.id, tp]))
     const ticketTypeOf = ticketTypeOfEntry(season.ticketPrices)
 
-    console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode: ${households.length} household(s), ${dinnerEvents.length} events, ${existingEntries.length} queue entries`)
+    console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode${dryRun ? ' (dry run)' : ''}: ${households.length} household(s), ${dinnerEvents.length} events, ${existingEntries.length} queue entries`)
 
     // Process each household and accumulate one result per order that landed or failed
     const landed: BookingResult[] = []
@@ -255,7 +270,7 @@ export async function scaffoldPrebookings(
             // Create new orders; a failed batch is written order by order
             const creates = result.create.map(desired => ({desired, order: toOrderCreate(desired)}))
             for (const batch of chunkOrderBatch(creates)) {
-                await writeBatchOrEach(batch, orders => createOrders(d1Client, household.id, orders.map(({order}) => order), {
+                await execute(batch, orders => createOrders(d1Client, household.id, orders.map(({order}) => order), {
                     action: getAuditAction(isUserTriggered, Action.BOOK),
                     performedByUserId: effectiveUserId,
                     source: isUserMode ? Source['user-booking'] : (options.householdId ? Source['preference-update'] : Source['scaffold-prebookings']),
@@ -295,7 +310,7 @@ export async function scaffoldPrebookings(
             }
             const executeBatchUpdates = updateOrdersBatch(90)
             const actionOf = (desired: DesiredOrder) => updates.find(entry => entry.desired === desired)!.action
-            await writeBatchOrEach(updates, entries => executeBatchUpdates(d1Client, entries.map(({update}) => update)),
+            await execute(updates, entries => executeBatchUpdates(d1Client, entries.map(({update}) => update)),
                 entries => {
                     for (const {desired, action} of entries) landed.push(resultOf(desired, action))
                 },
@@ -310,7 +325,7 @@ export async function scaffoldPrebookings(
             for (const chunk of chunkDeleteBatch(cancels)) {
                 // Pass null for system-triggered deletes → SYSTEM_DELETED audit (deleteOrder contract: null = system)
                 // Pass effectiveUserId for user-triggered deletes → USER_CANCELLED audit (respected by scaffolder)
-                await writeBatchOrEach(chunk, entries => deleteOrder(d1Client, entries.map(({orderId}) => orderId), isUserTriggered ? effectiveUserId : null),
+                await execute(chunk, entries => deleteOrder(d1Client, entries.map(({orderId}) => orderId), isUserTriggered ? effectiveUserId : null),
                     landedAs(Action.CANCEL), failedAs(() => Action.CANCEL))
             }
 
@@ -412,15 +427,17 @@ export async function scaffoldPrebookings(
     }
 
     // The tickets for sale go to the first in their type's line, once per run; the extra portions it finishes for a
-    // stopped run go to the caller with them
-    try {
-        const {waitlistTicketsSold, waitlistPortionsAssigned} = await sellTicketsToWaitlist(d1Client, dinnerEventIds, season.ticketPrices)
-        outcomes.waitlistTicketsSold.push(...waitlistTicketsSold)
-        outcomes.waitlistPortionsAssigned.push(...waitlistPortionsAssigned)
-    } catch (error) {
-        eventHandlerHelper.logNuxtError(eventHandlerHelper.nuxtErrorFromCatch(
-            `${LOG} The tickets for sale on ${dinnerEventIds.length} dinner(s) did not reach the waiting list`, error
-        ), error)
+    // stopped run go to the caller with them. A dry run leaves the sale to the save
+    if (!dryRun) {
+        try {
+            const {waitlistTicketsSold, waitlistPortionsAssigned} = await sellTicketsToWaitlist(d1Client, dinnerEventIds, season.ticketPrices)
+            outcomes.waitlistTicketsSold.push(...waitlistTicketsSold)
+            outcomes.waitlistPortionsAssigned.push(...waitlistPortionsAssigned)
+        } catch (error) {
+            eventHandlerHelper.logNuxtError(eventHandlerHelper.nuxtErrorFromCatch(
+                `${LOG} The tickets for sale on ${dinnerEventIds.length} dinner(s) did not reach the waiting list`, error
+            ), error)
+        }
     }
 
     const totals = countTotals(landed)

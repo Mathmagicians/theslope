@@ -28,9 +28,11 @@ export const RouteIdSchema = z.coerce.number().int().positive()
 export const idParams = <const K extends string>(...names: K[]) =>
     z.object(Object.fromEntries(names.map(name => [name, RouteIdSchema])) as Record<K, typeof RouteIdSchema>)
 
-// Only the literal "true" bypasses: z.coerce.boolean() reads the string "false" as true
+// A flag in a url's query: only the literal "true" sets it, as z.coerce.boolean() reads the string "false" as true
+export const QueryFlagSchema = z.enum(['true', 'false']).optional().transform(flag => flag === 'true')
+
 export const AdminBypassQuerySchema = z.object({
-    adminBypass: z.enum(['true', 'false']).optional().transform(flag => flag === 'true')
+    adminBypass: QueryFlagSchema
 })
 
 // Response of a delete whose entity no caller renders (ADR-009)

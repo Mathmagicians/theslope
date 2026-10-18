@@ -10,15 +10,26 @@
  *   Risotto                 1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check)
  *
  * The team's round: its heading, the cooking days as the rows, the team's total row
- *   Hele Madhold 2, for perioden 12/04–15/04                  ex / inkl. moms
+ *   Hele Madhold 2, periode 12/04–15/04                       ex / inkl. moms
  *   12/04  Lasagne          1.425 / 1.781 kr  1.540 / 1.925 kr  -115 / -144 kr (overdraft)
  *   14/04  (arrow) Risotto  1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check)
  *   15/04  Pasta                0 /     0 kr      0 /     0 kr      0 /     0 kr (waiting)
  *   Hele Madhold 2          2.923 / 3.654 kr  2.850 / 3.563 kr   +73 /  +91 kr (check)
  *
+ * A dinner without a menu title reads Fællesspisning (formatDinnerName) in its heading, its total row and its Middag cell:
+ *   Fællesspisning, 10/11/2026                                ex / inkl. moms
+ *   Dato   Middag            Rådighedsbeløb      Brugt         Tilbage
+ *   Fællesspisning           1.498 / 1.873 kr       0 /    0 kr  ...
+ *
+ *   Hele Madhold 2, periode 03/11–10/11                       ex / inkl. moms
+ *   Dato   Middag            Rådighedsbeløb      Brugt         Tilbage
+ *   03/11  Lasagne           1.425 / 1.781 kr  1.540 / 1.925 kr  ...
+ *   10/11  Fællesspisning    1.498 / 1.873 kr       0 /    0 kr  ...
+ *   Hele Madhold 2           ...
+ *
  * While the round's orders load (the bookings store), UTable's loading bar runs under the team's round's column
  * headers and its days and total row stay; this dinner's receipts come from the dinner and carry no bar:
- *   Hele Madhold 2, for perioden 12/04–15/04                  ex / inkl. moms
+ *   Hele Madhold 2, periode 12/04–15/04                       ex / inkl. moms
  *   Dato   Middag            Rådighedsbeløb      Brugt         Tilbage
  *   ==============================================================  <- UTable's loading bar
  *   12/04  Lasagne          1.425 / 1.781 kr  1.540 / 1.925 kr  -115 / -144 kr (overdraft)
@@ -34,7 +45,7 @@ const props = defineProps<{
   fragment: SpendingFragment
 }>()
 
-const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY, ALERTS, getRandomEmptyMessageText} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, TYPOGRAPHY, ALERTS, getRandomEmptyMessageText} = useTheSlopeDesignSystem()
 
 // A team's cooking days read their allowance off the round's orders; this dinner's rows are its receipts
 const {isOrdersLoading} = storeToRefs(useBookingsStore())
@@ -62,7 +73,7 @@ const columns: TableColumn<SpendingTableRow>[] = [
       <template #label-cell="{ row }">
         <template v-if="row.original.kind === 'dinner'">
           <UIcon v-if="row.original.isCurrent" :name="ICONS.arrowRight" :class="COMPONENTS.table.currentMarker" data-testid="cooking-round-marker" />
-          {{ row.original.menuTitle }}
+          {{ formatDinnerName(row.original) }}
         </template>
         <span v-else :class="COMPONENTS.table.receiptLabel">{{ row.original.label }}</span>
       </template>
@@ -75,12 +86,6 @@ const columns: TableColumn<SpendingTableRow>[] = [
       </template>
       <template #left-cell="{ row }">
         <VatAmount v-if="row.original.kind === 'dinner'" :gross="spendingLeft(row.original)" balance :pending="spendingAwaitsTickets(row.original)" />
-      </template>
-      <template #loading>
-        <div :class="COMPONENTS.table.loadingRow">
-          <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
-          Henter bookinger...
-        </div>
       </template>
       <template #empty>
         <UAlert v-bind="ALERTS.emptyStateCompact" :title="noReceipts" data-testid="cooking-round-empty" />

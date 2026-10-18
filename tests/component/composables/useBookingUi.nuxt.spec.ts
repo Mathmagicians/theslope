@@ -12,6 +12,7 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {ticketTypeLabel} from '~/composables/useTicket'
+import {formatDate} from '~/utils/date'
 import appConfig from '~/app.config'
 
 const {DinnerStateSchema, DinnerModeSchema, BookingActionSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
@@ -59,9 +60,16 @@ describe('spending fragments', () => {
         expect(fragment.total).toEqual({label: 'Ret 2', figures: {budgetGross: 2000, spentGross: 200}})
     })
 
+    it('GIVEN a dinner without a menu title THEN its heading and its total row read Fællesspisning', () => {
+        const untitled = {...dinner(2, true), menuTitle: ''}
+        const fragment = dinnerSpendingFragment(untitled, [])
+        expect(fragment.heading).toBe(`Fællesspisning, ${formatDate(untitled.date)}`)
+        expect(fragment.total.label).toBe('Fællesspisning')
+    })
+
     it('builds the team\'s fragment: its words as heading and total label, the days as rows, the sums as figures', () => {
-        const fragment = teamSpendingFragment([dinner(1, false), dinner(2, true)], {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, for perioden 11/04–12/04'})
-        expect(fragment.heading).toBe('Hele Madhold 2, for perioden 11/04–12/04')
+        const fragment = teamSpendingFragment([dinner(1, false), dinner(2, true)], {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, periode 11/04–12/04'})
+        expect(fragment.heading).toBe('Hele Madhold 2, periode 11/04–12/04')
         expect(fragment.rows.map(row => row.kind)).toEqual(['dinner', 'dinner'])
         expect(fragment.total).toEqual({label: 'Hele Madhold 2', figures: {budgetGross: 3000, spentGross: 300}})
     })

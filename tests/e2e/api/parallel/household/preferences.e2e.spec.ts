@@ -4,8 +4,9 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, type InhabitantUpdateResponse} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {dateToWeekDay} from '~/utils/season'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {differenceInCalendarDays} from 'date-fns'
 const Action = useBookingValidation().BookingActionSchema.enum
@@ -305,5 +306,55 @@ test.describe('Preferences and guest tickets', () => {
             const waiting = (await WaitlistFactory.entries(adminContext, [dinner.id])).filter(entry => entry.inhabitantId === inhabitant.id)
             expect(waiting).toHaveLength(queuedGuests - sold)
         })
+    })
+})
+
+/**
+ * A preview answers the reply the save of the draft preferences would give and writes nothing. The spec's own season is
+ * open until each dinner, so a weekday turned Ingen cancels the person's dinners on it.
+ */
+test.describe('Preference preview', () => {
+    const seasonIds: number[] = []
+    const inhabitantIds: number[] = []
+
+    test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        for (const id of inhabitantIds) await HouseholdFactory.deleteInhabitant(context, id)
+        await SeasonFactory.cleanupSeasons(context, seasonIds)
+    })
+
+    test('GIVEN an inhabitant with upcoming orders WHEN a preview sets a weekday to Ingen THEN the reply lists the cancellations, the orders and the stored preferences are unchanged, and the save then lists the same actions', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const memberContext = await memberValidatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+        const {householdId} = await getSessionUserInfo(memberContext)
+        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {ticketIsCancellableDaysBefore: 0})
+        seasonIds.push(season.id!)
+        const inhabitant = await HouseholdFactory.createInhabitantForHousehold(adminContext, householdId, salt('Preview', testSalt))
+        inhabitantIds.push(inhabitant.id)
+        const dineIn = createDefaultWeekdayMap(DinnerMode.DINEIN)
+        await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, dineIn, 200, season.id)
+
+        // The run covers the member's whole household; the case reads its own inhabitant's orders and lines
+        const ordersOf = async () => (await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, dinnerEvents.map(de => de.id)))
+            .filter(order => order.inhabitantId === inhabitant.id)
+        const linesOf = (reply: InhabitantUpdateResponse | null) => reply!.scaffoldResult.results.filter(line => line.inhabitantId === inhabitant.id)
+        const weekdayOf = (dinnerEventId: number) => dateToWeekDay(dinnerEvents.find(de => de.id === dinnerEventId)!.date)
+        const booked = await ordersOf()
+        const weekday = dateToWeekDay(dinnerEvents.find(de => differenceInCalendarDays(de.date, new Date()) >= 1)!.date)
+        const draft = {...dineIn, [weekday]: DinnerMode.NONE}
+        const cancelled = booked.filter(order => weekdayOf(order.dinnerEventId) === weekday)
+        expect(cancelled, 'The inhabitant holds an order on the weekday').not.toEqual([])
+
+        const preview = await HouseholdFactory.previewInhabitantPreferences(memberContext, inhabitant.id, draft, season.id)
+
+        expect(linesOf(preview)).toHaveLength(cancelled.length)
+        expect(linesOf(preview)).toEqual(expect.arrayContaining(cancelled.map(order => expect.objectContaining({dinnerEventId: order.dinnerEventId, action: Action.CANCEL}))))
+        expect(await ordersOf()).toEqual(booked)
+        expect((await HouseholdFactory.getInhabitantById(adminContext, inhabitant.id))!.dinnerPreferences).toEqual(dineIn)
+
+        const saved = await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, draft, 200, season.id)
+
+        expect(linesOf(saved)).toEqual(linesOf(preview))
     })
 })

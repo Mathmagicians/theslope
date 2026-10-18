@@ -445,6 +445,7 @@ export class HouseholdFactory {
      * @param seasonId - Optional seasonId query param for parallel-safe testing
      * @param assertResponse - Optional callback to assert response properties
      * @param adminBypass - An admin changing another household's preferences
+     * @param preview - The reply the save would give, with nothing written
      */
     static readonly updateInhabitantPreferences = async (
         context: BrowserContext,
@@ -453,11 +454,13 @@ export class HouseholdFactory {
         expectedStatus: number = 200,
         seasonId?: number,
         assertResponse?: (response: InhabitantUpdateResponse) => void,
-        adminBypass: boolean = false
+        adminBypass: boolean = false,
+        preview: boolean = false
     ): Promise<InhabitantUpdateResponse | null> => {
         const query = new URLSearchParams()
         if (seasonId !== undefined) query.append('seasonId', String(seasonId))
         if (adminBypass) query.append('adminBypass', 'true')
+        if (preview) query.append('preview', 'true')
         const url = `/api/household/inhabitants/${inhabitantId}/preferences${query.size > 0 ? `?${query}` : ''}`
 
         const response = await context.request.post(url, {
@@ -477,6 +480,15 @@ export class HouseholdFactory {
         }
         return parsed
     }
+
+    /** Preview a preference change via the household endpoint: the reply the save would give, with nothing written */
+    static readonly previewInhabitantPreferences = (
+        context: BrowserContext,
+        inhabitantId: number,
+        dinnerPreferences: Record<string, string>,
+        seasonId?: number
+    ): Promise<InhabitantUpdateResponse | null> =>
+        HouseholdFactory.updateInhabitantPreferences(context, inhabitantId, dinnerPreferences, 200, seasonId, undefined, false, true)
 
     /**
      * Release orders for an inhabitant by setting their preferences to NONE

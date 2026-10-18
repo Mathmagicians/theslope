@@ -13,6 +13,7 @@ import {calculateCountdown, formatDate, DATE_SETTINGS} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
 import {chunkArray, groupBy, partition} from '~/utils/batchUtils'
 import {sumBy} from '~/utils/ledger'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 import {differenceInCalendarDays, isAfter} from 'date-fns'
 
 const {BookingRowActionSchema, OrderBucketSchema, BookingActionSchema} = useBookingValidation()
@@ -148,6 +149,10 @@ export const actionOfUpdate = (incoming: DesiredOrder, existing: OrderDisplay | 
 /** A place on a dinner's waiting list, in the line of its ticket type; an entry whose ticket price is gone has its number alone */
 export const formatPlace = (position: number, ticketType?: TicketType | null): string =>
     `${ticketType ? `${ticketTypeLabel(ticketType)} ` : ''}#${position}`
+
+/** A dinner's name: its menu title, else the untitled dinner's word while the chef has written no menu */
+export const formatDinnerName = (dinner: Pick<DinnerEventDisplay, 'menuTitle'>): string =>
+    dinner.menuTitle.trim() || BOOKING_WORDS.untitledDinner
 
 /** The buckets whose execution has a supply outcome, in the order a preview reads them */
 export const OUTCOME_BUCKETS = [Bucket.claim, Bucket.create, Bucket.leave, Bucket.requeue] as const

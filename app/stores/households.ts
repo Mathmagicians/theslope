@@ -223,6 +223,24 @@ export const useHouseholdsStore = defineStore("Households", () => {
     }
 
     /**
+     * What a save of the draft preferences would do, read without writing: the preview of each inhabitant the save
+     * writes, combined. One inhabitant, or every inhabitant of the household in power mode
+     */
+    const previewPreferences = async (inhabitantIds: number[], preferences: Record<string, string>, adminBypass = false): Promise<ScaffoldResult> => {
+        console.info(`🏠 > HOUSEHOLDS_STORE > Previewing preferences for inhabitants ${inhabitantIds.join(', ')}${adminBypass ? ' (admin bypass)' : ''}`)
+        // A preview writes nothing, so the previews run side by side where the saves run one after another
+        const responses = await Promise.all(inhabitantIds.map(inhabitantId => apiRequest(preferencesUrl(inhabitantId, adminBypass), {
+            method: 'POST',
+            body: {dinnerPreferences: preferences},
+            query: {preview: true},
+            schema: InhabitantUpdateResponseSchema,
+            action: 'previewPreferences'
+        })))
+        // The inhabitants share one household
+        return {...sumScaffoldResults(responses.map(response => response.scaffoldResult)), households: 1}
+    }
+
+    /**
      * Set or clear move-out date for a household
      * Uses admin household update endpoint (POST /api/admin/household/:id)
      * Triggers re-scaffolding of prebookings when moveOutDate changes (server-side)
@@ -376,6 +394,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         refreshSelectedHousehold,
         updateInhabitantPreferences,
         updateAllInhabitantPreferences,
+        previewPreferences,
         setMoveOutDate,
         moveInhabitant,
         deleteHousehold,

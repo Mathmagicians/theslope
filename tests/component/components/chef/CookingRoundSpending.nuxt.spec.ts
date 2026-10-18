@@ -31,7 +31,7 @@ const rows: CookingRoundRow[] = [
     {dinnerEventId: 2, date: new Date('2026-04-13T18:00:00'), menuTitle: 'Boller i karry', isCurrent: false, budgetGross: 189000, spentGross: 174400},
     {dinnerEventId: 3, date: new Date('2026-04-14T18:00:00'), menuTitle: 'Risotto', isCurrent: true, budgetGross: 187300, spentGross: 163800}
 ]
-const words = {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, for perioden 12/04–14/04'}
+const words = {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, periode 12/04–14/04'}
 
 const mount = (props: {fragment: SpendingFragment}) => mountWithTooltipProvider(CookingRoundSpending, {props, isMd: true})
 // The table's body rows without the total row the body-bottom slot adds
@@ -73,6 +73,13 @@ describe('CookingRoundSpending, the team\'s round', () => {
         const last = dataRows(wrapper)[3]!
         expect(last.find('[data-testid="vat-amount-pending"]').exists()).toBe(true)
         expect(last.find('[data-testid="vat-amount-ok"]').exists()).toBe(false)
+    })
+
+    it('GIVEN a dinner without a menu title WHEN rendering THEN its Middag cell reads Fællesspisning', async () => {
+        const untitled: CookingRoundRow = {...rows[2]!, menuTitle: ''}
+        const wrapper = await mount({fragment: teamSpendingFragment([rows[0]!, untitled], words)})
+        const middag = dataRows(wrapper)[1]!.findAll('td')[1]!
+        expect(middag.text()).toBe('Fællesspisning')
     })
 })
 

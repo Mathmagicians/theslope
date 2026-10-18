@@ -7,7 +7,7 @@ import {defineStore, type Pinia} from 'pinia'
 import {useApiHandler, resolveApiError, type StoreAsyncDataOptions} from '~/composables/useApiHandler'
 import {useAllergyValidation, type AllergyTypeDetail} from '~/composables/useAllergyValidation'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
-import {resetStores} from '~~/tests/component/testHelpers'
+import {resetStores, useTestScope} from '~~/tests/component/testHelpers'
 
 const CATALOG = '/api/admin/allergy-type'
 const ERROR_MESSAGE = 'Kunne ikke hente allergi katalog'
@@ -46,8 +46,13 @@ describe('useApiHandler', () => {
     let storeAsyncData: ReturnType<typeof useApiHandler>['storeAsyncData']
     let apiRequest: ReturnType<typeof useApiHandler>['apiRequest']
     let AllergyTypeDetailSchema: ReturnType<typeof useAllergyValidation>['AllergyTypeDetailSchema']
+    // A dataset a case creates lives in the case's scope, as a store's lives in the store's: its watchers stop with the
+    // case, before the next case's resetStores removes the entries they read
+    const inScope = useTestScope()
     beforeAll(() => {
-        ({storeAsyncData, apiRequest} = useApiHandler())
+        const handler = useApiHandler()
+        storeAsyncData = (key, url, options) => inScope(() => handler.storeAsyncData(key, url, options))
+        apiRequest = handler.apiRequest
         ;({AllergyTypeDetailSchema} = useAllergyValidation())
     })
 
@@ -322,7 +327,7 @@ describe('useApiHandler', () => {
             const hydrate = async (id: string, served: AllergyTypeDetail[] | undefined) => {
                 const useSelectionStore = defineStore(id, () => {
                     const selectedId = ref<number | null>(null)
-                    const {data} = storeAsyncData(id, () => `${CATALOG}/${selectedId.value}`, {
+                    const {data} = useApiHandler().storeAsyncData(id, () => `${CATALOG}/${selectedId.value}`, {
                         schema: AllergyTypeDetailSchema.array(), default: () => [], enabled: () => !!selectedId.value
                     })
                     return {selectedId, data}

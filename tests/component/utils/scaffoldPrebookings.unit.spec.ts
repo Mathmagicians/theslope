@@ -1,20 +1,29 @@
-import {describe, it, expect, vi} from 'vitest'
+import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {createError} from 'h3'
 import {scaffoldPrebookings} from '~~/server/utils/scaffoldPrebookings'
+import {joinWaitlist, sellTicketsToWaitlist} from '~~/server/utils/waitlistAssignment'
 import {fetchHouseholds, fetchSeason} from '~~/server/data/prismaRepository'
-import {fetchOrders, fetchUserIntentKeys, updateOrdersBatch} from '~~/server/data/financesRepository'
+import {claimOrder, createOrders, deleteOrder, fetchOrders, fetchUserIntentKeys, updateOrdersBatch, type OrderBatchUpdate} from '~~/server/data/financesRepository'
 import {deleteWaitlistEntry, fetchWaitlistForHousehold, fetchWaitlistForDinners, updateWaitlistEntryOrder} from '~~/server/data/waitlistRepository'
-import {useBookingValidation, type DesiredOrder} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DesiredOrder, type DinnerMode} from '~/composables/useBookingValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
+import type {WeekDayMap} from '~/types/dateTypes'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {OPEN_DEADLINES} from '~/composables/useSeason'
+import {dateToWeekDay} from '~/utils/season'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 
-// The scaffolder reads the app config, and its error log builds errors, from the Nitro auto-import scope
-vi.stubGlobal('useAppConfig', () => ({theslope: {}}))
+// The scaffolder reads the app config, and its error log builds errors, from the Nitro auto-import scope; the config
+// module calls Nuxt's defineAppConfig, which the unit runtime lacks
+const appConfig = await vi.hoisted(async () => {
+    vi.stubGlobal('defineAppConfig', <T>(config: T) => config)
+    return (await import('~/app.config')).default
+})
+vi.stubGlobal('useAppConfig', () => appConfig)
 vi.stubGlobal('createError', createError)
 
 // The repositories stand for the database the unit runtime lacks
@@ -28,9 +37,17 @@ vi.mock('~~/server/data/financesRepository', () => ({
 vi.mock('~~/server/data/waitlistRepository', () => ({
     fetchWaitlistForHousehold: vi.fn(), fetchWaitlistForDinners: vi.fn(), deleteWaitlistEntry: vi.fn(), updateWaitlistEntryOrder: vi.fn(), createWaitlistEntry: vi.fn()
 }))
+// The system account is a seeded user the unit runtime lacks
+vi.mock('~~/server/utils/systemUser', () => ({getSystemUserId: vi.fn(async () => 1)}))
+// The waiting-list writes run as written; the spies record whether a run reaches them
+vi.mock('~~/server/utils/waitlistAssignment', async importOriginal => {
+    const original = await importOriginal<typeof import('~~/server/utils/waitlistAssignment')>()
+    return {...original, joinWaitlist: vi.fn(original.joinWaitlist), sellTicketsToWaitlist: vi.fn(original.sellTicketsToWaitlist)}
+})
 
 const d1Client = {} as D1Database
 const {DinnerModeSchema, BookingActionSchema, BookingFailureSchema, TicketTypeSchema} = useBookingValidation()
+const {createDefaultWeekdayMap} = useCoreValidation()
 
 // A household of two on a dinner where Bo holds an order; the household waits for nothing until a test says so
 const givenSave = () => {
@@ -53,7 +70,47 @@ const givenSave = () => {
     })
     const save = (desiredOrders: DesiredOrder[]) =>
         scaffoldPrebookings(d1Client, {seasonId: season.id, householdId: household.id, userId: 1, deadlines: OPEN_DEADLINES, desiredOrders})
-    return {household, anna: anna!, bo: bo!, boOrder, dinner, adultPrice, takeaway, save}
+    return {season, household, anna: anna!, bo: bo!, boOrder, dinner, adultPrice, takeaway, save}
+}
+
+// Anna's draft changes one dinner per weekday: past the season's cancel deadline it releases, before it it changes the
+// mode, cancels and books; Bo's stored preferences want no dinner
+const givenPreferenceDraft = () => {
+    const {season, household, anna, bo, adultPrice} = givenSave()
+    const Mode = DinnerModeSchema.enum
+    const days = [
+        {daysFromToday: 1, stored: Mode.DINEIN, draft: Mode.NONE},
+        {daysFromToday: 10, stored: Mode.DINEIN, draft: Mode.TAKEAWAY},
+        {daysFromToday: 18, stored: Mode.DINEIN, draft: Mode.NONE},
+        {daysFromToday: 26, stored: Mode.NONE, draft: Mode.DINEIN}
+    ].map((day, index) => ({...day, dinner: DinnerEventFactory.dinnerEventAt(31 + index, day.daysFromToday)}))
+    const preferencesOf = (pick: (day: typeof days[number]) => DinnerMode): WeekDayMap<DinnerMode> => ({
+        ...createDefaultWeekdayMap(Mode.NONE),
+        ...Object.fromEntries(days.map(day => [dateToWeekDay(day.dinner.date), pick(day)]))
+    })
+    const householdWith = (annaPreferences: WeekDayMap<DinnerMode>) => ({
+        ...household,
+        inhabitants: [{...anna, dinnerPreferences: annaPreferences}, {...bo, dinnerPreferences: createDefaultWeekdayMap(Mode.NONE)}]
+    })
+    const draft = preferencesOf(day => day.draft)
+    vi.mocked(fetchSeason).mockResolvedValue({...season, dinnerEvents: days.map(day => day.dinner)})
+    vi.mocked(fetchOrders).mockResolvedValue(days.filter(day => day.stored !== Mode.NONE).map((day, index) => OrderFactory.defaultOrder(undefined, {
+        id: 41 + index, inhabitantId: anna.id, dinnerEventId: day.dinner.id, ticketPriceId: adultPrice.id, priceAtBooking: adultPrice.price
+    })))
+    const writeUpdates = vi.fn(async (_d1: D1Database, updates: OrderBatchUpdate[]) => updates.length)
+    vi.mocked(updateOrdersBatch).mockReturnValue(writeUpdates)
+    const writers = {createOrders, writeUpdates, deleteOrder, claimOrder, joinWaitlist, deleteWaitlistEntry, updateWaitlistEntryOrder, sellTicketsToWaitlist}
+    const writersCalled = () => Object.entries(writers).filter(([, writer]) => vi.mocked(writer).mock.calls.length > 0).map(([name]) => name)
+    // The endpoint's runs: the preview over the stored household, the save over the household holding the draft
+    const preview = () => {
+        vi.mocked(fetchHouseholds).mockResolvedValue([householdWith(preferencesOf(day => day.stored))])
+        return scaffoldPrebookings(d1Client, {seasonId: season.id, householdId: household.id, dryRun: {inhabitantId: anna.id, dinnerPreferences: draft}})
+    }
+    const save = () => {
+        vi.mocked(fetchHouseholds).mockResolvedValue([householdWith(draft)])
+        return scaffoldPrebookings(d1Client, {seasonId: season.id, householdId: household.id})
+    }
+    return {preview, save, writersCalled}
 }
 
 describe('scaffoldPrebookings', () => {
@@ -98,6 +155,32 @@ describe('scaffoldPrebookings', () => {
             expect(result.failed).toEqual([expect.objectContaining({inhabitantId: anna.id, action})])
             expect(result.failed[0]!.reason).toBe(reason)
             expect(result.results).toEqual([expect.objectContaining({inhabitantId: bo.id, action: BookingActionSchema.enum.CHANGE_MODE})])
+        })
+    })
+
+    describe('a dry run of draft preferences', () => {
+        beforeEach(() => {
+            vi.clearAllMocks()
+        })
+
+        it('GIVEN a draft that books, changes the mode, releases and cancels WHEN the dry run runs THEN no writer runs and its result is the save\'s', async () => {
+            const {preview, save, writersCalled} = givenPreferenceDraft()
+
+            const previewed = await preview()
+            expect(writersCalled()).toEqual([])
+
+            const saved = await save()
+            expect(writersCalled()).toEqual(['createOrders', 'writeUpdates', 'deleteOrder', 'sellTicketsToWaitlist'])
+            expect(previewed).toEqual(saved)
+        })
+
+        it('refuses a dry run in user mode', async () => {
+            const {anna} = givenSave()
+
+            await expect(scaffoldPrebookings(d1Client, {
+                seasonId: 1, householdId: 1, userId: 1, desiredOrders: [OrderFactory.defaultDesiredOrder()],
+                dryRun: {inhabitantId: anna.id, dinnerPreferences: createDefaultWeekdayMap(DinnerModeSchema.enum.NONE)}
+            })).rejects.toThrow('A dry run decides from preferences')
         })
     })
 })

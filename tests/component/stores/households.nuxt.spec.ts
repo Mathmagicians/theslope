@@ -4,6 +4,7 @@ import { flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { registerEndpoint, mockNuxtImport } from '@nuxt/test-utils/runtime'
+import { getQuery, readBody, type H3Event } from 'h3'
 import type {
   HouseholdDisplay,
   HouseholdDetail
@@ -327,6 +328,41 @@ describe('Households Store', () => {
       await expect(
         store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
       ).rejects.toThrow()
+    })
+  })
+
+  // A preview reads what the save of the draft would do: the save's request per inhabitant with ?preview=true, outside the booking write
+  describe('previewPreferences', () => {
+    const draft = { MONDAY: DinnerMode.NONE, TUESDAY: DinnerMode.TAKEAWAY }
+    const totalsOf = {
+      1: {[Action.CANCEL]: 7, [Action.RELEASE]: 2},
+      2: {[Action.CHANGE_MODE]: 2}
+    }
+
+    it.each([
+      {mode: 'one inhabitant', inhabitantIds: [1], adminBypass: false, query: {preview: 'true'}, totals: totalsOf[1]},
+      {mode: 'power mode', inhabitantIds: [1, 2], adminBypass: false, query: {preview: 'true'}, totals: {...totalsOf[1], ...totalsOf[2]}},
+      {mode: 'an admin\'s power mode', inhabitantIds: [1, 2], adminBypass: true, query: {adminBypass: 'true', preview: 'true'}, totals: {...totalsOf[1], ...totalsOf[2]}}
+    ])('$mode: sends the draft to each inhabitant\'s preview and returns the results combined, outside the booking write', async ({inhabitantIds, adminBypass, query, totals}) => {
+      const sent: {inhabitantId: number, query: Record<string, unknown>, body: unknown}[] = []
+      const answer = (inhabitantId: 1 | 2) => async (event: H3Event) => {
+        sent.push({inhabitantId, query: getQuery(event), body: await readBody(event)})
+        return InhabitantUpdateResponseSchema.parse({
+          inhabitant: createMockInhabitant(inhabitantId, 1),
+          scaffoldResult: OrderFactory.defaultScaffoldResult({totals: totalsOf[inhabitantId]})
+        })
+      }
+      preferencesEndpoint1.mockImplementation(answer(1))
+      preferencesEndpoint2.mockImplementation(answer(2))
+      const store = await setupStore()
+      const lastSaved = store.lastPreferenceResult
+
+      const preview = store.previewPreferences(inhabitantIds, draft, adminBypass)
+      expect(useBookingsStore().isProcessingBookings).toBe(false)
+
+      expect(await preview).toEqual(OrderFactory.defaultScaffoldResult({totals}))
+      expect(sent).toEqual(inhabitantIds.map(inhabitantId => ({inhabitantId, query, body: {dinnerPreferences: draft}})))
+      expect(store.lastPreferenceResult).toBe(lastSaved)
     })
   })
 

@@ -10,6 +10,7 @@
  */
 import {
     formatPlace,
+    formatDinnerName,
     DINNER_STEP_MAP,
     DinnerStepState,
     DEADLINE_LABELS,
@@ -34,6 +35,7 @@ import {useTicket, ticketTypeLabel} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {ICONS, COLOR, COMPONENTS, ALARM_TO_BADGE, BOOKING_LOCK_STATUS, ORDER_STATE_COLORS, TICKET_TYPE_COLORS, TICKET_TYPE_ICONS, type NuxtUIColor, type TicketTypeColor} from '~/composables/useTheSlopeDesignSystem'
 import {calculateCountdown, formatDate, formatDateRange} from '~/utils/date'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 import {groupBy} from '~/utils/batchUtils'
 import {compareAsc} from 'date-fns'
 
@@ -153,7 +155,7 @@ export interface CookingRoundRow {
 export interface CookingRoundWords { team: string; heading: string }
 export const cookingRoundWords = (teamShortName: string, first: Date, last: Date): CookingRoundWords => {
     const team = `Hele ${teamShortName}`
-    return {team, heading: `${team}, for perioden ${formatDateRange({start: first, end: last})}`}
+    return {team, heading: BOOKING_WORDS.roundHeading(team, formatDateRange({start: first, end: last}))}
 }
 
 /**
@@ -169,9 +171,9 @@ export interface SpendingFragment {
     total: {label: string, figures: SpendingFigures}
 }
 export const dinnerSpendingFragment = (dinner: CookingRoundRow, receipts: Expense[]): SpendingFragment => ({
-    heading: `${dinner.menuTitle}, ${formatDate(dinner.date)}`,
+    heading: `${formatDinnerName(dinner)}, ${formatDate(dinner.date)}`,
     rows: receipts.map(receipt => ({kind: 'receipt', id: `receipt-${receipt.id}`, date: receipt.createdAt, label: receipt.description, amount: receipt.amount})),
-    total: {label: dinner.menuTitle, figures: {budgetGross: dinner.budgetGross, spentGross: dinner.spentGross}}
+    total: {label: formatDinnerName(dinner), figures: {budgetGross: dinner.budgetGross, spentGross: dinner.spentGross}}
 })
 export const teamSpendingFragment = (rows: CookingRoundRow[], words: CookingRoundWords): SpendingFragment => ({
     heading: words.heading,

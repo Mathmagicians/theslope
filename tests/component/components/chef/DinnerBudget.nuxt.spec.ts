@@ -50,7 +50,7 @@ beforeEach(() => {
 })
 
 const mount = (props: Record<string, unknown> = {}) => mountWithTooltipProvider(DinnerBudget, {
-    props: {orders, mode: 'full', expenses, dinnerEventId: 7, bookingDeadline: new Date('2026-04-03T18:00:00'), dinnerFragment: dinnerSpendingFragment(round[0]!, expenses), teamFragment: teamSpendingFragment(round, {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, for perioden 12/04–13/04'}), ...props},
+    props: {orders, mode: 'full', expenses, dinnerEventId: 7, bookingDeadline: new Date('2026-04-03T18:00:00'), dinnerFragment: dinnerSpendingFragment(round[0]!, expenses), teamFragment: teamSpendingFragment(round, {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, periode 12/04–13/04'}), ...props},
     isMd: true
 })
 
@@ -94,7 +94,7 @@ describe('DinnerBudget', () => {
         expect(findByTestId(wrapper, 'cooking-round').exists()).toBe(true)
         // The dinner's figures, then the team's, then the ticket changes last
         expect(wrapper.html().indexOf('data-testid="ticket-changes"')).toBeGreaterThan(wrapper.html().indexOf('data-testid="cooking-round"'))
-        expect(findAllByTestId(wrapper, 'cooking-round-heading')[1]!.text()).toBe('Hele Madhold 2, for perioden 12/04–13/04')
+        expect(findAllByTestId(wrapper, 'cooking-round-heading')[1]!.text()).toBe('Hele Madhold 2, periode 12/04–13/04')
     })
 
     it('GIVEN no tickets WHEN opened THEN there are no ticket changes to see', async () => {

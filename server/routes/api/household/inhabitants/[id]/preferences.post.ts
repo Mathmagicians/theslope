@@ -2,7 +2,7 @@ import {defineEventHandler, getValidatedRouterParams, getValidatedQuery, readVal
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {isAdmin} from '~/composables/usePermissions'
-import {AdminBypassQuerySchema, RouteIdSchema, idParams, useCoreValidation} from "~/composables/useCoreValidation"
+import {AdminBypassQuerySchema, QueryFlagSchema, RouteIdSchema, idParams, useCoreValidation} from "~/composables/useCoreValidation"
 import {useBookingValidation, type InhabitantUpdateResponse, type ScaffoldResult, type DinnerMode} from "~/composables/useBookingValidation"
 import {fetchInhabitant, updateInhabitant} from "~~/server/data/prismaRepository"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
@@ -16,12 +16,13 @@ const LOG = '👩‍🏠 > INHABITANT > [PREFERENCES]'
 
 const paramSchema = idParams('id')
 
-const querySchema = AdminBypassQuerySchema.extend({seasonId: RouteIdSchema.optional()})
+const querySchema = AdminBypassQuerySchema.extend({seasonId: RouteIdSchema.optional(), preview: QueryFlagSchema})
 
 /**
  * POST /api/household/inhabitants/[id]/preferences
  * Update inhabitant dinner preferences (for household members)
  * Requires: authenticated user belongs to same household as inhabitant
+ * With ?preview=true: the reply the save would give, with the stored inhabitant; nothing is written and no mail goes out
  */
 export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (event) => {
     const {cloudflare} = event.context
@@ -30,6 +31,7 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
     let id!: number
     let seasonId: number | undefined
     let adminBypass!: boolean
+    let preview!: boolean
     let dinnerPreferences: WeekDayMap<DinnerMode>
     try {
         const {InhabitantUpdateSchema} = useCoreValidation()
@@ -40,6 +42,7 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
         const query = await getValidatedQuery(event, querySchema.parse)
         seasonId = query.seasonId
         adminBypass = query.adminBypass
+        preview = query.preview
         const body = await readValidatedBody(event, bodySchema.parse)
         dinnerPreferences = body.dinnerPreferences!
     } catch (error) {
@@ -56,21 +59,22 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
         // Verify user belongs to same household (admin can bypass via ?adminBypass=true)
         const user = await requireHouseholdAccess(event, inhabitant.householdId, adminBypass ? isAdmin : undefined)
 
-        console.info(`${LOG} User ${user.email} updating preferences for inhabitant ${inhabitant.name} ${inhabitant.lastName}`)
-        const updatedInhabitant = await updateInhabitant(d1Client, id, {dinnerPreferences})
+        console.info(`${LOG} User ${user.email} ${preview ? 'previewing' : 'updating'} preferences for inhabitant ${inhabitant.name} ${inhabitant.lastName}`)
+        const storedInhabitant = preview ? inhabitant : await updateInhabitant(d1Client, id, {dinnerPreferences})
 
-        // Re-scaffold bookings for this household
-        console.info(`${LOG} Re-scaffolding household ${updatedInhabitant.householdId}`)
+        // Re-scaffold bookings for this household; a preview runs the same scaffold dry, on the draft
+        console.info(`${LOG} Re-scaffolding household ${storedInhabitant.householdId}`)
         const scaffoldResult: ScaffoldResult = await scaffoldPrebookings(d1Client, {
             seasonId,
-            householdId: updatedInhabitant.householdId
+            householdId: storedInhabitant.householdId,
+            dryRun: preview ? {inhabitantId: id, dinnerPreferences} : undefined
         })
-        await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffoldResult.outcomes)
+        if (!preview) await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffoldResult.outcomes)
 
         const {InhabitantUpdateResponseSchema} = useBookingValidation()
         setResponseStatus(event, 200)
         return InhabitantUpdateResponseSchema.parse({
-            inhabitant: updatedInhabitant,
+            inhabitant: storedInhabitant,
             scaffoldResult
         })
     } catch (error) {

@@ -684,13 +684,6 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
       data-testid="booking-table"
       :ui="COMPONENTS.table.bookingUi"
     >
-      <template #loading>
-        <div :class="COMPONENTS.table.loadingRow">
-          <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
-          Henter bookinger...
-        </div>
-      </template>
-
       <!-- Expand button column - uses BUTTONS.edit for standardized sizing -->
       <template #expand-cell="{row}">
         <UButton

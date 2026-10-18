@@ -154,9 +154,9 @@ describe('ExpenseLines', () => {
         })
 
         it('GIVEN the round WHEN open THEN the whole team gets its heading and the same three rows; without one no round block shows', async () => {
-            const withRound = await mount({editable: true, round: {label: 'Hele Madhold 2, for perioden 12/04–14/04', figures: {budgetGross: 400000, spentGross: 423800}}})
+            const withRound = await mount({editable: true, round: {label: 'Hele Madhold 2, periode 12/04–14/04', figures: {budgetGross: 400000, spentGross: 423800}}})
             await open(withRound)
-            expect(findByTestId(withRound, 'expense-hint-heading').text()).toBe('Hele Madhold 2, for perioden 12/04–14/04')
+            expect(findByTestId(withRound, 'expense-hint-heading').text()).toBe('Hele Madhold 2, periode 12/04–14/04')
             const rows = findAllByTestId(withRound, 'expense-hint-row')
             expect(rows).toHaveLength(6)
             expect(rows[3]!.text()).toContain('Rådighedsbeløb')
