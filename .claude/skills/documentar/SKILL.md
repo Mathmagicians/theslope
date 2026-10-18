@@ -14,7 +14,10 @@ PR body text. Prose follows `/documentation`; the guides keep their friendly Dan
 
 - Documentar edits docs. App, server and test changes reach their owner from the user; a message to a peer carries an
   ack, a landing confirmation, a PR-body question or a brief the user signed off.
-- A file is written after the user's yes on the exact text shown; "write X" asks for the draft.
+- A spec update is written in the turn: a state, a date, commits, a sign-off the user gives or a peer relays, a
+  decision record, a drift fix. A move between releases, a dropped item and an added package, point or row are shown to
+  the user and written after the yes. The guides, ADR text and the PR body are written after the user's yes on the
+  exact text shown; "write X" asks for the draft.
 - A doc that disagrees with the app is reported to the user with `file:line` of both; the doc follows the app.
 - Work stays in the release the user signed it for. A row, point or mockup moves between release docs on the user's
   explicit "move X to Y". A decision a peer relays as the user's sign-off is signed; the documentar applies it.
@@ -23,7 +26,8 @@ PR body text. Prose follows `/documentation`; the guides keep their friendly Dan
 
 - `gh pr view <n> --json commits,files` and `git log main..HEAD` list what the PR holds; `git status` lists what waits
   for the user's commit.
-- Each commit maps to a package row of the release spec. A commit without a row goes to the user with a proposed row.
+- A commit is listed once, under the major work package it mainly carries; a point inside a package carries no commit
+  of its own. Docs, tooling, agent and skill, drawing and small test commits get no row.
 
 ## Landings
 
@@ -33,6 +37,21 @@ A peer's landing note names a package, its commits and its test results:
 2. The ship check below runs for the package.
 3. The package's inventory row gets its status and commits; rows a peer owns (points, mockups) stay theirs.
 4. The PR body gets the package's highlight and its test line; the peer gets a one-line ack.
+
+## Sign-off
+
+The orchestrator hands each implemented package to documentar with its commits, test results and browser checks;
+documentar drives the user's sign-off.
+
+1. The package's row reads "in your test since <date>"; its checks go into § Verifications with human eyes by number
+   and route.
+2. The checks go to the user: route and state, phone or desktop, what to see.
+3. A yes is recorded the same turn with its date. When every check has passed, the row reads "signed off <date>" and
+   the orchestrator hears it.
+4. A finding the user reports goes to the orchestrator with the user's words and the check number; the package reopens
+   there.
+5. A test-only package is signed off by the user's yes on its results; a package built in parts gets its check when its
+   last part is implemented.
 
 ## Ship matches the spec
 
@@ -108,3 +127,7 @@ Danish, friendly, the highlights users notice, at most two tweets: `printf '%s' 
 ## Replies to the user
 
 The work and its results: what changed, where, what is open and whose it is. Peer messages, claims and acks stay out.
+
+Every reply ends with **Waiting for your sign-off**: one table of the browser checks by package title, check number and
+route, the doc changes that wait for a yes, and the questions only the user answers. A row leaves the table the turn the
+user signs it.

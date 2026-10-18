@@ -117,9 +117,9 @@ matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*
 
 A package moves through three states, and the release spec and every briefing name the state:
 - implemented: red and green shown, pre:all clean, diff reviewed, compliance rows updated;
-- in your test: the green report is out, with the files to commit and the visual check
-  (route and state → what to see);
-- signed off: the user's yes after the browser check. Only signed off is done.
+- in your test: the green report is out with the files to commit; the orchestrator hands the package to documentar
+  with its visual check (route and state → what to see), and documentar presents it to the user;
+- signed off: the user's yes after the browser check, recorded by documentar with its date. Only signed off is done.
 
 A finding in the user's test reopens the same package: it is fixed and reported there, never split into a new
 package. A finding in the same view and with the same symptom belongs to the package too. Anything outside the

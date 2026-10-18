@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, type Browser} from '@playwright/test'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -247,21 +247,44 @@ test.describe('Preference Transition Scaffold Counts', () => {
     })
 })
 
+/** The seasons and persons a describe's cases create through `personBookedOnOwnSeason`, removed in its afterAll */
+type OwnSeasonIds = {seasonIds: number[], inhabitantIds: number[]}
+
+/**
+ * A case's own season, open until each dinner, with a person of the member's household booked on it by a DINEIN
+ * preference; `dinner` is the season's first dinner from tomorrow on
+ */
+const personBookedOnOwnSeason = async (browser: Browser, name: string, created: OwnSeasonIds) => {
+    const adminContext = await validatedBrowserContext(browser)
+    const memberContext = await memberValidatedBrowserContext(browser)
+    const testSalt = temporaryAndRandom()
+    const {householdId} = await getSessionUserInfo(memberContext)
+    const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {ticketIsCancellableDaysBefore: 0})
+    created.seasonIds.push(season.id!)
+    const inhabitant = await HouseholdFactory.createInhabitantForHousehold(adminContext, householdId, salt(name, testSalt))
+    created.inhabitantIds.push(inhabitant.id)
+    const dinner = dinnerEvents.find(de => differenceInCalendarDays(de.date, new Date()) >= 1)!
+    const dineIn = createDefaultWeekdayMap(DinnerMode.DINEIN)
+    await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, dineIn, 200, season.id)
+    return {adminContext, memberContext, householdId, season, dinnerEvents, dinner, inhabitant, dineIn}
+}
+
+const removeOwnSeasons = async (browser: Browser, {seasonIds, inhabitantIds}: OwnSeasonIds) => {
+    const context = await validatedBrowserContext(browser)
+    for (const id of inhabitantIds) await HouseholdFactory.deleteInhabitant(context, id)
+    await SeasonFactory.cleanupSeasons(context, seasonIds)
+}
+
 /**
  * A guest ticket booked on a person is not the person's own ticket: a preference change decides the person's own
  * order and leaves the guest ticket as it is. The spec's own season books with its deadline open, then closes it.
  */
 test.describe('Preferences and guest tickets', () => {
-    const seasonIds: number[] = []
-    const inhabitantIds: number[] = []
+    const created: OwnSeasonIds = {seasonIds: [], inhabitantIds: []}
     // Every dinner of the week-long season lies within it once the season closes
     const CLOSED_PERIOD = 10
 
-    test.afterAll(async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-        for (const id of inhabitantIds) await HouseholdFactory.deleteInhabitant(context, id)
-        await SeasonFactory.cleanupSeasons(context, seasonIds)
-    })
+    test.afterAll(({browser}) => removeOwnSeasons(browser, created))
 
     // The queued guests wait in the adult line; the released own ticket goes to the first of them
     const examples = [
@@ -271,15 +294,7 @@ test.describe('Preferences and guest tickets', () => {
 
     examples.forEach(({queuedGuests, sold, outcome}) => {
         test(`GIVEN a person's own ticket, a guest ticket on them and ${queuedGuests} queued guest(s) on a closed dinner WHEN the preference turns Ingen THEN the own ticket ${outcome} and the guest ticket stays`, async ({browser}) => {
-            const adminContext = await validatedBrowserContext(browser)
-            const memberContext = await memberValidatedBrowserContext(browser)
-            const testSalt = temporaryAndRandom()
-            const {householdId} = await getSessionUserInfo(memberContext)
-            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {ticketIsCancellableDaysBefore: 0})
-            seasonIds.push(season.id!)
-            const inhabitant = await HouseholdFactory.createInhabitantForHousehold(adminContext, householdId, salt('Guest-Booker', testSalt))
-            inhabitantIds.push(inhabitant.id)
-            const dinner = dinnerEvents.find(de => differenceInCalendarDays(de.date, new Date()) >= 1)!
+            const {adminContext, memberContext, householdId, season, dinner, inhabitant} = await personBookedOnOwnSeason(browser, 'Guest-Booker', created)
             const adultPrice = season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!
             const guestOn = () => OrderFactory.defaultDesiredOrder({
                 inhabitantId: inhabitant.id, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: true
@@ -288,8 +303,7 @@ test.describe('Preferences and guest tickets', () => {
                 householdId, seasonId: season.id!, dinnerEventIds: [dinner.id], orders: Array.from({length: count}, guestOn)
             })
 
-            // While the dinner is open: the preference books the person, the member books a guest on them
-            await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, createDefaultWeekdayMap(DinnerMode.DINEIN), 200, season.id)
+            // While the dinner is open the member books a guest on the person
             await bookGuests(1)
             await SeasonFactory.updateSeason(adminContext, {...season, ticketIsCancellableDaysBefore: CLOSED_PERIOD})
             // Past the deadline nothing is for sale yet: the guests join the adult line
@@ -314,26 +328,12 @@ test.describe('Preferences and guest tickets', () => {
  * open until each dinner, so a weekday turned Ingen cancels the person's dinners on it.
  */
 test.describe('Preference preview', () => {
-    const seasonIds: number[] = []
-    const inhabitantIds: number[] = []
+    const created: OwnSeasonIds = {seasonIds: [], inhabitantIds: []}
 
-    test.afterAll(async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-        for (const id of inhabitantIds) await HouseholdFactory.deleteInhabitant(context, id)
-        await SeasonFactory.cleanupSeasons(context, seasonIds)
-    })
+    test.afterAll(({browser}) => removeOwnSeasons(browser, created))
 
     test('GIVEN an inhabitant with upcoming orders WHEN a preview sets a weekday to Ingen THEN the reply lists the cancellations, the orders and the stored preferences are unchanged, and the save then lists the same actions', async ({browser}) => {
-        const adminContext = await validatedBrowserContext(browser)
-        const memberContext = await memberValidatedBrowserContext(browser)
-        const testSalt = temporaryAndRandom()
-        const {householdId} = await getSessionUserInfo(memberContext)
-        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {ticketIsCancellableDaysBefore: 0})
-        seasonIds.push(season.id!)
-        const inhabitant = await HouseholdFactory.createInhabitantForHousehold(adminContext, householdId, salt('Preview', testSalt))
-        inhabitantIds.push(inhabitant.id)
-        const dineIn = createDefaultWeekdayMap(DinnerMode.DINEIN)
-        await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, dineIn, 200, season.id)
+        const {adminContext, memberContext, season, dinnerEvents, dinner, inhabitant, dineIn} = await personBookedOnOwnSeason(browser, 'Preview', created)
 
         // The run covers the member's whole household; the case reads its own inhabitant's orders and lines
         const ordersOf = async () => (await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, dinnerEvents.map(de => de.id)))
@@ -341,7 +341,7 @@ test.describe('Preference preview', () => {
         const linesOf = (reply: InhabitantUpdateResponse | null) => reply!.scaffoldResult.results.filter(line => line.inhabitantId === inhabitant.id)
         const weekdayOf = (dinnerEventId: number) => dateToWeekDay(dinnerEvents.find(de => de.id === dinnerEventId)!.date)
         const booked = await ordersOf()
-        const weekday = dateToWeekDay(dinnerEvents.find(de => differenceInCalendarDays(de.date, new Date()) >= 1)!.date)
+        const weekday = dateToWeekDay(dinner.date)
         const draft = {...dineIn, [weekday]: DinnerMode.NONE}
         const cancelled = booked.filter(order => weekdayOf(order.dinnerEventId) === weekday)
         expect(cancelled, 'The inhabitant holds an order on the weekday').not.toEqual([])

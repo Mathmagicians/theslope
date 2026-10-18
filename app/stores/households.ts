@@ -3,7 +3,7 @@ import type {
     HouseholdDetail
 } from '~/composables/useCoreValidation'
 import {useBookingValidation, type ScaffoldResult} from '~/composables/useBookingValidation'
-import {useBooking} from '~/composables/useBooking'
+import {useBooking, countTotals} from '~/composables/useBooking'
 
 /**
  * Household store - manages household data and API operations
@@ -236,8 +236,16 @@ export const useHouseholdsStore = defineStore("Households", () => {
             schema: InhabitantUpdateResponseSchema,
             action: 'previewPreferences'
         })))
+        // One person's preview is the save's whole result, the other members' corrections included
+        if (responses.length === 1) return responses[0]!.scaffoldResult
+        // In power mode an inhabitant's lines come from the preview holding that inhabitant's draft; another member's
+        // preview decides them by the stored preferences
+        const ownLines = responses.map(({scaffoldResult}, index) => {
+            const results = scaffoldResult.results.filter(line => line.inhabitantId === inhabitantIds[index])
+            return {...scaffoldResult, results, totals: countTotals(results)}
+        })
         // The inhabitants share one household
-        return {...sumScaffoldResults(responses.map(response => response.scaffoldResult)), households: 1}
+        return {...sumScaffoldResults(ownLines), households: 1}
     }
 
     /**

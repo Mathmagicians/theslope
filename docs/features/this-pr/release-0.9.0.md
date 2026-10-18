@@ -24,7 +24,7 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Team wanted poster | a dinner without a chef shows the wanted poster on the chef card | `ChefMenuCard.vue`, `COMPONENTS.wantedPoster` | committed (ba5604c) |
 | Waitlist | queue, assignment on release, extra portions, one booking path, UI, the calendar chips | `../archived/feature-waitlist.md`, ADR-016 | committed (5eedd34, 5f50af2, c151d74, f4892ad, 0a37cc4, 9cad84a, 627f2f6) |
 | Waitlist notifications | the serial e2e asserting each of the four kinds writes its Delivery row | § Waitlist notifications | planned |
-| Chef spending | expense rows per dinner, the chef endpoints, the Budget pane with the ticket changes | § Chef spending | committed (49ece5e, 24e9a3f, fd41213, c65feae); reopened 2026-10-18 from the user's test of the Budget pane, running |
+| Chef spending | expense rows per dinner, the chef endpoints, the Budget pane with the ticket changes | § Chef spending | committed (49ece5e, 24e9a3f, fd41213, c65feae); reopened 2026-10-18 from the user's test of the Budget pane; in your test since 2026-10-18: checks 1–5 open |
 | Kitchen allergy line | the dining-mode panels show the allergy kuverter; the expanded list opens with the allergen breakdown | § Kitchen allergy line | committed (5eedd34, 49ece5e, 42b380f) |
 | Chef allergen line | the chef's allergen row counts the dinner's diners in kuverter per menu allergen | § Chef allergen line | committed (49ece5e) |
 | Chef calendar header | the Agenda/Kalender tabs and the collapse chevron share one header row | § Chef calendar header | committed (42b380f) |
@@ -45,7 +45,7 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Test sweep | dead and duplicate cases removed; cleanup fails early; factories, `gotoHydrated` and web-first waits replace raw sleeps; the `setup-season` project creates the active season once per run | `docs/testing.md` | packages 1–6 committed (5b1616b, b7d238d, 2d17d64, 45c1f83, 084ea42, 614cec0) |
 | DRY sweep | dead code and duplicate token paths removed; the specs share their mount, endpoint and session helpers | `tests/component/testHelpers.ts`, `tests/component/hoistedMocks.ts` | committed (72cf9d9, 6b65a70, b456b2f, 999bdbd, c0beb62, 43876aa) |
 | PRF spike | passkey and PRF research with the device protocol | `../feature-proposal-relogin-faceid.md`, `../archived/feature-mobile-native-feel.md` | committed |
-| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–7 committed (2ad1429 to bf7bc75); 6 reopened for the preference preview; 6b mockup signed off, code brief owed |
+| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–7 committed (2ad1429 to bf7bc75); 6 reopened for the preference preview, part 1 committed (c90fa33); 6b mockup signed off, code brief owed |
 | Docs and tooling | the user, chef and admin guides; `docs/ui.md` and the compliance tables compacted; `docs/testing.md` Rule 0; the ui skill and the frontend agent | `docs/`, `.claude/skills/`, `.claude/agents/` | committed (b82852e, 38804ef, 0dfd8eb, 450bcc8) |
 | Close keeps the eating mode | the nightly close writes each order's own eating mode | `server/utils/closeOrders.ts`, `fetchPendingOrdersOnConsumedDinners` | committed (16b4035) |
 | One released predicate (the kitchen box) | a released ticket nobody bought stays released after the close; the kitchen panels add up and TIL SALG keeps its title | `app/composables/useOrder.ts`, `KitchenPreparation.vue` | committed (56f8e12) |
@@ -59,7 +59,7 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Item | State |
 |---|---|
 | One booking path, end to end | point 6 (the preference preview) and point 6b, § One booking path, end to end |
-| Browser checks | Table loading 4, 6 and 7; A waiting-list placement happens once 12; § Verifications with human eyes |
+| Browser checks | Table loading 4, 6 and 7; A waiting-list placement happens once 12; Chef spending 1–5; § Verifications with human eyes |
 | Waitlist notifications | planned, § Waitlist notifications |
 | CI summary | read on the Actions run page: categories, counts, red ui failures, report links |
 | Visual check per UI package | the route → viewport → element tables, carried into the PR description |
@@ -92,7 +92,8 @@ spending and Se billetændringer. Mockups: the headers of `ChefMenuCard.vue`, `D
 
 Reopened 2026-10-18 from the user's test of the Budget pane on `/chef`: a dinner without a menu title reads
 "Fællesspisning" in its heading ("Fællesspisning, 10/11/2026"), in the total row and in the round's Middag cell; the
-team round's heading reads "<team>, periode <range>".
+team round's heading reads "Hele <team>, periode <first date>-<last date>". Words: `app/config/bookingWords.ts`;
+code: `formatDinnerName` in `useBooking.ts`, `cookingRoundWords` in `useBookingUi.ts`.
 
 ## Kitchen allergy line
 
@@ -145,7 +146,7 @@ Each point is presented with its files and code, and signed off on its own.
 | 4b. The views show each line | The chef's alert, the booking form and the kitchen box name the waiting list per ticket type; the kitchen box holds the tickets for sale and the waiting list together | kitchen box ✅ signed off 2026-10-16, implemented (§ Mockup — kitchen box); the chef's alert ✅ signed off 2026-10-17, implemented (`SUPPLY_WORDS.queuedCount`, mockup in `ChefMenuCard.vue`); its ask in singular and plural (`SUPPLY_WORDS.chefAsk`) ✅ signed off 2026-10-18, checks 10 and 11 |
 | 4c. The preview sells each ticket once | The save preview settles the claims in order as the save does: the first claims of a ticket type buy that type's tickets for sale, the rest join its waiting list (`bookingOutcomes` takes one order or a list, `supplyOfType`); the guest form opens on Voksen and its button names the guests | ✅ signed off 2026-10-16, implemented |
 | 5. One client write | Every write that changes bookings goes through `bookingsStore.writeBookings`: the request, then the household's orders, the upcoming orders, the tickets for sale, the waiting list and the dinner on view re-read once; the waiting list per locked dinner derives from the one waiting-list read; the households store keeps its own household re-reads | ✅ signed off 2026-10-17, implemented |
-| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise. A preference change, one person or power mode, previews what Gem does above the buttons, in the grid's words and badges; the preference endpoint answers `?preview=true` with the save's own run without its writes; a small loader shows while the preview loads | reopened 2026-10-18: the preference preview, mockup and brief ✅ signed off 2026-10-17 (§ Mockup — preference preview), part 1 (the server dry run) running; toast look implemented 2026-10-16 (`scaffoldToastLook`); the words ✅ signed off 2026-10-17, implemented (5165b4f) (§ Mockup — toast and preview) |
+| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise. A preference change, one person or power mode, previews what Gem does above the buttons, in the grid's words and badges; the preference endpoint answers `?preview=true` with the save's own run without its writes; a small loader shows while the preview loads | reopened 2026-10-18: the preference preview, mockup and brief ✅ signed off 2026-10-17 (§ Mockup — preference preview), part 1 (the server dry run, `previewPreferences` in the households store) implemented 2026-10-18, part 2 (`HouseholdCard`) next, the browser check covers both; toast look implemented 2026-10-16 (`scaffoldToastLook`); the words ✅ signed off 2026-10-17, implemented (5165b4f) (§ Mockup — toast and preview) |
 | 6b. The mails speak the booking words | The waiting-list mails greet the user who booked, name the person as the toast does, carry the ticket line of the booking page and the badge's help text, and link to the dinner's booking page | mockup ✅ signed off 2026-10-17 (§ Mockup — waiting-list mails); the words in `app/config/bookingWords.ts`, the mail and toast lines from them in `useBooking.ts`, the icons in `useBookingUi.ts` ✅ signed off 2026-10-18; code brief owed |
 | 7. The ticket history follows kuverter | Every audit row replays, user or system alike; a line for each change of kuverter; a system run and the nightly close are one line for the dinner; the replay ends equal to state | mockup and brief ✅ signed off 2026-10-17 (§ Mockup — ticket history) |
 
@@ -554,7 +555,7 @@ sign-off.
 - The preference preview's dry run sits on `POST /api/household/inhabitants/[id]/preferences`, the endpoint the app
   writes preferences through, for a member and for an admin with `?adminBypass=true`.
 - Chef spending: a dinner without a menu title reads "Fællesspisning"; the team round's heading reads
-  "<team>, periode <range>".
+  "Hele <team>, periode <first date>-<last date>".
 
 ## Coverage
 
@@ -584,6 +585,7 @@ sign-off.
 | A waiting-list placement happens once, check 12 | a locked dinner with someone waiting for Voksen: another household releases a Voksen ticket; the first in the Voksen line holds it | open |
 | A waiting-list placement happens once, checks 13 and 14 | `/chef` Rediger, Frigiv portioner; a locked dinner with a child ticket released and only adults waiting | ✅ 2026-10-18 |
 | Chef alert words, checks 10 and 11 | `/chef` Rediger, one person waiting, then two or more | ✅ 2026-10-18 |
+| Chef spending (the budget's words), checks 1–5 | `/chef?date=2026-11-10`, Budget open: 1 the dinner's heading and total row; 2 the round's heading and Middag cell; 3 the Madbestilling editor's round heading; 4 a dinner with a menu title; 5 phone, the spending tables scroll inside their box | open |
 
 ## ADR notes
 

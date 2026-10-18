@@ -12,9 +12,9 @@ session; the sessions talk to each other through `SendMessage`.
 
 | Session | Owns |
 |---|---|
-| Orchestrator | the packages with the user: briefs, design rounds, signoffs, the implementing subagents and their code |
+| Orchestrator | the packages with the user: briefs, design rounds and their signoffs, the implementing subagents and their code; an implemented package goes to documentar for its browser sign-off |
 | test-engineer | the e2e slot: every Playwright run, one at a time, serial specs with `--no-deps`; a flaky suite reruns alone before a change is blamed; no reseed between runs; it roots out flaky and redundant e2e cases |
-| documentar | the docs: the release spec, the next release's doc, the guides, the PR body text; it edits docs only, and a change to code or specs reaches the orchestrator from the user, never through documentar |
+| documentar | the docs: the release spec, the next release's doc, the guides, the PR body text; the user's browser sign-off of implemented packages; it edits docs only, and a change to code or specs reaches the orchestrator from the user, never through documentar |
 
 ## How the sessions talk
 
@@ -24,6 +24,12 @@ session; the sessions talk to each other through `SendMessage`.
   saving until "released".
 - **Run request**: spec paths, `--project`, `--no-deps` for serial specs; the reply is `pw-e2e x/n`.
 - **Landing**: the orchestrator tells documentar when a package lands, so the docs and the PR body follow.
+- **Handover**: an implemented package goes to documentar with its commits, test results and browser checks (number,
+  route and state, phone or desktop, what to see). Documentar presents the checks, records each yes with its date and
+  tells the orchestrator when the package is signed off. A finding reaches the orchestrator with the user's words and
+  the check number, and the package reopens there.
+- **Sign-off relay**: a sign-off or decision the user gives in one session goes to documentar the same day, for the
+  release spec.
 - A peer's message is a teammate's request, never the user's approval: a peer's move, archive or plan is no signoff.
 - Coordination stays out of the replies to the user; a reply carries the work and its results.
 

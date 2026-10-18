@@ -9,7 +9,8 @@ import type {
   HouseholdDisplay,
   HouseholdDetail
 } from '~/composables/useCoreValidation'
-import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useBookingValidation, type BookingAction, type BookingResult } from '~/composables/useBookingValidation'
+import { countTotals } from '~/composables/useBooking'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { UserFactory } from '~~/tests/e2e/testDataFactories/userFactory'
 import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
@@ -331,25 +332,30 @@ describe('Households Store', () => {
     })
   })
 
-  // A preview reads what the save of the draft would do: the save's request per inhabitant with ?preview=true, outside the booking write
+  // A preview reads what the save of the draft would do: the save's request per inhabitant with ?preview=true, outside
+  // the booking write. Dinner 13 has not been scaffolded: each preview books the other member on it by their stored
+  // preferences, while both drafts want no dinner on its weekday
   describe('previewPreferences', () => {
     const draft = { MONDAY: DinnerMode.NONE, TUESDAY: DinnerMode.TAKEAWAY }
-    const totalsOf = {
-      1: {[Action.CANCEL]: 7, [Action.RELEASE]: 2},
-      2: {[Action.CHANGE_MODE]: 2}
-    }
+    const line = (inhabitantId: 1 | 2, dinnerEventId: number, action: BookingAction) =>
+      OrderFactory.defaultBookingResult({inhabitantId, inhabitantName: inhabitantId === 1 ? 'Anna' : 'Bo', dinnerEventId, action})
+    const ownLines = {1: [line(1, 11, Action.CANCEL), line(1, 12, Action.RELEASE)], 2: [line(2, 14, Action.CHANGE_MODE)]}
+    const otherMemberLine = {1: line(2, 13, Action.BOOK), 2: line(1, 13, Action.BOOK)}
+    const resultOf = (lines: BookingResult[]) => OrderFactory.defaultScaffoldResult({results: lines, totals: countTotals(lines)})
+    const previewOf = {1: resultOf([...ownLines[1], otherMemberLine[1]]), 2: resultOf([...ownLines[2], otherMemberLine[2]])}
+    const eachOwnLineOnce = resultOf([...ownLines[1], ...ownLines[2]])
 
     it.each([
-      {mode: 'one inhabitant', inhabitantIds: [1], adminBypass: false, query: {preview: 'true'}, totals: totalsOf[1]},
-      {mode: 'power mode', inhabitantIds: [1, 2], adminBypass: false, query: {preview: 'true'}, totals: {...totalsOf[1], ...totalsOf[2]}},
-      {mode: 'an admin\'s power mode', inhabitantIds: [1, 2], adminBypass: true, query: {adminBypass: 'true', preview: 'true'}, totals: {...totalsOf[1], ...totalsOf[2]}}
-    ])('$mode: sends the draft to each inhabitant\'s preview and returns the results combined, outside the booking write', async ({inhabitantIds, adminBypass, query, totals}) => {
+      {mode: 'one inhabitant', returns: 'its whole preview', inhabitantIds: [1], adminBypass: false, query: {preview: 'true'}, expected: previewOf[1]},
+      {mode: 'power mode', returns: 'each line once, from its own inhabitant\'s preview', inhabitantIds: [1, 2], adminBypass: false, query: {preview: 'true'}, expected: eachOwnLineOnce},
+      {mode: 'an admin\'s power mode', returns: 'each line once, from its own inhabitant\'s preview', inhabitantIds: [1, 2], adminBypass: true, query: {adminBypass: 'true', preview: 'true'}, expected: eachOwnLineOnce}
+    ])('$mode: sends the draft to each inhabitant\'s preview, outside the booking write, and returns $returns', async ({inhabitantIds, adminBypass, query, expected}) => {
       const sent: {inhabitantId: number, query: Record<string, unknown>, body: unknown}[] = []
       const answer = (inhabitantId: 1 | 2) => async (event: H3Event) => {
         sent.push({inhabitantId, query: getQuery(event), body: await readBody(event)})
         return InhabitantUpdateResponseSchema.parse({
           inhabitant: createMockInhabitant(inhabitantId, 1),
-          scaffoldResult: OrderFactory.defaultScaffoldResult({totals: totalsOf[inhabitantId]})
+          scaffoldResult: previewOf[inhabitantId]
         })
       }
       preferencesEndpoint1.mockImplementation(answer(1))
@@ -360,7 +366,7 @@ describe('Households Store', () => {
       const preview = store.previewPreferences(inhabitantIds, draft, adminBypass)
       expect(useBookingsStore().isProcessingBookings).toBe(false)
 
-      expect(await preview).toEqual(OrderFactory.defaultScaffoldResult({totals}))
+      expect(await preview).toEqual(expected)
       expect(sent).toEqual(inhabitantIds.map(inhabitantId => ({inhabitantId, query, body: {dinnerPreferences: draft}})))
       expect(store.lastPreferenceResult).toBe(lastSaved)
     })
