@@ -154,10 +154,11 @@ export const useBookingValidation = () => {
         orderId: IdSchema.nullable(),
         action: OrderAuditActionSchema,
         performedByUserId: IdSchema.nullable(),
-        // User relation for meaningful display (e.g., "Anna booked at 14:30")
+        // The user who wrote the row, with the name of their inhabitant to name them by (useBooking().formatPerformer)
         performedByUser: z.object({
             id: IdSchema,
-            email: z.string()
+            email: z.string(),
+            Inhabitant: InhabitantDisplaySchema.pick({name: true, lastName: true}).nullable()
         }).nullable(),
         auditData: z.string(),
         timestamp: z.coerce.date(),
@@ -228,9 +229,9 @@ export const useBookingValidation = () => {
      *
      * seasonId: Required for user intent tracking (fetchUserIntentKeys filters by seasonId)
      */
-    // What wrote an order's creation row: a user's booking, a preference change, the nightly scaffold, the chef's extra
-    // portions for the waiting list, the billing import
-    const OrderAuditSourceSchema = z.enum(['user-booking', 'preference-update', 'scaffold-prebookings', 'waitlist-assignment', 'csv_billing'])
+    // What wrote an order's history row: a member's booking, an admin's correction (`?adminBypass=true`), a preference
+    // change, the nightly scaffold, the chef's extra portions for the waiting list, the billing import
+    const OrderAuditSourceSchema = z.enum(['user-booking', 'admin-correction', 'preference-update', 'scaffold-prebookings', 'waitlist-assignment', 'csv_billing'])
 
     const AuditContextSchema = z.object({
         action: OrderAuditActionSchema,
@@ -759,28 +760,29 @@ export const useBookingValidation = () => {
         [TicketTypeSchema.enum.BABY]: z.number().int()
     })
 
-    // What a ticket event does: a booking action, the admin's deletion after the booking deadline, the chef's extra
-    // portions for the waiting list, or the nightly close
-    const TicketChangeKindSchema = z.enum([...BookingActionSchema.options, 'ADMIN_CANCEL', 'EXTRA_PORTIONS', Change.CLOSE])
+    // What a ticket event does: a booking action, the chef's extra portions for the waiting list, or the nightly close
+    const TicketChangeKindSchema = z.enum([...BookingActionSchema.options, 'EXTRA_PORTIONS', Change.CLOSE])
 
     // The tickets one event touched by type; a ticket type change also names the tickets it changed from, a sale the
-    // short name of the household it bought from
+    // short name of the household it bought from; an admin's correction carries its reason, read from its row's source
     const TicketEventSchema = z.object({
         change: TicketChangeKindSchema,
         tickets: TicketCountsSchema,
         from: TicketCountsSchema.optional(),
-        seller: z.string().nullable().optional()
+        seller: z.string().nullable().optional(),
+        reason: OrderAuditSourceSchema.extract([OrderAuditSourceSchema.enum['admin-correction']]).optional()
     })
 
     /**
-     * One line of the dinner's ticket changes: the ticket events of one actor within one minute and the households they
-     * touched, then the tickets the dinner is paid for, their kuverter and the revenue in øre after it. A row without an
-     * actor is the system user's.
+     * One line of the dinner's ticket changes: the ticket events of one actor within one minute, the actor's name and
+     * the households they touched, then the tickets the dinner is paid for, their kuverter and the revenue in øre after
+     * it. A row without an actor is the system user's.
      */
     const TicketChangeSchema = z.object({
         id: IdSchema,
         timestamp: z.coerce.date(),
         performedByUserId: IdSchema,
+        performedByName: z.string(),
         bySystem: z.boolean(),
         households: z.array(z.string()),
         events: z.array(TicketEventSchema).min(1),

@@ -1613,14 +1613,14 @@ export const COMPONENTS = {
         }
     },
 
-    // Entries inside an ALERTS.legend panel, each sample beside its name (`entry`): CalendarLegend's entries wrap in a
-    // row (`entries`); DinnerModeLegend lists one entry per row (`list`), its sample in a fixed-width column (`sample`)
-    // so every name starts on one vertical line; a team badge sample is the calendar's size
+    // An ALERTS.legend panel (CalendarLegend, DinnerModeLegend's rows in its slot) is one `list`, one entry per row:
+    // the sample in a fixed-width column (`sample`) beside its name (`entry`), so every name starts on one vertical
+    // line; a team badge sample is the calendar's size
     legend: {
-        entries: 'flex flex-wrap gap-x-6 gap-y-2',
-        entry: 'flex items-center gap-2',
         list: 'flex flex-col gap-2',
-        // Holds the widest sample, the expected booking's sliders beside its mode badge
+        entry: 'flex items-center gap-2',
+        // Holds the widest sample in a panel: the expected booking's sliders beside its mode badge, wider than a day
+        // circle with its chip
         sample: 'w-14 shrink-0 flex items-center gap-2',
         badge: 'w-8 h-8 flex items-center justify-center shrink-0',
         // A chip sample with a glyph mirrors the dinner calendar's waiting-list lock chip

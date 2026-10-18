@@ -7,6 +7,7 @@ import {useCoreValidation} from '~/composables/useCoreValidation'
 import {sumBy} from '~/utils/ledger'
 import {useBookingValidation, TicketState, SupplyState, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderAuditAction, type OrderAuditChange, type OrderAuditSource, type OrderSnapshot, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
 import {BOOKING_WORDS} from '~/config/bookingWords'
+import {useHousehold} from '~/composables/useHousehold'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -1957,8 +1958,10 @@ describe('replayTicketChanges', () => {
     const ticketPriceOf = (ticketPriceId: number) => PRICES[ticketPriceId] ?? null
     const priceOf = (ticketPriceId: number) => PRICES[ticketPriceId]?.price ?? UNNAMED_PRICE.price
     const SYSTEM = 99
-    // Household n is S_n and its user is user n
+    const CORRECTION = Source['admin-correction']
+    // Household n is S_n and its user is user n, the person Navn n Efternavn n; the system account holds no inhabitant
     const shortNameOf = (householdId: number) => `S_${householdId}`
+    const personOf = (actor: number) => ({name: `Navn${actor}`, lastName: `Efternavn${actor}`})
     // The buyer of household n eats as inhabitant 200 + n
     const buyerInhabitant = (householdId: number) => 200 + householdId
     const householdOfInhabitant = (inhabitantId: number) => ({id: inhabitantId - 200, shortName: shortNameOf(inhabitantId - 200)})
@@ -1972,7 +1975,8 @@ describe('replayTicketChanges', () => {
     const historyRow = (action: OrderAuditAction, actor: number | null, timestamp: Date, orderId: number | null, inhabitantId: number, auditData: string) =>
         OrderFactory.defaultOrderHistoryDisplay(undefined, {
             id: ++rowId, orderId, inhabitantId, dinnerEventId: 1, action, timestamp, auditData,
-            performedByUserId: actor, performedByUser: actor === null ? null : {id: actor, email: `user${actor}@example.com`}
+            performedByUserId: actor,
+            performedByUser: actor === null ? null : {id: actor, email: `user${actor}@example.com`, Inhabitant: actor === SYSTEM ? null : personOf(actor)}
         })
     const orderDataOf = (order: Ticket, actor: number | null) => OrderFactory.defaultOrderCreateWithPrice(order.householdId, {
         dinnerEventId: 1, inhabitantId: order.inhabitantId, bookedByUserId: actor, ticketPriceId: order.ticketPriceId, priceAtBooking: priceOf(order.ticketPriceId),
@@ -1995,6 +1999,9 @@ describe('replayTicketChanges', () => {
     const updated = (action: OrderAuditAction, order: Ticket, actor: number, timestamp: Date,
                      {state = State.BOOKED, dinnerMode = Mode.DINEIN, ticketPriceId = null}: {state?: OrderState, dinnerMode?: DinnerMode, ticketPriceId?: number | null} = {}) =>
         historyRow(action, actor, timestamp, order.id, order.inhabitantId, legacyAuditData.update({state, dinnerMode, ticketPriceId, priceAtBooking: ticketPriceId === null ? null : priceOf(ticketPriceId)}))
+    // A row in the audit format with the source of the run that wrote it; a cancellation's order is gone
+    const written = (action: OrderAuditAction, order: Ticket, actor: number, timestamp: Date, change: OrderAuditChange, source: OrderAuditSource) =>
+        historyRow(action, actor, timestamp, change === Change.CANCEL ? null : order.id, order.inhabitantId, createOrderAuditData(change, snapshotOf(order, State.BOOKED), source))
 
     const figures = ({counts, portions, revenue}: TicketChange) => ({counts, portions, revenue})
     // The tickets, kuverter and revenue of the tickets the dinner is paid for
@@ -2146,29 +2153,31 @@ describe('replayTicketChanges', () => {
 
         it.each([
             {desc: 'a release and the admin\'s deletion of the released ticket', rows: [release, deleted(child, ADMIN, at(35), Audit.USER_CANCELLED, State.RELEASED)],
-                kinds: [[Kind.BOOK], [Kind.RELEASE], [Kind.ADMIN_CANCEL]], paidFor: [adult]},
+                events: [[{change: Kind.BOOK}], [{change: Kind.RELEASE}], [{change: Kind.CANCEL, reason: CORRECTION}]], paidFor: [adult]},
             {desc: 'a cancellation before the deadline', rows: [deleted(child, 22, at(10))],
-                kinds: [[Kind.BOOK], [Kind.CANCEL]], paidFor: [adult]},
+                events: [[{change: Kind.BOOK}], [{change: Kind.CANCEL}]], paidFor: [adult]},
             {desc: 'a release alone', rows: [release],
-                kinds: [[Kind.BOOK], [Kind.RELEASE]], paidFor: [adult, child]}
-        ])('GIVEN two booked tickets and $desc WHEN replaying THEN the lines read $kinds and the last holds what is paid for', ({rows, kinds, paidFor}) => {
+                events: [[{change: Kind.BOOK}], [{change: Kind.RELEASE}]], paidFor: [adult, child]}
+        ])('GIVEN two booked tickets and $desc WHEN replaying THEN the lines read their events and the last holds what is paid for', ({rows, events, paidFor}) => {
             const {replayTicketChanges} = useBooking()
             const lines = replayTicketChanges([booked(adult, 22, at(0)), booked(child, 22, at(0)), ...rows], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, DEADLINE)
 
-            expect(lines.map(line => line.events.map(event => event.change))).toEqual(kinds)
+            expect(lines.map(line => line.events.map(({change, reason}) => ({change, reason})))).toEqual(events)
             expect(figures(lines.at(-1)!)).toEqual(paidForFigures(paidFor))
         })
 
-        // After the deadline a user releases instead of deleting: a user-mode deletion then is the admin's correction
+        // A row written before rows named their source: after the deadline a member releases instead of deleting, so a
+        // user-mode deletion then is the admin's correction; a row naming its source reads by its source
         it.each([
-            {desc: 'a system run\'s deletion after the deadline', action: Audit.SYSTEM_DELETED, actor: null, timestamp: at(35), kind: Kind.CANCEL},
-            {desc: 'a user-mode deletion after the deadline', action: Audit.USER_CANCELLED, actor: ADMIN, timestamp: at(35), kind: Kind.ADMIN_CANCEL},
-            {desc: 'a user-mode deletion before the deadline', action: Audit.USER_CANCELLED, actor: 22, timestamp: at(10), kind: Kind.CANCEL}
-        ])('GIVEN a booked ticket and $desc WHEN replaying THEN the deletion reads $kind', ({action, actor, timestamp, kind}) => {
+            {desc: 'a system run\'s deletion after the deadline', row: deleted(child, null, at(35), Audit.SYSTEM_DELETED), reason: undefined},
+            {desc: 'a user-mode deletion after the deadline', row: deleted(child, ADMIN, at(35)), reason: CORRECTION},
+            {desc: 'a user-mode deletion before the deadline', row: deleted(child, 22, at(10)), reason: undefined},
+            {desc: 'a member\'s deletion after the deadline written with its source', row: written(Audit.USER_CANCELLED, child, 22, at(35), Change.CANCEL, Source['user-booking']), reason: undefined}
+        ])('GIVEN a booked ticket and $desc WHEN replaying THEN the deletion reads as a cancellation with the reason $reason', ({row, reason}) => {
             const {replayTicketChanges} = useBooking()
-            const lines = replayTicketChanges([booked(child, 22, at(0)), deleted(child, actor, timestamp, action)], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, DEADLINE)
+            const lines = replayTicketChanges([booked(child, 22, at(0)), row], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, DEADLINE)
 
-            expect(lines.at(-1)!.events).toEqual([{change: kind, tickets: counts(0, 1, 0)}])
+            expect(lines.at(-1)!.events).toEqual([{change: Kind.CANCEL, tickets: counts(0, 1, 0), reason}])
         })
 
         it('GIVEN the admin\'s deletion of a released ticket WHEN replaying THEN one event takes the ticket off the counts, the kuverter and the revenue', () => {
@@ -2177,10 +2186,48 @@ describe('replayTicketChanges', () => {
                 ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, DEADLINE)
             const [, released, adminCancel] = lines
 
-            expect(adminCancel).toMatchObject({performedByUserId: ADMIN, households: ['S_22'], events: [{change: Kind.ADMIN_CANCEL, tickets: counts(0, 1, 0)}]})
+            expect(adminCancel).toMatchObject({performedByUserId: ADMIN, households: ['S_22'], events: [{change: Kind.CANCEL, tickets: counts(0, 1, 0), reason: CORRECTION}]})
             expect(released!.revenue - adminCancel!.revenue).toBe(PRICES[2]!.price)
             expect(released!.portions - adminCancel!.portions).toBe(PRICES[2]!.portions)
         })
+    })
+
+    // The source of the run that wrote a row gives its event's reason: an admin's correction reads on every kind of event
+    describe('the reason a row\'s source gives', () => {
+        const ADMIN = 1
+        const adult = ticket(1, 1, 22)
+        const child = ticket(2, 2, 22)
+        const childAsAdult = {...child, ticketPriceId: adult.ticketPriceId}
+
+        it.each([
+            {desc: 'an admin\'s booking', rows: [written(Audit.USER_BOOKED, adult, ADMIN, at(35), Change.BOOK, CORRECTION)],
+                event: {change: Kind.BOOK, tickets: counts(1, 0, 0), reason: CORRECTION}},
+            {desc: 'an admin\'s ticket type change', rows: [booked(child, 22, at(0)), written(Audit.USER_BOOKED, childAsAdult, ADMIN, at(35), Change.CHANGE_PRICE, CORRECTION)],
+                event: {change: Kind.CHANGE_PRICE, tickets: counts(1, 0, 0), from: counts(0, 1, 0), reason: CORRECTION}},
+            {desc: 'an admin\'s deletion', rows: [booked(child, 22, at(0)), written(Audit.USER_CANCELLED, child, ADMIN, at(35), Change.CANCEL, CORRECTION)],
+                event: {change: Kind.CANCEL, tickets: counts(0, 1, 0), reason: CORRECTION}},
+            {desc: 'a member\'s booking', rows: [written(Audit.USER_BOOKED, adult, 22, at(10), Change.BOOK, Source['user-booking'])],
+                event: {change: Kind.BOOK, tickets: counts(1, 0, 0)}}
+        ])('GIVEN $desc WHEN replaying THEN its event reads its kind with the reason its source gives', ({rows, event}) => {
+            const {replayTicketChanges} = useBooking()
+            const lines = replayTicketChanges(rows, ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, at(30))
+
+            expect(lines.at(-1)!.events).toEqual([event])
+        })
+    })
+
+    it('GIVEN rows by a member, by the system and by a user since deleted WHEN replaying THEN each line names its actor as the booking page names a person, the system\'s and the deleted user\'s lines as System', () => {
+        const {replayTicketChanges} = useBooking()
+        const {formatNameWithInitials} = useHousehold()
+        const [adult, child] = [ticket(1, 1, 31), ticket(2, 2, 31)]
+        const lines = replayTicketChanges([
+            booked(adult, 31, at(0)),
+            booked(child, SYSTEM, at(10), {action: Audit.SYSTEM_CREATED}),
+            deleted(child, null, at(20), Audit.SYSTEM_DELETED)
+        ], ticketPriceOf, SYSTEM, shortNameOf)
+
+        expect(lines.map(line => line.performedByName))
+            .toEqual([formatNameWithInitials(personOf(31)), BOOKING_WORDS.ticketChange.bySystem, BOOKING_WORDS.ticketChange.bySystem])
     })
 
     it('GIVEN the chef\'s extra portions for the first in line WHEN replaying THEN one line reads them as extra portions and the tickets, kuverter and revenue rise', () => {

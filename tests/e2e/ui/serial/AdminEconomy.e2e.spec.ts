@@ -5,13 +5,18 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {getHouseholdUrl} from '~/utils/household'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated, temporaryAndRandom, salt} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
+const {createDefaultWeekdayMap: createDinnerModeWeekdayMap} = useWeekDayMapValidation({
+    valueSchema: DinnerModeSchema,
+    defaultValue: DinnerMode.NONE
+})
 
 /**
  * SERIAL TEST: Creates its own active season to ensure future dinner events exist.
@@ -34,12 +39,17 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
 
     test.beforeAll(async ({browser}) => {
         adminContext = await validatedBrowserContext(browser)
-        const {householdId, inhabitantId} = await getSessionUserInfo(adminContext)
+        const {householdId} = await getSessionUserInfo(adminContext)
         testHouseholdId = householdId
-        testInhabitantId = inhabitantId
+        // The order to correct belongs to a person of the admin's household who books nothing by preference, so the
+        // season's activation leaves the dinner free for it
+        const person = await HouseholdFactory.createInhabitantWithConfig(adminContext, testHouseholdId, {
+            name: salt('Anders', testSalt), lastName: 'Korrektion', dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
+        })
+        testInhabitantId = person.id
 
-        // Create dedicated season with future dinner events
-        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 14})
+        // The spec's own season, open at activation: its cases correct an upcoming order and read no deadline
+        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 14, deadline: 0})
         createdSeasonIds.push(testSeason.season.id!)
 
         expect(testSeason.dinnerEvents.length, 'Test season should have dinner events').toBeGreaterThan(0)
@@ -73,8 +83,10 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
     })
 
     test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        await HouseholdFactory.deleteInhabitant(context, testInhabitantId)
         // Deleting the season cascades its dinners and the order on them
-        await SeasonFactory.cleanupSeasons(await validatedBrowserContext(browser), createdSeasonIds)
+        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
     })
 
     test('GIVEN an upcoming order WHEN /admin/economy is server-rendered THEN the future orders table shows its loading state, and once hydrated the order row appears', async ({browser, page}) => {

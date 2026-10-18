@@ -93,15 +93,26 @@ export const BOOKING_WORDS = {
         [OrderAuditAction.SYSTEM_DELETED]: 'Slettet',
         [OrderAuditAction.SYSTEM_UPDATED]: 'Opdateret'
     } satisfies Record<OrderAuditAction, string>,
-    /** Billetændringer: the events beyond the actions' toast words, the household a sale bought from, the system's line */
+    /**
+     * Billetændringer: its title, toggle, failure and columns; the events beyond the actions' toast words, an admin's
+     * correction after its event's word, the household a sale bought from, the system as an actor and as the household
+     * of a line over several; a line's kuverter, the moment Framelding closes and the button to the older changes
+     */
     ticketChange: {
+        title: 'Se billetændringer',
+        toggle: (open: boolean) => open ? 'Skjul billetændringer' : 'Vis billetændringer',
+        failed: 'Kunne ikke hente billetændringer',
+        columns: {date: 'Dato', households: 'Husstand', performedBy: 'Af', change: 'Ændring', tickets: 'Billetter · kuverter', revenue: 'Indtægter'},
         kinds: {
             [TicketChangeKind.CLOSE]: 'lukket',
-            [TicketChangeKind.ADMIN_CANCEL]: (cancelled: string) => `${cancelled}, ADMIN korrektion`,
             [TicketChangeKind.EXTRA_PORTIONS]: (booked: string) => `ekstra ${booked}`
         },
+        adminCorrection: (word: string) => `${word}, ADMIN korrektion`,
         seller: (seller: string) => `fra ${seller}`,
-        bySystem: 'System'
+        bySystem: 'System',
+        portions: (portions: string) => `· ${portions} kuverter`,
+        deadline: (moment: string) => `Framelding lukker · ${moment}`,
+        more: 'Vis fuld historik'
     },
     /** Billetændringer's household of a ticket the history cannot attribute */
     unknownHousehold: '?',

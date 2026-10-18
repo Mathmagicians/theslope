@@ -3,10 +3,10 @@ import {createError} from 'h3'
 import {subMinutes, subYears} from 'date-fns'
 import {scaffoldPrebookings, type ScaffoldOptions} from '~~/server/utils/scaffoldPrebookings'
 import {joinWaitlist, sellTicketsToWaitlist} from '~~/server/utils/waitlistAssignment'
-import {fetchHouseholds, fetchHouseholdsByInhabitantIds, fetchSeason} from '~~/server/data/prismaRepository'
+import {fetchActiveSeasonId, fetchHouseholds, fetchHouseholdsByInhabitantIds, fetchSeason} from '~~/server/data/prismaRepository'
 import {
-    claimOrder, claimReleasedOrder, countReleasedTicketsByType, createOrders, deleteOrder, fetchOrders, fetchUserIntentKeys, findReleasedOrderId, recordCancellation,
-    updateOrdersBatch, type OrderBatchUpdate
+    claimOrder, claimReleasedOrder, countReleasedTicketsByType, createOrders, deleteOrder, fetchDinnerEventsByIds, fetchOrders, fetchUserIntentKeys, findReleasedOrderId,
+    recordCancellation, updateOrdersBatch, type OrderBatchUpdate
 } from '~~/server/data/financesRepository'
 import {
     createWaitlistEntries, deleteWaitlistEntries, fetchWaitlistForDinners, grabWaitlistEntry, removePlacedWaitlistEntry, updateWaitlistEntryOrders
@@ -44,7 +44,8 @@ vi.mock('~~/server/data/prismaRepository', async importOriginal => ({
 vi.mock('~~/server/data/financesRepository', async importOriginal => ({
     orderSnapshotOf: (await importOriginal<typeof import('~~/server/data/financesRepository')>()).orderSnapshotOf,
     fetchOrders: vi.fn(), fetchUserIntentKeys: vi.fn(), createOrders: vi.fn(), deleteOrder: vi.fn(), updateOrdersBatch: vi.fn(),
-    claimOrder: vi.fn(), countReleasedTicketsByType: vi.fn(), findReleasedOrderId: vi.fn(), claimReleasedOrder: vi.fn(), recordCancellation: vi.fn()
+    claimOrder: vi.fn(), countReleasedTicketsByType: vi.fn(), findReleasedOrderId: vi.fn(), claimReleasedOrder: vi.fn(), recordCancellation: vi.fn(),
+    fetchDinnerEventsByIds: vi.fn()
 }))
 vi.mock('~~/server/data/waitlistRepository', () => ({
     fetchWaitlistForDinners: vi.fn(), deleteWaitlistEntries: vi.fn(), updateWaitlistEntryOrders: vi.fn(), createWaitlistEntries: vi.fn(), grabWaitlistEntry: vi.fn(), removePlacedWaitlistEntry: vi.fn(), releaseWaitlistEntry: vi.fn(), recordWaitlistPlacingOrder: vi.fn(), fetchOrdersServingEntry: vi.fn()
@@ -58,10 +59,11 @@ vi.mock('~~/server/utils/waitlistAssignment', async importOriginal => {
 })
 
 const d1Client = {} as D1Database
-const {DinnerModeSchema, BookingActionSchema, BookingFailureSchema, TicketTypeSchema, OrderStateSchema} = useBookingValidation()
+const {DinnerModeSchema, BookingActionSchema, BookingFailureSchema, TicketTypeSchema, OrderStateSchema, OrderAuditSourceSchema} = useBookingValidation()
 const {createDefaultWeekdayMap} = useCoreValidation()
 const Mode = DinnerModeSchema.enum
 const Action = BookingActionSchema.enum
+const Source = OrderAuditSourceSchema.enum
 const {ADULT, CHILD} = TicketTypeSchema.enum
 
 // The writes a run makes; a preview makes none
@@ -443,9 +445,9 @@ describe('scaffoldPrebookings', () => {
             expect(result.results.map(line => [line.inhabitantId, line.action])).toEqual([[bo.id, Action.CANCEL], [anna.id, Action.CANCEL]])
             expect(Object.entries({deleteOrder, recordCancellation}).filter(([, writer]) => vi.mocked(writer).mock.calls.length > 0).map(([name]) => name)).toEqual(writes)
             if (!preview) {
-                expect(deleteOrder).toHaveBeenCalledWith(d1Client, [boOrder.id], 7)
+                expect(deleteOrder).toHaveBeenCalledWith(d1Client, [boOrder.id], 7, Source['user-booking'])
                 expect(recordCancellation).toHaveBeenCalledWith(d1Client, [{
-                    orderId: null, inhabitantId: anna.id, dinnerEventId: dinner.id, seasonId: season.id, performedByUserId: 7,
+                    orderId: null, inhabitantId: anna.id, dinnerEventId: dinner.id, seasonId: season.id, performedByUserId: 7, source: Source['user-booking'],
                     snapshot: expect.objectContaining({
                         id: null, inhabitantId: anna.id, dinnerEventId: dinner.id, dinnerMode: Mode.NONE, isGuestTicket: false,
                         householdId: household.id, householdShortname: getHouseholdShortName(household.address)
@@ -453,6 +455,32 @@ describe('scaffoldPrebookings', () => {
                 }])
             }
         })
+    })
+
+    // Every order row a run writes names its source: a member's save as the member's booking, an admin's correction as
+    // the correction
+    it.each([
+        {run: 'a member\'s save', adminCorrection: undefined, source: Source['user-booking']},
+        {run: 'an admin\'s correction', adminCorrection: true, source: Source['admin-correction']}
+    ])('GIVEN Anna booking, Bo changing his eating mode and cancelling his guest WHEN $run lands THEN the booking, the change and the cancellation name $source', async ({adminCorrection, source}) => {
+        vi.clearAllMocks()
+        const {season, household, anna, bo, boOrder, dinner, adultPrice, takeaway} = givenSave()
+        const boGuest = OrderFactory.defaultOrder(undefined, {
+            id: 12, inhabitantId: bo.id, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, priceAtBooking: adultPrice.price, isGuestTicket: true
+        })
+        vi.mocked(fetchOrders).mockResolvedValue([boOrder, boGuest])
+        vi.mocked(updateOrdersBatch).mockReturnValue(writeUpdates)
+        const desired = (inhabitantId: number, dinnerMode: DinnerMode, overrides: Partial<DesiredOrder> = {}) =>
+            OrderFactory.defaultDesiredOrder({inhabitantId, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, dinnerMode, ...overrides})
+
+        await scaffoldPrebookings(d1Client, {
+            seasonId: season.id, householdId: household.id, userId: 7, deadlines: OPEN_DEADLINES, adminCorrection,
+            desiredOrders: [desired(anna.id, Mode.DINEIN), takeaway(bo.id, boOrder.id), desired(bo.id, Mode.NONE, {orderId: boGuest.id, isGuestTicket: true})]
+        })
+
+        expect(createOrders).toHaveBeenCalledWith(d1Client, household.id, [expect.objectContaining({inhabitantId: anna.id})], expect.objectContaining({source}))
+        expect(writeUpdates.mock.calls.flatMap(([, updates]) => updates.map(update => [update.orderId, update.audit?.source]))).toEqual([[boOrder.id, source]])
+        expect(deleteOrder).toHaveBeenCalledWith(d1Client, [boGuest.id], 7, source)
     })
 
     // A member's own join outranks the preference: its booking row makes the dinner the member's
@@ -711,6 +739,62 @@ describe('scaffoldPrebookings', () => {
             const places = [[0, ADULT, 1], [1, ADULT, 2], [2, CHILD, 1]]
             expect(result.positions.map(place => [indexOf(place.inhabitantId), place.ticketType, place.position])).toEqual(places)
             expect(result.outcomes.joined.map(event => [indexOf(event.inhabitantId), event.ticketType, event.position])).toEqual(places)
+        })
+    })
+
+    // The booking page names its dinners and no season: a run that names its dinners runs in their season, whichever is active
+    describe('the season of a run', () => {
+        beforeEach(() => {
+            vi.clearAllMocks()
+        })
+
+        // Bo holds his order on a dinner of season 1 a month ahead while season 2 is active; Anna and Bo eat every day by
+        // preference. The endpoint's two runs on the page's dinners: Anna's bookings saved, and the preview of an empty draft
+        const givenDinnerOfInactiveSeason = () => {
+            const {season, household, anna, boOrder, adultPrice} = givenSave()
+            const dinner = {...DinnerEventFactory.dinnerEventAt(boOrder.dinnerEventId, 30), seasonId: season.id!}
+            const activeDinner = {...DinnerEventFactory.dinnerEventAt(6, 30), seasonId: 2}
+            const activeSeason = {...season, id: activeDinner.seasonId, dinnerEvents: [activeDinner]}
+            vi.mocked(fetchSeason).mockImplementation(async (_d1, id) => [{...season, dinnerEvents: [dinner]}, activeSeason].find(candidate => candidate.id === id) ?? null)
+            vi.mocked(fetchActiveSeasonId).mockResolvedValue(activeSeason.id)
+            vi.mocked(fetchDinnerEventsByIds).mockImplementation(async (_d1, ids) => [dinner, activeDinner].filter(({id}) => ids.includes(id)))
+            vi.mocked(fetchOrders).mockImplementation(async (_d1, ids) => [boOrder].filter(({dinnerEventId}) => ids.includes(dinnerEventId)))
+            const runs = {
+                save: (dinnerEventIds: number[]) => scaffoldPrebookings(d1Client, {
+                    householdId: household.id, userId: 1,
+                    desiredOrders: dinnerEventIds.map(dinnerEventId => OrderFactory.defaultDesiredOrder({inhabitantId: anna.id, dinnerEventId, ticketPriceId: adultPrice.id}))
+                }),
+                preview: (dinnerEventIds: number[]) => scaffoldPrebookings(d1Client, {householdId: household.id, dinnerEventIds, preview: true})
+            }
+            return {runs, dinner, activeDinner, anna, householdId: household.id, seasonId: season.id!, activeSeasonId: activeSeason.id}
+        }
+
+        it.each(['save', 'preview'] as const)('GIVEN Bo\'s order on a dinner of a season that is not active WHEN the %s names the dinner and no season THEN it runs in the dinner\'s season: Bo\'s order stays and Anna books', async run => {
+            const {runs, dinner, anna, seasonId} = givenDinnerOfInactiveSeason()
+
+            const result = await runs[run]([dinner.id])
+
+            expect(result.results.map(line => [line.inhabitantId, line.dinnerEventId, line.action])).toEqual([[anna.id, dinner.id, Action.BOOK]])
+            expect(result.seasonId).toBe(seasonId)
+            expect(vi.mocked(fetchDinnerEventsByIds).mock.calls).toEqual([[d1Client, [dinner.id]]])
+            expect(fetchActiveSeasonId).not.toHaveBeenCalled()
+        })
+
+        it.each(['save', 'preview'] as const)('GIVEN dinners of two seasons WHEN the %s names them and no season THEN it is refused as a bad request and writes nothing', async run => {
+            const {runs, dinner, activeDinner} = givenDinnerOfInactiveSeason()
+
+            await expect(runs[run]([dinner.id, activeDinner.id])).rejects.toMatchObject({statusCode: 400})
+            expect(writersCalled()).toEqual([])
+        })
+
+        it('GIVEN a preference run naming neither dinners nor a season WHEN it runs THEN it decides the active season\'s dinners', async () => {
+            const {householdId, activeDinner, activeSeasonId} = givenDinnerOfInactiveSeason()
+
+            const result = await scaffoldPrebookings(d1Client, {householdId})
+
+            expect(result.seasonId).toBe(activeSeasonId)
+            expect(result.dinners).toEqual([{id: activeDinner.id, date: activeDinner.date}])
+            expect(fetchDinnerEventsByIds).not.toHaveBeenCalled()
         })
     })
 

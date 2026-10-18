@@ -79,11 +79,12 @@ export class OrderFactory {
   static readonly ticketCounts = (adult: number, child: number, baby: number) =>
     ({[TicketTypeSchema.enum.ADULT]: adult, [TicketTypeSchema.enum.CHILD]: child, [TicketTypeSchema.enum.BABY]: baby})
 
-  /** A line of a dinner's ticket changes: user 31 of S_31 books an adult on a dinner without tickets */
+  /** A line of a dinner's ticket changes: user 31 of S_31, Lars J., books an adult on a dinner without tickets */
   static readonly defaultTicketChange = (overrides?: Partial<TicketChange>): TicketChange => ({
     id: 1,
     timestamp: new Date('2026-04-05T08:02:00Z'),
     performedByUserId: 31,
+    performedByName: 'Lars J.',
     bySystem: false,
     households: ['S_31'],
     events: [{change: TicketChangeKindSchema.enum.BOOK, tickets: OrderFactory.ticketCounts(1, 0, 0)}],
@@ -196,7 +197,7 @@ export class OrderFactory {
     orderId: 1,
     action: OrderAuditActionSchema.enum.USER_BOOKED,
     performedByUserId: 1,
-    performedByUser: {id: 1, email: 'test@example.com'},
+    performedByUser: {id: 1, email: 'test@example.com', Inhabitant: {name: 'Anna', lastName: 'Hansen'}},
     auditData: JSON.stringify({
       inhabitantId: 10,
       bookedByUserId: 1,

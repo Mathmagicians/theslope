@@ -6,7 +6,7 @@ import {enableAutoUnmount} from '@vue/test-utils'
 import CalendarLegend from '~/components/calendar/CalendarLegend.vue'
 import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 import {mountWithTooltipProvider, findAllByTestId, findByTestId, resetStores} from '~~/tests/component/testHelpers'
-import {ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
 
 enableAutoUnmount(afterEach)
 
@@ -27,6 +27,7 @@ describe('CalendarLegend', () => {
         ...chips,
         {label: 'Madhold 1', kind: 'badge', badgeClass: 'band-one'}
     ]
+    const HINT = 'Klik på en celle'
 
     beforeEach(() => {
         resetStores()
@@ -55,13 +56,35 @@ describe('CalendarLegend', () => {
         })
     })
 
+    it('stands every entry as a row of one list, the sample in the sample column and the name beside it: the items first, the slot\'s rows under them, the hint last', async () => {
+        const wrapper = await mountSuspended(CalendarLegend, {
+            props: {items, hint: HINT},
+            slots: {default: () => [h('div', {'data-testid': 'own-entry'}, 'Egen'), h('div', {'data-testid': 'own-entry'}, 'Anden')]}
+        })
+        const list = findByTestId(wrapper, 'calendar-legend-list')
+        const rows = Array.from(list.element.children)
+
+        expect(list.classes()).toEqual(COMPONENTS.legend.list.split(' '))
+        expect(rows.map(row => row.getAttribute('data-testid'))).toEqual([...items.map(() => 'calendar-legend-entry'), 'own-entry', 'own-entry'])
+        expect(rows.slice(items.length).map(row => row.textContent)).toEqual(['Egen', 'Anden'])
+        rows.slice(0, items.length).forEach((row, index) => {
+            const [sample, name] = Array.from(row.children)
+            expect(row.children).toHaveLength(2)
+            expect(Array.from(row.classList)).toEqual(COMPONENTS.legend.entry.split(' '))
+            expect(Array.from(sample!.classList)).toEqual(COMPONENTS.legend.sample.split(' '))
+            expect(name!.textContent).toBe(items[index]!.label)
+        })
+        expect(list.text()).not.toContain(HINT)
+        expect(findByTestId(wrapper, 'calendar-legend').text().trim().endsWith(HINT)).toBe(true)
+    })
+
     it('hosts own entries in the default slot and the hint under them', async () => {
         const wrapper = await mountSuspended(CalendarLegend, {
-            props: {hint: 'Klik på en celle'},
+            props: {hint: HINT},
             slots: {default: () => h('span', {'data-testid': 'own-entry'}, 'Egen')}
         })
         expect(findByTestId(wrapper, 'own-entry').text()).toBe('Egen')
         expect(findAllByTestId(wrapper, 'calendar-legend-entry')).toHaveLength(0)
-        expect(findByTestId(wrapper, 'calendar-legend').text()).toContain('Klik på en celle')
+        expect(findByTestId(wrapper, 'calendar-legend').text()).toContain(HINT)
     })
 })

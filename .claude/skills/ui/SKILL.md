@@ -27,7 +27,7 @@ passes domain props. Read `docs/ui.md` before the first edit; it names every tok
   `COMPONENTS.calendarGrid`, a panel that opens below a button spreads `BUTTONS.flipOpen(isOpen)`. A `div` with padding, a border
   and a grid is never the answer when the family exists.
 - Reuse the surface that already renders the pattern (`DinnerModeLegend` is the "Forklaring" panel: a calendar legend binds
-  the same `ALERTS.legend` and the same `COMPONENTS.legend.entries`). Look for the pattern before drawing a new one:
+  the same `ALERTS.legend` and the same `COMPONENTS.legend.list`, one entry per row). Look for the pattern before drawing a new one:
   `grep -rn "ALERTS\.\|BUTTONS\.\|COMPONENTS\." app/components`.
 - The `ui` prop is set only through a token (`COMPONENTS.table.ui`, `COMPONENTS.calendarGrid.ui`), never inline.
 - Two kinds of table. A data-heavy table (lines, ledgers, history, the admin economy) binds `COMPONENTS.table.ui` and, wider

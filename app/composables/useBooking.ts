@@ -1397,11 +1397,13 @@ export const useBooking = () => {
     /**
      * Replays a dinner's order history in time order into the lines of Billetændringer. Each row moves one held ticket,
      * and its ticket events follow from that ticket before and after the row: booked, the chef's extra portions,
-     * cancelled, cancelled by the admin after the booking deadline, released, bought, taken back, changed to another
-     * price row, or closed; a row that moves nothing, such as an eating mode switch, makes no event. A line gathers the
-     * events of one actor within one rendered minute, the system user acting for a row without an actor, with the
-     * tickets, kuverter and revenue after it. A ticket price the season no longer names counts in the revenue without a
-     * type or kuverter. A sale passes the ticket to the buyer, whose household its line and the ticket's later lines name.
+     * cancelled, released, bought, taken back, changed to another price row, or closed; a row that moves nothing, such as
+     * an eating mode switch, makes no event. The events of an admin's correction carry its reason, read from the row's
+     * source; a row without a source that deletes a ticket after the booking deadline is one. A line gathers the events
+     * of one actor within one rendered minute, the system user acting for a row without an actor, with the actor's name
+     * and the tickets, kuverter and revenue after it. A ticket price the season no longer names counts in the revenue
+     * without a type or kuverter. A sale passes the ticket to the buyer, whose household its line and the ticket's later
+     * lines name.
      */
     const replayTicketChanges = (
         history: OrderHistoryDisplay[],
@@ -1468,9 +1470,13 @@ export const useBooking = () => {
         }
 
         const isAfterBookingDeadline = (moment: Date): boolean => bookingDeadline !== undefined && isAfter(moment, bookingDeadline)
-        // After the booking deadline a user releases instead of deleting, so a user-mode deletion then is the admin's
-        // correction; a system run's deletion is SYSTEM_DELETED
-        const isAdminDeletion = (row: OrderHistoryDisplay): boolean => row.action === Audit.USER_CANCELLED && isAfterBookingDeadline(row.timestamp)
+        // A row written before rows named their source: after the booking deadline a member releases instead of
+        // deleting, so a user-mode deletion then is the admin's correction; a system run's deletion is SYSTEM_DELETED
+        const isUnsourcedAdminDeletion = (row: OrderHistoryDisplay, audit: OrderAudit): boolean =>
+            audit.source === null && row.action === Audit.USER_CANCELLED && isAfterBookingDeadline(row.timestamp)
+        // An admin's correction names itself in its row's source
+        const reasonOf = (row: OrderHistoryDisplay, audit: OrderAudit, deletes: boolean): TicketEvent['reason'] =>
+            audit.source === Source['admin-correction'] || (deletes && isUnsourcedAdminDeletion(row, audit)) ? Source['admin-correction'] : undefined
         // The chef's extra portions are the orders the waiting-list assignment creates for the first in line
         const isExtraPortion = (audit: OrderAudit): boolean => audit.source === Source['waitlist-assignment']
         // A sale's row holds the seller's order as it stood before the sale: its household is the seller
@@ -1479,8 +1485,8 @@ export const useBooking = () => {
         const eatingAgain = (row: OrderHistoryDisplay, audit: OrderAudit, tickets: TicketCounts): TicketEvent =>
             row.action === Audit.USER_CLAIMED ? {change: Kind.BUY, tickets, seller: sellerOf(audit)} : {change: Kind.RECLAIM, tickets}
 
-        const eventsOf = (before: HeldTicket | undefined, after: HeldTicket | undefined, row: OrderHistoryDisplay, audit: OrderAudit): TicketEvent[] => {
-            if (!after) return before ? [{change: isAdminDeletion(row) ? Kind.ADMIN_CANCEL : Kind.CANCEL, tickets: countsOf([before])}] : []
+        const changesOf = (before: HeldTicket | undefined, after: HeldTicket | undefined, row: OrderHistoryDisplay, audit: OrderAudit): TicketEvent[] => {
+            if (!after) return before ? [{change: Kind.CANCEL, tickets: countsOf([before])}] : []
             if (!before) return [{change: isExtraPortion(audit) ? Kind.EXTRA_PORTIONS : Kind.BOOK, tickets: countsOf([after])}]
             const tickets = countsOf([after])
             if (after.closed && !before.closed) return [{change: Kind.CLOSE, tickets}]
@@ -1489,6 +1495,10 @@ export const useBooking = () => {
                 ...(before.eating === after.eating ? [] : [after.eating ? eatingAgain(row, audit, tickets) : {change: Kind.RELEASE, tickets}])
             ]
         }
+        const eventsOf = (before: HeldTicket | undefined, after: HeldTicket | undefined, row: OrderHistoryDisplay, audit: OrderAudit): TicketEvent[] => {
+            const reason = reasonOf(row, audit, after === undefined)
+            return changesOf(before, after, row, audit).map(event => reason ? {...event, reason} : event)
+        }
 
         // A legacy batch update's row carries the new scalars only; the ticket it moves names the household, held as after
         // the row
@@ -1496,11 +1506,13 @@ export const useBooking = () => {
             const householdId = ticket.householdId ?? moved?.householdId ?? null
             const household = ticket.householdShortname ?? moved?.householdShortname ?? (householdId === null ? null : householdShortnameOf(householdId))
             const performedByUserId = row.performedByUserId ?? systemUserId
+            const bySystem = performedByUserId === systemUserId
             return {
                 id: row.id,
                 timestamp: row.timestamp,
                 performedByUserId,
-                bySystem: performedByUserId === systemUserId,
+                performedByName: formatPerformer(bySystem ? null : row.performedByUser),
+                bySystem,
                 households: [household ?? BOOKING_WORDS.unknownHousehold],
                 events,
                 counts: countsOf(held.values()),
@@ -1530,18 +1542,26 @@ export const useBooking = () => {
 
     /** A moment as the chef reads it: the date mask and the hour */
     const formatMoment = (date: Date): string => formatDate(date, `${DATE_SETTINGS.DATE_MASK} HH:mm`)
-    // One event per kind and seller with the tickets added up, in the order of the kinds: sales from two households stay two
+    /**
+     * Who wrote a history row, named as the booking page names a person; the system account, which holds no inhabitant,
+     * and a user since deleted read System
+     */
+    const formatPerformer = (user: OrderHistoryDisplay['performedByUser']): string =>
+        user?.Inhabitant ? formatNameWithInitials(user.Inhabitant) : BOOKING_WORDS.ticketChange.bySystem
+    // One event per kind, seller and reason with the tickets added up, in the order of the kinds: sales from two
+    // households stay two, and so do an admin's correction and the same act without one
     const mergeEvents = (events: TicketEvent[]): TicketEvent[] =>
         TicketChangeKindSchema.options.flatMap(change => {
-            const bySeller = groupBy((event: TicketEvent) => event.seller ?? '')(events.filter(event => event.change === change))
-            return [...bySeller.values()].map(ofSeller => {
-                const {seller} = ofSeller[0]!
-                const from = ofSeller.flatMap(event => event.from ? [event.from] : [])
+            const alike = groupBy((event: TicketEvent) => `${event.seller ?? ''}|${event.reason ?? ''}`)(events.filter(event => event.change === change))
+            return [...alike.values()].map(ofAlike => {
+                const {seller, reason} = ofAlike[0]!
+                const from = ofAlike.flatMap(event => event.from ? [event.from] : [])
                 return {
                     change,
-                    tickets: ofSeller.map(event => event.tickets).reduce(countsPlus),
+                    tickets: ofAlike.map(event => event.tickets).reduce(countsPlus),
                     ...(seller === undefined ? {} : {seller}),
-                    ...(from.length === 0 ? {} : {from: from.reduce(countsPlus)})
+                    ...(from.length === 0 ? {} : {from: from.reduce(countsPlus)}),
+                    ...(reason === undefined ? {} : {reason})
                 }
             })
         })
@@ -1614,6 +1634,7 @@ export const useBooking = () => {
         countChanges,
         // Ticket changes and the cooking round
         formatMoment,
+        formatPerformer,
         replayTicketChanges,
         consecutiveDinnerRun
     }

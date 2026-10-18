@@ -133,7 +133,7 @@ Status.
 | `WeekDayMapDisplay.vue` | `/admin/planning`, `/admin/teams` | none | ✅ | ✅ parent | ✅ |
 | `WeekDayMapDinnerModeDisplay.vue` | `/household/[shortname]/settings` | none | ❌ | ❌ | ❌ no tests |
 | `BaseCalendar.vue` | every calendar | none | ❌ | N/A | ⚠️ missing unit |
-| `CalendarLegend.vue` | `/admin/teams`, `/chef`, `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | none | ✅ | ✅ parent | ✅ the one "Forklaring" panel; `DinnerModeLegend` renders inside it |
+| `CalendarLegend.vue` | `/admin/teams`, `/chef`, `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | none | ✅ | ✅ parent | ✅ the one "Forklaring" panel, one entry per row (`COMPONENTS.legend.list`, `sample`); `DinnerModeLegend`'s rows join its list |
 | `CalendarDisplay.vue` | `/admin/planning` | none | ✅ | ❌ | ✅ |
 | `ChefCalendarDisplay.vue` | `/chef` | none | ✅ | ✅ | ✅ |
 | `DinnerCalendarDisplay.vue` | `/dinner`, `/household/[shortname]/bookings` | none | ✅ | ✅ serial `Waitlist` | ✅ |
@@ -151,7 +151,7 @@ Status.
 | `ActionPreview.vue` | `/household/[shortname]/bookings`, `/household/[shortname]`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ |
 | `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ parent | ✅ parent | ✅ via `DinnerBookingForm` |
 | `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | allergies, auth, households | ✅ | ✅ serial, incl. `Waitlist` | ✅ |
-| `DinnerModeLegend.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ renders through `CalendarLegend`, one entry per row (`COMPONENTS.legend.list`, `sample`), its words from `BOOKING_WORDS` (ADR-017) |
+| `DinnerModeLegend.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ renders its rows into `CalendarLegend`'s list, its words from `BOOKING_WORDS` (ADR-017) |
 | `DinnerModeSelector.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ✅ parent | ✅ parent | ✅ |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `DinnerTicket.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/planning` | none | ✅ | ✅ parent | ✅ |

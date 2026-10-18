@@ -25,7 +25,8 @@ const {fakePrisma, rawQuery} = await vi.hoisted(async () => ({
 }))
 vi.mock('~~/server/utils/database', () => ({getPrismaClientConnection: async () => ({...fakePrisma, $queryRawUnsafe: rawQuery})}))
 
-const {TicketTypeSchema, OrderStateSchema, DinnerModeSchema, OrderAuditChangeSchema, readOrderAudit} = useBookingValidation()
+const {TicketTypeSchema, OrderStateSchema, DinnerModeSchema, OrderAuditChangeSchema, OrderAuditSourceSchema, readOrderAudit} = useBookingValidation()
+const CORRECTION = OrderAuditSourceSchema.enum['admin-correction']
 const {ADULT, CHILD} = TicketTypeSchema.enum
 const d1Client = {} as D1Database
 
@@ -70,17 +71,17 @@ describe('deleteOrder', () => {
         return rows.map(({id}) => id)
     }
 
-    it('GIVEN booked orders WHEN a member cancels them THEN they are read, deleted, then one CANCEL row each names no order and keeps the order in its snapshot', async () => {
+    it('GIVEN booked orders WHEN an admin\'s correction cancels them THEN they are read, deleted, then one CANCEL row each names no order, keeps the order in its snapshot and names the run\'s source', async () => {
         const orderIds = givenBooked()
         fakePrisma.order.deleteMany.mockResolvedValue({count: orderIds.length})
 
-        await deleteOrder(d1Client, orderIds, 7)
+        await deleteOrder(d1Client, orderIds, 7, CORRECTION)
 
         expect(statementsInCallOrder(fakePrisma)).toEqual(['order.findMany', 'order.deleteMany', 'orderHistory.createMany'])
         expect(historyRows().map(row => ({orderId: row.orderId, action: row.action, audit: readOrderAudit(row)})))
             .toEqual(orderIds.map(orderId => ({
                 orderId: null, action: OrderAuditAction.USER_CANCELLED,
-                audit: expect.objectContaining({orderId, change: OrderAuditChangeSchema.enum.CANCEL})
+                audit: expect.objectContaining({orderId, change: OrderAuditChangeSchema.enum.CANCEL, source: CORRECTION})
             })))
     })
 
@@ -90,6 +91,30 @@ describe('deleteOrder', () => {
 
         await expect(deleteOrder(d1Client, orderIds, 7)).rejects.toThrow('D1 down')
         expect(fakePrisma.orderHistory.createMany).not.toHaveBeenCalled()
+    })
+})
+
+// A batch update's history row keeps its order as the update left it
+describe('updateOrdersBatch', () => {
+    it('GIVEN a release in an admin\'s correction WHEN written THEN its history row names the change and the run\'s source in its audit data', async () => {
+        const household = HouseholdFactory.defaultHouseholdDetail()
+        const person = household.inhabitants[0]!
+        const order = {...OrderFactory.defaultOrder(undefined, {id: 301, inhabitantId: person.id, state: OrderStateSchema.enum.RELEASED}), inhabitant: holderOf(person, household)}
+        fakePrisma.order.updateMany.mockResolvedValue({count: 1})
+        fakePrisma.order.findMany.mockResolvedValue([order])
+
+        await updateOrdersBatch()(d1Client, [{
+            orderId: order.id, state: OrderStateSchema.enum.RELEASED, dinnerMode: DinnerModeSchema.enum.NONE, ticketPriceId: null, priceAtBooking: null, isNewRelease: true,
+            audit: {
+                action: OrderAuditAction.USER_CANCELLED, change: OrderAuditChangeSchema.enum.RELEASE, source: CORRECTION,
+                performedByUserId: 7, inhabitantId: person.id, dinnerEventId: order.dinnerEventId, seasonId: 3
+            }
+        }])
+
+        const [row] = historyRows()
+        expect(readOrderAudit(row)).toEqual(expect.objectContaining({orderId: order.id, change: OrderAuditChangeSchema.enum.RELEASE, source: CORRECTION}))
+        // The source lives in the audit data; the row holds the history table's columns
+        expect(row).not.toHaveProperty('source')
     })
 })
 

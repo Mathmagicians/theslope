@@ -42,11 +42,11 @@ describe('DinnerModeLegend', () => {
         expect(without.text()).not.toContain(BOOKING_WORDS.mixedModes)
     })
 
-    it('lists every entry as one row, its sample in the sample column and its explanation beside it, the hint under the rows', async () => {
+    it('lists every entry as one row of the panel\'s list, its sample in the sample column and its explanation beside it, the hint under the rows', async () => {
         const wrapper = await mountSuspended(DinnerModeLegend, {
             props: {showModified: true, showWaitlist: true, showExpected: true, hint: GRID_HINT}
         })
-        const list = findByTestId(wrapper, 'dinner-mode-legend-list')
+        const list = findByTestId(wrapper, 'calendar-legend-list')
         const rows = Array.from(list.element.children)
 
         expect(list.classes()).toEqual(COMPONENTS.legend.list.split(' '))

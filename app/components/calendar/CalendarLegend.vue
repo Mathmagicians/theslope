@@ -12,18 +12,24 @@ export type CalendarLegendItem =
 /**
  * CalendarLegend - the one "Forklaring" panel
  *
- * ┌ ⓘ Forklaring ──────────────────────────────────────────────────────────────────────────┐
- * │  (1) Næste fællesspisning   (1)* Ledige billetter   (1)[wl] Venteliste   [1] Madhold 1 │
- * │  <default slot: a surface's own entries>                                               │
- * │  hint                                                                                  │
- * └────────────────────────────────────────────────────────────────────────────────────────┘
+ * One entry per row (COMPONENTS.legend.list): the sample in a fixed-width column (COMPONENTS.legend.sample), its name
+ * beside it, so every name starts on one vertical line. The default slot's rows join the list under the items.
+ *
+ * ┌ ⓘ Forklaring ────────────────────────────────┐
+ * │  (1)       Næste fællesspisning              │
+ * │  (1)*      Ledige billetter                  │
+ * │  (1)[wl]   Venteliste                        │
+ * │  [1]       Madhold 1                         │
+ * │  [🍽️]      Spisesal          (slot rows …)   │
+ * │  hint                                        │
+ * └──────────────────────────────────────────────┘
  *   circle: a day circle in the variant's classes
  *   chip:   that circle wrapped in a chip, reading the item's count, or carrying the item's glyph [wl] inset
  *           in a chip a size up (COMPONENTS.legend.iconChip)
  *   badge:  the team's rainbow band
  *
  * The calendars pass `items` and render it in BaseCalendar's #legend slot. DinnerModeLegend fills the
- * default slot with its mode samples and passes the grid's operating `hint`.
+ * default slot with its rows and passes the grid's operating `hint`.
  */
 withDefaults(defineProps<{
   items?: CalendarLegendItem[]
@@ -40,31 +46,33 @@ const {ALERTS, ICONS, COMPONENTS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
 <template>
   <UAlert v-bind="ALERTS.legend" :icon="ICONS.info" title="Forklaring" data-testid="calendar-legend">
     <template #description>
-      <div :class="COMPONENTS.legend.entries">
+      <div :class="COMPONENTS.legend.list" data-testid="calendar-legend-list">
         <div v-for="(item, index) in items" :key="index" :class="COMPONENTS.legend.entry" data-testid="calendar-legend-entry">
-          <UChip
-            v-if="item.kind === 'chip'"
-            show
-            :size="item.chipSize ?? SIZES.md"
-            :color="item.chipColor"
-            :text="item.count"
-            :ui="item.icon ? COMPONENTS.legend.iconChip.ui : undefined"
-          >
-            <div :class="item.circleClass">1</div>
-            <template v-if="item.icon" #content>
-              <UIcon :name="item.icon" :class="COMPONENTS.legend.iconChip.icon" />
-            </template>
-          </UChip>
-          <UBadge
-            v-else-if="item.kind === 'badge'"
-            :size="SIZES.md"
-            :class="[item.badgeClass, COMPONENTS.legend.badge]"
-            data-testid="calendar-legend-badge"
-          >
-            1
-          </UBadge>
-          <div v-else :class="item.circleClass" data-testid="calendar-legend-circle">
-            1
+          <div :class="COMPONENTS.legend.sample">
+            <UChip
+              v-if="item.kind === 'chip'"
+              show
+              :size="item.chipSize ?? SIZES.md"
+              :color="item.chipColor"
+              :text="item.count"
+              :ui="item.icon ? COMPONENTS.legend.iconChip.ui : undefined"
+            >
+              <div :class="item.circleClass">1</div>
+              <template v-if="item.icon" #content>
+                <UIcon :name="item.icon" :class="COMPONENTS.legend.iconChip.icon" />
+              </template>
+            </UChip>
+            <UBadge
+              v-else-if="item.kind === 'badge'"
+              :size="SIZES.md"
+              :class="[item.badgeClass, COMPONENTS.legend.badge]"
+              data-testid="calendar-legend-badge"
+            >
+              1
+            </UBadge>
+            <div v-else :class="item.circleClass" data-testid="calendar-legend-circle">
+              1
+            </div>
           </div>
           <span>{{ item.label }}</span>
         </div>

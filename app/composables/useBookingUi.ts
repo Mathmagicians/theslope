@@ -382,20 +382,22 @@ export const ACTION_WORDS: Record<BookingAction, {icon: string, preview: (words:
     [Action.CHANGE_MODE]: {icon: ICONS.edit, ...ACTION_TEXTS[Action.CHANGE_MODE]}
 }
 
-/**
- * The word of a ticket event in Billetændringer: the toast's word of its action; the admin's cancellation and the chef's
- * extra portions build on the cancellation's and the booking's; the close has its own
- */
-export const ticketChangeWord = (change: TicketChangeKind): string => {
+const kindWord = (change: TicketChangeKind): string => {
     const Kind = TicketChangeKindSchema.enum
     const {kinds} = BOOKING_WORDS.ticketChange
     switch (change) {
         case Kind.CLOSE: return kinds[Kind.CLOSE]
-        case Kind.ADMIN_CANCEL: return kinds[Kind.ADMIN_CANCEL](ACTION_WORDS[Action.CANCEL].toast)
         case Kind.EXTRA_PORTIONS: return kinds[Kind.EXTRA_PORTIONS](ACTION_WORDS[Action.BOOK].toast)
         default: return ACTION_WORDS[change].toast
     }
 }
+
+/**
+ * The word of a ticket event in Billetændringer: the toast's word of its action; the chef's extra portions build on the
+ * booking's, the close has its own; an admin's correction follows the word with its reason
+ */
+export const ticketChangeWord = (change: TicketChangeKind, reason?: TicketEvent['reason']): string =>
+    reason ? BOOKING_WORDS.ticketChange.adminCorrection(kindWord(change)) : kindWord(change)
 
 /** The household a sale in Billetændringer bought from, after its tickets: "fra S_32" */
 export const ticketChangeSeller = (seller: string): string => BOOKING_WORDS.ticketChange.seller(seller)
