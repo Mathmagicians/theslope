@@ -8,11 +8,6 @@ const {doScreenshot, pollUntil} = testHelpers
 const publicPages = ['', 'login']
 const protectedPages = ['admin', 'household', 'chef']
 
-test('@smoke / has title', async ({page}) => {
-    await page.goto('/');
-    await expect(page).toHaveTitle(/Theslope/);
-});
-
 publicPages.forEach(pageName => {
     test(`All public pages can load - /${pageName}`, async ({page}) => {
         for (const pageName of publicPages) {
@@ -20,22 +15,6 @@ publicPages.forEach(pageName => {
             expect(response?.status()).toBe(200)
         }
     })
-})
-
-test('@smoke PWA manifest serves with its icons, and the page head links it', async ({page, request}) => {
-    const response = await request.get('/manifest.webmanifest')
-    expect(response.status()).toBe(200)
-
-    const manifest = await response.json()
-    expect(manifest.display).toBe('standalone')
-    expect(manifest.icons.length).toBeGreaterThan(0)
-    for (const icon of manifest.icons) {
-        const iconResponse = await request.get(icon.src)
-        expect(iconResponse.status(), `icon ${icon.src}`).toBe(200)
-    }
-
-    await page.goto('/')
-    await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.webmanifest')
 })
 
 protectedPages.forEach(pageName => {

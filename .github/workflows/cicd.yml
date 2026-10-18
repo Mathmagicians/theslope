@@ -18,10 +18,12 @@ on:
         type: string
 
 # Test artifacts: a suite <s> uploads playwright-report-<s> (the html report) and playwright-results-<s>
-# (its json, written by the test:e2e:<s> script as $E2E_RESULTS_DIR/e2e-<s>-results.json)
+# (its json, written by the test:e2e:<s> script as $E2E_RESULTS_DIR/e2e-<s>-results.json); a BDD suite also uploads
+# bdd-<s> (its Cucumber json and html, $E2E_RESULTS_DIR/e2e-<s>-bdd.json and e2e-<s>-bdd/)
 env:
   ARTIFACT_RETENTION_DAYS: 30
   E2E_RESULTS_DIR: test-results
+  BDD_RESULTS_DIR: .output/bdd/reports
 
 jobs:
   CICD:
@@ -304,11 +306,21 @@ jobs:
           name: playwright-results-smoke
           path: ${{ env.E2E_RESULTS_DIR }}/e2e-smoke-results.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      - uses: actions/upload-artifact@v7
+        id: upload_smoke_bdd
+        if: ${{ !cancelled() }}
+        with:
+          name: bdd-smoke
+          path: |
+            ${{ env.BDD_RESULTS_DIR }}/e2e-smoke-bdd.json
+            ${{ env.BDD_RESULTS_DIR }}/e2e-smoke-bdd/
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: Summary
         if: ${{ !cancelled() && steps.smoke_tests.outcome != 'skipped' }}
         env:
-          ARTIFACT_URL: ${{ steps.upload_smoke_report.outputs.artifact-url }}
+          ARTIFACT_URL: ${{ steps.upload_smoke_bdd.outputs.artifact-url }}
         run: |
-          make test-report report=$E2E_RESULTS_DIR/e2e-smoke-results.json title="Smoke tests" link="$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+          make bdd-report suite=smoke link="$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+          make bdd-steps summary=1 >> "$GITHUB_STEP_SUMMARY"
           echo "Verified: ${{ needs.CICD.outputs.deployed_url }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Version: \`${{ needs.CICD.outputs.release_version }}\`" >> "$GITHUB_STEP_SUMMARY"

@@ -8,8 +8,8 @@
  * Open, the editor the button reveals: the action first, the lines, then the sums with a rule above each result
  *   Hvad kostede indkøbene?                                                                           [Luk]
  *   [ beløb      ] [ Ex moms v ] [ "Risotto" 14/04/2026, Anna H. bestiller for Madhold 2 ] [Tilføj]
- *   Dato        Bestiller  Note                                                 ex / inkl. moms
- *   12/04/2026  Anna H.    "Risotto" 14/04/2026, Anna H. bestiller for Madhold 2  1.012 / 1.265 kr   [slet]
+ *   Dato   Bestiller  Note                                                 ex / inkl. moms
+ *   12/04  Anna H.    "Risotto" 14/04/2026, Anna H. bestiller for Madhold 2  1.012 / 1.265 kr   [slet]
  *   ──────────────────────────────────────────────────────────────────
  *   Rådighedsbeløb                                   1.425 / 1.781 kr
  *   Brugt                                            1.310 / 1.638 kr
@@ -185,7 +185,7 @@ const lineColumns: TableColumn<Expense>[] = [
 
       <!-- The lines and, as the table's bottom rows, the sums: this dinner's, then the whole team's set apart -->
       <UTable :data="expenses" :columns="lineColumns" :ui="COMPONENTS.table.ui" data-testid="expense-table">
-        <template #date-cell="{ row }">{{ formatDate(row.original.createdAt) }}</template>
+        <template #date-cell="{ row }">{{ formatDate(row.original.createdAt, DATE_SETTINGS.DAY_MONTH_MASK) }}</template>
         <template #payer-cell="{ row }"><span :class="COMPONENTS.expenseLines.textCell" data-testid="expense-payer">{{ row.original.paidBy.name ?? '' }}</span></template>
         <template #note-cell="{ row }"><span :class="COMPONENTS.expenseLines.textCell" data-testid="expense-note">{{ row.original.description }}</span></template>
         <template #amount-cell="{ row }"><VatAmount :gross="row.original.amount" /></template>

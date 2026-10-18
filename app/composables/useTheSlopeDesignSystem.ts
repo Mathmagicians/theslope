@@ -654,8 +654,10 @@ const CHOICE_LABEL_UI = {
 
 /** Table cells wrap between words; a word stays whole */
 const TABLE_CELL_WRAP = 'whitespace-normal'
+/** A data table cell's padding */
+const TABLE_CELL_PADDING = 'px-2 py-1 md:px-4 md:py-2'
 /** A data table's cell, the one `table.ui` gives every td and a sum row binds through `table.sumCell` */
-const TABLE_CELL = `px-2 py-1 md:px-4 md:py-2 ${TABLE_CELL_WRAP}`
+const TABLE_CELL = `${TABLE_CELL_PADDING} ${TABLE_CELL_WRAP}`
 
 /** Compact tables with many narrow columns */
 const TABLE_DENSE_UI = {th: 'px-1 py-1 md:px-4 md:py-3', td: `px-1 md:px-4 ${TABLE_CELL_WRAP}`} as const
@@ -973,15 +975,34 @@ export const COMPONENTS = {
 
     /**
      * Inhabitant avatars (`UserListItem`): the server renders before the breakpoint is known, so
-     * `size` is one value everywhere, `max` too but for the compact household list item (`listItemMax`), and `fit` steps the avatar up a size from md.
+     * `size` is one value everywhere, `max` too but for the compact household list item (`listItemMax`) and the
+     * preferences power row (`powerRowMax`), and `fit` steps the avatar up a size from md.
      * `fit` goes on each `UAvatar` and on the group's `ui.base`, which reaches the overflow count.
      */
     avatar: {
         max: 5,
         // The compact household list item shows three faces before the overflow count
         listItemMax: 3,
+        // The preferences power row shows three faces before the overflow count, so the members table fits a phone
+        powerRowMax: 3,
         regular: {size: 'md' as const, fit: 'md:size-9 md:text-lg'},
         compact: {size: 'sm' as const, fit: 'md:size-8 md:text-base'}
+    },
+
+    /**
+     * UserListItem: the `group` stack and its `groupRow` of faces beside the names or the count, the `single` row and
+     * its `nameStack`, a face's profile `link` (`singleLink` keeps the single face from shrinking), the regular `name`,
+     * and a face's `ring` from md in the caller's colour
+     */
+    userListItem: {
+        group: 'flex flex-col gap-1',
+        groupRow: 'flex items-center gap-2',
+        link: 'hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block',
+        singleLink: 'hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block flex-shrink-0',
+        single: 'flex items-start gap-3',
+        nameStack: 'flex flex-col gap-1',
+        name: 'font-semibold',
+        ring: (color: string) => `md:ring-2 md:ring-${color}`
     },
 
     // The selected item in a segmented control (form mode, booking view) - a ring, not a fill,
@@ -1412,6 +1433,10 @@ export const COMPONENTS = {
          * A data table wider than a phone scrolls inside its own box, the page never does (MobileViewport.e2e).
          */
         ui: {th: 'px-2 md:px-4', td: TABLE_CELL},
+        /** A history table (Billetændringer): `ui`'s padding, every row on one line, so on a phone the table scrolls sideways */
+        historyUi: {th: 'px-2 md:px-4', td: `${TABLE_CELL_PADDING} whitespace-nowrap`},
+        /** A cell a row's spanning cell covers (a column's `meta.class.td`): out of the row's layout */
+        spannedCell: 'hidden',
         /** The household allergies: the dense cells, an expanded inhabitant row tinted */
         householdAllergiesUi: {...TABLE_DENSE_UI, tr: BG.expandedRow},
         /** The booking form: the dense cells, the power row first in the warning tint, an expanded row tinted */
@@ -1424,6 +1449,8 @@ export const COMPONENTS = {
         catalogUi: {th: 'px-1', td: `px-1 py-1 md:px-1 md:py-2 ${TABLE_CELL_WRAP}`},
         /** The booking grid: centred day cells, a sticky footer, the power row first in the warning tint, an expanded row tinted */
         gridUi: {
+            // On a phone the scroll box is the size container `bookingGrid.expandedPanel` measures its width against
+            root: '@container md:@container-normal',
             th: 'px-1 py-1 md:px-2 md:py-2 text-center',
             td: `px-1 py-1 md:px-2 text-center ${TABLE_CELL_WRAP}`,
             tfoot: 'sticky bottom-0 bg-default px-1 py-1 md:px-2 text-center text-xs',
@@ -1438,7 +1465,9 @@ export const COMPONENTS = {
      * `lockChip`, muted while the dinner is out of reach (`eventHeaderDisabled`), and `weekBoundary` on the first
      * dinner of a week; the name cells (`powerName`, `inhabitantName`, `guestName` with `guestIcon`, `guestLabel`,
      * `guestUnknown`, `guestAddName` with `guestAddLabel`) and the count badges' `countIcon`; the guest-add
-     * button, turning through `COMPONENTS.openTurn` while its form is open; the footer `summary` with its `summaryPrice`, the
+     * button, turning through `COMPONENTS.openTurn` while its form is open, and the form's `expandedPanel`: the expanded
+     * row spans every column, so where the table scrolls sideways in its box the panel keeps to the part in view, sticky at
+     * the cell's inset and no wider than the box; the footer `summary` with its `summaryPrice`, the
      * edit footer's `actionCell` and `actionStack`, and the `legend` gap. A cell without an order shows the booking the
      * preferences give it as `expectedBadge`: the mode ghosted on the waiting list's neutral (`ORDER_STATE_COLORS.queued`),
      * outlined, its glyph and label in the muted ink, as the waiting list's ghost (`COMPONENTS.waitlist.ghostBadge`) shows
@@ -1450,7 +1479,8 @@ export const COMPONENTS = {
         navSide: 'flex-1',
         navEnd: 'flex-1 flex justify-end',
         alert: 'mx-2 mt-2',
-        dayContent: 'pt-2 md:pt-4',
+        // On a phone the household card body has no side padding: the slot carries a card body's, so the day form's table keeps its width and scrolls in its box
+        dayContent: 'pt-2 px-4 md:pt-4 md:px-0',
         eventHeader: 'flex flex-col items-center',
         eventHeaderDisabled: TEXT.muted,
         chipSlot: 'h-6 flex items-center justify-center',
@@ -1464,6 +1494,8 @@ export const COMPONENTS = {
         guestLabel: `${TYPOGRAPHY.bodyTextSmall} ${TEXT.muted}`,
         guestUnknown: TYPOGRAPHY.bodyTextSmall,
         guestAddName: 'flex items-center gap-1',
+        // The inset follows the cell padding of `table.gridUi.td` (px-1 md:px-2); the cap, the box less that padding, binds on a phone
+        expandedPanel: 'sticky left-1 md:left-2 max-w-[calc(100cqw-0.5rem)] overflow-x-auto',
         guestAddLabel: `${TYPOGRAPHY.bodyText} ${TEXT.muted}`,
         summary: 'flex flex-col items-center',
         summaryPrice: TEXT.muted,
@@ -1687,6 +1719,12 @@ export const COMPONENTS = {
         history: 'pl-6 md:pl-8 pt-1'
     },
 
+    /** An order's history timeline (OrderHistoryDisplay): the line it shows while the history loads, its glyph spinning */
+    orderHistory: {
+        loadingLine: 'flex items-center gap-2 py-2',
+        loadingSpinner: MOTION_SPIN
+    },
+
     // Hero-complementary panels - Sections that sit on hero backgrounds (mocha/peach/pink/orange)
     // Curated defaults for maximum readability on warm hero backgrounds
     heroPanel: {
@@ -1871,7 +1909,8 @@ export const COMPONENTS = {
     ticketChanges: {
         // The history glyph leads the title, in its ink and size
         title: 'inline-flex items-center gap-1',
-        chips: 'inline-flex flex-wrap items-center gap-1',
+        // A run of chips sits on the middle of the row's text line, beside the plain-text cells
+        chips: 'inline-flex flex-wrap items-center gap-1 align-middle',
         moreRow: 'flex justify-center py-2'
     },
 

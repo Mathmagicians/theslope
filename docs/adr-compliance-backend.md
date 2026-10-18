@@ -105,7 +105,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | **Household** | | | | | |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save runs on the weekdays its draft changes, `?preview=true` runs the save dry on the same; past the deadline the path buys or queues (One intent path); `preferences.e2e` written, unrun |
-| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save naming an order since bought by another household lists it in `failed`; that case awaits its spec. `?preview=true` runs the save dry, an empty draft answers the household's next run (One intent path); `scaffold.e2e` written, unrun |
+| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save naming an order since bought by another household lists it in `failed`; that case awaits its spec. `?preview=true` runs the save dry, an empty draft answers the household's next run (One intent path); `?adminBypass=true` from an admin writes the run's history rows with the source `admin-correction`; `scaffold.e2e` written, unrun |
 | `/api/household/allergy/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/allergy/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/allergy/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -116,7 +116,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/chef/dinner/[id]/expenses/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/[expenseId].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/chef/dinner/[id]/order-history.get.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec asserts the reply before ticket events and leaves the sale line's household (the buyer's) unread; the buyers' households come from `fetchHouseholdsByInhabitantIds`; the admin's deletion after the booking deadline (`ADMIN_CANCEL`) awaits its spec case; the audit rows read through `readOrderAudit`, "?" for a ticket it cannot attribute (One audit format); `orderHistory` e2e unrun |
+| `/api/chef/dinner/[id]/order-history.get.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a line names its actor (`performedByName`, from the history read's performer select with the inhabitant's name); an admin's correction carries its reason from the row's source (`admin-correction`), a row without a source that deletes after the booking deadline by inference; the buyers' households come from `fetchHouseholdsByInhabitantIds`; the audit rows read through `readOrderAudit`, "?" for a ticket it cannot attribute (One audit format); `orderHistory` e2e written, unrun |
 | `/api/chef/dinner/[id]/extra-portions.post.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ |
 | **Teams** | | | | | |
 | `/api/team/my.get.ts` | ✅ | N/A | ✅ | ✅ | ✅ |

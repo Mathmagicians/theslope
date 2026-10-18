@@ -3,10 +3,10 @@ import {createError} from 'h3'
 import {subMinutes, subYears} from 'date-fns'
 import {scaffoldPrebookings, type ScaffoldOptions} from '~~/server/utils/scaffoldPrebookings'
 import {joinWaitlist, sellTicketsToWaitlist} from '~~/server/utils/waitlistAssignment'
-import {fetchActiveSeasonId, fetchHouseholds, fetchHouseholdsByInhabitantIds, fetchSeason} from '~~/server/data/prismaRepository'
+import {fetchHouseholds, fetchHouseholdsByInhabitantIds, fetchSeason} from '~~/server/data/prismaRepository'
 import {
-    claimOrder, claimReleasedOrder, countReleasedTicketsByType, createOrders, deleteOrder, fetchDinnerEventsByIds, fetchOrders, fetchUserIntentKeys, findReleasedOrderId,
-    recordCancellation, updateOrdersBatch, type OrderBatchUpdate
+    claimOrder, claimReleasedOrder, countReleasedTicketsByType, createOrders, deleteOrder, fetchOrders, fetchUserIntentKeys, findReleasedOrderId, recordCancellation,
+    updateOrdersBatch, type OrderBatchUpdate
 } from '~~/server/data/financesRepository'
 import {
     createWaitlistEntries, deleteWaitlistEntries, fetchWaitlistForDinners, grabWaitlistEntry, removePlacedWaitlistEntry, updateWaitlistEntryOrders
@@ -44,8 +44,7 @@ vi.mock('~~/server/data/prismaRepository', async importOriginal => ({
 vi.mock('~~/server/data/financesRepository', async importOriginal => ({
     orderSnapshotOf: (await importOriginal<typeof import('~~/server/data/financesRepository')>()).orderSnapshotOf,
     fetchOrders: vi.fn(), fetchUserIntentKeys: vi.fn(), createOrders: vi.fn(), deleteOrder: vi.fn(), updateOrdersBatch: vi.fn(),
-    claimOrder: vi.fn(), countReleasedTicketsByType: vi.fn(), findReleasedOrderId: vi.fn(), claimReleasedOrder: vi.fn(), recordCancellation: vi.fn(),
-    fetchDinnerEventsByIds: vi.fn()
+    claimOrder: vi.fn(), countReleasedTicketsByType: vi.fn(), findReleasedOrderId: vi.fn(), claimReleasedOrder: vi.fn(), recordCancellation: vi.fn()
 }))
 vi.mock('~~/server/data/waitlistRepository', () => ({
     fetchWaitlistForDinners: vi.fn(), deleteWaitlistEntries: vi.fn(), updateWaitlistEntryOrders: vi.fn(), createWaitlistEntries: vi.fn(), grabWaitlistEntry: vi.fn(), removePlacedWaitlistEntry: vi.fn(), releaseWaitlistEntry: vi.fn(), recordWaitlistPlacingOrder: vi.fn(), fetchOrdersServingEntry: vi.fn()
@@ -739,62 +738,6 @@ describe('scaffoldPrebookings', () => {
             const places = [[0, ADULT, 1], [1, ADULT, 2], [2, CHILD, 1]]
             expect(result.positions.map(place => [indexOf(place.inhabitantId), place.ticketType, place.position])).toEqual(places)
             expect(result.outcomes.joined.map(event => [indexOf(event.inhabitantId), event.ticketType, event.position])).toEqual(places)
-        })
-    })
-
-    // The booking page names its dinners and no season: a run that names its dinners runs in their season, whichever is active
-    describe('the season of a run', () => {
-        beforeEach(() => {
-            vi.clearAllMocks()
-        })
-
-        // Bo holds his order on a dinner of season 1 a month ahead while season 2 is active; Anna and Bo eat every day by
-        // preference. The endpoint's two runs on the page's dinners: Anna's bookings saved, and the preview of an empty draft
-        const givenDinnerOfInactiveSeason = () => {
-            const {season, household, anna, boOrder, adultPrice} = givenSave()
-            const dinner = {...DinnerEventFactory.dinnerEventAt(boOrder.dinnerEventId, 30), seasonId: season.id!}
-            const activeDinner = {...DinnerEventFactory.dinnerEventAt(6, 30), seasonId: 2}
-            const activeSeason = {...season, id: activeDinner.seasonId, dinnerEvents: [activeDinner]}
-            vi.mocked(fetchSeason).mockImplementation(async (_d1, id) => [{...season, dinnerEvents: [dinner]}, activeSeason].find(candidate => candidate.id === id) ?? null)
-            vi.mocked(fetchActiveSeasonId).mockResolvedValue(activeSeason.id)
-            vi.mocked(fetchDinnerEventsByIds).mockImplementation(async (_d1, ids) => [dinner, activeDinner].filter(({id}) => ids.includes(id)))
-            vi.mocked(fetchOrders).mockImplementation(async (_d1, ids) => [boOrder].filter(({dinnerEventId}) => ids.includes(dinnerEventId)))
-            const runs = {
-                save: (dinnerEventIds: number[]) => scaffoldPrebookings(d1Client, {
-                    householdId: household.id, userId: 1,
-                    desiredOrders: dinnerEventIds.map(dinnerEventId => OrderFactory.defaultDesiredOrder({inhabitantId: anna.id, dinnerEventId, ticketPriceId: adultPrice.id}))
-                }),
-                preview: (dinnerEventIds: number[]) => scaffoldPrebookings(d1Client, {householdId: household.id, dinnerEventIds, preview: true})
-            }
-            return {runs, dinner, activeDinner, anna, householdId: household.id, seasonId: season.id!, activeSeasonId: activeSeason.id}
-        }
-
-        it.each(['save', 'preview'] as const)('GIVEN Bo\'s order on a dinner of a season that is not active WHEN the %s names the dinner and no season THEN it runs in the dinner\'s season: Bo\'s order stays and Anna books', async run => {
-            const {runs, dinner, anna, seasonId} = givenDinnerOfInactiveSeason()
-
-            const result = await runs[run]([dinner.id])
-
-            expect(result.results.map(line => [line.inhabitantId, line.dinnerEventId, line.action])).toEqual([[anna.id, dinner.id, Action.BOOK]])
-            expect(result.seasonId).toBe(seasonId)
-            expect(vi.mocked(fetchDinnerEventsByIds).mock.calls).toEqual([[d1Client, [dinner.id]]])
-            expect(fetchActiveSeasonId).not.toHaveBeenCalled()
-        })
-
-        it.each(['save', 'preview'] as const)('GIVEN dinners of two seasons WHEN the %s names them and no season THEN it is refused as a bad request and writes nothing', async run => {
-            const {runs, dinner, activeDinner} = givenDinnerOfInactiveSeason()
-
-            await expect(runs[run]([dinner.id, activeDinner.id])).rejects.toMatchObject({statusCode: 400})
-            expect(writersCalled()).toEqual([])
-        })
-
-        it('GIVEN a preference run naming neither dinners nor a season WHEN it runs THEN it decides the active season\'s dinners', async () => {
-            const {householdId, activeDinner, activeSeasonId} = givenDinnerOfInactiveSeason()
-
-            const result = await scaffoldPrebookings(d1Client, {householdId})
-
-            expect(result.seasonId).toBe(activeSeasonId)
-            expect(result.dinners).toEqual([{id: activeDinner.id, date: activeDinner.date}])
-            expect(fetchDinnerEventsByIds).not.toHaveBeenCalled()
         })
     })
 

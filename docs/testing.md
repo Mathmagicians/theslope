@@ -7,26 +7,27 @@
 | Unit | `*.unit.spec.ts` | Vitest | Parametrization |
 | Component | `*.nuxt.spec.ts` | Nuxt Test Utils | Parametrization / factories |
 | E2E | `*.e2e.spec.ts` | Playwright | **Factories REQUIRED** |
-| Smoke | `@smoke` tag in title | Playwright | Post-deployment verification |
+| E2E feature | `tests/e2e/features/<domain>/*.feature` | playwright-bdd | **Factories REQUIRED** |
+| Smoke | `@smoke` scenario in `tests/e2e/features/smoke/` | playwright-bdd | Post-deployment verification |
 
 A build-time script under `scripts/` has its unit spec in `tests/component/scripts/` (`c4.unit.spec.ts` for
 `scripts/c4/`).
 
 ## Smoke Tests
 
-Smoke tests run after CI/CD deployment to verify the deployed environment works.
-
-**Tag a test:** Add `@smoke` to the test title:
-```typescript
-test('@smoke / has title', async ({page}) => { ... })
-```
+Smoke tests run after CI/CD deployment to verify the deployed environment works. A smoke case is a scenario in
+`tests/e2e/features/smoke/`, tagged `@smoke` on its feature: `worker-health`, `api-health`, `cron-jobs`, `pages` and
+`auth` (see [BDD (playwright-bdd)](#bdd-playwright-bdd)). The `chromium-smoke` project runs the `@smoke` scenarios of
+`tests/e2e/features/`.
 
 **Run locally:**
 ```bash
-npm run test:e2e:smoke
+npm run test:e2e:smoke   # bddgen, then the chromium-smoke project with the Cucumber reports
 ```
 
-**CI/CD:** Runs automatically after deployment using GitHub Environment credentials (`dev` or `prod`).
+**CI/CD:** Runs after deployment using GitHub Environment credentials (`dev` or `prod`), with `SHOULD_NOT_MUTATE`
+(the factories read the deployment's data) and `EXPECTED_VERSION` (the version each worker reports). The step summary
+carries `make bdd-report suite=smoke` and `make bdd-steps summary=1`; the artifact `bdd-smoke` holds the Cucumber report.
 
 ## NON-NEGOTIABLE RULES
 
@@ -193,6 +194,78 @@ const wrapper = await mountWithTooltipProvider(AdminAllergies, {props: {canEdit:
 ```
 
 **Every remaining mock needs a comment naming what the environment cannot provide.** "To avoid tooltip issues" is not a reason - it is a missing helper. Specs that still mock stores or house components are debt: migrate them when you touch them.
+
+## BDD (playwright-bdd)
+
+`bddgen` (`npm run test:bdd:generate`) generates a Playwright spec per feature into `.output/bdd/<suite>/`; the Playwright
+projects, the setup projects and the factories run the scenarios. A project picks its scenarios by tag through
+`defineBddProject` in `playwright.config.ts` (`chromium-smoke`: `@smoke`). The smoke suite runs as features, the api
+and ui suites as `*.e2e.spec.ts`; a spec's cases become scenarios one to one when it migrates. Rules 0 to 5 hold for
+the steps.
+
+| Path | Holds |
+|---|---|
+| `tests/e2e/features/<domain>/*.feature` | The scenarios, tagged with their suite on the feature |
+| `tests/e2e/steps/<domain>.steps.ts` | The steps of a domain and its parameter types: `auth`, `health`, `household`, `maintenance`, `pages`, `season` |
+| `tests/e2e/fixtures.ts` | playwright-bdd's `test` with the fixtures, `Given`/`When`/`Then` (`createBdd`), `fromScene` |
+| `.output/bdd/<suite>/` | The generated specs, gitignored |
+
+**Fixtures.** `adminContext` and `memberContext` are the stored sessions (`validatedBrowserContext`,
+`memberValidatedBrowserContext`), closed after the scenario. `scene` holds what the steps of one scenario hand each
+other; `fromScene(scene, key)` reads what an earlier step set. A GIVEN that signs in puts its context in
+`scene.context`, and the steps after it read through that context, so one step serves each actor.
+
+```gherkin
+@smoke
+Feature: Cron jobs
+
+  Background:
+    Given the admin is signed in
+
+  Scenario Outline: The <job> job runs successfully
+    When the <job> job runs
+    Then the job reports success
+
+    Examples:
+      | job               |
+      | Heynabo import    |
+      | daily maintenance |
+      | monthly billing   |
+```
+
+**Step rules.**
+
+- A step names a domain fact: `Then the active season has dinner events`, `When the daily maintenance job runs`. The
+  page, the request and the locator live in the step body.
+- One phrasing per fact. `npx bddgen export` lists the steps; read it before writing a step, and reuse the one that
+  states the fact. `npx bddgen export --unused-steps` lists the steps no scenario uses.
+- Steps live in the file of their domain.
+- A domain word is a parameter type (`defineParameterType`) bound to its enum schema member: `{job}` reads "daily
+  maintenance" as `JobType.DAILY_MAINTENANCE`. A word outside the type fails at generation.
+- Scenario state and its cleanup live in fixtures (`scene`); data comes from the factories, salted (Rules 2 and 3).
+- A Background carries the GIVENs the scenarios of a feature share.
+- A Scenario Outline carries examples, one scenario per row; a `<column>` in the outline's name names each scenario.
+- GIVEN sets the scene, WHEN acts, THEN reads the outcome. A THEN that reads standing state needs no WHEN
+  (`Then the users list is non-empty`).
+
+**Commands.**
+
+```bash
+npm run test:bdd:generate                     # generate .output/bdd/ from the features
+npx bddgen export                    # the step definitions
+npm run test:e2e:smoke               # generate, then run the smoke suite with its reports
+npm run test:bdd:generate && npx playwright test --project=chromium-smoke --grep "<scenario>" --reporter=line   # one scenario by its title
+```
+
+**Reports.** A BDD suite's npm script sets `BDD_SUITE=<suite>` and passes no `--reporter`, so the reporter list of
+`playwright.config.ts` writes the Playwright html, line and json reports and the Cucumber reports
+`.output/bdd/reports/e2e-<suite>-bdd.json` and `.output/bdd/reports/e2e-<suite>-bdd/index.html` (outside `test-results/`, which Playwright empties when a run starts). The Cucumber html drops traces
+(`application/zip`); the smoke html keeps no attachment. CI uploads the two as the artifact `bdd-<suite>`;
+`make bdd-report suite=<suite>` writes the summary table and `make developer-assemble` publishes the Cucumber html as
+the suite's report. `make bdd-steps` (`summary=1` for the one line) counts every step line of every feature against the
+definition `bddgen` matches it with (`scripts/bdd-steps.mjs`, no run needed): lines, definitions, uses per definition,
+the definitions used once or unused and the lines without a definition. A new step phrasing is a definition used once;
+reuse an existing phrasing before adding one.
 
 ## Anti-Patterns Quick Reference
 

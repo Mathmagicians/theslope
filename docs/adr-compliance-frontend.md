@@ -155,7 +155,7 @@ Status.
 | `DinnerModeSelector.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ✅ parent | ✅ parent | ✅ |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `DinnerTicket.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/planning` | none | ✅ | ✅ parent | ✅ |
-| `OrderHistoryDisplay.vue` | `/admin/economy`, `/household/[shortname]/economy` | bookings | ✅ | ✅ parent | ✅ |
+| `OrderHistoryDisplay.vue` | `/admin/economy`, `/household/[shortname]/economy`, `/dinner` | bookings | ✅ | ✅ parent | ✅ |
 | `KitchenPreparation.vue` | `/dinner`, `/chef` | households | ✅ | ✅ parent | ✅ |
 | `DinnerDetailHeader.vue` | `/chef`, `/dinner` | none | ✅ | ✅ serial | ✅ |
 | `DinnerDetailPanel.vue` | `/chef`, `/dinner` | none | ❌ | ✅ | ⚠️ missing unit |

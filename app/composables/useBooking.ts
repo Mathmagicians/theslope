@@ -320,8 +320,8 @@ export const resolveDesiredOrdersToBuckets = (
     return result
 }
 
-/** A user's booking change for one inhabitant at one dinner */
-export type BookingIntent = Pick<DesiredOrder, 'inhabitantId' | 'dinnerEventId' | 'dinnerMode'>
+/** A user's booking change for one inhabitant at one dinner; a queued inhabitant's names the person's place */
+export type BookingIntent = Pick<DesiredOrder, 'inhabitantId' | 'dinnerEventId' | 'dinnerMode' | 'waitlistEntryId'>
 
 /** `useTicket().resolveTicketPrice` bound to the season's ticket prices */
 export type TicketPriceResolver = (
@@ -364,8 +364,11 @@ export const buildDesiredOrder = (
 /** A user's dinner-mode change for one guest group (groupGuestOrders: one booker, ticket type and dinner) */
 export type GuestBookingIntent = {guestOrders: OrderDisplay[], dinnerMode: DinnerMode}
 
-/** The edits of a booking grid: inhabitant cells and guest cells, saved in one scaffold call */
-export type BookingChanges = {intents: BookingIntent[], guestIntents: GuestBookingIntent[]}
+/** A user's dinner-mode change for one place the household holds on a dinner's waiting list */
+export type WaitlistEntryIntent = {entry: TicketWaitlistDisplay, dinnerMode: DinnerMode}
+
+/** The edits of a booking grid: inhabitant cells, guest cells and places on the waiting list, saved in one scaffold call */
+export type BookingChanges = {intents: BookingIntent[], guestIntents: GuestBookingIntent[], entryIntents: WaitlistEntryIntent[]}
 
 /**
  * Turn a guest group's mode change into one DesiredOrder per guest order, each updated by its orderId.
@@ -389,6 +392,18 @@ export const buildGuestDesiredOrder = (
         state: BOOKED
     }))
 }
+
+/** A place's mode change as the DesiredOrder that names it, at its held price: Ingen leaves the line, another mode requeues */
+export const buildEntryDesiredOrder = ({entry, dinnerMode}: WaitlistEntryIntent, BOOKED: OrderState): DesiredOrder => ({
+    inhabitantId: entry.inhabitantId,
+    dinnerEventId: entry.dinnerEventId,
+    dinnerMode,
+    ticketPriceId: entry.order.ticketPriceId,
+    isGuestTicket: entry.isGuestTicket,
+    allergyTypeIds: entry.order.allergyTypeIds,
+    state: BOOKED,
+    waitlistEntryId: entry.id
+})
 
 /**
  * Desired orders from inhabitant preferences; only the orders preferences manage come in. Ingen is a wish where the
@@ -1216,7 +1231,7 @@ export const useBooking = () => {
         return guestIntents.flatMap(intent => buildGuestDesiredOrder(intent, resolveSeasonTicketPrice, OrderStateSchema.enum.BOOKED))
     }
 
-    /** Every grid edit as one DesiredOrder[]: inhabitant intents and guest intents together */
+    /** Every grid edit as one DesiredOrder[]: inhabitant intents, guest intents and the places' intents together */
     const buildBookingChanges = (
         changes: BookingChanges,
         existingOrders: OrderDisplay[],
@@ -1225,53 +1240,79 @@ export const useBooking = () => {
         ticketPrices: TicketPrice[]
     ): DesiredOrder[] => [
         ...buildDesiredOrders(changes.intents, existingOrders, inhabitants, dinnerEvents, ticketPrices),
-        ...buildGuestDesiredOrders(changes.guestIntents, ticketPrices)
+        ...buildGuestDesiredOrders(changes.guestIntents, ticketPrices),
+        ...changes.entryIntents.map(intent => buildEntryDesiredOrder(intent, OrderStateEnum.BOOKED))
     ]
 
-    /** Who a power change on one dinner reaches: the given inhabitants and every guest group booked on that dinner */
+    /**
+     * Who a power change on one dinner reaches: the given inhabitants, every guest group booked on it and every place
+     * the household holds on its waiting list. An inhabitant's own place goes with the inhabitant while they hold no
+     * order there (an order supersedes it); the other places stand alone
+     */
     const getPowerTargets = (
         inhabitantIds: number[],
         orders: OrderDisplay[],
+        entries: TicketWaitlistDisplay[],
         dinnerEventId: number
-    ): {inhabitantIds: number[], guestGroups: OrderDisplay[][]} => ({
-        inhabitantIds,
-        guestGroups: Object.values(groupGuestOrders(orders.filter(o => o.dinnerEventId === dinnerEventId)))
-    })
-
-    /** A power change on one dinner as BookingChanges: one intent per inhabitant, one guest intent per guest group */
-    const getPowerChanges = (
-        inhabitantIds: number[],
-        orders: OrderDisplay[],
-        dinnerEventId: number,
-        dinnerMode: DinnerMode
-    ): BookingChanges => {
-        const targets = getPowerTargets(inhabitantIds, orders, dinnerEventId)
+    ): {
+        inhabitants: {inhabitantId: number, order?: OrderDisplay, entry?: TicketWaitlistDisplay}[]
+        guestGroups: OrderDisplay[][]
+        entries: TicketWaitlistDisplay[]
+    } => {
+        const dinnerEntries = entries.filter(entry => entry.dinnerEventId === dinnerEventId)
         return {
-            intents: targets.inhabitantIds.map(inhabitantId => ({inhabitantId, dinnerEventId, dinnerMode})),
-            guestIntents: targets.guestGroups.map(guestOrders => ({guestOrders, dinnerMode}))
+            inhabitants: inhabitantIds.map(inhabitantId => {
+                const order = findRegularOrder(orders, inhabitantId, dinnerEventId)
+                return {inhabitantId, order, entry: order ? undefined : findRegularOrder(dinnerEntries, inhabitantId, dinnerEventId)}
+            }),
+            guestGroups: Object.values(groupGuestOrders(orders.filter(o => o.dinnerEventId === dinnerEventId))),
+            entries: dinnerEntries.filter(entry => entry.isGuestTicket || !inhabitantIds.includes(entry.inhabitantId))
         }
     }
 
     /**
-     * Power-row consensus on one dinner over every power target: inhabitants' regular orders and guest groups.
-     * A draft mode, when given, overrides the saved mode of its inhabitant or guest group.
+     * A power change on one dinner as BookingChanges: one intent per inhabitant, naming the person's place while queued,
+     * one guest intent per guest group and one intent per other place
+     */
+    const getPowerChanges = (
+        inhabitantIds: number[],
+        orders: OrderDisplay[],
+        entries: TicketWaitlistDisplay[],
+        dinnerEventId: number,
+        dinnerMode: DinnerMode
+    ): BookingChanges => {
+        const targets = getPowerTargets(inhabitantIds, orders, entries, dinnerEventId)
+        return {
+            intents: targets.inhabitants.map(({inhabitantId, entry}) => ({inhabitantId, dinnerEventId, dinnerMode, waitlistEntryId: entry?.id})),
+            guestIntents: targets.guestGroups.map(guestOrders => ({guestOrders, dinnerMode})),
+            entryIntents: targets.entries.map(entry => ({entry, dinnerMode}))
+        }
+    }
+
+    /**
+     * Power-row consensus on one dinner over every power target: inhabitants' regular orders or own places, guest groups
+     * and the other places; a place counts its wish. A draft mode, when given, overrides the saved mode of its target.
      */
     const getPowerConsensus = (
         inhabitantIds: number[],
         orders: OrderDisplay[],
+        entries: TicketWaitlistDisplay[],
         dinnerEventId: number,
         draftMode: {
             inhabitant?: (inhabitantId: number) => DinnerMode | undefined
             guestGroup?: (guestOrders: OrderDisplay[]) => DinnerMode | undefined
+            entry?: (entry: TicketWaitlistDisplay) => DinnerMode | undefined
         } = {}
     ): {value: DinnerMode, consensus: boolean} => {
         const {DinnerModeSchema} = useBookingValidation()
-        const targets = getPowerTargets(inhabitantIds, orders, dinnerEventId)
+        const targets = getPowerTargets(inhabitantIds, orders, entries, dinnerEventId)
         const modes = [
-            ...targets.inhabitantIds.map(inhabitantId => draftMode.inhabitant?.(inhabitantId)
-                ?? findRegularOrder(orders, inhabitantId, dinnerEventId)?.dinnerMode
+            ...targets.inhabitants.map(({inhabitantId, order, entry}) => draftMode.inhabitant?.(inhabitantId)
+                ?? order?.dinnerMode
+                ?? entry?.order.dinnerMode
                 ?? DinnerModeSchema.enum.NONE),
-            ...targets.guestGroups.map(guestOrders => draftMode.guestGroup?.(guestOrders) ?? guestOrders[0]!.dinnerMode)
+            ...targets.guestGroups.map(guestOrders => draftMode.guestGroup?.(guestOrders) ?? guestOrders[0]!.dinnerMode),
+            ...targets.entries.map(entry => draftMode.entry?.(entry) ?? entry.order.dinnerMode)
         ]
         return computeConsensus(modes, DinnerModeSchema.enum.DINEIN)
     }

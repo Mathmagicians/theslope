@@ -303,7 +303,8 @@ d1-copy-dev-to-local: ## Replace the local D1 with a copy of dev (schema, data, 
 # ============================================================================
 .PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod test-report bdd-report bdd-steps developer-resolve developer-assemble developer-build developer-publish
 
-# The summary tables are jq programs under scripts/ (test-report.jq, bdd-report.jq, bdd-steps.jq)
+# The summary tables are jq programs under scripts/ (test-report.jq, bdd-report.jq); the step reuse is
+# scripts/bdd-steps.mjs, which matches the feature lines through playwright-bdd's generator
 TEST_REPORT_USAGE := usage: make test-report report=<playwright json> title=<text> [link=<url>] [note=<warning shown when failed > 0>]
 
 test-report: ## Markdown summary of a Playwright suite - report=<json> title=<text> [link=<url>] [note=<text>]
@@ -317,7 +318,7 @@ test-report: ## Markdown summary of a Playwright suite - report=<json> title=<te
 
 # The suite's Cucumber JSON, as npm run test:e2e:<suite> writes it
 suite ?= api
-bdd_report = test-results/e2e-$(suite)-bdd.json
+bdd_report = .output/bdd/reports/e2e-$(suite)-bdd.json
 
 bdd-report: ## BDD summary of a suite - [suite=api|ui|smoke] [report=<cucumber json>] [title=<text>] [link=<url>] [note=<text>]
 	@report="$(or $(report),$(bdd_report))"; title="$(or $(title),BDD $(suite) tests)"; \
@@ -328,14 +329,8 @@ bdd-report: ## BDD summary of a suite - [suite=api|ui|smoke] [report=<cucumber j
 		echo "## ⚠️ $$title — no results file at $$report (npm run test:e2e:$(suite) writes it)"; \
 	fi
 
-bdd-steps: ## Step reuse across the suites' Cucumber JSON - [report=<json …>] [summary=1 for the one line alone]
-	@reports="$(or $(report),$(wildcard test-results/e2e-*-bdd.json))"; \
-	if [ -n "$$reports" ]; then \
-		jq -rs -f scripts/bdd-steps.jq --arg summary "$(summary)" $$reports \
-			|| echo "⚠️ Steps — could not parse $$reports"; \
-	else \
-		echo "⚠️ Steps — no Cucumber JSON under test-results/ (npm run test:e2e writes e2e-<suite>-bdd.json)"; \
-	fi
+bdd-steps: ## Step reuse across the features, each line against the definition bddgen matches - [summary=1 for the one line alone]
+	@node scripts/bdd-steps.mjs $(if $(summary),--summary,)
 
 # Developer companion (docs/features/feature-proposal-developer-companion.md): everything generated lives under
 # .output/developer — the downloaded artifacts, the Nuxt build (.nuxt, nitro, public; developer/nuxt.config.ts), the gh-pages checkout
@@ -359,14 +354,24 @@ developer-assemble: ## Lay a run's results and manifest under site/environments 
 	@test -n "$(env)" -a -n "$(run)" -a -n "$(version)" -a -n "$(sha)" || { echo "$(DEVELOPER_ASSEMBLE_USAGE)"; exit 1; }
 	@rm -rf "$(site)/environments/$(env)" && mkdir -p "$(site)/environments/$(env)"
 	@suites='{}'; for suite in $(DEVELOPER_SUITES); do \
+		dest="$(site)/environments/$(env)/$$suite"; \
+		bdd="$(artifacts)/bdd-$$suite"; cucumber="$$bdd/e2e-$$suite-bdd.json"; \
 		src="$(artifacts)/playwright-results-$$suite"; results="$$src/e2e-$$suite-results.json"; \
-		[ -f "$$results" ] || { echo "developer-assemble: no $$results"; continue; }; \
-		mkdir -p "$(site)/environments/$(env)/$$suite" && cp -R "$$src/." "$(site)/environments/$(env)/$$suite/"; \
-		published="$(site)/environments/$(env)/$$suite/$$(basename "$$results")"; \
-		[ "$$suite" != smoke ] || { jq 'walk(if type == "object" then del(.errors, .error, .stdout, .stderr, .attachments) else . end)' "$$published" > "$$published.tmp" && mv "$$published.tmp" "$$published"; }; \
-		report=$$( [ -f "$$src/index.html" ] && echo index.html || basename "$$results" ); \
-		suites=$$(jq -c --arg suite "$$suite" --arg report "$$report" --slurpfile r "$$results" \
-			'. + {($$suite): {passed: ($$r[0].stats.expected // 0), failed: ($$r[0].stats.unexpected // 0), flaky: ($$r[0].stats.flaky // 0), skipped: ($$r[0].stats.skipped // 0), report: $$report}}' <<< "$$suites"); \
+		if [ -f "$$cucumber" ]; then \
+			mkdir -p "$$dest" && cp "$$cucumber" "$$dest/" && cp -R "$$bdd/e2e-$$suite-bdd/." "$$dest/"; \
+			result=$$(jq -c -f scripts/bdd-report.jq --arg title "" --arg link "" --arg note "" --arg counts 1 "$$cucumber" \
+				| jq -c '{passed, failed: (.failed + .undefined), flaky: 0, skipped: .other, report: "index.html"}'); \
+		elif [ -f "$$results" ]; then \
+			mkdir -p "$$dest" && cp -R "$$src/." "$$dest/"; \
+			published="$$dest/$$(basename "$$results")"; \
+			[ "$$suite" != smoke ] || { jq 'walk(if type == "object" then del(.errors, .error, .stdout, .stderr, .attachments) else . end)' "$$published" > "$$published.tmp" && mv "$$published.tmp" "$$published"; }; \
+			report=$$( [ -f "$$src/index.html" ] && echo index.html || basename "$$results" ); \
+			result=$$(jq -c --arg report "$$report" \
+				'{passed: (.stats.expected // 0), failed: (.stats.unexpected // 0), flaky: (.stats.flaky // 0), skipped: (.stats.skipped // 0), report: $$report}' "$$results"); \
+		else \
+			echo "developer-assemble: no $$cucumber or $$results"; continue; \
+		fi; \
+		suites=$$(jq -c --arg suite "$$suite" --argjson result "$$result" '. + {($$suite): $$result}' <<< "$$suites"); \
 	done; \
 	jq -n --arg environment "$(env)" --arg version "$(version)" --arg sha "$(sha)" --arg url "$(url)" --arg run "$(run)" --arg deployedAt "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson suites "$$suites" \
 		'{environment: $$environment, version: $$version, sha: $$sha, deployedAt: $$deployedAt, run: ($$run | tonumber? // $$run), suites: $$suites} + (if ($$url | length) > 0 then {url: $$url} else {} end)' > "$(site)/environments/$(env).json"

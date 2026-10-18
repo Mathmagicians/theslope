@@ -60,6 +60,8 @@ export type ScaffoldOptions = {
     preferences?: {inhabitantId: number, dinnerPreferences: WeekDayMap<DinnerMode>}[]
     /** Decides and settles the supply by reading and writes nothing: the result is the one the run would give */
     preview?: boolean
+    /** An admin's correction (`?adminBypass=true`): every order row the run writes names it as its source */
+    adminCorrection?: boolean
 }
 
 /** A ticket a claim bought: the price row it keeps and the household and the inhabitant that sold it */
@@ -225,7 +227,7 @@ export const rescaffoldOnFieldChange = async (
  * A preview runs either mode against the supply it reads and writes nothing.
  *
  * @param d1Client - D1 database client
- * @param options - Scaffold options (seasonId, householdId, dinnerEventIds, desiredOrders, userId, preferences, preview)
+ * @param options - Scaffold options (seasonId, householdId, dinnerEventIds, desiredOrders, userId, preferences, preview, adminCorrection)
  * @returns ScaffoldResult with seasonId=null if no season available
  */
 export async function scaffoldPrebookings(
@@ -309,6 +311,10 @@ export async function scaffoldPrebookings(
     let totalUnchanged = 0
     let processedHouseholds = 0
     let erroredHouseholds = 0
+    // What wrote the run's order rows: an admin's correction, a member's booking, a preference change, the nightly run
+    const source = options.adminCorrection
+        ? Source['admin-correction']
+        : isUserMode ? Source['user-booking'] : (options.householdId ? Source['preference-update'] : Source['scaffold-prebookings'])
 
     // A household's writes name its people and the household: the order it books, the history row of a wish, the result
     // line and the log of a failure
@@ -413,7 +419,7 @@ export async function scaffoldPrebookings(
                 await execute(batch, orders => createOrders(d1Client, household.id, orders.map(({order}) => order), {
                     action: getAuditAction(isUserTriggered, Action.BOOK),
                     performedByUserId: effectiveUserId,
-                    source: isUserMode ? Source['user-booking'] : (options.householdId ? Source['preference-update'] : Source['scaffold-prebookings']),
+                    source,
                     seasonId: season.id ?? null
                 }), landedAs(Action.BOOK), failedAs(() => Action.BOOK))
             }
@@ -442,6 +448,7 @@ export async function scaffoldPrebookings(
                     audit: {
                         action: getAuditAction(isUserTriggered, action),
                         change: action,
+                        source,
                         performedByUserId: effectiveUserId,
                         inhabitantId: incoming.inhabitantId,
                         dinnerEventId: incoming.dinnerEventId,
@@ -473,7 +480,7 @@ export async function scaffoldPrebookings(
             const cancelledBy = isUserTriggered ? effectiveUserId : null
             const [orderCancels, nothingBooked] = partition((desired: DesiredOrder) => desired.orderId !== undefined)(result.delete)
             for (const chunk of chunkDeleteBatch(orderCancels.map(desired => ({desired, orderId: desired.orderId!})))) {
-                await execute(chunk, entries => deleteOrder(d1Client, entries.map(({orderId}) => orderId), cancelledBy),
+                await execute(chunk, entries => deleteOrder(d1Client, entries.map(({orderId}) => orderId), cancelledBy, source),
                     entries => {
                         landedAs(Action.CANCEL)(entries)
                         for (const {orderId} of entries) supply.orderWritten(orderId, null)
@@ -484,7 +491,7 @@ export async function scaffoldPrebookings(
                 const holder = holderOf(desired.inhabitantId)
                 if (holder) {
                     const cancellation: Cancellation = {
-                        orderId: null, inhabitantId: desired.inhabitantId, dinnerEventId: desired.dinnerEventId, seasonId: effectiveSeasonId, performedByUserId: cancelledBy,
+                        orderId: null, inhabitantId: desired.inhabitantId, dinnerEventId: desired.dinnerEventId, seasonId: effectiveSeasonId, performedByUserId: cancelledBy, source,
                         snapshot: orderSnapshotOf({...toOrderCreate(desired), id: null}, holder)
                     }
                     return [{desired, cancellation}]

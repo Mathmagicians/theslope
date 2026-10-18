@@ -3,7 +3,8 @@
  * OrderHistoryDisplay - Vertical timeline of order audit history
  *
  * Lazy-loads the order's history through the bookings store's fetchOrderDetail
- * Uses UTimeline with action-specific icons and colors
+ * Uses UTimeline with action-specific icons and colors; each entry names who wrote it as the booking page names a
+ * person, the system account and a user since deleted as System
  *
  * ADR-007: component-local useAsyncData exception - each expanded row holds its own order's history
  */
@@ -15,8 +16,9 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const {ICONS, TYPOGRAPHY, SIZES, COLOR, ALERTS} = useTheSlopeDesignSystem()
+const {ICONS, TYPOGRAPHY, SIZES, COLOR, ALERTS, COMPONENTS} = useTheSlopeDesignSystem()
 const bookingsStore = useBookingsStore()
+const {formatPerformer} = useBooking()
 
 // Lazy-load order detail with history
 const {data: orderDetail, status, error} = useAsyncData(
@@ -44,7 +46,7 @@ const timelineItems = computed(() =>
         const config = getActionConfig(entry.action)
         return {
             title: config.label,
-            description: entry.performedByUser?.email ?? 'System',
+            description: formatPerformer(entry.performedByUser),
             date: formatTimestamp(entry.timestamp),
             icon: config.icon,
             color: config.color
@@ -55,8 +57,8 @@ const timelineItems = computed(() =>
 
 <template>
   <!-- Loading -->
-  <div v-if="isLoading" class="flex items-center gap-2 py-2">
-    <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" class="animate-spin"/>
+  <div v-if="isLoading" :class="COMPONENTS.orderHistory.loadingLine">
+    <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.orderHistory.loadingSpinner"/>
     <span :class="TYPOGRAPHY.finePrint">Henter...</span>
   </div>
 

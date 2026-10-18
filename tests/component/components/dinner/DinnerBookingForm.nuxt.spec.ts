@@ -443,6 +443,48 @@ describe('DinnerBookingForm on a queued guest row', () => {
   })
 })
 
+// Hele familien reaches every row on a closed dinner: Anna's ticket, Bo's place and the place of Bo's queued guest
+describe('DinnerBookingForm power mode on a closed dinner where the household waits', () => {
+  const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
+  const DinnerMode = DinnerModeSchema.enum
+  const [adultPrice, childPrice] = [TicketTypeSchema.enum.ADULT, TicketTypeSchema.enum.CHILD].map(ticketType => baseProps.ticketPrices.find(tp => tp.ticketType === ticketType)!)
+  const [anna, bo] = householdWithInhabitants.inhabitants
+  const dinnerEventId = baseProps.dinnerEvent.id
+  const annaTicket = OrderFactory.defaultOrder('power', {
+    id: 201, inhabitantId: anna!.id, dinnerEventId, ticketPriceId: adultPrice!.id, ticketType: adultPrice!.ticketType, priceAtBooking: adultPrice!.price, dinnerMode: DinnerMode.TAKEAWAY
+  })
+  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY, ticketPriceId: adultPrice!.id})
+  const guestQueued = (dinnerMode: DinnerMode) => {
+    const entry = WaitlistFactory.defaultEntry({id: 41, inhabitantId: bo!.id, dinnerEventId, isGuestTicket: true, position: 1, ticketPriceId: childPrice!.id, dinnerMode})
+    return {...entry, order: {...entry.order, allergyTypeIds: [7]}}
+  }
+  const mountWaiting = (guestWish: DinnerMode) => mountMemberForm(false, {orders: [annaTicket], waitlistEntries: [boQueued, guestQueued(guestWish)]})
+
+  it.each([
+    {guestWish: DinnerMode.TAKEAWAY, power: {dinnerMode: DinnerMode.TAKEAWAY, consensus: true}},
+    {guestWish: DinnerMode.DINEINLATE, power: {consensus: false}}
+  ])('GIVEN Anna\'s ticket and Bo\'s place on Takeaway and a queued guest wishing $guestWish THEN the power row counts the wishes in its consensus', async ({guestWish, power}) => {
+    const wrapper = await mountWaiting(guestWish)
+
+    const powerTickets = wrapper.findAllComponents(DinnerTicket).filter(ticket => ticket.props('consensus') !== undefined)
+    expect(powerTickets).not.toHaveLength(0)
+    powerTickets.forEach(ticket => expect(ticket.props()).toMatchObject(power))
+  })
+
+  it('WHEN power mode sets Ingen and saves THEN Anna\'s ticket is released, Bo\'s intent names his place and the guest\'s place leaves the line', async () => {
+    const wrapper = await mountWaiting(DinnerMode.TAKEAWAY)
+    await clickByTestId(wrapper, 'power-power-mode-toggle')
+    await clickByTestId(wrapper, `power-power-mode-mode-edit-${DinnerMode.NONE}`)
+    await clickByTestId(wrapper, 'power-power-mode-save')
+
+    expect(wrapper.emitted('saveBookings')).toEqual([[[
+      expect.objectContaining({inhabitantId: anna!.id, dinnerEventId, dinnerMode: DinnerMode.NONE, isGuestTicket: false, orderId: annaTicket.id}),
+      expect.objectContaining({inhabitantId: bo!.id, dinnerEventId, dinnerMode: DinnerMode.NONE, isGuestTicket: false, waitlistEntryId: boQueued.id}),
+      expect.objectContaining({inhabitantId: bo!.id, dinnerEventId, dinnerMode: DinnerMode.NONE, ticketPriceId: childPrice!.id, isGuestTicket: true, allergyTypeIds: [7], waitlistEntryId: 41})
+    ]]])
+  })
+})
+
 // Every preview is the server's dry run of the save: the save's request with ?preview=true, its reply under the dinner's day
 describe('DinnerBookingForm previews a save through the server\'s dry run', () => {
   const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()

@@ -628,6 +628,20 @@ spec call sites stay as they are.
 
 `tests/e2e/testDataFactories/seasonFactory.ts`, `tests/e2e/testDataFactories/dinnerEventFactory.ts`.
 
+## Slow client after a save
+
+Priority: low. Added 2026-10-19 from the e2e work on `HouseholdBookings.e2e` (release 0.9, One booking path point 5).
+
+### Problem
+
+After a grid save the server answers in under 400 ms, and the client takes about 3 s from that answer until its
+re-reads land (the household's orders, the upcoming orders, the tickets for sale, the waiting list, the dinner on
+view: the chain of `bookingsStore.writeBookings`).
+
+### Solution
+
+Investigate where the 3 s go (the re-read chain, its sequencing, the store's refreshes) and propose the fix in a round.
+
 ## Deferred from release 0.9
 
 | Work | Where it lives | State |

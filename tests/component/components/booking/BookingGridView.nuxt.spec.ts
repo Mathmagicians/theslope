@@ -2,11 +2,11 @@
 import {describe, it, expect, beforeAll, beforeEach, afterEach, vi} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {findByTestId, clickByTestId, resetStores, findLoadingRow, isTableLoading, registerScaffoldEndpoint} from '~~/tests/component/testHelpers'
+import {findByTestId, clickByTestId, resetStores, findLoadingRow, isTableLoading, registerScaffoldEndpoint, mountWithTooltipProvider, VIEWPORTS} from '~~/tests/component/testHelpers'
 import {BookingViewSchema} from '~/composables/useBookingView'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
-import {useBookingValidation, type DinnerEventDisplay, type DinnerMode, type OrderDisplay, type OrderState} from '~/composables/useBookingValidation'
+import {useBookingValidation, TicketState, type DinnerEventDisplay, type DinnerMode, type OrderDisplay, type OrderState} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 import {EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
@@ -14,8 +14,10 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, ICONS, ORDER_STATE_COLORS} from '~/composables/useTheSlopeDesignSystem'
+import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
+import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import {formatPreviewLines} from '~/composables/useBookingUi'
 import {addDays, startOfDay} from 'date-fns'
 
@@ -237,15 +239,41 @@ describe('BookingGridView', () => {
       })
     })
 
-    it.each([
-      {desc: 'guest tickets only', orders: [order(7, anna.id, true, DinnerMode.DINEIN), order(8, anna.id, true, DinnerMode.DINEIN, OrderState.RELEASED)], total: 0, released: 0},
-      {desc: 'a released regular order and guest tickets', orders: [order(7, anna.id, true, DinnerMode.DINEIN), order(8, anna.id, true, DinnerMode.DINEIN, OrderState.RELEASED), order(42, anna.id, false, DinnerMode.DINEIN, OrderState.RELEASED)], total: 1, released: 1}
-    ])('counts only Anna\'s own tickets when she holds $desc', async ({orders, total, released}) => {
-      const wrapper = await mountWeek(orders)
+    // The name cell counts over the dinners in view
+    const later = DinnerEventFactory.dinnerEventAt(5, 2)
+    const place = (id: number, dinnerEventId: number, isGuestTicket = false): TicketWaitlistDetail =>
+      WaitlistFactory.defaultEntry({id, inhabitantId: anna.id, dinnerEventId, isGuestTicket})
+    const mountCounts = (orders: OrderDisplay[], waitlistEntries: TicketWaitlistDetail[]) => mount({
+      view: week,
+      dateRange: {start: addDays(event.date, -3), end: addDays(event.date, 3)},
+      dinnerEvents: [event, later],
+      orders,
+      waitlistEntries
+    })
+    const countCases: {desc: string, orders: OrderDisplay[], places: TicketWaitlistDetail[], counts: {total: number, released: number, queued: number}}[] = [
+      {desc: 'guest tickets only', orders: [order(7, anna.id, true, DinnerMode.DINEIN), order(8, anna.id, true, DinnerMode.DINEIN, OrderState.RELEASED)], places: [], counts: {total: 0, released: 0, queued: 0}},
+      {desc: 'a released regular order and guest tickets', orders: [order(7, anna.id, true, DinnerMode.DINEIN), order(8, anna.id, true, DinnerMode.DINEIN, OrderState.RELEASED), order(42, anna.id, false, DinnerMode.DINEIN, OrderState.RELEASED)], places: [], counts: {total: 1, released: 1, queued: 0}},
+      {desc: 'a ticket and a place on the waiting list', orders: [order(42, anna.id, false, DinnerMode.DINEIN)], places: [place(9, later.id)], counts: {total: 1, released: 0, queued: 1}},
+      {desc: 'places on the waiting list only', orders: [], places: [place(9, event.id), place(10, later.id)], counts: {total: 0, released: 0, queued: 2}},
+      {desc: 'a guest\'s place on the waiting list', orders: [], places: [place(11, later.id, true)], counts: {total: 0, released: 0, queued: 0}}
+    ]
+
+    it.each(countCases)('counts Anna\'s own tickets, the released among them and her own places on the waiting list when she holds $desc', async ({orders, places, counts}) => {
+      const wrapper = await mountCounts(orders, places)
       expect({
         total: countOf(wrapper, `inhabitant-ticket-count-${anna.id}`),
-        released: countOf(wrapper, `inhabitant-released-count-${anna.id}`)
-      }).toEqual({total, released})
+        released: countOf(wrapper, `inhabitant-released-count-${anna.id}`),
+        queued: countOf(wrapper, `inhabitant-waitlist-count-${anna.id}`)
+      }).toEqual(counts)
+    })
+
+    it('the waiting-list count wears the waiting list\'s glyph and colour, in the name cell beside the ticket count', async () => {
+      const wrapper = await mountCounts([order(42, anna.id, false, DinnerMode.DINEIN)], [place(9, later.id)])
+      const waitlistBadge = wrapper.findAllComponents({name: 'UBadge'}).find(badge => badge.attributes('data-testid') === `inhabitant-waitlist-count-${anna.id}`)!
+
+      expect(waitlistBadge.props('color')).toBe(ORDER_STATE_COLORS[TicketState.queued])
+      expect(waitlistBadge.findComponent({name: 'UIcon'}).props('name')).toBe(ICONS.waitlist)
+      expect(findByTestId(wrapper, `inhabitant-ticket-count-${anna.id}`).element.parentElement).toBe(waitlistBadge.element.parentElement)
     })
 
     describe('guest cells in edit mode', () => {
@@ -281,7 +309,8 @@ describe('BookingGridView', () => {
 
         expect(wrapper.emitted('save')?.[0]).toEqual([{
           intents: [{inhabitantId: anna.id, dinnerEventId: future.id, dinnerMode: annaMode}],
-          guestIntents: [{guestOrders: [guest], dinnerMode: guestMode}]
+          guestIntents: [{guestOrders: [guest], dinnerMode: guestMode}],
+          entryIntents: []
         }])
       })
 
@@ -303,7 +332,8 @@ describe('BookingGridView', () => {
 
           expect(wrapper.emitted('save')?.[0]).toEqual([{
             intents: [anna, lars].map(({id}) => ({inhabitantId: id, dinnerEventId: future.id, dinnerMode: DinnerMode.TAKEAWAY})),
-            guestIntents: [{guestOrders: [differingGuest], dinnerMode: DinnerMode.TAKEAWAY}]
+            guestIntents: [{guestOrders: [differingGuest], dinnerMode: DinnerMode.TAKEAWAY}],
+            entryIntents: []
           }])
         })
       })
@@ -351,6 +381,69 @@ describe('BookingGridView', () => {
     })
   })
 
+  // The power cell reaches every place the household holds on the dinner: Lars's own and Anna's queued guest's
+  describe('the power cell over the household\'s places on the waiting list', () => {
+    const {DinnerModeSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+    const [anna, lars] = mockHousehold.inhabitants as [typeof mockHousehold.inhabitants[number], typeof mockHousehold.inhabitants[number]]
+    const closedDinner = DinnerEventFactory.dinnerEventAt(1, 1)
+    const powerCell = `power-${closedDinner.id}`
+    const annaTicket = OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: anna.id, dinnerEventId: closedDinner.id, dinnerMode: DinnerMode.TAKEAWAY})
+    const larsQueued = WaitlistFactory.defaultEntry({id: 11, inhabitantId: lars.id, dinnerEventId: closedDinner.id, dinnerMode: DinnerMode.TAKEAWAY})
+    const guestQueued = (dinnerMode: DinnerMode) => WaitlistFactory.defaultEntry({id: 28, inhabitantId: anna.id, dinnerEventId: closedDinner.id, isGuestTicket: true, dinnerMode})
+    const mountWaiting = (guestEntry: TicketWaitlistDetail, formMode: FormMode = FORM_MODES.VIEW) => mount({
+      view: week,
+      dateRange: {start: addDays(closedDinner.date, -3), end: addDays(closedDinner.date, 3)},
+      dinnerEvents: [closedDinner],
+      orders: [annaTicket],
+      waitlistEntries: [larsQueued, guestEntry],
+      formMode
+    })
+    const powerSelector = (wrapper: Awaited<ReturnType<typeof mount>>) =>
+      wrapper.findAllComponents(DinnerModeSelector).find(selector => selector.props('name') === powerCell)!
+
+    it.each([
+      {guestWish: DinnerMode.TAKEAWAY, power: {modelValue: DinnerMode.TAKEAWAY, consensus: true}},
+      {guestWish: DinnerMode.DINEINLATE, power: {consensus: false}}
+    ])('GIVEN Anna\'s ticket and Lars\'s place on Takeaway and a queued guest wishing $guestWish THEN the power cell counts the wishes in its consensus', async ({guestWish, power}) => {
+      const wrapper = await mountWaiting(guestQueued(guestWish))
+
+      expect(powerSelector(wrapper).props()).toMatchObject(power)
+    })
+
+    it('WHEN the power cell is set to Ingen and saved THEN Lars\'s intent names his place and the queued guest\'s place leaves', async () => {
+      const guestEntry = guestQueued(DinnerMode.TAKEAWAY)
+      const wrapper = await mountWaiting(guestEntry, FORM_MODES.EDIT)
+
+      powerSelector(wrapper).vm.$emit('update:modelValue', DinnerMode.NONE)
+      await nextTick()
+      expect(powerSelector(wrapper).props()).toMatchObject({modelValue: DinnerMode.NONE, consensus: true})
+
+      await clickByTestId(wrapper, 'grid-save')
+
+      expect(wrapper.emitted('save')?.[0]).toEqual([{
+        intents: [
+          {inhabitantId: anna.id, dinnerEventId: closedDinner.id, dinnerMode: DinnerMode.NONE},
+          {inhabitantId: lars.id, dinnerEventId: closedDinner.id, dinnerMode: DinnerMode.NONE, waitlistEntryId: larsQueued.id}
+        ],
+        guestIntents: [],
+        entryIntents: [{entry: guestEntry, dinnerMode: DinnerMode.NONE}]
+      }])
+    })
+
+    // As an expected cell does, the queued cell ghosts its wish until a draft takes its place
+    it('WHEN the power cell is set to Ingen THEN Lars\'s queued cell shows the draft with the modified accent under the queue marker', async () => {
+      const wrapper = await mountWaiting(guestQueued(DinnerMode.TAKEAWAY), FORM_MODES.EDIT)
+      const larsCell = () => wrapper.findAllComponents(DinnerModeSelector).find(selector => selector.props('name') === `cell-${lars.id}-${closedDinner.id}`)!
+
+      powerSelector(wrapper).vm.$emit('update:modelValue', DinnerMode.NONE)
+      await nextTick()
+
+      expect(findByTestId(wrapper, `grid-waitlist-${lars.id}-${closedDinner.id}`).exists()).toBe(true)
+      expect(larsCell().props()).toMatchObject({modelValue: DinnerMode.NONE, isModified: true, ghost: false, formMode: FORM_MODES.VIEW})
+    })
+  })
+
   // The column header counts the household's own released tickets on a locked dinner: the household pays for them until they are sold
   describe('lock chip in the column header', () => {
     const {OrderStateSchema} = useBookingValidation()
@@ -393,19 +486,52 @@ describe('BookingGridView', () => {
 
 describe('BookingGridView add-guest button', () => {
   const future = DinnerEventFactory.dinnerEventAt(2, 60)
-  const mountEdit = () => mount({
+  const editProps = {
     view: week,
     dateRange: {start: addDays(future.date, -3), end: addDays(future.date, 3)},
     dinnerEvents: [future],
     formMode: FORM_MODES.EDIT,
     bookerId: mockHousehold.inhabitants[0]!.id
-  })
+  }
+  const mountEdit = () => mount(editProps)
   const addButton = (wrapper: Awaited<ReturnType<typeof mount>>) =>
     wrapper.findAllComponents({name: 'UButton'}).find(button => button.attributes('data-testid') === `guest-add-${future.id}`)!
 
   it('carries the chevron glyph', async () => {
     const wrapper = await mountEdit()
     expect(addButton(wrapper).props('icon')).toBe(ICONS.chevronDown)
+  })
+
+  // The day columns widen the table past a phone, and the table scrolls sideways in its own box
+  it.each(VIEWPORTS)('at $viewport width the chevron opens the guest form in the row below, kept to the part of the table\'s box in view', async ({isMd}) => {
+    const wrapper = await mountWithTooltipProvider(BookingGridView, {props: {...baseProps, ...editProps}, isMd})
+
+    await clickByTestId(wrapper, `guest-add-${future.id}`)
+
+    const form = wrapper.findComponent(GuestBookingForm)
+    expect(form.props('dinnerEvent')).toEqual(future)
+    // GuestBookingForm renders several roots; its UForm sits directly in the panel
+    const panel = form.findComponent({name: 'UForm'}).element.parentElement!
+    expect([...panel.classList]).toEqual(expect.arrayContaining(COMPONENTS.bookingGrid.expandedPanel.split(' ')))
+  })
+
+  describe('with the guest form open on one of two dinners', () => {
+    const later = DinnerEventFactory.dinnerEventAt(3, 62)
+    const twoDinners = {...editProps, dateRange: {start: addDays(future.date, -3), end: addDays(later.date, 3)}, dinnerEvents: [future, later]}
+
+    it.each([
+      {desc: 'its own chevron', tapped: later, outcome: 'closes', open: undefined},
+      {desc: 'the other dinner\'s chevron', tapped: future, outcome: 'switches to that dinner in one tap', open: future}
+    ])('WHEN $desc is tapped THEN the form $outcome', async ({tapped, open}) => {
+      const wrapper = await mountWithTooltipProvider(BookingGridView, {props: {...baseProps, ...twoDinners}})
+      await clickByTestId(wrapper, `guest-add-${later.id}`)
+      expect(wrapper.findComponent(GuestBookingForm).props('dinnerEvent')).toEqual(later)
+
+      await clickByTestId(wrapper, `guest-add-${tapped.id}`)
+
+      const form = wrapper.findComponent(GuestBookingForm)
+      expect(form.exists() ? form.props('dinnerEvent') : undefined).toEqual(open)
+    })
   })
 })
 
@@ -491,6 +617,18 @@ describe('BookingGridView and the server\'s dry run', () => {
       land()
       await vi.waitFor(() => expect(isTableLoading(wrapper)).toBe(false))
       expect(cell(wrapper, anna.id, future.id).props('expected')).toBe(true)
+    })
+
+    // The power cell reads the modes the cells show: an expected cell counts its expected mode
+    it.each([
+      {desc: 'Anna and Lars expected on Takeaway', expected: () => OrderFactory.defaultScaffoldOrdersResponse({results: [anna, lars].flatMap(inhabitant => dinnerEvents.map(({id}) => resultOf(inhabitant, id, Action.BOOK, DinnerMode.TAKEAWAY)))}), power: {modelValue: DinnerMode.TAKEAWAY, consensus: true}},
+      {desc: 'Anna expected and Lars left out', expected: annaExpected, power: {consensus: false}}
+    ])('GIVEN $desc THEN the power cell reads the consensus of the modes the cells show', async ({expected, power}) => {
+      scaffold.answers.expected = expected
+      const wrapper = await mountWeek()
+      await landed(wrapper)
+
+      dinnerEvents.forEach(({id}) => expect(wrapper.findAllComponents(DinnerModeSelector).find(selector => selector.props('name') === `power-${id}`)!.props()).toMatchObject(power))
     })
   })
 

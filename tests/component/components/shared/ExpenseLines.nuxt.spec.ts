@@ -8,7 +8,7 @@ import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useOrder} from '~/composables/useOrder'
 import {useTicket} from '~/composables/useTicket'
 import {useBillingValidation} from '~/composables/useBillingValidation'
-import {formatDate} from '~/utils/date'
+import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, kitchenConfig, resetStores} from '~~/tests/component/testHelpers'
 
 enableAutoUnmount(afterEach)
@@ -128,7 +128,7 @@ describe('ExpenseLines', () => {
             const rows = lineRows(wrapper)
             expect(rows).toHaveLength(2)
             lines().forEach((line, index) => {
-                expect(rows[index]!.text()).toContain(formatDate(line.createdAt))
+                expect(rows[index]!.findAll('td')[0]!.text()).toBe(formatDate(line.createdAt, DATE_SETTINGS.DAY_MONTH_MASK))
                 expect(rows[index]!.find('[data-testid="expense-payer"]').text()).toBe(line.paidBy.name!)
                 expect(rows[index]!.find('[data-testid="expense-note"]').text()).toBe(line.description)
                 expect(rows[index]!.text()).toContain(formatPrice(exOf(line.amount)))

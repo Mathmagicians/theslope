@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears} from 'date-fns'
-import {useBooking, formatPlace, formatDinnerName, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type OrderBucketResult, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
+import {useBooking, formatPlace, formatDinnerName, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type OrderBucketResult, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {dateToWeekDay} from '~/utils/season'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -1120,6 +1120,24 @@ describe('buildDesiredOrder', () => {
         })
     })
 
+    describe('buildEntryDesiredOrder', () => {
+        it('names a queued guest\'s place at its held price, with the guest flag and the allergies', () => {
+            const queued = WaitlistFactory.defaultEntry({id: 28, inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, isGuestTicket: true, ticketPriceId: priceIdOf(TicketType.CHILD)})
+            const entry = {...queued, order: {...queued.order, allergyTypeIds: [3]}}
+
+            expect(buildEntryDesiredOrder({entry, dinnerMode: DinnerMode.NONE}, OrderState.BOOKED)).toEqual({
+                inhabitantId: inhabitant.id,
+                dinnerEventId: dinnerEvent.id,
+                dinnerMode: DinnerMode.NONE,
+                ticketPriceId: priceIdOf(TicketType.CHILD),
+                isGuestTicket: true,
+                allergyTypeIds: [3],
+                state: OrderState.BOOKED,
+                waitlistEntryId: entry.id
+            })
+        })
+    })
+
     describe('power mode targets', () => {
         const otherEvent = DinnerEventFactory.dinnerEventAt(102, EVENT_DAYS_AHEAD + 1)
         const guestOn = (id: number, dinnerEventId: number, dinnerMode: DinnerMode): OrderDisplay =>
@@ -1129,9 +1147,10 @@ describe('buildDesiredOrder', () => {
         const orders = [regular, guest, guestOn(GUEST_ID + 1, otherEvent.id, DinnerMode.TAKEAWAY)]
 
         it('targets every inhabitant and only the guest groups of the dinner', () => {
-            expect(getPowerChanges([inhabitant.id], orders, dinnerEvent.id, DinnerMode.TAKEAWAY)).toEqual({
+            expect(getPowerChanges([inhabitant.id], orders, [], dinnerEvent.id, DinnerMode.TAKEAWAY)).toEqual({
                 intents: [{inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, dinnerMode: DinnerMode.TAKEAWAY}],
-                guestIntents: [{guestOrders: [guest], dinnerMode: DinnerMode.TAKEAWAY}]
+                guestIntents: [{guestOrders: [guest], dinnerMode: DinnerMode.TAKEAWAY}],
+                entryIntents: []
             })
         })
 
@@ -1140,7 +1159,38 @@ describe('buildDesiredOrder', () => {
             {desc: 'a guest draft matching the inhabitant', drafts: {guestGroup: () => DinnerMode.DINEIN}, expected: {value: DinnerMode.DINEIN, consensus: true}},
             {desc: 'an inhabitant draft matching the guest', drafts: {inhabitant: () => DinnerMode.DINEINLATE}, expected: {value: DinnerMode.DINEINLATE, consensus: true}}
         ])('consensus over $desc', ({drafts, expected}) => {
-            expect(getPowerConsensus([inhabitant.id], orders, dinnerEvent.id, drafts)).toEqual(expected)
+            expect(getPowerConsensus([inhabitant.id], orders, [], dinnerEvent.id, drafts)).toEqual(expected)
+        })
+
+        describe('the household\'s places on the waiting list', () => {
+            // A second inhabitant without a ticket, queued on the dinner
+            const QUEUED_ID = 2
+            const place = (id: number, inhabitantId: number, dinnerMode: DinnerMode, isGuestTicket = false, dinnerEventId = dinnerEvent.id): TicketWaitlistDisplay =>
+                WaitlistFactory.defaultEntry({id, inhabitantId, dinnerEventId, isGuestTicket, dinnerMode})
+            const ownPlace = place(11, QUEUED_ID, DinnerMode.DINEIN)
+            const guestPlace = place(28, inhabitant.id, DinnerMode.DINEIN, true)
+
+            it('names a queued inhabitant\'s own place in their intent, reaches every other place on the dinner, and leaves a place its holder\'s order supersedes', () => {
+                const entries = [ownPlace, guestPlace, place(29, QUEUED_ID, DinnerMode.DINEIN, false, otherEvent.id), place(30, inhabitant.id, DinnerMode.DINEIN)]
+
+                expect(getPowerChanges([inhabitant.id, QUEUED_ID], orders, entries, dinnerEvent.id, DinnerMode.NONE)).toEqual({
+                    intents: [
+                        {inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, dinnerMode: DinnerMode.NONE},
+                        {inhabitantId: QUEUED_ID, dinnerEventId: dinnerEvent.id, dinnerMode: DinnerMode.NONE, waitlistEntryId: ownPlace.id}
+                    ],
+                    guestIntents: [{guestOrders: [guest], dinnerMode: DinnerMode.NONE}],
+                    entryIntents: [{entry: guestPlace, dinnerMode: DinnerMode.NONE}]
+                })
+            })
+
+            it.each([
+                {desc: 'queued wishes matching the ticket', entries: [ownPlace, guestPlace], drafts: {}, expected: {value: DinnerMode.DINEIN, consensus: true}},
+                {desc: 'a queued guest wishing another mode', entries: [ownPlace, place(28, inhabitant.id, DinnerMode.TAKEAWAY, true)], drafts: {}, expected: {value: DinnerMode.DINEIN, consensus: false}},
+                {desc: 'a queued inhabitant wishing another mode', entries: [place(11, QUEUED_ID, DinnerMode.TAKEAWAY), guestPlace], drafts: {}, expected: {value: DinnerMode.DINEIN, consensus: false}},
+                {desc: 'a draft on the queued guest matching the ticket', entries: [ownPlace, place(28, inhabitant.id, DinnerMode.TAKEAWAY, true)], drafts: {entry: () => DinnerMode.DINEIN}, expected: {value: DinnerMode.DINEIN, consensus: true}}
+            ])('consensus over $desc', ({entries, drafts, expected}) => {
+                expect(getPowerConsensus([inhabitant.id, QUEUED_ID], [regular], entries, dinnerEvent.id, drafts)).toEqual(expected)
+            })
         })
     })
 })

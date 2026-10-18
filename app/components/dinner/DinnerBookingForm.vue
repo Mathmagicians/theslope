@@ -117,6 +117,8 @@
  * loader while it works); the save label reads the reply's outcome (bookingSaveLabel over previewSaveOutcome: Book,
  * Køb billet, Skriv på venteliste, Forlad ventelisten, Opdater); a requeue previews "X ændrer spisemåde til Sen
  * (venteliste)". A queued row edits its wish (requeued) or picks Ingen to leave; Tilføj gæst saves the same way.
+ * Hele familien reaches the queued rows too: their wishes count in its consensus, and its Ingen leaves every place the
+ * household holds on the dinner in the same save as its releases.
  *
  * EXPECTED BOOKINGS - a row without an order or a queue entry shows the booking the preferences give it, read from the
  * dry run with no orders: its ticket reads as a queued one with the sliders [ex] in place of the hourglass, the mode
@@ -458,7 +460,7 @@ const tableData = computed((): TableRow[] => {
   })
 
   // The consensus of the modes the rows show: an expected row counts its expected mode
-  const {value: consensusMode, consensus: hasConsensus} = getPowerConsensus(allInhabitants.map(i => i.id), eventOrders.value, props.dinnerEvent.id, {
+  const {value: consensusMode, consensus: hasConsensus} = getPowerConsensus(allInhabitants.map(i => i.id), eventOrders.value, eventWaitlistEntries.value, props.dinnerEvent.id, {
     inhabitant: expectedModeOf
   })
 
@@ -534,7 +536,7 @@ const buildDesiredOrdersForRow = (row: TableRow): DesiredOrder[] => {
   if (row.rowType === 'power') {
     const inhabitantIds = (household.value?.inhabitants ?? []).map(i => i.id)
     return buildBookingChanges(
-      getPowerChanges(inhabitantIds, eventOrders.value, dinnerEventId, draftMode.value),
+      getPowerChanges(inhabitantIds, eventOrders.value, eventWaitlistEntries.value, dinnerEventId, draftMode.value),
       eventOrders.value,
       household.value?.inhabitants ?? [],
       [props.dinnerEvent],
@@ -544,11 +546,7 @@ const buildDesiredOrdersForRow = (row: TableRow): DesiredOrder[] => {
 
   if (row.rowType === 'guest-order' && row.waitlistEntry) {
     // A queued guest names its entry: Ingen leaves the queue, another mode requeues the wish at the held price
-    const {id: waitlistEntryId, inhabitantId, order} = row.waitlistEntry
-    return [{
-      inhabitantId, dinnerEventId, dinnerMode: draftMode.value, ticketPriceId: order.ticketPriceId,
-      isGuestTicket: true, allergyTypeIds: order.allergyTypeIds, state: OrderStateEnum.BOOKED, waitlistEntryId
-    }]
+    return [buildEntryDesiredOrder({entry: row.waitlistEntry, dinnerMode: draftMode.value}, OrderStateEnum.BOOKED)]
   }
 
   if (row.rowType === 'guest-order') {

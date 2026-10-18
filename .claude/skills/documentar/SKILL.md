@@ -35,7 +35,8 @@ A peer's landing note names a package, its commits and its test results:
 
 1. `git log --oneline` shows the commits; the names the note gives are in the code (`grep`).
 2. The ship check below runs for the package.
-3. The package's inventory row gets its status and commits; rows a peer owns (points, mockups) stay theirs.
+3. The package's inventory row gets its status and commits; rows a peer owns (points, mockups) stay theirs. A status
+   cell with more than one state reads as bullets, one state per line (`• …<br>• …`), in the order they happened.
 4. The PR body gets the package's highlight and its test line; the peer gets a one-line ack.
 
 ## Sign-off

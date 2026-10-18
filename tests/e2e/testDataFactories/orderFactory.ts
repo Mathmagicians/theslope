@@ -329,7 +329,7 @@ export class OrderFactory {
       orders: data.orders.map(order => this.defaultDesiredOrder({...order, dinnerEventId: data.dinnerEventId, isGuestTicket: order.isGuestTicket ?? false}))
     }, expectedStatus, true)
     if (!response) return null
-    expect(response.scaffoldResult.errored, 'The scaffold placed every order').toBe(0)
+    expect(response.scaffoldResult.errored, `The scaffold placed every order; failed: ${JSON.stringify(response.scaffoldResult.failed)}`).toBe(0)
     const createdIds = (await householdOrders()).map(order => order.id).filter(id => !before.has(id))
     return {householdId: data.householdId, createdIds}
   }

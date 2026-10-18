@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
+import { defineBddProject, cucumberReporter } from 'playwright-bdd'
 
 /**
  * Read environment variables from file.
@@ -18,6 +19,13 @@ const extraHTTPHeaders = process.env.CLOUDFLARE_BYPASS_TOKEN
   ? { 'x-bypass-token': process.env.CLOUDFLARE_BYPASS_TOKEN }
   : {}
 
+// A BDD suite's npm script sets BDD_SUITE and passes no --reporter, so this list writes its Cucumber reports beside
+// the Playwright ones; a spec suite's script passes --reporter, which replaces the list
+const bddSuite = process.env.BDD_SUITE
+// The published smoke report runs on live data and keeps no attachment (stdout, stderr, screenshots); a trace
+// attaches as application/zip and carries the session cookies and the bypass header
+const bddSkipAttachments = bddSuite === 'smoke' ? true : ['application/zip']
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -32,7 +40,15 @@ export default defineConfig({
   /* One worker on CI; a fixed few locally, the local D1 proxy drops requests under a wider fan-out */
   workers: process.env.CI ? 1 : 3,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
+  reporter: bddSuite
+    ? [
+        ['html'],
+        ['line'],
+        ['json'],
+        cucumberReporter('json', { outputFile: `.output/bdd/reports/e2e-${bddSuite}-bdd.json` }),
+        cucumberReporter('html', { outputFile: `.output/bdd/reports/e2e-${bddSuite}-bdd/index.html`, skipAttachments: bddSkipAttachments }),
+      ]
+    : 'html',
   /* Global teardown - runs once after all tests complete */
   globalTeardown: './tests/e2e/global.teardown.ts',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
@@ -112,12 +128,16 @@ export default defineConfig({
       workers: 1,
       dependencies: ['chromium-ui'],
     },
-    // Smoke tests - run serially (shared active season state)
+    // Smoke tests - the @smoke scenarios of tests/e2e/features, run serially (shared active season state)
     {
-      name: 'chromium-smoke',
+      ...defineBddProject({
+        name: 'chromium-smoke',
+        features: 'tests/e2e/features/**/*.feature',
+        steps: ['tests/e2e/fixtures.ts', 'tests/e2e/steps/**/*.ts'],
+        tags: '@smoke',
+        outputDir: '.output/bdd/smoke',
+      }),
       use: { ...devices['Desktop Chrome'] },
-      testMatch: /tests\/e2e\/.*\.spec\.ts/,
-      grep: /@smoke/,
       fullyParallel: false,
       workers: 1,
       dependencies: ['setup-api', 'setup-ui'],

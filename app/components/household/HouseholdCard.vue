@@ -80,10 +80,14 @@
  *
  * Legend:
  * - ⚡ = Power mode (update all inhabitants)
+ * - 👥👥👥 = The members' faces: three, then the overflow count, so the table fits a phone
  * - ✏️ = Pencil icon (edit one inhabitant)
  * - ▼ = Chevron down (expanded row - click to collapse)
  * - 🍽️🕐🛍️❌ = Compact badges (collapsed VIEW mode)
  * - [Button] = Button groups (expanded EDIT mode)
+ *
+ * Visual check: /household/<S>/members at 375px and desktop, closed, one person open with a preview, power mode open
+ * with a preview: the table and the editor stay inside the width and the page does not scroll sideways.
  */
 import {FORM_MODES} from '~/types/form'
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
@@ -300,6 +304,7 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
                 :inhabitants="household.inhabitants"
                 compact
                 :show-names="false"
+                :max="COMPONENTS.avatar.powerRowMax"
                 :ring-color="COLOR.warning"
                 label="beboere"
             />

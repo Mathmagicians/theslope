@@ -11,7 +11,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {createResponsiveSizes, createTableColumns} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, createResponsiveSizes, createTableColumns} from '~/composables/useTheSlopeDesignSystem'
 import {formatPreviewLines} from '~/composables/useBookingUi'
 import {useBookingValidation, type InhabitantUpdateResponse, type ScaffoldResult} from '~/composables/useBookingValidation'
 import {WEEKDAYS} from '~/types/dateTypes'
@@ -73,6 +73,12 @@ describe.each(VIEWPORTS)('HouseholdCard on $viewport', ({isMd}) => {
         const actions = wrapper.findAllComponents({name: 'UFieldGroup'})
             .find(group => group.find('[data-testid="cancel-preferences"]').exists())
         expect(actions?.props('size')).toBe(createResponsiveSizes(ref(isMd)).cardFieldGroup)
+    })
+
+    // The power row's faces set the name column's width: a household's faces past the power row's max fold into the count
+    it('the power row\'s face group stops at the power row\'s max', async () => {
+        const wrapper = await mountCard(isMd)
+        expect(wrapper.findComponent({name: 'UAvatarGroup'}).props('max')).toBe(COMPONENTS.avatar.powerRowMax)
     })
 })
 

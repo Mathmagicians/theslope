@@ -21,6 +21,7 @@ import type {
     OrderState,
     OrderAuditAction,
     OrderAuditChange,
+    OrderAuditSource,
     OrderSnapshot,
     TicketType
 } from '~/composables/useBookingValidation'
@@ -63,6 +64,9 @@ const {throwH3Error, isPrismaNotFound} = eventHandlerHelper
 
 // The dinner embedded in an order read: its cost is the sum of the selected expense amounts, never the stored column
 const embeddedDinnerEvent = (dinnerEvent: Record<string, unknown>) => useBookingValidation().deserializeDinnerEvent(dinnerEvent)
+
+// The user who wrote a history row with the name of their inhabitant, as the order timeline and Billetændringer name them
+const performedByUserSelect = {select: {id: true, email: true, Inhabitant: {select: {name: true, lastName: true}}}} as const
 
 // The expense amounts give each dinner its computed cost (ADR-010)
 const orderDetailInclude = {
@@ -373,12 +377,7 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
                         orderId: true,
                         action: true,
                         performedByUserId: true,
-                        performedByUser: {
-                            select: {
-                                id: true,
-                                email: true
-                            }
-                        },
+                        performedByUser: performedByUserSelect,
                         auditData: true,
                         timestamp: true,
                         inhabitantId: true,
@@ -560,6 +559,8 @@ export type Cancellation = {
     seasonId: number | null
     /** The member who cancelled; null when the system did */
     performedByUserId: number | null
+    /** What wrote the cancellation: the run's source */
+    source?: OrderAuditSource
     snapshot: OrderSnapshot
 }
 
@@ -579,11 +580,11 @@ export async function recordCancellation(
     const prisma = await getPrismaClientConnection(d1Client)
     try {
         await prisma.orderHistory.createMany({
-            data: rows.map(({snapshot, performedByUserId, ...row}) => ({
+            data: rows.map(({snapshot, performedByUserId, source, ...row}) => ({
                 ...row,
                 performedByUserId,
                 action: performedByUserId === null ? OrderAuditActionSchema.enum.SYSTEM_DELETED : OrderAuditActionSchema.enum.USER_CANCELLED,
-                auditData: createOrderAuditData(change ?? OrderAuditChangeSchema.enum.CANCEL, snapshot)
+                auditData: createOrderAuditData(change ?? OrderAuditChangeSchema.enum.CANCEL, snapshot, source)
             }))
         })
     } catch (error) {
@@ -607,11 +608,13 @@ export async function recordCancellation(
  *
  * @param orderIds - Single ID or array of IDs
  * @param performedByUserId - User ID if user-initiated, null for admin/system
+ * @param source - What wrote the cancellation: the run's source
  */
 export async function deleteOrder(
     d1Client: D1Database,
     orderIds: number | number[],
-    performedByUserId: number | null = null
+    performedByUserId: number | null = null,
+    source?: OrderAuditSource
 ): Promise<OrderDisplay[]> {
     const LOG = '🎟️ > ORDER > [DELETE]'
     // Normalize to array, return early for empty
@@ -647,6 +650,7 @@ export async function deleteOrder(
         await recordCancellation(d1Client, ordersToDelete.map(order => ({
             orderId: null,
             performedByUserId,
+            source,
             inhabitantId: order.inhabitantId,
             dinnerEventId: order.dinnerEventId,
             seasonId: order.dinnerEvent?.seasonId ?? null,
@@ -1200,6 +1204,8 @@ export async function fetchPendingOrdersOnConsumedDinners(
 export type BatchUpdateAudit = {
     action: OrderAuditAction
     change: OrderAuditChange
+    /** What wrote the update: the run's source */
+    source?: OrderAuditSource
     performedByUserId: number | null
     inhabitantId: number
     dinnerEventId: number
@@ -1304,9 +1310,9 @@ export const updateOrdersBatch = (chunkSize: number = 90) =>
                 include: {inhabitant: {select: snapshotInhabitantSelect}}
             }))
             const orderById = new Map(audited.map(order => [order.id, order]))
-            const auditEntries = updatesWithAudit.flatMap(({orderId, audit: {change, ...row}}) => {
+            const auditEntries = updatesWithAudit.flatMap(({orderId, audit: {change, source, ...row}}) => {
                 const order = orderById.get(orderId)
-                return order ? [{orderId, ...row, auditData: createOrderAuditData(change, orderSnapshotOf(order, order.inhabitant))}] : []
+                return order ? [{orderId, ...row, auditData: createOrderAuditData(change, orderSnapshotOf(order, order.inhabitant), source)}] : []
             })
             // Batch create audit entries (Prisma auto-chunks for D1)
             await prisma.orderHistory.createMany({ data: auditEntries })
@@ -1728,7 +1734,7 @@ export async function fetchOrderHistoryForDinner(d1Client: D1Database, dinnerEve
     try {
         const rows = await prisma.orderHistory.findMany({
             where: {dinnerEventId},
-            include: {performedByUser: {select: {id: true, email: true}}},
+            include: {performedByUser: performedByUserSelect},
             orderBy: [{timestamp: 'asc'}, {id: 'asc'}]
         })
         return rows.map(row => OrderHistoryDisplaySchema.parse(row))

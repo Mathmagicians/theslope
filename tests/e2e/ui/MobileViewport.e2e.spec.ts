@@ -7,7 +7,7 @@ import {getHouseholdUrl} from '~/utils/household'
 import {BookingViewSchema} from '~/composables/useBookingView'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, doScreenshot, gotoHydrated, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, doScreenshot, gotoHydrated, getSessionUserInfo, PHONE_VIEWPORT} = testHelpers
 
 /**
  * Mobile viewport guard (iPhone X, 375x812): every screen fits a phone.
@@ -28,9 +28,7 @@ const {validatedBrowserContext, doScreenshot, gotoHydrated, getSessionUserInfo} 
  * A screenshot of each screen lands in test-results/mobile/, taken before the assertions.
  */
 test.describe('Mobile viewport - no horizontal overflow', () => {
-    const MOBILE_VIEWPORT = {width: 375, height: 812}
-
-    test.use({storageState: adminUIFile, viewport: MOBILE_VIEWPORT})
+    test.use({storageState: adminUIFile, viewport: PHONE_VIEWPORT})
 
     // Session-derived (the admin's own household) and data-derived (a billing period's share token), resolved in beforeAll
     let ownHousehold = {shortName: '', pbsId: 0}

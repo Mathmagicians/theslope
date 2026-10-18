@@ -25,7 +25,8 @@ const querySchema = AdminBypassQuerySchema.extend({preview: QueryFlagSchema})
  * - Updates existing orders (mode changes, price changes)
  * - Deletes orders when NONE before deadline, releases them after it (the ticket goes to the queue head when it fits)
  * - Leaves the queue on NONE for an entry, rewrites the entry's wish on another mode or price
- * - `?adminBypass=true` from an admin: any household, and the deadlines lift (the admin correction)
+ * - `?adminBypass=true` from an admin: any household, and the deadlines lift (the admin correction); the history rows
+ *   name their source as the admin's correction
  * - `?preview=true`: the reply the save would give, settled against the tickets for sale and the waiting list as they
  *   stand; nothing is written and no mail goes out. Combines with `?adminBypass=true`. With no orders it answers the
  *   household's next run on the dinners asked: the bookings its preferences make there
@@ -59,13 +60,16 @@ export default defineEventHandler<Promise<ScaffoldOrdersResponse>>(async (event)
 
         // User mode on the orders; an empty draft's preview runs system mode, as the household's next run would
         const nextRun = preview && requestData.orders.length === 0
+        // An admin's bypass lifts the deadlines and writes the run's rows as the admin's correction
+        const adminCorrection = adminBypass && isAdmin(user)
         const result = await scaffoldPrebookings(d1Client, {
             seasonId: requestData.seasonId,
             householdId: requestData.householdId,
             dinnerEventIds: requestData.dinnerEventIds,
             desiredOrders: nextRun ? undefined : requestData.orders,
             userId: nextRun ? undefined : user.id,
-            deadlines: adminBypass && isAdmin(user) ? OPEN_DEADLINES : undefined,
+            deadlines: adminCorrection ? OPEN_DEADLINES : undefined,
+            adminCorrection,
             preview
         })
         if (!preview) await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), result.outcomes)

@@ -56,6 +56,7 @@ The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL
   - E2E tests: `npm run test:e2e` - Run Playwright tests
   - Single test: `npx vitest tests/component/path/file.unit.spec.ts`
   - Single E2E test: `npx playwright test tests/e2e/path/file.e2e.spec.ts --reporter=line` - Run specific Playwright test with simplified output
+  - Single BDD scenario: `npm run test:bdd:generate && npx playwright test --project=chromium-smoke --grep "<scenario>" --reporter=line` - Generate the features (`bddgen`) and run one scenario by its title (`docs/testing.md`, BDD)
   - Run test once and exit: `npx vitest run tests/component/path/file.unit.spec.ts` - Run without watch mode (won't hang)
   - Run test with verbose output: `npx vitest run tests/component/path/file.unit.spec.ts --reporter=verbose` - Detailed test output
 - **Database**: the Database section in [README.md](./README.md) holds the setup and migration commands; schema and migration work follows `.claude/skills/prisma/SKILL.md`

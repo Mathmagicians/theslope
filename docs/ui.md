@@ -94,8 +94,13 @@ site that adds to a kind's `ui` merges on top of it.
 
 The empty state renders in the `UTable` `#empty` slot. A table bound to a dataset that reloads binds that dataset's `loading`: UTable's loading bar runs under the column headers while the rows stay. Its `#loading` slot, the spinning sync glyph and a line of text from the table tokens, fills a table that has no rows yet, so the empty state shows only once the data has answered. `COMPONENTS.table.ui` cells wrap between words and keep words, dates
 and e-mails whole; a dense variant per surface sits beside it (`table.catalogUi`, `table.bookingUi`, …). A data table wider
-than a phone scrolls inside its own box. A column sizes through its `meta.class` (`{th, td}`); `COMPONENTS.masterDetail`
-holds the master table's `primaryColumn` and `compactColumn`.
+than a phone scrolls inside its own box; `table.historyUi` keeps each row on one line, so a history scrolls sideways on a
+phone. A column sizes through its `meta.class` (`{th, td}`); `COMPONENTS.masterDetail` holds the master table's
+`primaryColumn` and `compactColumn`. A row that spans the table, the moment line in `TicketChanges.vue`, sets the first
+column's `meta.colspan.td` to the column count and binds `table.spannedCell` on the other cells. An `#expanded` row
+spans every column: in a table that scrolls sideways, its content keeps to the part of the box in view, sticky at the
+cell's inset and no wider than the box (`table.gridUi` makes its box a size container on a phone,
+`bookingGrid.expandedPanel` holds the booking grid's guest form).
 
 ### Choice groups
 

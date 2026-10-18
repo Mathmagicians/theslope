@@ -44,9 +44,9 @@ describe('OrderHistoryDisplay', () => {
     })
 
     it.each([
-        {writer: 'a member', performedByUser: {id: 5, email: 'anna@example.com', Inhabitant: MEMBER}, name: () => useHousehold().formatNameWithInitials(MEMBER)},
-        {writer: 'the system account', performedByUser: {id: 99, email: 'system@example.com', Inhabitant: null}, name: () => BOOKING_WORDS.ticketChange.bySystem},
-        {writer: 'a user since deleted', performedByUser: null, name: () => BOOKING_WORDS.ticketChange.bySystem}
+        {writer: 'a member', performedByUser: {id: 5, email: 'anna@example.com', Inhabitant: MEMBER}, name: (): string => useHousehold().formatNameWithInitials(MEMBER)},
+        {writer: 'the system account', performedByUser: {id: 99, email: 'system@example.com', Inhabitant: null}, name: (): string => BOOKING_WORDS.ticketChange.bySystem},
+        {writer: 'a user since deleted', performedByUser: null, name: (): string => BOOKING_WORDS.ticketChange.bySystem}
     ])('GIVEN a history row written by $writer WHEN the timeline renders THEN it names the writer as the booking page names a person, never by e-mail', async ({performedByUser, name}) => {
         orderDetailEndpoint.mockImplementationOnce(() => orderDetailOf(performedByUser))
         const wrapper = await mountWithTooltipProvider(OrderHistoryDisplay, {props: {orderId: ORDER_ID}})

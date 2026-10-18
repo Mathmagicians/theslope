@@ -169,7 +169,9 @@ renders every feature with each scenario's latest result from the environment's 
   `deployment` with the build's `version-info` lines, `ENV` and `URL`, and the companion reads it. Step and job
   outputs stay inside a run, and the build system owns the version, so the companion computes none of it.
   `deployment_status` was signed first and dropped: GitHub documents it for third-party statuses only.
-- The summary filters are jq programs under `scripts/` (`test-report.jq`, `bdd-report.jq`, `bdd-steps.jq`).
+- The summary filters are jq programs under `scripts/` (`test-report.jq`, `bdd-report.jq`); the step reuse
+  (`make bdd-steps`) is `scripts/bdd-steps.mjs` over playwright-bdd's generator, since the Cucumber json and messages
+  playwright-bdd writes carry no step-definition match.
 - One package in idle slices of the test-engineer session; the spike features are `orderHistory.e2e.spec.ts` (api) and
   `DinnerBookingForm.e2e.spec.ts` (ui serial, one Scenario Outline), both green today.
 - One site holds every environment as a path; a third environment is one more manifest.

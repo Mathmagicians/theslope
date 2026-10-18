@@ -4,12 +4,11 @@ import {enableAutoUnmount} from '@vue/test-utils'
 import UserListItem from '~/components/shared/UserListItem.vue'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
+import {COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
 
 enableAutoUnmount(afterEach)
 
-const SHOWN_AVATARS = 5
-
-const inhabitants = Array.from({length: SHOWN_AVATARS + 2}, (_, i) => ({
+const inhabitants = Array.from({length: COMPONENTS.avatar.max + 2}, (_, i) => ({
     ...HouseholdFactory.defaultInhabitantData(`user-list-item-${i}`),
     id: i + 1
 }))
@@ -35,10 +34,13 @@ describe('UserListItem', () => {
     })
 
     // The markup is the same on both widths (above), so the count runs on one
-    it(`group shows ${SHOWN_AVATARS} avatars and counts the rest`, async () => {
-        const wrapper = await mountItem({inhabitants, showNames: false, linkToProfile: false}, false)
+    it.each([
+        {faces: 'the avatar max', max: undefined, shown: COMPONENTS.avatar.max},
+        {faces: 'the given max', max: COMPONENTS.avatar.powerRowMax, shown: COMPONENTS.avatar.powerRowMax}
+    ])('group shows $faces avatars and counts the rest', async ({max, shown}) => {
+        const wrapper = await mountItem({inhabitants, showNames: false, linkToProfile: false, max}, false)
 
-        expect(wrapper.findAll('span[data-slot="root"]')).toHaveLength(SHOWN_AVATARS)
-        expect(wrapper.find('[data-slot="fallback"]').text()).toBe(`+${inhabitants.length - SHOWN_AVATARS}`)
+        expect(wrapper.findAll('span[data-slot="root"]')).toHaveLength(shown)
+        expect(wrapper.find('[data-slot="fallback"]').text()).toBe(`+${inhabitants.length - shown}`)
     })
 })

@@ -7,6 +7,7 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation, type DinnerEventDisplay, type ScaffoldOrdersResponse} from '~/composables/useBookingValidation'
 import {formatDate} from '~/utils/date'
+import {groupBy} from '~/utils/batchUtils'
 import {BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 
 /**
@@ -29,7 +30,7 @@ import {BookingViewSchema, type BookingView} from '~/composables/useBookingView'
  */
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch, waitForApi} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch, waitForApi, PHONE_VIEWPORT} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema, BookingActionSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -80,6 +81,13 @@ test.afterAll(async ({browser}) => {
 const buildBookingsUrl = (view: BookingView, date?: Date, household: {shortName: string, pbsId: number} = {shortName, pbsId}): string =>
     `/household/${encodeURIComponent(household.shortName)}/bookings?pbs=${household.pbsId}&view=${view}${date ? `&date=${formatDate(date)}` : ''}`
 
+const dinnersByDate = (): DinnerEventDisplay[] => [...testSeason.dinnerEvents].sort((a, b) => a.date.getTime() - b.date.getTime())
+
+// The dinners of the month holding most of the season's, in date order: the month grid with the most columns
+const fullestMonth = (): DinnerEventDisplay[] =>
+    [...groupBy<DinnerEventDisplay, string>(d => `${d.date.getFullYear()}-${d.date.getMonth()}`)(dinnersByDate()).values()]
+        .sort((a, b) => b.length - a.length)[0]!
+
 // ---- Tests ----
 
 test('GIVEN an inhabitant holding only a guest ticket on a dinner WHEN the week grid power mode books the family THEN a regular order is booked and the guest ticket carries the family\'s mode', async ({page, browser}) => {
@@ -91,7 +99,7 @@ test('GIVEN an inhabitant holding only a guest ticket on a dinner WHEN the week 
         dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
     })
     // The season's last dinner lies past the prebooking window, before its cancellation deadline
-    const dinnerEvent: DinnerEventDisplay = [...testSeason.dinnerEvents].sort((a, b) => a.date.getTime() - b.date.getTime()).at(-1)!
+    const dinnerEvent = dinnersByDate().at(-1)!
     const adultPrice = testSeason.season.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
     const guest = await OrderFactory.createOrder(context, {
         householdId,
@@ -134,7 +142,7 @@ test('GIVEN a member holding a regular order and a guest ticket on a dinner WHEN
         dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
     })
     // The season's second-to-last dinner: before its cancellation deadline, apart from the power-mode test's dinner
-    const dinnerEvent: DinnerEventDisplay = [...testSeason.dinnerEvents].sort((a, b) => a.date.getTime() - b.date.getTime()).at(-2)!
+    const dinnerEvent = dinnersByDate().at(-2)!
     const adultPrice = testSeason.season.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
     const created = await OrderFactory.createOrder(context, {
         householdId,
@@ -187,7 +195,7 @@ const openExpectedWeek = async (browser: Browser, lastName: string) => {
         dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.DINEIN)
     })
     createdInhabitantIds.push(inhabitant.id)
-    const dinnerEvent: DinnerEventDisplay = [...testSeason.dinnerEvents].sort((a, b) => a.date.getTime() - b.date.getTime())[0]!
+    const dinnerEvent = dinnersByDate()[0]!
     const page = await memberContext.newPage()
     const expectedRead = page.waitForResponse(isExpectedRead)
     await gotoHydrated(page, buildBookingsUrl(BookingViewSchema.enum.week, dinnerEvent.date, {shortName: householdShortname, pbsId: householdPbsId}))
@@ -220,6 +228,41 @@ test('GIVEN an expected cell on a week past the scaffold window WHEN the member 
     expect(result.results).toContainEqual(expect.objectContaining({...theInhabitantOn, action: BookingActionSchema.enum.CANCEL}))
     const {scaffoldResult: after} = await (await reRead).json() as ScaffoldOrdersResponse
     expect(after.results).not.toContainEqual(expect.objectContaining(theInhabitantOn))
+    await page.close()
+})
+
+test('GIVEN a member on a phone and a month of Mon–Fri dinners WHEN the month grid is in edit mode, scrolled to the last open dinner, and its guest chevron is tapped THEN the guest form is in the viewport and a guest booked from it lands as a guest order on that dinner', async ({browser}) => {
+    const adminContext = await validatedBrowserContext(browser)
+    const memberContext = await memberValidatedBrowserContext(browser)
+    const {inhabitantId, householdShortname, householdPbsId} = await getSessionUserInfo(memberContext)
+    // The month's last dinner: the column past the phone's first screen, open as every dinner of the season is
+    const dinnerEvent = fullestMonth().at(-1)!
+    const page = await memberContext.newPage()
+    await page.setViewportSize(PHONE_VIEWPORT)
+    await gotoHydrated(page, buildBookingsUrl(BookingViewSchema.enum.month, dinnerEvent.date, {shortName: householdShortname, pbsId: householdPbsId}))
+
+    // WHEN: the grid's box scrolls sideways to the last dinner and its chevron opens the guest form
+    await page.getByTestId('grid-edit').click()
+    const chevron = page.getByTestId(`guest-add-${dinnerEvent.id}`)
+    await chevron.scrollIntoViewIfNeeded()
+    await chevron.click()
+
+    // THEN: the form keeps to the part of the box in view, within the phone's width
+    const form = page.locator('form').filter({has: page.getByTestId('guest-form-save')})
+    await expect(form).toBeVisible()
+    await expect(form).toBeInViewport()
+    const box = (await form.boundingBox())!
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width)
+
+    // THEN: the save books one adult guest (the form's defaults) as the member's guest order on the dinner
+    const saved = page.waitForResponse(response => isScaffold(response) && !response.url().includes('preview=true'))
+    await page.getByTestId('guest-form-save').click()
+    const {scaffoldResult} = await (await saved).json() as ScaffoldOrdersResponse
+    expect(scaffoldResult.results).toContainEqual(expect.objectContaining({inhabitantId, dinnerEventId: dinnerEvent.id, isGuestTicket: true, action: BookingActionSchema.enum.BOOK}))
+    const guestOrders = (await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, dinnerEvent.id))
+        .filter(o => o.inhabitantId === inhabitantId && o.isGuestTicket)
+    expect(guestOrders).toEqual([expect.objectContaining({state: OrderState.BOOKED})])
     await page.close()
 })
 

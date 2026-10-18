@@ -305,10 +305,14 @@ const readDateField = async (scope: Locator, field: 'start' | 'end'): Promise<Da
     return new Date(await segment('year'), await segment('month') - 1, await segment('day'))
 }
 
+// The phone every screen fits (iPhone X)
+const PHONE_VIEWPORT = {width: 375, height: 812}
+
 const testHelpers = {
     salt,
     saltedId,
     temporaryAndRandom,
+    PHONE_VIEWPORT,
     headers,
     validatedBrowserContext,
     memberValidatedBrowserContext,
