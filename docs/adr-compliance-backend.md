@@ -116,7 +116,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/chef/dinner/[id]/expenses/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/[expenseId].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/chef/dinner/[id]/order-history.get.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec asserts the reply before ticket events and leaves the sale line's household (the buyer's) unread; the buyers' households come from `fetchHouseholdsByInhabitantIds`; the admin's deletion after the booking deadline (`ADMIN_CANCEL`) awaits its spec case |
+| `/api/chef/dinner/[id]/order-history.get.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec asserts the reply before ticket events and leaves the sale line's household (the buyer's) unread; the buyers' households come from `fetchHouseholdsByInhabitantIds`; the admin's deletion after the booking deadline (`ADMIN_CANCEL`) awaits its spec case; the audit rows read through `readOrderAudit`, "?" for a ticket it cannot attribute (One audit format); `orderHistory` e2e unrun |
 | `/api/chef/dinner/[id]/extra-portions.post.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ |
 | **Teams** | | | | | |
 | `/api/team/my.get.ts` | ✅ | N/A | ✅ | ✅ | ✅ |

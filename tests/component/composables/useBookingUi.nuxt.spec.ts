@@ -1,11 +1,11 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, scaffoldToastLook, formatBookingResult, formatPreviewLines, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, formatBookingResult, formatPreviewLines, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS} from '~/composables/useBooking'
-import {useBookingValidation, type BookingAction, type BookingResult, type QueuePosition, type TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, TicketState, type BookingAction, type BookingResult, type QueuePosition, type TicketType} from '~/composables/useBookingValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {lockedDinnerSupply} from '~~/tests/component/testHelpers'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -517,6 +517,18 @@ describe('formatPreviewLines', () => {
             ]
         },
         {
+            // One group per ticket type, in the order the results name them
+            desc: 'a booker\'s guests of two ticket types at one dinner',
+            results: [...resultsOnDinner(1, guestsOfAnna(CHILD), Action.BOOK, Action.BOOK), ...resultsOnDinner(1, guestsOfAnna(ADULT), Action.BOOK)],
+            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Barn ×2) tilmeldes', 'Gæst af Anna (Voksen) tilmeldes']}]
+        },
+        {
+            // The save buys the one ticket for sale for the first guest and queues the rest: a group per action
+            desc: 'a booker\'s guests of one ticket type split by what the save does for them',
+            results: resultsOnDinner(1, guestsOfAnna(ADULT), Action.BUY, Action.QUEUE, Action.QUEUE),
+            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Voksen) køber en billet til salg', 'Gæst af Anna (Voksen ×2) skrives på ventelisten']}]
+        },
+        {
             desc: 'a ticket for sale bought',
             results: resultsAt(ANNA, Action.BUY, 1),
             days: [{dinnerEventId: 1, lines: ['Anna køber en billet til salg']}]
@@ -556,6 +568,31 @@ describe('formatPreviewLines', () => {
         expect(daysOf(formatPreviewLines(run({results, positions, outcomes: withSold(sold)}), dinners, HOUSEHOLD))).toEqual(days)
     })
 
+    // Each action's line: the person and the action's words, in the action's glyph and the colour of the order state it
+    // leads to (a buy or a place on the waiting list wears the bought ticket's colour)
+    const ACTION_TO_STATE = {
+        [Action.BOOK]: OrderState.BOOKED,
+        [Action.CANCEL]: OrderState.CANCELLED,
+        [Action.RELEASE]: OrderState.RELEASED,
+        [Action.RECLAIM]: OrderState.BOOKED,
+        [Action.BUY]: TicketState.claimed,
+        [Action.QUEUE]: TicketState.claimed,
+        [Action.LEAVE]: OrderState.CANCELLED,
+        [Action.REQUEUE]: TicketState.claimed,
+        [Action.CHANGE_PRICE]: OrderState.CLOSED,
+        [Action.CHANGE_MODE]: OrderState.CLOSED
+    } as const satisfies Record<BookingAction, keyof typeof ORDER_STATE_LABELS>
+    it.each(BookingActionSchema.options)('a %s line reads the person and the action\'s words in its glyph and colour', (action) => {
+        const [day] = formatPreviewLines(run({results: resultsAt(ANNA, action, 1)}), dinners)
+        expect(day!.lines).toEqual([{
+            name: ANNA.inhabitantName,
+            action,
+            icon: ACTION_WORDS[action].icon,
+            color: ORDER_STATE_LABELS[ACTION_TO_STATE[action]].color,
+            text: `${ANNA.inhabitantName} ${ACTION_WORDS[action].preview({mode: MODE_WORDS[DinnerModeSchema.enum.DINEIN].label})}`
+        }])
+    })
+
     it('without the household\'s order the people keep the order the results first name them', () => {
         const days = formatPreviewLines(run({results: [...resultsAt(LARS, Action.BOOK, 1), ...resultsAt(ANNA, Action.BOOK, 1)]}), dinners)
         expect(daysOf(days)).toEqual([{dinnerEventId: 1, lines: ['Lars tilmeldes', 'Anna tilmeldes']}])
@@ -582,5 +619,18 @@ describe('guestTicketsLabel', () => {
         {label: undefined, count: 3, text: '×3'}
     ])('$count of $label read "$text"', ({label, count, text}) => {
         expect(guestTicketsLabel(label, count)).toBe(text)
+    })
+})
+
+// A dry run with no orders names what the scaffold will book in the people's own cells
+describe('expectedBookings', () => {
+    const {DINEIN, TAKEAWAY, NONE} = DinnerModeSchema.enum
+    it.each([
+        {desc: 'an eating mode is the cell\'s expected booking', results: [OrderFactory.defaultBookingResult({...ANNA, dinnerEventId: 4, dinnerMode: TAKEAWAY})], expected: [[expectedBookingKey(ANNA.inhabitantId, 4), TAKEAWAY]]},
+        {desc: 'Ingen expects no booking', results: [OrderFactory.defaultBookingResult({...ANNA, dinnerEventId: 4, dinnerMode: NONE, action: Action.CANCEL})], expected: []},
+        {desc: 'a guest ticket is no person\'s own cell', results: [OrderFactory.defaultBookingResult({...guestsOfAnna(ADULT), dinnerEventId: 4, dinnerMode: DINEIN})], expected: []},
+        {desc: 'no reply yet expects nothing', results: null, expected: []}
+    ])('$desc', ({results, expected}) => {
+        expect([...expectedBookings(results === null ? null : run({results}))]).toEqual(expected)
     })
 })

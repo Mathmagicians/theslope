@@ -52,8 +52,8 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Shared words, supply predicates and the system's identity | one set of ticket-type words and counts; "Lukket for framelding"; a stale order id is skipped; the system account from `HEY_NABO_USERNAME`; "frameldt, ADMIN korrektion" in the ticket history | `app/composables/useBookingUi.ts`, `app/composables/useTicket.ts`, `server/utils/systemUser.ts` | committed (56f8e12) |
 | A waiting-list placement happens once | the queue keeps its own placement state (`placingAt`, `placingOrderId`); migration `0018_protocol`; recovery reports what it finishes; a held entry refuses leave and change with a conflict | § A waiting-list placement happens once | in your test since 2026-10-18 (009c54c, c5a74c8, cf767b1): checks 13 and 14 ✅ 2026-10-18; reopened 2026-10-18: `household/preferences.e2e.spec.ts:296` red, a released ticket to the first in line (check 12) |
 | Table loading | a table bound to a dataset that reloads binds that dataset's `loading`: Nuxt UI's loading bar runs while the rows stay, a write's re-read included; `#loading` fills a table with no rows yet; the day bill, the household's notes and the grid's lock chips wait for the bookings (ADR-018 § Table loading) | ADR-018 § Table loading | in your test since 2026-10-18 (4e7d174, cf767b1, 558d7a4): checks 1, 2, 3 and 5 ✅ 2026-10-18; 4, 6 and 7 open |
-| One audit format for the order history | one `auditData` schema, written and read through one pair of functions | § One audit format for the order history | signed off 2026-10-17; runs after "Shared words, supply predicates and the system's identity" |
-| One intent path | one generator for the preference path and the grid: past the deadline a preference change buys a ticket for sale or joins its line; the nightly job runs the same rules; the preferences endpoint and the scaffold endpoint answer `?preview=true`, and every preview in the app comes from that dry run | § One intent path | brief signed 2026-10-18; the server half and the words implemented 2026-10-18, uncommitted; the surfaces (UI step 2) running; e2e after them |
+| One audit format for the order history | one `auditData` schema, written and read through one pair of functions | § One audit format for the order history | brief signed 2026-10-17; implemented 2026-10-18 in One intent path's commit; e2e (`orderHistory`, `preferences`, `scaffold`, `maintenance`, `waitlistAssignment`) after UI step 2 |
+| One intent path | one generator for the preference path and the grid: past the deadline a preference change buys a ticket for sale or joins its line; the nightly job runs the same rules; the preferences endpoint and the scaffold endpoint answer `?preview=true`, and every preview in the app comes from that dry run | § One intent path | brief signed 2026-10-18; the server half and the words implemented 2026-10-18 (d894021); the surfaces (UI step 2) running; e2e after them |
 
 ## Open before the release
 
@@ -393,6 +393,12 @@ order-history endpoint, the preferences intents, the claim provenance) read thro
 three legacy shapes and returns null for what a row cannot tell. The history groups rows by order id, else by dinner and
 household, and prints "?" for a ticket it cannot attribute. The replay's `collapseByKey` adopts `linesBy`
 (`app/utils/batchUtils.ts`, One intent path).
+
+Implemented 2026-10-18: `OrderAuditChangeSchema` and `OrderAuditDataSchema` in `useBookingValidation.ts`,
+`createOrderAuditData` and `readOrderAudit`, one snapshot builder `orderSnapshotOf` for every repository write in
+`financesRepository.ts`; `recordCancellation` takes LEAVE for a waiting-list leave; "?" is
+`BOOKING_WORDS.unknownHousehold`. Specs: `useBookingValidation.unit`, `useBooking.nuxt` (the replay),
+`scaffoldPrebookings.unit`, `waitlistAssignment.unit`; the e2e specs named in the inventory row.
 
 The legacy cancellations on upcoming dinners hold no guest ticket in production, dev or local, so an unknown guest flag
 reads as a regular ticket. The count re-runs after the 0.9 deploy.
@@ -743,7 +749,7 @@ sign-off.
 | ADR-007 | `storeAsyncData` and `apiRequest`, rules 7 to 10 |
 | ADR-009 | rule 7, what a delete returns |
 | ADR-010 | rule 6, a deprecated column's value; rule 7, `portions` filled on read |
-| ADR-011 | at One intent path's landing, the waiting-list writes carry an OrderHistory row |
+| ADR-011 | at One intent path's landing, the waiting-list writes carry an OrderHistory row; the `auditData` format `{change, orderSnapshot, source?}` (One audit format for the order history) |
 | ADR-012 | conditional spread in `where`, `Prisma.skip` in `data` |
 | ADR-014 | `writeBatchOrEach`; at One intent path's landing, `linesBy` |
 | ADR-015 | the waitlist clear in daily maintenance; the scaffold's idempotency through the generator; `sellTicketsToWaitlist` |

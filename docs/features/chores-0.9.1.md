@@ -541,7 +541,7 @@ order-history route reads the households its creation rows name because the crea
 #### Solution
 
 `RouteIdSchema` / `RouteIdSchema.optional()` in the six query schemas; one `fallback(invalid)` in `useQueryParam`;
-`createOrders` writes `householdShortname` into the creation audit row, `readAuditTicket` reads it from both shapes, and a convergent backfill fills the existing rows, after which the
+`createOrders` writes `householdShortname` into the creation audit row, `readOrderAudit` reads it from the new format and the legacy shapes, and a convergent backfill fills the existing rows, after which the
 households read in `chef/dinner/[id]/order-history.get.ts` goes. The users store gains the two flags with a case each; the two composables import the enum from `useCoreValidation`;
 the three chef routes log one `console.info` on success.
 

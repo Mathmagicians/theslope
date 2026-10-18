@@ -569,9 +569,11 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
   const annaExpected = OrderFactory.defaultBookingResult({inhabitantId: anna!.id, inhabitantName: anna!.name, dinnerEventId, dinnerMode: DinnerMode.DINEIN, action: Action.BOOK})
   const annaOrder = OrderFactory.defaultOrder('anna', {inhabitantId: anna!.id, dinnerEventId, dinnerMode: DinnerMode.TAKEAWAY, state: OrderStateSchema.enum.BOOKED})
   type Mounted = Awaited<ReturnType<typeof mountMemberForm>>
-  const ticketsOf = (wrapper: Mounted, inhabitantId: number) => wrapper.findAll('tr')
-    .find(row => row.find(`[data-testid="inhabitant-${inhabitantId}-toggle"]`).exists())!
-    .findAllComponents(DinnerTicket)
+  // The tickets of an inhabitant's row: on a phone under the name, from md in their own column
+  const ticketsOf = (wrapper: Mounted, inhabitantId: number) => {
+    const row = wrapper.findAll('tr').find(candidate => candidate.find(`[data-testid="inhabitant-${inhabitantId}-toggle"]`).exists())!
+    return wrapper.findAllComponents(DinnerTicket).filter(ticket => row.element.contains(ticket.element))
+  }
 
   it.each([
     {desc: 'a row without an order shows the expected mode ghosted', orders: [], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.DINEIN, expected: true}, legend: true},
@@ -587,9 +589,12 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
     }))
     // The table's loading bar runs until the read lands
     await vi.waitFor(() => expect(isTableLoading(wrapper)).toBe(false))
-    ticketsOf(wrapper, anna!.id).forEach(ticket => expect(ticket.props()).toMatchObject(annaTicket))
+    const ticketProps = (inhabitantId: number) => ticketsOf(wrapper, inhabitantId).map(ticket => ticket.props())
+    expect(ticketProps(anna!.id)).not.toHaveLength(0)
+    ticketProps(anna!.id).forEach(props => expect(props).toMatchObject(annaTicket))
     // Bo has no result: the run leaves him out, as it leaves out a person who cancelled the dinner
-    ticketsOf(wrapper, bo!.id).forEach(ticket => expect(ticket.props()).toMatchObject({dinnerMode: DinnerMode.NONE, expected: false}))
+    expect(ticketProps(bo!.id)).not.toHaveLength(0)
+    ticketProps(bo!.id).forEach(props => expect(props).toMatchObject({dinnerMode: DinnerMode.NONE, expected: false}))
     expect(findByTestId(wrapper, 'dinner-mode-legend-expected').exists()).toBe(legend)
   })
 })

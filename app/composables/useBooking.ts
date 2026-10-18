@@ -1377,9 +1377,9 @@ export const useBooking = () => {
     // A booking row without its order's id keys its ticket by its own negative row id, until a later row names the order
     const isUnread = (ticket: HeldTicket): boolean => ticket.key < 0
     /**
-     * The held ticket a row moves: the ticket of its order id; for a row that books none, a ticket whose order id the
-     * history never read, on the row's dinner and in its household (its person when the row names no household), the
-     * same price row first, then the same person
+     * The held ticket a row moves: the ticket of its order id. A booking without one books its own; any other row takes
+     * a ticket whose order id the history never read, on the row's dinner and in its household (its person when the row
+     * names no household), the same price row first, then the same person
      */
     const findHeld = (held: HeldTickets, audit: OrderAudit): HeldTicket | undefined => {
         const byOrderId = audit.orderId === null ? undefined : held.get(audit.orderId)

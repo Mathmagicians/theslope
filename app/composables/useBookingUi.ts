@@ -3,8 +3,9 @@
  *
  * Client-only presentation of booking/dinner state: deadline badges, chef step
  * icons, order state badges, the action preview shown before a booking is saved
- * and the booking result reported after it. Never imported by server code — it
- * depends on the design system, which is client-only.
+ * (the server's dry run, read through useScaffoldPreview) and the booking result
+ * reported after it. Never imported by server code — it depends on the design
+ * system, which is client-only.
  *
  * Domain logic (step machine, deadlines, bucket resolution) stays in useBooking.
  */
