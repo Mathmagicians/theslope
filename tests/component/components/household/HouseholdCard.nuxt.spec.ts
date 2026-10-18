@@ -80,6 +80,16 @@ describe.each(VIEWPORTS)('HouseholdCard on $viewport', ({isMd}) => {
         const wrapper = await mountCard(isMd)
         expect(wrapper.findComponent({name: 'UAvatarGroup'}).props('max')).toBe(COMPONENTS.avatar.powerRowMax)
     })
+
+    it('the hint\'s line of dinner modes binds the hint modes token, and each mode holds its glyph and its word in a hint mode element', async () => {
+        const wrapper = await mountCard(isMd)
+        const line = wrapper.find('strong').element.parentElement!
+        const modes = [...line.children].filter(element => element.tagName !== 'STRONG')
+
+        expect(line.getAttribute('class')).toBe(COMPONENTS.householdCard.hintModes)
+        expect(modes.map(mode => mode.getAttribute('class'))).toEqual(DinnerModeSchema.options.map(() => COMPONENTS.householdCard.hintMode))
+        modes.forEach(mode => expect(mode.textContent!.trim()).not.toBe(''))
+    })
 })
 
 // A preference change previews what Gem does through the server's dry run, one person or every member in power mode

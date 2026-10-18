@@ -282,6 +282,12 @@ describe('DinnerBookingForm', () => {
     })
   })
 
+  // The power row's faces set the name column's width: a household's faces past the power row's max fold into the count
+  it('the power row\'s face group stops at the power row\'s max', async () => {
+    const wrapper = await mountMemberForm(true)
+    expect(wrapper.findAllComponents({name: 'UAvatarGroup'}).map(group => group.props('max'))).toEqual([COMPONENTS.avatar.powerRowMax])
+  })
+
   // While the dinner's bookings reload, UTable runs its loading bar over the household's rows
   describe('while the bookings of the dinner reload', () => {
     // The expected bookings' read runs the same bar; it lands at once here

@@ -75,6 +75,7 @@
  *   A ticket for sale after the deadline keeps the claim: the cell toggles through the eating modes as before.
  *   The power cell reaches every place the household holds on the dinner, a queued guest's too (it has no row): the
  *   wishes count in its consensus, as an expected cell counts its expected mode, and its Ingen leaves the places.
+ *   Its draft on a queued cell shows in place of the wish, unghosted with the modified accent, under the hourglass.
  *
  * WHILE THE BOOKINGS OF THE RANGE LOAD (`loading`, a new range or a save's re-read): UTable's loading bar runs under
  * the column headers and the rows stay; the lock chips wait, they count the household's orders:
@@ -338,11 +339,12 @@ const guestAddRowIndex = computed(() =>
 
 // Handle + button click: set event context and expand row
 const handleGuestAdd = (eventId: number) => {
+  // Toggle expansion - the open dinner's chevron collapses, another dinner's switches the form to it
+  const isOpenDinner = activeGuestEventId.value === eventId
   activeGuestEventId.value = eventId
-  // Toggle expansion - if already expanded for same event, collapse
   const rowIdx = guestAddRowIndex.value
   if (rowIdx >= 0) {
-    if (expanded.value[rowIdx] && activeGuestEventId.value === eventId) {
+    if (expanded.value[rowIdx] && isOpenDinner) {
       expanded.value = {}
     } else {
       expanded.value = {[rowIdx]: true}
@@ -850,18 +852,19 @@ const getEventSummary = (eventId: number) => {
           :name="`power-${event.id}`"
           @update:model-value="(mode: DinnerMode) => handlePowerUpdate(event.id, mode)"
         />
-        <!-- Inhabitant row, queued: the wish ghosted under the hourglass, read-only -->
+        <!-- Inhabitant row, queued: the wish ghosted under the hourglass until a draft takes its place, read-only -->
         <UChip
           v-else-if="row.original.rowType === 'inhabitant' && row.original.inhabitant && getWaitlistEntryForCell(row.original.inhabitant.id, event.id)"
           v-bind="COMPONENTS.waitlist.chip"
           :data-testid="`grid-waitlist-${row.original.inhabitant.id}-${event.id}`"
         >
           <DinnerModeSelector
-            :model-value="getWaitlistEntryForCell(row.original.inhabitant.id, event.id)!.order.dinnerMode"
+            :model-value="getCellMode(row.original.inhabitant.id, event.id)"
             :form-mode="FORM_MODES.VIEW"
             :size="SIZES.standard"
             :name="`cell-${row.original.inhabitant.id}-${event.id}`"
-            ghost
+            :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
+            :ghost="!isCellModified(row.original.inhabitant.id, event.id)"
           />
           <template #content>
             <UIcon :name="ICONS.waitlist" :class="COMPONENTS.waitlist.chipIcon" />

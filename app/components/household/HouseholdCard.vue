@@ -453,10 +453,10 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
             <span>Ændringer gemmes når du trykker på GEM, og påvirker fremtidige bookinger</span>
             <span :class="COMPONENTS.householdCard.hintModes">
               <strong>Valg for fællesspisning:</strong>
-              <UIcon :name="ICONS.dinner" :class="COMPONENTS.householdCard.hintIcon" /> Fællesspisning
-              <UIcon :name="ICONS.clock" :class="COMPONENTS.householdCard.hintIcon" /> Sen spisning
-              <UIcon :name="ICONS.takeaway" :class="COMPONENTS.householdCard.hintIcon" /> Takeaway
-              <UIcon :name="ICONS.noDinner" :class="COMPONENTS.householdCard.hintIcon" /> Ingen spisning
+              <span :class="COMPONENTS.householdCard.hintMode"><UIcon :name="ICONS.dinner" :class="COMPONENTS.householdCard.hintIcon" /> Fællesspisning</span>
+              <span :class="COMPONENTS.householdCard.hintMode"><UIcon :name="ICONS.clock" :class="COMPONENTS.householdCard.hintIcon" /> Sen spisning</span>
+              <span :class="COMPONENTS.householdCard.hintMode"><UIcon :name="ICONS.takeaway" :class="COMPONENTS.householdCard.hintIcon" /> Takeaway</span>
+              <span :class="COMPONENTS.householdCard.hintMode"><UIcon :name="ICONS.noDinner" :class="COMPONENTS.householdCard.hintIcon" /> Ingen spisning</span>
             </span>
           </div>
         </template>

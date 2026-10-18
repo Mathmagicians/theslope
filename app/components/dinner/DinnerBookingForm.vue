@@ -733,6 +733,7 @@ const hasExpectedRow = computed(() => tableData.value.some(row => row.expected))
               :inhabitants="row.original.inhabitants"
               :show-names="false"
               :link-to-profile="false"
+              :max="COMPONENTS.avatar.powerRowMax"
               compact
               label="beboere"
             />

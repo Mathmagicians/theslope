@@ -976,14 +976,14 @@ export const COMPONENTS = {
     /**
      * Inhabitant avatars (`UserListItem`): the server renders before the breakpoint is known, so
      * `size` is one value everywhere, `max` too but for the compact household list item (`listItemMax`) and the
-     * preferences power row (`powerRowMax`), and `fit` steps the avatar up a size from md.
+     * power rows (`powerRowMax`), and `fit` steps the avatar up a size from md.
      * `fit` goes on each `UAvatar` and on the group's `ui.base`, which reaches the overflow count.
      */
     avatar: {
         max: 5,
         // The compact household list item shows three faces before the overflow count
         listItemMax: 3,
-        // The preferences power row shows three faces before the overflow count, so the members table fits a phone
+        // A power row (the household preferences, the booking form) shows three faces before the overflow count, so its table fits a phone
         powerRowMax: 3,
         regular: {size: 'md' as const, fit: 'md:size-9 md:text-lg'},
         compact: {size: 'sm' as const, fit: 'md:size-8 md:text-base'}
@@ -1141,7 +1141,9 @@ export const COMPONENTS = {
         saveIconIdle: 'group-hover:animate-pulse group-hover:scale-125 group-hover:rotate-12 group-active:rotate-[360deg]',
         hintList: 'flex flex-col gap-1',
         hintLine: 'flex items-center gap-1',
-        hintModes: 'flex items-center gap-1 mt-1',
+        hintModes: 'flex flex-wrap items-center gap-1 mt-1',
+        // One dinner mode in the hint: its glyph and its word wrap as one
+        hintMode: 'inline-flex items-center gap-1',
         hintIcon: 'size-4'
     },
 

@@ -62,6 +62,11 @@ documentar drives the user's sign-off.
 8. The table is a walk through the app: the decisions to answer in chat first, then one block per route in the order
    a session visits them (the bookings grid, the dinner page, the household members, the chef page, the README), each
    block headed by its route and its count, so the user opens a page once and ticks its checks.
+9. An authorization is specific: the user's words name the item and the choice ("#3 a", "y to the toast block").
+   A question, a request for context or an explanation, "check it against the ADR", or a yes to a neighbouring item is
+   no authorization. What goes to the orchestrator is the user's words verbatim with the number, as a question when the
+   user asked one; "Decision from the user" is written only when the user wrote the choice. When the words are not a
+   plain choice, the documentar asks the user back ("#3: a or b?") before anything is recorded or relayed.
 
 ## Ship matches the spec
 
