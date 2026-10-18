@@ -2,18 +2,18 @@
 import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS, lockedDinnerSupply, isTableLoading} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, registerScaffoldEndpoint, VIEWPORTS, lockedDinnerSupply, isTableLoading} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel, closedForCancellation} from '~/composables/useBookingUi'
+import {ACTION_WORDS, MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel, guestSaveLabel, closedForCancellation, formatPreviewLines, previewSaveOutcome} from '~/composables/useBookingUi'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
-import {formatDate} from '~/utils/date'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
-import type {DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
+import type {BookingAction, BookingResult, DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 import type {HouseholdDetail, UserDetail} from '~/composables/useCoreValidation'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -72,6 +72,8 @@ registerEmptyStoreEndpoints()
 registerEndpoint('/api/admin/allergy-type', () => [])
 registerEndpoint(`/api/admin/household/${householdWithInhabitants.id}`, () => householdWithInhabitants)
 registerEndpoint(`/api/admin/household/${strangerHousehold.id}`, () => strangerHousehold)
+// The previews and the expected bookings read the scaffold's dry run
+const scaffold = registerScaffoldEndpoint()
 
 const mountForm = (props: Record<string, unknown>, isMd?: boolean) => mountWithTooltipProvider(DinnerBookingForm, {props, isMd})
 
@@ -88,6 +90,7 @@ enableAutoUnmount(afterEach)
 beforeEach(() => {
   resetStores()
   session.user.value = null
+  scaffold.reset()
 })
 
 describe('DinnerBookingForm', () => {
@@ -281,10 +284,11 @@ describe('DinnerBookingForm', () => {
 
   // While the dinner's bookings reload, UTable runs its loading bar over the household's rows
   describe('while the bookings of the dinner reload', () => {
+    // The expected bookings' read runs the same bar; it lands at once here
     it.each([true, false])('GIVEN loading=%s THEN the table receives it, and the household\'s rows stay', async (loading) => {
       const wrapper = await mountMemberForm(true, {loading})
 
-      expect(isTableLoading(wrapper)).toBe(loading)
+      await vi.waitFor(() => expect(isTableLoading(wrapper)).toBe(loading))
       expect(findByTestId(wrapper, 'power-power-mode-toggle').exists()).toBe(true)
       expect(wrapper.findAllComponents(DinnerTicket).length > 0).toBe(true)
     })
@@ -323,12 +327,13 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
     wrapper.findAllComponents({name: 'DinnerModeSelector'}).find(selector => selector.props('name') === `inhabitant-${inhabitantId}-mode-edit`)!
 
   it('GIVEN no ticket WHEN the member picks a mode THEN the save previews the queue and sends the mode at the row\'s ticket price through the one booking path', async () => {
+    scaffold.answers.preview = () => OrderFactory.defaultScaffoldOrdersResponse({results: [OrderFactory.defaultBookingResult({inhabitantId: anna!.id, inhabitantName: anna!.name, dinnerEventId, dinnerMode: DinnerMode.TAKEAWAY, action: Action.QUEUE})]})
     const wrapper = await mountClosed({waitlistEntries: [boQueued]})
     await clickByTestId(wrapper, `inhabitant-${anna!.id}-toggle`)
     await clickByTestId(wrapper, `inhabitant-${anna!.id}-mode-edit-${DinnerMode.TAKEAWAY}`)
 
     const save = findByTestId(wrapper, `inhabitant-${anna!.id}-save`)
-    expect(save.text()).toContain('Skriv på venteliste')
+    await vi.waitFor(() => expect(save.text()).toContain('Skriv på venteliste'))
     await save.trigger('click')
 
     expect(emittedSaves(wrapper)).toEqual([[[expect.objectContaining({
@@ -438,91 +443,154 @@ describe('DinnerBookingForm on a queued guest row', () => {
   })
 })
 
-describe('DinnerBookingForm previews the outcome of a save by the supply', () => {
+// Every preview is the server's dry run of the save: the save's request with ?preview=true, its reply under the dinner's day
+describe('DinnerBookingForm previews a save through the server\'s dry run', () => {
   const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
-  const anna = householdWithInhabitants.inhabitants[0]!
-
-  // Anna is an adult: the tickets for sale are adult tickets
-  const mountRow = (canModify: boolean, ticketsForSale: number) => mountMemberForm(canModify, {releasedTicketCounts: {
-    ...EMPTY_RELEASED_TICKET_COUNTS, total: ticketsForSale, formatted: `${ticketsForSale}V`, byType: {[TicketTypeSchema.enum.ADULT]: ticketsForSale}
-  }})
-
-  it.each([
-    {desc: 'before the deadline', canModify: true, ticketsForSale: 0, label: 'Book'},
-    {desc: 'after the deadline, a ticket for sale', canModify: false, ticketsForSale: 1, label: 'Køb billet'},
-    {desc: 'after the deadline, nothing for sale', canModify: false, ticketsForSale: 0, label: 'Skriv på venteliste'}
-  ])('$desc: a row without a ticket saves as "$label"', async ({canModify, ticketsForSale, label}) => {
-    const wrapper = await mountRow(canModify, ticketsForSale)
-    await clickByTestId(wrapper, `inhabitant-${anna.id}-toggle`)
-    await clickByTestId(wrapper, `inhabitant-${anna.id}-mode-edit-${DinnerModeSchema.enum.DINEIN}`)
-
-    expect(findByTestId(wrapper, `inhabitant-${anna.id}-save`).text()).toContain(label)
+  const DinnerMode = DinnerModeSchema.enum
+  const [anna, bo] = householdWithInhabitants.inhabitants
+  const {dinnerEvent} = baseProps
+  const householdOrder = householdWithInhabitants.inhabitants.map(({id}) => id)
+  const adultPrice = baseProps.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+  const resultOf = (action: BookingAction, overrides: Partial<BookingResult> = {}): BookingResult => OrderFactory.defaultBookingResult({
+    inhabitantId: anna!.id, inhabitantName: anna!.name, dinnerEventId: dinnerEvent.id, action, ...overrides
   })
-
-  // The guest form opens on Voksen; its preview lines name the guests per outcome and its button names the guests
-  const guestPreview = (wrapper: Awaited<ReturnType<typeof mountRow>>) =>
-    wrapper.findComponent(GuestBookingForm).findComponent(ActionPreview).props('items').map(item => item.action)
-
-  it.each([
-    {desc: 'nothing for sale', ticketsForSale: 0, action: Action.QUEUE},
-    {desc: 'an adult ticket for sale', ticketsForSale: 1, action: Action.BUY}
-  ])('after the deadline with $desc: the guest form opens on Voksen, previews $action and saves as "Tilmeld gæst"', async ({ticketsForSale, action}) => {
-    const wrapper = await mountRow(false, ticketsForSale)
-    await clickByTestId(wrapper, 'guest-add-guest-toggle')
-
-    expect(guestPreview(wrapper)).toEqual([action])
-    expect(findByTestId(wrapper, 'guest-form-save').text()).toContain('Tilmeld gæst')
-  })
-
-  // The guests of one booker and ticket type are one group per outcome, named with the count
-  it('after the deadline with 3V 1B for sale: ten adult guests preview three buys and seven on the waiting list, and save as "Tilmeld gæster"', async () => {
-    const wrapper = await mountMemberForm(false, {releasedTicketCounts: {
-      ...EMPTY_RELEASED_TICKET_COUNTS, total: 4, formatted: '3V 1B', byType: {[TicketTypeSchema.enum.ADULT]: 3, [TicketTypeSchema.enum.CHILD]: 1}
-    }})
-    await clickByTestId(wrapper, 'guest-add-guest-toggle')
-    await wrapper.findComponent(GuestBookingForm).find('input[name="count"]').setValue(10)
-
-    expect(guestPreview(wrapper)).toEqual([Action.BUY, Action.QUEUE])
-    expect(wrapper.findComponent(GuestBookingForm).findComponent(ActionPreview).props('items').map(item => item.name))
-      .toEqual([expect.stringMatching(/\(Voksen ×3\)$/), expect.stringMatching(/\(Voksen ×7\)$/)])
-    expect(findByTestId(wrapper, 'guest-form-save').text()).toContain('Tilmeld gæster')
-  })
-})
-
-describe('DinnerBookingForm settles a claim against the tickets for sale of the row\'s ticket type', () => {
-  const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
-  const TicketType = TicketTypeSchema.enum
-  const anna = householdWithInhabitants.inhabitants[0]!
-  // Anna is a child on the dinner's day: her row claims a child ticket
-  const household = {
-    ...householdWithInhabitants,
-    inhabitants: [{...anna, birthDate: TicketFactory.birthDateForTicketType(TicketType.CHILD, baseProps.dinnerEvent.date)}, ...householdWithInhabitants.inhabitants.slice(1)]
+  const answer = (...results: BookingResult[]) => OrderFactory.defaultScaffoldOrdersResponse({results})
+  const previews = () => scaffold.sent.filter(({body}) => body.orders.length > 0)
+  type Mounted = Awaited<ReturnType<typeof mountMemberForm>>
+  const rowPreview = (wrapper: Mounted) => wrapper.findComponent(ActionPreview)
+  const guestPreview = (wrapper: Mounted) => wrapper.findComponent(GuestBookingForm).findComponent(ActionPreview)
+  const openRow = async (wrapper: Mounted, inhabitantId: number, dinnerMode: DinnerMode) => {
+    await clickByTestId(wrapper, `inhabitant-${inhabitantId}-toggle`)
+    await clickByTestId(wrapper, `inhabitant-${inhabitantId}-mode-edit-${dinnerMode}`)
   }
 
   it.each([
-    {desc: 'only an adult ticket', ticketType: TicketType.ADULT, label: 'Skriv på venteliste'},
-    {desc: 'a child ticket', ticketType: TicketType.CHILD, label: 'Køb billet'}
-  ])('GIVEN $desc for sale WHEN a child row picks a mode THEN it saves as "$label"', async ({ticketType, label}) => {
-    const wrapper = await mountMemberForm(false, {household, releasedTicketCounts: {...EMPTY_RELEASED_TICKET_COUNTS, total: 1, byType: {[ticketType]: 1}}})
-    await clickByTestId(wrapper, `inhabitant-${anna.id}-toggle`)
-    await clickByTestId(wrapper, `inhabitant-${anna.id}-mode-edit-${DinnerModeSchema.enum.DINEIN}`)
+    {who: 'a member', adminBypass: false},
+    {who: 'an admin', adminBypass: true}
+  ])('WHEN $who picks a mode THEN the row\'s desired order goes to the dry run and its reply renders under the dinner\'s day', async ({adminBypass}) => {
+    const reply = answer(resultOf(Action.BOOK, {dinnerMode: DinnerMode.TAKEAWAY}))
+    scaffold.answers.preview = () => reply
+    const wrapper = await mountMemberForm(true, {adminBypass})
+    await openRow(wrapper, anna!.id, DinnerMode.TAKEAWAY)
 
-    expect(findByTestId(wrapper, `inhabitant-${anna.id}-save`).text()).toContain(label)
+    await vi.waitFor(() => expect(rowPreview(wrapper).props('days')).toEqual(formatPreviewLines(reply.scaffoldResult, [dinnerEvent], householdOrder)))
+    expect(previews().at(-1)).toEqual({
+      query: {adminBypass: String(adminBypass), preview: 'true'},
+      body: {
+        householdId: householdWithInhabitants.id,
+        dinnerEventIds: [dinnerEvent.id],
+        orders: [expect.objectContaining({inhabitantId: anna!.id, dinnerMode: DinnerMode.TAKEAWAY, ticketPriceId: adultPrice.id})]
+      }
+    })
+  })
+
+  it.each([Action.BOOK, Action.BUY, Action.QUEUE, Action.CHANGE_MODE])('GIVEN the dry run answers %s THEN the row saves as that outcome', async (action) => {
+    scaffold.answers.preview = () => answer(resultOf(action))
+    const wrapper = await mountMemberForm(false)
+    await openRow(wrapper, anna!.id, DinnerMode.DINEIN)
+
+    await vi.waitFor(() => expect(findByTestId(wrapper, `inhabitant-${anna!.id}-save`).text()).toContain(bookingSaveLabel(previewSaveOutcome(answer(resultOf(action)).scaffoldResult))))
+  })
+
+  it('WHILE the dry run works THEN the row shows the loader in place of the lines, and the reply\'s lines once it lands', async () => {
+    let land: () => void = () => {}
+    const landed = new Promise<void>(resolve => {
+      land = resolve
+    })
+    scaffold.answers.preview = async () => {
+      await landed
+      return answer(resultOf(Action.BOOK))
+    }
+    const wrapper = await mountMemberForm(true)
+    await openRow(wrapper, anna!.id, DinnerMode.DINEIN)
+
+    await vi.waitFor(() => expect(rowPreview(wrapper).props('pending')).toBe(true))
+    land()
+    await vi.waitFor(() => expect(rowPreview(wrapper).props('pending')).toBe(false))
+    expect(rowPreview(wrapper).props('days')).toHaveLength(1)
+  })
+
+  it('GIVEN no row open THEN no preview is asked for', async () => {
+    const wrapper = await mountMemberForm(true)
+    await vi.waitFor(() => expect(scaffold.sent.length).toBeGreaterThan(0))
+
+    expect(previews()).toEqual([])
+    expect(rowPreview(wrapper).exists()).toBe(false)
+  })
+
+  // The guest form opens on Voksen; its preview lines name the guests per outcome and its button names the guests
+  it.each([
+    {desc: 'nothing for sale', action: Action.QUEUE},
+    {desc: 'an adult ticket for sale', action: Action.BUY}
+  ])('after the deadline with $desc: the guest form sends the guest on Voksen to the dry run, previews $action and saves as one guest', async ({action}) => {
+    scaffold.answers.preview = () => answer(resultOf(action, {isGuestTicket: true}))
+    const wrapper = await mountMemberForm(false)
+    await clickByTestId(wrapper, 'guest-add-guest-toggle')
+
+    await vi.waitFor(() => expect(guestPreview(wrapper).props('days').flatMap(day => day.lines.map(line => line.action))).toEqual([action]))
+    expect(guestPreview(wrapper).props('title')).toBe(BOOKING_WORDS.preview.guestTitle)
+    expect(previews().at(-1)!.body.orders).toEqual([expect.objectContaining({inhabitantId: anna!.id, isGuestTicket: true, ticketPriceId: adultPrice.id})])
+    expect(findByTestId(wrapper, 'guest-form-save').text()).toContain(guestSaveLabel(1))
+  })
+
+  // The guests of one booker and ticket type are one group per outcome, named with the count
+  it('ten adult guests whose dry run buys three and queues seven preview a line each, and save as guests', async () => {
+    const guests = (action: BookingAction, count: number) => Array.from({length: count}, () => resultOf(action, {isGuestTicket: true}))
+    scaffold.answers.preview = () => answer(...guests(Action.BUY, 3), ...guests(Action.QUEUE, 7))
+    const wrapper = await mountMemberForm(false)
+    await clickByTestId(wrapper, 'guest-add-guest-toggle')
+    await wrapper.findComponent(GuestBookingForm).find('input[name="count"]').setValue(10)
+
+    await vi.waitFor(() => expect(guestPreview(wrapper).props('days').flatMap(day => day.lines.map(line => line.name)))
+      .toEqual([expect.stringMatching(/\(Voksen ×3\)$/), expect.stringMatching(/\(Voksen ×7\)$/)]))
+    expect(previews().at(-1)!.body.orders).toHaveLength(10)
+    expect(findByTestId(wrapper, 'guest-form-save').text()).toContain(guestSaveLabel(10))
+  })
+
+  it('WHEN a queued inhabitant picks another mode THEN the entry goes to the dry run, its requeue names the new mode on the waiting list and the save reads its outcome', async () => {
+    const QUEUED_ENTRY_ID = 31
+    const boQueued = WaitlistFactory.defaultEntry({id: QUEUED_ENTRY_ID, inhabitantId: bo!.id, dinnerEventId: dinnerEvent.id, position: 2, dinnerMode: DinnerMode.TAKEAWAY})
+    scaffold.answers.preview = () => answer(resultOf(Action.REQUEUE, {inhabitantId: bo!.id, inhabitantName: bo!.name, dinnerMode: DinnerMode.DINEINLATE}))
+    const wrapper = await mountMemberForm(false, {waitlistEntries: [boQueued]})
+    await openRow(wrapper, bo!.id, DinnerMode.DINEINLATE)
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain(`${bo!.name} ${ACTION_WORDS[Action.REQUEUE].preview({mode: MODE_WORDS[DinnerMode.DINEINLATE].label})}`))
+    expect(findByTestId(wrapper, `inhabitant-${bo!.id}-save`).text()).toContain(bookingSaveLabel(Action.REQUEUE))
+    expect(previews().at(-1)!.body.orders).toEqual([expect.objectContaining({inhabitantId: bo!.id, dinnerMode: DinnerMode.DINEINLATE, waitlistEntryId: QUEUED_ENTRY_ID})])
   })
 })
 
-describe('DinnerBookingForm previews a requeue', () => {
-  const {DinnerModeSchema} = useBookingValidation()
-  const bo = householdWithInhabitants.inhabitants[1]!
-  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo.id, dinnerEventId: baseProps.dinnerEvent.id, position: 2, dinnerMode: DinnerModeSchema.enum.TAKEAWAY})
+// A row without an order shows what the scaffold will do: the dry run with no orders answers the expected bookings
+describe('DinnerBookingForm shows the bookings the preferences give a row without an order', () => {
+  const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+  const DinnerMode = DinnerModeSchema.enum
+  const [anna, bo] = householdWithInhabitants.inhabitants
+  const dinnerEventId = baseProps.dinnerEvent.id
+  const annaExpected = OrderFactory.defaultBookingResult({inhabitantId: anna!.id, inhabitantName: anna!.name, dinnerEventId, dinnerMode: DinnerMode.DINEIN, action: Action.BOOK})
+  const annaOrder = OrderFactory.defaultOrder('anna', {inhabitantId: anna!.id, dinnerEventId, dinnerMode: DinnerMode.TAKEAWAY, state: OrderStateSchema.enum.BOOKED})
+  type Mounted = Awaited<ReturnType<typeof mountMemberForm>>
+  const ticketsOf = (wrapper: Mounted, inhabitantId: number) => wrapper.findAll('tr')
+    .find(row => row.find(`[data-testid="inhabitant-${inhabitantId}-toggle"]`).exists())!
+    .findAllComponents(DinnerTicket)
 
-  it('WHEN a queued inhabitant picks another mode THEN the save reads Opdater and the preview names the new mode on the waiting list', async () => {
-    const wrapper = await mountMemberForm(false, {waitlistEntries: [boQueued]})
-    await clickByTestId(wrapper, `inhabitant-${bo.id}-toggle`)
-    await clickByTestId(wrapper, `inhabitant-${bo.id}-mode-edit-${DinnerModeSchema.enum.DINEINLATE}`)
+  it.each([
+    {desc: 'a row without an order shows the expected mode ghosted', orders: [], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.DINEIN, expected: true}, legend: true},
+    {desc: 'an order supersedes the expected booking', orders: [annaOrder], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.TAKEAWAY, expected: false}, legend: false},
+    {desc: 'a run that expects nothing leaves the row on Ingen', orders: [], expected: [], annaTicket: {dinnerMode: DinnerMode.NONE, expected: false}, legend: false}
+  ])('$desc', async ({orders, expected, annaTicket, legend}) => {
+    scaffold.answers.expected = () => OrderFactory.defaultScaffoldOrdersResponse({results: expected})
+    const wrapper = await mountMemberForm(true, {orders})
 
-    expect(findByTestId(wrapper, `inhabitant-${bo.id}-save`).text()).toContain(bookingSaveLabel(Action.REQUEUE))
-    expect(wrapper.text()).toContain(`${bo.name} ændrer spisemåde til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label} (venteliste): ${formatDate(baseProps.dinnerEvent.date)}`)
+    await vi.waitFor(() => expect(scaffold.sent.find(({body}) => body.orders.length === 0)).toEqual({
+      query: {adminBypass: 'false', preview: 'true'},
+      body: {householdId: householdWithInhabitants.id, dinnerEventIds: [dinnerEventId], orders: []}
+    }))
+    // The table's loading bar runs until the read lands
+    await vi.waitFor(() => expect(isTableLoading(wrapper)).toBe(false))
+    ticketsOf(wrapper, anna!.id).forEach(ticket => expect(ticket.props()).toMatchObject(annaTicket))
+    // Bo has no result: the run leaves him out, as it leaves out a person who cancelled the dinner
+    ticketsOf(wrapper, bo!.id).forEach(ticket => expect(ticket.props()).toMatchObject({dinnerMode: DinnerMode.NONE, expected: false}))
+    expect(findByTestId(wrapper, 'dinner-mode-legend-expected').exists()).toBe(legend)
   })
 })
 

@@ -3,7 +3,7 @@ import {createError} from 'h3'
 import {useBookingValidation, type CreateOrdersResult, type DinnerEventDetail, type TicketSale, type TicketType, type WaitlistJoined} from '~/composables/useBookingValidation'
 import {
     PlacementRecovery, type GrabbedWaitlistEntry, type TicketWaitlistCreate, type TicketWaitlistDisplay, type WaitlistAssigned,
-    type WaitlistAssignmentResult, type WaitlistPlacementOutcomes
+    type WaitlistAssignmentResult, type WaitlistAuditContext, type WaitlistPlacementOutcomes
 } from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {createOrders, claimReleasedOrder, findReleasedOrderId, fetchDinnerEvent, type ClaimedOrder} from '~~/server/data/financesRepository'
@@ -51,13 +51,9 @@ const forWaitlist = async (d1Client: D1Database, dinner: DinnerEventDetail | nul
 export const loadDinner = async (d1Client: D1Database, dinnerEventId: number): Promise<DinnerForWaitlist> =>
     forWaitlist(d1Client, await fetchDinnerEvent(d1Client, dinnerEventId), dinnerEventId)
 
-/** A claim that found no ticket for sale: the wish joins the dinner's queue at its frozen price */
-export async function joinWaitlist(
-    d1Client: D1Database, request: TicketWaitlistCreate, dinner: Pick<DinnerForWaitlist, 'state' | 'ticketPrices'>
-): Promise<{entry: TicketWaitlistDisplay, position: number, joined: WaitlistJoined}> {
-    const {positionOf, portionNeed, portionsOfEntryFor, ticketTypeOfEntry} = useWaitlist()
+// A wish joins the queue of a dinner still to come, booked by a member: the member it returns
+const joinerOf = (request: TicketWaitlistCreate, dinner: Pick<DinnerForWaitlist, 'state'>): number => {
     const {DinnerStateSchema} = useBookingValidation()
-    // A queue exists for a dinner still to come
     if (dinner.state === DinnerStateSchema.enum.CONSUMED || dinner.state === DinnerStateSchema.enum.CANCELLED) {
         throw createError({statusCode: 400, message: `Dinner event ${request.dinnerEventId} is ${dinner.state}`})
     }
@@ -65,17 +61,34 @@ export async function joinWaitlist(
     if (!bookedByUserId) {
         throw createError({statusCode: 400, message: `A waiting entry on dinner ${request.dinnerEventId} needs its booking member`})
     }
-    const entry = await createWaitlistEntry(d1Client, request)
-    const queue = await fetchWaitlistForDinners(d1Client, [request.dinnerEventId])
-    const position = positionOf(queue, entry.id, ticketTypeOfEntry(dinner.ticketPrices)) ?? queue.length
+    return bookedByUserId
+}
 
+/** A claim that found no ticket for sale: the wish joins the dinner's queue at its frozen price */
+export async function joinWaitlist(
+    d1Client: D1Database, request: TicketWaitlistCreate, dinner: Pick<DinnerForWaitlist, 'state' | 'ticketPrices'>, audit: WaitlistAuditContext
+): Promise<{entry: TicketWaitlistDisplay, position: number, joined: WaitlistJoined}> {
+    const bookedByUserId = joinerOf(request, dinner)
+    const entry = await createWaitlistEntry(d1Client, request, audit)
+    const {position, joined} = useWaitlist().joinedOf(await fetchWaitlistForDinners(d1Client, [request.dinnerEventId]), entry, dinner.ticketPrices, bookedByUserId)
     console.info(`${LOG} Inhabitant ${request.inhabitantId} is #${position} in its ticket type's line on dinner ${request.dinnerEventId}`)
-    const joined: WaitlistJoined = {
-        dinnerEventId: request.dinnerEventId, inhabitantId: request.inhabitantId, bookedByUserId,
-        position, ticketType: ticketTypeOfEntry(dinner.ticketPrices)(entry) ?? null,
-        queueSize: queue.length, portionNeed: portionNeed(queue, portionsOfEntryFor(dinner.ticketPrices))
-    }
     return {entry, position, joined}
+}
+
+/**
+ * A join without the write: the entry the queue would hold at the end of its line, on the queue as the caller reads it.
+ * The entry carries the id and the join time the caller gives it.
+ */
+export function previewJoinWaitlist(
+    queue: TicketWaitlistDisplay[], request: TicketWaitlistCreate, dinner: Pick<DinnerForWaitlist, 'state' | 'ticketPrices'>, id: number, createdAt: Date
+): {entry: TicketWaitlistDisplay, position: number, joined: WaitlistJoined} {
+    const bookedByUserId = joinerOf(request, dinner)
+    // The database's unique index holds one regular entry per inhabitant and dinner
+    if (!request.isGuestTicket && queue.some(entry => entry.inhabitantId === request.inhabitantId && !entry.isGuestTicket)) {
+        throw createError({statusCode: 409, message: `Inhabitant ${request.inhabitantId} already queues for dinner ${request.dinnerEventId}`})
+    }
+    const entry: TicketWaitlistDisplay = {...request, id, createdAt, placingAt: null, placingOrderId: null}
+    return {entry, ...useWaitlist().joinedOf([...queue, entry], entry, dinner.ticketPrices, bookedByUserId)}
 }
 
 // The unique index on regular orders answers the write of an entry whose inhabitant already holds a regular order on

@@ -9,7 +9,9 @@ import {toCalendarDate} from '~/utils/date'
 import {sumBy} from '~/utils/ledger'
 import {TICKET_COUNTS} from '~/composables/useBilling'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
-import type {TicketType} from '~/composables/useBookingValidation'
+import type {ScaffoldOrdersRequest, ScaffoldOrdersResponse, TicketType} from '~/composables/useBookingValidation'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {getQuery, readBody, type H3Event} from 'h3'
 
 /**
  * Generic polling function for component tests
@@ -98,6 +100,33 @@ export const holdEndpoint = (url: string, body: unknown) => {
         return body
     })
     return {release, unregister}
+}
+
+type ScaffoldAnswer = (body: ScaffoldOrdersRequest) => ScaffoldOrdersResponse | Promise<ScaffoldOrdersResponse>
+
+/**
+ * The scaffold endpoint a booking surface reads its previews from: each request is kept with its query and body; a
+ * request with orders answers `answers.preview`, one without answers `answers.expected` (the household's expected
+ * bookings). Both answer an empty run until a test sets them; `reset` empties both and the requests kept
+ */
+export const registerScaffoldEndpoint = () => {
+    const sent: {query: Record<string, unknown>, body: ScaffoldOrdersRequest}[] = []
+    const empty: ScaffoldAnswer = () => OrderFactory.defaultScaffoldOrdersResponse()
+    const answers: {preview: ScaffoldAnswer, expected: ScaffoldAnswer} = {preview: empty, expected: empty}
+    registerEndpoint('/api/household/order/scaffold', {
+        method: 'POST',
+        handler: async (event: H3Event) => {
+            const body = await readBody<ScaffoldOrdersRequest>(event)
+            sent.push({query: getQuery(event), body})
+            return body.orders.length > 0 ? answers.preview(body) : answers.expected(body)
+        }
+    })
+    const reset = () => {
+        sent.length = 0
+        answers.preview = empty
+        answers.expected = empty
+    }
+    return {sent, answers, reset}
 }
 
 /** Resolves once `condition` holds, watching the reactive state it reads: no polling window, the test's timeout bounds it */

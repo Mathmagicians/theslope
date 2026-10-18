@@ -7,7 +7,8 @@ import {formatDate} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {sumBy} from '~/utils/ledger'
-import {useBookingValidation, TicketState, SupplyState, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderAuditAction, type OrderAuditSource, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
+import {useBookingValidation, TicketState, SupplyState, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderAuditAction, type OrderAuditChange, type OrderAuditSource, type OrderSnapshot, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -664,15 +665,15 @@ describe('decideOrderAction', () => {
                 expectedBucket: Bucket.create,
                 expectedState: OrderState.BOOKED
             },
-            // Case 2: No orderId + NONE → null (skip)
+            // Case 2: No orderId + NONE → delete: the cancellation is recorded with no order to delete
             {
-                desc: 'no orderId + NONE → skip (null)',
+                desc: 'no orderId + NONE → delete (records the cancellation)',
                 desired: createDesired({ dinnerMode: DinnerMode.NONE }),
                 existing: null,
                 beforeDeadline: true,
                 canEditMode: true,
-                expectedBucket: null,
-                expectedState: null
+                expectedBucket: Bucket.delete,
+                expectedState: undefined  // delete doesn't set state
             },
             // Case 3: No orderId + eating mode + after deadline → claim (a released ticket, else the queue)
             {
@@ -1171,6 +1172,7 @@ describe('generateDesiredOrdersFromPreferences', () => {
             inhabitants,
             farFutureDinners,
             [],
+            [],  // queue entries
             new Set(),  // cancelledKeys
             ticketPrices
         )
@@ -1182,9 +1184,22 @@ describe('generateDesiredOrdersFromPreferences', () => {
     it('a key with a user intent gets no booking', () => {
         const inhabitants = [createInhabitant(1, dineInOnDinnerDays)]
 
-        const result = generateDesiredOrdersFromPreferences(inhabitants, farFutureDinners, [], new Set(['1-102']), ticketPrices)
+        const result = generateDesiredOrdersFromPreferences(inhabitants, farFutureDinners, [], [], new Set(['1-102']), ticketPrices)
 
         expect(result.map(o => o.dinnerEventId).sort()).toEqual(farFutureDinnerIds.filter(id => id !== 102))
+    })
+
+    // Ingen with no order is a wish only where the inhabitant holds a place of their own on the dinner's waiting list
+    it.each([
+        {desc: 'a place on the dinner\'s waiting list: a wish for Ingen', entries: [WaitlistFactory.defaultEntry({id: 21, inhabitantId: 1, dinnerEventId: 101})], wishes: [101]},
+        {desc: 'a guest\'s place: no wish', entries: [WaitlistFactory.defaultEntry({id: 21, inhabitantId: 1, dinnerEventId: 101, isGuestTicket: true})], wishes: []},
+        {desc: 'no place: no wish', entries: [], wishes: []}
+    ])('Ingen with no order, $desc', ({entries, wishes}) => {
+        const inhabitants = [createInhabitant(1, dinnerModeMap(DinnerMode.NONE))]
+
+        const result = generateDesiredOrdersFromPreferences(inhabitants, farFutureDinners, [], entries, new Set(), ticketPrices)
+
+        expect(result.map(o => [o.dinnerEventId, o.dinnerMode])).toEqual(wishes.map(dinnerEventId => [dinnerEventId, DinnerMode.NONE]))
     })
 
     it('enriches with orderId when existing order found', () => {
@@ -1199,6 +1214,7 @@ describe('generateDesiredOrdersFromPreferences', () => {
             inhabitants,
             farFutureDinners,
             [existingOrder],
+            [],  // queue entries
             new Set(),  // cancelledKeys
             ticketPrices
         )
@@ -1214,6 +1230,7 @@ describe('generateDesiredOrdersFromPreferences', () => {
             inhabitants,
             farFutureDinners,
             [],
+            [],  // queue entries
             new Set(),  // cancelledKeys
             ticketPrices
         )
@@ -1233,7 +1250,7 @@ describe('generateDesiredOrdersFromPreferences', () => {
             ], expectedState: OrderState.RELEASED}
         ])('$desc', ({existingOrders, expectedState}) => {
             const inhabitants = [createInhabitant(1, dineInOnDinnerDays)]
-            const result = generateDesiredOrdersFromPreferences(inhabitants, farFutureDinners, existingOrders, new Set(), ticketPrices)
+            const result = generateDesiredOrdersFromPreferences(inhabitants, farFutureDinners, existingOrders, [], new Set(), ticketPrices)
 
             const order101 = result.find(o => o.dinnerEventId === 101)
             expect(order101?.state).toBe(expectedState)
@@ -1452,31 +1469,42 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         const pastDeadlineSeason = seasonWith([tomorrowDinner])
         const allDaysPrefs = dinnerModeMap(DinnerMode.DINEIN)
         const noDaysPrefs = dinnerModeMap(DinnerMode.NONE)
+        // The inhabitant's place on the dinner's waiting list, held for a dine-in at the adult price
+        const queued = WaitlistFactory.defaultEntry({id: 21, inhabitantId: 1, dinnerEventId: tomorrowDinner.id, ticketPriceId: 4})
 
+        // A preference decides like a member's change: with no order it buys or queues, on a place it leaves or requeues
         it.each([
             {
-                desc: 'preference change to DINEIN after the deadline → nothing, system mode never claims',
+                desc: 'a preference to eat with no order claims',
                 prefs: allDaysPrefs,
-                expected: { create: 0, claim: 0 }
+                entries: [],
+                expected: {claim: [expect.objectContaining({inhabitantId: 1, dinnerEventId: tomorrowDinner.id, dinnerMode: DinnerMode.DINEIN, state: OrderState.BOOKED})], leave: [], requeue: []}
             },
             {
-                desc: 'preference stays NONE after the deadline → nothing',
+                desc: 'Ingen on a dinner the inhabitant queues for leaves the waiting list',
                 prefs: noDaysPrefs,
-                expected: { create: 0, claim: 0 }
+                entries: [queued],
+                expected: {claim: [], leave: [expect.objectContaining({inhabitantId: 1, waitlistEntryId: queued.id})], requeue: []}
+            },
+            {
+                desc: 'another eating mode on a dinner the inhabitant queues for requeues the place',
+                prefs: dinnerModeMap(DinnerMode.TAKEAWAY),
+                entries: [queued],
+                expected: {claim: [], leave: [], requeue: [expect.objectContaining({waitlistEntryId: queued.id, dinnerMode: DinnerMode.TAKEAWAY})]}
+            },
+            {
+                desc: 'Ingen with no order and no place → nothing',
+                prefs: noDaysPrefs,
+                entries: [],
+                expected: {claim: [], leave: [], requeue: []}
             }
-        ])('$desc', ({ prefs, expected }) => {
+        ])('$desc', ({prefs, entries, expected}) => {
             const household = createHousehold(1, [createInhabitant(1, prefs)])
 
-            const result = resolveOrdersFromPreferencesToBuckets(
-                pastDeadlineSeason,
-                household,
-                [],  // No existing orders
-                new Set(),  // confirmedKeys
-                new Set()  // cancelledKeys
-            )
+            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, household, [], new Set(), new Set(), entries)
 
-            expect(result.create).toHaveLength(expected.create)
-            expect(result.claim).toHaveLength(expected.claim)
+            expect({claim: result.claim, leave: result.leave, requeue: result.requeue}).toEqual(expected)
+            expect(result.create).toEqual([])
         })
 
         // A guest ticket booked on a person is not the person's own ticket, in either order of the list
@@ -2146,8 +2174,9 @@ describe('Action Preview', () => {
 // ---- Ticket changes (Billetændringer) and the cooking round ----
 
 describe('replayTicketChanges', () => {
-    const {OrderAuditActionSchema, OrderAuditSourceSchema, OrderStateSchema, TicketTypeSchema, DinnerModeSchema, TicketChangeKindSchema, createOrderAuditData} = useBookingValidation()
+    const {OrderAuditActionSchema, OrderAuditSourceSchema, OrderAuditChangeSchema, OrderStateSchema, TicketTypeSchema, DinnerModeSchema, TicketChangeKindSchema, createOrderAuditData} = useBookingValidation()
     const Audit = OrderAuditActionSchema.enum
+    const Change = OrderAuditChangeSchema.enum
     const Source = OrderAuditSourceSchema.enum
     const State = OrderStateSchema.enum
     const Mode = DinnerModeSchema.enum
@@ -2171,8 +2200,9 @@ describe('replayTicketChanges', () => {
     const householdOfInhabitant = (inhabitantId: number) => ({id: inhabitantId - 200, shortName: shortNameOf(inhabitantId - 200)})
     const at =(minutes: number, seconds = 0) => new Date(2026, 3, 2, 20, minutes, seconds)
 
-    type Ticket = {id: number, inhabitantId: number, ticketPriceId: number, householdId: number}
+    type Ticket = {id: number, inhabitantId: number, ticketPriceId: number, householdId: number, isGuestTicket?: boolean}
     const ticket = (id: number, ticketPriceId: number, householdId: number): Ticket => ({id, inhabitantId: 100 + id, ticketPriceId, householdId})
+    const {legacyAuditData} = OrderFactory
 
     let rowId = 0
     const historyRow = (action: OrderAuditAction, actor: number | null, timestamp: Date, orderId: number | null, inhabitantId: number, auditData: string) =>
@@ -2180,25 +2210,27 @@ describe('replayTicketChanges', () => {
             id: ++rowId, orderId, inhabitantId, dinnerEventId: 1, action, timestamp, auditData,
             performedByUserId: actor, performedByUser: actor === null ? null : {id: actor, email: `user${actor}@example.com`}
         })
-    // A booking writes the order's data without its id; the row's order id turns null once the order is deleted
-    const booked = (order: Ticket, actor: number, timestamp: Date, {action = Audit.USER_BOOKED, deletedLater = false, source = Source['user-booking']}: {action?: OrderAuditAction, deletedLater?: boolean, source?: OrderAuditSource} = {}) =>
-        historyRow(action, actor, timestamp, deletedLater ? null : order.id, order.inhabitantId, JSON.stringify({source, orderData: {
-            dinnerEventId: 1, inhabitantId: order.inhabitantId, bookedByUserId: actor, ticketPriceId: order.ticketPriceId, priceAtBooking: priceOf(order.ticketPriceId),
-            householdId: order.householdId, dinnerMode: Mode.DINEIN, state: State.BOOKED, isGuestTicket: false
-        }}))
-    // A deletion and a claim write the order as it stood before them
-    const orderSnapshot = (order: Ticket, state: OrderState) => createOrderAuditData({
-        id: order.id, inhabitantId: order.inhabitantId, dinnerEventId: 1, ticketPriceId: order.ticketPriceId, priceAtBooking: priceOf(order.ticketPriceId),
-        dinnerMode: Mode.DINEIN, state, inhabitantNameWithInitials: 'A. B.', householdShortname: shortNameOf(order.householdId), householdId: order.householdId
+    const orderDataOf = (order: Ticket, actor: number | null) => OrderFactory.defaultOrderCreateWithPrice(order.householdId, {
+        dinnerEventId: 1, inhabitantId: order.inhabitantId, bookedByUserId: actor, ticketPriceId: order.ticketPriceId, priceAtBooking: priceOf(order.ticketPriceId),
+        dinnerMode: Mode.DINEIN, state: State.BOOKED, isGuestTicket: order.isGuestTicket ?? false
     })
+    const snapshotOf = (order: Ticket, state: OrderState): OrderSnapshot => OrderFactory.defaultOrderSnapshot({
+        id: order.id, inhabitantId: order.inhabitantId, dinnerEventId: 1, ticketPriceId: order.ticketPriceId, priceAtBooking: priceOf(order.ticketPriceId),
+        dinnerMode: Mode.DINEIN, state, isGuestTicket: order.isGuestTicket ?? false, inhabitantNameWithInitials: 'A. B.',
+        householdShortname: shortNameOf(order.householdId), householdId: order.householdId
+    })
+    // A legacy booking wrote the order's data without its id; the row's order id turns null once the order is deleted
+    const booked = (order: Ticket, actor: number, timestamp: Date, {action = Audit.USER_BOOKED, deletedLater = false, source = Source['user-booking']}: {action?: OrderAuditAction, deletedLater?: boolean, source?: OrderAuditSource} = {}) =>
+        historyRow(action, actor, timestamp, deletedLater ? null : order.id, order.inhabitantId, legacyAuditData.creation(source, orderDataOf(order, actor)))
+    // A deletion and a claim write the order as it stood before them
     const deleted = (order: Ticket, actor: number | null, timestamp: Date, action: OrderAuditAction = Audit.USER_CANCELLED, state: OrderState = State.BOOKED) =>
-        historyRow(action, actor, timestamp, null, order.inhabitantId, orderSnapshot(order, state))
+        historyRow(action, actor, timestamp, null, order.inhabitantId, legacyAuditData.snapshot(snapshotOf(order, state)))
     const claimed = (order: Ticket, buyer: number, timestamp: Date) =>
-        historyRow(Audit.USER_CLAIMED, buyer, timestamp, order.id, buyerInhabitant(buyer), orderSnapshot(order, State.RELEASED))
-    // A batch update writes the new scalars, the price row only when it changed
+        historyRow(Audit.USER_CLAIMED, buyer, timestamp, order.id, buyerInhabitant(buyer), legacyAuditData.snapshot(snapshotOf(order, State.RELEASED)))
+    // A legacy batch update wrote the new scalars, the price row only when it changed
     const updated = (action: OrderAuditAction, order: Ticket, actor: number, timestamp: Date,
                      {state = State.BOOKED, dinnerMode = Mode.DINEIN, ticketPriceId = null}: {state?: OrderState, dinnerMode?: DinnerMode, ticketPriceId?: number | null} = {}) =>
-        historyRow(action, actor, timestamp, order.id, order.inhabitantId, JSON.stringify({state, dinnerMode, ticketPriceId, priceAtBooking: ticketPriceId === null ? null : priceOf(ticketPriceId)}))
+        historyRow(action, actor, timestamp, order.id, order.inhabitantId, legacyAuditData.update({state, dinnerMode, ticketPriceId, priceAtBooking: ticketPriceId === null ? null : priceOf(ticketPriceId)}))
 
     const figures = ({counts, portions, revenue}: TicketChange) => ({counts, portions, revenue})
     // The tickets, kuverter and revenue of the tickets the dinner is paid for
@@ -2273,6 +2305,25 @@ describe('replayTicketChanges', () => {
         ])
         expect(lines.map(line => line.households)).toEqual([['S_22'], ['S_22'], ['S_22']])
         expect(lines.map(figures)).toEqual(Array(3).fill({counts: counts(0, 1, 0), portions: PRICES[2]!.portions, revenue: PRICES[2]!.price}))
+    })
+
+    // A place on the waiting list and a cancellation of nothing booked write rows whose snapshot names no order
+    it('GIVEN a booked adult whose guest joins, changes and leaves the waiting list WHEN replaying THEN the guest\'s rows are no ticket events and the adult\'s ticket stays held', () => {
+        const {replayTicketChanges} = useBooking()
+        const adult = ticket(1, 1, 22)
+        const guestPlace = (action: OrderAuditAction, timestamp: Date) => historyRow(action, 22, timestamp, null, adult.inhabitantId,
+            legacyAuditData.snapshot({...snapshotOf({...adult, isGuestTicket: true}, State.BOOKED), id: null}))
+
+        const lines = replayTicketChanges([
+            booked(adult, 22, at(1)),
+            guestPlace(Audit.USER_BOOKED, at(2)),
+            guestPlace(Audit.USER_BOOKED, at(3)),
+            guestPlace(Audit.USER_CANCELLED, at(4))
+        ], ticketPriceOf, SYSTEM, shortNameOf)
+
+        expect(lines.map(line => [line.events, figures(line)])).toEqual([
+            [[{change: Kind.BOOK, tickets: counts(1, 0, 0)}], {counts: counts(1, 0, 0), portions: PRICES[1]!.portions, revenue: PRICES[1]!.price}]
+        ])
     })
 
     it('GIVEN a ticket released by one household and bought by another WHEN replaying THEN the sale and the close name the buyer\'s household', () => {
@@ -2416,6 +2467,101 @@ describe('replayTicketChanges', () => {
         const adult = ticket(10, 1, 7)
         const lines = replayTicketChanges([booked(adult, 7, at(1)), updated(Audit.SYSTEM_UPDATED, adult, SYSTEM, at(2), {state: State.CLOSED})], ticketPriceOf, SYSTEM, shortNameOf)
         expect(lines.at(-1)).toMatchObject({bySystem: true, events: [{change: Kind.CLOSE, tickets: counts(1, 0, 0)}], counts: counts(1, 0, 0), revenue: PRICES[1]!.price})
+    })
+
+    // One ticket's life as the writers leave it: in the audit format, and in the shapes written before it. A sale and a
+    // deletion keep the order as it stood before them
+    const WRITTEN = [
+        {
+            format: 'the audit format',
+            creation: (order: Ticket, source: OrderAuditSource) => createOrderAuditData(Change.BOOK, snapshotOf(order, State.BOOKED), source),
+            update: (change: OrderAuditChange, order: Ticket, state: OrderState) => createOrderAuditData(change, snapshotOf(order, state)),
+            asItStood: (change: OrderAuditChange, order: Ticket, state: OrderState) => createOrderAuditData(change, snapshotOf(order, state))
+        },
+        {
+            format: 'the legacy shapes',
+            creation: (order: Ticket, source: OrderAuditSource) => legacyAuditData.creation(source, orderDataOf(order, null)),
+            update: (change: OrderAuditChange, order: Ticket, state: OrderState) => legacyAuditData.update({
+                state, dinnerMode: state === State.RELEASED ? Mode.NONE : Mode.DINEIN,
+                ticketPriceId: change === Change.CHANGE_PRICE ? order.ticketPriceId : null,
+                priceAtBooking: change === Change.CHANGE_PRICE ? priceOf(order.ticketPriceId) : null
+            }),
+            asItStood: (_change: OrderAuditChange, order: Ticket, state: OrderState) => legacyAuditData.snapshot(snapshotOf(order, state))
+        }
+    ]
+
+    it.each(WRITTEN)('GIVEN a ticket released and bought, and a second ticket changed to another price row and cancelled, written in $format WHEN replaying THEN the lines read the same events and households', ({creation, update, asItStood}) => {
+        const {replayTicketChanges} = useBooking()
+        const [adult, child] = [ticket(1, 1, 22), ticket(2, 2, 22)]
+        const childAsAdult = {...child, ticketPriceId: adult.ticketPriceId}
+        const bought = {...adult, inhabitantId: buyerInhabitant(14), householdId: 14}
+        const lines = replayTicketChanges([
+            historyRow(Audit.USER_BOOKED, 22, at(0), adult.id, adult.inhabitantId, creation(adult, Source['user-booking'])),
+            // The child's order is deleted later: its rows have lost their order id
+            historyRow(Audit.USER_BOOKED, 22, at(0), null, child.inhabitantId, creation(child, Source['user-booking'])),
+            historyRow(Audit.USER_BOOKED, 22, at(10), null, child.inhabitantId, update(Change.CHANGE_PRICE, childAsAdult, State.BOOKED)),
+            historyRow(Audit.USER_CANCELLED, 22, at(20), adult.id, adult.inhabitantId, update(Change.RELEASE, adult, State.RELEASED)),
+            historyRow(Audit.USER_CLAIMED, 14, at(30), adult.id, bought.inhabitantId, asItStood(Change.BUY, adult, State.RELEASED)),
+            historyRow(Audit.USER_CANCELLED, 22, at(40), null, child.inhabitantId, asItStood(Change.CANCEL, childAsAdult, State.BOOKED)),
+            historyRow(Audit.SYSTEM_UPDATED, SYSTEM, at(120), adult.id, bought.inhabitantId, update(Change.CLOSE, bought, State.CLOSED))
+        ], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant)
+
+        expect(lines.map(({households, events}) => ({households, events}))).toEqual([
+            {households: ['S_22'], events: [{change: Kind.BOOK, tickets: counts(1, 1, 0)}]},
+            {households: ['S_22'], events: [{change: Kind.CHANGE_PRICE, tickets: counts(1, 0, 0), from: counts(0, 1, 0)}]},
+            {households: ['S_22'], events: [{change: Kind.RELEASE, tickets: counts(1, 0, 0)}]},
+            {households: ['S_14'], events: [{change: Kind.BUY, tickets: counts(1, 0, 0), seller: shortNameOf(adult.householdId)}]},
+            {households: ['S_22'], events: [{change: Kind.CANCEL, tickets: counts(1, 0, 0)}]},
+            {households: ['S_14'], events: [{change: Kind.CLOSE, tickets: counts(1, 0, 0)}]}
+        ])
+    })
+
+    // A guest ticket is booked on its booker, so one person holds their own ticket and their guests' tickets
+    describe('a person\'s own ticket and their guests\' tickets', () => {
+        const PERSON = 131
+        const own: Ticket = {...ticket(1, 1, 31), inhabitantId: PERSON}
+        const guestAdult: Ticket = {...ticket(2, 1, 31), inhabitantId: PERSON, isGuestTicket: true}
+        const guestChild: Ticket = {...ticket(3, 2, 31), inhabitantId: PERSON, isGuestTicket: true}
+        const eventsAndCounts = (lines: TicketChange[]) => lines.map(line => ({events: line.events, counts: line.counts}))
+
+        it('GIVEN the guest orders deleted later, written in the audit format WHEN replaying THEN each deletion takes its own ticket by order id', () => {
+            const {replayTicketChanges} = useBooking()
+            const bookingOf = (order: Ticket, orderId: number | null) =>
+                historyRow(Audit.USER_BOOKED, 31, at(0), orderId, PERSON, createOrderAuditData(Change.BOOK, snapshotOf(order, State.BOOKED), Source['user-booking']))
+            const cancellationOf = (order: Ticket, timestamp: Date) =>
+                historyRow(Audit.USER_CANCELLED, 31, timestamp, null, PERSON, createOrderAuditData(Change.CANCEL, snapshotOf(order, State.BOOKED)))
+            const lines = replayTicketChanges([
+                bookingOf(own, own.id), bookingOf(guestAdult, null), bookingOf(guestChild, null),
+                cancellationOf(guestChild, at(10)), cancellationOf(guestAdult, at(20))
+            ], ticketPriceOf, SYSTEM, shortNameOf)
+
+            expect(eventsAndCounts(lines)).toEqual([
+                {events: [{change: Kind.BOOK, tickets: counts(2, 1, 0)}], counts: counts(2, 1, 0)},
+                {events: [{change: Kind.CANCEL, tickets: counts(0, 1, 0)}], counts: counts(2, 0, 0)},
+                {events: [{change: Kind.CANCEL, tickets: counts(1, 0, 0)}], counts: counts(1, 0, 0)}
+            ])
+        })
+
+        it('GIVEN the person\'s own order and a guest order booked in the legacy shape and both deleted later WHEN replaying THEN each booking holds its ticket and each deletion takes the ticket of its dinner and household with its price row', () => {
+            const {replayTicketChanges} = useBooking()
+            const lines = replayTicketChanges([
+                ...[own, guestChild].map(order => booked(order, 31, at(0), {deletedLater: true})),
+                deleted(guestChild, 31, at(10)),
+                deleted(own, 31, at(20))
+            ], ticketPriceOf, SYSTEM, shortNameOf)
+
+            expect(eventsAndCounts(lines)).toEqual([
+                {events: [{change: Kind.BOOK, tickets: counts(1, 1, 0)}], counts: counts(1, 1, 0)},
+                {events: [{change: Kind.CANCEL, tickets: counts(0, 1, 0)}], counts: counts(1, 0, 0)},
+                {events: [{change: Kind.CANCEL, tickets: counts(1, 0, 0)}], counts: counts(0, 0, 0)}
+            ])
+        })
+    })
+
+    it('GIVEN a legacy update of an order whose booking the history does not hold WHEN replaying THEN its line names the household as unknown', () => {
+        const {replayTicketChanges} = useBooking()
+        const lines = replayTicketChanges([updated(Audit.USER_BOOKED, ticket(4, 1, 22), 22, at(5), {ticketPriceId: 1})], ticketPriceOf, SYSTEM, shortNameOf)
+        expect(lines.map(line => line.households)).toEqual([[BOOKING_WORDS.unknownHousehold]])
     })
 })
 

@@ -26,6 +26,12 @@
  * └ ─ ─ ┘
  * Spisesal   - The label in the same ink
  *
+ * SELECTOR VIEW MODE, expected (no order yet: the booking the preferences give the cell):
+ * ┌ ─ ─ ┐
+ *   [mode]   - The glyph on the mode's own colour, outlined (COMPONENTS.bookingGrid.expectedBadge), in its muted ink
+ * └ ─ ─ ┘
+ * Spisesal   - The label in the same ink
+ *
  * SELECTOR EDIT MODE - BUTTONS (interaction="buttons", default, showLabel=true):
  * ┌────────────────────────┐
  * │ [🍽️][🕐][🛍️][❌]     │  - Icon buttons
@@ -60,6 +66,7 @@ interface Props {
   orientation?: 'horizontal' | 'vertical' | 'responsive' // Override default responsive orientation (vertical mobile, horizontal desktop)
   isModified?: boolean // Grid booking: show left border accent when cell has unsaved changes
   ghost?: boolean // View mode: the mode is a wish on the waiting list, not a booking
+  expected?: boolean // View mode: the mode is the booking the preferences give a cell without an order
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -74,7 +81,8 @@ const props = withDefaults(defineProps<Props>(), {
   interaction: 'buttons',
   orientation: 'responsive', // Default: vertical on mobile, horizontal on desktop
   isModified: false,
-  ghost: false
+  ghost: false,
+  expected: false
 })
 
 const emit = defineEmits<{
@@ -93,6 +101,7 @@ watch(() => props.consensus, () => {
 const { WEEKDAY, ORIENTATIONS, ICONS, SIZES, TYPOGRAPHY, COMPONENTS, COLOR, NOISE } = useTheSlopeDesignSystem()
 const selector = COMPONENTS.dinnerModeSelector
 const waitlistFace = COMPONENTS.waitlist
+const expectedFace = COMPONENTS.bookingGrid.expectedBadge
 
 // Responsive size: use prop if provided, otherwise use responsive default
 const responsiveSize = computed(() => props.size ?? SIZES.small)
@@ -212,9 +221,14 @@ const getViewConfig = (): ModeDisplayConfig => {
 // Get icon for current mode (VIEW mode uses mixedModeConfig when no consensus)
 const getModeIcon = (): string => getViewConfig().icon
 
-// VIEW mode badge: the mode's colour and variant, or the ghost of a wish on the waiting list
+// VIEW mode badge: the mode's colour and variant, the ghost of a wish on the waiting list, or an expected booking outlined
 const getBadgeColor = (): BadgeColor => props.ghost ? waitlistFace.ghostBadge.color : getViewConfig().activeColor
-const getBadgeVariant = (): BadgeVariant => props.ghost ? waitlistFace.ghostBadge.variant : getViewConfig().viewVariant
+const getBadgeVariant = (): BadgeVariant => {
+  if (props.ghost) return waitlistFace.ghostBadge.variant
+  return props.expected ? expectedFace.variant : getViewConfig().viewVariant
+}
+// The glyph and the label of a wish or an expected booking take a muted ink
+const inkClass = computed(() => props.ghost ? waitlistFace.ghostInk : props.expected ? expectedFace.ink : undefined)
 
 // Get mode label (VIEW mode uses mixedModeConfig when no consensus)
 const getModeLabel = (): string => getViewConfig().label
@@ -267,9 +281,9 @@ const shouldPulse = (mode: DinnerMode): boolean => {
         :name="name"
         :data-testid="name"
       >
-        <UIcon :name="getModeIcon()" :class="[iconSizeClass, ghost && waitlistFace.ghostInk]" />
+        <UIcon :name="getModeIcon()" :class="[iconSizeClass, inkClass]" />
       </UBadge>
-      <span v-if="showLabel" :class="[TYPOGRAPHY.finePrint, ghost && waitlistFace.ghostInk]">{{ getModeLabel() }}</span>
+      <span v-if="showLabel" :class="[TYPOGRAPHY.finePrint, inkClass]">{{ getModeLabel() }}</span>
     </div>
 
     <!-- EDIT MODE: Toggle (single button, click cycles) - no label for compact grid use -->

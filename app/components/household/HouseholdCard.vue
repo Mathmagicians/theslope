@@ -46,6 +46,38 @@
  * │  (NONE: active=ghost error, inactive=ghost neutral)          │
  * └───────────────────────────────────────────────────────────────┘
  *
+ * PREVIEW above the buttons while the draft differs from the saved preferences: the server's dry run of the save, one
+ * person or every member in power mode, through ActionPreview (a day per dinner); the loader while it works:
+ *
+ * One person
+ *  Opdater fællesspisning præferencer for Knud
+ *  Man [Spis][Sen][Take][Ingen]  Tir [...]  Ons [...]  Tor [...]
+ *  (ticket) Du er ved at ændre familiens booking
+ *  ── ti 20/10/2026 ──────────────────────────────
+ *     [released badge]  Knud frigiver sin billet
+ *  ── ti 27/10/2026 ──────────────────────────────
+ *     [edit badge]      Knud ændrer spisemåde til Takeaway
+ *  ── ma 02/11/2026 ──────────────────────────────
+ *     [cancel badge]    Knud frameldes
+ *                                                    [Annuller] [Gem]
+ *
+ * Power mode
+ *  Power mode: Opdater præferencer for hele husstanden
+ *  (warning) Du er ved at aktivere power mode ...
+ *  Man [Spis][Sen][Take][Ingen]  Tir [...]  Ons [...]  Tor [...]
+ *  (ticket) Du er ved at ændre familiens booking
+ *  ── ti 20/10/2026 ──────────────────────────────
+ *     [released badge]  Lene frigiver sin billet
+ *  ── ma 02/11/2026 ──────────────────────────────
+ *     [cancel badge]    Knud frameldes
+ *     [cancel badge]    Lene frameldes
+ *                                            [Annuller] [Gem for alle]
+ *
+ * While the preview loads
+ *  Man [Spis][Sen][Take][Ingen]  Tir [...]  Ons [...]  Tor [...]
+ *       (sync, spinning)  Prøver at beregne hvad I skal spise hvornår...
+ *                                                    [Annuller] [Gem]
+ *
  * Legend:
  * - ⚡ = Power mode (update all inhabitants)
  * - ✏️ = Pencil icon (edit one inhabitant)
@@ -74,7 +106,7 @@ const props = withDefaults(defineProps<Props>(), {
 const householdsStore = useHouseholdsStore()
 const {lastPreferenceResult} = storeToRefs(householdsStore)
 const planStore = usePlanStore()
-const {activeSeason} = storeToRefs(planStore)
+const {activeSeason, selectedSeason} = storeToRefs(planStore)
 
 // Ticket business logic
 
@@ -132,6 +164,22 @@ const { expanded } = useExpandableRow({
     draftPreferences.value = null
   }
 })
+
+// The preview of Gem: the server's dry run of the draft for the person, or for every member in power mode
+const previewRequest = computed(() => {
+  const draft = draftPreferences.value
+  const saved = tableData.value.find(row => row.id === editingInhabitantId.value)?.dinnerPreferences
+  if (editingInhabitantId.value === null || !draft || WEEKDAYS.every(day => draft[day] === saved?.[day])) return null
+  const inhabitantIds = editingInhabitantId.value === -1 ? props.household.inhabitants.map(({id}) => id) : [editingInhabitantId.value]
+  return {inhabitantIds, preferences: draft}
+})
+const {result: preview, pending: isPreviewPending} = useScaffoldPreview(
+  () => previewRequest.value,
+  ({inhabitantIds, preferences}) => householdsStore.previewPreferences(inhabitantIds, preferences, props.adminBypass)
+)
+const previewDays = computed(() => preview.value
+  ? formatPreviewLines(preview.value, selectedSeason.value?.dinnerEvents ?? [], props.household.inhabitants.map(({id}) => id))
+  : [])
 
 // Toast notifications
 const toast = useToast()
@@ -329,6 +377,8 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
                   :name="row.original.isSynthetic ? 'power-mode-preferences-edit' : `inhabitant-${row.original.id}-preferences-edit`"
                   @update:model-value="updateDraft"
               />
+
+              <ActionPreview :days="previewDays" :pending="isPreviewPending" />
 
               <!-- Actions grouped -->
               <div :class="COMPONENTS.householdCard.actionsRow">

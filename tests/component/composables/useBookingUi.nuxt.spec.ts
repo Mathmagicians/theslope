@@ -1,10 +1,10 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewOutcome, scaffoldToastLook, formatBookingResult, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, scaffoldToastLook, formatBookingResult, formatPreviewLines, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, emptyOrderBuckets, type OrderBucketResult} from '~/composables/useBooking'
+import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS} from '~/composables/useBooking'
 import {useBookingValidation, type BookingAction, type BookingResult, type QueuePosition, type TicketType} from '~/composables/useBookingValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {lockedDinnerSupply} from '~~/tests/component/testHelpers'
@@ -305,20 +305,23 @@ describe('useBookingUi', () => {
     })
 })
 
-describe('previewOutcome', () => {
-    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
-    const desired = OrderFactory.defaultDesiredOrder({dinnerMode: DinnerModeSchema.enum.DINEIN, state: OrderStateSchema.enum.BOOKED})
-    const buckets = (filled: Partial<OrderBucketResult>): OrderBucketResult => ({...emptyOrderBuckets(), ...filled})
+// What the save does, read from the preview's reply: its first supply outcome, else a mode change
+describe('previewSaveOutcome', () => {
+    const replyOf = (...actions: BookingAction[]) =>
+        OrderFactory.defaultScaffoldResult({results: actions.map(action => OrderFactory.defaultBookingResult({action}))})
 
     it.each([
-        {desc: 'a new ticket before the deadline', filled: {create: [desired]}, ticketsForSale: 0, outcome: Action.BOOK},
-        {desc: 'a claim with a ticket for sale', filled: {claim: [desired]}, ticketsForSale: 1, outcome: Action.BUY},
-        {desc: 'a claim with nothing for sale', filled: {claim: [desired]}, ticketsForSale: 0, outcome: Action.QUEUE},
-        {desc: 'Ingen on a queued row', filled: {leave: [desired]}, ticketsForSale: 0, outcome: Action.LEAVE},
-        {desc: 'a new wish on a queued row', filled: {requeue: [desired]}, ticketsForSale: 0, outcome: Action.REQUEUE},
-        {desc: 'a mode change on a held ticket', filled: {update: [desired]}, ticketsForSale: 0, outcome: Action.CHANGE_MODE}
-    ])('$desc → $outcome', ({filled, ticketsForSale, outcome}) => {
-        expect(previewOutcome(buckets(filled), () => ({ticketsForSale}))).toBe(outcome)
+        {desc: 'a new ticket before the deadline', actions: [Action.BOOK], outcome: Action.BOOK},
+        {desc: 'a ticket for sale bought', actions: [Action.BUY], outcome: Action.BUY},
+        {desc: 'a place on the waiting list', actions: [Action.QUEUE], outcome: Action.QUEUE},
+        {desc: 'guests where the first buys and the next queues', actions: [Action.BUY, Action.QUEUE], outcome: Action.BUY},
+        {desc: 'Ingen on a queued row', actions: [Action.LEAVE], outcome: Action.LEAVE},
+        {desc: 'a new wish on a queued row', actions: [Action.REQUEUE], outcome: Action.REQUEUE},
+        {desc: 'a mode change on a held ticket', actions: [Action.CHANGE_MODE], outcome: Action.CHANGE_MODE},
+        {desc: 'a ticket released', actions: [Action.RELEASE], outcome: Action.CHANGE_MODE},
+        {desc: 'a reply without results', actions: [], outcome: Action.CHANGE_MODE}
+    ])('$desc → $outcome', ({actions, outcome}) => {
+        expect(previewSaveOutcome(replyOf(...actions))).toBe(outcome)
     })
 })
 
@@ -357,27 +360,33 @@ describe('scaffoldToastLook', () => {
     })
 })
 
-describe('formatBookingResult', () => {
-    const {ADULT, CHILD} = TicketTypeSchema.enum
-    const ANNA = {inhabitantId: 1, inhabitantName: 'Anna', ticketType: ADULT}
-    const guestsOfAnna = (ticketType: TicketType | null) => ({...ANNA, isGuestTicket: true, ticketType})
-    const LARS = {inhabitantId: 2, inhabitantName: 'Lars', ticketType: ADULT}
-    const KNUD = {inhabitantId: 3, inhabitantName: 'Knud', ticketType: ADULT}
-    const LENE = {inhabitantId: 4, inhabitantName: 'Lene', ticketType: ADULT}
-    type Person = Pick<BookingResult, 'inhabitantId' | 'inhabitantName' | 'ticketType'> & {isGuestTicket?: boolean}
+// The people of a booking result: Anna and her guests of one ticket type, Lars, Knud and Lene
+const ANNA = {inhabitantId: 1, inhabitantName: 'Anna', ticketType: ADULT}
+const guestsOfAnna = (ticketType: TicketType | null) => ({...ANNA, isGuestTicket: true, ticketType})
+const LARS = {inhabitantId: 2, inhabitantName: 'Lars', ticketType: ADULT}
+const KNUD = {inhabitantId: 3, inhabitantName: 'Knud', ticketType: ADULT}
+const LENE = {inhabitantId: 4, inhabitantName: 'Lene', ticketType: ADULT}
+type Person = Pick<BookingResult, 'inhabitantId' | 'inhabitantName' | 'ticketType'> & {isGuestTicket?: boolean}
 
-    // One order's result per action listed, each on its own dinner
-    const resultsOf = (person: Person, ...actions: BookingAction[]): BookingResult[] =>
-        actions.map((action, index) => OrderFactory.defaultBookingResult({...person, dinnerEventId: index + 1, action}))
-    // One order's result per action listed, all on one dinner: a booker's guests at one table
-    const resultsOnDinner = (dinnerEventId: number, person: Person, ...actions: BookingAction[]): BookingResult[] =>
-        actions.map(action => OrderFactory.defaultBookingResult({...person, dinnerEventId, action}))
-    const times = (count: number, action: BookingAction): BookingAction[] => Array.from({length: count}, () => action)
-    const placeOf = (person: Person, position: number): QueuePosition =>
-        ({inhabitantId: person.inhabitantId, dinnerEventId: 1, isGuestTicket: !!person.isGuestTicket, position, ticketType: person.ticketType})
-    const soldToWaitlist = (count: number) =>
-        Array.from({length: count}, () => ({dinnerEventId: 1, ticketPriceId: 1, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1}))
-    const run = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => OrderFactory.defaultScaffoldResult(overrides)
+// One order's result per action listed, each on its own dinner
+const resultsOf = (person: Person, ...actions: BookingAction[]): BookingResult[] =>
+    actions.map((action, index) => OrderFactory.defaultBookingResult({...person, dinnerEventId: index + 1, action}))
+// One order's result per action listed, all on one dinner: a booker's guests at one table
+const resultsOnDinner = (dinnerEventId: number, person: Person, ...actions: BookingAction[]): BookingResult[] =>
+    actions.map(action => OrderFactory.defaultBookingResult({...person, dinnerEventId, action}))
+// One order's result per dinner listed, all with one action
+const resultsAt = (person: Person, action: BookingAction, ...dinnerEventIds: number[]): BookingResult[] =>
+    dinnerEventIds.map(dinnerEventId => OrderFactory.defaultBookingResult({...person, dinnerEventId, action}))
+const times = (count: number, action: BookingAction): BookingAction[] => Array.from({length: count}, () => action)
+const placeOf = (person: Person, position: number, dinnerEventId = 1): QueuePosition =>
+    ({inhabitantId: person.inhabitantId, dinnerEventId, isGuestTicket: !!person.isGuestTicket, position, ticketType: person.ticketType})
+const soldToWaitlist = (count: number, dinnerEventId = 1) =>
+    Array.from({length: count}, () => ({dinnerEventId, ticketPriceId: 1, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1}))
+const run = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => OrderFactory.defaultScaffoldResult(overrides)
+// A run's outcomes with the tickets it sold to the waiting list
+const withSold = (waitlistTicketsSold: ReturnType<typeof soldToWaitlist>) => ({...run({}).outcomes, waitlistTicketsSold})
+
+describe('formatBookingResult', () => {
     // Failed orders the queue refused because a run is placing the entry
     const conflictsOf = (person: Person, ...actions: BookingAction[]): BookingResult[] =>
         resultsOf(person, ...actions).map(result => ({...result, reason: useBookingValidation().BookingFailureSchema.enum.CONFLICT}))
@@ -426,7 +435,7 @@ describe('formatBookingResult', () => {
                 failed: resultsOf(LENE, Action.RELEASE),
                 errored: 1,
                 unchanged: 42,
-                outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: soldToWaitlist(1), waitlistPortionsAssigned: []}
+                outcomes: withSold(soldToWaitlist(1))
             }),
             text: 'Knud: 7 frameldt, 2 frigivet\nLene: 6 frameldt, 2 frigivet, 1 opdatering fejlede\n1 billet solgt til ventelisten\n42 uændret'
         },
@@ -454,7 +463,7 @@ describe('formatBookingResult', () => {
         },
         {
             desc: 'tickets sold to the waiting list and nothing else changed',
-            result: run({unchanged: 5, outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: soldToWaitlist(2), waitlistPortionsAssigned: []}}),
+            result: run({unchanged: 5, outcomes: withSold(soldToWaitlist(2))}),
             text: '2 billetter solgt til ventelisten\n5 uændret'
         },
         {
@@ -464,6 +473,104 @@ describe('formatBookingResult', () => {
         }
     ])('$desc', ({result, text}) => {
         expect(formatBookingResult(result)).toBe(text)
+    })
+})
+
+// The preview of a booking: a day per dinner, ascending; within a day a line per action in the word table's order,
+// then per person in the household's order; the tickets sold to the waiting list last in their day
+describe('formatPreviewLines', () => {
+    const {TAKEAWAY} = DinnerModeSchema.enum
+    // The dinners a preview names, one a day from 19/10/2026
+    const dinners = Array.from({length: 8}, (_, index) =>
+        ({...DinnerEventFactory.defaultDinnerEventDisplay(), id: index + 1, date: new Date(2026, 9, 19 + index)}))
+    const dateOf = (dinnerEventId: number) => dinners[dinnerEventId - 1]!.date
+    const HOUSEHOLD = [ANNA, LARS, KNUD].map(person => person.inhabitantId)
+    // Each day's lines, keyed by its dinner
+    const daysOf = (days: ReturnType<typeof formatPreviewLines>) => days.map(({dinnerEventId, lines}) => ({dinnerEventId, lines: lines.map(line => line.text)}))
+
+    it.each([
+        {
+            // The mockup's grid power mode: the results name each person's dinners in turn, the days gather them
+            desc: 'a day per dinner, its people in the household\'s order',
+            results: [...resultsAt(LARS, Action.CHANGE_MODE, 4), ...resultsAt(LARS, Action.RELEASE, 5), ...resultsAt(ANNA, Action.CHANGE_MODE, 4), ...resultsAt(ANNA, Action.RELEASE, 5)]
+                .map(result => ({...result, dinnerMode: TAKEAWAY})),
+            days: [
+                {dinnerEventId: 4, lines: [`Anna ændrer spisemåde til ${MODE_WORDS[TAKEAWAY].label}`, `Lars ændrer spisemåde til ${MODE_WORDS[TAKEAWAY].label}`]},
+                {dinnerEventId: 5, lines: ['Anna frigiver sin billet', 'Lars frigiver sin billet']}
+            ]
+        },
+        {
+            desc: 'the days ascending, each day\'s lines per action in the word table\'s order',
+            results: [...resultsAt(KNUD, Action.CANCEL, 3), ...resultsAt(LARS, Action.CANCEL, 1), ...resultsAt(KNUD, Action.BOOK, 1), ...resultsAt(ANNA, Action.BOOK, 1)],
+            days: [
+                {dinnerEventId: 1, lines: ['Anna tilmeldes', 'Knud tilmeldes', 'Lars frameldes']},
+                {dinnerEventId: 3, lines: ['Knud frameldes']}
+            ]
+        },
+        {
+            // A booker's guests of one ticket type at one dinner are one group, named with the count as the guest row badges it
+            desc: 'a booker\'s guests after the booker',
+            results: [...resultsOnDinner(1, guestsOfAnna(CHILD), Action.BOOK, Action.BOOK), ...resultsAt(ANNA, Action.BOOK, 1), ...resultsAt(guestsOfAnna(CHILD), Action.BOOK, 2)],
+            days: [
+                {dinnerEventId: 1, lines: ['Anna tilmeldes', 'Gæst af Anna (Barn ×2) tilmeldes']},
+                {dinnerEventId: 2, lines: ['Gæst af Anna (Barn) tilmeldes']}
+            ]
+        },
+        {
+            desc: 'a ticket for sale bought',
+            results: resultsAt(ANNA, Action.BUY, 1),
+            days: [{dinnerEventId: 1, lines: ['Anna køber en billet til salg']}]
+        },
+        {
+            // Each line carries its places on its dinner, ascending, as the toast names them
+            desc: 'places on the waiting list',
+            results: [...resultsAt(ANNA, Action.QUEUE, 2, 3), ...resultsAt(guestsOfAnna(ADULT), Action.QUEUE, 3)],
+            positions: [placeOf(ANNA, 5, 3), placeOf(guestsOfAnna(ADULT), 6, 3), placeOf(ANNA, 3, 2)],
+            days: [
+                {dinnerEventId: 2, lines: ['Anna skrives på ventelisten (Voksen #3)']},
+                {dinnerEventId: 3, lines: ['Anna skrives på ventelisten (Voksen #5)', 'Gæst af Anna (Voksen) skrives på ventelisten (Voksen #6)']}
+            ]
+        },
+        {
+            // The sale the save causes closes its day, after the actions that come later in the word table
+            desc: 'a released ticket sold to the waiting list',
+            results: [...resultsAt(ANNA, Action.RELEASE, 1), ...resultsAt(LARS, Action.CHANGE_MODE, 1)],
+            sold: soldToWaitlist(1, 1),
+            days: [{dinnerEventId: 1, lines: ['Anna frigiver sin billet', `Lars ændrer spisemåde til ${MODE_WORDS[DinnerModeSchema.enum.DINEIN].label}`, '1 billet sælges til ventelisten']}]
+        },
+        {
+            desc: 'tickets sold to the waiting list on two dinners',
+            results: [],
+            sold: [...soldToWaitlist(2, 2), ...soldToWaitlist(1, 1)],
+            days: [
+                {dinnerEventId: 1, lines: ['1 billet sælges til ventelisten']},
+                {dinnerEventId: 2, lines: ['2 billetter sælges til ventelisten']}
+            ]
+        },
+        {
+            desc: 'nothing to do',
+            results: [],
+            days: []
+        }
+    ])('$desc', ({results, positions = [], sold = [], days}) => {
+        expect(daysOf(formatPreviewLines(run({results, positions, outcomes: withSold(sold)}), dinners, HOUSEHOLD))).toEqual(days)
+    })
+
+    it('without the household\'s order the people keep the order the results first name them', () => {
+        const days = formatPreviewLines(run({results: [...resultsAt(LARS, Action.BOOK, 1), ...resultsAt(ANNA, Action.BOOK, 1)]}), dinners)
+        expect(daysOf(days)).toEqual([{dinnerEventId: 1, lines: ['Lars tilmeldes', 'Anna tilmeldes']}])
+    })
+
+    it('a day carries its dinner\'s date and its weekday with the date as the separator reads it', () => {
+        const [day] = formatPreviewLines(run({results: resultsAt(ANNA, Action.BOOK, 4)}), dinners)
+        expect(day).toMatchObject({date: dateOf(4), label: `${formatDate(dateOf(4), 'EEEEEE')} ${formatDate(dateOf(4))}`})
+    })
+
+    it('a ticket sold to the waiting list wears the glyph and the colour of a ticket bought', () => {
+        const [day] = formatPreviewLines(run({results: resultsAt(ANNA, Action.BUY, 1), outcomes: withSold(soldToWaitlist(1, 1))}), dinners)
+        const [bought, sold] = day!.lines
+        expect(bought).toMatchObject({name: ANNA.inhabitantName, action: Action.BUY, icon: ACTION_WORDS[Action.BUY].icon})
+        expect(sold).toMatchObject({action: Action.BUY, icon: bought!.icon, color: bought!.color})
     })
 })
 

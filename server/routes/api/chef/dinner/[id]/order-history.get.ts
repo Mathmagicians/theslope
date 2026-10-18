@@ -24,7 +24,7 @@ const querySchema = z.object({since: z.coerce.date().optional()})
  */
 export default defineEventHandler(async (event): Promise<TicketChangesResponse> => {
     const d1Client = event.context.cloudflare.env.DB
-    const {TicketChangesResponseSchema, OrderAuditActionSchema, readAuditTicket} = useBookingValidation()
+    const {TicketChangesResponseSchema, OrderAuditActionSchema, readOrderAudit} = useBookingValidation()
     const {replayTicketChanges} = useBooking()
     const {deadlinesForSeason} = useSeason()
 
@@ -43,9 +43,9 @@ export default defineEventHandler(async (event): Promise<TicketChangesResponse> 
         const dinner = await fetchDinnerEvent(d1Client, id)
         if (!dinner?.seasonId) throw createError({statusCode: 404, message: `Dinner event ${id} not found in a season`})
         const [season, history, systemUserId] = await Promise.all([fetchSeason(d1Client, dinner.seasonId), fetchOrderHistoryForDinner(d1Client, id), getSystemUserId(d1Client)])
-        // A creation row names its household by id; the snapshot rows carry the short name themselves
-        const unnamedHouseholdIds = history.map(readAuditTicket)
-            .flatMap(ticket => ticket?.householdId && !ticket.householdShortname ? [ticket.householdId] : [])
+        // A legacy creation row names its household by id; a snapshot carries the short name itself
+        const unnamedHouseholdIds = history.map(readOrderAudit)
+            .flatMap(audit => audit?.householdId && !audit.householdShortname ? [audit.householdId] : [])
         // A sale's row names the buyer's inhabitant; its snapshot names the seller's household
         const buyerIds = history.flatMap(row => row.action === OrderAuditActionSchema.enum.USER_CLAIMED && row.inhabitantId !== null ? [row.inhabitantId] : [])
         const [households, buyerHouseholds] = await Promise.all([

@@ -342,6 +342,31 @@ describe('Bookings store — scaffold bookings', () => {
         expect(result.totals[Action.CANCEL]).toBe(1)
     })
 
+    // A preview reads what the save of the request would do: the save's request with ?preview=true, outside the booking write
+    it.each([
+        {who: 'a member', adminBypass: false, query: {adminBypass: 'false', preview: 'true'}},
+        {who: 'an admin correcting', adminBypass: true, query: {adminBypass: 'true', preview: 'true'}}
+    ])('previews a save for $who: sends the request with ?preview=true outside the booking write and returns its result without a toast', async ({adminBypass, query}) => {
+        const sent: {query: Record<string, unknown>, body: unknown}[] = []
+        const previewed = OrderFactory.defaultScaffoldOrdersResponse({
+            totals: {[Action.BUY]: 1, [Action.QUEUE]: 1},
+            positions: [{inhabitantId: 2, dinnerEventId: DINNER_ID, isGuestTicket: false, position: 3, ticketType: TicketType.ADULT}]
+        })
+        scaffoldEndpoint.mockImplementation(async (event: H3Event) => {
+            sent.push({query: getQuery(event), body: await readBody(event)})
+            return previewed
+        })
+        const store = useBookingsStore()
+        const request = {householdId: 7, dinnerEventIds: [DINNER_ID], orders: [OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID})]}
+
+        const preview = store.previewBookings(request, adminBypass)
+        expect(store.isProcessingBookings).toBe(false)
+
+        expect(await preview).toEqual(previewed.scaffoldResult)
+        expect(sent).toEqual([{query, body: request}])
+        expect(useToast().toasts.value).toHaveLength(0)
+    })
+
     it('rethrows a failed scaffold and clears the processing flag', async () => {
         scaffoldEndpoint.mockImplementation(failure)
         const store = useBookingsStore()

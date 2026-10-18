@@ -1,5 +1,5 @@
 import {z} from 'zod'
-import {useBookingValidation, type BookingOutcomes} from '~/composables/useBookingValidation'
+import {useBookingValidation, type AuditContext, type BookingOutcomes} from '~/composables/useBookingValidation'
 import {IdSchema} from '~/composables/useCoreValidation'
 
 // What a recovery does with an entry a stopped run grabbed: finish its placement, or hand it back to its line
@@ -107,3 +107,5 @@ export type PlacementRecovery = z.infer<typeof PlacementRecoverySchema>
 export type GrabbedWaitlistEntry = TicketWaitlistDisplay & {placingAt: Date}
 // What a placement walk finished: the tickets sold and the extra portions assigned, each with its dinner
 export type WaitlistPlacementOutcomes = Pick<BookingOutcomes, 'waitlistTicketsSold' | 'waitlistPortionsAssigned'>
+// The audit of a write to an entry: the history row it writes, with no order
+export type WaitlistAuditContext = Pick<AuditContext, 'action' | 'performedByUserId' | 'seasonId'>

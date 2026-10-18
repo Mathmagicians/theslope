@@ -205,7 +205,7 @@ Status.
 | `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `users.ts` | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ no ready flag, no `isEmpty`, `isInitialized` on my teams only; 0.9.1 |
 | `auth.ts` | N/A | ✅ | N/A | ✅ | ✅ |
-| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ✅ spec covers the queue entries, the household places, the dinner's queue, `addExtraPortions` and `isBookingsReloading` |
+| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ✅ spec covers the queue entries, the household places, the dinner's queue, `addExtraPortions`, `isBookingsReloading` and `previewBookings` |
 
 ## Composables
 

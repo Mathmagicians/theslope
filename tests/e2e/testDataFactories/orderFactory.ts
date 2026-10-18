@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, BookingResult, BookingTotals, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, TicketChange, TicketChangesResponse, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
+import type { OrderDisplay, BookingResult, BookingTotals, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, TicketChange, TicketChangesResponse, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, OrderAuditSource,CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
@@ -260,6 +260,16 @@ export class OrderFactory {
     allergies: [],
     ...overrides
   })
+
+  /**
+   * The auditData shapes earlier writers left in OrderHistory: a creation's order data with its source, a batch update's
+   * new scalars with the price row only when it changed, and a claim's or a deletion's snapshot
+   */
+  static readonly legacyAuditData = {
+    creation: (source: OrderAuditSource, orderData: OrderCreateWithPrice): string => JSON.stringify({source, orderData}),
+    update: (scalars: Pick<OrderDisplay, 'state' | 'dinnerMode'> & {ticketPriceId: number | null, priceAtBooking: number | null}): string => JSON.stringify(scalars),
+    snapshot: (orderSnapshot: OrderSnapshot): string => JSON.stringify({orderSnapshot})
+  }
 
   // === BULK ORDER CREATION ===
 
@@ -608,11 +618,15 @@ export class OrderFactory {
     context: BrowserContext,
     request: ScaffoldOrdersRequest,
     expectedStatus: number = 200,
-    adminBypass?: boolean
+    adminBypass?: boolean,
+    preview: boolean = false
   ): Promise<ScaffoldOrdersResponse | null> => {
     const { ScaffoldOrdersResponseSchema } = useBookingValidation()
+    const query = new URLSearchParams()
+    if (adminBypass !== undefined) query.append('adminBypass', String(adminBypass))
+    if (preview) query.append('preview', 'true')
 
-    const response = await context.request.post(`${HOUSEHOLD_SCAFFOLD_ENDPOINT}${adminBypass === undefined ? '' : `?adminBypass=${adminBypass}`}`, {
+    const response = await context.request.post(`${HOUSEHOLD_SCAFFOLD_ENDPOINT}${query.size > 0 ? `?${query}` : ''}`, {
       headers,
       data: request
     })
@@ -629,6 +643,14 @@ export class OrderFactory {
 
     return null
   }
+
+  /** Preview a scaffold save: the reply the save would give, with nothing written */
+  static readonly previewScaffoldOrders = (
+    context: BrowserContext,
+    request: ScaffoldOrdersRequest,
+    adminBypass?: boolean
+  ): Promise<ScaffoldOrdersResponse | null> =>
+    OrderFactory.scaffoldOrders(context, request, 200, adminBypass, true)
 
   /**
    * Create a DesiredOrder for booking (BOOKED state, specific mode)

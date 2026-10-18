@@ -1,62 +1,84 @@
 <!--
-Action Preview - Shows users what will happen when they save booking changes: one line per person and action,
-naming the dinners (up to three dates, else the count with the first and last date)
+Action Preview - What a save will do, read from the server's dry run of the save (formatPreviewLines): a day per
+dinner under its separator, ascending; within a day a line per action in the word table's order, then per person in the
+household's order; the tickets sold to the waiting list close their day. Every booking surface renders its preview here.
 
-ASCII mockup (COMPONENTS.actionPreview: the list, each item a badge with its glyph):
-┌──────────────────────────────────────────────────────────────────────────┐
-│ (ticket) Du er ved at ændre familiens booking                            │
-│                                                                          │
-│   [buy]      Anna køber en billet til salg: 19/10/2026                   │
-│   [queue]    Anna skrives på ventelisten: 20/10/2026, 21/10/2026         │
-│   [queue]    Gæst af Anna (Barn ×2) skrives på ventelisten: 20/10/2026   │
-│   [queue]    Bo ændrer spisemåde til Sen (venteliste): 20/10/2026        │
-│   [edit]     Lars ændrer spisemåde til Takeaway: 22/10/2026              │
-│   [released] Lars frigiver sin billet: 23/10/2026                        │
-│   [cancel]   Knud frameldes: 7 middage, 02/11/2026 – 14/12/2026          │
-└──────────────────────────────────────────────────────────────────────────┘
+ASCII mockup (ALERTS.legend; each day a USeparator on COMPONENTS.separator.moment with its weekday and date, each line
+a badge with its glyph in COMPONENTS.actionPreview):
+┌──────────────────────────────────────────────────────────────┐
+│ (ticket) Du er ved at ændre familiens booking                │
+│ ──────────────────── ti 20/10/2026 ───────────────────────── │
+│   [queue]     Anna skrives på ventelisten (Voksen #3)        │
+│ ──────────────────── to 22/10/2026 ───────────────────────── │
+│   [edit]      Anna ændrer spisemåde til Takeaway             │
+│   [edit]      Lars ændrer spisemåde til Takeaway             │
+│ ──────────────────── fr 23/10/2026 ───────────────────────── │
+│   [released]  Anna frigiver sin billet                       │
+│   [released]  Lars frigiver sin billet                       │
+│ ──────────────────── ti 27/10/2026 ───────────────────────── │
+│   [buy]       Anna køber en billet til salg                  │
+│   [sold]      1 billet sælges til ventelisten                │
+└──────────────────────────────────────────────────────────────┘
+A booker's guests of one ticket type read as one group: "Gæst af Anna (Voksen ×2) tilmeldes".
 
-Visual check: a grid save at 375px and desktop; the longest line stays inside the panel.
+While the preview loads (`pending`), the loader line in a table's #loading look (COMPONENTS.table.loadingRow) stands in
+its place:
+      (sync, spinning)  Prøver at beregne hvad I skal spise hvornår...
+
+Visual check: a grid save, a day form row, the guest form and the preference editor at 375px and desktop; the day
+separators read weekday and date, the longest line stays inside the panel, the loader shows while the preview loads.
 -->
 
 <script setup lang="ts">
-import type {ActionPreviewItem} from '~/composables/useBookingUi'
+import type {ActionPreviewDay} from '~/composables/useBookingUi'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 interface Props {
-  items: ActionPreviewItem[]
+  days: ActionPreviewDay[]
   title?: string
+  pending?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'Du er ved at ændre familiens booking'
+  title: BOOKING_WORDS.preview.title,
+  pending: false
 })
 
 const {ICONS, SIZES, ALERTS, NOISE, COMPONENTS} = useTheSlopeDesignSystem()
 </script>
 
 <template>
+  <div v-if="props.pending" :class="COMPONENTS.table.loadingRow" data-testid="action-preview-loading">
+    <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
+    {{ BOOKING_WORDS.preferencePreviewLoading }}
+  </div>
   <UAlert
-    v-if="props.items.length > 0"
+    v-else-if="props.days.length > 0"
     v-bind="ALERTS.legend"
     :icon="ICONS.ticket"
     :title="props.title"
+    data-testid="action-preview"
   >
     <template #description>
-      <ul :class="COMPONENTS.actionPreview.list">
-        <li
-          v-for="(item, index) in props.items"
-          :key="index"
-          :class="COMPONENTS.actionPreview.item"
-        >
-          <UBadge
-            :color="item.color"
-            :variant="NOISE.subtle"
-            :size="SIZES.small"
+      <div v-for="day in props.days" :key="day.dinnerEventId" data-testid="action-preview-day">
+        <USeparator v-bind="COMPONENTS.separator.moment" :label="day.label" />
+        <ul :class="COMPONENTS.actionPreview.list">
+          <li
+            v-for="(item, index) in day.lines"
+            :key="index"
+            :class="COMPONENTS.actionPreview.item"
           >
-            <UIcon :name="item.icon" :class="COMPONENTS.actionPreview.icon" />
-            {{ item.text }}
-          </UBadge>
-        </li>
-      </ul>
+            <UBadge
+              :color="item.color"
+              :variant="NOISE.subtle"
+              :size="SIZES.small"
+            >
+              <UIcon :name="item.icon" :class="COMPONENTS.actionPreview.icon" />
+              {{ item.text }}
+            </UBadge>
+          </li>
+        </ul>
+      </div>
     </template>
   </UAlert>
 </template>

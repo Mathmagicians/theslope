@@ -289,6 +289,16 @@ export const useBookingsStore = defineStore("Bookings", () => {
         return result
     }
 
+    /** What the save of the request would do, read without writing: the scaffold's preview, outside the booking write */
+    const previewBookings = async (request: ScaffoldOrdersRequest, adminBypass = false): Promise<ScaffoldResult> =>
+        (await apiRequest('/api/household/order/scaffold', {
+            method: 'POST',
+            body: request,
+            query: {adminBypass, preview: true},
+            schema: ScaffoldOrdersResponseSchema,
+            action: 'previewBookings'
+        })).scaffoldResult
+
     /**
      * ADR-016: Process bookings for a single dinner event.
      * Used by day view, power mode, and guest booking.
@@ -712,6 +722,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         isProcessingBookings,
         isBookingsReloading,
         writeBookings,
+        previewBookings,
         processSingleEventBookings,
         processMultipleEventsBookings,
         processAdminCorrection,

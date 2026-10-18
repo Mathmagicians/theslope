@@ -1431,7 +1431,9 @@ export const COMPONENTS = {
      * dinner of a week; the name cells (`powerName`, `inhabitantName`, `guestName` with `guestIcon`, `guestLabel`,
      * `guestUnknown`, `guestAddName` with `guestAddLabel`) and the count badges' `countIcon`; the guest-add
      * button, turning through `COMPONENTS.openTurn` while its form is open; the footer `summary` with its `summaryPrice`, the
-     * edit footer's `actionCell` and `actionStack`, and the `legend` gap
+     * edit footer's `actionCell` and `actionStack`, and the `legend` gap. A cell without an order shows the booking the
+     * preferences give it as `expectedBadge`: the mode in its own colour, outlined, its glyph and label in the muted ink,
+     * beside the waiting list's ghost (`COMPONENTS.waitlist.ghostBadge`); the day form's ticket binds it too
      */
     bookingGrid: {
         root: 'flex flex-col',
@@ -1458,7 +1460,8 @@ export const COMPONENTS = {
         summaryPrice: TEXT.muted,
         actionCell: 'px-2 py-2 border-t border-default',
         actionStack: 'flex flex-col gap-2',
-        legend: 'mt-4'
+        legend: 'mt-4',
+        expectedBadge: {variant: NOISE.medium, ink: TEXT.muted}
     },
 
     /** ActionPreview: the `list` of preview lines under the title, each `item` a badge with its `icon` */

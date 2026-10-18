@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, type OrderAuditAction, type OrderHistoryDisplay} from '~/composables/useBookingValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import type {PortionTicket} from '~/composables/useTicketPriceValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
@@ -29,7 +29,13 @@ describe('useBookingValidation', () => {
     OrderHistoryDetailSchema,
     OrderHistoryCreateSchema,
     OrderSnapshotSchema,
+    OrderAuditChangeSchema,
+    OrderAuditActionSchema,
+    OrderAuditSourceSchema,
+    OrderStateSchema,
+    DinnerModeSchema,
     createOrderAuditData,
+    readOrderAudit,
     serializeOrder,
     deserializeOrder,
     serializeOrderHistoryDisplay,
@@ -102,13 +108,70 @@ describe('useBookingValidation', () => {
       expect(result.success, getValidationError(result)).toBe(true)
     })
 
-    describe('createOrderAuditData', () => {
-      it('GIVEN snapshot WHEN creating audit data THEN returns valid JSON string', () => {
-        const snapshot = OrderFactory.defaultOrderSnapshot()
-        const auditData = createOrderAuditData(snapshot)
-        expect(typeof auditData).toBe('string')
-        const parsed = JSON.parse(auditData)
-        expect(parsed.orderSnapshot).toEqual(snapshot)
+    // One auditData format written by createOrderAuditData; readOrderAudit also reads the shapes earlier writers left
+    describe('order audit data', () => {
+      const Change = OrderAuditChangeSchema.enum
+      const Audit = OrderAuditActionSchema.enum
+      const Source = OrderAuditSourceSchema.enum
+      const State = OrderStateSchema.enum
+      const Mode = DinnerModeSchema.enum
+      const {legacyAuditData} = OrderFactory
+      const snapshot = OrderFactory.defaultOrderSnapshot({id: 7, isGuestTicket: true, allergies: ['Gluten']})
+      const BUYER = 20
+      // A row on the snapshot's dinner by its inhabitant; the row's order id is null once the order is deleted
+      const auditRow = (action: OrderAuditAction, auditData: string, overrides: Partial<OrderHistoryDisplay> = {}) =>
+        OrderFactory.defaultOrderHistoryDisplay(undefined, {action, auditData, orderId: null, inhabitantId: snapshot.inhabitantId, dinnerEventId: snapshot.dinnerEventId, ...overrides})
+      const tellsNothing = {
+        change: null, source: null, orderId: null, inhabitantId: null, dinnerEventId: null, householdId: null, householdShortname: null,
+        ticketPriceId: null, priceAtBooking: null, state: null, isGuestTicket: null, allergies: null
+      }
+      const ofSnapshot = {
+        orderId: snapshot.id, inhabitantId: snapshot.inhabitantId, dinnerEventId: snapshot.dinnerEventId, householdId: snapshot.householdId,
+        householdShortname: snapshot.householdShortname, ticketPriceId: snapshot.ticketPriceId, priceAtBooking: snapshot.priceAtBooking,
+        state: snapshot.state, isGuestTicket: snapshot.isGuestTicket, allergies: snapshot.allergies
+      }
+      const orderData = OrderFactory.defaultOrderCreateWithPrice(snapshot.householdId, {
+        inhabitantId: snapshot.inhabitantId, dinnerEventId: snapshot.dinnerEventId, ticketPriceId: 2, priceAtBooking: 2500, isGuestTicket: true
+      })
+      const ofOrderData = {
+        inhabitantId: orderData.inhabitantId, dinnerEventId: orderData.dinnerEventId, householdId: orderData.householdId,
+        ticketPriceId: orderData.ticketPriceId, priceAtBooking: orderData.priceAtBooking, state: orderData.state, isGuestTicket: orderData.isGuestTicket
+      }
+      // A legacy batch update's row: its order, inhabitant and dinner from the row's own fields
+      const ofUpdateRow = {orderId: snapshot.id, inhabitantId: snapshot.inhabitantId, dinnerEventId: snapshot.dinnerEventId}
+
+      it.each(OrderAuditChangeSchema.options)('GIVEN a %s written through createOrderAuditData WHEN reading the row THEN it reads the change and the order of the snapshot', (change) => {
+        expect(readOrderAudit(auditRow(Audit.SYSTEM_UPDATED, createOrderAuditData(change, snapshot)))).toEqual({...tellsNothing, change, ...ofSnapshot})
+      })
+
+      it('GIVEN a creation written with its source WHEN reading the row THEN the source reads back', () => {
+        const auditData = createOrderAuditData(Change.BOOK, snapshot, Source['waitlist-assignment'])
+        expect(readOrderAudit(auditRow(Audit.SYSTEM_CREATED, auditData))).toEqual({...tellsNothing, change: Change.BOOK, source: Source['waitlist-assignment'], ...ofSnapshot})
+      })
+
+      it.each([
+        {shape: 'a creation\'s order data and source', row: auditRow(Audit.USER_BOOKED, legacyAuditData.creation(Source['user-booking'], orderData)),
+          reads: {...tellsNothing, change: Change.BOOK, source: Source['user-booking'], ...ofOrderData}},
+        {shape: 'a creation whose source the enum does not name', row: auditRow(Audit.SYSTEM_CREATED, JSON.stringify({source: 'heynabo-import', orderData})),
+          reads: {...tellsNothing, change: Change.BOOK, ...ofOrderData}},
+        {shape: 'a release\'s new scalars', row: auditRow(Audit.USER_CANCELLED, legacyAuditData.update({state: State.RELEASED, dinnerMode: Mode.NONE, ticketPriceId: null, priceAtBooking: null}), {orderId: snapshot.id}),
+          reads: {...tellsNothing, change: Change.RELEASE, ...ofUpdateRow, state: State.RELEASED}},
+        {shape: 'the close\'s new scalars', row: auditRow(Audit.SYSTEM_UPDATED, legacyAuditData.update({state: State.CLOSED, dinnerMode: Mode.DINEIN, ticketPriceId: null, priceAtBooking: null}), {orderId: snapshot.id}),
+          reads: {...tellsNothing, change: Change.CLOSE, ...ofUpdateRow, state: State.CLOSED}},
+        {shape: 'a price row change\'s new scalars', row: auditRow(Audit.USER_BOOKED, legacyAuditData.update({state: State.BOOKED, dinnerMode: Mode.DINEIN, ticketPriceId: 2, priceAtBooking: 2500}), {orderId: snapshot.id}),
+          reads: {...tellsNothing, ...ofUpdateRow, ticketPriceId: 2, priceAtBooking: 2500, state: State.BOOKED}},
+        {shape: 'a claim\'s snapshot of the seller\'s order', row: auditRow(Audit.USER_CLAIMED, legacyAuditData.snapshot(snapshot), {orderId: snapshot.id, inhabitantId: BUYER}),
+          reads: {...tellsNothing, change: Change.BUY, ...ofSnapshot}},
+        {shape: 'a cancellation\'s snapshot', row: auditRow(Audit.USER_CANCELLED, legacyAuditData.snapshot(snapshot)),
+          reads: {...tellsNothing, change: Change.CANCEL, ...ofSnapshot}},
+        {shape: 'a system deletion\'s snapshot', row: auditRow(Audit.SYSTEM_DELETED, legacyAuditData.snapshot(snapshot)),
+          reads: {...tellsNothing, change: Change.CANCEL, ...ofSnapshot}}
+      ])('GIVEN the legacy shape of $shape WHEN reading the row THEN it reads what the row tells and null for the rest', ({row, reads}) => {
+        expect(readOrderAudit(row)).toEqual(reads)
+      })
+
+      it.each(['not json', 'null', '"a text"'])('GIVEN audit data holding no object (%s) WHEN reading the row THEN it reads null', (auditData) => {
+        expect(readOrderAudit(auditRow(Audit.USER_BOOKED, auditData))).toBeNull()
       })
     })
   })

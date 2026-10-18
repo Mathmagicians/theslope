@@ -10,6 +10,8 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import {useCoreValidation, type InhabitantDisplay} from '~/composables/useCoreValidation'
 import {useBookingValidation, type DinnerMode} from '~/composables/useBookingValidation'
+import type {WeekDayMap} from '~/types/dateTypes'
+import {dateToWeekDay} from '~/utils/season'
 const Action = useBookingValidation().BookingActionSchema.enum
 
 const {validatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo, daysFromNow} = testHelpers
@@ -260,5 +262,85 @@ test.describe('Waiting list assignment', () => {
         const events = history.changes.flatMap(change => change.events.map(event => event.change))
         expect(history.changes.some(change => change.bySystem && change.events.some(event => event.change === TicketChangeKind.RELEASE))).toBe(true)
         expect(events).toContain(TicketChangeKind.BUY)
+    })
+})
+
+/**
+ * A preference decides a place on the waiting list as a member's change does, and a member's own act on a place outranks
+ * it: a leave on the booking page records a cancellation, a join a booking. The household's preference run stands in
+ * for the nightly one: both decide by the same rules. Each case runs on its own season, every dinner past its deadline.
+ */
+test.describe('Preferences and the waiting list', () => {
+    const CLOSED_PERIOD = 10
+    const createdSeasonIds: number[] = []
+    const createdInhabitantIds: number[] = []
+    const Mode = DinnerModeSchema.enum
+
+    test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        for (const id of createdInhabitantIds) await HouseholdFactory.deleteInhabitant(context, id)
+        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+    })
+
+    // A person of the admin's household who eats on no day, on a season whose dinners are all past the deadline
+    const givenClosedSeason = async (context: Parameters<typeof WaitlistFactory.entries>[0], name: string) => {
+        const testSalt = temporaryAndRandom()
+        const {householdId} = await getSessionUserInfo(context)
+        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {ticketIsCancellableDaysBefore: CLOSED_PERIOD})
+        createdSeasonIds.push(season.id!)
+        const person = await HouseholdFactory.createInhabitantWithConfig(context, householdId, {name: salt(name, testSalt), dinnerPreferences: createDefaultWeekdayMap(Mode.NONE)})
+        createdInhabitantIds.push(person.id)
+        const preferences = (dinnerPreferences: WeekDayMap<DinnerMode>) =>
+            HouseholdFactory.updateInhabitantPreferences(context, person.id, dinnerPreferences, 200, season.id)
+        const placesOf = async () => (await WaitlistFactory.entries(context, dinnerEvents.map(de => de.id)))
+            .filter(entry => entry.inhabitantId === person.id && !entry.isGuestTicket)
+        const dinner = dinnerEvents[0]!
+        const placeOnDinner = async () => (await placesOf()).find(entry => entry.dinnerEventId === dinner.id)
+        return {householdId, season, dinnerEvents, dinner, person, preferences, placesOf, placeOnDinner}
+    }
+
+    test('GIVEN a person a preference run queued WHEN the person sets a dinner to Ingen on the booking page THEN the place is gone and the next run does not queue the person there again', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const {season, dinner, person, preferences, placeOnDinner} = await givenClosedSeason(context, 'Forlader')
+        const queued = await preferences(createDefaultWeekdayMap(Mode.DINEIN))
+        expect(queued!.scaffoldResult.results).toContainEqual(expect.objectContaining({inhabitantId: person.id, dinnerEventId: dinner.id, action: Action.QUEUE}))
+
+        const left = await WaitlistFactory.leave(context, season.id!, (await placeOnDinner())!)
+        expect(left.totals[Action.LEAVE]).toBe(1)
+        expect(await placeOnDinner()).toBeUndefined()
+
+        const nextRun = await preferences(createDefaultWeekdayMap(Mode.DINEIN))
+
+        expect(nextRun!.scaffoldResult.results.filter(line => line.inhabitantId === person.id && line.dinnerEventId === dinner.id)).toEqual([])
+        expect(await placeOnDinner()).toBeUndefined()
+    })
+
+    test('GIVEN a person a preference run queued WHEN the preference turns the dinner\'s weekday to Ingen and the rest to takeaway THEN the places on that weekday go and the other places take the new mode', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const {dinnerEvents, dinner, preferences, placesOf} = await givenClosedSeason(context, 'Skifter')
+        await preferences(createDefaultWeekdayMap(Mode.DINEIN))
+        const weekday = dateToWeekDay(dinner.date)
+        const onOtherWeekdays = dinnerEvents.filter(de => dateToWeekDay(de.date) !== weekday).map(de => de.id)
+
+        await preferences({...createDefaultWeekdayMap(Mode.TAKEAWAY), [weekday]: Mode.NONE})
+
+        const places = await placesOf()
+        expect(places.map(entry => entry.dinnerEventId).sort()).toEqual([...onOtherWeekdays].sort())
+        expect(places.map(entry => entry.order.dinnerMode)).toEqual(places.map(() => Mode.TAKEAWAY))
+    })
+
+    test('GIVEN a person who joined the waiting list on the booking page WHEN preference runs say Ingen and then takeaway THEN the place stands as the person left it', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const {householdId, season, dinner, person, preferences, placeOnDinner} = await givenClosedSeason(context, 'Står')
+        const adultPriceId = season.ticketPrices.find(price => price.ticketType === TicketType.ADULT)!.id!
+        const joined = await WaitlistFactory.queue(context, householdId, season.id!, OrderFactory.createBookingOrder(person.id, dinner.id, adultPriceId))
+        expect(joined.totals[Action.QUEUE]).toBe(1)
+        const place = await placeOnDinner()
+
+        await preferences(createDefaultWeekdayMap(Mode.NONE))
+        expect(await placeOnDinner()).toEqual(place)
+
+        await preferences(createDefaultWeekdayMap(Mode.TAKEAWAY))
+        expect(await placeOnDinner()).toEqual(place)
     })
 })

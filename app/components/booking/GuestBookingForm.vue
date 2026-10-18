@@ -9,16 +9,22 @@
  *
  * For "add guest" context, NONE is always disabled (can't add a guest who won't eat)
  * but shown for visual consistency with other booking forms.
+ *
+ * The preview above the buttons is the server's dry run of the guests' orders (ActionPreview, titled
+ * "Du er ved at tilføje gæster"): the loader while it works, then a line per outcome naming the guests; the button
+ * names the guests.
  */
-import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData, ScaffoldOrdersRequest} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import {supplyOfType, type PreviewSupply, type ReleasedTicketCounts} from '~/composables/useBooking'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 import type {FormSubmitEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
 
 interface Props {
+  householdId: number
   dinnerEvent: DinnerEventDisplay
   ticketPrices: TicketPrice[]
   allergyTypes: AllergyTypeDisplay[]
@@ -27,9 +33,12 @@ interface Props {
   bookerId: number
   bookerName: string
   isHouseholdInResidency: boolean
+  adminBypass?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  adminBypass: false
+})
 
 const emit = defineEmits<{
   save: [orders: DesiredOrder[]]
@@ -44,8 +53,9 @@ const guestForm = COMPONENTS.guestBookingForm
 const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets'))
 
 // Booking logic
-const {getBookingOptions, resolveUserBookingBuckets} = useBooking()
-const {createBookingBadges, formatActionPreview, guestSaveLabel} = useBookingUi()
+const {getBookingOptions} = useBooking()
+const {createBookingBadges, guestSaveLabel} = useBookingUi()
+const bookingsStore = useBookingsStore()
 const {canModifyOrders, canEditDiningMode} = props.deadlines
 
 // Validation schemas
@@ -95,9 +105,6 @@ const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadl
 // The header's badge while tickets are for sale
 const forSaleWords = computed(() => ticketsForSale(props.releasedTicketCounts))
 
-// The client settles the guests' claims against the tickets for sale of their ticket type on this dinner (the lock status)
-const supply: PreviewSupply = order => supplyOfType(props.releasedTicketCounts, props.ticketPrices, order.ticketPriceId)
-
 // The guests the form books: count orders at the picked ticket price, booked by the booker
 const guestOrdersOf = ({count, ticketPriceId, dinnerMode, allergyTypeIds}: GuestDraft): DesiredOrder[] =>
   Array.from({length: count}, () => ({
@@ -110,22 +117,17 @@ const guestOrdersOf = ({count, ticketPriceId, dinnerMode, allergyTypeIds}: Guest
     state: OrderStateEnum.BOOKED
   }))
 
-// Action preview: the guests' orders settled against the supply as the save settles them
-const actionPreviewItems = computed(() => {
-  const {ticketPriceId} = formState
-  if (!ticketPriceId || !bookingOptions.value.action) return []
-
-  // Resolve buckets using same logic as server; a new guest has no order and no queue entry
-  const buckets = resolveUserBookingBuckets(
-    guestOrdersOf({...formState, ticketPriceId}),
-    [],
-    [props.dinnerEvent],
-    props.deadlines
-  )
-
-  // Format preview items - use booker name for guest label
-  return formatActionPreview(buckets, [], [props.dinnerEvent], () => props.bookerName, supply)
+// The preview: the server's dry run of the guests a valid draft books
+const previewRequest = computed((): ScaffoldOrdersRequest | null => {
+  const draft = GuestBookingFormSchema.safeParse(formState)
+  if (!draft.success || !bookingOptions.value.action) return null
+  return {householdId: props.householdId, dinnerEventIds: [props.dinnerEvent.id], orders: guestOrdersOf(draft.data)}
 })
+const {result: preview, pending: isPreviewPending} = useScaffoldPreview(
+  () => previewRequest.value,
+  request => bookingsStore.previewBookings(request, props.adminBypass)
+)
+const previewDays = computed(() => preview.value ? formatPreviewLines(preview.value, [props.dinnerEvent], [props.bookerId]) : [])
 
 // The button names the guests; the preview lines name what saving does for them, one line per outcome
 const saveLabel = computed(() => guestSaveLabel(formState.count))
@@ -268,7 +270,7 @@ const handleCancel = () => emit('cancel')
       <template #footer>
         <div :class="guestForm.footer">
           <!-- Action preview: show what will happen when saving -->
-          <ActionPreview :items="actionPreviewItems" title="Du er ved at tilføje gæster" />
+          <ActionPreview :days="previewDays" :pending="isPreviewPending" :title="BOOKING_WORDS.preview.guestTitle" />
 
           <!-- Error messages near buttons -->
           <div v-if="errors.length > 0" :class="guestForm.errors">

@@ -62,12 +62,13 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
         console.info(`${LOG} User ${user.email} ${preview ? 'previewing' : 'updating'} preferences for inhabitant ${inhabitant.name} ${inhabitant.lastName}`)
         const storedInhabitant = preview ? inhabitant : await updateInhabitant(d1Client, id, {dinnerPreferences})
 
-        // Re-scaffold bookings for this household; a preview runs the same scaffold dry, on the draft
+        // Re-scaffold bookings for this household; a preview runs the same scaffold on the draft and writes nothing
         console.info(`${LOG} Re-scaffolding household ${storedInhabitant.householdId}`)
         const scaffoldResult: ScaffoldResult = await scaffoldPrebookings(d1Client, {
             seasonId,
             householdId: storedInhabitant.householdId,
-            dryRun: preview ? {inhabitantId: id, dinnerPreferences} : undefined
+            preferences: preview ? [{inhabitantId: id, dinnerPreferences}] : undefined,
+            preview
         })
         if (!preview) await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffoldResult.outcomes)
 

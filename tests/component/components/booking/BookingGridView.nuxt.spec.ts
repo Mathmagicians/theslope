@@ -1,8 +1,8 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
+import {describe, it, expect, beforeAll, beforeEach, afterEach, vi} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {findByTestId, clickByTestId, resetStores, findLoadingRow, isTableLoading} from '~~/tests/component/testHelpers'
+import {findByTestId, clickByTestId, resetStores, findLoadingRow, isTableLoading, registerScaffoldEndpoint} from '~~/tests/component/testHelpers'
 import {BookingViewSchema} from '~/composables/useBookingView'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
@@ -15,14 +15,20 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {ICONS} from '~/composables/useTheSlopeDesignSystem'
+import ActionPreview from '~/components/booking/ActionPreview.vue'
+import {formatPreviewLines} from '~/composables/useBookingUi'
 import {addDays, startOfDay} from 'date-fns'
 
 const {day, week, month} = BookingViewSchema.enum
 
 enableAutoUnmount(afterEach)
 
+// The preview and the expected bookings read the scaffold's dry run
+const scaffold = registerScaffoldEndpoint()
+
 beforeEach(() => {
   resetStores()
+  scaffold.reset()
 })
 
 const ticketPrices = TicketFactory.defaultTicketPrices()
@@ -148,10 +154,11 @@ describe('BookingGridView', () => {
       loading
     })
 
+    // The expected bookings' read runs the same bar; it lands at once here
     it.each([true, false])('GIVEN loading=%s THEN the table receives it, and the household\'s cells and the sum row stay', async (loading) => {
       const wrapper = await mountLoading(loading)
 
-      expect(isTableLoading(wrapper)).toBe(loading)
+      await vi.waitFor(() => expect(isTableLoading(wrapper)).toBe(loading))
       // The legend draws its own mode samples: a grid cell carries the dinner's id in its name
       expect(wrapper.findAllComponents(DinnerModeSelector).filter(c => String(c.props('name')).endsWith(`-${dinner.id}`))).toHaveLength(mockHousehold.inhabitants.length + 1)
       expect(wrapper.find('tfoot').exists()).toBe(true)
@@ -399,5 +406,123 @@ describe('BookingGridView add-guest button', () => {
   it('carries the chevron glyph', async () => {
     const wrapper = await mountEdit()
     expect(addButton(wrapper).props('icon')).toBe(ICONS.chevronDown)
+  })
+})
+
+// The grid's draft and its cells without an order read the server's dry run
+describe('BookingGridView and the server\'s dry run', () => {
+  const {DinnerModeSchema, BookingActionSchema} = useBookingValidation()
+  const DinnerMode = DinnerModeSchema.enum
+  const Action = BookingActionSchema.enum
+  const anna = mockHousehold.inhabitants[0]!
+  const lars = mockHousehold.inhabitants[1]!
+  const householdOrder = mockHousehold.inhabitants.map(({id}) => id)
+  const future = DinnerEventFactory.dinnerEventAt(2, 60)
+  const later = DinnerEventFactory.dinnerEventAt(3, 62)
+  const dinnerEvents = [future, later]
+  const mountWeek = (formMode: FormMode = FORM_MODES.VIEW, orders: OrderDisplay[] = []) => mount({
+    view: week,
+    dateRange: {start: addDays(future.date, -3), end: addDays(later.date, 3)},
+    dinnerEvents,
+    orders,
+    formMode
+  })
+  type Mounted = Awaited<ReturnType<typeof mount>>
+  const cell = (wrapper: Mounted, inhabitantId: number, dinnerEventId: number) =>
+    wrapper.findAllComponents(DinnerModeSelector).find(selector => selector.props('name') === `cell-${inhabitantId}-${dinnerEventId}`)!
+  const previews = () => scaffold.sent.filter(({body}) => body.orders.length > 0)
+  const expectedReads = () => scaffold.sent.filter(({body}) => body.orders.length === 0)
+  const resultOf = (inhabitant: typeof anna, dinnerEventId: number, action: string, dinnerMode: DinnerMode = DinnerMode.DINEIN) =>
+    OrderFactory.defaultBookingResult({inhabitantId: inhabitant.id, inhabitantName: inhabitant.name, dinnerEventId, dinnerMode, action: BookingActionSchema.parse(action)})
+  // Anna is expected on both dinners; Lars, who cancelled earlier, is left out
+  const annaExpected = () => OrderFactory.defaultScaffoldOrdersResponse({results: [resultOf(anna, future.id, Action.BOOK), resultOf(anna, later.id, Action.BOOK)]})
+  const landed = async (wrapper: Mounted) => {
+    await vi.waitFor(() => expect(expectedReads().length).toBeGreaterThan(0))
+    await vi.waitFor(() => expect(isTableLoading(wrapper)).toBe(false))
+  }
+
+  describe('the expected bookings', () => {
+    it('reads the dry run with no orders on the dinners on view and shows Anna\'s expected cells outlined, Lars\'s on Ingen, with the legend entry', async () => {
+      scaffold.answers.expected = annaExpected
+      const wrapper = await mountWeek()
+      await landed(wrapper)
+
+      expect(expectedReads()[0]).toEqual({query: {adminBypass: 'false', preview: 'true'}, body: {householdId: mockHousehold.id, dinnerEventIds: [future.id, later.id], orders: []}})
+      dinnerEvents.forEach(({id}) => {
+        expect(cell(wrapper, anna.id, id).props()).toMatchObject({modelValue: DinnerMode.DINEIN, expected: true})
+        expect(cell(wrapper, lars.id, id).props()).toMatchObject({modelValue: DinnerMode.NONE, expected: false})
+      })
+      expect(findByTestId(wrapper, 'dinner-mode-legend-expected').exists()).toBe(true)
+    })
+
+    it('an order supersedes the expected booking, and without an expected cell the legend carries no entry for it', async () => {
+      scaffold.answers.expected = () => OrderFactory.defaultScaffoldOrdersResponse({results: [resultOf(anna, future.id, Action.BOOK)]})
+      const annaOrder = OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: anna.id, dinnerEventId: future.id, dinnerMode: DinnerMode.TAKEAWAY})
+      const wrapper = await mountWeek(FORM_MODES.VIEW, [annaOrder])
+      await landed(wrapper)
+
+      expect(cell(wrapper, anna.id, future.id).props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, expected: false})
+      expect(findByTestId(wrapper, 'dinner-mode-legend-expected').exists()).toBe(false)
+    })
+
+    it('the table\'s loading bar runs while the read loads', async () => {
+      let land: () => void = () => {}
+      const held = new Promise<void>(resolve => {
+        land = resolve
+      })
+      scaffold.answers.expected = async () => {
+        await held
+        return annaExpected()
+      }
+      const wrapper = await mountWeek()
+
+      await vi.waitFor(() => expect(isTableLoading(wrapper)).toBe(true))
+      land()
+      await vi.waitFor(() => expect(isTableLoading(wrapper)).toBe(false))
+      expect(cell(wrapper, anna.id, future.id).props('expected')).toBe(true)
+    })
+  })
+
+  describe('the preview of the draft', () => {
+    it('GIVEN no draft THEN no preview is asked for', async () => {
+      const wrapper = await mountWeek(FORM_MODES.EDIT)
+      await landed(wrapper)
+
+      expect(previews()).toEqual([])
+      expect(wrapper.findComponent(ActionPreview).props()).toMatchObject({days: [], pending: false})
+    })
+
+    it('WHEN a cell changes THEN the draft goes to the dry run once the clicks rest, the loader shows meanwhile, and the reply renders a day per dinner', async () => {
+      const reply = OrderFactory.defaultScaffoldOrdersResponse({results: [resultOf(lars, future.id, Action.BOOK, DinnerMode.DINEINLATE)]})
+      scaffold.answers.preview = () => reply
+      const wrapper = await mountWeek(FORM_MODES.EDIT)
+      await landed(wrapper)
+
+      await clickByTestId(wrapper, `cell-${lars.id}-${future.id}`)
+      expect(wrapper.findComponent(ActionPreview).props('pending')).toBe(true)
+
+      await vi.waitFor(() => expect(wrapper.findComponent(ActionPreview).props('days')).toEqual(formatPreviewLines(reply.scaffoldResult, dinnerEvents, householdOrder)))
+      expect(previews()).toEqual([{
+        query: {adminBypass: 'false', preview: 'true'},
+        body: {householdId: mockHousehold.id, dinnerEventIds: [future.id], orders: [expect.objectContaining({inhabitantId: lars.id, dinnerEventId: future.id, dinnerMode: cell(wrapper, lars.id, future.id).props('modelValue')})]}
+      }])
+    })
+
+    it('WHEN an expected cell is set to Ingen THEN the draft sends the bare Ingen and the reply previews the cancellation', async () => {
+      scaffold.answers.expected = annaExpected
+      scaffold.answers.preview = () => OrderFactory.defaultScaffoldOrdersResponse({results: [resultOf(anna, future.id, Action.CANCEL, DinnerMode.NONE)]})
+      const wrapper = await mountWeek(FORM_MODES.EDIT)
+      await landed(wrapper)
+
+      cell(wrapper, anna.id, future.id).vm.$emit('update:modelValue', DinnerMode.NONE)
+      await nextTick()
+      expect(cell(wrapper, anna.id, future.id).props()).toMatchObject({modelValue: DinnerMode.NONE, isModified: true, expected: false})
+
+      await vi.waitFor(() => expect(wrapper.findComponent(ActionPreview).props('days').flatMap(day => day.lines.map(line => line.text)))
+        .toEqual([`${anna.name} frameldes`]))
+      const [bareIngen] = previews().at(-1)!.body.orders
+      expect(bareIngen).toMatchObject({inhabitantId: anna.id, dinnerEventId: future.id, dinnerMode: DinnerMode.NONE})
+      expect(bareIngen).not.toHaveProperty('orderId')
+    })
   })
 })

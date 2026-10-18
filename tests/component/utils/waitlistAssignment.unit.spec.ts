@@ -8,7 +8,7 @@ import {
     releaseWaitlistEntry, removePlacedWaitlistEntry
 } from '~~/server/data/waitlistRepository'
 import {assignWaitlistPortions, joinWaitlist, sellTicketsToWaitlist} from '~~/server/utils/waitlistAssignment'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, OrderAuditAction} from '~/composables/useBookingValidation'
 import {useWaitlistValidation, type PlacementOrder} from '~/composables/useWaitlistValidation'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
@@ -93,12 +93,15 @@ beforeEach(() => {
 describe('joinWaitlist', () => {
     const {position: _position, ...request} = second!
     const wish = TicketWaitlistCreateSchema.parse(request)
+    // The member who joins, as the join's history row names them
+    const audit = {action: OrderAuditAction.USER_BOOKED, performedByUserId: 7, seasonId: SEASON_ID}
 
-    it('decides by the dinner it is handed and reads neither the dinner nor its season', async () => {
+    it('decides by the dinner it is handed, reads neither the dinner nor its season, and writes the entry with its audit', async () => {
         vi.mocked(createWaitlistEntry).mockResolvedValue(second!)
 
-        const {position, joined} = await joinWaitlist(d1Client, wish, {state: DinnerState.SCHEDULED, ticketPrices})
+        const {position, joined} = await joinWaitlist(d1Client, wish, {state: DinnerState.SCHEDULED, ticketPrices}, audit)
 
+        expect(createWaitlistEntry).toHaveBeenCalledWith(d1Client, wish, audit)
         expect(position).toBe(2)
         expect(joined).toMatchObject({position: 2, ticketType: TicketTypeSchema.enum.ADULT, queueSize: 2})
         expect(fetchDinnerEvent).not.toHaveBeenCalled()
@@ -106,7 +109,7 @@ describe('joinWaitlist', () => {
     })
 
     it.each([DinnerState.CONSUMED, DinnerState.CANCELLED])('refuses a %s dinner', async (state) => {
-        await expect(joinWaitlist(d1Client, wish, {state, ticketPrices})).rejects.toMatchObject({statusCode: 400})
+        await expect(joinWaitlist(d1Client, wish, {state, ticketPrices}, audit)).rejects.toMatchObject({statusCode: 400})
         expect(createWaitlistEntry).not.toHaveBeenCalled()
     })
 })

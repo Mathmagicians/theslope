@@ -13,6 +13,7 @@
  * ┃                fra Hansen                                        ░░░░░░░░┃
  * ┃  [cl][gu][al]  [BARN · 35kr · 2 Gæster]       [mode] Spisesal   ░░[tk]░░┃  claimed guest, allergic   gu + al green
  * ┃  [wl][  ][  ]  [VOKSEN · 55kr]                (mode) Spisesal   ░░[tk]░░┃  queued   wl toned, edge neutral, (mode) the wish ghosted
+ * ┃  [  ][  ][  ]  [VOKSEN · 55kr]                (mode) Spisesal   ░░[tk]░░┃  expected: no order yet, (mode) the booking the preferences give, outlined
  * ┃  [  ][  ][  ]  [BARN · 17kr]                  [remove]          ░░[tk]░░┃  a season's ticket price (TicketPriceListEditor)
  * ┃                Under 12 år · Barn                                ░░░░░░░░┃
  *
@@ -22,6 +23,7 @@
  * type = the badge (ticket.badge) in the ticket type's colour
  * how you eat = ticket.modeSlot: DinnerModeSelector in view mode, right-aligned; a queued ticket shows the wished mode as
  *   its ghost (COMPONENTS.waitlist)
+ *   an expected booking (no order yet) shows the mode outlined (COMPONENTS.bookingGrid.expectedBadge)
  *   or the caller's control through the end slot (a ticket price's remove button)
  * row 2 = ticket.subRow, starting under the badge: the household a claimed ticket came from, or a ticket price's note
  * [tk] = ICONS.ticketSolid at ticket.watermarkIcon
@@ -41,6 +43,7 @@ interface Props {
   price: number
   dinnerMode?: DinnerMode
   ticketState?: TicketStateValue // What the ticket is now (ticketStateOf); a queued ticket's dinnerMode is the wish, not a booking
+  expected?: boolean // No order yet: dinnerMode is the booking the preferences give
   guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
   consensus?: boolean // Power mode: true=all agree, false=mixed, undefined=not power mode
   allergies?: AllergyTypeDisplay[] // The eater's allergy types; the card shows the glyph only
@@ -51,6 +54,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   dinnerMode: undefined,
   ticketState: TicketState.normal,
+  expected: false,
   guestCount: undefined,
   consensus: undefined,
   allergies: () => [],
@@ -142,6 +146,7 @@ const badgeText = computed(() => {
               :model-value="dinnerMode"
               :consensus="consensus"
               :ghost="isWish"
+              :expected="expected"
               show-label
             />
           </slot>

@@ -104,8 +104,8 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/sender/event/monthly-billing.post.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ |
 | **Household** | | | | | |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save naming an order since bought by another household lists it in `failed`; that case awaits its spec |
+| `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ `?preview=true` runs the save dry; past the deadline the path buys or queues (One intent path); `preferences.e2e` written, unrun |
+| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save naming an order since bought by another household lists it in `failed`; that case awaits its spec. `?preview=true` runs the save dry, an empty draft answers the household's next run (One intent path); `scaffold.e2e` written, unrun |
 | `/api/household/allergy/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/allergy/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/allergy/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |

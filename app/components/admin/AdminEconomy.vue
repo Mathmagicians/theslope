@@ -551,6 +551,7 @@ const dinnerBreakdownStats = computed(() => {
                         :ticket-prices="ticketPrices"
                         :deadlines="adminDeadlines"
                         :can-edit-admin-override="() => true"
+                        admin-bypass
                         @save-bookings="handleAdminSave"
                         @cancel="cancelEditing"
                     />

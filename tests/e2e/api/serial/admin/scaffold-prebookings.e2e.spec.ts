@@ -5,6 +5,7 @@ import {useWeekDayMapValidation} from '~~/app/composables/useWeekDayMapValidatio
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
 const Action = useActionValidation().BookingActionSchema.enum
@@ -12,7 +13,7 @@ const Action = useActionValidation().BookingActionSchema.enum
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap: createDefaultDinnerModeMap} = useCoreValidation()
-const {validatedBrowserContext, temporaryAndRandom, assertNoOrdersWithOrphanPrices, daysFromNow} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom, assertNoOrdersWithOrphanPrices, daysFromNow} = testHelpers
 const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
 
 /**
@@ -30,10 +31,12 @@ const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidati
 test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
     const createdSeasonIds: number[] = []
     const createdHouseholdIds: number[] = []
+    const createdInhabitantIds: number[] = []
     const allDaysCooking = createBooleanWeekdayMap([true, true, true, true, true, true, true])
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+        for (const inhabitantId of createdInhabitantIds) await HouseholdFactory.deleteInhabitant(context, inhabitantId)
         for (const householdId of createdHouseholdIds) {
             await HouseholdFactory.deleteHousehold(context, householdId)
         }
@@ -538,5 +541,37 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                 expect(preserved?.id, 'Same order ID').toBe(userOrder!.id)
             })
         }
+    })
+
+    // A member's Ingen is a cancellation whatever the person holds: on a dinner the scaffold has not reached, with nothing
+    // booked, it is recorded alone and the scaffold that reaches the dinner books nothing there
+    test('GIVEN a dinner beyond the scaffold window WHEN a member sets it to Ingen THEN the reply counts one cancellation, and the scaffold that reaches the dinner books no order on it', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const memberContext = await memberValidatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+        const {householdId} = await getSessionUserInfo(memberContext)
+        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {ticketIsCancellableDaysBefore: 0})
+        createdSeasonIds.push(season.id!)
+        const inhabitant = await HouseholdFactory.createInhabitantWithConfig(context, householdId, {
+            name: salt('Ingen', testSalt), dinnerPreferences: createDefaultDinnerModeMap(DinnerMode.DINEIN)
+        })
+        createdInhabitantIds.push(inhabitant.id)
+        const beyondWindow = await DinnerEventFactory.createDinnerEvent(context, {seasonId: season.id!, date: daysFromNow(70), menuTitle: salt('Beyond the window', testSalt)})
+        const adultPriceId = season.ticketPrices.find(price => price.ticketType === useBookingValidation().TicketTypeSchema.enum.ADULT)!.id!
+
+        const cancelled = await OrderFactory.scaffoldOrders(memberContext, {
+            householdId, seasonId: season.id!, dinnerEventIds: [beyondWindow.id],
+            orders: [OrderFactory.createBookingOrder(inhabitant.id, beyondWindow.id, adultPriceId, DinnerMode.NONE)]
+        })
+
+        expect(cancelled!.scaffoldResult.results).toEqual([expect.objectContaining({inhabitantId: inhabitant.id, dinnerEventId: beyondWindow.id, action: Action.CANCEL})])
+
+        // The dinner moves into the window, where the scaffold reaches it beside the season's other dinners
+        await DinnerEventFactory.updateDinnerEvent(context, beyondWindow.id, {date: daysFromNow(5)})
+        await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+
+        const orders = (await OrderFactory.getAllOrdersForEvents(context, [...dinnerEvents.map(de => de.id), beyondWindow.id]))
+            .filter(order => order.inhabitantId === inhabitant.id)
+        expect(orders.map(order => order.dinnerEventId).sort()).toEqual(dinnerEvents.map(de => de.id).sort())
     })
 })

@@ -1,6 +1,6 @@
 import {describe, it, expect} from 'vitest'
 import {subMinutes} from 'date-fns'
-import {useWaitlist} from '~/composables/useWaitlist'
+import {useWaitlist, type TicketForSale} from '~/composables/useWaitlist'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useWaitlistValidation, type PlacementOrder, type TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
@@ -71,6 +71,51 @@ describe('useWaitlist', () => {
 
     it('sums the portion need of the queue', () => {
         expect(portionNeed(queue, portionsOf)).toBe(3)
+    })
+
+    it('reports a joined entry at its place in its ticket type\'s line, with the size and the portion need of the queue that holds it', () => {
+        const {joinedOf} = useWaitlist()
+
+        expect(joinedOf(queue, queue[2]!, TICKET_PRICES, 7)).toEqual({
+            position: 2,
+            joined: {dinnerEventId: 100, inhabitantId: queue[2]!.inhabitantId, bookedByUserId: 7, position: 2, ticketType: TicketType.ADULT, queueSize: 4, portionNeed: 3}
+        })
+    })
+
+    // What the sale to the waiting list would sell, read without writing; sellers are households 5, 6 and 7
+    describe('previewSale', () => {
+        const {previewSale} = useWaitlist()
+        const ticket = (id: number, ticketType: keyof typeof PRICE_ID, minute: number, householdId: number, dinnerEventId = 100): TicketForSale =>
+            ({id, dinnerEventId, ticketPriceId: PRICE_ID[ticketType], releasedAt: new Date(2026, 9, 1, 14, minute), householdId})
+        const sale = (buyer: TicketWaitlistDisplay, ticketType: keyof typeof PRICE_ID, sellerHouseholdId: number) => ({
+            dinnerEventId: buyer.dinnerEventId, ticketPriceId: PRICE_ID[ticketType], buyerInhabitantId: buyer.inhabitantId,
+            buyerHouseholdId: buyer.order.householdId, sellerHouseholdId
+        })
+        const [adult1, child2, adult3] = queue
+
+        it.each([
+            {
+                description: 'each line takes its type\'s tickets oldest released first; a line longer than its tickets waits',
+                tickets: [ticket(70, TicketType.ADULT, 2, 5), ticket(71, TicketType.ADULT, 1, 6), ticket(72, TicketType.CHILD, 1, 7)],
+                sold: [sale(adult1!, TicketType.ADULT, 6), sale(adult3!, TicketType.ADULT, 5), sale(child2!, TicketType.CHILD, 7)]
+            },
+            {
+                description: 'tickets beyond a line\'s length stay for sale',
+                tickets: [ticket(70, TicketType.ADULT, 0, 5), ticket(71, TicketType.ADULT, 1, 6), ticket(72, TicketType.ADULT, 2, 7)],
+                sold: [sale(adult1!, TicketType.ADULT, 5), sale(adult3!, TicketType.ADULT, 6)]
+            },
+            {
+                description: 'a ticket of a type nobody waits for, or of another dinner, sells to nobody',
+                tickets: [ticket(70, TicketType.BABY, 0, 5), ticket(71, TicketType.ADULT, 1, 6, 101)],
+                sold: []
+            }
+        ])('$description', ({tickets, sold}) => {
+            expect(previewSale(queue, tickets, TICKET_PRICES)).toEqual({waitlistTicketsSold: sold})
+        })
+
+        it('sells nothing while nobody waits', () => {
+            expect(previewSale([], [ticket(70, TicketType.ADULT, 0, 5)], TICKET_PRICES)).toEqual({waitlistTicketsSold: []})
+        })
     })
 
     describe.each([

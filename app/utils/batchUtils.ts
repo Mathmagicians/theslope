@@ -34,6 +34,14 @@ export const groupBy = <T, K extends string | number>(getKey: (item: T) => K) =>
             return map.set(key, [...group, item])
         }, new Map<K, T[]>())
 
+/** Lines from rows: the rows with one key make one line, the lines in the given order */
+export const linesBy = <Row, Line, Key extends string | number>(
+    keyOf: (row: Row) => Key,
+    toLine: (rows: Row[], key: Key) => Line,
+    order: (a: Line, b: Line) => number
+) => (rows: Row[]): Line[] =>
+    Array.from(groupBy(keyOf)(rows), ([key, group]) => toLine(group, key)).sort(order)
+
 /** Splits a list by a predicate: the items that match, then the rest */
 export const partition = <T>(predicate: (item: T) => boolean) => (items: T[]): [T[], T[]] =>
     [items.filter(predicate), items.filter(item => !predicate(item))]

@@ -112,18 +112,25 @@
  *
  * The collapsed row: DinnerTicket queued (the hourglass, the wish ghosted) and the position badge on the line under
  * the name, the place in the line of the entry's ticket type (createWaitlistBadge through DeadlineBadge). One booking
- * path: the save sends the desired order through the scaffold, which books, buys a ticket for sale or queues by supply;
- * the save label previews the outcome (bookingSaveLabel over previewOutcome: Book, Køb billet, Skriv på venteliste,
- * Forlad ventelisten, Opdater); a requeue previews "X ændrer spisemåde til Sen (venteliste): 20/10/2026". A queued
- * row edits its wish (requeued) or picks Ingen to leave; Tilføj gæst saves the same way.
+ * path: the save sends the desired order through the scaffold, which books, buys a ticket for sale or queues by supply.
+ * The expanded row previews its save through the server's dry run (ActionPreview under the dinner's day separator, the
+ * loader while it works); the save label reads the reply's outcome (bookingSaveLabel over previewSaveOutcome: Book,
+ * Køb billet, Skriv på venteliste, Forlad ventelisten, Opdater); a requeue previews "X ændrer spisemåde til Sen
+ * (venteliste)". A queued row edits its wish (requeued) or picks Ingen to leave; Tilføj gæst saves the same way.
+ *
+ * EXPECTED BOOKINGS - a row without an order or a queue entry shows the booking the preferences give it, read from the
+ * dry run with no orders, its mode ghosted (COMPONENTS.bookingGrid.expectedBadge); a person the run leaves out reads
+ * Ingen; the legend gains "Forventet efter præferencer" and the table's loading bar runs while the read loads:
+ *   Anna    [  ][  ][  ] [VOKSEN · 55kr]   (mode) Spisesal    expected, ghosted
+ *   Bo      [  ][  ][  ] [VOKSEN · 55kr]   [mode] Ingen       cancelled earlier: not expected
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
-import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, BookingRowAction, TicketState as TicketStateValue} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, BookingRowAction, ScaffoldOrdersRequest, TicketState as TicketStateValue} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {TicketPresentation} from '~/composables/useBookingUi'
-import {EMPTY_RELEASED_TICKET_COUNTS, supplyOfType, type PreviewSupply, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES} from '~/types/form'
 
@@ -147,6 +154,7 @@ interface TableRow {
   disabledModes: DinnerMode[] // Computed via getBookingOptions per row
   bookingAction: BookingRowAction | null // What action is possible for this row
   waitlistEntry?: TicketWaitlistDetail // The inhabitant's own place in the queue, while they hold no ticket
+  expected?: boolean // No order and no queue entry: the mode is the booking the preferences give the row
   consensus?: boolean // Power mode: true=all agree, false=mixed
   price: number
   ticketPriceId: number | null // Nullable: TicketPrice may be deleted (priceAtBooking preserved)
@@ -170,6 +178,8 @@ interface Props {
   waitlistEntries?: TicketWaitlistDetail[]
   /** The dinner's bookings are on the way */
   loading?: boolean
+  /** An admin's save lifts the deadlines (ADR-016): its preview reads the same run */
+  adminBypass?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -179,7 +189,8 @@ const props = withDefaults(defineProps<Props>(), {
   releasedTicketCounts: () => EMPTY_RELEASED_TICKET_COUNTS,
   canEditAdminOverride: undefined,
   waitlistEntries: () => [],
-  loading: false
+  loading: false,
+  adminBypass: false
 })
 
 const emit = defineEmits<{
@@ -322,6 +333,19 @@ const eventOrders = computed(() =>
 )
 const eventWaitlistEntries = computed(() => props.waitlistEntries.filter(entry => entry.dinnerEventId === props.dinnerEvent.id))
 
+// The bookings the scaffold will make on this dinner: its dry run with no orders, read again once the orders change
+const bookingsStore = useBookingsStore()
+const householdOrder = computed(() => household.value?.inhabitants.map(({id}) => id) ?? [])
+const expectedRequest = computed((): ScaffoldOrdersRequest | null => household.value && !dinnerHasPassed.value
+  ? {householdId: household.value.id, dinnerEventIds: [props.dinnerEvent.id], orders: []}
+  : null)
+const {result: expectedRun, pending: isExpectedPending} = useScaffoldPreview(
+  () => expectedRequest.value,
+  request => bookingsStore.previewBookings(request),
+  {refreshOn: [() => props.orders]}
+)
+const expectedModes = computed(() => expectedBookings(expectedRun.value))
+
 // The household's own notes on a closed dinner: the tickets it released and its places on the waiting list
 const householdReleasedNote = computed(() =>
   householdReleasedTickets.value.length > 0 ? SUPPLY_WORDS.householdReleased(householdReleasedTickets.value.length) : null)
@@ -344,10 +368,6 @@ const columns = computed(() => [
 // Booker for guest tickets: current user's inhabitant (for regular booking flow)
 const {myInhabitant: bookerInhabitant} = storeToRefs(householdsStore)
 
-// Inhabitant name lookup (used by actionPreviewItems)
-const getInhabitantName = (id: number) =>
-  household.value?.inhabitants.find(i => i.id === id)?.name ?? 'Ukendt'
-
 const tableData = computed((): TableRow[] => {
   if (!household.value?.inhabitants) return []
 
@@ -357,6 +377,8 @@ const tableData = computed((): TableRow[] => {
     const order = findRegularOrder(eventOrders.value, inhabitant.id, props.dinnerEvent.id) ?? null
     // An order supersedes a queue entry: the assignment deletes the entry it placed
     const waitlistEntry = order ? undefined : findRegularOrder(eventWaitlistEntries.value, inhabitant.id, props.dinnerEvent.id)
+    // A row with neither shows the booking the preferences give it
+    const expectedMode = order || waitlistEntry ? undefined : expectedModes.value.get(expectedBookingKey(inhabitant.id, props.dinnerEvent.id))
 
     // Single DRY code path: resolveTicketPrice → ticketTypePresentation
     const ticketPrice = resolveTicketPrice(
@@ -375,7 +397,8 @@ const tableData = computed((): TableRow[] => {
       ticketConfig: ticketPrice ? ticketTypePresentation(ticketPrice.ticketType) : null,
       order,
       waitlistEntry,
-      dinnerMode: order?.dinnerMode ?? waitlistEntry?.order.dinnerMode ?? DinnerModeEnum.NONE,
+      expected: expectedMode !== undefined,
+      dinnerMode: order?.dinnerMode ?? waitlistEntry?.order.dinnerMode ?? expectedMode ?? DinnerModeEnum.NONE,
       ...getRowBookingState(order, false, !!waitlistEntry),
       price: order?.priceAtBooking ?? ticketPrice?.price ?? 0,
       ticketPriceId: order?.ticketPriceId ?? ticketPrice?.id ?? null,
@@ -576,8 +599,8 @@ const handleGuestSave = (orders: DesiredOrder[]) => completeBooking(orders)
 // HELPER TEXT
 // ============================================================================
 
-const {groupGuestOrders, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
-const {createBookingBadges, createWaitlistBadge, bookingSaveLabel, previewOutcome, formatActionPreview} = useBookingUi()
+const {groupGuestOrders, getBookingOptions, getDayBillSummary, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
+const {createBookingBadges, createWaitlistBadge, bookingSaveLabel} = useBookingUi()
 
 // A queue entry's place names the line of the ticket type its price holds
 const ticketTypeOfEntry = computed(() => useWaitlist().ticketTypeOfEntry(props.ticketPrices))
@@ -588,30 +611,23 @@ const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadl
 // Day bill summary (ticket counts + total price)
 const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
 
-// The client settles a claim against the tickets for sale of the order's ticket type on this dinner (the lock status)
-const supply: PreviewSupply = order => supplyOfType(props.releasedTicketCounts, props.ticketPrices, order.ticketPriceId)
-
-// What saving the expanded row does: its buckets feed the preview lines and the save label
-const editingBuckets = computed(() => {
+// What saving the expanded row does: the server's dry run of its desired orders feeds the preview and the save label
+const previewRequest = computed((): ScaffoldOrdersRequest | null => {
   const row = tableData.value.find(r => r.id === editingRowId.value)
-  if (!row || row.rowType === 'guest') return null // guest-add uses GuestBookingForm
-
-  const desiredOrders = buildDesiredOrdersForRow(row)
-  if (desiredOrders.length === 0) return null
-
-  // The household's queue entries tell a requeue or a leave from a new claim
-  return resolveUserBookingBuckets(
-    desiredOrders,
-    eventOrders.value,
-    [props.dinnerEvent],
-    props.deadlines,
-    eventWaitlistEntries.value
-  )
+  // The add-guest row previews in GuestBookingForm
+  if (!row || row.rowType === 'guest' || !household.value) return null
+  const orders = buildDesiredOrdersForRow(row)
+  return orders.length > 0 ? {householdId: household.value.id, dinnerEventIds: [props.dinnerEvent.id], orders} : null
 })
+const {result: preview, pending: isPreviewPending} = useScaffoldPreview(
+  () => previewRequest.value,
+  request => bookingsStore.previewBookings(request, props.adminBypass)
+)
+const previewDays = computed(() => preview.value ? formatPreviewLines(preview.value, [props.dinnerEvent], householdOrder.value) : [])
+const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOutcome(preview.value) : BookingActionSchema.enum.CHANGE_MODE))
 
-const actionPreviewItems = computed(() =>
-  editingBuckets.value ? formatActionPreview(editingBuckets.value, eventOrders.value, [props.dinnerEvent], getInhabitantName, supply) : [])
-const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? previewOutcome(editingBuckets.value, supply) : BookingActionSchema.enum.CHANGE_MODE))
+// The legend explains a ghosted mode while a row shows one
+const hasExpectedRow = computed(() => tableData.value.some(row => row.expected))
 </script>
 
 <template>
@@ -679,7 +695,7 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
       v-model:expanded="expanded"
       :data="tableData"
       :columns="columns"
-      :loading="loading"
+      :loading="loading || isExpectedPending"
       row-key="id"
       data-testid="booking-table"
       :ui="COMPONENTS.table.bookingUi"
@@ -798,6 +814,7 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
               :price="row.original.price"
               :dinner-mode="row.original.dinnerMode"
               :ticket-state="row.original.ticketState"
+              :expected="row.original.expected"
               :guest-count="row.original.guestCount"
               :allergies="row.original.allergyTypes"
               :provenance-household="row.original.provenanceHousehold"
@@ -824,6 +841,7 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
             :price="row.original.price"
             :dinner-mode="row.original.dinnerMode"
             :ticket-state="row.original.ticketState"
+            :expected="row.original.expected"
             :guest-count="row.original.guestCount"
             :allergies="row.original.allergyTypes"
             :provenance-household="row.original.provenanceHousehold"
@@ -835,7 +853,8 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
       <template #expanded="{row}">
         <!-- Guest add row: Use standalone GuestBookingForm -->
         <GuestBookingForm
-          v-if="row.original.rowType === 'guest' && bookerInhabitant?.id"
+          v-if="row.original.rowType === 'guest' && bookerInhabitant?.id && household"
+          :household-id="household.id"
           :dinner-event="dinnerEvent"
           :ticket-prices="ticketPrices"
           :allergy-types="allergyTypes ?? []"
@@ -844,6 +863,7 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
           :booker-id="bookerInhabitant.id"
           :booker-name="bookerInhabitant.name"
           :is-household-in-residency="isHouseholdInResidency"
+          :admin-bypass="adminBypass"
           @save="handleGuestSave"
           @cancel="handleCancel"
         />
@@ -925,7 +945,7 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
           <!-- Footer: action preview + buttons (stacked on mobile, horizontal on desktop) -->
           <template #footer>
             <div :class="COMPONENTS.bookingForm.editFooter">
-              <ActionPreview :items="actionPreviewItems" />
+              <ActionPreview :days="previewDays" :pending="isPreviewPending" />
 
               <div :class="LAYOUTS.formButtonRow">
                 <UButton
@@ -956,6 +976,6 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
     </UTable>
 
     <!-- Legend: shared with the week/month grid -->
-    <DinnerModeLegend v-if="isEditModeAllowed" :class="COMPONENTS.bookingForm.legend"/>
+    <DinnerModeLegend v-if="isEditModeAllowed" :show-expected="hasExpectedRow" :class="COMPONENTS.bookingForm.legend"/>
   </div>
 </template>

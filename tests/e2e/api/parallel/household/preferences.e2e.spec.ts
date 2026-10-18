@@ -358,3 +358,64 @@ test.describe('Preference preview', () => {
         expect(linesOf(saved)).toEqual(linesOf(preview))
     })
 })
+
+/**
+ * Past the deadline a preference decides as a member's booking: it buys a ticket for sale while nobody waits, else the
+ * person joins the end of the line. The spec's own season books with its deadline open, then closes it; a seller of the
+ * member's household books the dinner, wants no dinner by preference, and releases the ticket or queues a guest
+ */
+test.describe('Preferences on a closed dinner', () => {
+    const created: OwnSeasonIds = {seasonIds: [], inhabitantIds: []}
+    // Every dinner of the week-long season lies within it once the season closes
+    const CLOSED_PERIOD = 10
+
+    test.afterAll(({browser}) => removeOwnSeasons(browser, created))
+
+    const examples = [
+        {supply: 'a ticket for sale and nobody waiting', outcome: 'buys it', action: Action.BUY, sellerReleases: true, place: null, holds: 1},
+        {supply: 'a waiting line of one', outcome: 'joins at the end of the line', action: Action.QUEUE, sellerReleases: false, place: 2, holds: 0}
+    ]
+
+    examples.forEach(({supply, outcome, action, sellerReleases, place, holds}) => {
+        test(`GIVEN a closed dinner with ${supply} WHEN the preference turns Spisesal THEN the preview lists the save's actions and changes nothing, and the person ${outcome}`, async ({browser}) => {
+            const {adminContext, memberContext, householdId, season, dinnerEvents, dinner, inhabitant, dineIn} = await personBookedOnOwnSeason(browser, 'Closed-Dinner', created)
+            const adultPriceId = season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!.id!
+            const none = createDefaultWeekdayMap(DinnerMode.NONE)
+            // While the dinner is open the person's dinners are cancelled and the seller books it
+            await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, none, 200, season.id)
+            const seller = await HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {name: salt('Seller', temporaryAndRandom()), dinnerPreferences: none})
+            created.inhabitantIds.push(seller.id)
+            const scaffold = (orders: ReturnType<typeof OrderFactory.createBookingOrder>[]) =>
+                OrderFactory.scaffoldOrders(memberContext, {householdId, seasonId: season.id!, dinnerEventIds: [dinner.id], orders})
+            const booked = await scaffold([OrderFactory.createBookingOrder(seller.id, dinner.id, adultPriceId)])
+            expect(booked!.scaffoldResult.totals[Action.BOOK]).toBe(1)
+            await SeasonFactory.updateSeason(adminContext, {...season, ticketIsCancellableDaysBefore: CLOSED_PERIOD})
+            const sellerOrder = (await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, [dinner.id])).find(order => order.inhabitantId === seller.id && !order.isGuestTicket)!
+            if (sellerReleases) await OrderFactory.updateOrder(memberContext, sellerOrder.id, {dinnerMode: DinnerMode.NONE})
+            else await scaffold([OrderFactory.createGuestOrder(seller.id, dinner.id, adultPriceId)])
+
+            // The run covers the member's whole household and the season's dinners; the case reads its person on the dinner
+            const supplyOf = async () => ({
+                orders: await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, dinnerEvents.map(de => de.id)),
+                entries: await WaitlistFactory.entries(adminContext, [dinner.id])
+            })
+            const linesOf = (reply: InhabitantUpdateResponse | null) => reply!.scaffoldResult.results.filter(line => line.inhabitantId === inhabitant.id)
+            const placeOf = (reply: InhabitantUpdateResponse | null) => reply!.scaffoldResult.positions.find(position => position.inhabitantId === inhabitant.id && position.dinnerEventId === dinner.id)?.position ?? null
+            const before = await supplyOf()
+
+            const preview = await HouseholdFactory.previewInhabitantPreferences(memberContext, inhabitant.id, dineIn, season.id)
+
+            expect(linesOf(preview)).toContainEqual(expect.objectContaining({dinnerEventId: dinner.id, action}))
+            expect(placeOf(preview)).toBe(place)
+            expect(await supplyOf()).toEqual(before)
+
+            const saved = await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, dineIn, 200, season.id)
+
+            expect(linesOf(saved)).toEqual(linesOf(preview))
+            expect(placeOf(saved)).toBe(place)
+            const {orders, entries} = await supplyOf()
+            expect(orders.filter(order => order.dinnerEventId === dinner.id && order.inhabitantId === inhabitant.id && order.state === OrderStateSchema.enum.BOOKED)).toHaveLength(holds)
+            expect(entries.findIndex(entry => entry.inhabitantId === inhabitant.id && !entry.isGuestTicket) + 1 || null).toBe(place)
+        })
+    })
+})

@@ -6,7 +6,6 @@ import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFa
 import { WaitlistFactory } from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
 import { useBookingValidation } from '~/composables/useBookingValidation'
-import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 import type { Season } from '~/composables/useSeasonValidation'
@@ -16,7 +15,6 @@ const Action = useBookingValidation().BookingActionSchema.enum
 const { validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, salt, getSessionUserInfo, daysFromNow } = testHelpers
 const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema } = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
-const { createDefaultWeekdayMap } = useWeekDayMapValidation({ valueSchema: DinnerModeSchema, defaultValue: DinnerMode.NONE })
 
 /**
  * E2E tests for POST /api/household/order/scaffold
@@ -28,6 +26,7 @@ const { createDefaultWeekdayMap } = useWeekDayMapValidation({ valueSchema: Dinne
  * - Multi-event grid booking
  * - Guest ticket creation
  * - After the deadline: claim a released ticket, else queue; leave and requeue an entry
+ * - A preview: the save's reply, nothing written
  * - Error cases
  */
 test.describe('Household Scaffold API (ADR-016)', () => {
@@ -591,18 +590,71 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       expect(await WaitlistFactory.entries(context, [dinnerEventId])).toHaveLength(1)
     })
 
-    test('GIVEN a household eating every day by preference WHEN its preferences re-scaffold a closed dinner THEN nothing queues', async ({ browser }) => {
+    test('GIVEN a closed dinner with one adult ticket for sale WHEN a save of two adult wishes is previewed THEN the reply lists the purchase and the place in line, nothing changes, and the save answers the same', async ({ browser }) => {
       const context = await validatedBrowserContext(browser)
-      const dinnerEventId = await closedDinner(context, 'Queue system mode')
-      const { household, inhabitants } = await HouseholdFactory.createHouseholdWithInhabitants(context, { address: salt('Systemvej 1', temporaryAndRandom()) }, 1)
+      const dinnerEventId = await closedDinner(context, 'Queue preview')
+      const sellerId = await queuedInhabitant(context, 'Preview seller')
+      const buyerId = await queuedInhabitant(context, 'Preview buyer')
+      const queuerId = await queuedInhabitant(context, 'Preview queuer')
+      const created = await OrderFactory.createOrder(context, {
+        householdId: testHouseholdId, dinnerEventId, orders: [OrderFactory.defaultOrderItem({ inhabitantId: sellerId, ticketPriceId: testAdultTicketPriceId })]
+      })
+      const ticketForSale = await OrderFactory.updateOrder(context, created!.createdIds[0]!, { dinnerMode: DinnerMode.NONE })
+      expect(ticketForSale?.state).toBe(OrderStateSchema.enum.RELEASED)
+      const request: ScaffoldOrdersRequest = {
+        householdId: testHouseholdId, seasonId: testSeason.id!, dinnerEventIds: [dinnerEventId],
+        orders: [OrderFactory.createBookingOrder(buyerId, dinnerEventId, testAdultTicketPriceId), OrderFactory.createBookingOrder(queuerId, dinnerEventId, testAdultTicketPriceId)]
+      }
+      const supply = async () => ({
+        orders: await OrderFactory.getOrders(context, { dinnerEventIds: dinnerEventId, allHouseholds: true }),
+        entries: await WaitlistFactory.entries(context, [dinnerEventId])
+      })
+      const before = await supply()
+
+      const preview = await OrderFactory.previewScaffoldOrders(context, request)
+
+      expect(preview!.scaffoldResult.results.map(line => [line.inhabitantId, line.action])).toEqual([[buyerId, Action.BUY], [queuerId, Action.QUEUE]])
+      expect(preview!.scaffoldResult.positions).toEqual([{ inhabitantId: queuerId, dinnerEventId, isGuestTicket: false, position: 1, ticketType: TicketTypeSchema.enum.ADULT }])
+      expect(await supply()).toEqual(before)
+
+      const saved = await OrderFactory.scaffoldOrders(context, request)
+
+      expect(saved!.scaffoldResult.results).toEqual(preview!.scaffoldResult.results)
+      expect(saved!.scaffoldResult.positions).toEqual(preview!.scaffoldResult.positions)
+      expect((await OrderFactory.getOrder(context, ticketForSale!.id))?.inhabitantId).toBe(buyerId)
+      expect((await WaitlistFactory.entries(context, [dinnerEventId])).map(entry => entry.inhabitantId)).toEqual([queuerId])
+    })
+  })
+
+  // ============================================================================
+  // NEXT RUN: a preview with no orders answers the bookings the household's preferences make on the dinners asked
+  // ============================================================================
+
+  test.describe('Next run preview', () => {
+    test('GIVEN a household eating every day by preference and an Ingen set on one of two open dinners WHEN an empty draft is previewed on both THEN the reply lists the booking of the other dinner and nothing changes', async ({ browser }) => {
+      const context = await validatedBrowserContext(browser)
+      const { household, inhabitants } = await HouseholdFactory.createHouseholdWithInhabitants(context, { name: salt('NextRun', temporaryAndRandom()) }, 1)
       createdHouseholdIds.push(household.id)
+      const inhabitantId = inhabitants[0]!.id
+      const openDinner = async (days: number) => (await DinnerEventFactory.createDinnerEvent(context, {
+        seasonId: testSeason.id!, date: daysFromNow(days), menuTitle: salt('Test NextRun', temporaryAndRandom())
+      })).id
+      const [bookedId, cancelledId] = [await openDinner(20), await openDinner(22)]
+      // The household is not the admin's own: the admin writes and reads it with adminBypass
+      const cancelled = await OrderFactory.scaffoldOrders(context, {
+        householdId: household.id, seasonId: testSeason.id!, dinnerEventIds: [cancelledId],
+        orders: [OrderFactory.createBookingOrder(inhabitantId, cancelledId, testAdultTicketPriceId, DinnerMode.NONE)]
+      }, 200, true)
+      expect(cancelled!.scaffoldResult.totals[Action.CANCEL]).toBe(1)
+      const ordersOf = async () => OrderFactory.getOrders(context, { dinnerEventIds: [bookedId, cancelledId], allHouseholds: true })
+      const before = await ordersOf()
 
-      const updated = await HouseholdFactory.updateInhabitant(context, inhabitants[0]!.id, {
-        dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
-      }, 200, testSeason.id!)
+      const preview = await OrderFactory.previewScaffoldOrders(context, {
+        householdId: household.id, seasonId: testSeason.id!, dinnerEventIds: [bookedId, cancelledId], orders: []
+      }, true)
 
-      expect(updated?.scaffoldResult).toMatchObject({ totals: { [Action.QUEUE]: 0, [Action.BUY]: 0 } })
-      expect(await WaitlistFactory.entries(context, [dinnerEventId])).toEqual([])
+      expect(preview!.scaffoldResult.results.map(line => [line.inhabitantId, line.dinnerEventId, line.action])).toEqual([[inhabitantId, bookedId, Action.BOOK]])
+      expect(await ordersOf()).toEqual(before)
     })
   })
 

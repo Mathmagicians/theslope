@@ -1,5 +1,5 @@
 import {describe, it, expect, vi} from 'vitest'
-import {chunkArray, groupBy, partition, pruneAndCreate, writeBatchOrEach} from '~/utils/batchUtils'
+import {chunkArray, groupBy, linesBy, partition, pruneAndCreate, writeBatchOrEach} from '~/utils/batchUtils'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 
 const {OrderStateSchema, DinnerModeSchema} = useBookingValidation()
@@ -52,6 +52,32 @@ describe('batchUtils', () => {
             expect(result.size).toBe(2)
             expect(result.get(OrderState.BOOKED)?.map(o => o.id)).toEqual([1, 3])
             expect(result.get(OrderState.RELEASED)?.map(o => o.id)).toEqual([2, 4])
+        })
+    })
+
+    describe('linesBy', () => {
+        interface Row { day: number; name: string }
+        // One line per day: the day and the names on it, the days ascending
+        const daysOf = linesBy<Row, {day: number, names: string[]}, number>(
+            row => row.day,
+            (rows, day) => ({day, names: rows.map(row => row.name)}),
+            (a, b) => a.day - b.day
+        )
+
+        it.each([
+            {desc: 'an empty input makes no lines', rows: [], lines: []},
+            {
+                desc: 'the rows with one key make one line, in the order the rows name them',
+                rows: [{day: 3, name: 'Anna'}, {day: 3, name: 'Lars'}],
+                lines: [{day: 3, names: ['Anna', 'Lars']}]
+            },
+            {
+                desc: 'the lines follow the given order',
+                rows: [{day: 5, name: 'Anna'}, {day: 1, name: 'Lars'}, {day: 5, name: 'Knud'}, {day: 3, name: 'Lene'}],
+                lines: [{day: 1, names: ['Lars']}, {day: 3, names: ['Lene']}, {day: 5, names: ['Anna', 'Knud']}]
+            }
+        ])('$desc', ({rows, lines}) => {
+            expect(daysOf(rows)).toEqual(lines)
         })
     })
 
