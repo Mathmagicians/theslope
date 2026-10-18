@@ -42,11 +42,12 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         const {householdId} = await getSessionUserInfo(adminContext)
         testHouseholdId = householdId
         // The order to correct belongs to a person of the admin's household who books nothing by preference, so the
-        // season's activation leaves the dinner free for it
+        // season's activation leaves the dinner free for it; the create stores no preferences, the update after it does
         const person = await HouseholdFactory.createInhabitantWithConfig(adminContext, testHouseholdId, {
-            name: salt('Anders', testSalt), lastName: 'Korrektion', dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
+            name: salt('Anders', testSalt), lastName: 'Korrektion'
         })
         testInhabitantId = person.id
+        await HouseholdFactory.updateInhabitant(adminContext, testInhabitantId, {dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)})
 
         // The spec's own season, open at activation: its cases correct an upcoming order and read no deadline
         testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 14, deadline: 0})

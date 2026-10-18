@@ -8,7 +8,7 @@ import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useOrder} from '~/composables/useOrder'
 import {useTicket} from '~/composables/useTicket'
 import {useBillingValidation} from '~/composables/useBillingValidation'
-import {formatDate, DATE_SETTINGS} from '~/utils/date'
+import {formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, kitchenConfig, resetStores} from '~~/tests/component/testHelpers'
 
 enableAutoUnmount(afterEach)
@@ -154,9 +154,11 @@ describe('ExpenseLines', () => {
         })
 
         it('GIVEN the round WHEN open THEN the whole team gets its heading and the same three rows; without one no round block shows', async () => {
-            const withRound = await mount({editable: true, round: {label: 'Hele Madhold 2, periode 12/04–14/04', figures: {budgetGross: 400000, spentGross: 423800}}})
+            const [first, last] = lines()
+            const label = `Hele Madhold 2, periode ${formatDateRange({start: first!.createdAt, end: last!.createdAt}, DATE_SETTINGS.DAY_MONTH_MASK)}`
+            const withRound = await mount({editable: true, round: {label, figures: {budgetGross: 400000, spentGross: 423800}}})
             await open(withRound)
-            expect(findByTestId(withRound, 'expense-hint-heading').text()).toBe('Hele Madhold 2, periode 12/04–14/04')
+            expect(findByTestId(withRound, 'expense-hint-heading').text()).toBe(label)
             const rows = findAllByTestId(withRound, 'expense-hint-row')
             expect(rows).toHaveLength(6)
             expect(rows[3]!.text()).toContain('Rådighedsbeløb')

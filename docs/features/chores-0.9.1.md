@@ -229,6 +229,32 @@ ships; no migration.
 `useSeason.nuxt`: assignment and reconciliation with events in the stored shape. `season.e2e`: a generated dinner reads
 back at UTC midnight.
 
+## Preferences at an inhabitant's creation
+
+### Problem
+
+`InhabitantCreateSchema` (`useCoreValidation.ts:207`) accepts `dinnerPreferences`, and the create
+(`saveInhabitant`, `prismaRepository.ts:339-354`; the import's `createInhabitants`, `:415-424`) writes the row without
+it. The season initialises a person's preferences: `clipPreferences` (`server/utils/initializePreferences.ts`) runs on
+activation, on a season update and nightly, writes Spisesal on the cooking days and Ingen on the rest into a `null`
+map, and sets a stored map's non-cooking days to Ingen. A map sent with a create is dropped silently; a spec that
+creates a person with Ingen and then activates a season finds the person booked (`AdminEconomy.e2e.spec.ts`, 2026-10-19).
+The specs set preferences through the preference write after the create.
+
+### Decision — OPEN
+
+- a) the create persists a map when the body carries one; the import sends none, so the clip initialises as today.
+  An API case: a create with Ingen reads back Ingen after an activation.
+- b) the create takes no map: `InhabitantCreateSchema` omits `dinnerPreferences`, a body carrying it is a 400, the
+  factory default `dinnerPreferences` in `defaultInhabitantData` goes. Preferences are the season's to initialise and
+  the person's to change. An API case: a create with a map answers 400.
+
+### Affected
+
+`app/composables/useCoreValidation.ts`, `server/data/prismaRepository.ts`, `tests/e2e/testDataFactories/householdFactory.ts`,
+`tests/e2e/api/parallel/admin/household.e2e.spec.ts`, the specs that pass a map at creation
+(`HouseholdBookings.e2e.spec.ts`).
+
 ### Affected
 
 `server/data/prismaRepository.ts`, `server/utils/reconcileDinnerEvents.ts`, `app/utils/date.ts`,

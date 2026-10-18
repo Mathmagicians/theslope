@@ -6,7 +6,7 @@ import CookingRoundSpending from '~/components/chef/CookingRoundSpending.vue'
 import {dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow, type SpendingFragment} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useTicket} from '~/composables/useTicket'
-import {formatDate, DATE_SETTINGS} from '~/utils/date'
+import {formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
 import {mountWithTooltipProvider, findByTestId, resetStores, registerEmptyStoreEndpoints, holdEndpoint, isTableLoading, untilTrue} from '~~/tests/component/testHelpers'
 import {useBookingsStore} from '~/stores/bookings'
 
@@ -31,7 +31,7 @@ const rows: CookingRoundRow[] = [
     {dinnerEventId: 2, date: new Date('2026-04-13T18:00:00'), menuTitle: 'Boller i karry', isCurrent: false, budgetGross: 189000, spentGross: 174400},
     {dinnerEventId: 3, date: new Date('2026-04-14T18:00:00'), menuTitle: 'Risotto', isCurrent: true, budgetGross: 187300, spentGross: 163800}
 ]
-const words = {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, periode 12/04–14/04'}
+const words = {team: 'Hele Madhold 2', heading: `Hele Madhold 2, periode ${formatDateRange({start: rows[0]!.date, end: rows[2]!.date}, DATE_SETTINGS.DAY_MONTH_MASK)}`}
 
 const mount = (props: {fragment: SpendingFragment}) => mountWithTooltipProvider(CookingRoundSpending, {props, isMd: true})
 // The table's body rows without the total row the body-bottom slot adds

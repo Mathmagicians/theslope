@@ -10,8 +10,8 @@
  *   Risotto                 1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check)
  *
  * The team's round: its heading, the cooking days as the rows, the team's total row
- *   Hele Madhold 2, periode 12/04–15/04                       ex / inkl. moms
- *   12/04  Lasagne          1.425 / 1.781 kr  1.540 / 1.925 kr  -115 / -144 kr (overdraft)
+ *   Hele Madhold 2, periode 12/04-15/04                       ex / inkl. moms
+ *   12/04  Lasagne         1.425 / 1.781 kr  1.540 / 1.925 kr  -115 / -144 kr (overdraft)
  *   14/04  (arrow) Risotto  1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check)
  *   15/04  Pasta                0 /     0 kr      0 /     0 kr      0 /     0 kr (waiting)
  *   Hele Madhold 2          2.923 / 3.654 kr  2.850 / 3.563 kr   +73 /  +91 kr (check)
@@ -21,7 +21,7 @@
  *   Dato   Middag            Rådighedsbeløb      Brugt         Tilbage
  *   Fællesspisning           1.498 / 1.873 kr       0 /    0 kr  ...
  *
- *   Hele Madhold 2, periode 03/11–10/11                       ex / inkl. moms
+ *   Hele Madhold 2, periode 03/11-10/11                      ex / inkl. moms
  *   Dato   Middag            Rådighedsbeløb      Brugt         Tilbage
  *   03/11  Lasagne           1.425 / 1.781 kr  1.540 / 1.925 kr  ...
  *   10/11  Fællesspisning    1.498 / 1.873 kr       0 /    0 kr  ...
@@ -29,8 +29,8 @@
  *
  * While the round's orders load (the bookings store), UTable's loading bar runs under the team's round's column
  * headers and its days and total row stay; this dinner's receipts come from the dinner and carry no bar:
- *   Hele Madhold 2, periode 12/04–15/04                       ex / inkl. moms
- *   Dato   Middag            Rådighedsbeløb      Brugt         Tilbage
+ *   Hele Madhold 2, periode 12/04-15/04                       ex / inkl. moms
+ *   Dato  Middag            Rådighedsbeløb      Brugt         Tilbage
  *   ==============================================================  <- UTable's loading bar
  *   12/04  Lasagne          1.425 / 1.781 kr  1.540 / 1.925 kr  -115 / -144 kr (overdraft)
  *

@@ -818,7 +818,8 @@ sign-off.
   hands-off, ADR-016 rule 5 unchanged.
 - #16 Chef spending: the dates in the spending tables read dd/MM, as the mockups draw them ("periode 03/11–10/11",
   Dato "03/11"); the table is crowded, and the short format reads better. #27 (2026-10-19): Madbestilling's lines
-  table reads dd/MM too, for consistency.
+  table reads dd/MM too, for consistency. #26 (2026-10-19): an interval reads as `formatDateRange` renders it, with a
+  hyphen ("periode 03/11-10/11"), the app's default; the mockups and the fixtures that drew an en dash follow.
 - The architecture skill (`.claude/skills/architecture/SKILL.md`) is signed; senior-architect,
   nuxt-typescript-developer and frontend-engineer list it. The five non-test agents drop `disallowedTools` (option b);
   "no Playwright outside the test engineer" stays a rule of the briefs and the peer-sessions skill.
