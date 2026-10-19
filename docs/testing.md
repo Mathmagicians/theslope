@@ -809,16 +809,10 @@ Business logic often depends on deadlines (e.g., "can only cancel 2 days before 
 
 ### Strategy: Control the Season, Control the Deadline
 
-**Serial tests create their own season** with specific deadline configuration:
-
-```typescript
-// Season config for predictable deadline scenarios:
-// - ALL days cooking (Mon-Sun) → predictable event count regardless of day-of-week
-// - 2-day deadline → tomorrow is ALWAYS after deadline
-// - 10-day duration → guarantees both before/after deadline events exist
-// The factory creates the season with its dinner events from tomorrow and activates it (one season is active at a time)
-testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 10, deadline: 2, cookingDays: 'all'})
-```
+**Serial tests create their own season** with the deadline their cases need:
+`SeasonFactory.createActiveSeasonFromTomorrow` creates it with its dinners from tomorrow and activates it. The season in
+`tests/e2e/ui/serial/HouseholdScaffolding.e2e.spec.ts` (`beforeAll`) cooks every day with a 2-day deadline, so it
+holds dinners after and before the deadline.
 
 **Result with 2-day deadline:**
 - Events 3+ days away → **BEFORE deadline** (can CREATE, DELETE)

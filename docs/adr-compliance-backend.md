@@ -100,8 +100,8 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/maintenance/job-run/[id].get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/heynabo/import.get.ts` | ✅ | ⚠️ | ✅ | ✅ serial | ⚠️ raw query read |
 | **Admin - sender events** | | | | | |
-| `/api/admin/sender/event/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ |
-| `/api/admin/sender/event/monthly-billing.post.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ |
+| `/api/admin/sender/event/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ batched, 100 per call |
+| `/api/admin/sender/event/monthly-billing.post.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ batched, 100 per call |
 | **Household** | | | | | |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save runs on the weekdays its draft changes, `?preview=true` runs the save dry on the same; past the deadline the path buys or queues (One intent path); `preferences.e2e` green in CI 2026-10-19 (8ed7e42) |
@@ -124,7 +124,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/team/cooking/[id]/remove-role.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **User** | | | | | |
 | `/api/user/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the booking mails honour the saved `notificationChannels` |
-| `/api/user/notifications/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ |
+| `/api/user/notifications/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ batched, 100 per call |
 | **Public** | | | | | |
 | `/api/public/billing/[token]/index.get.ts` | ✅ | ✅ | ❓ | ✅ ui | ❓ audit needed |
 | `/api/public/billing/[token]/csv.get.ts` | ✅ | ✅ | ❓ | ✅ ui | ❓ audit needed |

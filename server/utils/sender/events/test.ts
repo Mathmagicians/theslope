@@ -21,5 +21,5 @@ export const emitTestEmail = (channel: EmailChannel, to?: string): Promise<Sende
         console.warn(`${LOG} ${missingAddress(channel.config, 'adminEmail')} not set — mail not sent`)
         return notSent(KIND, 'unconfigured')
     }
-    return emit(channel.queue, buildTestEmail(channel.config, recipient))
+    return emit(channel.queue, buildTestEmail(channel.config, recipient)).then(([result]) => result!)
 }

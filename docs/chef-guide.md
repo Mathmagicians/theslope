@@ -122,14 +122,14 @@ Når du har handlet, skriver du beløbet ind, så budgettet følger med:
 3. Linjen gemmes med det samme - med dato og dig som bestiller. Skraldespanden fjerner den igen
 4. Klik **Tilbage** for at folde sektionen sammen
 
-Over linjerne står hjælpetallene **Rådighedsbeløb**, **Brugt** og **Til rådighed** - med et flueben når der er penge tilbage, og et udråbstegn når du er over. Laver dit madhold mad flere dage i træk, står holdets samlede saldo for de dage på sin egen linje.
+Over linjerne står hjælpetallene **Rådighedsbeløb**, **Brugt** og **Tilbage** - med et flueben når der er penge tilbage, og et udråbstegn når du er over. Laver dit madhold mad flere dage i træk, står holdets samlede saldo for de dage på sin egen linje.
 
 **Budget**-sektionen nedenunder viser tre bokse:
 
 | Boks | Indhold |
 |------|---------|
 | **Indtægter** | Alle betalte billetter - også dem der er frigivet efter fristen |
-| **Rådighedsbeløb** | Indtægter minus køkkenbidrag: det du kan handle for. Med **Brugt** og **Til rådighed** |
+| **Rådighedsbeløb** | Indtægter minus køkkenbidrag: det du kan handle for. Med **Brugt** og **Tilbage** |
 | **Køkkenbidrag** | 5 % af indtægterne, som går til køkkenet |
 
 Alle beløb står som **ex / inkl. moms**. Fold sektionen ud for **Billetter** (fordelt på voksen, barn og baby), **Billetændringer** siden menufristen - med **Vis fuld historik** - og holdets runde, hvis I laver mad flere dage i træk.

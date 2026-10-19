@@ -1,13 +1,13 @@
 /**
  * Booking notifications: the waiting-list mails and the sold mail. The booking steps return their outcomes; the caller
  * hands them here after the action. notifyBookingOutcomes and notifyExtraPortions resolve recipients and household
- * shortnames from the database, each kind the mails name in one read (ADR-014); bookingMails turns the resolved mails
- * into messages on the channel.
+ * shortnames from the database, each kind the mails name in one read (ADR-014); bookingMails composes the resolved mails
+ * and puts them on the channel in one emit, a batch per hundred.
  */
 import {channelOff, emit, notSent} from '~~/server/utils/sender/emit'
 import {composeEmail, siteUrl} from '~~/server/utils/sender/compose'
 import type {EmailChannel} from '~~/server/utils/sender/config'
-import type {SenderEmitResult} from '~/composables/useNotificationValidation'
+import type {EmailMessage, NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
 import type {BookingOutcomes, TicketSale, WaitlistJoined} from '~/composables/useBookingValidation'
 import type {WaitlistAssignmentResult} from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
@@ -43,78 +43,69 @@ export interface WaitlistDinnerContext {
 // The mail names the dinner by its date and menu
 const dinnerLabel = ({date, menuTitle}: WaitlistDinnerContext): string => `${formatDate(date)} · ${menuTitle}`
 
-export const emitWaitlistJoined = (
+// A booking mail on its way: the message for the queue, or the result of a mail never sent (e-mail off, no address)
+type OutgoingMail = {message: EmailMessage} | {unsent: SenderEmitResult}
+
+// A booking mail of its kind on the dinner, composed for its address; the values read the config of a channel that is on
+const bookingMail = (
+    channel: EmailChannel, kind: string, to: string | null, dinner: WaitlistDinnerContext, values: (config: NotificationConfig) => Record<string, string>
+): Promise<OutgoingMail> => {
+    const subject = `${dinner.dinnerEventId}`
+    if (!channel.on) return channelOff(kind, channel.missing, subject).then(unsent => ({unsent}))
+    if (!to) return notSent(kind, 'unaddressed', subject).then(unsent => ({unsent}))
+    return Promise.resolve({message: composeEmail(channel.config, {kind, to, values: values(channel.config), correlationId: `dinner ${dinner.dinnerEventId}`})})
+}
+
+// The mails of one operation reach the queue in one emit, a batch per hundred; a mail never sent keeps its result in place
+const sendMails = async (channel: EmailChannel, mails: Promise<OutgoingMail>[]): Promise<SenderEmitResult[]> => {
+    const outgoing = await Promise.all(mails)
+    const messages = outgoing.flatMap(mail => 'message' in mail ? [mail.message] : [])
+    const queued = channel.on && messages.length > 0 ? await emit(channel.queue, messages) : []
+    return outgoing.map(mail => 'message' in mail ? queued.shift()! : mail.unsent)
+}
+
+// A booking mail sent on its own
+const alone = <A extends [EmailChannel, ...unknown[]]>(mail: (...args: A) => Promise<OutgoingMail>) =>
+    (...args: A): Promise<SenderEmitResult> => sendMails(args[0], [mail(...args)]).then(([result]) => result!)
+
+const waitlistJoinedMail = (
     channel: EmailChannel, to: string | null, name: string, dinner: WaitlistDinnerContext, position: number, ticketType: string
-): Promise<SenderEmitResult> => {
-    if (!channel.on) return channelOff('WAITLIST_JOINED', channel.missing, `${dinner.dinnerEventId}`)
-    if (!to) return notSent('WAITLIST_JOINED', 'unaddressed', `${dinner.dinnerEventId}`)
-    return emit(channel.queue, composeEmail(channel.config, {
-        kind: 'WAITLIST_JOINED',
-        to,
-        values: {name, dinner: dinnerLabel(dinner), position: String(position), ticketType},
-        correlationId: `dinner ${dinner.dinnerEventId}`
-    }))
-}
+): Promise<OutgoingMail> =>
+    bookingMail(channel, 'WAITLIST_JOINED', to, dinner, () => ({name, dinner: dinnerLabel(dinner), position: String(position), ticketType}))
 
-export const emitWaitlistTicketAssigned = (
+const waitlistTicketAssignedMail = (
     channel: EmailChannel, to: string | null, name: string, dinner: WaitlistDinnerContext, ticket: string, seller: string, buyer: string
-): Promise<SenderEmitResult> => {
-    if (!channel.on) return channelOff('WAITLIST_TICKET_ASSIGNED', channel.missing, `${dinner.dinnerEventId}`)
-    if (!to) return notSent('WAITLIST_TICKET_ASSIGNED', 'unaddressed', `${dinner.dinnerEventId}`)
-    return emit(channel.queue, composeEmail(channel.config, {
-        kind: 'WAITLIST_TICKET_ASSIGNED',
-        to,
-        values: {name, dinner: dinnerLabel(dinner), ticket, seller, buyer},
-        correlationId: `dinner ${dinner.dinnerEventId}`
-    }))
-}
+): Promise<OutgoingMail> =>
+    bookingMail(channel, 'WAITLIST_TICKET_ASSIGNED', to, dinner, () => ({name, dinner: dinnerLabel(dinner), ticket, seller, buyer}))
 
-export const emitWaitlistExtraPortion = (
+const waitlistExtraPortionMail = (
     channel: EmailChannel, to: string | null, name: string, dinner: WaitlistDinnerContext, ticket: string, buyer: string
-): Promise<SenderEmitResult> => {
-    if (!channel.on) return channelOff('WAITLIST_EXTRA_PORTION', channel.missing, `${dinner.dinnerEventId}`)
-    if (!to) return notSent('WAITLIST_EXTRA_PORTION', 'unaddressed', `${dinner.dinnerEventId}`)
-    return emit(channel.queue, composeEmail(channel.config, {
-        kind: 'WAITLIST_EXTRA_PORTION',
-        to,
-        values: {name, dinner: dinnerLabel(dinner), ticket, buyer},
-        correlationId: `dinner ${dinner.dinnerEventId}`
-    }))
-}
+): Promise<OutgoingMail> =>
+    bookingMail(channel, 'WAITLIST_EXTRA_PORTION', to, dinner, () => ({name, dinner: dinnerLabel(dinner), ticket, buyer}))
 
-export const emitWaitlistBuildup = (
+const waitlistBuildupMail = (
     channel: EmailChannel, to: string | null, name: string, dinner: WaitlistDinnerContext, entries: number, portions: number
-): Promise<SenderEmitResult> => {
-    if (!channel.on) return channelOff('WAITLIST_BUILDUP', channel.missing, `${dinner.dinnerEventId}`)
-    if (!to) {
-        console.warn(`${LOG} the chef of dinner ${dinner.dinnerEventId} has no address — buildup mail not sent`)
-        return notSent('WAITLIST_BUILDUP', 'unaddressed', `${dinner.dinnerEventId}`)
-    }
-    return emit(channel.queue, composeEmail(channel.config, {
-        kind: 'WAITLIST_BUILDUP',
-        to,
-        values: {
-            name,
-            dinner: dinnerLabel(dinner),
-            entries: String(entries),
-            portions: portions.toLocaleString('da-DK'),
-            dinnerUrl: siteUrl(channel.config, '/chef')
-        },
-        correlationId: `dinner ${dinner.dinnerEventId}`
+): Promise<OutgoingMail> => {
+    if (channel.on && !to) console.warn(`${LOG} the chef of dinner ${dinner.dinnerEventId} has no address — buildup mail not sent`)
+    return bookingMail(channel, 'WAITLIST_BUILDUP', to, dinner, config => ({
+        name,
+        dinner: dinnerLabel(dinner),
+        entries: String(entries),
+        portions: portions.toLocaleString('da-DK'),
+        dinnerUrl: siteUrl(config, '/chef')
     }))
 }
 
-export const emitTicketSold = (
+const ticketSoldMail = (
     channel: EmailChannel, to: string, name: string, dinner: WaitlistDinnerContext, seller: string, buyer: string
-): Promise<SenderEmitResult> => {
-    if (!channel.on) return channelOff('TICKET_SOLD', channel.missing, `${dinner.dinnerEventId}`)
-    return emit(channel.queue, composeEmail(channel.config, {
-        kind: 'TICKET_SOLD',
-        to,
-        values: {name, dinner: dinnerLabel(dinner), seller, buyer},
-        correlationId: `dinner ${dinner.dinnerEventId}`
-    }))
-}
+): Promise<OutgoingMail> =>
+    bookingMail(channel, 'TICKET_SOLD', to, dinner, () => ({name, dinner: dinnerLabel(dinner), seller, buyer}))
+
+export const emitWaitlistJoined = alone(waitlistJoinedMail)
+export const emitWaitlistTicketAssigned = alone(waitlistTicketAssignedMail)
+export const emitWaitlistExtraPortion = alone(waitlistExtraPortionMail)
+export const emitWaitlistBuildup = alone(waitlistBuildupMail)
+export const emitTicketSold = alone(ticketSoldMail)
 
 /** The booking mails of one operation, with recipients, names and household shortnames resolved */
 export interface BookingMails {
@@ -127,12 +118,12 @@ export interface BookingMails {
 
 export const NO_BOOKING_MAILS: BookingMails = {joined: [], buildups: [], sold: [], assigned: [], extraPortions: []}
 
-export const bookingMails = (channel: EmailChannel, mails: BookingMails): Promise<SenderEmitResult[]> => Promise.all([
-    ...mails.joined.map(mail => emitWaitlistJoined(channel, mail.to, mail.name, mail.dinner, mail.position, mail.ticketType)),
-    ...mails.buildups.map(mail => emitWaitlistBuildup(channel, mail.to, mail.name, mail.dinner, mail.entries, mail.portions)),
-    ...mails.sold.map(mail => emitTicketSold(channel, mail.to, mail.name, mail.dinner, mail.seller, mail.buyer)),
-    ...mails.assigned.map(mail => emitWaitlistTicketAssigned(channel, mail.to, mail.name, mail.dinner, mail.ticket, mail.seller, mail.buyer)),
-    ...mails.extraPortions.map(mail => emitWaitlistExtraPortion(channel, mail.to, mail.name, mail.dinner, mail.ticket, mail.buyer))
+export const bookingMails = (channel: EmailChannel, mails: BookingMails): Promise<SenderEmitResult[]> => sendMails(channel, [
+    ...mails.joined.map(mail => waitlistJoinedMail(channel, mail.to, mail.name, mail.dinner, mail.position, mail.ticketType)),
+    ...mails.buildups.map(mail => waitlistBuildupMail(channel, mail.to, mail.name, mail.dinner, mail.entries, mail.portions)),
+    ...mails.sold.map(mail => ticketSoldMail(channel, mail.to, mail.name, mail.dinner, mail.seller, mail.buyer)),
+    ...mails.assigned.map(mail => waitlistTicketAssignedMail(channel, mail.to, mail.name, mail.dinner, mail.ticket, mail.seller, mail.buyer)),
+    ...mails.extraPortions.map(mail => waitlistExtraPortionMail(channel, mail.to, mail.name, mail.dinner, mail.ticket, mail.buyer))
 ])
 
 const ticketLabel = (ticketPrices: TicketPrice[], ticketPriceId: number): string =>

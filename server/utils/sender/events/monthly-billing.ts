@@ -46,5 +46,5 @@ export const emitBillingPeriodClosed = (channel: EmailChannel, summary: BillingP
         console.warn(`${LOG} ${missing} not set — mail not sent`, {billingPeriod: summary.billingPeriod, version: summary.version})
         return notSent(billingMailKind(summary.version), 'unconfigured', summary.billingPeriod)
     }
-    return emit(queue, buildBillingPeriodClosedEmail(config, summary))
+    return emit(queue, buildBillingPeriodClosedEmail(config, summary)).then(([result]) => result!)
 }
