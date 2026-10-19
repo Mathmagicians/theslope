@@ -144,6 +144,28 @@ jobs:
         env:
           ARTIFACT_URL: ${{ steps.upload_ui_report.outputs.artifact-url }}
         run: make test-report report=$E2E_RESULTS_DIR/e2e-ui-results.json title="E2E ui tests" link="$ARTIFACT_URL" note="UI test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
+      - name: Run e2e ui serial tests
+        id: e2e_ui_serial_tests
+        run: npm run test:e2e:ui:serial
+        continue-on-error: true
+      - uses: actions/upload-artifact@v7
+        id: upload_ui_serial_report
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-ui-serial
+          path: playwright-report/
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-results-ui-serial
+          path: ${{ env.E2E_RESULTS_DIR }}/e2e-ui-serial-results.json
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      - name: E2E ui serial test summary
+        if: ${{ !cancelled() && steps.e2e_ui_serial_tests.outcome != 'skipped' }}
+        env:
+          ARTIFACT_URL: ${{ steps.upload_ui_serial_report.outputs.artifact-url }}
+        run: make test-report report=$E2E_RESULTS_DIR/e2e-ui-serial-results.json title="E2E ui serial tests" link="$ARTIFACT_URL" note="UI serial test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
       - name: Determine deployment target
         id: target
         run: |

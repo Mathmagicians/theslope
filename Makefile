@@ -356,20 +356,12 @@ developer-assemble: ## Lay a run's results and manifest under site/environments 
 	@suites='{}'; for suite in $(DEVELOPER_SUITES); do \
 		dest="$(site)/environments/$(env)/$$suite"; \
 		bdd="$(artifacts)/bdd-$$suite"; cucumber="$$bdd/e2e-$$suite-bdd.json"; \
-		src="$(artifacts)/playwright-results-$$suite"; results="$$src/e2e-$$suite-results.json"; \
 		if [ -f "$$cucumber" ]; then \
 			mkdir -p "$$dest" && cp "$$cucumber" "$$dest/" && cp -R "$$bdd/e2e-$$suite-bdd/." "$$dest/"; \
 			result=$$(jq -c -f scripts/bdd-report.jq --arg title "" --arg link "" --arg note "" --arg counts 1 "$$cucumber" \
 				| jq -c '{passed, failed: (.failed + .undefined), flaky: 0, skipped: .other, report: "index.html"}'); \
-		elif [ -f "$$results" ]; then \
-			mkdir -p "$$dest" && cp -R "$$src/." "$$dest/"; \
-			published="$$dest/$$(basename "$$results")"; \
-			[ "$$suite" != smoke ] || { jq 'walk(if type == "object" then del(.errors, .error, .stdout, .stderr, .attachments) else . end)' "$$published" > "$$published.tmp" && mv "$$published.tmp" "$$published"; }; \
-			report=$$( [ -f "$$src/index.html" ] && echo index.html || basename "$$results" ); \
-			result=$$(jq -c --arg report "$$report" \
-				'{passed: (.stats.expected // 0), failed: (.stats.unexpected // 0), flaky: (.stats.flaky // 0), skipped: (.stats.skipped // 0), report: $$report}' "$$results"); \
 		else \
-			echo "developer-assemble: no $$cucumber or $$results"; continue; \
+			echo "developer-assemble: no $$cucumber"; continue; \
 		fi; \
 		suites=$$(jq -c --arg suite "$$suite" --argjson result "$$result" '. + {($$suite): $$result}' <<< "$$suites"); \
 	done; \

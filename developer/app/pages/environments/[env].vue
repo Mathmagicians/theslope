@@ -42,9 +42,8 @@ const columns: TableColumn<SuiteRow>[] = [
     {accessorKey: 'report', header: 'Report'}
 ]
 
-// The Playwright HTML report is index.html; a suite without one links its results JSON; the smoke suite runs live
-const reportText = (row: SuiteRow) =>
-    `${row.result.report === 'index.html' ? 'Report' : 'Results'}${row.suite === 'smoke' ? ' (live)' : ''}`
+// The smoke suite runs live, on the deployed environment
+const reportText = (row: SuiteRow) => `Report${row.suite === 'smoke' ? ' (live)' : ''}`
 </script>
 
 <template>
