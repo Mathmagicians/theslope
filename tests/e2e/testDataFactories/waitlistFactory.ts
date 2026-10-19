@@ -93,11 +93,4 @@ export class WaitlistFactory {
         expect(response.status(), `Unexpected status releasing portions: ${body}`).toBe(expectedStatus)
         return expectedStatus === 200 ? WaitlistAssignmentResultSchema.parse(await response.json()) : null
     }
-
-    // Cleanup: the entries still queued on the dinners leave; a dinner's deletion cascades to the rest
-    static readonly cleanupEntries = async (context: BrowserContext, seasonId: number, dinnerEventIds: number[]): Promise<void> => {
-        for (const entry of await WaitlistFactory.entries(context, dinnerEventIds)) {
-            await WaitlistFactory.leave(context, seasonId, entry, true)
-        }
-    }
 }

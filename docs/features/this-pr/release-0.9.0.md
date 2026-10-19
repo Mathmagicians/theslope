@@ -65,7 +65,7 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | In the tree for the commit | the power row's component cases (#39's coverage, test-only); today's docs (the spec, the poster, the compliance cells) |
 | Rules | #57 to check; #64 the mail opt-out running |
 | CI api e2e | red at 8ed7e42: `scaffold-prebookings:616` fixed in 81ad76e; `maintenance:141` and `sender-event-monthly-billing:22` wait on the admin bypass on a consumed dinner (a/b with the user); `scaffold-prebookings:254` and `:429` on the closed-season activation (a/b with the user) |
-| CI summary | read on the Actions run page: categories, counts, red ui failures, report links |
+| CI summary | read on the Actions run page: categories, counts, red ui failures |
 | Close-out | the PR body (highlights, tests, QA) for the packages since 0122723; the guides' sync check; compaction and archive once every package is done |
 
 
@@ -900,7 +900,7 @@ sign-off.
 |---|---|---|
 | Visual check per UI package | route → viewport → DS element → expectation, in the PR description | per package |
 | PWA install and icon | phone home screen | ✅ 2026-10-13 |
-| CI summary | Actions run page: categories, counts, red ui failures, report links | open |
+| CI summary | Actions run page: categories, counts, red ui failures | open |
 | Table loading, checks 1–7 | 1 `/household/<S>/bookings` Uge or Måned; 2 the same, Dag; 3 `/dinner`; 4 `/chef` Budget, a dinner in another round; 5 `/household/<S>/allergies`; 6 `/admin/economy`; 7 `/admin/households`, `/admin/users`, `/admin/system`, `/admin/allergies` on first load | ✅ 2026-10-18 |
 | A waiting-list placement happens once: a released Voksen ticket to the first in line ✅ 2026-10-19 | a locked dinner with someone waiting for Voksen: another household releases a Voksen ticket; the first in the Voksen line holds it (seen on dev 6d633d1 under #32: the ticket went to the next household) | ✅ 2026-10-19; `household/preferences.e2e.spec.ts:301` ("the released own ticket is sold to the queued guest", two examples) green 2026-10-18 23:20, pw-e2e household/preferences 16/16 in the chromium-api batch 94/94, landed in 06054df |
 | A waiting-list placement happens once, checks 13 and 14 | `/chef` Rediger, Frigiv portioner; a locked dinner with a child ticket released and only adults waiting | ✅ 2026-10-18 |

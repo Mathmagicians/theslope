@@ -499,7 +499,8 @@ describe('scaffoldPrebookings', () => {
             desiredOrders: [OrderFactory.defaultDesiredOrder({inhabitantId: anna.id, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, dinnerMode: Mode.DINEIN})]
         })
 
-        expect(vi.mocked(createOrders).mock.calls.flatMap(([, , orders]) => orders.map(order => order.inhabitantId))).toEqual(lands ? [anna.id] : [])
+        // createOrders takes one order or a list, as the repository normalizes it
+        expect(vi.mocked(createOrders).mock.calls.flatMap(([, , orders]) => [orders].flat().map(order => order.inhabitantId))).toEqual(lands ? [anna.id] : [])
         expect(result.results.map(line => [line.inhabitantId, line.action])).toEqual(lands ? [[anna.id, Action.BOOK]] : [])
     })
 

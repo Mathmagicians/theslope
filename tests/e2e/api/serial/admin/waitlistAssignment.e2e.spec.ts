@@ -93,7 +93,6 @@ test.describe('Waiting list assignment', () => {
         const context = await validatedBrowserContext(browser)
         // The persons go first, their orders and entries with them: a hook that runs out of time leaves none in the shared household
         for (const inhabitant of inhabitants) await HouseholdFactory.deleteInhabitant(context, inhabitant.id!)
-        await WaitlistFactory.cleanupEntries(context, activeSeasonId, dinnerIds)
         await OrderFactory.cleanupOrders(context, orderIds)
         await HouseholdFactory.deleteHousehold(context, sellerHouseholdIds)
         for (const id of dinnerIds) await DinnerEventFactory.deleteDinnerEvent(context, id)

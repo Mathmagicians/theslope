@@ -48,8 +48,8 @@ runner, the projects, the setup chain and the factories stay.
   `@smoke`); `.features-gen/` is gitignored and excluded from eslint and the tsconfigs; the `.spec.ts` `testMatch`
   stays until the last spec migrates.
 - Reports: `cucumberReporter('json')` and `cucumberReporter('html', {skipAttachments: ['trace']})` per suite into
-  `test-results/`, uploaded as the artifact `bdd-<suite>`; `make bdd-report report=<cucumber json> title=<text>
-  [link=<url>]` writes the summary table: features and scenarios passed and failed, each failing scenario with its
+  `test-results/`, uploaded as the artifact `bdd-<suite>`; `make bdd-report report=<cucumber json> title=<text>`
+  writes the summary table: features and scenarios passed and failed, each failing scenario with its
   failed step. It stands beside `make test-report` while specs remain.
 - Step rules, written into `docs/testing.md`: a step names a domain fact, never a screen; one phrasing per fact; steps
   grouped by domain file; the domain words are parameter types; scenario state and cleanup live in fixtures;
