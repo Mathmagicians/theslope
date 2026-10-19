@@ -684,8 +684,14 @@ export const ORDER_STATE_COLORS = {
     queued: COLOR.neutral
 } as const satisfies Record<TicketState, NuxtUIBadgeColor>
 
-// A dinner ticket's card; each face adds the edge its state colours (`COMPONENTS.ticket.face`)
-const TICKET_FACE = `relative overflow-hidden rounded-lg ${BG.ticket} p-2 md:p-3 w-full border-x-4 md:border-x-8`
+// A dinner ticket's card; each face adds its fill and the edge its state colours (`COMPONENTS.ticket.face`)
+const TICKET_FRAME = 'relative overflow-hidden rounded-lg p-2 md:p-3 w-full border-x-4 md:border-x-8'
+const TICKET_FACE = `${TICKET_FRAME} ${BG.ticket}`
+
+// A past calendar day's colours (`CALENDAR.day.past`); a cancelled dinner's ticket and mode badge wear them too
+const PAST_DAY_COLORS = `${BG.mocha[100]} ${TEXT.mocha[900]}`
+// A cancelled dinner is struck through: its calendar day, its tickets and their mode badges
+const CANCELLED_STRIKE = 'line-through'
 
 // The lock chip that carries the waiting-list hourglass: a step above SIZES.lockChip, so the glyph sits with a small inset
 const QUEUE_LOCK_CHIP = {ui: {base: 'h-3.5 min-w-3.5 md:h-4.5 md:min-w-4.5'}, icon: 'size-2.5 md:size-3.5'} as const
@@ -1330,7 +1336,8 @@ export const COMPONENTS = {
      * eat, right-aligned); `subRow` starts row 2 under the badge with its `provenance` line or a ticket price's `note`. A queued
      * ticket's edge takes the waiting list's colour (`ORDER_STATE_COLORS.queued`); its glyph (`stateIcon.queued`) takes the toned ink.
      * An expected booking (no order yet) is no ticket state: its `face.expected` and `stateIcon.expected` sit beside the
-     * queued ones, on the same neutral edge and toned ink
+     * queued ones, on the same neutral edge and toned ink. A ticket on a cancelled dinner wears `face.cancelled` whatever
+     * its state: the past calendar day's colours without an edge, struck through
      */
     ticket: {
         // The edge is the Nuxt UI slot utility of `ORDER_STATE_COLORS[state]`, spelled out for the Tailwind scanner
@@ -1341,7 +1348,10 @@ export const COMPONENTS = {
                 claimed: `${TICKET_FACE} border-info`,
                 queued: `${TICKET_FACE} border-neutral`
             } satisfies Record<TicketState, string>),
-            expected: `${TICKET_FACE} border-neutral`
+            expected: `${TICKET_FACE} border-neutral`,
+            // No edge: the past day's fill stays light in the dark, where no edge holds 3:1 against it and the dark page
+            // alike; the transparent edge keeps the frame, so the fill runs to the card's border
+            cancelled: `${TICKET_FRAME} ${PAST_DAY_COLORS} border-transparent ${CANCELLED_STRIKE}`
         },
         watermark: 'absolute inset-0 flex items-center justify-center pointer-events-none',
         watermarkIcon: `w-full h-[140%] opacity-[0.12] ${TEXT.dimmed}`,
@@ -1560,7 +1570,9 @@ export const COMPONENTS = {
      * grid's unsaved-cell accent (`modified`), the DINEIN button's `pulse` while a household disagrees, and the
      * glyph size per Nuxt UI size (`iconSize`); without a size the glyph follows `WEEKDAY.badgeContentSize`. The edit
      * faces' buttons carry that size in their leading icon slot (`buttonUi`). On a plan (an expected booking, no
-     * order yet) no button is selected: the plan's mode carries `plannedButton`, outlined on the expected booking's neutral
+     * order yet) no button is selected: the plan's mode carries `plannedButton`, outlined on the expected booking's neutral.
+     * On a cancelled dinner the view face's badge wears `cancelledFace`, the cancelled ticket's colours struck through; its
+     * class outranks the colour and variant, which only keep the badge without a ring
      */
     dinnerModeSelector: {
         weekdayLabel: `flex items-center justify-center ${TYPOGRAPHY.caption} ${TEXT.ink}`,
@@ -1572,7 +1584,8 @@ export const COMPONENTS = {
         pulse: 'animate-pulse',
         iconSize: {xs: 'size-3', sm: 'size-3', md: 'size-4', lg: 'size-5', xl: 'size-6'},
         buttonUi: (iconSize: string) => ({leadingIcon: iconSize}),
-        plannedButton: {color: ORDER_STATE_COLORS.queued, variant: NOISE.medium}
+        plannedButton: {color: ORDER_STATE_COLORS.queued, variant: NOISE.medium},
+        cancelledFace: {color: COLOR.neutral, variant: NOISE.soft, class: `${PAST_DAY_COLORS} ${CANCELLED_STRIKE}`}
     },
 
     // Card action buttons - positioned in card corners or footers
@@ -2840,9 +2853,9 @@ export const PLANNING_CALENDAR = {
 export const CALENDAR = {
     day: {
         shape: 'rounded-full flex items-center justify-center cursor-pointer hover:opacity-90',
-        past: `font-medium ${BG.mocha[100]} ${TEXT.mocha[900]}`,
+        past: `font-medium ${PAST_DAY_COLORS}`,
         // A cancelled dinner: the past circle, struck through
-        cancelled: 'line-through'
+        cancelled: CANCELLED_STRIKE
     },
     countdown: {
         container: 'bg-amber-950 text-amber-50 py-6 md:py-8 border-b-2',

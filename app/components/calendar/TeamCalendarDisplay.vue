@@ -20,7 +20,6 @@ import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type{DayEventList} from '~/composables/useCalendarEvents'
 import type {DateValue} from '@internationalized/date'
 import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
-import { isSameDay } from 'date-fns'
 
 interface Props {
   seasonDates: DateRange
@@ -43,6 +42,7 @@ const emit = defineEmits<{
 }>()
 
 const {createEventList} = useCalendarEvents()
+const {getDinnerForDay} = useTemporalCalendar()
 const {getHolidayDatesFromDateRangeList} = useSeason()
 const {CALENDAR, COMPONENTS, dayCircleClasses, getRainbowBand, SIZES} = useTheSlopeDesignSystem()
 const {getTeamNumber} = useCookingTeam()
@@ -92,20 +92,15 @@ const getTeamEventList = (eventLists: DayEventList[]) => {
 }
 
 // Calendar selection support - match agenda view behavior
-const getDinnerForDay = (day: DateValue): DinnerEventDisplay | undefined => {
-  const dayAsDate = toDate(day)
-  return props.dinnerEvents.find(event => isSameDay(new Date(event.date), dayAsDate))
-}
-
 const handleCalendarDayClick = (day: DateValue) => {
   if (!props.showSelection) return
-  const dinner = getDinnerForDay(day)
+  const dinner = getDinnerForDay(props.dinnerEvents, day)
   if (dinner) emit('select', dinner.id)
 }
 
 const isCalendarDaySelected = (day: DateValue): boolean => {
   if (!props.selectedDinnerId || !props.showSelection) return false
-  const dinner = getDinnerForDay(day)
+  const dinner = getDinnerForDay(props.dinnerEvents, day)
   return dinner?.id === props.selectedDinnerId
 }
 

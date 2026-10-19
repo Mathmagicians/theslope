@@ -56,7 +56,7 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | One intent path: batching and audit order | the nine review findings: the insert order as the repository's contract, bulk reads for the mails, the waiting-list read in 90-id chunks, leaves and requeues batched, one `orderSnapshotOf`, no `Promise.all` against D1, `countReleasedTickets` in one query, the join pairing contract tested; the push fix in `groupBy` and `waitingLines`; the deletes data first (ADR-011 rule 6) | § One intent path, Batching and audit order | brief signed 2026-10-18, running |
 | One intent path | one generator for the preference path and the grid: past the deadline a preference change buys a ticket for sale or joins its line; the nightly job runs the same rules; the preferences endpoint and the scaffold endpoint answer `?preview=true`, and every preview in the app comes from that dry run | § One intent path | • brief signed 2026-10-18<br>• implemented 2026-10-18 (d894021, e510f83, 805062b)<br>• reopened 2026-10-18 from the e2e slot (a season-wide run claimed the queued people again); the fix with steps 2 (claims settled once per dinner) and 3 (the notification step reads in bulk, one PrismaClient per binding) 2026-10-18 (d149e91)<br>• the day form's preview, the preference editor, the guest form, the week-view preview, the expected cell to Ingen ✅ 2026-10-18<br>• the expected ticket and the legend (#7) ✅ 2026-10-19<br>• reopened 2026-10-18 on #5 (the grid's expected cells green, a second implementation) and #11 (an expected dinner cannot be set to Ingen in the day view, power mode cannot cycle in the grid's future view)<br>• #3 settled 2026-10-19: a confirmed key keeps the dinner hands-off, automated runs do not override explicit user intent; the written change reverted<br>• #5 ✅ 2026-10-19 on dev (6d633d1)<br>• #11 reopened again 2026-10-19 on dev (6d633d1): 19/01, Martin from Takeaway to Ingen, the day view on `/dinner` and on the household's Dag cannot select Ingen, the grid's cycling can; the Rules package is the fix |
 | Rules | the views derive a row's allowed modes from the decision matrix through one `getBookingOptions(row, context)` and `powerOptions(rows)` for the household row; `DinnerModeSelector` takes the enabled modes and cycles that list; the four `ALL_MODES` copies go; the generator: a guest's bare Ingen with no ticket lands nothing, a claim or a reclaim under a locked mode lands as Spisesal | § Rules | • brief signed 2026-10-19, the remedy for #11 and #34<br>• the allowed modes from the decision matrix shared with the scaffolder (`DinnerModeSelector`, `useBooking.ts`) committed 2026-10-19 (c85962c)<br>• the views take their modes from the matrix, the unavailable ones not offered, committed 2026-10-19 (e3086e9)<br>• the grid's guest add (#29), the queued guest's row (#33), the queued cell's cycle in week and month (#36, #37), the legend (#40) ✅ 2026-10-19<br>• #41 reported 2026-10-19: the 9/11 dinner, cancelled on the chef page, shows no state in the day view or the grid and takes a regular booking<br>• #49 reported 2026-10-19: the booking calendar shows no cancelled face for a cancelled dinner, the chef calendar does |
-| Release notes PDF | `make release-notes version=<v>` prints `docs/releases/release-<v>.md` as one-page A4 and A3 PDFs through GitHub's markdown renderer, `docs/releases/poster.head.html` and Playwright's `pdf` command; the CICD job builds them as a workflow artifact, the `create-release` job downloads it, uses the notes file as the release body and uploads the PDFs as release assets | § Release notes PDF | • brief signed 2026-10-19 |
+| Release notes PDF | `make release-notes` prints every `docs/releases/*.md` as a one-page A4 PDF through GitHub's markdown renderer, `docs/releases/poster.head.html` and Playwright's `pdf` command; every CICD build uploads the PDFs as a workflow artifact, the `create-release` job downloads it and attaches them to the release | § Release notes PDF | • brief signed 2026-10-19 |
 
 ## Open before the release
 
@@ -569,22 +569,22 @@ Ingen as a component case and an e2e case, the grid's queued cell cycle.
 ## Release notes PDF
 
 The release poster `docs/releases/release-<version>.md` (two columns, the install box, the developer line) becomes
-one-page A4 and A3 PDFs and the GitHub Release carries both: the notes file as the release body, the PDFs as assets.
+one A4 PDF (A3 is the printer's scaling) and the GitHub Release carries it as an asset, with a one-line body linking it.
 
-- `make release-notes version=<v>`: `gh api -X POST /markdown -f mode=gfm -f text=@docs/releases/release-<v>.md`
+- `make release-notes`, for every `docs/releases/*.md` (no version key, so a push to main builds it too): `gh api -X POST /markdown -f mode=gfm -f text=@<notes>.md`
   renders the markdown as GitHub does (the alert box included); `docs/releases/poster.head.html` wraps it with the
   GitHub stylesheet (`github-markdown-css` 5.9.0 from cdnjs), `<base href>` on the releases folder and a print media
-  query that scales A4 to one page; `npx playwright pdf --paper-format A4|A3` prints `release-<v>-a4.pdf` and
-  `release-<v>-a3.pdf` beside the notes. `docs/releases/*.pdf` is gitignored.
-- The CICD job runs the target after its tests (it holds `npm ci` and Playwright's chromium) and uploads the PDFs with
+  query that scales A4 to one page; `npx playwright pdf --paper-format A4` prints `<notes>.pdf` beside the notes. `docs/releases/*.pdf` is gitignored.
+- Every CICD build runs the target after its tests (the job holds `npm ci` and Playwright's chromium) and uploads the PDFs with
   `actions/upload-artifact` as `release-notes`; the `create-release` job downloads the artifact and runs
-  `gh release create "$TAG" --notes-file docs/releases/release-$VERSION.md` and
-  `gh release upload "$TAG" release-$VERSION-a4.pdf release-$VERSION-a3.pdf --clobber`. The release job installs
+  `gh release create "$TAG"` with a one-line body and
+  `gh release upload "$TAG" <the PDFs of the artifact> --clobber`. The release job installs
   nothing.
 - The poster's screenshots live beside the notes in `docs/releases/release-<v>/` (the user, 2026-10-19: in the
   releases folder, or live from the e2e features); the two of this release were taken on the local server at phone
-  width.
-- Proven by hand 2026-10-19 on this release's notes: one page on A4 (zoom .8) and on A3.
+  width, and the QR code to the login page (`qr-login.svg`, made once with `npx qrcode`) is a pregenerated image beside
+  them, not a product of the target.
+- Proven by hand 2026-10-19 on this release's notes: one page on A4 (zoom .8).
 
 ## A waiting-list placement happens once
 
@@ -804,6 +804,11 @@ sign-off.
   ("relase shouldnt step shouldnt be installing chromium etc, artifact should be generated in previous job").
 - #41 and #49 (2026-10-19): the cancelled dinner in the booking calendar, the day view and the grid is a fix with
   no ADR line — "adr is archietcture decision, this is coherent implementation !".
+- #51 (2026-10-19): the release PDF is the standalone artefact with the images embedded, built in the CICD job and
+  attached to the release; the release body is one line linking the PDF and the deployment record, not the
+  poster markdown ("pdf should be standalone as is, and include the images, it should be baked in ci pipeline").
+- #48 (2026-10-19): a queued wish stays a ghost under the hourglass, in view and edit mode, as #33 shows it — "keep
+  it, should be visible you dont have it"; #48 is the check that edit mode matches.
 - #32 (2026-10-19) One booking path, power mode reaches the household's queue entries: a power change on a dinner
   reaches every place the household holds there — a queued inhabitant's intent names the person's place, every other
   place (the guests', the people outside the targets) gets its own intent at its held price; Ingen leaves, another

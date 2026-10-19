@@ -18,10 +18,12 @@
  * │  │  1   2   3   4   5   6   7              │                │
  * │  │  8  [9] 10  11  12  13  14              │                │
  * │  │ 15  16 [17]n 18w 19* 20  21             │                │
+ * │  │ 22  -23- 24  25  26  27  28             │                │
  * │  └─────────────────────────────────────────┘                │
  * │  Forklaring                                                 │
  * │  (1) Næste fællesspisning   (1) Valgt dato                  │
  * │  (1) Planlagt fællesspisning   (1) Tidligere fællesspisning │
+ * │  -(1)- Aflyst fællesspisning                                │
  * │  (1) Ferie                                                  │
  * │  (1)*  Lukket for framelding                                │
  * │  (1)n  Ledige billetter                                     │
@@ -33,6 +35,9 @@
  *   w = yellow, the hourglass ICONS.waitlist inset in a chip a size up (COMPONENTS.dinnerCalendar.queueChip): a waiting list, nothing for sale
  *   * = peach, no number: closed, nothing for sale and nobody waiting
  * The legend (CalendarLegend) draws each chip on a planned-day circle, the hourglass chip at COMPONENTS.legend.iconChip.
+ *
+ * -23- = a cancelled dinner: the past circle struck through (CALENDAR.day.past + CALENDAR.day.cancelled), as the chef
+ * calendar draws it, whether past or upcoming, and without a lock chip.
  *
  * Displays:
  * - Countdown timer (train station style with configurable colors from event list)
@@ -50,6 +55,7 @@ import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {isCalendarDateInDateList, toDate} from '~/utils/date'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 interface Props {
   seasonDates: DateRange
@@ -75,7 +81,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const {getHolidayDatesFromDateRangeList} = useSeason()
-const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
+const {useTemporalSplit, createTemporalEventLists, getDinnerForDay, isCancelledDay} = useTemporalCalendar()
 const {CALENDAR, DINNER_CALENDAR, COMPONENTS, SIZES, ICONS, BOOKING_LOCK_STATUS, dayCircleClasses} = useTheSlopeDesignSystem()
 const {lockChip} = useBookingUi()
 
@@ -98,18 +104,10 @@ const isHoliday = (day: DateValue): boolean => {
   return isCalendarDateInDateList(day, holidayDates.value)
 }
 
-// Get dinner event for a specific day
-const getDinnerForDay = (day: DateValue): DinnerEventDisplay | undefined => {
-  const dayDate = toDate(day)
-  return props.dinnerEvents?.find(event =>
-    dayDate.toDateString() === new Date(event.date).toDateString()
-  )
-}
-
 // The lock chip of the day's dinner; null without a lock status or a locked dinner on the day
 const getLockChipForDay = (day: DateValue) => {
   if (!props.lockStatus) return null
-  const dinner = getDinnerForDay(day)
+  const dinner = getDinnerForDay(props.dinnerEvents, day)
   return dinner ? lockChip(props.lockStatus.get(dinner.id)) : null
 }
 
@@ -134,6 +132,7 @@ const legendItems = computed((): CalendarLegendItem[] => {
     { label: 'Valgt dato', kind: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.next, DINNER_CALENDAR.selection) },
     { label: 'Planlagt fællesspisning', kind: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.future) },
     { label: 'Tidligere fællesspisning', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past) },
+    { label: BOOKING_WORDS.cancelledDinner.legend, kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past, CALENDAR.day.cancelled) },
     { label: 'Ferie', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.holiday) }
   ]
 
@@ -213,6 +212,16 @@ const isSelected = (day: DateValue): boolean => {
               <div
                 v-if="isHoliday(day)"
                 :class="dayCircleClasses(CALENDAR.holiday)"
+              >
+                {{ day.day }}
+              </div>
+
+              <!-- Cancelled dinner: the past circle struck through, as the chef calendar draws it, and no lock chip -->
+              <div
+                v-else-if="isCancelledDay(dinnerEvents, day)"
+                :data-testid="`calendar-dinner-date-${day.day}`"
+                :class="dayCircleClasses(CALENDAR.day.past, CALENDAR.day.cancelled, isSelected(day) && DINNER_CALENDAR.selection)"
+                @click="handleDateClick(day)"
               >
                 {{ day.day }}
               </div>

@@ -9,7 +9,7 @@ import type {WeekDay, WeekDayMap} from "~/types/dateTypes"
 import {dateToWeekDay} from "~/utils/season"
 import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets, bookingOutcomes, actionOfUpdate, countTotals} from "~/composables/useBooking"
 import {groupBy, partition, writeBatchOnce, writeBatchOrEach} from "~/utils/batchUtils"
-import {sellTicketsToWaitlist, joinWaitlist, previewJoinWaitlist, type DinnerForWaitlist} from "~~/server/utils/waitlistAssignment"
+import {sellTicketsToWaitlist, joinWaitlist, previewJoinWaitlist, isClosedDinner, type DinnerForWaitlist} from "~~/server/utils/waitlistAssignment"
 import {fetchWaitlistForDinners, deleteWaitlistEntries, updateWaitlistEntryOrders, type WaitlistJoin} from "~~/server/data/waitlistRepository"
 import {useWaitlist, byTimeThenId, type TicketForSale} from "~/composables/useWaitlist"
 import {isHouseholdActiveOnDay} from "~/composables/useHousehold"
@@ -266,14 +266,19 @@ export async function scaffoldPrebookings(
     // A write to a place on the waiting list records the act it is, by the run's user
     const auditOf = (action: BookingAction): WaitlistAuditContext => ({action: getAuditAction(isUserTriggered, action), performedByUserId: effectiveUserId, seasonId: effectiveSeasonId})
 
-    // Filter dinner events: user mode uses IDs from desiredOrders, system uses rolling window
+    // Filter dinner events: user mode uses IDs from desiredOrders, system uses rolling window. Every caller's run leaves
+    // a cancelled or consumed dinner out, its orders and its waiting list as they stand
     const onWeekdays = (dinnerEvent: {date: Date}) => !options.weekdays || options.weekdays.includes(dateToWeekDay(dinnerEvent.date))
     const allDinnerEvents = season.dinnerEvents ?? []
-    const dinnerEventIds = isUserMode
-        ? [...new Set(options.desiredOrders!.map(o => o.dinnerEventId))]
+    const closedDinnerIds = new Set(allDinnerEvents.filter(isClosedDinner).map(de => de.id))
+    const isOpen = (dinnerEventId: number) => !closedDinnerIds.has(dinnerEventId)
+    const desiredOrders = options.desiredOrders?.filter(desired => isOpen(desired.dinnerEventId))
+    const dinnerEventIds = (isUserMode
+        ? [...new Set(desiredOrders!.map(o => o.dinnerEventId))]
         : (options.dinnerEventIds
             ? options.dinnerEventIds
-            : getScaffoldableDinnerEvents(allDinnerEvents).filter(onWeekdays).map(e => e.id))
+            : getScaffoldableDinnerEvents(allDinnerEvents).filter(onWeekdays).map(e => e.id)))
+        .filter(isOpen)
     const dinnerEvents = allDinnerEvents.filter(de => dinnerEventIds.includes(de.id))
 
     const draftOf = new Map((options.preferences ?? []).map(({inhabitantId, dinnerPreferences}) => [inhabitantId, dinnerPreferences]))
@@ -391,7 +396,7 @@ export async function scaffoldPrebookings(
             // Resolve desired orders to buckets
             const result = isUserMode
                 ? resolveDesiredOrdersToBuckets(
-                    options.desiredOrders!,
+                    desiredOrders!,
                     householdOrders,
                     dinnerEventById,
                     canModifyOrders,
@@ -410,7 +415,7 @@ export async function scaffoldPrebookings(
                 )
 
             // The generator skips an order the household no longer holds (bought by another household, or deleted); the save lists it as failed
-            const staleOrders = isUserMode ? options.desiredOrders!.filter(desired => desired.orderId !== undefined && !orderById.has(desired.orderId)) : []
+            const staleOrders = isUserMode ? desiredOrders!.filter(desired => desired.orderId !== undefined && !orderById.has(desired.orderId)) : []
             failed.push(...staleOrders.map(stale => resultOf(stale, actionOfUpdate(stale, undefined))))
 
             // Create new orders; a failed batch is written order by order

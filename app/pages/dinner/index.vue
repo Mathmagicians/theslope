@@ -207,8 +207,9 @@ useHead({
           @next="navigate(1)"
           @toggle-calendar="setCalendarOpen(!calendarOpen)"
         >
-          <!-- Household booking form - uses session-filtered orders (not admin's all-households tickets) -->
+          <!-- Household booking form - uses session-filtered orders (not admin's all-households tickets); the card draws the cancelled ribbon -->
           <DinnerBookingForm
+            :ribbon="false"
             :dinner-event="dinnerEventDetail"
             :orders="householdOrders"
             :ticket-prices="selectedSeason?.ticketPrices ?? []"

@@ -49,10 +49,15 @@ export const dinnerForWaitlist = (
     }
 }
 
+/** A cancelled or consumed dinner takes no booking: no order, no place on its waiting list, no sale */
+export const isClosedDinner = (dinner: Pick<DinnerForWaitlist, 'state'>): boolean => {
+    const {DinnerStateSchema} = useBookingValidation()
+    return dinner.state === DinnerStateSchema.enum.CONSUMED || dinner.state === DinnerStateSchema.enum.CANCELLED
+}
+
 // A wish joins the queue of a dinner still to come, booked by a member
 const assertJoinable = (request: TicketWaitlistCreate, dinner: Pick<DinnerForWaitlist, 'state'>): void => {
-    const {DinnerStateSchema} = useBookingValidation()
-    if (dinner.state === DinnerStateSchema.enum.CONSUMED || dinner.state === DinnerStateSchema.enum.CANCELLED) {
+    if (isClosedDinner(dinner)) {
         throw createError({statusCode: 400, message: `Dinner event ${request.dinnerEventId} is ${dinner.state}`})
     }
     if (!request.order.bookedByUserId) {
@@ -168,13 +173,19 @@ const placeEntry = async (
 /**
  * The chef releases N portions: the resolver walks the queue in strict FIFO and the entries that fit get their
  * orders at the price written at join. Idempotent: a placed entry is gone from the queue, a grabbed entry belongs to
- * one run, and the recovery settles the grabs of a run that stopped midway (ADR-015).
+ * one run, and the recovery settles the grabs of a run that stopped midway (ADR-015). A cancelled or consumed dinner
+ * places nobody: its queue keeps its places.
  */
 export async function assignWaitlistPortions(
     d1Client: D1Database, dinnerEvent: DinnerEventDetail, supplyPortions: number, performedByUserId: number | null
 ): Promise<WaitlistAssignmentResult> {
     const {resolveWaitlistAssignment, portionsOfEntryFor} = useWaitlist()
     const dinnerEventId = dinnerEvent.id
+    if (isClosedDinner(dinnerEvent)) {
+        const waiting = (await fetchWaitlistForDinners(d1Client, [dinnerEventId])).length
+        console.info(`${LOG} Dinner ${dinnerEventId} is ${dinnerEvent.state}: ${supplyPortions} portions place nobody, ${waiting} entries keep their place`)
+        return {dinnerEventId, supplyPortions, assigned: [], portionsUsed: 0, waiting, waitlistTicketsSold: []}
+    }
     const dinner = dinnerForWaitlist(dinnerEvent, dinnerEvent.seasonId ? await fetchSeason(d1Client, dinnerEvent.seasonId) : null)
     const portionsOf = portionsOfEntryFor(dinner.ticketPrices)
     const {isHeld, isExpired} = placingLease()
@@ -235,6 +246,7 @@ const sellToEntry = async (d1Client: D1Database, entry: TicketWaitlistDisplay, t
  * of its type until the line or that supply runs out. A sold ticket keeps its price row. Idempotent: a placed entry
  * leaves its line, a line stops at its first miss and at an entry another run holds, and the recovery settles the
  * grabs of a run that stopped midway (ADR-015). Reports the tickets sold, and the extra portions the recovery finished.
+ * The caller names open dinners only: the scaffold, which reads the dinners' states, drops the closed ones.
  */
 export async function sellTicketsToWaitlist(
     d1Client: D1Database, dinnerEventIds: number[], ticketPrices: Pick<TicketPrice, 'id' | 'ticketType' | 'portions'>[]

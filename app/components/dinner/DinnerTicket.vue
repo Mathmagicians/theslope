@@ -15,6 +15,7 @@
  * ┃  [wl][  ][  ]  [VOKSEN · 55kr]                (mode) Spisesal   ░░[tk]░░┃  queued   wl toned, edge neutral, (mode) the wish ghosted
  * ┃  [ex][  ][  ]  [VOKSEN · 55kr]                (mode) Takeaway   ░░[tk]░░┃  expected: no order yet, ex toned, edge neutral, (mode) ghosted on neutral
  * ┃  [ex][  ][  ]  [ALLE]                         (mode) Takeaway   ░░[tk]░░┃  power row when every row is expected: the consensus of what the rows show
+ * ┃  [  ][  ][  ]  -[VOKSEN · 55kr]-              -[mode] Spisesal- ░░[tk]░░┃  cancelled dinner: the past day's colours, no edge, struck through
  * ┃  [  ][  ][  ]  [BARN · 17kr]                  [remove]          ░░[tk]░░┃  a season's ticket price (TicketPriceListEditor)
  * ┃                Under 12 år · Barn                                ░░░░░░░░┃
  *
@@ -34,6 +35,8 @@
  * paints the badge and the guest and allergy glyphs. A queued ticket's edge takes the waiting list's neutral
  * (ORDER_STATE_COLORS.queued); its hourglass takes the toned ink. An expected ticket reads as a queued one with the
  * sliders in place of the hourglass (ticket.face.expected, ticket.stateIcon.expected)
+ * A ticket on a cancelled dinner wears ticket.face.cancelled whatever its state, and its mode badge the cancelled face
+ * (COMPONENTS.dinnerModeSelector.cancelledFace): nothing is eaten, nothing reads green
  * Mode labels: Spisesal | Sen | Takeaway | Ingen
  */
 import type {DinnerMode, TicketState as TicketStateValue} from '~/composables/useBookingValidation'
@@ -47,6 +50,7 @@ interface Props {
   dinnerMode?: DinnerMode
   ticketState?: TicketStateValue // What the ticket is now (ticketStateOf); a queued ticket's dinnerMode is the wish, not a booking
   expected?: boolean // No order yet: dinnerMode is the booking the preferences give
+  cancelled?: boolean // The dinner is cancelled: the card and its mode wear the cancelled face, whatever the state
   guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
   consensus?: boolean // Power mode: true=all agree, false=mixed, undefined=not power mode
   allergies?: AllergyTypeDisplay[] // The eater's allergy types; the card shows the glyph only
@@ -58,6 +62,7 @@ const props = withDefaults(defineProps<Props>(), {
   dinnerMode: undefined,
   ticketState: TicketState.normal,
   expected: false,
+  cancelled: false,
   guestCount: undefined,
   consensus: undefined,
   allergies: () => [],
@@ -78,11 +83,15 @@ const STATE_GLYPHS: Record<TicketStateValue, {name: string, class: string} | nul
   [TicketState.queued]: {name: ICONS.waitlist, class: ticket.stateIcon.queued},
   [TicketState.normal]: null
 }
-// An expected booking is a prop, not a ticket state: it takes the face and the glyph before the state does
+// An expected booking is a prop, not a ticket state: it takes the face and the glyph before the state does;
+// a cancelled dinner takes the face before both
 const stateGlyph = computed(() => props.expected
   ? {name: ICONS.preferences, class: ticket.stateIcon.expected}
   : STATE_GLYPHS[props.ticketState])
-const face = computed(() => props.expected ? ticket.face.expected : ticket.face[props.ticketState])
+const face = computed(() => {
+  if (props.cancelled) return ticket.face.cancelled
+  return props.expected ? ticket.face.expected : ticket.face[props.ticketState]
+})
 // On the waiting list the mode is the wish, shown as its ghost
 const isWish = computed(() => props.ticketState === TicketState.queued)
 
@@ -154,6 +163,7 @@ const badgeText = computed(() => {
               :consensus="consensus"
               :ghost="isWish"
               :expected="expected"
+              :cancelled="cancelled"
               show-label
             />
           </slot>

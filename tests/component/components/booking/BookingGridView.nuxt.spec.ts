@@ -14,7 +14,7 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {COMPONENTS, ICONS, ORDER_STATE_COLORS} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, DINNER_STATE_BADGES, ICONS, ORDER_STATE_COLORS} from '~/composables/useTheSlopeDesignSystem'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
@@ -382,6 +382,20 @@ describe('BookingGridView', () => {
       expect(queuedCell(wrapper).props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, ghost: true, ...cell})
     })
 
+    // A wish on the waiting list is no booking: untouched it keeps the ghost face in edit mode too
+    it('in edit mode an untouched queued cell renders its wish as a ghost under the queue marker, and a click trades the ghost for the modified accent', async () => {
+      const wrapper = await mountQueued(FORM_MODES.EDIT)
+      const {color, variant} = COMPONENTS.waitlist.ghostBadge
+
+      expect(findByTestId(wrapper, `grid-waitlist-${anna.id}-${closedDinner.id}`).exists()).toBe(true)
+      expect(queuedCell(wrapper).props()).toMatchObject({ghost: true, isModified: false})
+      expect(queuedCell(wrapper).findComponent({name: 'UButton'}).props()).toMatchObject({color, variant})
+
+      await clickByTestId(wrapper, queuedCellName)
+
+      expect(queuedCell(wrapper).props()).toMatchObject({ghost: false, isModified: true})
+    })
+
     it('the legend explains the queue marker', async () => {
       const wrapper = await mountQueued()
 
@@ -400,6 +414,41 @@ describe('BookingGridView', () => {
       }
 
       expect(modes).toEqual([DinnerMode.NONE, DinnerMode.TAKEAWAY])
+    })
+  })
+
+  // The grid's rows follow its dinners on view; the waiting list it receives also covers the season's locked dinners
+  describe('guest rows of dinners outside the week on view', () => {
+    const anna = mockHousehold.inhabitants[0]!
+    const inWeek = DinnerEventFactory.dinnerEventAt(1, 1)
+    const outside = DinnerEventFactory.dinnerEventAt(6, 15)
+    const entries = {
+      inWeek: WaitlistFactory.defaultEntry({id: 41, inhabitantId: anna.id, dinnerEventId: inWeek.id, isGuestTicket: true}),
+      outside: WaitlistFactory.defaultEntry({id: 42, inhabitantId: anna.id, dinnerEventId: outside.id, isGuestTicket: true})
+    }
+    const groups = {
+      inWeek: OrderFactory.defaultOrder(undefined, {id: 71, inhabitantId: anna.id, dinnerEventId: inWeek.id, isGuestTicket: true}),
+      outside: OrderFactory.defaultOrder(undefined, {id: 72, inhabitantId: anna.id, dinnerEventId: outside.id, isGuestTicket: true})
+    }
+    const groupRowId = (order: OrderDisplay) => `guest-group-${Object.keys(useBooking().groupGuestOrders([order]))[0]}`
+    // The ids of the rows the grid hands its table
+    const rowIdsOf = (wrapper: Awaited<ReturnType<typeof mount>>) =>
+      (wrapper.findComponent({name: 'UTable'}).props('data') as {id: string | number}[]).map(row => row.id)
+
+    it.each([
+      {kind: 'queued guest', props: {waitlistEntries: [entries.inWeek, entries.outside]}, rowIds: () => ({kept: `guest-entry-${entries.inWeek.id}`, dropped: `guest-entry-${entries.outside.id}`})},
+      {kind: 'placed guest group', props: {orders: [groups.inWeek, groups.outside]}, rowIds: () => ({kept: groupRowId(groups.inWeek), dropped: groupRowId(groups.outside)})}
+    ])('GIVEN the week on view and a $kind on a dinner in it and one outside it THEN only the one in the week has a guest row', async ({props, rowIds}) => {
+      const wrapper = await mount({
+        view: week,
+        dateRange: {start: addDays(inWeek.date, -3), end: addDays(inWeek.date, 3)},
+        dinnerEvents: [inWeek, outside],
+        ...props
+      })
+      const {kept, dropped} = rowIds()
+
+      expect(rowIdsOf(wrapper)).toContain(kept)
+      expect(rowIdsOf(wrapper)).not.toContain(dropped)
     })
   })
 
@@ -463,6 +512,43 @@ describe('BookingGridView', () => {
 
       expect(findByTestId(wrapper, `grid-waitlist-${lars.id}-${closedDinner.id}`).exists()).toBe(true)
       expect(larsCell().props()).toMatchObject({modelValue: DinnerMode.NONE, isModified: true, ghost: false, formMode: FORM_MODES.EDIT})
+    })
+  })
+
+  // Nothing lands on a cancelled dinner: its header names the state, and its cells show the tickets cancelled, offering no mode
+  describe('a cancelled dinner', () => {
+    const {DinnerModeSchema, DinnerStateSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+    const anna = mockHousehold.inhabitants[0]!
+    // Tomorrow, past the booking deadline, where a dinner that goes ahead carries the lock chip
+    const cancelled = {...DinnerEventFactory.dinnerEventAt(1, 1), state: DinnerStateSchema.enum.CANCELLED}
+    const annaTicket = OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: anna.id, dinnerEventId: cancelled.id, dinnerMode: DinnerMode.DINEIN})
+    const mountCancelled = (formMode: FormMode = FORM_MODES.VIEW) => mount({
+      view: week,
+      dateRange: {start: addDays(cancelled.date, -3), end: addDays(cancelled.date, 3)},
+      dinnerEvents: [cancelled],
+      orders: [annaTicket],
+      formMode
+    })
+    const inHeader = (wrapper: Awaited<ReturnType<typeof mount>>, name: string) => {
+      const header = wrapper.find('thead').element
+      return wrapper.findAllComponents({name}).filter(component => header.contains(component.element))
+    }
+
+    it('GIVEN a cancelled dinner THEN its column header shows the Aflyst badge in place of the lock chip', async () => {
+      const wrapper = await mountCancelled()
+
+      const {label, color, icon} = DINNER_STATE_BADGES.CANCELLED
+      const badge = inHeader(wrapper, 'UBadge').find(candidate => candidate.props('color') === color && candidate.props('icon') === icon)
+      expect(badge?.text()).toContain(label)
+      expect(inHeader(wrapper, 'UChip')).toHaveLength(0)
+    })
+
+    it.each([FORM_MODES.VIEW, FORM_MODES.EDIT])('GIVEN Anna\'s ticket on a cancelled dinner in %s mode THEN her cell shows it cancelled and offers no mode', async (formMode) => {
+      const wrapper = await mountCancelled(formMode)
+
+      const annaCell = wrapper.findAllComponents(DinnerModeSelector).find(selector => selector.props('name') === `cell-${anna.id}-${cancelled.id}`)!
+      expect(annaCell.props()).toMatchObject({modelValue: DinnerMode.DINEIN, cancelled: true, enabledModes: [], formMode: FORM_MODES.VIEW})
     })
   })
 

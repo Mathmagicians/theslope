@@ -6,18 +6,20 @@ import DinnerCalendarDisplay from '~/components/calendar/DinnerCalendarDisplay.v
 import {EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {findAllByTestId, findByTestId, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
-import {ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {CALENDAR, ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {DinnerState} from '~/composables/useBookingValidation'
 import {WAITLIST_TEST_IDS} from '~~/tests/component/components/dinner/waitlistTestIds'
 
 enableAutoUnmount(afterEach)
+
+// A month two ahead of today: every dinner is upcoming and the one month view holds them all
+const MONTH = startOfMonth(addMonths(new Date(), 2))
 
 /**
  * The lock chip on a dinner past its booking deadline shows the dinner's supply: the tickets for sale counting up,
  * else the hourglass of the waiting list, else the closed chip alone. A dinner open for booking carries no chip.
  */
 describe('DinnerCalendarDisplay lock chips', () => {
-    // A month two ahead of today: every dinner is upcoming and the one month view holds them all
-    const MONTH = startOfMonth(addMonths(new Date(), 2))
     const dinnerOn = (id: number, dayOfMonth: number) =>
         ({...DinnerEventFactory.defaultDinnerEventDisplay(), id, date: addDays(MONTH, dayOfMonth - 1)})
     const supply = (total: number, queued: number): ReleasedTicketCounts => ({...EMPTY_RELEASED_TICKET_COUNTS, total, formatted: total > 0 ? `${total}V` : '-', queued, queuedFormatted: queued > 0 ? `${queued}V` : '-'})
@@ -90,5 +92,39 @@ describe('DinnerCalendarDisplay lock chips', () => {
             expect(chip?.textContent?.trim(), label).toBe(text)
             expect(glyphsIn(wrapper, chip), label).toEqual(glyphs)
         })
+    })
+})
+
+// A cancelled dinner's day reads as the chef calendar draws it: the past circle, struck through, explained in the legend
+describe('DinnerCalendarDisplay cancelled dinners', () => {
+    const CANCELLED_DINNER = {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 5, date: addDays(MONTH, 13), state: DinnerState.CANCELLED}
+
+    beforeEach(() => {
+        resetStores()
+    })
+
+    const mountCalendar = () => mountWithTooltipProvider(DinnerCalendarDisplay, {
+        props: {
+            seasonDates: {start: MONTH, end: endOfMonth(MONTH)},
+            holidays: [],
+            dinnerEvents: [CANCELLED_DINNER],
+            lockStatus: new Map<number, ReleasedTicketCounts | null>(),
+            selectedDate: MONTH,
+            numberOfMonths: 1
+        },
+        isMd: true
+    })
+
+    it('a cancelled dinner\'s day carries the past circle struck through', async () => {
+        const wrapper = await mountCalendar()
+
+        const day = findByTestId(wrapper, `calendar-dinner-date-${CANCELLED_DINNER.date.getDate()}`)
+        expect(day.classes()).toEqual(expect.arrayContaining([...CALENDAR.day.past.split(' '), ...CALENDAR.day.cancelled.split(' ')]))
+    })
+
+    it('the legend explains a cancelled dinner as "Aflyst fællesspisning"', async () => {
+        const wrapper = await mountCalendar()
+
+        expect(findAllByTestId(wrapper, 'calendar-legend-entry').some(entry => entry.text().includes('Aflyst fællesspisning'))).toBe(true)
     })
 })

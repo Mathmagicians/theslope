@@ -258,6 +258,20 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
     }
 
+    // The booking views read a dinner's state off the selected season's dinners
+    const refreshSelectedSeason = () => planStore.selectedSeasonDataset.refresh()
+
+    // A run on a season leaves its cancelled and consumed dinners out of the dinners it covered: an asked dinner the
+    // selected season still shows open closed since the season was read. A dinner the season shows closed, or a run
+    // without a season, reads nothing: a page that re-mounts on the season read would preview and read again
+    const refreshSeasonOnClosedDinners = async (request: ScaffoldOrdersRequest, {seasonId, dinners}: ScaffoldResult) => {
+        const covered = new Set(dinners.map(({id}) => id))
+        const shownOpen = new Set((planStore.selectedSeason?.dinnerEvents ?? [])
+            .filter(({state}) => state !== DinnerState.CANCELLED && state !== DinnerState.CONSUMED)
+            .map(({id}) => id))
+        if (seasonId !== null && request.dinnerEventIds.some(id => shownOpen.has(id) && !covered.has(id))) await refreshSelectedSeason()
+    }
+
     // A scaffold result toast: the title names the view, the suffix the dinner (guest bookings), the household's order its people
     type ScaffoldToast = {title: string, suffix?: string, householdOrder?: number[]}
 
@@ -278,6 +292,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             schema: ScaffoldOrdersResponseSchema,
             action: 'processBookings', errorMessage: 'Kunne ikke gemme bookinger'
         }))
+        await refreshSeasonOnClosedDinners(request, result.scaffoldResult)
         console.info(CTX, `${label}: ${formatScaffoldResult(result.scaffoldResult)}`)
         if (report) {
             const reported = scaffoldToast(report.title, result.scaffoldResult, report.householdOrder)
@@ -287,14 +302,17 @@ export const useBookingsStore = defineStore("Bookings", () => {
     }
 
     /** What the save of the request would do, read without writing: the scaffold's preview, outside the booking write */
-    const previewBookings = async (request: ScaffoldOrdersRequest, adminBypass = false): Promise<ScaffoldResult> =>
-        (await apiRequest('/api/household/order/scaffold', {
+    const previewBookings = async (request: ScaffoldOrdersRequest, adminBypass = false): Promise<ScaffoldResult> => {
+        const {scaffoldResult} = await apiRequest('/api/household/order/scaffold', {
             method: 'POST',
             body: request,
             query: {adminBypass, preview: true},
             schema: ScaffoldOrdersResponseSchema,
             action: 'previewBookings'
-        })).scaffoldResult
+        })
+        await refreshSeasonOnClosedDinners(request, scaffoldResult)
+        return scaffoldResult
+    }
 
     /**
      * ADR-016: Process bookings for a single dinner event.
@@ -446,8 +464,14 @@ export const useBookingsStore = defineStore("Bookings", () => {
     })
 
     const announceDinner = withLoading((id: number) => updateDinner(id, {state: DinnerState.ANNOUNCED}, 'Kunne ikke annoncere fællesspisningen'))
-    const cancelDinner = withLoading((id: number) => updateDinner(id, {state: DinnerState.CANCELLED}, 'Kunne ikke aflyse fællesspisningen'))
-    const undoCancelDinner = withLoading((id: number, targetState: DinnerState = DinnerState.SCHEDULED) => updateDinner(id, {state: targetState}, 'Kunne ikke annullere aflysningen'))
+    // A cancel and its undo change what the booking views offer on the dinner: the season they read it off is read again
+    const updateDinnerState = async (id: number, state: DinnerState, action: string): Promise<DinnerEventDetail> => {
+        const updated = await updateDinner(id, {state}, action)
+        await refreshSelectedSeason()
+        return updated
+    }
+    const cancelDinner = withLoading((id: number) => updateDinnerState(id, DinnerState.CANCELLED, 'Kunne ikke aflyse fællesspisningen'))
+    const undoCancelDinner = withLoading((id: number, targetState: DinnerState = DinnerState.SCHEDULED) => updateDinnerState(id, targetState, 'Kunne ikke annullere aflysningen'))
 
     // ========================================
     // WAITING LIST (ADR-007)

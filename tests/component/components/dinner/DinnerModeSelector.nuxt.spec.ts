@@ -25,7 +25,7 @@ const labelsOf = (modes: DinnerMode[]) => modes.length > 0 ? modes.map(mode => M
 
 // The parent's v-model: an emitted mode comes back as the next modelValue, and a plan once touched is the person's own
 // draft, as the booking form's and the grid's drafts do
-const mountSelector = async (props: {interaction: 'toggle' | 'buttons', enabledModes: DinnerMode[], modelValue: DinnerMode, expected?: boolean}) => {
+const mountSelector = async (props: {interaction: 'toggle' | 'buttons', enabledModes: DinnerMode[], modelValue: DinnerMode, expected?: boolean, ghost?: boolean}) => {
     const wrapper = await mountSuspended(DinnerModeSelector, {
         props: {...props, formMode: FORM_MODES.EDIT, name: NAME},
         attrs: {'onUpdate:modelValue': (value: DinnerMode) => wrapper.setProps({modelValue: value, expected: false})}
@@ -43,6 +43,11 @@ const clickToggle = async (wrapper: Mounted, clicks: number) => {
     return emittedModes(wrapper)
 }
 const emittedModes = (wrapper: Mounted) => wrapper.emitted('update:modelValue')?.map(([mode]) => mode) ?? []
+// The toggle's face: the colour and variant its button renders
+const toggleFaceOf = (wrapper: Mounted) => {
+    const {color, variant} = wrapper.findComponent({name: 'UButton'}).props()
+    return {color, variant}
+}
 
 describe('DinnerModeSelector toggle', () => {
     const cases = [
@@ -71,6 +76,18 @@ describe('DinnerModeSelector toggle', () => {
 
         expect(findByTestId(wrapper, NAME).attributes()).toHaveProperty('disabled')
     })
+
+    // A wish on the waiting list is no booking: the toggle shows it as a ghost, and a click cycles as on any cell
+    it('GIVEN the toggle on a wish (ghost) THEN it renders the ghost face, not the solid one, and a click still cycles', async () => {
+        const onWish = (ghost: boolean) => mountSelector({interaction: 'toggle', enabledModes: [TAKEAWAY, NONE], modelValue: TAKEAWAY, ghost})
+        const wish = await onWish(true)
+        const solid = toggleFaceOf(await onWish(false))
+
+        const {color, variant} = COMPONENTS.waitlist.ghostBadge
+        expect(toggleFaceOf(wish)).toEqual({color, variant})
+        expect(toggleFaceOf(wish)).not.toEqual(solid)
+        expect(await clickToggle(wish, 1)).toEqual([NONE])
+    })
 })
 
 describe('DinnerModeSelector buttons', () => {
@@ -90,10 +107,12 @@ describe('DinnerModeSelector on a plan', () => {
     const onPlan = (interaction: 'toggle' | 'buttons') => mountSelector({interaction, enabledModes: ALL, modelValue: PLAN, expected: true})
 
     it('GIVEN the toggle on a plan THEN it renders the plan\'s ghost face', async () => {
-        const wrapper = await onPlan('toggle')
+        const planned = toggleFaceOf(await onPlan('toggle'))
+        const solid = toggleFaceOf(await mountSelector({interaction: 'toggle', enabledModes: ALL, modelValue: PLAN}))
 
         const {color, variant} = COMPONENTS.bookingGrid.expectedBadge
-        expect(wrapper.findComponent({name: 'UButton'}).props()).toMatchObject({color, variant})
+        expect(planned).toEqual({color, variant})
+        expect(planned).not.toEqual(solid)
     })
 
     it('GIVEN the toggle on a plan WHEN clicked twice THEN the first click adopts the plan and the second moves to the next mode', async () => {

@@ -32,6 +32,11 @@
  * └ ─ ─ ┘
  * Spisesal   - The label in the same ink
  *
+ * SELECTOR VIEW MODE, cancelled (the dinner is cancelled; edit mode alike, toggle and buttons):
+ * ┌─────┐
+ * │-[m]-│  - The glyph on COMPONENTS.dinnerModeSelector.cancelledFace: the cancelled ticket's colours, struck through
+ * └─────┘    Nothing to click: a cancelled dinner offers no mode
+ *
  * SELECTOR EDIT MODE - BUTTONS (interaction="buttons", default, showLabel=true):
  * ┌────────────────────────┐
  * │ [🍽️][🕐][🛍️][❌]     │  - Icon buttons
@@ -84,6 +89,7 @@ interface Props {
   isModified?: boolean // Grid booking: show left border accent when cell has unsaved changes
   ghost?: boolean // The mode is a wish on the waiting list, not a booking, untouched
   expected?: boolean // The mode is the booking the preferences give a cell without an order, untouched
+  cancelled?: boolean // The dinner is cancelled: the view face in every form mode, on the cancelled face
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -99,7 +105,8 @@ const props = withDefaults(defineProps<Props>(), {
   orientation: 'responsive', // Default: vertical on mobile, horizontal on desktop
   isModified: false,
   ghost: false,
-  expected: false
+  expected: false,
+  cancelled: false
 })
 
 const emit = defineEmits<{
@@ -242,9 +249,13 @@ const getBadgeVariant = (): BadgeVariant => {
   if (props.ghost) return waitlistFace.ghostBadge.variant
   return props.expected ? expectedFace.variant : getViewConfig().viewVariant
 }
-// The glyph and the label of a wish or an expected booking take a muted ink
-const planInk = computed(() => props.expected ? expectedFace.ink : undefined)
-const inkClass = computed(() => props.ghost ? waitlistFace.ghostInk : planInk.value)
+// A cancelled dinner's badge wears the cancelled face whatever the mode
+const badgeFace = computed(() => props.cancelled
+  ? selector.cancelledFace
+  : {color: getBadgeColor(), variant: getBadgeVariant()})
+// The glyph and the label of a wish or an expected booking take a muted ink; on a cancelled dinner they keep the face's
+const planInk = computed(() => props.expected && !props.cancelled ? expectedFace.ink : undefined)
+const inkClass = computed(() => props.ghost && !props.cancelled ? waitlistFace.ghostInk : planInk.value)
 
 // Get mode label (VIEW mode uses mixedModeConfig when no consensus)
 const getModeLabel = (): string => getViewConfig().label
@@ -292,11 +303,11 @@ const shouldPulse = (mode: DinnerMode): boolean => {
 
     <!-- SELECTOR MODE: Dinner mode selection -->
     <template v-else>
-    <!-- VIEW MODE: Badge + fine print label below; a ghost wish takes the waiting list's ghost face -->
-    <div v-if="formMode === FORM_MODES.VIEW" :class="selector.stack">
+    <!-- VIEW MODE: Badge + fine print label below; a ghost wish takes the waiting list's ghost face, a cancelled dinner the
+         cancelled face in every form mode -->
+    <div v-if="formMode === FORM_MODES.VIEW || cancelled" :class="selector.stack">
       <UBadge
-        :color="getBadgeColor()"
-        :variant="getBadgeVariant()"
+        v-bind="badgeFace"
         :size="responsiveSize"
         :class="selector.segment"
         :name="name"

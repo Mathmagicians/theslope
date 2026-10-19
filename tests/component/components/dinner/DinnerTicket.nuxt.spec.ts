@@ -167,6 +167,16 @@ describe('DinnerTicket for an expected booking', () => {
     })
 })
 
+// Nothing is eaten on a cancelled dinner: the ticket wears the cancelled face, apart from the face of its state
+describe('DinnerTicket on a cancelled dinner', () => {
+    it('GIVEN a booked ticket on a cancelled dinner THEN the card wears the cancelled face, apart from the normal one', async () => {
+        const wrapper = await mountTicket({cancelled: true})
+
+        expect(wrapper.classes()).toEqual(COMPONENTS.ticket.face.cancelled.split(' '))
+        expect(wrapper.classes()).not.toEqual(COMPONENTS.ticket.face.normal.split(' '))
+    })
+})
+
 describe('DinnerTicket for a queued guest', () => {
     it('GIVEN a queued guest THEN the state cell carries the hourglass and the guest cell the guest glyph', async () => {
         const wrapper = await mountTicket({ticketState: TicketState.queued, guestCount: 1})

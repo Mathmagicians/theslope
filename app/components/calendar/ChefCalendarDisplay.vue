@@ -56,7 +56,7 @@
  *
  * Uses:
  * - BaseCalendar for calendar structure
- * - useTemporalCalendar for shared temporal/countdown logic
+ * - useTemporalCalendar for shared temporal/countdown logic, the dinner on a day and whether it is cancelled
  * - CHEF_CALENDAR design system for consistent ocean palette
  * - DEADLINE_BADGES for urgency indicators
  */
@@ -67,7 +67,6 @@ import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
-import {toDate} from '~/utils/date'
 import {getPaginationRowModel} from '@tanstack/vue-table'
 
 interface Props {
@@ -92,12 +91,10 @@ const emit = defineEmits<{
   'update:accordion-open': [open: boolean]
 }>()
 
-const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
+const {useTemporalSplit, createTemporalEventLists, getDinnerForDay, isCancelledDay} = useTemporalCalendar()
 const {sortDinnerEventsByTemporal} = useSeason()
 const {getChefDeadlineAlarm} = useBooking()
 const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, TEXT, BUTTONS, COLOR, NOISE, ICONS, URGENCY_TO_CHIP_COLOR, dayCircleClasses} = useTheSlopeDesignSystem()
-const {DinnerStateSchema} = useBookingValidation()
-const DinnerState = DinnerStateSchema.enum
 
 // Selected dinner for detail display
 const selectedDinner = computed(() => props.dinnerEvents.find(e => e.id === props.selectedDinnerId))
@@ -159,25 +156,13 @@ const getDayColorClass = (type: DayType): string => {
 // Selection support
 const handleDateClick = (day: DateValue) => {
   if (!props.showSelection) return
-  const dinner = getDinnerForDay(day)
+  const dinner = getDinnerForDay(props.dinnerEvents, day)
   if (dinner) emit('select', dinner.id)
-}
-
-const getDinnerForDay = (day: DateValue): DinnerEventDisplay | undefined => {
-  const dayDate = toDate(day)
-  return props.dinnerEvents.find(event =>
-    dayDate.toDateString() === new Date(event.date).toDateString()
-  )
-}
-
-const isCancelledDay = (day: DateValue): boolean => {
-  const dinner = getDinnerForDay(day)
-  return dinner?.state === DinnerState.CANCELLED
 }
 
 const isSelected = (day: DateValue): boolean => {
   if (!props.selectedDinnerId || !props.showSelection) return false
-  const dinner = getDinnerForDay(day)
+  const dinner = getDinnerForDay(props.dinnerEvents, day)
   return dinner?.id === props.selectedDinnerId
 }
 
@@ -203,7 +188,7 @@ const agendaColumns = [
 
 // Deadline alarm for day using chef deadline logic (menu + groceries)
 const getAlarmForDay = (day: DateValue): -1 | 0 | 1 | 2 | 3 => {
-  const dinner = getDinnerForDay(day)
+  const dinner = getDinnerForDay(props.dinnerEvents, day)
   if (!dinner) return -1
   return getChefDeadlineAlarm(dinner, props.deadlines)
 }
@@ -319,7 +304,7 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => emit('tab-click', mode)
               <!-- Deadline chip for warning/critical (alarm 1, 2, 3) - only for non-past, non-cancelled -->
               <!-- Chip wraps styled circle (same pattern as DinnerCalendarDisplay) -->
               <UChip
-                v-if="getDayType(eventLists) && getDayType(eventLists) !== 'past' && !isCancelledDay(day) && URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)]"
+                v-if="getDayType(eventLists) && getDayType(eventLists) !== 'past' && !isCancelledDay(dinnerEvents, day) && URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)]"
                 show
                 :size="SIZES.md"
                 :color="URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)]!"
@@ -338,7 +323,7 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => emit('tab-click', mode)
                 v-else-if="getDayType(eventLists)"
                 :data-testid="`calendar-dinner-date-${day.day}`"
                 :class="dayCircleClasses(
-                  isCancelledDay(day) ? `${CALENDAR.day.past} ${CALENDAR.day.cancelled}` : getDayColorClass(getDayType(eventLists)!),
+                  isCancelledDay(dinnerEvents, day) ? `${CALENDAR.day.past} ${CALENDAR.day.cancelled}` : getDayColorClass(getDayType(eventLists)!),
                   isSelected(day) && CHEF_CALENDAR.selection
                 )"
                 @click="handleDateClick(day)"

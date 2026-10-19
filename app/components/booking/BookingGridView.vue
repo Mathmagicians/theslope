@@ -119,6 +119,13 @@
  * CELL STATES: 🍽️=dine-in, 🕐=late, 🛍️=takeaway, ❌=none, ?=no consensus, °=modified, ⌛=queued (the wish ghosted),
  * (mode)=expected (ghosted on neutral), [ex]=the sliders in the legend
  * HEADER CHIPS: (🟠)=locked, (🟡N)=locked with N tickets available
+ *
+ * A CANCELLED DINNER: its header's chip slot carries the state badge (DINNER_STATE_BADGES.CANCELLED) in place of the lock
+ * chip, and every cell of its column shows what it holds on the cancelled face (COMPONENTS.dinnerModeSelector.cancelledFace),
+ * offering no mode, in view and edit mode alike:
+ * │ Beboer           │ To 16 │    Fr 17     │
+ * │                  │ (🟠)  │ [(x) Aflyst] │ <- the state badge
+ * │ Anna V           │ [mode]│   -[mode]-   │ <- the ticket she held, struck through
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, ScaffoldOrdersRequest} from '~/composables/useBookingValidation'
@@ -198,7 +205,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, ORDER_STATE_COLORS, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, ORDER_STATE_COLORS, DINNER_STATE_BADGES, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
 // Ticket price formatting
@@ -210,7 +217,7 @@ const {lockChip} = useBookingUi()
 const bookingsStore = useBookingsStore()
 
 // Validation schemas
-const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
 
 // ============================================================================
@@ -653,6 +660,9 @@ const cellInteraction = (modes: DinnerMode[]) => cellFormMode(modes) === FORM_MO
 // A column the household cannot book: no mode in its power cell (past, outside residency, cancelled or consumed)
 const isEventDisabled = (event: DinnerEventDisplay): boolean => getPowerModes(event).length === 0
 
+// Nothing lands on a cancelled dinner: its header shows the state badge, its cells their tickets on the cancelled face
+const isCancelledEvent = (event: DinnerEventDisplay): boolean => event.state === DinnerStateSchema.enum.CANCELLED
+
 // Residency alert: shown when any visible event falls outside residency
 const residencyAlert = computed(() => {
   const hasDisabledByResidency = flatEvents.value.some(e => !isHouseholdInResidency(e.date))
@@ -779,10 +789,19 @@ const getEventSummary = (eventId: number) => {
         <div :class="[COMPONENTS.bookingGrid.eventHeader, isEventDisabled(event) && COMPONENTS.bookingGrid.eventHeaderDisabled]">
           <span :class="TYPOGRAPHY.caption">{{ formatDate(event.date, 'EEEEE') }}</span>
           <span :class="TYPOGRAPHY.finePrint">{{ formatDate(event.date, 'd/M') }}</span>
-          <!-- Fixed height slot for chip: 🟠=locked, 🟡N=locked with N tickets -->
+          <!-- Fixed height slot for chip: 🟠=locked, 🟡N=locked with N tickets; a cancelled dinner's state badge in its place -->
           <div :class="COMPONENTS.bookingGrid.chipSlot">
+            <UBadge
+              v-if="isCancelledEvent(event)"
+              :color="DINNER_STATE_BADGES.CANCELLED.color"
+              :icon="DINNER_STATE_BADGES.CANCELLED.icon"
+              :variant="NOISE.subtle"
+              :size="SIZES.small"
+            >
+              {{ DINNER_STATE_BADGES.CANCELLED.label }}
+            </UBadge>
             <UChip
-              v-if="getEventLockChip(event)"
+              v-else-if="getEventLockChip(event)"
               v-bind="COMPONENTS.bookingGrid.lockChip"
               :color="getEventLockChip(event)!.color"
               :text="getEventLockChip(event)!.text"
@@ -894,6 +913,7 @@ const getEventSummary = (eventId: number) => {
           :enabled-modes="getPowerModes(event)"
           :consensus="getEventConsensus(event.id).consensus"
           :expected="isPowerExpected(event.id)"
+          :cancelled="isCancelledEvent(event)"
           :size="SIZES.standard"
           :name="`power-${event.id}`"
           @update:model-value="(mode: DinnerMode) => handlePowerUpdate(event.id, mode)"
@@ -909,6 +929,7 @@ const getEventSummary = (eventId: number) => {
             :form-mode="cellFormMode(getCellModes(row.original.inhabitant.id, event.id))"
             :interaction="cellInteraction(getCellModes(row.original.inhabitant.id, event.id))"
             :enabled-modes="getCellModes(row.original.inhabitant.id, event.id)"
+            :cancelled="isCancelledEvent(event)"
             :size="SIZES.standard"
             :name="`cell-${row.original.inhabitant.id}-${event.id}`"
             :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
@@ -926,6 +947,7 @@ const getEventSummary = (eventId: number) => {
           :form-mode="cellFormMode(getCellModes(row.original.inhabitant.id, event.id))"
           :interaction="cellInteraction(getCellModes(row.original.inhabitant.id, event.id))"
           :enabled-modes="getCellModes(row.original.inhabitant.id, event.id)"
+          :cancelled="isCancelledEvent(event)"
           :size="SIZES.standard"
           :name="`cell-${row.original.inhabitant.id}-${event.id}`"
           :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
@@ -943,6 +965,7 @@ const getEventSummary = (eventId: number) => {
             :form-mode="cellFormMode(getGuestModes(row.original))"
             :interaction="cellInteraction(getGuestModes(row.original))"
             :enabled-modes="getGuestModes(row.original)"
+            :cancelled="isCancelledEvent(event)"
             :size="SIZES.standard"
             :name="`guest-${row.original.id}-${event.id}`"
             :is-modified="isEntryCellModified(row.original.waitlistEntry)"
@@ -960,6 +983,7 @@ const getEventSummary = (eventId: number) => {
           :form-mode="cellFormMode(getGuestModes(row.original))"
           :interaction="cellInteraction(getGuestModes(row.original))"
           :enabled-modes="getGuestModes(row.original)"
+          :cancelled="isCancelledEvent(event)"
           :size="SIZES.standard"
           :name="`guest-${row.original.id}-${event.id}`"
           :is-modified="isGuestCellModified(row.original.guestOrders)"

@@ -195,6 +195,16 @@ describe('assignWaitlistPortions', () => {
         expect(result).toMatchObject({assigned: [], portionsUsed: 0, waiting: 2})
         expect(createOrders).not.toHaveBeenCalled()
     })
+
+    // Nothing lands on a dinner that is over or called off: its queue keeps its places
+    it.each([DinnerState.CANCELLED, DinnerState.CONSUMED])('places nobody on a %s dinner: the queue is counted once, the season is not read and no entry is grabbed', async (state) => {
+        const result = await assignWaitlistPortions(d1Client, {...portionDinner, state}, 2, null)
+
+        expect(result).toMatchObject({assigned: [], portionsUsed: 0, waiting: 2})
+        expect(fetchWaitlistForDinners).toHaveBeenCalledTimes(1)
+        expect(fetchSeason).not.toHaveBeenCalled()
+        expect(protocolSteps()).toEqual([])
+    })
 })
 
 // An entry whose inhabitant already holds a regular order: the unique index answers the write with a conflict, the

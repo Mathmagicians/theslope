@@ -69,7 +69,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/season/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/season/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/season/active.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/season/active.post.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed |
+| `/api/admin/season/active.post.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed; the activation's scaffold drops cancelled and consumed dinners |
 | `/api/admin/season/deactivate.post.ts` | ✅ | N/A | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/season/[id]/generate-dinner-events.post.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed |
 | `/api/admin/season/[id]/assign-cooking-teams.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -94,7 +94,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/billing/periods/[id].get.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed |
 | `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec skipped, import replaced |
 | **Admin - maintenance and jobs** | | | | | |
-| `/api/admin/maintenance/daily.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial | ⚠️ raw body read |
+| `/api/admin/maintenance/daily.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial | ⚠️ raw body read; the scaffold step drops cancelled and consumed dinners |
 | `/api/admin/maintenance/monthly.post.ts` | ✅ | ⚠️ | ✅ | ✅ serial | ⚠️ raw body read |
 | `/api/admin/maintenance/job-run/index.get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/maintenance/job-run/[id].get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
@@ -105,7 +105,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | **Household** | | | | | |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save runs on the weekdays its draft changes, `?preview=true` runs the save dry on the same; past the deadline the path buys or queues (One intent path); `preferences.e2e` written, unrun |
-| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save naming an order since bought by another household lists it in `failed`; that case awaits its spec. `?preview=true` runs the save dry, an empty draft answers the household's next run (One intent path); `?adminBypass=true` from an admin writes the run's history rows with the source `admin-correction`; `scaffold.e2e` written, unrun |
+| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save naming an order since bought by another household lists it in `failed`; that case awaits its spec. `?preview=true` runs the save dry, an empty draft answers the household's next run (One intent path); `?adminBypass=true` from an admin writes the run's history rows with the source `admin-correction`; the run drops cancelled and consumed dinners; `scaffold.e2e` written, unrun |
 | `/api/household/allergy/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/allergy/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/allergy/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |

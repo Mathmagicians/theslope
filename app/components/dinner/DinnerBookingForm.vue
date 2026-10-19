@@ -137,6 +137,16 @@
  *   Anna  [  ][  ][  ] [VOKSEN · 55kr]   [mode] Takeaway    after a click on (mode): Takeaway booked on save, bare
  * The power row with every row expected hints its mode the same way; a click on it adopts each person's plan, another
  * mode goes to every row.
+ *
+ * ON A CANCELLED DINNER - the cancelled corner ribbon (getRibbonClasses('cancel'), COMPONENTS.ribbon) over the form's
+ * top right corner, and every row's ticket on the cancelled face (DinnerTicket cancelled); no row offers a mode, and an
+ * expanded row's selector shows the held mode on the cancelled face (DinnerModeSelector cancelled). A parent
+ * that draws the ribbon itself passes `ribbon` false (/dinner, where the form sits inside ChefMenuCard):
+ * ┌────────────────────────────────────────────────────────╲ AFLYST ╲┐
+ * │ [booking deadline badge] [dining mode deadline badge]   2V · 110 │
+ * │ Hele familien     -[DinnerTicket]-                               │
+ * │ Anna B.H.         -[DinnerTicket]-                               │  -[..]- the past day's colours, struck through
+ * └──────────────────────────────────────────────────────────────────┘
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, ScaffoldOrdersRequest, TicketState as TicketStateValue} from '~/composables/useBookingValidation'
@@ -147,6 +157,7 @@ import type {TicketPresentation} from '~/composables/useBookingUi'
 import {EMPTY_RELEASED_TICKET_COUNTS, type BookingContext, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES} from '~/types/form'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 // Row types for synthetic rows in table
 type RowType = 'inhabitant' | 'power' | 'guest' | 'guest-order'
@@ -196,6 +207,8 @@ interface Props {
   loading?: boolean
   /** An admin's save lifts the deadlines (ADR-016): its preview reads the same run */
   adminBypass?: boolean
+  /** Draws the cancelled corner ribbon on a cancelled dinner; a parent that draws its own passes false */
+  ribbon?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -206,7 +219,8 @@ const props = withDefaults(defineProps<Props>(), {
   canEditAdminOverride: undefined,
   waitlistEntries: () => [],
   loading: false,
-  adminBypass: false
+  adminBypass: false,
+  ribbon: true
 })
 
 const emit = defineEmits<{
@@ -240,7 +254,7 @@ const {isDinnerPast} = useSeason()
 const {canModifyOrders} = props.deadlines
 
 // Validation
-const {DinnerModeSchema, OrderStateSchema, BookingActionSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, BookingActionSchema, DinnerStateSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
 const OrderStateEnum = OrderStateSchema.enum
 
@@ -288,6 +302,9 @@ const canBook = computed(() => canModifyOrders(props.dinnerEvent.date))
 const dinnerHasPassed = computed(() => isDinnerPast(props.dinnerEvent.date))
 // Edit allowed if: permission-based formMode is EDIT AND dinner hasn't passed
 const isEditModeAllowed = computed(() => formMode.value === FORM_MODES.EDIT && !dinnerHasPassed.value)
+// Nothing lands on a cancelled dinner: the form wears the corner ribbon, and every ticket the cancelled face
+const isCancelled = computed(() => props.dinnerEvent.state === DinnerStateSchema.enum.CANCELLED)
+const showRibbon = computed(() => props.ribbon && isCancelled.value)
 
 // Without a household every day counts
 const isInResidencyOn = computed((): (date: Date) => boolean => household.value
@@ -669,7 +686,16 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
   </UAlert>
 
   <!-- Booking form -->
-  <div v-else :class="COMPONENTS.bookingForm.root">
+  <div v-else :class="[COMPONENTS.bookingForm.root, showRibbon && COMPONENTS.ribbon.container]">
+    <!-- Cancelled ribbon -->
+    <div
+      v-if="showRibbon"
+      :class="getRibbonClasses('cancel')"
+      data-testid="cancelled-ribbon"
+    >
+      {{ BOOKING_WORDS.cancelledDinner.ribbon }}
+    </div>
+
     <!-- Deadline Status Badges + Day Bill Summary -->
     <!-- Mobile: badges stacked left, day bill right | Desktop: all in row with gaps -->
     <div :class="COMPONENTS.bookingForm.statusRow">
@@ -753,6 +779,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
                 :dinner-mode="ticketModeOf(row.original)"
                 :consensus="row.original.consensus"
                 :expected="isPlan(row.original)"
+                :cancelled="isCancelled"
               />
             </div>
           </div>
@@ -836,6 +863,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
               :dinner-mode="ticketModeOf(row.original)"
               :ticket-state="row.original.ticketState"
               :expected="isPlan(row.original)"
+              :cancelled="isCancelled"
               :guest-count="row.original.guestCount"
               :allergies="row.original.allergyTypes"
               :provenance-household="row.original.provenanceHousehold"
@@ -854,6 +882,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
             :dinner-mode="ticketModeOf(row.original)"
             :consensus="row.original.consensus"
             :expected="isPlan(row.original)"
+            :cancelled="isCancelled"
           />
         </div>
         <!-- Inhabitant/Guest rows: show ticket -->
@@ -864,6 +893,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
             :dinner-mode="ticketModeOf(row.original)"
             :ticket-state="row.original.ticketState"
             :expected="isPlan(row.original)"
+            :cancelled="isCancelled"
             :guest-count="row.original.guestCount"
             :allergies="row.original.allergyTypes"
             :provenance-household="row.original.provenanceHousehold"
@@ -946,6 +976,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
           <DinnerModeSelector
             :model-value="draftMode ?? row.original.dinnerMode"
             :expected="isPlan(row.original)"
+            :cancelled="isCancelled"
             :form-mode="FORM_MODES.EDIT"
             :enabled-modes="row.original.enabledModes"
             :consensus="row.original.consensus"

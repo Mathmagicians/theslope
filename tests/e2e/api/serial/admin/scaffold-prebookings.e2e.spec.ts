@@ -578,4 +578,66 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             .filter(order => order.inhabitantId === inhabitant.id)
         expect(orders.map(order => order.dinnerEventId).sort()).toEqual(dinnerEvents.map(de => de.id).sort())
     })
+
+    // Nothing lands on a cancelled dinner: the run reads the dinner's state and leaves it, orders and all
+    test.describe('a cancelled dinner', () => {
+        const {DinnerStateSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
+        // A dinner of the admin's own team in the season: the chef's route, which cancels it, answers the team's chef
+        const teamDinnerOf = async (context: Parameters<typeof DinnerEventFactory.updateDinnerEvent>[0], season: Parameters<typeof SeasonFactory.createCookingTeamWithChefAndDinner>[1], days: number, testSalt: string) => {
+            const {inhabitantId: adminInhabitantId} = await getSessionUserInfo(context)
+            const {dinner} = await SeasonFactory.createCookingTeamWithChefAndDinner(context, season, adminInhabitantId, {
+                teamName: salt('Cancelled', testSalt), dinner: {date: daysFromNow(days), menuTitle: salt('Test Cancelled', testSalt)}
+            })
+            return dinner
+        }
+        const cancel = (context: Parameters<typeof DinnerEventFactory.updateDinnerEvent>[0], dinnerEventId: number) =>
+            DinnerEventFactory.updateDinnerEvent(context, dinnerEventId, {state: DinnerStateSchema.enum.CANCELLED})
+
+        test('GIVEN a dinner the chef cancelled in the window and a person whose preferences eat every day WHEN the run goes THEN it books the season\'s other dinners and nothing on the cancelled one', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {ticketIsCancellableDaysBefore: 0})
+            createdSeasonIds.push(season.id!)
+            const cancelled = await teamDinnerOf(context, season, 4, testSalt)
+            await cancel(context, cancelled.id)
+            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(context, HouseholdFactory.defaultHouseholdData(testSalt), 1)
+            createdHouseholdIds.push(household.id)
+            const inhabitant = inhabitants[0]!
+
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: createDefaultDinnerModeMap(DinnerMode.DINEIN)}, 200, season.id!)
+            await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+
+            const orders = (await OrderFactory.getAllOrdersForEvents(context, [...dinnerEvents.map(de => de.id), cancelled.id]))
+                .filter(order => order.inhabitantId === inhabitant.id)
+            expect(orders.map(order => order.dinnerEventId).sort()).toEqual(dinnerEvents.map(de => de.id).sort())
+        })
+
+        // The ticket for sale stays where it is: a sale on a cancelled dinner would charge the buyer for a dinner nobody cooks
+        test('GIVEN a released ticket on a dinner the chef cancelled and a person whose preferences eat every day WHEN the run goes THEN the ticket stays for sale with its holder', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+            // The season's booking deadline lies past the dinner two days ahead: a release keeps the ticket, a wish to eat buys it
+            const {season} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {ticketIsCancellableDaysBefore: SeasonFactory.DEFAULT_BOOKING_DEADLINE_DAYS})
+            createdSeasonIds.push(season.id!)
+            const dinner = await teamDinnerOf(context, season, 2, testSalt)
+            // Both eat every day by default: the holder's release is the holder's own act, the buyer's preference speaks alone
+            const {household, inhabitants: [holder, buyer]} = await HouseholdFactory.createHouseholdWithInhabitants(context, HouseholdFactory.defaultHouseholdData(testSalt), 2)
+            createdHouseholdIds.push(household.id)
+            const adultPriceId = season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!.id!
+            const created = await OrderFactory.createOrder(context, {
+                householdId: household.id, dinnerEventId: dinner.id,
+                orders: [OrderFactory.defaultOrderItem({inhabitantId: holder!.id, ticketPriceId: adultPriceId})]
+            })
+            const ticketId = created!.createdIds[0]!
+            const released = await OrderFactory.updateOrder(context, ticketId, {dinnerMode: DinnerMode.NONE})
+            expect(released?.state).toBe(OrderStateSchema.enum.RELEASED)
+            await cancel(context, dinner.id)
+
+            await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+
+            const orders = await OrderFactory.getAllOrdersForEvents(context, dinner.id)
+            expect(orders).toEqual([expect.objectContaining({id: ticketId, inhabitantId: holder!.id, state: OrderStateSchema.enum.RELEASED})])
+            expect(orders.some(order => order.inhabitantId === buyer!.id)).toBe(false)
+        })
+    })
 })

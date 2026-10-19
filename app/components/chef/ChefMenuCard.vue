@@ -99,6 +99,7 @@ import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
 import type { Form, FormSubmitEvent } from '#ui/types'
 import type { WaitlistQueueSummary, ExtraPortionsRequest } from '~/composables/useWaitlistValidation'
 import { FORM_MODES, type FormMode } from '~/types/form'
+import { BOOKING_WORDS } from '~/config/bookingWords'
 
 interface Props {
   dinnerEvent: DinnerEventDetail
@@ -455,7 +456,7 @@ const handleCardClick = () => {
       :class="getRibbonClasses('cancel')"
       data-testid="cancelled-ribbon"
     >
-      AFLYST
+      {{ BOOKING_WORDS.cancelledDinner.ribbon }}
     </div>
 
     <template #header>

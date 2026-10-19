@@ -113,6 +113,13 @@ A `UTabs` whose triggers render `CookingTeamBadges` binds `COMPONENTS.teamTabs`:
 full label, and a horizontal row that scrolls sideways when more tabs than fit. On a phone the trigger stacks `ICONS.team`
 over the compact badge (`MyTeamSelector`, `COMPONENTS.myTeamSelector`).
 
+### A cancelled dinner
+
+A cancelled dinner reads as a past day struck through on every member surface: the calendar day binds the past circle
+with the cancelled strike (`CALENDAR.day`), a ticket and a grid cell's mode badge bind the cancelled faces of their own
+tokens, built from the same past-day colours and strike, the grid's column header carries the dinner state badge in the
+lock chip's place, and the booking form and the chef's card wear the cancel corner ribbon (`getRibbonClasses`).
+
 ### Component layouts
 
 A layout one component owns is drawn in that component's header and bound through the `COMPONENTS` key that carries its

@@ -142,6 +142,8 @@ export const BOOKING_WORDS = {
     expectedBooking: 'Forventet bestilling ifølge præferencer',
     /** The booking grid's legend entries: a cell with unsaved changes, and a place on the waiting list with its number */
     legend: {modified: 'Ændret', waitlist: 'På venteliste (#n)'},
+    /** A cancelled dinner: the corner ribbon on the chef's card and the booking form, and the booking calendar's legend entry */
+    cancelledDinner: {ribbon: 'AFLYST', legend: 'Aflyst fællesspisning'},
     /**
      * A dinner's deadline badges and steps, the chef's and the household's. "Framelding", as the preferences sign everybody
      * up and the deadline is the one for cancelling

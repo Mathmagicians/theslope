@@ -457,6 +457,58 @@ describe('Bookings store — one booking write', () => {
     })
 })
 
+// The views read a dinner's state from the selected season's dinner list: a cancel, its undo and a scaffold reply that
+// leaves out a dinner it was asked about read the season again, so a cancelled dinner shows at once
+describe('Bookings store — a cancelled dinner', () => {
+    const dinner = {...DinnerEventFactory.defaultDinnerEventDisplay('cancelled'), id: DINNER_ID, date: addDays(new Date(), 1)}
+    type Store = ReturnType<typeof useBookingsStore>
+
+    beforeEach(() => {
+        resetStores()
+        selectSeason([dinner])
+    })
+
+    // The store with the selected season landed; the season's reads count from here
+    const storeOnSeason = async (): Promise<Store> => {
+        const store = useBookingsStore()
+        const planStore = usePlanStore()
+        await vi.waitFor(() => expect(planStore.selectedSeason?.id).toBe(SEASON_ID))
+        await flushPromises()
+        seasonByIdEndpoint.mockClear()
+        return store
+    }
+
+    it.each([
+        {act: 'a cancel', run: (store: Store) => store.cancelDinner(DINNER_ID)},
+        {act: 'an undo of the cancel', run: (store: Store) => store.undoCancelDinner(DINNER_ID)}
+    ])('WHEN $act saves THEN the selected season is read again, so the dinner shows cancelled or back at once', async ({run}) => {
+        const store = await storeOnSeason()
+
+        await run(store)
+
+        await vi.waitFor(() => expect(seasonByIdEndpoint).toHaveBeenCalledTimes(1))
+    })
+
+    const vias = [
+        {via: 'a preview', run: (store: Store) => store.previewBookings({householdId: MY_HOUSEHOLD_ID, dinnerEventIds: [dinner.id], orders: []})},
+        {via: 'a save', run: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [])}
+    ]
+    const replies = [
+        {reply: 'leaves the asked dinner out', dinners: [], reads: 1},
+        {reply: 'covers the asked dinner', dinners: [{id: dinner.id, date: dinner.date}], reads: 0}
+    ]
+
+    it.each(vias.flatMap(via => replies.map(reply => ({...via, ...reply}))))('WHEN $via\'s reply $reply THEN the selected season is read $reads more time(s), so a cancelled dinner shows at once', async ({run, dinners, reads}) => {
+        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({dinners}))
+        const store = await storeOnSeason()
+
+        await run(store)
+
+        await flushPromises()
+        await vi.waitFor(() => expect(seasonByIdEndpoint).toHaveBeenCalledTimes(reads))
+    })
+})
+
 describe('Bookings store — daily maintenance', () => {
     it('keeps the result and reports it in a toast', async () => {
         const store = useBookingsStore()

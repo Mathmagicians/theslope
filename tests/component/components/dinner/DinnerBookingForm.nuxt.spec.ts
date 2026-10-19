@@ -21,7 +21,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
-import {COMPONENTS, ICONS, createTableColumns, useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, ICONS, createTableColumns, getRibbonClasses, useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from './waitlistTestIds'
 import {useBookingValidation as useActionValidation, TicketState} from '~/composables/useBookingValidation'
 const Action = useActionValidation().BookingActionSchema.enum
@@ -794,5 +794,30 @@ describe('DinnerBookingForm on a closed dinner: the household\'s own places on t
 
     expect(wrapper.text()).toContain(SUPPLY_WORDS.householdReleased(1).title)
     expect(noteOf(wrapper).text()).toContain(SUPPLY_WORDS.householdQueued(1).title)
+  })
+})
+
+// Nothing lands on a cancelled dinner: the form wears the corner ribbon, and the tickets of its rows the cancelled face
+describe('DinnerBookingForm on a cancelled dinner', () => {
+  const {DinnerStateSchema, OrderStateSchema} = useBookingValidation()
+  const [anna] = householdWithInhabitants.inhabitants
+  const cancelledDinner = {...baseProps.dinnerEvent, state: DinnerStateSchema.enum.CANCELLED}
+  const annaTicket = OrderFactory.defaultOrder('cancelled', {inhabitantId: anna!.id, dinnerEventId: cancelledDinner.id, state: OrderStateSchema.enum.BOOKED})
+  const mountCancelled = () => mountMemberForm(true, {dinnerEvent: cancelledDinner, orders: [annaTicket]})
+
+  it('GIVEN a cancelled dinner THEN the form wears the cancelled corner ribbon', async () => {
+    const wrapper = await mountCancelled()
+
+    const ribbon = findByTestId(wrapper, 'cancelled-ribbon')
+    expect(ribbon.exists()).toBe(true)
+    expect(ribbon.classes()).toEqual(getRibbonClasses('cancel').split(' '))
+  })
+
+  it('GIVEN a cancelled dinner THEN every ticket of its rows wears the cancelled face', async () => {
+    const wrapper = await mountCancelled()
+
+    const tickets = wrapper.findAllComponents(DinnerTicket)
+    expect(tickets).not.toHaveLength(0)
+    tickets.forEach(ticket => expect(ticket.props('cancelled')).toBe(true))
   })
 })

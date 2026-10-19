@@ -27,6 +27,7 @@ const DinnerMode = DinnerModeSchema.enum
  * - Guest ticket creation
  * - After the deadline: claim a released ticket, else queue; leave and requeue an entry
  * - A preview: the save's reply, nothing written
+ * - A cancelled dinner: nothing lands on it
  * - Error cases
  */
 test.describe('Household Scaffold API (ADR-016)', () => {
@@ -765,5 +766,47 @@ test.describe('Household Scaffold API (ADR-016)', () => {
         orders: []
       }, 403)
     })
+  })
+
+  // ============================================================================
+  // A CANCELLED DINNER: nothing lands on it
+  // ============================================================================
+
+  test.describe('A cancelled dinner', () => {
+    const { DinnerStateSchema, BookingActionSchema } = useBookingValidation()
+    const NOTHING_LANDED = Object.fromEntries(BookingActionSchema.options.map(action => [action, 0]))
+    // A dinner of the admin's own team, cancelled through the chef's route
+    const cancelledDinner = async (context: Parameters<typeof DinnerEventFactory.updateDinnerEvent>[0], days: number) => {
+      const testSalt = temporaryAndRandom()
+      const { inhabitantId } = await getSessionUserInfo(context)
+      const { dinner } = await SeasonFactory.createCookingTeamWithChefAndDinner(context, testSeason, inhabitantId, {
+        teamName: salt('Cancelled', testSalt), dinner: { date: daysFromNow(days), menuTitle: salt('Test Cancelled', testSalt) }
+      })
+      await DinnerEventFactory.updateDinnerEvent(context, dinner.id, { state: DinnerStateSchema.enum.CANCELLED })
+      return dinner.id
+    }
+    const wishes = [
+      { wish: 'a booking before the deadline', days: 15, order: (dinnerEventId: number) => OrderFactory.createBookingOrder(testInhabitantId, dinnerEventId, testAdultTicketPriceId, DinnerMode.DINEIN) },
+      { wish: 'a guest wish after the deadline', days: 2, order: (dinnerEventId: number) => OrderFactory.createGuestOrder(testInhabitantId, dinnerEventId, testAdultTicketPriceId) }
+    ]
+
+    for (const { wish, days, order } of wishes) {
+      test(`GIVEN a dinner the chef cancelled WHEN ${wish} is previewed and saved THEN both replies list nothing and leave the cancelled dinner out, and no order or place lands on it`, async ({ browser }) => {
+        const context = await validatedBrowserContext(browser)
+        const dinnerEventId = await cancelledDinner(context, days)
+        const request: ScaffoldOrdersRequest = { householdId: testHouseholdId, seasonId: testSeason.id!, dinnerEventIds: [dinnerEventId], orders: [order(dinnerEventId)] }
+
+        const preview = await OrderFactory.previewScaffoldOrders(context, request)
+        const saved = await OrderFactory.scaffoldOrders(context, request)
+
+        for (const { scaffoldResult } of [preview!, saved!]) {
+          expect(scaffoldResult.results).toEqual([])
+          expect(scaffoldResult.totals).toEqual(NOTHING_LANDED)
+          expect(scaffoldResult.dinners.map(dinner => dinner.id)).not.toContain(dinnerEventId)
+        }
+        expect(await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEventId)).toEqual([])
+        expect(await WaitlistFactory.entries(context, [dinnerEventId])).toEqual([])
+      })
+    }
   })
 })

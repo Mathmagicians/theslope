@@ -5,16 +5,28 @@
  * - Temporal splitting (next/future/past events)
  * - Event list creation helpers
  * - Countdown calculation utilities
+ * - The dinner on a calendar day, and whether it is cancelled
  *
  * Used by:
  * - DinnerCalendarDisplay (household booking view)
  * - ChefCalendarDisplay (chef cooking schedule)
+ * - TeamCalendarDisplay (the dinner on a day)
  *
  * Note: Components must handle their own countdown timers with lifecycle hooks.
  * This composable provides the calculation logic only.
  */
 import {toValue, type MaybeRefOrGetter} from 'vue'
-import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
+import type {DateValue} from '@internationalized/date'
+import {isSameDay} from 'date-fns'
+import {DinnerState, type DinnerEventDisplay} from '~/composables/useBookingValidation'
+
+const getDinnerForDay = <T extends { date: Date }>(dinnerEvents: T[], day: DateValue): T | undefined => {
+  const dayDate = toDate(day)
+  return dinnerEvents.find(event => isSameDay(event.date, dayDate))
+}
+
+const isCancelledDay = (dinnerEvents: DinnerEventDisplay[], day: DateValue): boolean =>
+  getDinnerForDay(dinnerEvents, day)?.state === DinnerState.CANCELLED
 
 export const useTemporalCalendar = () => {
   const {
@@ -77,6 +89,8 @@ export const useTemporalCalendar = () => {
 
   return {
     useTemporalSplit,
-    createTemporalEventLists
+    createTemporalEventLists,
+    getDinnerForDay,
+    isCancelledDay
   }
 }

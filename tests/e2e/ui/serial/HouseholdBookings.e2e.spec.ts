@@ -209,12 +209,13 @@ test('GIVEN a member whose preferences book Spisesal on a week past the scaffold
     await page.close()
 })
 
-test('GIVEN an expected cell on a week past the scaffold window WHEN the member sets it to Ingen and saves THEN the save cancels it and the re-read expects nothing there', async ({browser}) => {
+test('GIVEN an expected cell on a week past the scaffold window WHEN the member adopts the plan, turns it to Ingen and saves THEN the save cancels it and the re-read expects nothing there', async ({browser}) => {
     const {page, inhabitant, dinnerEvent, theInhabitantOn} = await openExpectedWeek(browser, 'Cancelled')
 
-    // WHEN: the member turns the cell through the modes to Ingen and saves; the save sends the draft, the preview plays no part
+    // WHEN: the first click adopts the planned Spisesal as the member's draft, the next ones turn the cell through the
+    // modes to Ingen, and the member saves; the save sends the draft, the preview plays no part
     await page.getByTestId('grid-edit').click()
-    for (const _mode of [DinnerMode.DINEINLATE, DinnerMode.TAKEAWAY, DinnerMode.NONE]) {
+    for (const _mode of [DinnerMode.DINEIN, DinnerMode.DINEINLATE, DinnerMode.TAKEAWAY, DinnerMode.NONE]) {
         await page.getByTestId(`cell-${inhabitant.id}-${dinnerEvent.id}`).click()
     }
     const saved = page.waitForResponse(isScaffoldSave)

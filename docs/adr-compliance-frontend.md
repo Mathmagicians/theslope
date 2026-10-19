@@ -75,7 +75,7 @@ Status.
 | `WorkAssignment.vue` | `/dinner`, `/chef` | plan, auth | ❌ | ✅ parent | ⚠️ missing unit |
 | `InhabitantSelector.vue` | `/admin/teams` | none | ✅ | ✅ parent | ✅ |
 | `CookingTeamBadges.vue` | `/admin/teams`, `/chef`, `/dinner` | none | ✅ | ✅ parent | ✅ |
-| `TeamCalendarDisplay.vue` | `/admin/teams` | none | ✅ | ❌ | ✅ |
+| `TeamCalendarDisplay.vue` | `/admin/teams` | none | ✅ | ❌ | ✅ the dinner on a day from `useTemporalCalendar`'s `getDinnerForDay` |
 
 ### Admin households
 
@@ -135,8 +135,8 @@ Status.
 | `BaseCalendar.vue` | every calendar | none | ❌ | N/A | ⚠️ missing unit |
 | `CalendarLegend.vue` | `/admin/teams`, `/chef`, `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | none | ✅ | ✅ parent | ✅ the one "Forklaring" panel, one entry per row (`COMPONENTS.legend.list`, `sample`); `DinnerModeLegend`'s rows join its list |
 | `CalendarDisplay.vue` | `/admin/planning` | none | ✅ | ❌ | ✅ |
-| `ChefCalendarDisplay.vue` | `/chef` | none | ✅ | ✅ | ✅ |
-| `DinnerCalendarDisplay.vue` | `/dinner`, `/household/[shortname]/bookings` | none | ✅ | ✅ serial `Waitlist` | ✅ |
+| `ChefCalendarDisplay.vue` | `/chef` | none | ✅ | ✅ | ✅ the dinner on a day and a cancelled day from `useTemporalCalendar`'s `getDinnerForDay` and `isCancelledDay` |
+| `DinnerCalendarDisplay.vue` | `/dinner`, `/household/[shortname]/bookings` | none | ✅ | ✅ serial `Waitlist` | ✅ a cancelled day from `useTemporalCalendar`'s `isCancelledDay`, drawn as the chef calendar's (`CALENDAR.day.past` + `CALENDAR.day.cancelled`), its legend word from `BOOKING_WORDS.cancelledDinner` |
 | `CountdownTimer.vue` | `/chef`, `/dinner` | none | ❌ | ✅ | ⚠️ missing unit |
 | `CalendarDateNav.vue` | `/household/[shortname]/bookings`, `/chef`, `/dinner` | none | ✅ parent | ✅ serial | ✅ |
 | `CalendarMasterPanel.vue` | `/chef`, `/dinner` | none | ❌ | ✅ parent | ⚠️ missing unit |
@@ -146,15 +146,15 @@ Status.
 | Component | Routes | Stores | Component spec | E2E | Status |
 |---|---|---|---|---|---|
 | `HouseholdBookings.vue` | `/household/[shortname]/bookings` | plan, households, bookings | ✅ | ✅ | ⚠️ partial unit |
-| `BookingGridView.vue` | `/household/[shortname]/bookings` | bookings | ✅ `BookingGridView.nuxt.spec.ts` | ✅ serial | ✅ each cell's modes, the power cell's and the add-guest chevron's from `useBooking`'s `getBookingOptions` and `powerOptions`; an expected cell and the power cell keep the plan's ghost until the first click adopts it as a draft |
+| `BookingGridView.vue` | `/household/[shortname]/bookings` | bookings | ✅ `BookingGridView.nuxt.spec.ts` | ✅ serial | ✅ each cell's modes, the power cell's and the add-guest chevron's from `useBooking`'s `getBookingOptions` and `powerOptions`; an expected cell and the power cell keep the plan's ghost until the first click adopts it as a draft; a cancelled dinner's header binds `DINNER_STATE_BADGES.CANCELLED` and its cells `cancelled` (ADR-018) |
 | `BookingViewSwitcher.vue` | `/household/[shortname]/bookings` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `ActionPreview.vue` | `/household/[shortname]/bookings`, `/household/[shortname]`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ |
 | `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ parent `DinnerBookingForm.nuxt.spec.ts`, `BookingGridView.nuxt.spec.ts` | ✅ parent | ✅ its modes from `useBooking`'s `getBookingOptions` |
-| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | allergies, auth, households | ✅ `DinnerBookingForm.nuxt.spec.ts` | ✅ serial, incl. `Waitlist` | ✅ each row's modes from `useBooking`'s `getBookingOptions`, the power row's from `powerOptions`; an expected row's draft starts on the person's click (ADR-007) |
+| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | allergies, auth, households | ✅ `DinnerBookingForm.nuxt.spec.ts` | ✅ serial, incl. `Waitlist` | ✅ each row's modes from `useBooking`'s `getBookingOptions`, the power row's from `powerOptions`; an expected row's draft starts on the person's click (ADR-007); a cancelled dinner wears the cancel ribbon (`getRibbonClasses`, `ribbon` false inside ChefMenuCard), its word from `BOOKING_WORDS.cancelledDinner` (ADR-017), and its tickets and the expanded row's selector `cancelled` (ADR-018) |
 | `DinnerModeLegend.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ renders its rows into `CalendarLegend`'s list, its words from `BOOKING_WORDS` (ADR-017) |
-| `DinnerModeSelector.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ✅ `DinnerModeSelector.nuxt.spec.ts` | ✅ parent | ✅ offers the `enabledModes` its parent reads from `getBookingOptions`, in `DINNER_MODE_ORDER` (`useBooking`); a plan's faces bind `COMPONENTS.bookingGrid.expectedBadge` and `dinnerModeSelector.plannedButton`, a wish's `waitlist.ghostBadge`, in edit mode too (ADR-018) |
+| `DinnerModeSelector.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ✅ `DinnerModeSelector.nuxt.spec.ts` | ✅ parent | ✅ offers the `enabledModes` its parent reads from `getBookingOptions`, in `DINNER_MODE_ORDER` (`useBooking`); a plan's faces bind `COMPONENTS.bookingGrid.expectedBadge` and `dinnerModeSelector.plannedButton`, a wish's `waitlist.ghostBadge`, in edit mode too, a cancelled dinner's view face `dinnerModeSelector.cancelledFace` in every form mode (ADR-018) |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ❌ | ✅ parent | ⚠️ missing unit |
-| `DinnerTicket.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/planning` | none | ✅ | ✅ parent | ✅ |
+| `DinnerTicket.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/planning` | none | ✅ | ✅ parent | ✅ a cancelled dinner's ticket binds `ticket.face.cancelled` (ADR-018) |
 | `OrderHistoryDisplay.vue` | `/admin/economy`, `/household/[shortname]/economy`, `/dinner` | bookings | ✅ | ✅ parent | ✅ |
 | `KitchenPreparation.vue` | `/dinner`, `/chef` | households | ✅ | ✅ parent | ✅ |
 | `DinnerDetailHeader.vue` | `/chef`, `/dinner` | none | ✅ | ✅ serial | ✅ |
@@ -164,7 +164,7 @@ Status.
 
 | Component | Routes | Stores | Component spec | E2E | Status |
 |---|---|---|---|---|---|
-| `ChefMenuCard.vue` | `/chef`, `/dinner` | allergies | ✅ real stores | ✅ serial `Waitlist` | ✅ |
+| `ChefMenuCard.vue` | `/chef`, `/dinner` | allergies | ✅ real stores | ✅ serial `Waitlist` | ✅ the cancel ribbon's word from `BOOKING_WORDS.cancelledDinner` (ADR-017) |
 | `DinnerBudget.vue` | `/chef` | none | ✅ | ✅ | ✅ |
 | `ExpenseLines.vue` | `/chef` | none | ✅ | ✅ | ✅ |
 | `VatAmount.vue` | `/chef` | none | ✅ | ✅ parent | ✅ |
@@ -256,7 +256,7 @@ Status.
 | `useBookingUi()` | pure UI | N/A | N/A | ✅ | ✅ | ✅ a failed order's conflict reads in the result lines (`CONFLICT_WORDS`) |
 | `useUserRolesUi()` | pure UI | N/A | N/A | N/A | ✅ | ✅ |
 | `useInstallPrompt()` | pure UI | N/A | N/A | N/A | ✅ | ✅ |
-| `useTemporalCalendar()` | client | N/A | N/A | ✅ | ✅ | ✅ |
+| `useTemporalCalendar()` | client | N/A | N/A | ✅ | ✅ parent | ✅ the dinner on a calendar day and a cancelled day (`getDinnerForDay`, `isCancelledDay`), for the three calendars |
 | `useCalendarEvents()` | client | N/A | N/A | N/A | ✅ | ✅ |
 | `useExpandableRow()` | client | N/A | N/A | N/A | ❌ | ⚠️ missing unit |
 | `useTheSlopeDesignSystem()` | design system (ADR-018) | N/A | N/A | N/A | ✅ architecture specs, unit | ✅ |
