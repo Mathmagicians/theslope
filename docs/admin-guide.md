@@ -76,13 +76,13 @@ Når du aktiverer en sæson, bliver den synlig for alle brugere, og automatiske 
 
 1. Gå til [Planlægning](https://www.skraaningen.dk/admin/planning)
 2. Brug sæsonvælgeren til at finde sæsonen
-3. Find sæsoner med ![Fremtidig](https://api.iconify.design/mdi:sprout.svg?height=16&color=%2322c55e) (fremtidig) eller ![Inaktiv](https://api.iconify.design/mdi:circle.svg?height=16&color=%23facc15) (inaktiv) status
+3. Find sæsoner med ![Fremtidig](https://api.iconify.design/mdi/sprout.svg?height=16&color=%2322c55e) (fremtidig) eller ![Inaktiv](https://api.iconify.design/mdi/circle.svg?height=16&color=%23facc15) (inaktiv) status
 4. Klik **Aktiver Sæson**
 
 ![Fremtidig sæson](screenshots/admin/season-status-display-future-season.png)
 
 **Hvad sker der ved aktivering:**
-- Sæsonen bliver synlig for alle (![Aktiv](https://api.iconify.design/mdi:circle.svg?height=16&color=%2322c55e) status)
+- Sæsonen bliver synlig for alle (![Aktiv](https://api.iconify.design/mdi/circle.svg?height=16&color=%2322c55e) status)
 - Tilmeldinger oprettes ud fra beboernes præferencer
 - Kun middage inden for 60 dage bliver booket
 - Afmeldinger respekteres (systemet genskaber ikke afmeldte billetter)
@@ -104,10 +104,10 @@ Sæsonvælgeren viser sæsonerne i rækkefølgen aktiv, inaktiv, fremtidig, arki
 
 | Ikon | Status | Betydning |
 |:----:|--------|-----------|
-| ![Aktiv](https://api.iconify.design/mdi:circle.svg?height=20&color=%2322c55e) | Aktiv | Synlig for brugere, tilmeldinger aktive |
-| ![Inaktiv](https://api.iconify.design/mdi:circle.svg?height=20&color=%23facc15) | Inaktiv | Datoerne er nu, men sæsonen er ikke aktiveret |
-| ![Fremtidig](https://api.iconify.design/mdi:sprout.svg?height=20&color=%2322c55e) | Fremtidig | Kan aktiveres, datoer er i fremtiden |
-| ![Arkiveret](https://api.iconify.design/mdi:circle.svg?height=20&color=%236b7280) | Arkiveret | Afsluttet, kan ikke genaktiveres |
+| ![Aktiv](https://api.iconify.design/mdi/circle.svg?height=20&color=%2322c55e) | Aktiv | Synlig for brugere, tilmeldinger aktive |
+| ![Inaktiv](https://api.iconify.design/mdi/circle.svg?height=20&color=%23facc15) | Inaktiv | Datoerne er nu, men sæsonen er ikke aktiveret |
+| ![Fremtidig](https://api.iconify.design/mdi/sprout.svg?height=20&color=%2322c55e) | Fremtidig | Kan aktiveres, datoer er i fremtiden |
+| ![Arkiveret](https://api.iconify.design/mdi/circle.svg?height=20&color=%236b7280) | Arkiveret | Afsluttet, kan ikke genaktiveres |
 
 ![Sæsonvælger](screenshots/admin/season-selector-dropdown-status-indicators.png)
 

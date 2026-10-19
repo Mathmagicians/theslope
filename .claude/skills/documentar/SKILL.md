@@ -28,6 +28,10 @@ PR body text. Prose follows `/documentation`; the guides keep their friendly Dan
   for the user's commit.
 - A commit is listed once, under the major work package it mainly carries; a point inside a package carries no commit
   of its own. Docs, tooling, agent and skill, drawing and small test commits get no row.
+- The release spec records what is done: a state names its commit ("✅ 2026-10-19 (6be90c7)"). Work in the tree
+  keeps its last recorded state (brief signed, reopened, reported) until its commit lands; "implemented, uncommitted"
+  is never written. The sign-off table in the reply carries the checks of a package in the tree; the spec gets its
+  rows with the commit.
 
 ## Landings
 
@@ -136,7 +140,7 @@ gh api repos/Mathmagicians/theslope/pulls/<n> -q .body | grep -c '<new text>'   
 
 - A UI term in a guide is the app's own word (badge, legend, button, help text): `grep` the label in `app/` and copy it.
 - A symbol is the real icon as an image, from its `ICONS` entry:
-  `![Venteliste](https://api.iconify.design/hugeicons:hourglass.svg?height=20&color=%23737373)`; a badge without an icon
+  `![Venteliste](https://api.iconify.design/hugeicons/hourglass.svg?height=20&color=%23737373)`; a badge without an icon
   renders as its shape (`mdi:circle` in the badge colour); `curl -s <url> | head -c 60` shows `<svg`.
 - Sync check: per user-visible change in `git log main..HEAD`, the guide's flow, labels and statuses are read against
   the component; the `Sidst opdateret` line names the topics; anchors resolve after a heading changes.

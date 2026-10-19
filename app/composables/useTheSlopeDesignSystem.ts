@@ -1559,7 +1559,8 @@ export const COMPONENTS = {
      * button group over its label), the edit face's `fieldGroup` and each mode's square `segment` on a phone, the
      * grid's unsaved-cell accent (`modified`), the DINEIN button's `pulse` while a household disagrees, and the
      * glyph size per Nuxt UI size (`iconSize`); without a size the glyph follows `WEEKDAY.badgeContentSize`. The edit
-     * faces' buttons carry that size in their leading icon slot (`buttonUi`)
+     * faces' buttons carry that size in their leading icon slot (`buttonUi`). On a plan (an expected booking, no
+     * order yet) no button is selected: the plan's mode carries `plannedButton`, outlined on the expected booking's neutral
      */
     dinnerModeSelector: {
         weekdayLabel: `flex items-center justify-center ${TYPOGRAPHY.caption} ${TEXT.ink}`,
@@ -1570,7 +1571,8 @@ export const COMPONENTS = {
         modified: 'border-l-2 border-warning pl-0.5',
         pulse: 'animate-pulse',
         iconSize: {xs: 'size-3', sm: 'size-3', md: 'size-4', lg: 'size-5', xl: 'size-6'},
-        buttonUi: (iconSize: string) => ({leadingIcon: iconSize})
+        buttonUi: (iconSize: string) => ({leadingIcon: iconSize}),
+        plannedButton: {color: ORDER_STATE_COLORS.queued, variant: NOISE.medium}
     },
 
     // Card action buttons - positioned in card corners or footers

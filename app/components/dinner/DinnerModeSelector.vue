@@ -42,6 +42,22 @@
  * ┌─────┐
  * │ 🍽️  │ - Single button, click cycles: DINEIN→LATE→TAKE→NONE, through the enabledModes only
  * └─────┘   Compact for grid cells (no label); disabled while no mode is enabled
+ *
+ * SELECTOR EDIT MODE on a plan (expected): the plan stays a ghost until it is touched; solid is a booking or an intent
+ *   BUTTONS: no button selected, the plan's button hinted (COMPONENTS.dinnerModeSelector.plannedButton):
+ *   ┌────────────────────────┐
+ *   │ [  ][  ](mode)[  ]     │  - (mode) = the planned hint; a click picks its mode, on the hint it adopts the plan
+ *   └────────────────────────┘
+ *          Takeaway             - The plan's label in the expected booking's muted ink
+ *   TOGGLE: the view face's expected ghost (COMPONENTS.bookingGrid.expectedBadge):
+ *   ┌ ─ ─ ┐
+ *     [mode]   - The first click adopts the plan (emits the shown mode), the next ones cycle as above
+ *   └ ─ ─ ┘
+ *
+ * SELECTOR EDIT MODE - TOGGLE on a wish (ghost): the view face's ghost (COMPONENTS.waitlist.ghostBadge, the ghostInk)
+ *   ┌ ─ ─ ┐
+ *     [mode]   - A click cycles as above; the parent's draft then replaces the ghost
+ *   └ ─ ─ ┘
  */
 import {DinnerMode} from '~/composables/useBookingValidation'
 import {BOOKING_WORDS} from '~/config/bookingWords'
@@ -66,8 +82,8 @@ interface Props {
   interaction?: 'buttons' | 'toggle' // buttons = show all options, toggle = click cycles through modes
   orientation?: 'horizontal' | 'vertical' | 'responsive' // Override default responsive orientation (vertical mobile, horizontal desktop)
   isModified?: boolean // Grid booking: show left border accent when cell has unsaved changes
-  ghost?: boolean // View mode: the mode is a wish on the waiting list, not a booking
-  expected?: boolean // View mode: the mode is the booking the preferences give a cell without an order
+  ghost?: boolean // The mode is a wish on the waiting list, not a booking, untouched
+  expected?: boolean // The mode is the booking the preferences give a cell without an order, untouched
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -184,9 +200,15 @@ const updateMode = (value: DinnerMode) => {
   emit('update:modelValue', value)
 }
 
-// Toggle to the next enabled mode after the current one; with no other, the toggle stays put
+// Toggle to the next enabled mode after the current one; with no other, the toggle stays put.
+// On a plan the first click adopts the shown mode as the person's own instead
 const toggleMode = () => {
   if (isToggleDisabled.value || props.formMode === FORM_MODES.VIEW || isTitle.value) return
+  if (props.expected && !isModeDisabled(dinnerMode.value)) {
+    hasUserSelected.value = true
+    emit('update:modelValue', dinnerMode.value)
+    return
+  }
   const currentIndex = DINNER_MODE_ORDER.indexOf(dinnerMode.value)
   for (let i = 1; i < DINNER_MODE_ORDER.length; i++) {
     const nextIndex = (currentIndex + i) % DINNER_MODE_ORDER.length
@@ -221,21 +243,27 @@ const getBadgeVariant = (): BadgeVariant => {
   return props.expected ? expectedFace.variant : getViewConfig().viewVariant
 }
 // The glyph and the label of a wish or an expected booking take a muted ink
-const inkClass = computed(() => props.ghost ? waitlistFace.ghostInk : props.expected ? expectedFace.ink : undefined)
+const planInk = computed(() => props.expected ? expectedFace.ink : undefined)
+const inkClass = computed(() => props.ghost ? waitlistFace.ghostInk : planInk.value)
 
 // Get mode label (VIEW mode uses mixedModeConfig when no consensus)
 const getModeLabel = (): string => getViewConfig().label
 
-// Get button color for EDIT mode (active vs inactive)
-const getButtonColor = (mode: DinnerMode): BadgeColor => {
-  const isActive = dinnerMode.value === mode
-  return isActive ? dinnerModeConfig[mode]!.activeColor : COLOR.neutral
-}
+type ButtonFace = {color: BadgeColor, variant: ButtonVariant}
 
-// Get button variant for EDIT mode (active vs inactive)
-const getButtonVariant = (mode: DinnerMode): ButtonVariant => {
-  const isActive = dinnerMode.value === mode
-  return isActive ? dinnerModeConfig[mode]!.editActiveVariant : dinnerModeConfig[mode]!.editInactiveVariant
+// The toggle wears a wish's or a plan's ghost, as the view face does, until a click; else the shown mode's colour
+const toggleFace = computed((): ButtonFace => {
+  if (props.ghost) return waitlistFace.ghostBadge
+  return props.expected
+    ? {color: expectedFace.color, variant: expectedFace.variant}
+    : {color: dinnerModeConfig[dinnerMode.value]!.activeColor, variant: dinnerModeConfig[dinnerMode.value]!.editActiveVariant}
+})
+const toggleIconClass = computed(() => inkClass.value ? `${iconSizeClass.value} ${inkClass.value}` : iconSizeClass.value)
+
+// A button of the group: the selected mode in its colour, on a plan the plan's mode hinted and none selected
+const buttonFace = (mode: DinnerMode): ButtonFace => {
+  if (dinnerMode.value !== mode) return {color: COLOR.neutral, variant: dinnerModeConfig[mode]!.editInactiveVariant}
+  return props.expected ? selector.plannedButton : {color: dinnerModeConfig[mode]!.activeColor, variant: dinnerModeConfig[mode]!.editActiveVariant}
 }
 
 // Check if button should pulse (DINEIN is fallback default without consensus)
@@ -282,14 +310,13 @@ const shouldPulse = (mode: DinnerMode): boolean => {
     <!-- EDIT MODE: Toggle (single button, click cycles) - no label for compact grid use -->
     <UButton
       v-else-if="formMode === FORM_MODES.EDIT && interaction === 'toggle'"
+      v-bind="toggleFace"
       :icon="getModeIcon()"
-      :color="dinnerModeConfig[dinnerMode]!.activeColor"
-      :variant="dinnerModeConfig[dinnerMode]!.editActiveVariant"
       :disabled="isToggleDisabled"
       :size="responsiveSize"
       :name="name"
       :data-testid="name"
-      :ui="selector.buttonUi(iconSizeClass)"
+      :ui="selector.buttonUi(toggleIconClass)"
       @click="toggleMode"
     />
 
@@ -305,9 +332,8 @@ const shouldPulse = (mode: DinnerMode): boolean => {
         <UButton
           v-for="mode in DINNER_MODE_ORDER"
           :key="mode"
+          v-bind="buttonFace(mode)"
           :icon="dinnerModeConfig[mode]!.icon"
-          :color="getButtonColor(mode)"
-          :variant="getButtonVariant(mode)"
           :disabled="isModeDisabled(mode)"
           :size="responsiveSize"
           :data-testid="`${name}-${mode}`"
@@ -316,7 +342,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
           @click="updateMode(mode)"
         />
       </UFieldGroup>
-      <span v-if="showLabel" :class="TYPOGRAPHY.finePrint">{{ getModeLabel() }}</span>
+      <span v-if="showLabel" :class="[TYPOGRAPHY.finePrint, planInk]">{{ getModeLabel() }}</span>
     </div>
     </template>
   </div>

@@ -105,7 +105,7 @@ Klik **Bliv chefkok**, bekræft — og dit ansigt pryder portrættet. Tjansen er
 
 > **Tip:** Brug husstandsoversigten til at planlægge portionsstørrelser og allergihensyn.
 
-**Står der naboer på ventelisten?** Så viser middagen en boks med ![Venteliste](https://api.iconify.design/hugeicons:hourglass.svg?height=16&color=%23737373) hvor mange der venter, og hvor mange portioner de mangler - og vokser køen, får du en mail. Kan du lave lidt ekstra:
+**Står der naboer på ventelisten?** Så viser middagen en boks med ![Venteliste](https://api.iconify.design/hugeicons/hourglass.svg?height=16&color=%23737373) hvor mange der venter, og hvor mange portioner de mangler - og vokser køen, får du en mail. Kan du lave lidt ekstra:
 
 1. Klik **Frigiv portioner** i boksen - eller find den under **tandhjulet** i knaprækken
 2. Skriv hvor mange portioner du kan frigive (feltet er udfyldt med det, ventelisten mangler)

@@ -130,6 +130,13 @@
  *   Bo             [  ][  ][  ] [VOKSEN · 55kr]   [mode] Ingen       cancelled earlier: not expected
  * every inhabitant row expected:
  *   Hele familien  [ex][  ][  ] [ALLE]            (mode) Takeaway    the power row ghosted too
+ * The plan stays a ghost until it is touched: the expanded row's selector selects no button and hints the plan's
+ * (COMPONENTS.dinnerModeSelector.plannedButton), with no preview; a click adopts the clicked mode as the person's
+ * intent, and the ticket turns solid on it. Solid is a booking or an intent, never a plan:
+ *   Anna  [ex][  ][  ] [VOKSEN · 55kr]   (mode) Takeaway    expanded: [  ][  ](mode)[  ]   untouched, Opdater sends nothing
+ *   Anna  [  ][  ][  ] [VOKSEN · 55kr]   [mode] Takeaway    after a click on (mode): Takeaway booked on save, bare
+ * The power row with every row expected hints its mode the same way; a click on it adopts each person's plan, another
+ * mode goes to every row.
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, ScaffoldOrdersRequest, TicketState as TicketStateValue} from '~/composables/useBookingValidation'
@@ -245,8 +252,8 @@ const {allergyTypes} = storeToRefs(allergiesStore)
 // EXPANDABLE ROW STATE
 // ============================================================================
 
-// Draft state for editing
-const draftMode = ref<DinnerMode>(DinnerModeEnum.DINEIN)
+// Draft state for editing: null while the expanded row is an untouched plan
+const draftMode = ref<DinnerMode | null>(null)
 const editingRowId = ref<number | string | null>(null)
 const isSaving = ref(false)
 
@@ -262,8 +269,8 @@ const {expanded} = useExpandableRow({
     const row = tableData.value[rowIndex]
     if (row) {
       editingRowId.value = row.id
-      // A row without a ticket shows Ingen; the draft starts on the first mode the row may pick
-      draftMode.value = row.enabledModes.includes(row.dinnerMode) ? row.dinnerMode : row.enabledModes[0] ?? row.dinnerMode
+      // A plan's draft starts on the person's click; a row without a ticket shows Ingen, its draft starts on the first mode it may pick
+      draftMode.value = row.expected ? null : row.enabledModes.includes(row.dinnerMode) ? row.dinnerMode : row.enabledModes[0] ?? row.dinnerMode
     }
     historyOrderId.value = null
   },
@@ -507,8 +514,8 @@ const tableData = computed((): TableRow[] => {
 // HANDLERS
 // ============================================================================
 
-// Build desired orders for a row in a mode, the draft's by default (DRY: the save, its preview and the row's modes)
-const buildDesiredOrdersForRow = (row: SavedRow, dinnerMode: DinnerMode = draftMode.value): DesiredOrder[] => {
+// Build desired orders for a row in a mode (DRY: the save, its preview and the row's modes)
+const buildDesiredOrdersForRow = (row: SavedRow, dinnerMode: DinnerMode): DesiredOrder[] => {
   const dinnerEventId = props.dinnerEvent.id
   const buildForInhabitants = (inhabitantIds: number[]) => buildDesiredOrders(
     inhabitantIds.map(inhabitantId => ({inhabitantId, dinnerEventId, dinnerMode})),
@@ -548,6 +555,25 @@ const buildDesiredOrdersForRow = (row: SavedRow, dinnerMode: DinnerMode = draftM
   return []
 }
 
+// The expanded row's draft; null while it is an untouched plan
+const draftOf = (row: TableRow): DinnerMode | null => editingRowId.value === row.id ? draftMode.value : null
+// A plan stays a ghost until its row is touched; once touched the ticket shows the person's intent, solid
+const isPlan = (row: TableRow): boolean => !!row.expected && draftOf(row) === null
+const ticketModeOf = (row: TableRow): DinnerMode => (row.expected ? draftOf(row) : null) ?? row.dinnerMode
+
+// What the expanded row's save sends: nothing for an untouched plan; the planned power row's shown mode adopts each person's plan
+const draftOrdersOf = (row: TableRow): DesiredOrder[] => {
+  const dinnerMode = draftOf(row)
+  if (dinnerMode === null) return []
+  if (row.rowType !== 'power' || !row.expected || dinnerMode !== row.dinnerMode) return buildDesiredOrdersForRow(row, dinnerMode)
+  const inhabitants = household.value?.inhabitants ?? []
+  const plans = inhabitants.flatMap(({id}) => {
+    const plan = expectedModeOf(id)
+    return plan ? [{inhabitantId: id, dinnerEventId: props.dinnerEvent.id, dinnerMode: plan}] : []
+  })
+  return buildDesiredOrders(plans, eventOrders.value, inhabitants, [props.dinnerEvent], props.ticketPrices)
+}
+
 const handleSave = async (row: TableRow) => {
   isSaving.value = true
 
@@ -565,7 +591,7 @@ const handleSave = async (row: TableRow) => {
         : `Kan ikke booke: mangler billetpris for ${row.name}`)
     }
 
-    const orders = buildDesiredOrdersForRow(row)
+    const orders = draftOrdersOf(row)
 
     if (orders.length > 0) {
       completeBooking(orders)
@@ -612,7 +638,7 @@ const previewRequest = computed((): ScaffoldOrdersRequest | null => {
   const row = tableData.value.find(r => r.id === editingRowId.value)
   // The add-guest row previews in GuestBookingForm
   if (!row || row.rowType === 'guest' || !household.value) return null
-  const orders = buildDesiredOrdersForRow(row)
+  const orders = draftOrdersOf(row)
   return orders.length > 0 ? {householdId: household.value.id, dinnerEventIds: [props.dinnerEvent.id], orders} : null
 })
 const {result: preview, pending: isPreviewPending} = useScaffoldPreview(
@@ -724,9 +750,9 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
               <DinnerTicket
                 :ticket-config="row.original.ticketConfig"
                 :price="row.original.price"
-                :dinner-mode="row.original.dinnerMode"
+                :dinner-mode="ticketModeOf(row.original)"
                 :consensus="row.original.consensus"
-                :expected="row.original.expected"
+                :expected="isPlan(row.original)"
               />
             </div>
           </div>
@@ -807,9 +833,9 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
             <DinnerTicket
               :ticket-config="row.original.ticketConfig"
               :price="row.original.price"
-              :dinner-mode="row.original.dinnerMode"
+              :dinner-mode="ticketModeOf(row.original)"
               :ticket-state="row.original.ticketState"
-              :expected="row.original.expected"
+              :expected="isPlan(row.original)"
               :guest-count="row.original.guestCount"
               :allergies="row.original.allergyTypes"
               :provenance-household="row.original.provenanceHousehold"
@@ -825,9 +851,9 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
           <DinnerTicket
             :ticket-config="row.original.ticketConfig"
             :price="row.original.price"
-            :dinner-mode="row.original.dinnerMode"
+            :dinner-mode="ticketModeOf(row.original)"
             :consensus="row.original.consensus"
-            :expected="row.original.expected"
+            :expected="isPlan(row.original)"
           />
         </div>
         <!-- Inhabitant/Guest rows: show ticket -->
@@ -835,9 +861,9 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
           <DinnerTicket
             :ticket-config="row.original.ticketConfig"
             :price="row.original.price"
-            :dinner-mode="row.original.dinnerMode"
+            :dinner-mode="ticketModeOf(row.original)"
             :ticket-state="row.original.ticketState"
-            :expected="row.original.expected"
+            :expected="isPlan(row.original)"
             :guest-count="row.original.guestCount"
             :allergies="row.original.allergyTypes"
             :provenance-household="row.original.provenanceHousehold"
@@ -916,9 +942,10 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
             <DeadlineBadge :badge="badges.diningMode" />
           </div>
 
-          <!-- Mode selector: a queued inhabitant changes the wish (requeued) or picks Ingen to leave the queue -->
+          <!-- Mode selector: a queued inhabitant changes the wish (requeued) or picks Ingen to leave the queue; a plan shows hinted until a click -->
           <DinnerModeSelector
-            v-model="draftMode"
+            :model-value="draftMode ?? row.original.dinnerMode"
+            :expected="isPlan(row.original)"
             :form-mode="FORM_MODES.EDIT"
             :enabled-modes="row.original.enabledModes"
             :consensus="row.original.consensus"
@@ -926,6 +953,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
             :name="`${row.original.rowType}-${row.original.id}-mode-edit`"
             :orientation="ORIENTATIONS.horizontal"
             show-label
+            @update:model-value="(mode: DinnerMode) => draftMode = mode"
           />
 
           <!-- Order history toggle + display (in body, near the content it reveals) -->

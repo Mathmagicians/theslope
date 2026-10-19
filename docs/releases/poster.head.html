@@ -1,0 +1,24 @@
+<!doctype html>
+<!-- The head of the release poster: `make release-notes version=<v>` replaces BASE_HREF with the file URL of
+     docs/releases/, appends GitHub's rendering of release-<v>.md and closes the article (release-0.9.0.md § Release notes PDF).
+     The print media query scales A4 to one page; A3 prints at 100 %. -->
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<base href="BASE_HREF">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.9.0/github-markdown.min.css">
+<style>
+@page { margin: 10mm }
+body { margin: 0 }
+@media print and (max-width: 220mm) { body { zoom: .8 } }
+.markdown-body { font-size: 13px }
+.markdown-body table { width: 100%; display: table }
+.markdown-body td, .markdown-body th { padding: 8px 12px; vertical-align: top }
+.markdown-body img[align=left] { margin: 0 14px 6px 0 }
+.markdown-body img[align=right] { margin: 0 0 8px 12px }
+.markdown-body .markdown-alert table { width: auto; clear: both }
+.markdown-body .markdown-alert td, .markdown-body .markdown-alert th { padding: 4px 10px }
+</style>
+</head>
+<body>
+<article class="markdown-body">

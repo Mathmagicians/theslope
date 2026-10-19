@@ -449,6 +449,36 @@ version-info: ## Output all version components as env vars
 	@echo "SHORT_VERSION=$(VERSION)"
 
 # ============================================================================
+# RELEASE NOTES — docs/releases/release-<v>.md as one-page PDFs (A4 and A3) beside the notes, gitignored
+# ============================================================================
+.PHONY: release-notes
+
+# GitHub renders the markdown (gh api /markdown, gfm; -F reads the file, -f would send the literal "@path");
+# docs/releases/poster.head.html carries the stylesheet, the print scaling and the BASE_HREF placeholder, replaced with
+# the file URL of docs/releases/ so the screenshots in release-<v>/ resolve. The page lands under .output (gitignored);
+# --wait-for-timeout gives the stylesheet and the icons on cdnjs/iconify time to load before the print
+RELEASE_NOTES_HEAD := docs/releases/poster.head.html
+RELEASE_NOTES_OUT := .output/release-notes
+release_notes_md = docs/releases/release-$(version).md
+release_notes_html = $(RELEASE_NOTES_OUT)/release-$(version).html
+# $(1)=paper format, $(2)=file suffix → docs/releases/release-<version>-<suffix>.pdf
+define release_notes_pdf
+	@npx playwright pdf --paper-format $(1) --wait-for-timeout 3000 "file://$(CURDIR)/$(release_notes_html)" "docs/releases/release-$(version)-$(2).pdf"
+endef
+
+release-notes: ## Render docs/releases/release-<v>.md to release-<v>-a4.pdf and release-<v>-a3.pdf beside it - version=<v>
+	@test -n "$(version)" || { echo "usage: make $@ version=<v> (renders docs/releases/release-<v>.md)"; exit 1; }
+	@test -f "$(release_notes_md)" || { echo "make $@: no release notes at $(release_notes_md)"; exit 1; }
+	@test -f "$(RELEASE_NOTES_HEAD)" || { echo "make $@: no poster head at $(RELEASE_NOTES_HEAD)"; exit 1; }
+	@mkdir -p "$(RELEASE_NOTES_OUT)" && { \
+		sed 's|BASE_HREF|file://$(CURDIR)/docs/releases/|' "$(RELEASE_NOTES_HEAD)" && \
+		gh api /markdown -X POST -f mode=gfm -F text=@"$(release_notes_md)" && \
+		printf '\n</article>\n</body>\n</html>\n'; } > "$(release_notes_html)"
+	$(call release_notes_pdf,A4,a4)
+	$(call release_notes_pdf,A3,a3)
+	@ls -l docs/releases/release-$(version)-a4.pdf docs/releases/release-$(version)-a3.pdf
+
+# ============================================================================
 # DEPLOYMENT & LOGS
 # ============================================================================
 # Workers: "theslope" = the Nuxt app (root wrangler.toml); every other worker is a Nitro app in workers/<name>/

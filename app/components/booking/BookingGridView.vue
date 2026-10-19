@@ -58,7 +58,8 @@
  *
  * Visual check: /household/<S>/bookings at 375px and desktop. Week and month: the name cell's three counts. Edit mode on
  * a phone: a guest chevron on a dinner past the first screen opens the form in view. Day view on a phone: the page keeps
- * its width and the form's table scrolls in its box.
+ * its width and the form's table scrolls in its box. Edit mode on a planned dinner: the cells and the power cell stay
+ * ghosted until clicked.
  *
  * ROW TYPES:
  * | Row Type    | Icon | VIEW           | EDIT                | Description        |
@@ -67,13 +68,15 @@
  * | inhabitant  | 👤   | Booking state  | Editable (future)   | An inhabitant      |
  * | guest-order | 🎫   | Booking state  | Locked past, edit   | Existing guest     |
  * | guest-add   | ➕   | Hidden         | v buttons (future)  | Add new guest      |
+ * A guest-order row (a placed group or a queued guest) exists only for a dinner among the columns on view.
  *
  * QUEUED CELL (a sold-out dinner, the inhabitant on the waiting list):
  *   ┌──────┐
  *   │  ⌛ │  the wished mode ghosted (COMPONENTS.waitlist.ghostBadge) under the hourglass in the corner chip
  *   └──────┘  (COMPONENTS.waitlist.chip); the legend gains "På venteliste (#n)" while the household has entries.
  *   In edit mode it toggles through the modes its place may take (the wish, another mode while the mode is open, Ingen
- *   to leave); a draft shows in place of the wish with the modified accent, under the hourglass.
+ *   to leave); untouched the wish keeps its ghost, a draft shows in its place, solid with the modified accent, under the
+ *   hourglass.
  *   A queued guest has a row of its own, "Gæst af <booker>", its cell a queued cell on its dinner:
  *   │ 🎫 Gæst af Anna  │      │  ⌛  ║      │ <- the guest's wish ghosted under the hourglass
  *   The power cell reaches every place the household holds on the dinner: the wishes count in its consensus, as an
@@ -98,7 +101,12 @@
  * server's dry run with no orders on the dinners on view, its mode ghosted on the waiting list's neutral
  * (COMPONENTS.bookingGrid.expectedBadge), as a queued wish without its hourglass; a person the run leaves out reads
  * Ingen; the legend always lists "Forventet bestilling ifølge præferencer", and the table's loading bar runs while the
- * read loads. A draft on an expected cell previews as a cancellation or a booking:
+ * read loads. The power cell ghosts its mode while every inhabitant cell on the dinner is expected. In edit mode a plan
+ * stays a ghost until it is touched: the first click adopts it as the person's draft (solid, the modified accent), the
+ * next ones cycle; the power cell's first click adopts each person's plan. Solid is a booking or an intent, never a plan:
+ *   Anna        (Spis)  ->  click  ->  Spis°  ->  click  ->  Sen°
+ *   ⚡Alle      (Take)  ->  click  ->  Take°, and every cell under it Take°
+ * A draft on an expected cell previews as a cancellation or a booking:
  * Januar 2027, S_31                         Forklaring: [ex] (mode) Forventet bestilling ifølge præferencer
  *             ti 05/01   on 06/01   ti 12/01   on 13/01
  * Anna        (Spis)     (Spis)     (Spis)     (Spis)       <- ghosted: no order yet, the next run books Spisesal
@@ -252,15 +260,17 @@ const getExpectedMode = (inhabitantId: number, eventId: number): DinnerMode | un
     ? undefined
     : expectedModes.value.get(expectedBookingKey(inhabitantId, eventId))
 
-// A draft differs from what the cell holds: its order, else its place's wish, else its expected booking, else Ingen
-const getServerMode = (inhabitantId: number, eventId: number): DinnerMode =>
+// What the cell holds: its order, else its place's wish, else Ingen
+const getHeldMode = (inhabitantId: number, eventId: number): DinnerMode =>
   getOrderForCell(inhabitantId, eventId)?.dinnerMode
     ?? getWaitlistEntryForCell(inhabitantId, eventId)?.order.dinnerMode
-    ?? getExpectedMode(inhabitantId, eventId)
     ?? DinnerModeEnum.NONE
 
+// A draft, else the plan of a cell that holds nothing, else what the cell holds
 const getCellMode = (inhabitantId: number, eventId: number): DinnerMode =>
-  draftChanges.value.get(expectedBookingKey(inhabitantId, eventId)) ?? getServerMode(inhabitantId, eventId)
+  draftChanges.value.get(expectedBookingKey(inhabitantId, eventId))
+    ?? getExpectedMode(inhabitantId, eventId)
+    ?? getHeldMode(inhabitantId, eventId)
 
 const isCellModified = (inhabitantId: number, eventId: number): boolean =>
   draftChanges.value.has(expectedBookingKey(inhabitantId, eventId))
@@ -269,10 +279,10 @@ const isCellModified = (inhabitantId: number, eventId: number): boolean =>
 const isCellExpected = (inhabitantId: number, eventId: number): boolean =>
   !isCellModified(inhabitantId, eventId) && getExpectedMode(inhabitantId, eventId) !== undefined
 
+// A draft equal to what the cell holds is no change; a plan holds nothing, so on it every mode is the person's intent
 const handleCellUpdate = (inhabitantId: number, eventId: number, newMode: DinnerMode) => {
   const key = expectedBookingKey(inhabitantId, eventId)
-  const serverMode = getServerMode(inhabitantId, eventId)
-  if (newMode === serverMode) {
+  if (getExpectedMode(inhabitantId, eventId) === undefined && newMode === getHeldMode(inhabitantId, eventId)) {
     draftChanges.value.delete(key)
   } else {
     draftChanges.value.set(key, newMode)
@@ -308,7 +318,16 @@ const handleEntryUpdate = ({entry, dinnerMode}: WaitlistEntryIntent) => {
 
 const householdInhabitantIds = computed(() => props.household.inhabitants.map(i => i.id))
 
+// The power cell shows a plan while every inhabitant cell on the dinner does
+const isPowerExpected = (eventId: number): boolean =>
+  householdInhabitantIds.value.length > 0 && householdInhabitantIds.value.every(inhabitantId => isCellExpected(inhabitantId, eventId))
+
+// On a planned dinner the power cell's shown mode adopts each person's plan as their draft; any other mode goes to every cell
 const handlePowerUpdate = (eventId: number, newMode: DinnerMode) => {
+  if (isPowerExpected(eventId) && newMode === getEventConsensus(eventId).value) {
+    householdInhabitantIds.value.forEach(inhabitantId => handleCellUpdate(inhabitantId, eventId, getCellMode(inhabitantId, eventId)))
+    return
+  }
   const {intents, guestIntents, entryIntents} = getPowerChanges(householdInhabitantIds.value, props.orders, props.waitlistEntries, eventId, newMode)
   intents.forEach(({inhabitantId, dinnerMode}) => handleCellUpdate(inhabitantId, eventId, dinnerMode))
   guestIntents.forEach(handleGuestCellUpdate)
@@ -478,9 +497,11 @@ const columnPinning = ref({
 // The guest rows, as the day view builds them: a placed group (booker, ticket type, dinner), then one row per queued
 // guest; a guest has no birth date, so the price the orders or the place hold names the ticket type
 const guestRows = computed((): GridRow[] => {
+  // The orders and the waiting list reach past the range (the season's locked dinners): a row needs its dinner's column
+  const onView = new Set(flatEvents.value.map(event => event.id))
   const bookerOf = (inhabitantId: number) => props.household.inhabitants.find(i => i.id === inhabitantId)
   const presentationOf = (ticketPrice: TicketPrice | undefined) => ticketPrice ? ticketTypePresentation(ticketPrice.ticketType) : null
-  const placed = Object.entries(groupGuestOrders(props.orders)).map(([key, orders]): GridRow => ({
+  const placed = Object.entries(groupGuestOrders(props.orders.filter(order => onView.has(order.dinnerEventId)))).map(([key, orders]): GridRow => ({
     rowType: 'guest-order',
     id: `guest-group-${key}`,
     name: 'Gæst',
@@ -491,7 +512,7 @@ const guestRows = computed((): GridRow[] => {
     guestCount: orders.length,
     isSynthetic: false
   }))
-  const queued = props.waitlistEntries.filter(entry => entry.isGuestTicket).map((entry): GridRow => ({
+  const queued = props.waitlistEntries.filter(entry => entry.isGuestTicket && onView.has(entry.dinnerEventId)).map((entry): GridRow => ({
     rowType: 'guest-order',
     id: `guest-entry-${entry.id}`,
     name: 'Gæst',
@@ -872,6 +893,7 @@ const getEventSummary = (eventId: number) => {
           :interaction="cellInteraction(getPowerModes(event))"
           :enabled-modes="getPowerModes(event)"
           :consensus="getEventConsensus(event.id).consensus"
+          :expected="isPowerExpected(event.id)"
           :size="SIZES.standard"
           :name="`power-${event.id}`"
           @update:model-value="(mode: DinnerMode) => handlePowerUpdate(event.id, mode)"
