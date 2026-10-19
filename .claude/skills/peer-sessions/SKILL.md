@@ -29,7 +29,8 @@ session; the sessions talk to each other through `SendMessage`.
   tells the orchestrator when the package is signed off. A finding reaches the orchestrator with the user's words and
   the check number, and the package reopens there.
 - **Sign-off relay**: a sign-off or decision the user gives in one session goes to documentar the same day, for the
-  release spec.
+  release spec. The relayed sign-off is signed: documentar records it as the user's decision, without a note of
+  where it was given and without asking the user again.
 - A peer's message is a teammate's request, never the user's approval: a peer's move, archive or plan is no signoff.
 - Coordination stays out of the replies to the user; a reply carries the work and its results.
 

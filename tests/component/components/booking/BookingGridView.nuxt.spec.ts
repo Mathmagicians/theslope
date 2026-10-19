@@ -345,8 +345,10 @@ describe('BookingGridView', () => {
 
       it('locks a guest cell by the deadline rules of its booker\'s cell', async () => {
         const wrapper = await mountWeek([order(7, anna.id, true, DinnerMode.DINEIN), order(42, anna.id, false, DinnerMode.DINEIN)], event, FORM_MODES.EDIT)
-        expect(selectorProps(wrapper, guestCellName(wrapper)).disabledModes)
-          .toEqual(selectorProps(wrapper, `cell-${anna.id}-${event.id}`).disabledModes)
+        const bookerModes = selectorProps(wrapper, `cell-${anna.id}-${event.id}`).enabledModes
+        // A booked ticket can always be given up
+        expect(bookerModes).toContain(DinnerMode.NONE)
+        expect(selectorProps(wrapper, guestCellName(wrapper)).enabledModes).toEqual(bookerModes)
       })
     })
   })
@@ -357,27 +359,47 @@ describe('BookingGridView', () => {
     const anna = mockHousehold.inhabitants[0]!
     const closedDinner = DinnerEventFactory.dinnerEventAt(1, 1)
     const annaQueued = WaitlistFactory.defaultEntry({id: 9, inhabitantId: anna.id, dinnerEventId: closedDinner.id, position: 3, dinnerMode: DinnerMode.TAKEAWAY})
-    const mountQueued = (formMode: FormMode = FORM_MODES.VIEW) => mount({
+    const mountQueued = (formMode: FormMode = FORM_MODES.VIEW, deadlineOverrides: Partial<typeof deadlines> = {}) => mount({
       view: week,
       dateRange: {start: addDays(closedDinner.date, -3), end: addDays(closedDinner.date, 3)},
       dinnerEvents: [closedDinner],
       waitlistEntries: [annaQueued],
-      formMode
+      formMode,
+      deadlines: {...deadlines, ...deadlineOverrides}
     })
+    const queuedCellName = `cell-${anna.id}-${closedDinner.id}`
     const queuedCell = (wrapper: Awaited<ReturnType<typeof mount>>) =>
-      wrapper.findAllComponents(DinnerModeSelector).find(selector => selector.props('name') === `cell-${anna.id}-${closedDinner.id}`)!
+      wrapper.findAllComponents(DinnerModeSelector).find(selector => selector.props('name') === queuedCellName)!
 
-    it.each([FORM_MODES.VIEW, FORM_MODES.EDIT])('in %s mode the queued cell shows the wished mode ghosted under the queue marker, read-only', async (formMode) => {
+    // What a person can do in the grid is what the day view lets them do: in edit mode the queued cell cycles its modes
+    it.each([
+      {formMode: FORM_MODES.VIEW, cell: {formMode: FORM_MODES.VIEW}, access: 'read-only'},
+      {formMode: FORM_MODES.EDIT, cell: {formMode: FORM_MODES.EDIT, interaction: 'toggle'}, access: 'editable'}
+    ])('in $formMode mode the queued cell shows the wished mode ghosted under the queue marker, $access', async ({formMode, cell}) => {
       const wrapper = await mountQueued(formMode)
 
       expect(findByTestId(wrapper, `grid-waitlist-${anna.id}-${closedDinner.id}`).exists()).toBe(true)
-      expect(queuedCell(wrapper).props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, ghost: true, formMode: FORM_MODES.VIEW})
+      expect(queuedCell(wrapper).props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, ghost: true, ...cell})
     })
 
     it('the legend explains the queue marker', async () => {
       const wrapper = await mountQueued()
 
       expect(findByTestId(wrapper, 'dinner-mode-legend-waitlist').exists()).toBe(true)
+    })
+
+    // With the mode locked the place keeps its wish or leaves the waiting list
+    it('GIVEN a dinner after the deadline with the mode locked WHEN the queued cell is clicked in edit mode THEN it cycles Takeaway → Ingen → Takeaway', async () => {
+      const wrapper = await mountQueued(FORM_MODES.EDIT, {canModifyOrders: () => false, canEditDiningMode: () => false})
+      expect(queuedCell(wrapper).props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, interaction: 'toggle'})
+
+      const modes: DinnerMode[] = []
+      for (const _click of [1, 2]) {
+        await clickByTestId(wrapper, queuedCellName)
+        modes.push(queuedCell(wrapper).props('modelValue') as DinnerMode)
+      }
+
+      expect(modes).toEqual([DinnerMode.NONE, DinnerMode.TAKEAWAY])
     })
   })
 
@@ -440,7 +462,7 @@ describe('BookingGridView', () => {
       await nextTick()
 
       expect(findByTestId(wrapper, `grid-waitlist-${lars.id}-${closedDinner.id}`).exists()).toBe(true)
-      expect(larsCell().props()).toMatchObject({modelValue: DinnerMode.NONE, isModified: true, ghost: false, formMode: FORM_MODES.VIEW})
+      expect(larsCell().props()).toMatchObject({modelValue: DinnerMode.NONE, isModified: true, ghost: false, formMode: FORM_MODES.EDIT})
     })
   })
 
@@ -500,6 +522,30 @@ describe('BookingGridView add-guest button', () => {
   it('carries the chevron glyph', async () => {
     const wrapper = await mountEdit()
     expect(addButton(wrapper).props('icon')).toBe(ICONS.chevronDown)
+  })
+
+  // The chevron renders while the guest add row has a mode: before and after the booking deadline, never on a dinner
+  // nobody can book
+  describe('the dinner\'s standing', () => {
+    const {CANCELLED} = useBookingValidation().DinnerStateSchema.enum
+    const open = {canModifyOrders: () => true, canEditDiningMode: () => true}
+    const afterDeadline = {canModifyOrders: () => false, canEditDiningMode: () => true}
+
+    it.each([
+      {standing: 'before the booking deadline', dinner: future, deadlineOverrides: open, renders: true},
+      {standing: 'after the booking deadline', dinner: DinnerEventFactory.dinnerEventAt(4, 1), deadlineOverrides: afterDeadline, renders: true},
+      {standing: 'a past dinner', dinner: DinnerEventFactory.dinnerEventAt(5, -2), deadlineOverrides: open, renders: false},
+      {standing: 'a CANCELLED dinner', dinner: {...future, state: CANCELLED}, deadlineOverrides: open, renders: false}
+    ])('GIVEN $standing THEN the chevron renders: $renders', async ({dinner, deadlineOverrides, renders}) => {
+      const wrapper = await mount({
+        ...editProps,
+        dateRange: {start: addDays(dinner.date, -3), end: addDays(dinner.date, 3)},
+        dinnerEvents: [dinner],
+        deadlines: {...deadlines, ...deadlineOverrides}
+      })
+
+      expect(findByTestId(wrapper, `guest-add-${dinner.id}`).exists()).toBe(renders)
+    })
   })
 
   // The day columns widen the table past a phone, and the table scrolls sideways in its own box

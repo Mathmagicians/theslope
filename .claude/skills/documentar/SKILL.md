@@ -67,6 +67,9 @@ documentar drives the user's sign-off.
    no authorization. What goes to the orchestrator is the user's words verbatim with the number, as a question when the
    user asked one; "Decision from the user" is written only when the user wrote the choice. When the words are not a
    plain choice, the documentar asks the user back ("#3: a or b?") before anything is recorded or relayed.
+10. A sign-off or decision the user gave in a peer's session is signed: the documentar records it as the user's
+    decision, in the spec's own words, without noting where it was given and without asking the user again; the
+    reply states what is recorded and moves on.
 
 ## Ship matches the spec
 

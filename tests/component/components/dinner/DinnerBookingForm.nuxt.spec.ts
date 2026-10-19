@@ -13,7 +13,7 @@ import {ACTION_WORDS, MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel, guestSaveLabel
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
-import type {BookingAction, BookingResult, DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
+import type {BookingAction, BookingResult, DesiredOrder, DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 import type {HouseholdDetail, UserDetail} from '~/composables/useCoreValidation'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -83,6 +83,10 @@ const mountMemberForm = (canModify: boolean, props: Record<string, unknown> = {}
   const deadlines = {...baseDeadlines, canModifyOrders: () => canModify, canEditDiningMode: () => true}
   return mountForm({...baseProps, household: householdWithInhabitants, deadlines, ...props})
 }
+
+/** The mode selector of an inhabitant's expanded row */
+const editSelector = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, inhabitantId: number) =>
+  wrapper.findAllComponents({name: 'DinnerModeSelector'}).find(selector => selector.props('name') === `inhabitant-${inhabitantId}-mode-edit`)!
 
 // The next test's resetStores drops the datasets a still-mounted form reads
 enableAutoUnmount(afterEach)
@@ -329,8 +333,6 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
   const mountClosed = (props: {orders?: OrderDisplay[], waitlistEntries?: ReturnType<typeof WaitlistFactory.defaultEntry>[]} = {}) =>
     mountMemberForm(false, props)
   const emittedSaves = (wrapper: Awaited<ReturnType<typeof mountClosed>>) => wrapper.emitted('saveBookings')
-  const editSelector = (wrapper: Awaited<ReturnType<typeof mountClosed>>, inhabitantId: number) =>
-    wrapper.findAllComponents({name: 'DinnerModeSelector'}).find(selector => selector.props('name') === `inhabitant-${inhabitantId}-mode-edit`)!
 
   it('GIVEN no ticket WHEN the member picks a mode THEN the save previews the queue and sends the mode at the row\'s ticket price through the one booking path', async () => {
     scaffold.answers.preview = () => OrderFactory.defaultScaffoldOrdersResponse({results: [OrderFactory.defaultBookingResult({inhabitantId: anna!.id, inhabitantName: anna!.name, dinnerEventId, dinnerMode: DinnerMode.TAKEAWAY, action: Action.QUEUE})]})
@@ -366,7 +368,7 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
 
     const selector = editSelector(wrapper, bo!.id)
     expect(selector.props('modelValue')).toBe(DinnerMode.TAKEAWAY)
-    expect(selector.props('disabledModes')).not.toContain(DinnerMode.NONE)
+    expect(selector.props('enabledModes')).toContain(DinnerMode.NONE)
   })
 
   it('GIVEN a member holding a ticket THEN the row shows no queue position', async () => {
@@ -664,6 +666,23 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
     const powerTickets = wrapper.findAllComponents(DinnerTicket).filter(ticket => ticket.props('consensus') !== undefined)
     expect(powerTickets).not.toHaveLength(0)
     powerTickets.forEach(ticket => expect(ticket.props()).toMatchObject(power))
+  })
+
+  // Ingen on a row without an order is the person's cancellation: the save sends it with nothing to name
+  it('GIVEN an expected row WHEN it expands THEN Ingen is open and the save sends the bare Ingen', async () => {
+    const annaOnTakeaway = OrderFactory.defaultBookingResult({inhabitantId: anna!.id, inhabitantName: anna!.name, dinnerEventId, dinnerMode: DinnerMode.TAKEAWAY, action: Action.BOOK})
+    const wrapper = await mountExpected([annaOnTakeaway])
+    await clickByTestId(wrapper, `inhabitant-${anna!.id}-toggle`)
+
+    expect(editSelector(wrapper, anna!.id).props('enabledModes')).toContain(DinnerMode.NONE)
+
+    await clickByTestId(wrapper, `inhabitant-${anna!.id}-mode-edit-${DinnerMode.NONE}`)
+    await clickByTestId(wrapper, `inhabitant-${anna!.id}-save`)
+
+    expect(wrapper.emitted('saveBookings')).toEqual([[[expect.objectContaining({inhabitantId: anna!.id, dinnerEventId, dinnerMode: DinnerMode.NONE, isGuestTicket: false})]]])
+    const [[[bareIngen]]] = wrapper.emitted('saveBookings') as [[DesiredOrder[]]]
+    expect(bareIngen!.orderId).toBeUndefined()
+    expect(bareIngen!.waitlistEntryId).toBeUndefined()
   })
 })
 

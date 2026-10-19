@@ -5,16 +5,22 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, type ScaffoldOrdersResponse} from '~/composables/useBookingValidation'
+import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {addDays, startOfDay} from 'date-fns'
 import {formatDate} from '~/utils/date'
 import {EMPTY_STATE_MESSAGES} from '~/composables/useTheSlopeDesignSystem'
 import {BookingViewSchema} from '~/composables/useBookingView'
 
 const {memberUIFile, adminUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, getSessionUserInfo, gotoHydrated, selectDropdownOption, temporaryAndRandom} = testHelpers
-const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, getSessionUserInfo, gotoHydrated, selectDropdownOption, temporaryAndRandom, salt, isScaffoldSave, isExpectedRead, PAST_THE_SCAFFOLD_WINDOW_DAYS} = testHelpers
+const {DinnerModeSchema, OrderStateSchema, BookingActionSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
+const {createDefaultWeekdayMap: createDinnerModeWeekdayMap} = useWeekDayMapValidation({
+    valueSchema: DinnerModeSchema,
+    defaultValue: DinnerMode.NONE
+})
 
 /**
  * E2E UI Tests for DinnerBookingForm
@@ -27,6 +33,7 @@ const OrderState = OrderStateSchema.enum
  * - Power mode (family) change
  * - Guest ticket addition
  * - View switching (week/month)
+ * - An expected row past the scaffold window cancelled with Ingen
  */
 test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
     let householdId: number
@@ -37,6 +44,7 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
     let adminContext: BrowserContext
     const testSalt = temporaryAndRandom()
     const createdSeasonIds: number[] = []
+    const createdInhabitantIds: number[] = []
 
     test.use({storageState: memberUIFile})
 
@@ -60,8 +68,11 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
     })
 
     test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        // The member's household stays; the spec's inhabitants go, with their orders. Cleanup accepts a 404
+        await Promise.all(createdInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(context, id)))
         // Cleanup accepts a season already gone (the admin case deletes its own)
-        await SeasonFactory.cleanupSeasons(await validatedBrowserContext(browser), createdSeasonIds)
+        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
     })
 
     const getFutureDinnerEvent = async (eventIndex: number = 0) => {
@@ -207,6 +218,38 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
             await doScreenshot(page, `dinner/booking-grid-${view}`, true)
         })
     }
+
+    test('GIVEN a member whose preferences expect Takeaway on a dinner beyond the scaffold window WHEN the day view sets the row to Ingen and saves THEN the save answers CANCEL for the member and the re-read expects nothing on the row', async ({page}) => {
+        // GIVEN: a dinner of the season alone on a day past the scaffold window, where only the preferences speak for it,
+        // and a person of the member's household eating Takeaway every weekday
+        const dinnerEvent = await DinnerEventFactory.createDinnerEventAloneOnDay(adminContext, testSeason.season, startOfDay(addDays(new Date(), PAST_THE_SCAFFOLD_WINDOW_DAYS)))
+        const inhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {
+            name: salt('Anders', testSalt),
+            lastName: 'Cancelled',
+            dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.TAKEAWAY)
+        })
+        createdInhabitantIds.push(inhabitant.id)
+        const theInhabitantOn = {inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id}
+
+        // The day view opens once its read of the expected bookings has answered
+        const expectedRead = page.waitForResponse(isExpectedRead)
+        await gotoHydrated(page, `/dinner?date=${formatDate(dinnerEvent.date)}`)
+        const {scaffoldResult: expected} = await (await expectedRead).json() as ScaffoldOrdersResponse
+        expect(expected.results).toContainEqual(expect.objectContaining({...theInhabitantOn, dinnerMode: DinnerMode.TAKEAWAY}))
+
+        // WHEN: the member opens the row, picks Ingen and saves
+        await page.getByTestId(`inhabitant-${inhabitant.id}-toggle`).click()
+        await page.getByTestId(`inhabitant-${inhabitant.id}-mode-edit-${DinnerMode.NONE}`).click()
+        const saved = page.waitForResponse(isScaffoldSave)
+        const reRead = page.waitForResponse(isExpectedRead)
+        await page.getByTestId(`inhabitant-${inhabitant.id}-save`).click()
+
+        // THEN: the save cancels the expected booking, and the re-read after it expects nothing on the row
+        const {scaffoldResult: result} = await (await saved).json() as ScaffoldOrdersResponse
+        expect(result.results).toContainEqual(expect.objectContaining({...theInhabitantOn, action: BookingActionSchema.enum.CANCEL}))
+        const {scaffoldResult: after} = await (await reRead).json() as ScaffoldOrdersResponse
+        expect(after.results).not.toContainEqual(expect.objectContaining(theInhabitantOn))
+    })
 
     // Deletes dinners of the test season, so it runs after every test that indexes them
     test.describe('a selection that no longer exists on the server', () => {

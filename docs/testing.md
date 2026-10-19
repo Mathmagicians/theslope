@@ -344,6 +344,8 @@ await doScreenshot(page, 'admin/page', true)  // Docs: docs/screenshots/
 | `collectHydrationWarnings(page)` | Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation |
 | `expectHydratedWithoutMismatch(page, url)` | Navigates, waits for hydration and asserts Vue logged no hydration mismatch on the way |
 | `waitForApi(page, path, method, options?)` | The next response to a `method` request whose url contains `path`; attach it before the action that sends the request |
+| `isScaffoldSave`, `isExpectedRead` | Response predicates for `page.waitForResponse`: the save of the household's booking write, and a booking view's read of the expected bookings (the dry run without orders) |
+| `PAST_THE_SCAFFOLD_WINDOW_DAYS` | A day past the prebooking window, where only the preferences speak for a dinner |
 
 ### Component helpers: `/tests/component/testHelpers.ts`
 

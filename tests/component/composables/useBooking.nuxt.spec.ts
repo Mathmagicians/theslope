@@ -1,11 +1,11 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears} from 'date-fns'
-import {useBooking, formatPlace, formatDinnerName, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type OrderBucketResult, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
+import {useBooking, formatPlace, formatDinnerName, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type OrderBucketResult, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {dateToWeekDay} from '~/utils/season'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {sumBy} from '~/utils/ledger'
-import {useBookingValidation, TicketState, SupplyState, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderAuditAction, type OrderAuditChange, type OrderAuditSource, type OrderSnapshot, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
+import {useBookingValidation, TicketState, SupplyState, type OrderDisplay, type DinnerMode, type DinnerState, type DesiredOrder, type OrderAuditAction, type OrderAuditChange, type OrderAuditSource, type OrderSnapshot, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {useHousehold} from '~/composables/useHousehold'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
@@ -27,6 +27,11 @@ const DinnerStates = DinnerStateEnumSchema.enum
 const OrderStates = OrderStateEnumSchema.enum
 const DinnerModes = DinnerModeEnumSchema.enum
 const TicketTypes = TicketTypeEnumSchema.enum
+const {DINEIN, TAKEAWAY, NONE} = DinnerModeEnumSchema.enum
+const {BOOKED, RELEASED} = OrderStateEnumSchema.enum
+const {CANCELLED, CONSUMED} = DinnerStateEnumSchema.enum
+// The modes in the app's order, the order the selector shows and getBookingOptions keeps
+const ALL = DINNER_MODE_ORDER
 
 const FAR_FUTURE_DAYS = appConfig.theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
 const today = new Date()
@@ -52,7 +57,7 @@ let buildOrderSnapshot: UseBookingT['buildOrderSnapshot']
 let getLockedFutureDinnerIds: UseBookingT['getLockedFutureDinnerIds']
 let computeLockStatus: UseBookingT['computeLockStatus']
 let countReleasedOrdersByDinner: UseBookingT['countReleasedOrdersByDinner']
-let getBookingOptions: UseBookingT['getBookingOptions']
+let buildGuestOrder: UseBookingT['buildGuestOrder']
 let groupGuestOrders: UseBookingT['groupGuestOrders']
 let getDayBillSummary: UseBookingT['getDayBillSummary']
 let hasChanges: UseBookingT['hasChanges']
@@ -75,7 +80,7 @@ beforeAll(() => {
         getLockedFutureDinnerIds,
         computeLockStatus,
         countReleasedOrdersByDinner,
-        getBookingOptions,
+        buildGuestOrder,
         groupGuestOrders,
         getDayBillSummary,
         hasChanges,
@@ -480,22 +485,6 @@ describe('useBooking', () => {
 })
 
 // =============================================================================
-// getNewOrderAction - Shared decision logic for new bookings
-// =============================================================================
-
-describe('getNewOrderAction', () => {
-    const RA = useBookingValidation().BookingRowActionSchema.enum
-
-    it.each([
-        { canModify: true, expected: RA.process },
-        { canModify: false, expected: RA.claim }  // the executor settles the supply: a released ticket, else the queue
-    ])('canModify=$canModify → $expected', ({ canModify, expected }) => {
-        expect(getNewOrderAction(canModify)).toBe(expected)
-    })
-})
-
-
-// =============================================================================
 // bookingOutcomes - what a bucket's orders do to the supply, in the order they execute
 // =============================================================================
 
@@ -808,6 +797,26 @@ describe('decideOrderAction', () => {
             const result = decideOrderAction(input, DinnerMode, OrderState)
 
             expect(result!.order.dinnerMode).toBe(DinnerMode.TAKEAWAY)  // changed
+        })
+    })
+
+    // The rows the rules matrix reads: a guest never added has nothing to cancel; after the mode deadline a claim and a
+    // reclaim land Spisesal, as an update keeps the held mode
+    describe('the rows the rules matrix reads', () => {
+        const decision = (label: string, input: OrderDecisionInput) => ({...input, label})
+        const guestIngen = decision('guest, no orderId, Ingen', createInput(createDesired({dinnerMode: NONE, isGuestTicket: true}), null))
+        const lockedClaim = decision('no orderId, Takeaway, after the deadline, mode locked', createInput(createDesired({dinnerMode: TAKEAWAY}), null, false, false))
+        const lockedReclaim = decision('a RELEASED order, Takeaway, mode locked', createInput(createDesired({orderId: 42, dinnerMode: TAKEAWAY}), createExisting({state: RELEASED, dinnerMode: NONE}), false, false))
+
+        it.each`
+            input             | bucket           | dinnerMode
+            ${guestIngen}     | ${null}          | ${null}
+            ${lockedClaim}    | ${Bucket.claim}  | ${DINEIN}
+            ${lockedReclaim}  | ${Bucket.update} | ${DINEIN}
+        `('$input.label → $bucket on $dinnerMode', ({input, bucket, dinnerMode}) => {
+            const result = decideOrderAction(input, DinnerMode, OrderState)
+
+            expect({bucket: result?.bucket ?? null, dinnerMode: result?.order.dinnerMode ?? null}).toEqual({bucket, dinnerMode})
         })
     })
 
@@ -1750,51 +1759,127 @@ describe('Lock Status Utilities', () => {
 })
 
 // =============================================================================
-// getBookingOptions - UI counterpart to decideOrderAction
+// getBookingOptions - the modes a row may pick: the ones the decision matrix lands as that mode
 // =============================================================================
 
-describe('getBookingOptions', () => {
-    const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema, BookingRowActionSchema} = useBookingValidation()
-    const DM = DinnerModeSchema.enum
-    const OS = OrderStateSchema.enum
-    const DS = DinnerStateSchema.enum
-    const RA = BookingRowActionSchema.enum
+describe('getBookingOptions — the rules matrix', () => {
+    const EATING = ALL.filter(mode => mode !== NONE)
+    const windowDays = appConfig.theslope.prebookingWindowDays
+    type Dinner = ReturnType<typeof DinnerEventFactory.dinnerEventAt>
+    type RowKind = {label: string, of: (dinner: Dinner) => BookingRow}
+    type ColumnSpec = {daysAhead: number, canModifyOrders: boolean, canEditDiningMode: boolean}
 
-    const ALL = [DM.DINEIN, DM.DINEINLATE, DM.TAKEAWAY, DM.NONE]
-    const EATING = [DM.DINEIN, DM.DINEINLATE, DM.TAKEAWAY]  // All modes except NONE (for claims)
-    const DINEIN_NONE = [DM.DINEIN, DM.NONE]
-    const DINEIN_ONLY = [DM.DINEIN]
-    const NONE_ONLY = [DM.NONE]
-    const EMPTY: typeof ALL = []
+    const inhabitant = {...HouseholdFactory.defaultInhabitantData(), id: 1}
+    const adultPriceId = priceIdOf(TicketTypes.ADULT)
+    const resolver: TicketPriceResolver = (birthDate, priceAtBooking, referenceDate) =>
+        resolveTicketPrice(birthDate, priceAtBooking, SEASON_PRICES, referenceDate)
 
-    it.each([
-        // Cancelled/consumed dinner - no booking possible
-        {desc: 'CANCELLED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CANCELLED, inResidency: true, expectedModes: EMPTY, expectedAction: null},
-        {desc: 'CONSUMED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CONSUMED, inResidency: true, expectedModes: EMPTY, expectedAction: null},
+    // Each row's candidate is the save's builder bound to the row: a mode is open when the save of it lands as that mode
+    const ownOrder = (dinner: Dinner, state: OrderState, dinnerMode: DinnerMode): OrderDisplay =>
+        OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, ticketPriceId: adultPriceId, dinnerMode, state})
+    const inhabitantRow = (dinner: Dinner, order: OrderDisplay | null): BookingRow => ({
+        order,
+        waitlistEntry: null,
+        candidate: dinnerMode => buildDesiredOrder({inhabitantId: inhabitant.id, dinnerEventId: dinner.id, dinnerMode}, order ? [order] : [], [inhabitant], [dinner], resolver, BOOKED)
+    })
+    const entryRow = (dinner: Dinner, wish: DinnerMode): BookingRow => {
+        const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, dinnerMode: wish, ticketPriceId: adultPriceId})
+        return {order: null, waitlistEntry: entry, candidate: dinnerMode => buildEntryDesiredOrder({entry, dinnerMode}, BOOKED)}
+    }
+    const guestRow = (dinner: Dinner, held: DinnerMode): BookingRow => {
+        const guest = OrderFactory.defaultOrder(undefined, {id: 43, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, ticketPriceId: adultPriceId, dinnerMode: held, state: BOOKED, isGuestTicket: true})
+        return {order: guest, waitlistEntry: null, candidate: dinnerMode => buildGuestDesiredOrder({guestOrders: [guest], dinnerMode}, resolver, BOOKED)[0] ?? null}
+    }
+    const guestAddRow = (dinner: Dinner): BookingRow =>
+        ({order: null, waitlistEntry: null, candidate: dinnerMode => buildGuestOrder(inhabitant.id, dinner.id, adultPriceId, dinnerMode)})
+    const rowKind = (label: string, of: RowKind['of']): RowKind => ({label, of})
 
-        // BOOKED order
-        {desc: 'BOOKED + canEdit=true', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: ALL, expectedAction: RA.process},
-        {desc: 'BOOKED + canEdit=false', orderState: OS.BOOKED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: NONE_ONLY, expectedAction: RA.process},
+    // A column's dinner lies `daysAhead` days from today; its context answers the column's deadlines
+    const dinnerAt = (daysAhead: number, state?: DinnerState): Dinner => {
+        const dinner = DinnerEventFactory.dinnerEventAt(101, daysAhead)
+        return state === undefined ? dinner : {...dinner, state}
+    }
+    const contextOf = (dinner: Dinner, {canModifyOrders, canEditDiningMode}: ColumnSpec): BookingContext => ({
+        event: {date: dinner.date, state: dinner.state},
+        deadlines: {canModifyOrders: () => canModifyOrders, canEditDiningMode: () => canEditDiningMode},
+        isHouseholdInResidency: () => true
+    })
+    // `at` moves the column's dinner (a day, a state), `with` overrides its context; both carry the dinner they ask about
+    const column = (label: string, spec: ColumnSpec) => {
+        const dinner = dinnerAt(spec.daysAhead)
+        const context = contextOf(dinner, spec)
+        return {
+            label, dinner, context,
+            at: ({daysAhead = spec.daysAhead, state}: {daysAhead?: number, state?: DinnerState}) => {
+                const moved = dinnerAt(daysAhead, state)
+                return {...contextOf(moved, spec), dinner: moved}
+            },
+            with: (overrides: Partial<BookingContext>) => ({...context, ...overrides, dinner})
+        }
+    }
 
-        // RELEASED order (reclaim own)
-        {desc: 'RELEASED + canEdit=true', orderState: OS.RELEASED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: ALL, expectedAction: RA.process},
-        {desc: 'RELEASED + canEdit=false', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: DINEIN_NONE, expectedAction: RA.process},
+    // The rows: a row kind is the order or the place a row holds, and the save's builder bound to it
+    const ownBooked   = rowKind('own ticket BOOKED, Takeaway',  dinner => inhabitantRow(dinner, ownOrder(dinner, BOOKED, TAKEAWAY)))
+    const ownReleased = rowKind('own ticket RELEASED',           dinner => inhabitantRow(dinner, ownOrder(dinner, RELEASED, NONE)))
+    const expected    = rowKind('no order, the expected row',    dinner => inhabitantRow(dinner, null))
+    const queued      = rowKind('queued, wish Takeaway',         dinner => entryRow(dinner, TAKEAWAY))
+    const guestBooked = rowKind('guest ticket BOOKED, Takeaway', dinner => guestRow(dinner, TAKEAWAY))
+    const guestAdd    = rowKind('guest add, no order',           dinner => guestAddRow(dinner))
 
-        // No order - before deadline
-        {desc: 'null + canModify=true', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: ALL, expectedAction: RA.process},
+    // The columns: where the dinner stands against the deadlines
+    const future      = column('future, beyond the window', {daysAhead: windowDays + 10, canModifyOrders: true,  canEditDiningMode: true})
+    const before      = column('before the deadline',       {daysAhead: 10,              canModifyOrders: true,  canEditDiningMode: true})
+    const afterOpen   = column('after, mode open',          {daysAhead: 1,               canModifyOrders: false, canEditDiningMode: true})
+    const afterLocked = column('after, mode locked',        {daysAhead: 1,               canModifyOrders: false, canEditDiningMode: false})
 
-        // No order - after the deadline: a claim, the server buys a released ticket or queues
-        {desc: 'after deadline + canEdit=true → claim, all eating modes', orderState: null, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: EATING, expectedAction: RA.claim},
-        {desc: 'after deadline + canEdit=false → claim, DINEIN only', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: DINEIN_ONLY, expectedAction: RA.claim},
+    it.each`
+        row             | column          | modes
+        ${ownBooked}    | ${future}       | ${ALL}
+        ${ownBooked}    | ${before}       | ${ALL}
+        ${ownBooked}    | ${afterOpen}    | ${ALL}
+        ${ownBooked}    | ${afterLocked}  | ${[TAKEAWAY, NONE]}
+        ${ownReleased}  | ${afterOpen}    | ${ALL}
+        ${ownReleased}  | ${afterLocked}  | ${[DINEIN, NONE]}
+        ${expected}     | ${future}       | ${ALL}
+        ${expected}     | ${before}       | ${ALL}
+        ${expected}     | ${afterOpen}    | ${ALL}
+        ${expected}     | ${afterLocked}  | ${[DINEIN, NONE]}
+        ${queued}       | ${afterOpen}    | ${ALL}
+        ${queued}       | ${afterLocked}  | ${[TAKEAWAY, NONE]}
+        ${guestBooked}  | ${future}       | ${ALL}
+        ${guestBooked}  | ${before}       | ${ALL}
+        ${guestBooked}  | ${afterOpen}    | ${ALL}
+        ${guestBooked}  | ${afterLocked}  | ${[TAKEAWAY, NONE]}
+        ${guestAdd}     | ${future}       | ${EATING}
+        ${guestAdd}     | ${before}       | ${EATING}
+        ${guestAdd}     | ${afterOpen}    | ${EATING}
+        ${guestAdd}     | ${afterLocked}  | ${[DINEIN]}
+    `('$row.label · $column.label → $modes', ({row, column, modes}) => {
+        expect(getBookingOptions(row.of(column.dinner), column.context)).toEqual(modes)
+    })
 
-        // Outside residency - no booking regardless of other params
-        {desc: 'outside residency + no order', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: false, expectedModes: EMPTY, expectedAction: null},
-        {desc: 'outside residency + BOOKED order', orderState: OS.BOOKED, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: false, expectedModes: EMPTY, expectedAction: null},
-    ])('$desc → modes=$expectedModes.length, action=$expectedAction', ({orderState, canModify, canEdit, dinnerState, inResidency, expectedModes, expectedAction}) => {
-        const order = orderState === null ? null : OrderFactory.defaultOrder(undefined, {state: orderState})
-        const result = getBookingOptions(order, canModify, canEdit, dinnerState, inResidency)
-        expect(result.enabledModes).toEqual(expectedModes)
-        expect(result.action).toBe(expectedAction)
+    // The gates close every mode before the matrix is asked
+    it.each`
+        gate                   | context
+        ${'past dinner'}       | ${before.at({daysAhead: -1})}
+        ${'outside residency'} | ${before.with({isHouseholdInResidency: () => false})}
+        ${'dinner CANCELLED'}  | ${before.at({state: CANCELLED})}
+        ${'dinner CONSUMED'}   | ${before.at({state: CONSUMED})}
+    `('own ticket BOOKED · $gate → no mode', ({context}) => {
+        expect(getBookingOptions(ownBooked.of(context.dinner), context)).toEqual([])
+    })
+})
+
+describe('powerOptions — the household row offers what every row offers', () => {
+    it.each`
+        rows                                   | modes
+        ${[ALL, ALL]}                          | ${ALL}
+        ${[ALL, [TAKEAWAY, NONE]]}             | ${[TAKEAWAY, NONE]}
+        ${[[TAKEAWAY, NONE], [DINEIN, NONE]]}  | ${[NONE]}
+        ${[ALL, []]}                           | ${[]}
+        ${[]}                                  | ${[]}
+    `('$rows → $modes', ({rows, modes}) => {
+        expect(powerOptions(rows)).toEqual(modes)
     })
 })
 

@@ -276,6 +276,18 @@ const expectHydratedWithoutMismatch = async (page: Page, url: string): Promise<v
 const waitForApi = (page: Page, path: string, method: string, options?: {timeout?: number}): Promise<Response> =>
     page.waitForResponse(response => response.url().includes(path) && response.request().method() === method, options)
 
+/** A response of the household's booking write, its save or its dry run (`preview=true`) */
+const isScaffold = (response: Response): boolean =>
+    response.url().includes('/api/household/order/scaffold') && response.request().method() === 'POST'
+/** The save of the household's booking write */
+const isScaffoldSave = (response: Response): boolean => isScaffold(response) && !response.url().includes('preview=true')
+/** A booking view's read of the expected bookings: the dry run without orders, answered with what the preferences book */
+const isExpectedRead = (response: Response): boolean =>
+    isScaffold(response) && response.url().includes('preview=true') && response.request().postDataJSON().orders.length === 0
+
+// Hardcoded beside app.config.ts prebookingWindowDays (60; Nuxt auto-imports not available in Playwright): a day past it
+const PAST_THE_SCAFFOLD_WINDOW_DAYS = 62
+
 /**
  * Types a dd/MM/yyyy date into a UInputDate field: clicks the field's day segment and
  * types the digits - the segments auto-advance through day, month and year.
@@ -328,6 +340,9 @@ const testHelpers = {
     collectHydrationWarnings,
     expectHydratedWithoutMismatch,
     waitForApi,
+    isScaffoldSave,
+    isExpectedRead,
+    PAST_THE_SCAFFOLD_WINDOW_DAYS,
     fillDateField,
     readDateField
 }

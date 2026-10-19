@@ -1,9 +1,12 @@
-import {test, expect, type Browser, type Response} from '@playwright/test'
+import {test, expect, type Browser} from '@playwright/test'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
+import {addDays, startOfDay} from 'date-fns'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation, type DinnerEventDisplay, type ScaffoldOrdersResponse} from '~/composables/useBookingValidation'
 import {formatDate} from '~/utils/date'
@@ -26,11 +29,12 @@ import {BookingViewSchema, type BookingView} from '~/composables/useBookingView'
  * File-level lifecycle: one `beforeAll` / `afterAll` for the whole file, no nested
  * describes. Season spans 14 days with Mon–Fri cooking, starting past the 60-day prebooking window (ADR-015): no
  * run has booked its dinners, so a cell without an order shows the booking the preferences give it, and every dinner
- * sits before its cancel deadline, open to book.
+ * sits before its cancel deadline, open to book. The guest-after-the-deadline case adds its own dinner on tomorrow, past
+ * the season's booking deadline.
  */
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch, waitForApi, PHONE_VIEWPORT} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch, waitForApi, isScaffoldSave, isExpectedRead, PAST_THE_SCAFFOLD_WINDOW_DAYS, PHONE_VIEWPORT} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema, BookingActionSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -39,8 +43,6 @@ const {createDefaultWeekdayMap: createDinnerModeWeekdayMap} = useWeekDayMapValid
     defaultValue: DinnerMode.NONE
 })
 
-// Hardcoded beside app.config.ts prebookingWindowDays (60; Nuxt auto-imports not available in Playwright): a day past it
-const PAST_THE_WINDOW_DAYS = 62
 const testSalt = temporaryAndRandom()
 const createdSeasonIds: number[] = []
 const createdHouseholdIds: number[] = []
@@ -57,7 +59,7 @@ test.beforeAll(async ({browser}) => {
 
     // Mon–Fri cooking gives predictable density regardless of which weekday the test starts on; the season starts
     // past the prebooking window, where only the preferences speak for a dinner
-    testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 14, cookingDays: 'weekdays', startInDays: PAST_THE_WINDOW_DAYS})
+    testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 14, cookingDays: 'weekdays', startInDays: PAST_THE_SCAFFOLD_WINDOW_DAYS})
     createdSeasonIds.push(testSeason.season.id!)
 
     const household = await HouseholdFactory.createHousehold(context, {name: salt('HouseholdBookings', testSalt)})
@@ -178,10 +180,6 @@ test('GIVEN a member holding a regular order and a guest ticket on a dinner WHEN
     expect(after.find(o => o.id === regularOrder.id)).toMatchObject({isGuestTicket: false, dinnerMode: DinnerMode.DINEIN, state: OrderState.BOOKED})
 })
 
-const isScaffold = (response: Response) => response.url().includes('/api/household/order/scaffold') && response.request().method() === 'POST'
-// The grid's own read of a month: a preview without orders, answered with what the preferences would book there
-const isExpectedRead = (response: Response) => isScaffold(response) && response.url().includes('preview=true') && response.request().postDataJSON().orders.length === 0
-
 // A person of the member's household eating in the dining hall every weekday, and the member's page on a week past
 // the scaffold window, open once the grid's read of it has answered; the week has a fraction of the month's cells to
 // re-render on each change
@@ -219,7 +217,7 @@ test('GIVEN an expected cell on a week past the scaffold window WHEN the member 
     for (const _mode of [DinnerMode.DINEINLATE, DinnerMode.TAKEAWAY, DinnerMode.NONE]) {
         await page.getByTestId(`cell-${inhabitant.id}-${dinnerEvent.id}`).click()
     }
-    const saved = page.waitForResponse(response => isScaffold(response) && !response.url().includes('preview=true'))
+    const saved = page.waitForResponse(isScaffoldSave)
     const reRead = page.waitForResponse(isExpectedRead)
     await page.getByTestId('grid-save').click()
 
@@ -228,6 +226,29 @@ test('GIVEN an expected cell on a week past the scaffold window WHEN the member 
     expect(result.results).toContainEqual(expect.objectContaining({...theInhabitantOn, action: BookingActionSchema.enum.CANCEL}))
     const {scaffoldResult: after} = await (await reRead).json() as ScaffoldOrdersResponse
     expect(after.results).not.toContainEqual(expect.objectContaining(theInhabitantOn))
+    await page.close()
+})
+
+test('GIVEN a member on the week grid and a dinner past its booking deadline with no ticket for sale WHEN the chevron opens the guest form and it saves THEN the guest\'s place is on the dinner\'s waiting list', async ({browser}) => {
+    const adminContext = await validatedBrowserContext(browser)
+    const memberContext = await memberValidatedBrowserContext(browser)
+    const {inhabitantId, householdShortname, householdPbsId} = await getSessionUserInfo(memberContext)
+    // GIVEN: a dinner of the season alone on tomorrow, past the season's booking deadline, where nobody has released a ticket
+    const dinnerEvent = await DinnerEventFactory.createDinnerEventAloneOnDay(adminContext, testSeason.season, startOfDay(addDays(new Date(), 1)))
+    const page = await memberContext.newPage()
+    await gotoHydrated(page, buildBookingsUrl(BookingViewSchema.enum.week, dinnerEvent.date, {shortName: householdShortname, pbsId: householdPbsId}))
+
+    // WHEN: the member opens the dinner's guest form from its chevron and saves the form's defaults
+    await page.getByTestId('grid-edit').click()
+    await page.getByTestId(`guest-add-${dinnerEvent.id}`).click()
+    const saved = page.waitForResponse(isScaffoldSave)
+    await page.getByTestId('guest-form-save').click()
+
+    // THEN: with nothing for sale the guest queues, and the dinner's waiting list holds the guest's place
+    const theGuestOn = {inhabitantId, dinnerEventId: dinnerEvent.id, isGuestTicket: true}
+    const {scaffoldResult: result} = await (await saved).json() as ScaffoldOrdersResponse
+    expect(result.results).toContainEqual(expect.objectContaining({...theGuestOn, action: BookingActionSchema.enum.QUEUE}))
+    expect(await WaitlistFactory.entries(adminContext, [dinnerEvent.id])).toContainEqual(expect.objectContaining(theGuestOn))
     await page.close()
 })
 
@@ -256,7 +277,7 @@ test('GIVEN a member on a phone and a month of Mon–Fri dinners WHEN the month 
     expect(box.x + box.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width)
 
     // THEN: the save books one adult guest (the form's defaults) as the member's guest order on the dinner
-    const saved = page.waitForResponse(response => isScaffold(response) && !response.url().includes('preview=true'))
+    const saved = page.waitForResponse(isScaffoldSave)
     await page.getByTestId('guest-form-save').click()
     const {scaffoldResult} = await (await saved).json() as ScaffoldOrdersResponse
     expect(scaffoldResult.results).toContainEqual(expect.objectContaining({inhabitantId, dinnerEventId: dinnerEvent.id, isGuestTicket: true, action: BookingActionSchema.enum.BOOK}))

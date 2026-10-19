@@ -1016,9 +1016,6 @@ export const useBookingValidation = () => {
         updatedAt: z.string().optional()
     })
 
-    // What a booking row can do: book before the deadline, or claim after it (a released ticket, else a place in the queue)
-    const BookingRowActionSchema = z.enum(['process', 'claim'])
-
     return {
         // Enums
         OrderStateSchema,
@@ -1120,8 +1117,6 @@ export const useBookingValidation = () => {
         ClearWaitlistResultSchema,
         DailyMaintenanceResultSchema,
 
-        BookingRowActionSchema,
-
         // Booking plan and results
         OrderBucketSchema,
         BookingActionSchema,
@@ -1214,8 +1209,6 @@ export type CreateTransactionsResult = z.infer<ReturnType<typeof useBookingValid
 export type InitPreferencesResult = z.infer<ReturnType<typeof useBookingValidation>['InitPreferencesResultSchema']>
 export type DailyMaintenanceResult = z.infer<ReturnType<typeof useBookingValidation>['DailyMaintenanceResultSchema']>
 export type ClearWaitlistResult = z.infer<ReturnType<typeof useBookingValidation>['ClearWaitlistResultSchema']>
-
-export type BookingRowAction = z.infer<ReturnType<typeof useBookingValidation>['BookingRowActionSchema']>
 
 // Booking plan and results
 export type OrderBucket = z.infer<ReturnType<typeof useBookingValidation>['OrderBucketSchema']>

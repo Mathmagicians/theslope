@@ -40,8 +40,8 @@
  *
  * SELECTOR EDIT MODE - TOGGLE (interaction="toggle"):
  * ┌─────┐
- * │ 🍽️  │ - Single button, click cycles: DINEIN→LATE→TAKE→NONE
- * └─────┘   Compact for grid cells (no label)
+ * │ 🍽️  │ - Single button, click cycles: DINEIN→LATE→TAKE→NONE, through the enabledModes only
+ * └─────┘   Compact for grid cells (no label); disabled while no mode is enabled
  */
 import {DinnerMode} from '~/composables/useBookingValidation'
 import {BOOKING_WORDS} from '~/config/bookingWords'
@@ -58,7 +58,7 @@ interface Props {
   modelValue?: WeekDay | DinnerMode // Optional - defaults to NONE when no order exists
   formMode?: FormMode
   disabled?: boolean
-  disabledModes?: DinnerMode[] // Specific modes to disable (e.g., after deadline)
+  enabledModes?: DinnerMode[] // The modes the row may pick (getBookingOptions)
   name?: string
   showLabel?: boolean // Show mode label text below selector (both VIEW and EDIT modes)
   size?: ButtonSize
@@ -74,7 +74,7 @@ const props = withDefaults(defineProps<Props>(), {
   modelValue: DinnerMode.NONE, // Default when no order exists
   formMode: FORM_MODES.VIEW,
   disabled: false,
-  disabledModes: () => [],
+  enabledModes: () => DINNER_MODE_ORDER,
   name: 'dinner-mode-selector',
   showLabel: false,
   size: undefined, // Falls back to responsive SIZES.small
@@ -121,14 +121,6 @@ const buttonOrientation = computed(() => {
   if (props.orientation === 'responsive') return ORIENTATIONS.responsive.value
   return props.orientation
 })
-
-// Dinner mode order for iteration
-const dinnerModeOrder: DinnerMode[] = [
-  DinnerMode.DINEIN,
-  DinnerMode.DINEINLATE,
-  DinnerMode.TAKEAWAY,
-  DinnerMode.NONE
-]
 
 // Display config type
 type ModeDisplayConfig = {
@@ -182,10 +174,8 @@ const mixedModeConfig: ModeDisplayConfig = {
   editInactiveVariant: NOISE.quiet
 }
 
-// Check if a specific mode is disabled
-const isModeDisabled = (mode: DinnerMode): boolean => {
-  return props.disabled || props.disabledModes.includes(mode)
-}
+const isModeDisabled = (mode: DinnerMode): boolean => props.disabled || !props.enabledModes.includes(mode)
+const isToggleDisabled = computed(() => props.disabled || props.enabledModes.length === 0)
 
 // Update value (selector mode only)
 const updateMode = (value: DinnerMode) => {
@@ -194,14 +184,13 @@ const updateMode = (value: DinnerMode) => {
   emit('update:modelValue', value)
 }
 
-// Toggle to next mode (for toggle interaction)
+// Toggle to the next enabled mode after the current one; with no other, the toggle stays put
 const toggleMode = () => {
-  if (props.disabled || props.formMode === FORM_MODES.VIEW || isTitle.value) return
-  const currentIndex = dinnerModeOrder.indexOf(dinnerMode.value)
-  // Find next enabled mode (skip disabled ones)
-  for (let i = 1; i <= dinnerModeOrder.length; i++) {
-    const nextIndex = (currentIndex + i) % dinnerModeOrder.length
-    const nextMode = dinnerModeOrder[nextIndex]!
+  if (isToggleDisabled.value || props.formMode === FORM_MODES.VIEW || isTitle.value) return
+  const currentIndex = DINNER_MODE_ORDER.indexOf(dinnerMode.value)
+  for (let i = 1; i < DINNER_MODE_ORDER.length; i++) {
+    const nextIndex = (currentIndex + i) % DINNER_MODE_ORDER.length
+    const nextMode = DINNER_MODE_ORDER[nextIndex]!
     if (!isModeDisabled(nextMode)) {
       hasUserSelected.value = true
       emit('update:modelValue', nextMode)
@@ -296,7 +285,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
       :icon="getModeIcon()"
       :color="dinnerModeConfig[dinnerMode]!.activeColor"
       :variant="dinnerModeConfig[dinnerMode]!.editActiveVariant"
-      :disabled="disabled"
+      :disabled="isToggleDisabled"
       :size="responsiveSize"
       :name="name"
       :data-testid="name"
@@ -314,7 +303,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
         :data-testid="name"
       >
         <UButton
-          v-for="mode in dinnerModeOrder"
+          v-for="mode in DINNER_MODE_ORDER"
           :key="mode"
           :icon="dinnerModeConfig[mode]!.icon"
           :color="getButtonColor(mode)"
