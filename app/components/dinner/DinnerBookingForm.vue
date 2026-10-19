@@ -124,7 +124,7 @@
  * dry run with no orders: its ticket reads as a queued one with the sliders [ex] in place of the hourglass, the mode
  * ghosted on neutral (DinnerTicket expected, COMPONENTS.bookingGrid.expectedBadge); a person the run leaves out reads
  * Ingen. The power row takes the consensus of the modes the rows show and is expected while every inhabitant row is.
- * The legend gains "Forventet bestilling ifølge præferencer" and the table's loading bar runs while the read loads:
+ * The legend always lists "Forventet bestilling ifølge præferencer"; the table's loading bar runs while the read loads:
  *   Hele familien  [  ][  ][  ] [ALLE]            [mixed] Blandet    Anna expected, Bo not: the mix of what the rows show
  *   Anna           [ex][  ][  ] [VOKSEN · 55kr]   (mode) Takeaway    expected, ghosted
  *   Bo             [  ][  ][  ] [VOKSEN · 55kr]   [mode] Ingen       cancelled earlier: not expected
@@ -132,12 +132,12 @@
  *   Hele familien  [ex][  ][  ] [ALLE]            (mode) Takeaway    the power row ghosted too
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
-import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, BookingRowAction, ScaffoldOrdersRequest, TicketState as TicketStateValue} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, ScaffoldOrdersRequest, TicketState as TicketStateValue} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {TicketPresentation} from '~/composables/useBookingUi'
-import {EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {EMPTY_RELEASED_TICKET_COUNTS, type BookingContext, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES} from '~/types/form'
 
@@ -158,8 +158,7 @@ interface TableRow {
   order: OrderDisplay | null
   orders?: OrderDisplay[] // For grouped guest orders
   dinnerMode: DinnerMode
-  disabledModes: DinnerMode[] // Computed via getBookingOptions per row
-  bookingAction: BookingRowAction | null // What action is possible for this row
+  enabledModes: DinnerMode[] // The modes the row may pick (getBookingOptions); none: the row is read-only
   waitlistEntry?: TicketWaitlistDetail // The inhabitant's own place in the queue, while they hold no ticket
   expected?: boolean // No order and no queue entry: the mode is the booking the preferences give the row
   consensus?: boolean // Power mode: true=all agree, false=mixed
@@ -170,6 +169,9 @@ interface TableRow {
   ticketState: TicketStateValue // What the row's ticket is now: released, bought, queued for, or normal
   allergyTypes: AllergyTypeDisplay[] // The booked inhabitant's live allergy profile; empty for every other row
 }
+
+// The parts of a row its save reads
+type SavedRow = Pick<TableRow, 'rowType' | 'id' | 'order' | 'orders' | 'waitlistEntry'>
 
 interface Props {
   household?: HouseholdDetail
@@ -228,7 +230,7 @@ const {resolveTicketPrice, formatPrice} = useTicket()
 
 // Season business logic
 const {isDinnerPast} = useSeason()
-const {canModifyOrders, canEditDiningMode} = props.deadlines
+const {canModifyOrders} = props.deadlines
 
 // Validation
 const {DinnerModeSchema, OrderStateSchema, BookingActionSchema} = useBookingValidation()
@@ -261,9 +263,7 @@ const {expanded} = useExpandableRow({
     if (row) {
       editingRowId.value = row.id
       // A row without a ticket shows Ingen; the draft starts on the first mode the row may pick
-      draftMode.value = row.disabledModes.includes(row.dinnerMode)
-        ? ALL_MODES.find(mode => !row.disabledModes.includes(mode)) ?? row.dinnerMode
-        : row.dinnerMode
+      draftMode.value = row.enabledModes.includes(row.dinnerMode) ? row.dinnerMode : row.enabledModes[0] ?? row.dinnerMode
     }
     historyOrderId.value = null
   },
@@ -278,46 +278,26 @@ const {expanded} = useExpandableRow({
 // ============================================================================
 
 const canBook = computed(() => canModifyOrders(props.dinnerEvent.date))
-const canChangeDiningMode = computed(() => canEditDiningMode(props.dinnerEvent.date))
 const dinnerHasPassed = computed(() => isDinnerPast(props.dinnerEvent.date))
 // Edit allowed if: permission-based formMode is EDIT AND dinner hasn't passed
 const isEditModeAllowed = computed(() => formMode.value === FORM_MODES.EDIT && !dinnerHasPassed.value)
 
-const isHouseholdInResidency = computed(() => {
-  if (!household.value) return true
-  return isHouseholdActiveOnDay(
-    household.value.movedInDate, household.value.moveOutDate
-  )(props.dinnerEvent.date)
-})
+// Without a household every day counts
+const isInResidencyOn = computed((): (date: Date) => boolean => household.value
+  ? isHouseholdActiveOnDay(household.value.movedInDate, household.value.moveOutDate)
+  : () => true)
+const isHouseholdInResidency = computed(() => isInResidencyOn.value(props.dinnerEvent.date))
 
 const residencyAlert = computed(() => {
   if (isHouseholdInResidency.value || !household.value) return null
   return getResidencyDisplay(household.value.movedInDate, household.value.moveOutDate)
 })
 
-// All dinner modes for computing disabled from enabled
-const ALL_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
-
-// Compute booking state for a row using getBookingOptions
-const getRowBookingState = (order: OrderDisplay | null, isGuestAddRow: boolean, isQueued = false): { disabledModes: DinnerMode[], bookingAction: BookingRowAction | null } => {
-  const {enabledModes, action} = getBookingOptions(
-    order,
-    canBook.value,
-    canChangeDiningMode.value,
-    props.dinnerEvent.state,
-    isHouseholdInResidency.value
-  )
-  // Disable NONE for: guest add row OR inhabitants without existing order (can't select "nothing" when no ticket exists)
-  const hasNoExistingOrder = order === null
-  const shouldDisableNone = isGuestAddRow || hasNoExistingOrder
-  const withoutNone = enabledModes.filter(m => m !== DinnerModeEnum.NONE)
-  // A queued inhabitant leaves the queue by picking Ingen
-  const effectiveEnabled = isQueued ? [...withoutNone, DinnerModeEnum.NONE] : shouldDisableNone ? withoutNone : enabledModes
-  return {
-    disabledModes: ALL_MODES.filter(m => !effectiveEnabled.includes(m)),
-    bookingAction: action
-  }
-}
+const bookingContext = computed((): BookingContext => ({
+  event: props.dinnerEvent,
+  deadlines: props.deadlines,
+  isHouseholdInResidency: isInResidencyOn.value
+}))
 
 // ============================================================================
 // RELEASED TICKETS COMPUTEDS
@@ -380,6 +360,16 @@ const columns = computed(() => [
 // Booker for guest tickets: current user's inhabitant (for regular booking flow)
 const {myInhabitant: bookerInhabitant} = storeToRefs(householdsStore)
 
+// The modes a row may pick: the desired order its save sends for each mode, as the decision matrix lands it
+const enabledModesOf = (row: SavedRow): DinnerMode[] => getBookingOptions({
+  order: row.order,
+  waitlistEntry: row.waitlistEntry ?? null,
+  candidate: dinnerMode => buildDesiredOrdersForRow(row, dinnerMode)[0] ?? null
+}, bookingContext.value)
+
+const newGuestModes = computed(() =>
+  getBookingOptions(newGuestRow(bookerInhabitant.value?.id, props.dinnerEvent.id, props.ticketPrices), bookingContext.value))
+
 const tableData = computed((): TableRow[] => {
   if (!household.value?.inhabitants) return []
 
@@ -398,7 +388,7 @@ const tableData = computed((): TableRow[] => {
       props.ticketPrices
     )
 
-    return {
+    const row = {
       rowType: 'inhabitant' as RowType,
       id: inhabitant.id,
       name: inhabitant.name,
@@ -410,13 +400,13 @@ const tableData = computed((): TableRow[] => {
       waitlistEntry,
       expected: expectedMode !== undefined,
       dinnerMode: order?.dinnerMode ?? waitlistEntry?.order.dinnerMode ?? expectedMode ?? DinnerModeEnum.NONE,
-      ...getRowBookingState(order, false, !!waitlistEntry),
       price: order?.priceAtBooking ?? ticketPrice?.price ?? 0,
       ticketPriceId: order?.ticketPriceId ?? ticketPrice?.id ?? null,
       provenanceHousehold: order?.provenanceHousehold,
       ticketState: ticketStateOf(order, !!waitlistEntry),
       allergyTypes: order ? (inhabitant.allergies ?? []).map(allergy => allergy.allergyType) : []
     }
+    return {...row, enabledModes: enabledModesOf(row)}
   })
 
   // A guest row is a placed group (booker, ticketType, eventId) or one queued guest: the same row, booked or queued
@@ -438,7 +428,7 @@ const tableData = computed((): TableRow[] => {
       ? props.ticketPrices.find(price => price.id === waitlistEntry.order.ticketPriceId)
       : resolveTicketPrice(null, held.priceAtBooking, props.ticketPrices)
 
-    return {
+    const row = {
       rowType: 'guest-order' as RowType,
       id,
       name: 'Gæst',
@@ -449,7 +439,6 @@ const tableData = computed((): TableRow[] => {
       orders,
       waitlistEntry,
       dinnerMode: held.dinnerMode,
-      ...getRowBookingState(firstOrder, false, !!waitlistEntry),
       price: held.priceAtBooking ?? 0,
       ticketPriceId: held.ticketPriceId ?? resolvedTicketPrice?.id ?? null,
       guestCount: Math.max(orders.length, 1),
@@ -457,6 +446,7 @@ const tableData = computed((): TableRow[] => {
       ticketState: ticketStateOf(firstOrder, !!waitlistEntry),
       allergyTypes: []
     }
+    return {...row, enabledModes: enabledModesOf(row)}
   })
 
   // The consensus of the modes the rows show: an expected row counts its expected mode
@@ -471,14 +461,11 @@ const tableData = computed((): TableRow[] => {
     order: null,
     price: 0,
     ticketPriceId: 0,
-    disabledModes: [] as DinnerMode[],
-    bookingAction: null as BookingRowAction | null,
     ticketState: TicketState.normal,
     allergyTypes: [] as AllergyTypeDisplay[]
   }
 
-  // Power row with consensus (shown in both VIEW and EDIT modes)
-  // Power row uses first inhabitant's booking state (they all share same deadline constraints)
+  // Power row with consensus (shown in both VIEW and EDIT modes): the modes every inhabitant row may pick
   const powerRow: TableRow = {
     ...defaultSyntheticRow,
     rowType: 'power' as RowType,
@@ -487,8 +474,7 @@ const tableData = computed((): TableRow[] => {
     inhabitants: allInhabitants,
     ticketConfig: COMPONENTS.powerMode.ticketConfig,
     dinnerMode: consensusMode,
-    disabledModes: inhabitantRows[0]?.disabledModes ?? [],
-    bookingAction: inhabitantRows[0]?.bookingAction ?? null,
+    enabledModes: powerOptions(inhabitantRows.map(row => row.enabledModes)),
     consensus: hasConsensus,
     expected: inhabitantRows.length > 0 && inhabitantRows.every(row => row.expected)
   }
@@ -497,7 +483,6 @@ const tableData = computed((): TableRow[] => {
   if (!isEditModeAllowed.value) return [powerRow, ...inhabitantRows, ...guestOrderRows]
 
   // EDIT mode: power + inhabitants + guest orders + add guest
-  // Guest add row: isGuestAddRow=true to disable NONE
   // Synthetic inhabitant for UserListItem consistency
   const guestAddInhabitant = {
     id: 0,
@@ -514,7 +499,7 @@ const tableData = computed((): TableRow[] => {
     powerRow,
     ...inhabitantRows,
     ...guestOrderRows,
-    {...defaultSyntheticRow, rowType: 'guest' as RowType, id: 'add-guest', name: 'Tilføj gæst', inhabitant: guestAddInhabitant, dinnerMode: DinnerModeEnum.DINEIN, ...getRowBookingState(null, true)}
+    {...defaultSyntheticRow, rowType: 'guest' as RowType, id: 'add-guest', name: 'Tilføj gæst', inhabitant: guestAddInhabitant, dinnerMode: DinnerModeEnum.DINEIN, enabledModes: newGuestModes.value}
   ]
 })
 
@@ -522,11 +507,11 @@ const tableData = computed((): TableRow[] => {
 // HANDLERS
 // ============================================================================
 
-// Build desired orders for a row (DRY: used by handleSave and actionPreviewItems)
-const buildDesiredOrdersForRow = (row: TableRow): DesiredOrder[] => {
+// Build desired orders for a row in a mode, the draft's by default (DRY: the save, its preview and the row's modes)
+const buildDesiredOrdersForRow = (row: SavedRow, dinnerMode: DinnerMode = draftMode.value): DesiredOrder[] => {
   const dinnerEventId = props.dinnerEvent.id
   const buildForInhabitants = (inhabitantIds: number[]) => buildDesiredOrders(
-    inhabitantIds.map(inhabitantId => ({inhabitantId, dinnerEventId, dinnerMode: draftMode.value})),
+    inhabitantIds.map(inhabitantId => ({inhabitantId, dinnerEventId, dinnerMode})),
     eventOrders.value,
     household.value?.inhabitants ?? [],
     [props.dinnerEvent],
@@ -536,7 +521,7 @@ const buildDesiredOrdersForRow = (row: TableRow): DesiredOrder[] => {
   if (row.rowType === 'power') {
     const inhabitantIds = (household.value?.inhabitants ?? []).map(i => i.id)
     return buildBookingChanges(
-      getPowerChanges(inhabitantIds, eventOrders.value, eventWaitlistEntries.value, dinnerEventId, draftMode.value),
+      getPowerChanges(inhabitantIds, eventOrders.value, eventWaitlistEntries.value, dinnerEventId, dinnerMode),
       eventOrders.value,
       household.value?.inhabitants ?? [],
       [props.dinnerEvent],
@@ -546,12 +531,12 @@ const buildDesiredOrdersForRow = (row: TableRow): DesiredOrder[] => {
 
   if (row.rowType === 'guest-order' && row.waitlistEntry) {
     // A queued guest names its entry: Ingen leaves the queue, another mode requeues the wish at the held price
-    return [buildEntryDesiredOrder({entry: row.waitlistEntry, dinnerMode: draftMode.value}, OrderStateEnum.BOOKED)]
+    return [buildEntryDesiredOrder({entry: row.waitlistEntry, dinnerMode}, OrderStateEnum.BOOKED)]
   }
 
   if (row.rowType === 'guest-order') {
     const guestOrders = row.orders ?? (row.order ? [row.order] : [])
-    return buildGuestDesiredOrders([{guestOrders, dinnerMode: draftMode.value}], props.ticketPrices)
+    return buildGuestDesiredOrders([{guestOrders, dinnerMode}], props.ticketPrices)
   }
 
   if (row.rowType === 'inhabitant' && typeof row.id === 'number') {
@@ -610,7 +595,7 @@ const handleGuestSave = (orders: DesiredOrder[]) => completeBooking(orders)
 // HELPER TEXT
 // ============================================================================
 
-const {groupGuestOrders, getBookingOptions, getDayBillSummary, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
+const {groupGuestOrders, getBookingOptions, powerOptions, newGuestRow, getDayBillSummary, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
 const {createBookingBadges, createWaitlistBadge, bookingSaveLabel} = useBookingUi()
 
 // A queue entry's place names the line of the ticket type its price holds
@@ -636,9 +621,6 @@ const {result: preview, pending: isPreviewPending} = useScaffoldPreview(
 )
 const previewDays = computed(() => preview.value ? formatPreviewLines(preview.value, householdOrder.value) : [])
 const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOutcome(preview.value) : BookingActionSchema.enum.CHANGE_MODE))
-
-// The legend explains a ghosted mode while a row shows one
-const hasExpectedRow = computed(() => tableData.value.some(row => row.expected))
 </script>
 
 <template>
@@ -938,7 +920,7 @@ const hasExpectedRow = computed(() => tableData.value.some(row => row.expected))
           <DinnerModeSelector
             v-model="draftMode"
             :form-mode="FORM_MODES.EDIT"
-            :disabled-modes="row.original.disabledModes"
+            :enabled-modes="row.original.enabledModes"
             :consensus="row.original.consensus"
             :size="SIZES.standard"
             :name="`${row.original.rowType}-${row.original.id}-mode-edit`"
@@ -973,7 +955,7 @@ const hasExpectedRow = computed(() => tableData.value.some(row => row.expected))
                   v-bind="row.original.rowType === 'power' ? {} : BUTTONS.save"
                   :color="row.original.rowType === 'power' ? COMPONENTS.powerMode.color : undefined"
                   :loading="isSaving"
-                  :disabled="row.original.bookingAction === null"
+                  :disabled="row.original.enabledModes.length === 0"
                   :data-testid="`${row.original.rowType}-${row.original.id}-save`"
                   @click="handleSave(row.original)"
                 >
@@ -990,6 +972,6 @@ const hasExpectedRow = computed(() => tableData.value.some(row => row.expected))
     </UTable>
 
     <!-- Legend: shared with the week/month grid -->
-    <DinnerModeLegend v-if="isEditModeAllowed" :show-expected="hasExpectedRow" :class="COMPONENTS.bookingForm.legend"/>
+    <DinnerModeLegend v-if="isEditModeAllowed" :class="COMPONENTS.bookingForm.legend"/>
   </div>
 </template>

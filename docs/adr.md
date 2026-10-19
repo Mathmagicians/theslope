@@ -112,7 +112,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 
 ## ADR-016: Unified Booking Through Scaffold
 
-**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-18
+**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-19
 
 ### Context
 
@@ -123,12 +123,13 @@ Abstract composite keys (`inhabitantId-dinnerEventId`) caused bugs:
 
 ### Decision
 
-**Use `orderId` for updates and `waitlistEntryId` for a queue entry. Generator decides intent → Scaffolder executes.**
+**Use `orderId` for updates and `waitlistEntryId` for a queue entry. Rules say what a row may pick → Generator decides intent → Scaffolder executes.**
 
 ### Architecture
 
 | Stage | File | Role |
 |-------|------|------|
+| **Rules** | `useBooking.ts` | `getBookingOptions(row, context) → DinnerMode[]` — the modes a row may pick, derived from the decision matrix: a mode is allowed when `decideOrderAction` lands the row's desired order for it as that mode; `powerOptions(rows)` is the intersection for the household row. The views render the list and hold no rule of their own |
 | **Generator** | `useBooking.ts` | `decideOrderAction(input) → { bucket, order } \| null` — pure function, returns bucket `create \| update \| delete \| idempotent \| claim \| leave \| requeue`, sets `state` (BOOKED/RELEASED) and `dinnerMode`. Entry points: `resolveDesiredOrdersToBuckets` (user mode, with the household's queue entries), `resolveOrdersFromPreferencesToBuckets` (system mode) |
 | **Scaffolder** | `scaffoldPrebookings.ts` | Transforms `DesiredOrder → OrderCreateWithPrice` (adds `bookedByUserId`, `priceAtBooking`, `householdId`) and executes the buckets: `createOrders()`, `updateOrdersBatch()` + `releasedAt` for releases, `deleteOrder()` or `recordCancellation()` alone when nothing is booked, `claimOrder()` else the waiting-list join for claims, `deleteWaitlistEntry()` for leave, `updateWaitlistEntryOrder()` for requeue, skip idempotent; after the households, `sellTicketsToWaitlist()`. With `preview` the same run settles against the supply it reads and writes nothing |
 
@@ -145,6 +146,9 @@ Abstract composite keys (`inhabitantId-dinnerEventId`) caused bugs:
 | present | ≠ NONE | same | any | **IDEMPOTENT** |
 | present | ≠ NONE | diff | any | **UPDATE** (mode/price change) |
 | present | any | not found | any | SKIP (stale) |
+
+A claim or a reclaim while the dining mode is locked (`canEditMode` false) lands as DINEIN, as an update does; a guest's
+bare NONE with no `orderId` lands nothing (no guest to cancel).
 
 A dinner's waiting list is one first-come-first-served line per ticket type. The claim bucket executes by supply at that
 instant: a released ticket of the claim's ticket type, FIFO by `releasedAt`, while nobody waits in that type's line;
@@ -221,12 +225,13 @@ the household's next run on the dinners asked. The endpoint hands the scaffolder
 10. A failed write batch is retried order by order; the reply counts the orders that landed per action (`totals`), lists them per person for a run scoped to one household (`results`) and lists the orders that failed (`failed`)
 11. A claim buys a released ticket of its type only while nobody waits in that type's line; every run ends with `sellTicketsToWaitlist` on its dinners
 12. Every write to a waiting entry writes its `OrderHistory` row (`orderId` null) with the run's audit context
+13. A view disables a mode from `getBookingOptions` alone (`enabledModes` on `DinnerModeSelector`; the cycle walks `DINNER_MODE_ORDER` and skips the rest) and holds no mode rule of its own; what the grid allows for a row is what the day view allows for it
 
 ### Key Files
 
 | File | Role |
 |------|------|
-| `app/composables/useBooking.ts` | Generator: `decideOrderAction`, bucket resolvers |
+| `app/composables/useBooking.ts` | Rules: `getBookingOptions`, `powerOptions`, `DINNER_MODE_ORDER`; generator: `decideOrderAction`, bucket resolvers |
 | `app/composables/useWaitlist.ts` | `previewSale`, the sale as the preview settles it; `joinedOf`, the join outcome of a save and a preview |
 | `server/data/financesRepository.ts` | `recordCancellation`, the one writer of a cancellation row |
 | `app/composables/useBookingValidation.ts` | Schemas: `DesiredOrderSchema`, `ScaffoldResultSchema`; enums `OrderBucketSchema`, `BookingActionSchema` |

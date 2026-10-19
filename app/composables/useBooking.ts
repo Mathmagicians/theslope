@@ -1017,16 +1017,23 @@ export const useBooking = () => {
         ticketPriceId: number,
         dinnerMode?: DinnerMode,
         allergyTypeIds?: number[]
-    ): DesiredOrder => {
-        const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+    ): DesiredOrder => ({
+        inhabitantId: bookerId,
+        dinnerEventId,
+        dinnerMode: dinnerMode ?? DinnerModeEnum.DINEIN,
+        ticketPriceId,
+        isGuestTicket: true,
+        allergyTypeIds,
+        state: OrderStateEnum.BOOKED
+    })
+
+    /** A guest not yet added, as the guest form opens: booked by the booker at a guest's price; without a booker or a price, no candidate */
+    const newGuestRow = (bookerId: number | undefined, dinnerEventId: number, ticketPrices: TicketPrice[]): BookingRow => {
+        const ticketPriceId = resolveTicketPrice(null, undefined, ticketPrices)?.id
         return {
-            inhabitantId: bookerId,
-            dinnerEventId,
-            dinnerMode: dinnerMode ?? DinnerModeSchema.enum.DINEIN,
-            ticketPriceId,
-            isGuestTicket: true,
-            allergyTypeIds,
-            state: OrderStateSchema.enum.BOOKED
+            order: null,
+            waitlistEntry: null,
+            candidate: dinnerMode => bookerId && ticketPriceId ? buildGuestOrder(bookerId, dinnerEventId, ticketPriceId, dinnerMode) : null
         }
     }
 
@@ -1165,11 +1172,10 @@ export const useBooking = () => {
         dinnerEvents: Pick<DinnerEventDisplay, 'id' | 'date'>[],
         ticketPrices: TicketPrice[]
     ): DesiredOrder[] => {
-        const {OrderStateSchema} = useBookingValidation()
         const resolveSeasonTicketPrice: TicketPriceResolver = (birthDate, priceAtBooking, referenceDate) =>
             resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
         return intents.flatMap(intent =>
-            buildDesiredOrder(intent, existingOrders, inhabitants, dinnerEvents, resolveSeasonTicketPrice, OrderStateSchema.enum.BOOKED) ?? []
+            buildDesiredOrder(intent, existingOrders, inhabitants, dinnerEvents, resolveSeasonTicketPrice, OrderStateEnum.BOOKED) ?? []
         )
     }
 
@@ -1178,10 +1184,9 @@ export const useBooking = () => {
         guestIntents: GuestBookingIntent[],
         ticketPrices: TicketPrice[]
     ): DesiredOrder[] => {
-        const {OrderStateSchema} = useBookingValidation()
         const resolveSeasonTicketPrice: TicketPriceResolver = (birthDate, priceAtBooking, referenceDate) =>
             resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
-        return guestIntents.flatMap(intent => buildGuestDesiredOrder(intent, resolveSeasonTicketPrice, OrderStateSchema.enum.BOOKED))
+        return guestIntents.flatMap(intent => buildGuestDesiredOrder(intent, resolveSeasonTicketPrice, OrderStateEnum.BOOKED))
     }
 
     /** Every grid edit as one DesiredOrder[]: inhabitant intents, guest intents and the places' intents together */
@@ -1603,6 +1608,7 @@ export const useBooking = () => {
         DEADLINE_LABELS,
         // Guest Booking
         buildGuestOrder,
+        newGuestRow,
         groupGuestOrders,
         // Scaffold Result Formatting
         formatScaffoldResult,

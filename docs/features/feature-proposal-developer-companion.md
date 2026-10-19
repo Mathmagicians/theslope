@@ -14,8 +14,8 @@ One package, built by the test-engineer session in idle slices; the sections bel
 
 | Part | State |
 |---|---|
-| Developer companion: the site, its workflow, the `playwright-results-<suite>`, `deployment` and `openapi` artifacts | in the tree; `make developer-build` generates 28 routes; the first publish waits for the merge to main |
-| BDD foundation | not started |
+| Developer companion: the site, its workflow, the `bdd-<suite>`, `deployment` and `openapi` artifacts | in the tree; `make developer-build` generates 28 routes; the first publish waits for the merge to main |
+| BDD foundation | in the tree for the smoke suite (69a5d75: the `chromium-smoke` project, its features and steps, `make bdd-report`, the `bdd-smoke` artifact, `docs/testing.md` § BDD); the `@api`, `@ui` and `@serial` projects and their `bdd-api` and `bdd-ui` artifacts not started |
 | API reference | not started |
 | Feature migration | a standing rule: a spec migrates when next touched, idle batches after |
 
@@ -79,12 +79,12 @@ served by GitHub Pages at `developer.skraaningen.dk`.
   reads it, and a run without it ends in one skipped job. `workflow_dispatch` with `run_id` republishes by hand;
   `concurrency: developer-site`.
 - Steps: checkout `main`; checkout `gh-pages` into the output, so the other environments' content stays;
-  `gh run download` of `playwright-results-<suite>` (the Playwright JSON until the BDD foundation lands, then `bdd-<suite>`);
+  `gh run download` of `bdd-<suite>` (the Cucumber JSON of each suite) and `openapi`; the Playwright reports and results stay GitHub artifacts;
   `make developer-assemble env=<env> run=<id> version=<v> sha=<sha>` lays `environments/<env>/<suite>/` and writes
   `environments/<env>.json` (environment, version, sha, deployed at, run, result per suite); `make developer-build`
   renders the site; `make developer-publish` commits once and force-pushes, so the branch stays the size of its content.
 - Pipeline addition: the `bdd-<suite>` artifacts after each suite; the smoke suite's report carries no screenshots,
-  as it runs against live data. Until the BDD foundation lands, the Playwright JSON stands in for the result per suite.
+  as it runs against live data.
 - Pages: the home page with one card per manifest; `environments/<env>` with the manifest and a link per suite;
   `guides`, `adr`, `testing`, `ui` rendered from `docs/`.
 - DNS and settings, the user's actions: Pages source `gh-pages`, root; `CNAME developer.skraaningen.dk →

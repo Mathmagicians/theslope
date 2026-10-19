@@ -84,9 +84,11 @@ const mountMemberForm = (canModify: boolean, props: Record<string, unknown> = {}
   return mountForm({...baseProps, household: householdWithInhabitants, deadlines, ...props})
 }
 
+/** The mode selector of an expanded row, by the row's test id prefix (`inhabitant-<id>`, `power-power-mode`) */
+const rowSelector = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, row: string) =>
+  wrapper.findAllComponents({name: 'DinnerModeSelector'}).find(selector => selector.props('name') === `${row}-mode-edit`)!
 /** The mode selector of an inhabitant's expanded row */
-const editSelector = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, inhabitantId: number) =>
-  wrapper.findAllComponents({name: 'DinnerModeSelector'}).find(selector => selector.props('name') === `inhabitant-${inhabitantId}-mode-edit`)!
+const editSelector = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, inhabitantId: number) => rowSelector(wrapper, `inhabitant-${inhabitantId}`)
 
 // The next test's resetStores drops the datasets a still-mounted form reads
 enableAutoUnmount(afterEach)
@@ -638,10 +640,10 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
   }
 
   it.each([
-    {desc: 'a row without an order shows the expected mode ghosted', orders: [], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.DINEIN, expected: true}, annaFace: COMPONENTS.ticket.face.expected, legend: true},
-    {desc: 'an order supersedes the expected booking', orders: [annaOrder], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.TAKEAWAY, expected: false}, annaFace: COMPONENTS.ticket.face.normal, legend: false},
-    {desc: 'a run that expects nothing leaves the row on Ingen', orders: [], expected: [], annaTicket: {dinnerMode: DinnerMode.NONE, expected: false}, annaFace: COMPONENTS.ticket.face.normal, legend: false}
-  ])('$desc', async ({orders, expected, annaTicket, annaFace, legend}) => {
+    {desc: 'a row without an order shows the expected mode ghosted', orders: [], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.DINEIN, expected: true}, annaFace: COMPONENTS.ticket.face.expected},
+    {desc: 'an order supersedes the expected booking', orders: [annaOrder], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.TAKEAWAY, expected: false}, annaFace: COMPONENTS.ticket.face.normal},
+    {desc: 'a run that expects nothing leaves the row on Ingen', orders: [], expected: [], annaTicket: {dinnerMode: DinnerMode.NONE, expected: false}, annaFace: COMPONENTS.ticket.face.normal}
+  ])('$desc', async ({orders, expected, annaTicket, annaFace}) => {
     const wrapper = await mountExpected(expected, orders)
 
     const ticketProps = (inhabitantId: number) => ticketsOf(wrapper, inhabitantId).map(ticket => ticket.props())
@@ -651,7 +653,13 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
     // Bo has no result: the run leaves him out, as it leaves out a person who cancelled the dinner
     expect(ticketProps(bo!.id)).not.toHaveLength(0)
     ticketProps(bo!.id).forEach(props => expect(props).toMatchObject({dinnerMode: DinnerMode.NONE, expected: false}))
-    expect(findByTestId(wrapper, 'dinner-mode-legend-expected').exists()).toBe(legend)
+  })
+
+  // The legend lists the expected booking as a standing entry, also while no row is expected
+  it('GIVEN a run that expects nothing THEN the legend still explains the expected booking', async () => {
+    const wrapper = await mountExpected([])
+
+    expect(findByTestId(wrapper, 'dinner-mode-legend-expected').exists()).toBe(true)
   })
 
   // The power row reads the modes the rows show; it is expected while every inhabitant row is
@@ -668,10 +676,22 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
     powerTickets.forEach(ticket => expect(ticket.props()).toMatchObject(power))
   })
 
+  // The plan the preferences give a person on Takeaway
+  const planOf = (inhabitant: NonNullable<typeof anna>) =>
+    OrderFactory.defaultBookingResult({inhabitantId: inhabitant.id, inhabitantName: inhabitant.name, dinnerEventId, dinnerMode: DinnerMode.TAKEAWAY, action: Action.BOOK})
+  // The save emits one desired order per person on the mode, each bare: no order and no place on the waiting list to name
+  const expectBareSave = (wrapper: Mounted, inhabitants: {id: number}[], dinnerMode: DinnerMode) => {
+    expect(wrapper.emitted('saveBookings')).toEqual([[inhabitants.map(({id}) => expect.objectContaining({inhabitantId: id, dinnerEventId, dinnerMode, isGuestTicket: false}))]])
+    const [[saved]] = wrapper.emitted('saveBookings') as [[DesiredOrder[]]]
+    for (const order of saved) {
+      expect(order.orderId).toBeUndefined()
+      expect(order.waitlistEntryId).toBeUndefined()
+    }
+  }
+
   // Ingen on a row without an order is the person's cancellation: the save sends it with nothing to name
   it('GIVEN an expected row WHEN it expands THEN Ingen is open and the save sends the bare Ingen', async () => {
-    const annaOnTakeaway = OrderFactory.defaultBookingResult({inhabitantId: anna!.id, inhabitantName: anna!.name, dinnerEventId, dinnerMode: DinnerMode.TAKEAWAY, action: Action.BOOK})
-    const wrapper = await mountExpected([annaOnTakeaway])
+    const wrapper = await mountExpected([planOf(anna!)])
     await clickByTestId(wrapper, `inhabitant-${anna!.id}-toggle`)
 
     expect(editSelector(wrapper, anna!.id).props('enabledModes')).toContain(DinnerMode.NONE)
@@ -679,10 +699,34 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
     await clickByTestId(wrapper, `inhabitant-${anna!.id}-mode-edit-${DinnerMode.NONE}`)
     await clickByTestId(wrapper, `inhabitant-${anna!.id}-save`)
 
-    expect(wrapper.emitted('saveBookings')).toEqual([[[expect.objectContaining({inhabitantId: anna!.id, dinnerEventId, dinnerMode: DinnerMode.NONE, isGuestTicket: false})]]])
-    const [[[bareIngen]]] = wrapper.emitted('saveBookings') as [[DesiredOrder[]]]
-    expect(bareIngen!.orderId).toBeUndefined()
-    expect(bareIngen!.waitlistEntryId).toBeUndefined()
+    expectBareSave(wrapper, [anna!], DinnerMode.NONE)
+  })
+
+  // A plan stays a ghost until it is touched: a click on its mode adopts it as the person's own draft
+  it('GIVEN Anna\'s plan WHEN her row expands THEN the selector shows the plan untouched, and a click adopts the plan, turns her ticket solid and saves it bare', async () => {
+    const wrapper = await mountExpected([planOf(anna!)])
+    await clickByTestId(wrapper, `inhabitant-${anna!.id}-toggle`)
+    expect(editSelector(wrapper, anna!.id).props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, expected: true})
+
+    await clickByTestId(wrapper, `inhabitant-${anna!.id}-mode-edit-${DinnerMode.TAKEAWAY}`)
+    expect(editSelector(wrapper, anna!.id).props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, expected: false})
+    expect(ticketsOf(wrapper, anna!.id)).not.toHaveLength(0)
+    ticketsOf(wrapper, anna!.id).forEach(ticket => expect(ticket.props('expected')).toBe(false))
+
+    await clickByTestId(wrapper, `inhabitant-${anna!.id}-save`)
+    expectBareSave(wrapper, [anna!], DinnerMode.TAKEAWAY)
+  })
+
+  it('GIVEN every row\'s plan on Takeaway WHEN the power row adopts the plan in one click THEN the save sends every person\'s plan bare', async () => {
+    const {inhabitants} = householdWithInhabitants
+    const wrapper = await mountExpected(inhabitants.map(planOf))
+    await clickByTestId(wrapper, 'power-power-mode-toggle')
+    expect(rowSelector(wrapper, 'power-power-mode').props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, expected: true})
+
+    await clickByTestId(wrapper, `power-power-mode-mode-edit-${DinnerMode.TAKEAWAY}`)
+    await clickByTestId(wrapper, 'power-power-mode-save')
+
+    expectBareSave(wrapper, inhabitants, DinnerMode.TAKEAWAY)
   })
 })
 

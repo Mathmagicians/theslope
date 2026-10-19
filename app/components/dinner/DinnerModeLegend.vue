@@ -2,8 +2,8 @@
 DinnerModeLegend - the dinner-mode entries of the "Forklaring" panel (CalendarLegend)
 
 Shared by the booking grid (week/month) and the single-dinner form, which differ only
-in which extras they explain: the grid also has a modified-cell marker, the queue marker and a hint; both explain an
-expected booking while a cell without an order shows one. Its rows join CalendarLegend's list, one entry per row: the
+in which extras they explain: the grid also has a modified-cell marker, the queue marker and a hint; both always explain
+an expected booking. Its rows join CalendarLegend's list, one entry per row: the
 sample in the fixed-width column (COMPONENTS.legend.sample), its explanation beside it, so every explanation starts on
 one vertical line.
 
@@ -20,7 +20,7 @@ one vertical line.
 └──────────────────────────────────────────────────────────┘
 (mode)°⌛ = the wish ghosted (COMPONENTS.waitlist) under the corner chip, grid only
 [ex] (mode) = the sliders the day form's ticket carries (ICONS.preferences at COMPONENTS.ticket.stateIcon.expected)
-beside an expected booking ghosted on neutral (COMPONENTS.bookingGrid.expectedBadge), while one shows
+beside an expected booking ghosted on neutral (COMPONENTS.bookingGrid.expectedBadge)
 -->
 <script setup lang="ts">
 import {DinnerMode} from '~/composables/useBookingValidation'
@@ -36,16 +36,13 @@ withDefaults(defineProps<{
   showModified?: boolean
   /** Grid only: the queued cell, the wish ghosted under the hourglass */
   showWaitlist?: boolean
-  /** A cell without an order showing the booking the preferences give it */
-  showExpected?: boolean
   /** Grid only: how to operate the cells */
   hint?: string
 }>(), {
-  modes: () => [DinnerMode.DINEIN, DinnerMode.DINEINLATE, DinnerMode.TAKEAWAY, DinnerMode.NONE],
+  modes: () => DINNER_MODE_ORDER,
   showNoConsensus: true,
   showModified: false,
   showWaitlist: false,
-  showExpected: false,
   hint: undefined
 })
 
@@ -102,7 +99,7 @@ const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
       </div>
       <span :class="TYPOGRAPHY.finePrint">{{ BOOKING_WORDS.legend.waitlist }}</span>
     </div>
-    <div v-if="showExpected" :class="COMPONENTS.legend.entry" data-testid="dinner-mode-legend-expected">
+    <div :class="COMPONENTS.legend.entry" data-testid="dinner-mode-legend-expected">
       <div :class="COMPONENTS.legend.sample">
         <UIcon :name="ICONS.preferences" :class="COMPONENTS.ticket.stateIcon.expected" />
         <DinnerModeSelector

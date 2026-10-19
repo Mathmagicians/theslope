@@ -638,14 +638,15 @@ describe('BookingGridView and the server\'s dry run', () => {
       expect(expectedCell.findComponent({name: 'UIcon'}).classes()).toEqual(expect.arrayContaining(ink.split(' ')))
     })
 
-    it('an order supersedes the expected booking, and without an expected cell the legend carries no entry for it', async () => {
+    // The legend lists the expected booking as a standing entry, also while no cell is expected
+    it('an order supersedes the expected booking, and without an expected cell the legend still explains it', async () => {
       scaffold.answers.expected = () => OrderFactory.defaultScaffoldOrdersResponse({results: [resultOf(anna, future.id, Action.BOOK)]})
       const annaOrder = OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: anna.id, dinnerEventId: future.id, dinnerMode: DinnerMode.TAKEAWAY})
       const wrapper = await mountWeek(FORM_MODES.VIEW, [annaOrder])
       await landed(wrapper)
 
       expect(cell(wrapper, anna.id, future.id).props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, expected: false})
-      expect(findByTestId(wrapper, 'dinner-mode-legend-expected').exists()).toBe(false)
+      expect(findByTestId(wrapper, 'dinner-mode-legend-expected').exists()).toBe(true)
     })
 
     it('the table\'s loading bar runs while the read loads', async () => {
@@ -675,6 +676,41 @@ describe('BookingGridView and the server\'s dry run', () => {
       await landed(wrapper)
 
       dinnerEvents.forEach(({id}) => expect(wrapper.findAllComponents(DinnerModeSelector).find(selector => selector.props('name') === `power-${id}`)!.props()).toMatchObject(power))
+    })
+
+    // In edit mode a plan stays a ghost until it is touched: the first click adopts the plan as the person's draft
+    it('GIVEN Anna\'s plan in edit mode WHEN her cell is clicked twice THEN it shows the plan until the first click adopts it as a draft, and the second moves to the next mode', async () => {
+      scaffold.answers.expected = annaExpected
+      const wrapper = await mountWeek(FORM_MODES.EDIT)
+      await landed(wrapper)
+      const annaCell = `cell-${anna.id}-${future.id}`
+      expect(cell(wrapper, anna.id, future.id).props()).toMatchObject({modelValue: DinnerMode.DINEIN, expected: true, isModified: false, formMode: FORM_MODES.EDIT})
+
+      await clickByTestId(wrapper, annaCell)
+      expect(cell(wrapper, anna.id, future.id).props()).toMatchObject({modelValue: DinnerMode.DINEIN, expected: false, isModified: true})
+
+      await clickByTestId(wrapper, annaCell)
+      expect(cell(wrapper, anna.id, future.id).props()).toMatchObject({modelValue: DinnerMode.DINEINLATE, expected: false, isModified: true})
+    })
+
+    it('GIVEN Anna and Lars planned on Takeaway in edit mode WHEN the power cell is clicked once and saved THEN it adopts the plan as one draft per person and saves them', async () => {
+      scaffold.answers.expected = () => OrderFactory.defaultScaffoldOrdersResponse({results: [anna, lars].flatMap(inhabitant => dinnerEvents.map(({id}) => resultOf(inhabitant, id, Action.BOOK, DinnerMode.TAKEAWAY)))})
+      const wrapper = await mountWeek(FORM_MODES.EDIT)
+      await landed(wrapper)
+      const powerCell = `power-${future.id}`
+      expect(wrapper.findAllComponents(DinnerModeSelector).find(selector => selector.props('name') === powerCell)!.props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, expected: true})
+
+      await clickByTestId(wrapper, powerCell)
+      for (const {id} of [anna, lars]) {
+        expect(cell(wrapper, id, future.id).props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, expected: false, isModified: true})
+      }
+
+      await clickByTestId(wrapper, 'grid-save')
+      expect(wrapper.emitted('save')?.[0]).toEqual([{
+        intents: [anna, lars].map(({id}) => ({inhabitantId: id, dinnerEventId: future.id, dinnerMode: DinnerMode.TAKEAWAY})),
+        guestIntents: [],
+        entryIntents: []
+      }])
     })
   })
 

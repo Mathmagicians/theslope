@@ -2,13 +2,11 @@
 /**
  * GuestBookingForm - Standalone form for adding a guest to a dinner
  *
- * Uses getBookingOptions to determine:
- * - Which dinner modes are available based on deadlines and released tickets
- * - Which action to take: 'process' before the deadline, 'claim' after it; both save through the scaffold, which
- *   books, buys a ticket for sale or queues the guest by supply
+ * The modes come from getBookingOptions over the guest the form saves: before the deadline it books, after it it buys a
+ * ticket for sale or queues the guest by supply, all through the scaffold. No mode (a past, cancelled or consumed
+ * dinner, a day outside residency) shows the empty state.
  *
- * For "add guest" context, NONE is always disabled (can't add a guest who won't eat)
- * but shown for visual consistency with other booking forms.
+ * A new guest never takes Ingen; it shows disabled for visual consistency with other booking forms.
  *
  * The preview above the buttons is the server's dry run of the guests' orders (ActionPreview, titled
  * "Du er ved at tilføje gæster"): the loader while it works, then a line per outcome naming the guests; the button
@@ -56,21 +54,11 @@ const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets')
 const {getBookingOptions} = useBooking()
 const {createBookingBadges, guestSaveLabel} = useBookingUi()
 const bookingsStore = useBookingsStore()
-const {canModifyOrders, canEditDiningMode} = props.deadlines
 
 // Validation schemas
 const {DinnerModeSchema, OrderStateSchema, GuestBookingFormSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
 const OrderStateEnum = OrderStateSchema.enum
-
-// Booking options using getBookingOptions utility (no order for a new guest)
-const bookingOptions = computed(() => getBookingOptions(
-  null,
-  canModifyOrders(props.dinnerEvent.date),
-  canEditDiningMode(props.dinnerEvent.date),
-  props.dinnerEvent.state,
-  props.isHouseholdInResidency
-))
 
 // The guests a save books: how many, at which ticket price, how they eat and their allergies
 type GuestDraft = Pick<DesiredOrder, 'dinnerMode'> & {count: number, ticketPriceId: number, allergyTypeIds: number[]}
@@ -90,9 +78,8 @@ const isSaving = ref(false)
 // Zod schema handles structural validation (type, min, max)
 const validateForm = () => {
   const errors: {name: string, message: string}[] = []
-  const {action} = bookingOptions.value
-  // No booking action: the dinner is cancelled or past, or the household lives elsewhere on the day
-  if (!action) {
+  // No mode: the dinner is cancelled or past, or the household lives elsewhere on the day
+  if (enabledModes.value.length === 0) {
     errors.push({name: 'count', message: 'Kan desværre ikke tilmelde dine gæster'})
   }
 
@@ -117,10 +104,21 @@ const guestOrdersOf = ({count, ticketPriceId, dinnerMode, allergyTypeIds}: Guest
     state: OrderStateEnum.BOOKED
   }))
 
+// The modes the guest may take: the guest the save books in each mode, as the decision matrix lands it. The decision
+// reads no price, so a season price stands in while none is picked
+const enabledModes = computed((): DinnerMode[] => {
+  const ticketPriceId = formState.ticketPriceId ?? props.ticketPrices[0]?.id
+  return getBookingOptions({
+    order: null,
+    waitlistEntry: null,
+    candidate: dinnerMode => ticketPriceId === undefined ? null : guestOrdersOf({...formState, count: 1, ticketPriceId, dinnerMode})[0] ?? null
+  }, {event: props.dinnerEvent, deadlines: props.deadlines, isHouseholdInResidency: () => props.isHouseholdInResidency})
+})
+
 // The preview: the server's dry run of the guests a valid draft books
 const previewRequest = computed((): ScaffoldOrdersRequest | null => {
   const draft = GuestBookingFormSchema.safeParse(formState)
-  if (!draft.success || !bookingOptions.value.action) return null
+  if (!draft.success || enabledModes.value.length === 0) return null
   return {householdId: props.householdId, dinnerEventIds: [props.dinnerEvent.id], orders: guestOrdersOf(draft.data)}
 })
 const {result: preview, pending: isPreviewPending} = useScaffoldPreview(
@@ -132,22 +130,11 @@ const previewDays = computed(() => preview.value ? formatPreviewLines(preview.va
 // The button names the guests; the preview lines name what saving does for them, one line per outcome
 const saveLabel = computed(() => guestSaveLabel(formState.count))
 
-// Enabled modes for guest: filter out NONE (can't add a guest who won't eat)
-const enabledModesForGuest = computed((): DinnerMode[] =>
-  bookingOptions.value.enabledModes.filter(m => m !== DinnerModeEnum.NONE)
-)
-
-// Disabled modes: all modes not in enabledModesForGuest
-const ALL_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
-const disabledModes = computed((): DinnerMode[] =>
-  ALL_MODES.filter(m => !enabledModesForGuest.value.includes(m))
-)
-
 // Allergy options for AllergySelectMenu (pass full AllergyTypeDisplay)
 const allergyOptions = computed(() => props.allergyTypes)
 
 // Default to first enabled eating mode
-watch(enabledModesForGuest, (modes) => {
+watch(enabledModes, (modes) => {
   if (modes.length > 0 && !modes.includes(formState.dinnerMode)) {
     formState.dinnerMode = modes[0]!
   }
@@ -155,7 +142,7 @@ watch(enabledModesForGuest, (modes) => {
 
 // UForm submit handler - receives validated data from FormSubmitEvent
 const handleSubmit = async (event: FormSubmitEvent<GuestBookingFormData>) => {
-  if (!event.data.ticketPriceId || !bookingOptions.value.action) return
+  if (!event.data.ticketPriceId || enabledModes.value.length === 0) return
 
   isSaving.value = true
 
@@ -170,9 +157,9 @@ const handleCancel = () => emit('cancel')
 </script>
 
 <template>
-  <!-- Empty state: no booking action available -->
+  <!-- Empty state: no mode available -->
   <UAlert
-    v-if="!bookingOptions.action"
+    v-if="enabledModes.length === 0"
     v-bind="ALERTS.emptyState"
     :avatar="{text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar}"
   >
@@ -212,7 +199,7 @@ const handleCancel = () => emit('cancel')
         <DinnerModeSelector
           v-model="formState.dinnerMode"
           :form-mode="FORM_MODES.EDIT"
-          :disabled-modes="disabledModes"
+          :enabled-modes="enabledModes"
           :size="SIZES.standard"
           name="guest-dinner-mode"
           :orientation="ORIENTATIONS.horizontal"

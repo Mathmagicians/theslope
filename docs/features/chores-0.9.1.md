@@ -668,6 +668,22 @@ view: the chain of `bookingsStore.writeBookings`).
 
 Investigate where the 3 s go (the re-read chain, its sequencing, the store's refreshes) and propose the fix in a round.
 
+## UI suites fail the build
+
+Priority: medium. Added 2026-10-19 from the e2e work on the UI suites (release 0.9, CI test reporting). Runs once the
+suites have stayed stable over a few pull requests.
+
+### Problem
+
+`.github/workflows/cicd.yml` runs the ui step (`npm run test:e2e:ui`) and the ui serial step with
+`continue-on-error: true` and prints their reports to the run summary with a "do not fail the pipeline" note: a red
+UI case leaves the build green.
+
+### Solution
+
+Both steps gate the build: `continue-on-error` goes from each step, and the note goes from its summary line. The api
+step is the model.
+
 ## Deferred from release 0.9
 
 | Work | Where it lives | State |

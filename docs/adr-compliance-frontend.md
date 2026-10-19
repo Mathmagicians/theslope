@@ -146,13 +146,13 @@ Status.
 | Component | Routes | Stores | Component spec | E2E | Status |
 |---|---|---|---|---|---|
 | `HouseholdBookings.vue` | `/household/[shortname]/bookings` | plan, households, bookings | ✅ | ✅ | ⚠️ partial unit |
-| `BookingGridView.vue` | `/household/[shortname]/bookings` | bookings | ✅ | ✅ serial | ✅ |
+| `BookingGridView.vue` | `/household/[shortname]/bookings` | bookings | ✅ `BookingGridView.nuxt.spec.ts` | ✅ serial | ✅ each cell's modes, the power cell's and the add-guest chevron's from `useBooking`'s `getBookingOptions` and `powerOptions` |
 | `BookingViewSwitcher.vue` | `/household/[shortname]/bookings` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `ActionPreview.vue` | `/household/[shortname]/bookings`, `/household/[shortname]`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ |
-| `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ parent | ✅ parent | ✅ via `DinnerBookingForm` |
-| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | allergies, auth, households | ✅ | ✅ serial, incl. `Waitlist` | ✅ |
+| `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ parent `DinnerBookingForm.nuxt.spec.ts`, `BookingGridView.nuxt.spec.ts` | ✅ parent | ✅ its modes from `useBooking`'s `getBookingOptions` |
+| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | allergies, auth, households | ✅ `DinnerBookingForm.nuxt.spec.ts` | ✅ serial, incl. `Waitlist` | ✅ each row's modes from `useBooking`'s `getBookingOptions`, the power row's from `powerOptions` |
 | `DinnerModeLegend.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ renders its rows into `CalendarLegend`'s list, its words from `BOOKING_WORDS` (ADR-017) |
-| `DinnerModeSelector.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ✅ parent | ✅ parent | ✅ |
+| `DinnerModeSelector.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ✅ `DinnerModeSelector.nuxt.spec.ts` | ✅ parent | ✅ offers the `enabledModes` its parent reads from `getBookingOptions`, in `DINNER_MODE_ORDER` (`useBooking`) |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `DinnerTicket.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/planning` | none | ✅ | ✅ parent | ✅ |
 | `OrderHistoryDisplay.vue` | `/admin/economy`, `/household/[shortname]/economy`, `/dinner` | bookings | ✅ | ✅ parent | ✅ |

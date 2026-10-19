@@ -44,7 +44,7 @@ describe('DinnerModeLegend', () => {
 
     it('lists every entry as one row of the panel\'s list, its sample in the sample column and its explanation beside it, the hint under the rows', async () => {
         const wrapper = await mountSuspended(DinnerModeLegend, {
-            props: {showModified: true, showWaitlist: true, showExpected: true, hint: GRID_HINT}
+            props: {showModified: true, showWaitlist: true, hint: GRID_HINT}
         })
         const list = findByTestId(wrapper, 'calendar-legend-list')
         const rows = Array.from(list.element.children)
@@ -90,16 +90,15 @@ describe('DinnerModeLegend', () => {
         expect(plain.find('[data-testid="dinner-mode-legend-waitlist"]').exists()).toBe(false)
     })
 
-    it('explains the expected booking with the sliders beside the expected mode only where the surface shows one', async () => {
-        const plain = await mountSuspended(DinnerModeLegend)
-        const withExpected = await mountSuspended(DinnerModeLegend, {props: {showExpected: true}})
-        const entry = withExpected.find('[data-testid="dinner-mode-legend-expected"]')
-        const sliders = withExpected.findAllComponents({name: 'UIcon'})
+    // The expected booking is a standing entry: a surface explains it whether or not one of its rows is expected now
+    it('explains the expected booking with the sliders beside the expected mode on every surface', async () => {
+        const wrapper = await mountSuspended(DinnerModeLegend)
+        const entry = findByTestId(wrapper, 'dinner-mode-legend-expected')
+        const sliders = wrapper.findAllComponents({name: 'UIcon'})
             .find(icon => entry.element.contains(icon.element) && icon.props('name') === ICONS.preferences)
 
         expect(entry.text()).toContain(BOOKING_WORDS.expectedBooking)
         expect(sliders?.classes()).toEqual(expect.arrayContaining(COMPONENTS.ticket.stateIcon.expected.split(' ')))
-        expect(withExpected.findAllComponents(DinnerModeSelector).some(selector => entry.element.contains(selector.element) && selector.props('expected'))).toBe(true)
-        expect(plain.find('[data-testid="dinner-mode-legend-expected"]').exists()).toBe(false)
+        expect(wrapper.findAllComponents(DinnerModeSelector).some(selector => entry.element.contains(selector.element) && selector.props('expected'))).toBe(true)
     })
 })
