@@ -58,7 +58,7 @@ vi.mock('~~/server/utils/waitlistAssignment', async importOriginal => {
 })
 
 const d1Client = {} as D1Database
-const {DinnerModeSchema, BookingActionSchema, BookingFailureSchema, TicketTypeSchema, OrderStateSchema, OrderAuditSourceSchema} = useBookingValidation()
+const {DinnerModeSchema, DinnerStateSchema, BookingActionSchema, BookingFailureSchema, TicketTypeSchema, OrderStateSchema, OrderAuditSourceSchema} = useBookingValidation()
 const {createDefaultWeekdayMap} = useCoreValidation()
 const Mode = DinnerModeSchema.enum
 const Action = BookingActionSchema.enum
@@ -480,6 +480,27 @@ describe('scaffoldPrebookings', () => {
         expect(createOrders).toHaveBeenCalledWith(d1Client, household.id, [expect.objectContaining({inhabitantId: anna.id})], expect.objectContaining({source}))
         expect(writeUpdates.mock.calls.flatMap(([, updates]) => updates.map(update => [update.orderId, update.audit?.source]))).toEqual([[boOrder.id, source]])
         expect(deleteOrder).toHaveBeenCalledWith(d1Client, [boGuest.id], 7, source)
+    })
+
+    // A cancelled dinner is closed to every run; a consumed one to every run but an admin's correction, which books there
+    it.each([
+        {state: DinnerStateSchema.enum.CONSUMED, run: 'a member\'s save', adminCorrection: undefined, lands: false},
+        {state: DinnerStateSchema.enum.CONSUMED, run: 'an admin correction', adminCorrection: true, lands: true},
+        {state: DinnerStateSchema.enum.CANCELLED, run: 'a member\'s save', adminCorrection: undefined, lands: false},
+        {state: DinnerStateSchema.enum.CANCELLED, run: 'an admin correction', adminCorrection: true, lands: false}
+    ])('GIVEN a $state dinner WHEN $run books Anna THEN her order lands: $lands (only an admin correction books a consumed dinner)', async ({state, adminCorrection, lands}) => {
+        vi.clearAllMocks()
+        const {season, household, anna, dinner, adultPrice} = givenSave()
+        vi.mocked(fetchSeason).mockResolvedValue({...season, dinnerEvents: [{...dinner, state}]})
+        vi.mocked(createOrders).mockResolvedValue({householdId: household.id, createdIds: [77]})
+
+        const result = await scaffoldPrebookings(d1Client, {
+            seasonId: season.id, householdId: household.id, userId: 7, deadlines: OPEN_DEADLINES, adminCorrection,
+            desiredOrders: [OrderFactory.defaultDesiredOrder({inhabitantId: anna.id, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, dinnerMode: Mode.DINEIN})]
+        })
+
+        expect(vi.mocked(createOrders).mock.calls.flatMap(([, , orders]) => orders.map(order => order.inhabitantId))).toEqual(lands ? [anna.id] : [])
+        expect(result.results.map(line => [line.inhabitantId, line.action])).toEqual(lands ? [[anna.id, Action.BOOK]] : [])
     })
 
     // A member's own join outranks the preference: its booking row makes the dinner the member's

@@ -12,6 +12,7 @@ import type {EmailChannel} from '~~/server/utils/sender/config'
 import type {EmailMessage, SenderEmitResult} from '~/composables/useNotificationValidation'
 import type {HouseholdDetail, InhabitantDisplay, UserDisplay} from '~/composables/useCoreValidation'
 import {useBookingValidation, type BookingOutcomes, type TicketSale, type WaitlistJoined} from '~/composables/useBookingValidation'
+import {useUserPreferenceValidation, type NotificationChannel} from '~/composables/useUserPreferenceValidation'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -307,5 +308,43 @@ describe('the people a run\'s mails name', () => {
         const results = await notifyBookingOutcomes({} as D1Database, NotificationFactory.channel(fakeQueue()), outcomes)
 
         expect(results.filter(result => !result.queued).map(kindOf)).toEqual([unaddressed])
+    })
+
+    // The mails honour the recipient's own channels (Mine indstillinger → Notifikationer): with e-mail off the recipient
+    // gets no mail, and the run's other recipients hear as before
+    describe('the recipient\'s notification channels', () => {
+        const {EMAIL, SMS} = useUserPreferenceValidation().NotificationChannelSchema.enum
+        // A second member of the selling household with a login: the sale mails every member
+        const sellerToo = person(303, 30, 3030)
+        const run = [...people, sellerToo]
+        // The people of the run, the recipient's login saving the channels given and every other login e-mail
+        const mockChannels = (recipient: Member, notificationChannels: NotificationChannel[]) => mockPeople(
+            run,
+            run.flatMap(member => member.userId ? [UserFactory.defaultUserWithInhabitant(`u${member.id}`, {
+                id: member.userId, email: addressOf(member), notificationChannels: member.id === recipient.id ? notificationChannels : [EMAIL]
+            })] : []),
+            [householdOf(30, [seller, sellerToo]), buyers]
+        )
+        const mails = [
+            {kind: 'WAITLIST_JOINED', recipient: parent, outcomes: outcomesOf({joined: [joinedEvent(parent, parent.userId!, 1)]}), others: []},
+            {kind: 'WAITLIST_BUILDUP', recipient: chef, outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}), others: []},
+            {kind: 'TICKET_SOLD', recipient: seller, outcomes: outcomesOf({ticketsSold: [saleTo(buyer)]}), others: [sellerToo]},
+            {kind: 'WAITLIST_TICKET_ASSIGNED', recipient: buyer, outcomes: outcomesOf({waitlistTicketsSold: [saleTo(buyer)]}), others: []},
+            {kind: 'WAITLIST_EXTRA_PORTION', recipient: buyer, outcomes: outcomesOf({waitlistPortionsAssigned: [portionTo(buyer)]}), others: []}
+        ]
+        const settings = [
+            {setting: 'e-mail among them', channels: [EMAIL, SMS], mailed: true},
+            {setting: 'no e-mail', channels: [SMS], mailed: false}
+        ]
+
+        it.each(mails.flatMap(mail => settings.map(setting => ({...mail, ...setting}))))('GIVEN the $kind recipient\'s channels with $setting WHEN the mails resolve THEN the recipient is mailed: $mailed, and the other recipients as before', async ({kind, recipient, outcomes, others, channels, mailed}) => {
+            mockChannels(recipient, channels)
+            const queue = fakeQueue()
+
+            await notifyBookingOutcomes({} as D1Database, NotificationFactory.channel(queue), outcomes)
+
+            expect(sentMessages(queue).filter(message => message.meta.kind === kind).map(message => message.to).sort())
+                .toEqual([...(mailed ? [recipient] : []), ...others].map(addressOf).sort())
+        })
     })
 })

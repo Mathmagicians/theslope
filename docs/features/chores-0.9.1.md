@@ -684,6 +684,48 @@ UI case leaves the build green.
 Both steps gate the build: `continue-on-error` goes from each step, and the note goes from its summary line. The api
 step is the model.
 
+## Booking mail delivery
+
+Priority: medium. Moved from release 0.9 on 2026-10-19 (point 6b of One booking path, end to end; the user: "61, 62,
+63 - descope to 0.9.1"). The mails, their words and their sending after the action shipped in 0.9
+(`app/config/bookingWords.ts`, `notifyBookingOutcomes`, `notifyExtraPortions`); the delivery below is signed and not
+built.
+
+### Problem
+
+A mail goes to `bookedByUserId` or to the person's own login: a join from a nightly or preference run mails the system
+account, and a child's assigned ticket or extra portion mails nobody. A mail lost on the way is not resent, and no
+row records what was sent.
+
+### Solution
+
+Delivery, signed 2026-10-18. The recipient is the member who acted (`bookedByUserId`, when it is a member), else the
+person's own login, else the first member of the household with a login; `TICKET_SOLD` goes to every member of the
+selling household with a login, `WAITLIST_BUILDUP` to the chef. A scaffolded order keeps the system user as
+`bookedByUserId`. The booking step returns outcomes; the notification step resolves, composes and queues a complete
+message; the worker sends what it gets (ADR-016 rule 9). `DeliverySubject` gains `TICKET_WAITLIST` (a join, by its
+entry), `ORDER` (assigned, extra portion, sold, by the order) and `DINNER_EVENT` (the buildup, by the dinner); the
+column is TEXT on D1 (`migrations/0015_notifications.sql`), so the change regenerates the client (`make d1-prisma`)
+with no migration file. `sendOnce` reads the Delivery rows, emits and records, one mail per subject, version, kind and
+recipient (the billing pattern, `monthlyBillingService.ts`); the version comes from the history: `TICKET_WAITLIST` 1,
+`ORDER` the number of BUY rows, `DINNER_EVENT` 1 plus the number of EXTRA_PORTIONS rows. Every booking mail, the
+buildup included, goes right after the action; daily maintenance gains a step that checks the owed notifications over
+the dinners still to come and resends the missing ones through the same rows, reported like `clearWaitlist`; the
+per-join buildup check in `server/utils/sender/events/waitlist.ts` goes. The chef's deadline reminders belong to daily
+maintenance in `feature-proposal-notification-triggers.md`.
+
+### Tests
+
+The Waitlist notifications serial e2e: it joins a queue, releases a ticket and portions, crosses the buildup
+threshold and asserts each kind writes its Delivery row, one per subject, version, kind and recipient.
+
+## Scaffold: a save naming an order bought by another household
+
+Priority: low. Moved from release 0.9 on 2026-10-19. `POST /api/household/order/scaffold` lists an order that another
+household has since bought in `failed`; the case has no e2e (`../adr-compliance-backend.md`, the scaffold row). The
+API e2e: a draft naming the order after its sale; the reply lists it in `failed`, and the buying household keeps the
+ticket.
+
 ## Deferred from release 0.9
 
 | Work | Where it lives | State |

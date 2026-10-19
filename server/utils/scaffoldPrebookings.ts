@@ -235,7 +235,7 @@ export async function scaffoldPrebookings(
     options: ScaffoldOptions = {}
 ): Promise<ScaffoldResult> {
     const {getScaffoldableDinnerEvents, deadlinesForSeason} = useSeason()
-    const {OrderStateSchema, DinnerModeSchema, ScaffoldResultSchema, chunkOrderBatch, chunkDeleteBatch} = useBookingValidation()
+    const {OrderStateSchema, DinnerModeSchema, DinnerStateSchema, ScaffoldResultSchema, chunkOrderBatch, chunkDeleteBatch} = useBookingValidation()
     const {ticketTypeOfEntry, joinedOf} = useWaitlist()
 
     const isUserTriggered = options.userId !== undefined
@@ -266,19 +266,25 @@ export async function scaffoldPrebookings(
     // A write to a place on the waiting list records the act it is, by the run's user
     const auditOf = (action: BookingAction): WaitlistAuditContext => ({action: getAuditAction(isUserTriggered, action), performedByUserId: effectiveUserId, seasonId: effectiveSeasonId})
 
-    // Filter dinner events: user mode uses IDs from desiredOrders, system uses rolling window. Every caller's run leaves
-    // a cancelled or consumed dinner out, its orders and its waiting list as they stand
+    // Filter dinner events: user mode uses IDs from desiredOrders, system uses rolling window. A cancelled dinner is
+    // closed to every run, a consumed one to every run but an admin's correction; the run leaves a closed dinner's
+    // orders and waiting list as they stand, and sells on open dinners only
     const onWeekdays = (dinnerEvent: {date: Date}) => !options.weekdays || options.weekdays.includes(dateToWeekDay(dinnerEvent.date))
     const allDinnerEvents = season.dinnerEvents ?? []
-    const closedDinnerIds = new Set(allDinnerEvents.filter(isClosedDinner).map(de => de.id))
-    const isOpen = (dinnerEventId: number) => !closedDinnerIds.has(dinnerEventId)
-    const desiredOrders = options.desiredOrders?.filter(desired => isOpen(desired.dinnerEventId))
+    const stateOf = new Map(allDinnerEvents.map(de => [de.id, de.state]))
+    const isOpen = (dinnerEventId: number) => {
+        const state = stateOf.get(dinnerEventId)
+        return state === undefined || !isClosedDinner({state})
+    }
+    const isBookable = (dinnerEventId: number) => isOpen(dinnerEventId)
+        || (options.adminCorrection === true && stateOf.get(dinnerEventId) === DinnerStateSchema.enum.CONSUMED)
+    const desiredOrders = options.desiredOrders?.filter(desired => isBookable(desired.dinnerEventId))
     const dinnerEventIds = (isUserMode
         ? [...new Set(desiredOrders!.map(o => o.dinnerEventId))]
         : (options.dinnerEventIds
             ? options.dinnerEventIds
             : getScaffoldableDinnerEvents(allDinnerEvents).filter(onWeekdays).map(e => e.id)))
-        .filter(isOpen)
+        .filter(isBookable)
     const dinnerEvents = allDinnerEvents.filter(de => dinnerEventIds.includes(de.id))
 
     const draftOf = new Map((options.preferences ?? []).map(({inhabitantId, dinnerPreferences}) => [inhabitantId, dinnerPreferences]))
@@ -651,7 +657,7 @@ export async function scaffoldPrebookings(
     // The tickets for sale go to the first in their type's line, once per run; the extra portions a save finishes for a
     // stopped run go to the caller with them
     try {
-        const {waitlistTicketsSold, waitlistPortionsAssigned} = await supply.sell(dinnerEventIds)
+        const {waitlistTicketsSold, waitlistPortionsAssigned} = await supply.sell(dinnerEventIds.filter(isOpen))
         outcomes.waitlistTicketsSold.push(...waitlistTicketsSold)
         outcomes.waitlistPortionsAssigned.push(...waitlistPortionsAssigned)
     } catch (error) {

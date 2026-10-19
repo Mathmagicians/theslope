@@ -8,7 +8,7 @@ import BookingGridView from '~/components/booking/BookingGridView.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
 import {useBookingValidation, TicketState, type DinnerEventDisplay, type DinnerMode, type OrderDisplay, type OrderState} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
-import {EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {DINNER_MODE_ORDER, EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -512,6 +512,36 @@ describe('BookingGridView', () => {
 
       expect(findByTestId(wrapper, `grid-waitlist-${lars.id}-${closedDinner.id}`).exists()).toBe(true)
       expect(larsCell().props()).toMatchObject({modelValue: DinnerMode.NONE, isModified: true, ghost: false, formMode: FORM_MODES.EDIT})
+    })
+  })
+
+  // The power cell offers the modes every cell of its dinner may pick (powerOptions over each cell's getBookingOptions)
+  describe('the power cell\'s modes', () => {
+    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+    const {TAKEAWAY, NONE} = DinnerModeSchema.enum
+    const [anna, lars] = mockHousehold.inhabitants
+    const dinner = DinnerEventFactory.dinnerEventAt(1, 1)
+    // Anna holds her ticket on Takeaway, Lars has released his
+    const orders = [
+      OrderFactory.defaultOrder(undefined, {id: 201, inhabitantId: anna!.id, dinnerEventId: dinner.id, dinnerMode: TAKEAWAY, state: OrderStateSchema.enum.BOOKED}),
+      OrderFactory.defaultOrder(undefined, {id: 202, inhabitantId: lars!.id, dinnerEventId: dinner.id, dinnerMode: NONE, state: OrderStateSchema.enum.RELEASED})
+    ]
+
+    it.each([
+      {standing: 'before the deadline, every cell open', canModifyOrders: true, canEditDiningMode: true, modes: DINNER_MODE_ORDER},
+      {standing: 'after the deadline with the mode locked', canModifyOrders: false, canEditDiningMode: false, modes: [NONE]}
+    ])('GIVEN Anna\'s ticket on Takeaway and Lars\'s released, $standing, THEN the power cell offers $modes', async ({canModifyOrders, canEditDiningMode, modes}) => {
+      const wrapper = await mount({
+        view: week,
+        dateRange: {start: addDays(dinner.date, -3), end: addDays(dinner.date, 3)},
+        dinnerEvents: [dinner],
+        orders,
+        formMode: FORM_MODES.EDIT,
+        deadlines: {...deadlines, canModifyOrders: () => canModifyOrders, canEditDiningMode: () => canEditDiningMode}
+      })
+
+      const powerCell = wrapper.findAllComponents(DinnerModeSelector).find(selector => selector.props('name') === `power-${dinner.id}`)!
+      expect(powerCell.props('enabledModes')).toEqual(modes)
     })
   })
 

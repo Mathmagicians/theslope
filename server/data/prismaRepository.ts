@@ -124,6 +124,7 @@ const USER_DISPLAY_SELECT = {
     email: true,
     phone: true,
     systemRoles: true,
+    notificationChannels: true,
     createdAt: true,
     updatedAt: true,
     Inhabitant: {
@@ -147,10 +148,11 @@ type UserWithInhabitantPayload = Prisma.UserGetPayload<{
 function deserializeToUserDisplay(user: UserWithInhabitantPayload): UserDisplay {
     const {UserDisplaySchema} = useCoreValidation()
 
-    // Let the schema do ALL the work - parse systemRoles JSON, validate fields, transform dates
+    // Let the schema do ALL the work - parse the JSON columns, validate fields, transform dates
     const userDisplay = {
         ...user,
-        systemRoles: JSON.parse(user.systemRoles) // Only deserialize systemRoles from JSON
+        systemRoles: JSON.parse(user.systemRoles),
+        notificationChannels: JSON.parse(user.notificationChannels)
     }
 
     // Schema validation with z.coerce.date() handles date conversion and all other transformations

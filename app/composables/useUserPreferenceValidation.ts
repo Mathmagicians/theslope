@@ -52,6 +52,10 @@ export const readAppearance = (stored: unknown): Appearance => {
 /** The `User.notificationChannels` column default */
 export const DEFAULT_NOTIFICATION_CHANNELS: NotificationChannel[] = ['EMAIL']
 
+/** A user hears on the channels saved in Mine indstillinger → Notifikationer */
+export const wantsChannel = (user: {notificationChannels: NotificationChannel[]}, channel: NotificationChannel): boolean =>
+    user.notificationChannels.includes(channel)
+
 /**
  * The palette registry: one entry per palette, carrying the contrast level
  * `designSystemContrast.unit.spec.ts` verifies it at (`null` = no verified level) and whether
@@ -81,5 +85,6 @@ export const useUserPreferenceValidation = () => ({
     PALETTES,
     DEFAULT_APPEARANCE,
     DEFAULT_NOTIFICATION_CHANNELS,
-    readAppearance
+    readAppearance,
+    wantsChannel
 })

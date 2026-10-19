@@ -104,8 +104,8 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/sender/event/monthly-billing.post.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ |
 | **Household** | | | | | |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save runs on the weekdays its draft changes, `?preview=true` runs the save dry on the same; past the deadline the path buys or queues (One intent path); `preferences.e2e` written, unrun |
-| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save naming an order since bought by another household lists it in `failed`; that case awaits its spec. `?preview=true` runs the save dry, an empty draft answers the household's next run (One intent path); `?adminBypass=true` from an admin writes the run's history rows with the source `admin-correction`; the run drops cancelled and consumed dinners; `scaffold.e2e` written, unrun |
+| `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save runs on the weekdays its draft changes, `?preview=true` runs the save dry on the same; past the deadline the path buys or queues (One intent path); `preferences.e2e` green in CI 2026-10-19 (8ed7e42) |
+| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save naming an order since bought by another household lists it in `failed`; that case's e2e is in 0.9.1 (`features/chores-0.9.1.md` § Scaffold: a save naming an order bought by another household). `?preview=true` runs the save dry, an empty draft answers the household's next run (One intent path); `?adminBypass=true` from an admin writes the run's history rows with the source `admin-correction`; the run drops cancelled and consumed dinners; `scaffold.e2e` green in CI 2026-10-19 (8ed7e42) |
 | `/api/household/allergy/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/allergy/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/allergy/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -116,14 +116,14 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/chef/dinner/[id]/expenses/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/[expenseId].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/chef/dinner/[id]/order-history.get.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a line names its actor (`performedByName`, from the history read's performer select with the inhabitant's name); an admin's correction carries its reason from the row's source (`admin-correction`), a row without a source that deletes after the booking deadline by inference; the buyers' households come from `fetchHouseholdsByInhabitantIds`; the audit rows read through `readOrderAudit`, "?" for a ticket it cannot attribute (One audit format); `orderHistory` e2e written, unrun |
+| `/api/chef/dinner/[id]/order-history.get.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a line names its actor (`performedByName`, from the history read's performer select with the inhabitant's name); an admin's correction carries its reason from the row's source (`admin-correction`), a row without a source that deletes after the booking deadline by inference; the buyers' households come from `fetchHouseholdsByInhabitantIds`; the audit rows read through `readOrderAudit`, "?" for a ticket it cannot attribute (One audit format); `orderHistory` e2e green in CI 2026-10-19 (8ed7e42) |
 | `/api/chef/dinner/[id]/extra-portions.post.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ |
 | **Teams** | | | | | |
 | `/api/team/my.get.ts` | ✅ | N/A | ✅ | ✅ | ✅ |
 | `/api/team/cooking/[id]/assign-role.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/team/cooking/[id]/remove-role.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **User** | | | | | |
-| `/api/user/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/user/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the booking mails honour the saved `notificationChannels` |
 | `/api/user/notifications/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ |
 | **Public** | | | | | |
 | `/api/public/billing/[token]/index.get.ts` | ✅ | ✅ | ❓ | ✅ ui | ❓ audit needed |

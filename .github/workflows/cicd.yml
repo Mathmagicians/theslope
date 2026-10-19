@@ -105,7 +105,6 @@ jobs:
         id: e2e_api_tests
         run: npm run test:e2e:api
       - uses: actions/upload-artifact@v7
-        id: upload_api_report
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-api
@@ -119,15 +118,12 @@ jobs:
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: E2E api test summary
         if: ${{ !cancelled() && steps.e2e_api_tests.outcome != 'skipped' }}
-        env:
-          ARTIFACT_URL: ${{ steps.upload_api_report.outputs.artifact-url }}
-        run: make test-report report=$E2E_RESULTS_DIR/e2e-api-results.json title="E2E api tests" link="$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+        run: make test-report report=$E2E_RESULTS_DIR/e2e-api-results.json title="E2E api tests" >> "$GITHUB_STEP_SUMMARY"
       - name: Run e2e ui tests
         id: e2e_ui_tests
         run: npm run test:e2e:ui
         continue-on-error: true
       - uses: actions/upload-artifact@v7
-        id: upload_ui_report
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-ui
@@ -141,15 +137,12 @@ jobs:
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: E2E ui test summary
         if: ${{ !cancelled() && steps.e2e_ui_tests.outcome != 'skipped' }}
-        env:
-          ARTIFACT_URL: ${{ steps.upload_ui_report.outputs.artifact-url }}
-        run: make test-report report=$E2E_RESULTS_DIR/e2e-ui-results.json title="E2E ui tests" link="$ARTIFACT_URL" note="UI test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
+        run: make test-report report=$E2E_RESULTS_DIR/e2e-ui-results.json title="E2E ui tests" note="UI test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
       - name: Run e2e ui serial tests
         id: e2e_ui_serial_tests
         run: npm run test:e2e:ui:serial
         continue-on-error: true
       - uses: actions/upload-artifact@v7
-        id: upload_ui_serial_report
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-ui-serial
@@ -163,9 +156,7 @@ jobs:
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: E2E ui serial test summary
         if: ${{ !cancelled() && steps.e2e_ui_serial_tests.outcome != 'skipped' }}
-        env:
-          ARTIFACT_URL: ${{ steps.upload_ui_serial_report.outputs.artifact-url }}
-        run: make test-report report=$E2E_RESULTS_DIR/e2e-ui-serial-results.json title="E2E ui serial tests" link="$ARTIFACT_URL" note="UI serial test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
+        run: make test-report report=$E2E_RESULTS_DIR/e2e-ui-serial-results.json title="E2E ui serial tests" note="UI serial test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
       # Every build renders docs/releases/*.md to one-page PDFs here, where Playwright is installed; create-release attaches them
       - name: Release notes PDF
         env:
@@ -336,7 +327,6 @@ jobs:
           EXPECTED_VERSION: ${{ needs.CICD.outputs.release_version }}
         run: npm run test:e2e:smoke
       - uses: actions/upload-artifact@v7
-        id: upload_smoke_report
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-smoke
@@ -349,7 +339,6 @@ jobs:
           path: ${{ env.E2E_RESULTS_DIR }}/e2e-smoke-results.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - uses: actions/upload-artifact@v7
-        id: upload_smoke_bdd
         if: ${{ !cancelled() }}
         with:
           name: bdd-smoke
@@ -359,10 +348,8 @@ jobs:
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: Summary
         if: ${{ !cancelled() && steps.smoke_tests.outcome != 'skipped' }}
-        env:
-          ARTIFACT_URL: ${{ steps.upload_smoke_bdd.outputs.artifact-url }}
         run: |
-          make bdd-report suite=smoke link="$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+          make bdd-report suite=smoke >> "$GITHUB_STEP_SUMMARY"
           make bdd-steps summary=1 >> "$GITHUB_STEP_SUMMARY"
           echo "Verified: ${{ needs.CICD.outputs.deployed_url }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Version: \`${{ needs.CICD.outputs.release_version }}\`" >> "$GITHUB_STEP_SUMMARY"

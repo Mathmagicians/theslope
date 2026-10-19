@@ -13,6 +13,7 @@ import type {WaitlistAssignmentResult} from '~/composables/useWaitlistValidation
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {HouseholdDisplay, InhabitantDisplay, UserDisplay} from '~/composables/useCoreValidation'
 import type {Season} from '~/composables/useSeasonValidation'
+import {useUserPreferenceValidation, wantsChannel} from '~/composables/useUserPreferenceValidation'
 import {fetchHouseholdsByIds, fetchInhabitantsByIds, fetchSeason, fetchUsersByIds} from '~~/server/data/prismaRepository'
 import {fetchDinnerEventsByIds} from '~~/server/data/financesRepository'
 import {dinnerForWaitlist, type DinnerForWaitlist} from '~~/server/utils/waitlistAssignment'
@@ -198,9 +199,14 @@ const load = async (d1Client: D1Database, {joined, ticketsSold, waitlistTicketsS
 
 // The mails composed from the records of their operation
 const composer = ({dinners, households, inhabitants, users}: MailRecords) => {
+    const {NotificationChannelSchema} = useUserPreferenceValidation()
     const dinnerOf = (dinnerEventId: number): DinnerForWaitlist => dinners.get(dinnerEventId)!
     const shortnameOf = (householdId: number): string => households.get(householdId)?.shortName ?? `#${householdId}`
-    const emailOf = (userId: number | null | undefined): string | null => userId ? users.get(userId)?.email ?? null : null
+    // A login whose channels leave e-mail out has no address for the mails
+    const emailOf = (userId: number | null | undefined): string | null => {
+        const user = userId ? users.get(userId) : undefined
+        return user && wantsChannel(user, NotificationChannelSchema.enum.EMAIL) ? user.email : null
+    }
     // The user behind an inhabitant, when the inhabitant has one
     const addressOf = (inhabitantId: number): {email: string | null, name: string} => {
         const inhabitant = inhabitants.get(inhabitantId)

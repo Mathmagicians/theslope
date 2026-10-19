@@ -305,12 +305,12 @@ d1-copy-dev-to-local: ## Replace the local D1 with a copy of dev (schema, data, 
 
 # The summary tables are jq programs under scripts/ (test-report.jq, bdd-report.jq); the step reuse is
 # scripts/bdd-steps.mjs, which matches the feature lines through playwright-bdd's generator
-TEST_REPORT_USAGE := usage: make test-report report=<playwright json> title=<text> [link=<url>] [note=<warning shown when failed > 0>]
+TEST_REPORT_USAGE := usage: make test-report report=<playwright json> title=<text> [note=<warning shown when failed > 0>]
 
-test-report: ## Markdown summary of a Playwright suite - report=<json> title=<text> [link=<url>] [note=<text>]
+test-report: ## Markdown summary of a Playwright suite - report=<json> title=<text> [note=<text>]
 	@test -n "$(report)" -a -n "$(title)" || { echo "$(TEST_REPORT_USAGE)"; exit 1; }
 	@if [ -f "$(report)" ]; then \
-		jq -r -f scripts/test-report.jq --arg title "$(title)" --arg link "$(link)" --arg note "$(note)" "$(report)" \
+		jq -r -f scripts/test-report.jq --arg title "$(title)" --arg note "$(note)" "$(report)" \
 			|| echo "## ⚠️ $(title) — could not parse $(report)"; \
 	else \
 		echo "## ⚠️ $(title) — no results file at $(report)"; \
@@ -320,10 +320,10 @@ test-report: ## Markdown summary of a Playwright suite - report=<json> title=<te
 suite ?= api
 bdd_report = .output/bdd/reports/e2e-$(suite)-bdd.json
 
-bdd-report: ## BDD summary of a suite - [suite=api|ui|smoke] [report=<cucumber json>] [title=<text>] [link=<url>] [note=<text>]
+bdd-report: ## BDD summary of a suite - [suite=api|ui|smoke] [report=<cucumber json>] [title=<text>] [note=<text>]
 	@report="$(or $(report),$(bdd_report))"; title="$(or $(title),BDD $(suite) tests)"; \
 	if [ -f "$$report" ]; then \
-		jq -r -f scripts/bdd-report.jq --arg title "$$title" --arg link "$(link)" --arg note "$(note)" "$$report" \
+		jq -r -f scripts/bdd-report.jq --arg title "$$title" --arg note "$(note)" "$$report" \
 			|| echo "## ⚠️ $$title — could not parse $$report"; \
 	else \
 		echo "## ⚠️ $$title — no results file at $$report (npm run test:e2e:$(suite) writes it)"; \
@@ -358,7 +358,7 @@ developer-assemble: ## Lay a run's results and manifest under site/environments 
 		bdd="$(artifacts)/bdd-$$suite"; cucumber="$$bdd/e2e-$$suite-bdd.json"; \
 		if [ -f "$$cucumber" ]; then \
 			mkdir -p "$$dest" && cp "$$cucumber" "$$dest/" && cp -R "$$bdd/e2e-$$suite-bdd/." "$$dest/"; \
-			result=$$(jq -c -f scripts/bdd-report.jq --arg title "" --arg link "" --arg note "" --arg counts 1 "$$cucumber" \
+			result=$$(jq -c -f scripts/bdd-report.jq --arg title "" --arg note "" --arg counts 1 "$$cucumber" \
 				| jq -c '{passed, failed: (.failed + .undefined), flaky: 0, skipped: .other, report: "index.html"}'); \
 		else \
 			echo "developer-assemble: no $$cucumber"; continue; \

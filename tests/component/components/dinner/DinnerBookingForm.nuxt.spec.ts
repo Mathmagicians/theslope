@@ -11,7 +11,7 @@ import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {ACTION_WORDS, MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel, guestSaveLabel, closedForCancellation, formatPreviewLines, previewSaveOutcome} from '~/composables/useBookingUi'
 import {BOOKING_WORDS} from '~/config/bookingWords'
-import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
+import {DINNER_MODE_ORDER, EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import type {BookingAction, BookingResult, DesiredOrder, DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 import type {HouseholdDetail, UserDetail} from '~/composables/useCoreValidation'
@@ -798,6 +798,29 @@ describe('DinnerBookingForm on a closed dinner: the household\'s own places on t
 })
 
 // Nothing lands on a cancelled dinner: the form wears the corner ribbon, and the tickets of its rows the cancelled face
+// Hele familien offers the modes every row may pick (powerOptions over each row's getBookingOptions)
+describe('DinnerBookingForm power row modes', () => {
+  const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+  const {TAKEAWAY, NONE} = DinnerModeSchema.enum
+  const [anna, bo] = householdWithInhabitants.inhabitants
+  const dinnerEventId = baseProps.dinnerEvent.id
+  // Anna holds her ticket on Takeaway, Bo has released his
+  const orders = [
+    OrderFactory.defaultOrder('power-anna', {id: 201, inhabitantId: anna!.id, dinnerEventId, dinnerMode: TAKEAWAY, state: OrderStateSchema.enum.BOOKED}),
+    OrderFactory.defaultOrder('power-bo', {id: 202, inhabitantId: bo!.id, dinnerEventId, dinnerMode: NONE, state: OrderStateSchema.enum.RELEASED})
+  ]
+
+  it.each([
+    {standing: 'before the deadline, every row open', canModifyOrders: true, canEditDiningMode: true, modes: DINNER_MODE_ORDER},
+    {standing: 'after the deadline with the mode locked', canModifyOrders: false, canEditDiningMode: false, modes: [NONE]}
+  ])('GIVEN Anna\'s ticket on Takeaway and Bo\'s released, $standing, WHEN Hele familien expands THEN it offers $modes', async ({canModifyOrders, canEditDiningMode, modes}) => {
+    const wrapper = await mountMemberForm(canModifyOrders, {orders, deadlines: {...baseDeadlines, canModifyOrders: () => canModifyOrders, canEditDiningMode: () => canEditDiningMode}})
+    await clickByTestId(wrapper, 'power-power-mode-toggle')
+
+    expect(rowSelector(wrapper, 'power-power-mode').props('enabledModes')).toEqual(modes)
+  })
+})
+
 describe('DinnerBookingForm on a cancelled dinner', () => {
   const {DinnerStateSchema, OrderStateSchema} = useBookingValidation()
   const [anna] = householdWithInhabitants.inhabitants

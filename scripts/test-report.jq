@@ -1,4 +1,4 @@
-# Markdown summary of a Playwright JSON report (--reporter=json). Arguments: title, link, note.
+# Markdown summary of a Playwright JSON report (--reporter=json). Arguments: title, note.
 # A failing test is listed with its file:line, its describe path and its project.
 def failed($path):
   (.specs[]? | . as $s | .tests[] | select(.status == "unexpected")
@@ -10,4 +10,3 @@ def failed($path):
 | "## \($icon) \($title)\n\n| Passed | Failed | Flaky | Skipped |\n|---:|---:|---:|---:|\n| \($r.passed) | \($r.failed) | \($r.flaky) | \($r.skipped) |\n"
   + (if $r.failed > 0 then "\n**Failing tests**\n\n" + ([.suites[]? | failed([])] | join("\n")) + "\n" else "" end)
   + (if ($r.failed > 0) and (($note | length) > 0) then "\n> ⚠️ \($note)\n" else "" end)
-  + (if ($link | length) > 0 then "\n[Playwright report (artifact)](\($link))\n" else "" end)

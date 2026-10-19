@@ -1,4 +1,4 @@
-# Markdown summary of a Cucumber JSON report (playwright-bdd cucumberReporter('json')). Arguments: title, link, note;
+# Markdown summary of a Cucumber JSON report (playwright-bdd cucumberReporter('json')). Arguments: title, note;
 # counts, non-empty for the scenario counts as a JSON object (make developer-assemble).
 # Features > elements (scenario | background) > steps; Before/After hooks are hidden steps; a keyword keeps its trailing space.
 def steps: .steps[]? | select(.hidden != true);
@@ -28,5 +28,4 @@ def status:
            | join("\n")) + "\n"
        else "" end)
     + (if $red and (($note | length) > 0) then "\n> ⚠️ \($note)\n" else "" end)
-    + (if ($link | length) > 0 then "\n[Cucumber report (artifact)](\($link))\n" else "" end)
   end
