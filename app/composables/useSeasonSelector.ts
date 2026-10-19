@@ -22,7 +22,7 @@ export function useSeasonSelector(options: SeasonSelectorOptions) {
     const safeSeason = (shortName?: string | null) => isValidSeason(shortName) ? shortName : fallbackSeason()
 
     // The dropdown writes the URL only; the plan store follows ?season= through the getter the page hands it
-    const {value: season, setValue} = useQueryParam<string>('season', {
+    const {value: season} = useQueryParam<string>('season', {
         validate: isValidSeason,
         normalize: shortName => safeSeason(shortName) ?? null,
         defaultValue: () => fallbackSeason() ?? '',
@@ -30,15 +30,8 @@ export function useSeasonSelector(options: SeasonSelectorOptions) {
         priority: SEASON_PRIORITY
     })
 
-    const onSeasonChange = async (shortName: string) => {
-        const safeSeasonName = safeSeason(shortName)
-        await setValue(safeSeasonName ?? '')
-        console.info(`${LOG_CTX} 🌱 > SEASON_SELECTOR > Season changed to ${safeSeasonName}, requested was ${shortName}`)
-    }
-
     return {
         season,
-        onSeasonChange,
         safeSeason
     }
 }

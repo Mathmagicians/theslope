@@ -45,8 +45,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const hasFilters = computed(() => ordersFilter.value().dinnerEventIds.length > 0)
 
     const {
-        data: orders, isLoading: isOrdersLoading, isErrored: isOrdersErrored, isInitialized: isOrdersInitialized,
-        error: ordersError, refresh: refreshOrders
+        data: orders, isLoading: isOrdersLoading, isInitialized: isOrdersInitialized,
+        refresh: refreshOrders
     } = storeAsyncData(
         'bookings-store-orders',
         () => `/api/order?${ordersQuery.value}`,
@@ -78,7 +78,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const waitlistDinnerIds = computed(() => [...new Set([...ordersFilter.value().dinnerEventIds, ...lockedDinnerIds.value])])
 
     const {
-        data: waitlistEntries, isLoading: isWaitlistEntriesLoading, isErrored: isWaitlistEntriesErrored, isInitialized: isWaitlistEntriesInitialized,
+        data: waitlistEntries, isLoading: isWaitlistEntriesLoading, isInitialized: isWaitlistEntriesInitialized,
         refresh: refreshWaitlistEntries
     } = storeAsyncData(
         'bookings-store-waitlist-entries',
@@ -127,11 +127,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     // A read of the orders or queue entries on view is in flight: a new selection or a save's re-read; a failed read ends it
     const isBookingsReloading = computed(() => isOrdersLoading.value || isWaitlistEntriesLoading.value)
-
-    // Business logic computeds
-    const totalOrdersCount = computed(() => orders.value.length)
-
-    const ordersByTicketType = computed(() => countTicketTypes(orders.value))
 
     // ========================================
     // Actions
@@ -190,22 +185,12 @@ export const useBookingsStore = defineStore("Bookings", () => {
             errorMessage: 'Kunne ikke hente billetændringer'
         })
 
-    const fetchReleasedOrders = async (dinnerEventId: number): Promise<OrderDisplay[]> => {
-        const released = await apiRequest('/api/order', {
-            query: {dinnerEventIds: dinnerEventId, state: OrderStateSchema.enum.RELEASED, allHouseholds: true, sortBy: 'releasedAt'},
-            schema: OrderDisplaySchema.array(),
-            action: 'fetchReleasedOrders', errorMessage: 'Kunne ikke hente billetterne til salg'
-        })
-        console.info(CTX, `Fetched ${released.length} released orders for dinner ${dinnerEventId}`)
-        return released
-    }
-
     // ========================================
     // Lock Status (reactive, watches planStore)
     // ========================================
     const {countTicketTypes, formatTicketCounts} = useBilling()
 
-    const {data: releasedCounts, isLoading: isReleasedCountsLoading, refresh: refreshReleasedCounts} = storeAsyncData(
+    const {data: releasedCounts, refresh: refreshReleasedCounts} = storeAsyncData(
         'bookings-store-released-counts',
         () => `/api/order?${orderQuery({dinnerEventIds: lockedDinnerIds.value, state: OrderStateSchema.enum.RELEASED, allHouseholds: true})}`,
         {
@@ -372,8 +357,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     const {
         data: selectedDinnerEventDetail,
-        isLoading: isSelectedDinnerEventLoading, isErrored: isSelectedDinnerEventErrored, isInitialized: isSelectedDinnerEventInitialized,
-        error: selectedDinnerEventError,
+        isLoading: isSelectedDinnerEventLoading, isErrored: isSelectedDinnerEventErrored,
         refresh: refreshSelectedDinnerEventDetail
     } = storeAsyncData(
         'bookings-store-selected-dinner-event',
@@ -600,7 +584,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         enabled: () => billingOverviewRequest.value()
     })
     const {
-        data: billingPeriods, isLoading: isBillingPeriodsLoading, isErrored: isBillingPeriodsErrored, isInitialized: isBillingPeriodsInitialized,
+        data: billingPeriods, isLoading: isBillingPeriodsLoading, isErrored: isBillingPeriodsErrored,
         error: billingPeriodsError, refresh: refreshBillingPeriods
     } = billingPeriodsDataset
 
@@ -632,7 +616,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     )
     const {
         data: selectedBillingPeriodDetail, isLoading: isBillingPeriodDetailLoading,
-        error: selectedBillingPeriodError, refresh: refreshSelectedBillingPeriod
+        refresh: refreshSelectedBillingPeriod
     } = selectedBillingPeriodDataset
 
 
@@ -642,8 +626,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     // Current period transactions (for "virtual" billing period in admin economy)
     const {
-        data: currentPeriodTransactions, isLoading: isCurrentPeriodLoading, isErrored: isCurrentPeriodErrored,
-        error: currentPeriodError, refresh: refreshCurrentPeriodTransactions
+        data: currentPeriodTransactions, isLoading: isCurrentPeriodLoading,
+        refresh: refreshCurrentPeriodTransactions
     } = storeAsyncData('bookings-store-current-period', '/api/admin/billing/current-period', {
         schema: TransactionDisplaySchema.array(),
         default: () => [],
@@ -715,15 +699,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
         // computed state
         isOrdersLoading,
-        isOrdersErrored,
         isOrdersInitialized,
         isNoOrders,
-        ordersError,
         isBookingsStoreReady,
-
-        // business logic computed
-        totalOrdersCount,
-        ordersByTicketType,
 
         // actions
         refreshOrders,
@@ -736,10 +714,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         refreshUpcomingOrders,
         fetchOrderDetail,
         fetchTicketChanges,
-        fetchReleasedOrders,
         // Lock status (calendar display)
         lockStatus,
-        isReleasedCountsLoading,
         isProcessingBookings,
         isBookingsReloading,
         writeBookings,
@@ -751,10 +727,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         // dinner event detail (store-owned per ADR-007)
         selectedDinnerEventId,
         selectedDinnerEventDetail,
-        selectedDinnerEventError,
         isSelectedDinnerEventLoading,
         isSelectedDinnerEventErrored,
-        isSelectedDinnerEventInitialized,
         selectDinnerDate,
         refreshSelectedDinnerEventDetail,
 
@@ -773,7 +747,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
         householdWaitlist,
         selectedDinnerWaitlist,
         isWaitlistEntriesLoading,
-        isWaitlistEntriesErrored,
         isWaitlistEntriesInitialized,
         addExtraPortions,
 
@@ -806,19 +779,15 @@ export const useBookingsStore = defineStore("Bookings", () => {
         billingPeriodsError,
         isBillingPeriodsLoading,
         isBillingPeriodsErrored,
-        isBillingPeriodsInitialized,
         refreshBillingPeriods,
         selectedBillingPeriodDetail,
-        selectedBillingPeriodError,
         isBillingPeriodDetailLoading,
         selectedBillingPeriodId,
         selectBillingPeriod,
 
         // current period (virtual billing period)
         currentPeriodTransactions,
-        currentPeriodError,
         isCurrentPeriodLoading,
-        isCurrentPeriodErrored,
         refreshCurrentPeriodTransactions,
 
         // invoice transactions (lazy load)

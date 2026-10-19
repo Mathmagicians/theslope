@@ -259,29 +259,9 @@ export const useBookingValidation = () => {
     // updateOrdersToClosed uses 2 data params, so max ~98 IDs. Using 90 for safety.
     const DELETE_BATCH_SIZE = 90
 
-    // findMany with nested includes: D1 limit is 100 params, but nested queries add overhead.
-    // fetchOrders includes orderHistory with WHERE clause, so use conservative 30 for IDs.
-    const FETCH_IDS_BATCH_SIZE = 30
-
     // Order writes in batches of the insert size, and deletes in batches within D1's parameter limit
     const chunkOrderBatch = <T>(items: T[]): T[][] => chunkArray<T>(ORDER_BATCH_SIZE)(items)
     const chunkDeleteBatch = <T>(items: T[]): T[][] => chunkArray<T>(DELETE_BATCH_SIZE)(items)
-
-    // Curried chunk function for IDs in fetch operations with nested includes
-    const chunkFetchIds = chunkArray<number>(FETCH_IDS_BATCH_SIZE)
-
-    /**
-     * Batch of orders for batch creation - validates business rules:
-     * - Array size: 1-ORDER_BATCH_SIZE orders (defense-in-depth, Prisma auto-chunks)
-     * - Same household: All orders must have same householdId
-     */
-    const OrdersBatchSchema = z.array(OrderCreateWithPriceSchema)
-        .min(1, 'Mindst én ordre er påkrævet')
-        .max(ORDER_BATCH_SIZE, `Maksimalt ${ORDER_BATCH_SIZE} ordrer per batch`)
-        .refine(
-            orders => new Set(orders.map(o => o.householdId)).size === 1,
-            { message: 'Alle ordrer skal være fra samme husstand' }
-        )
 
     /**
      * Result of bulk order creation
@@ -314,33 +294,6 @@ export const useBookingValidation = () => {
     const RemoveRoleRequestSchema = AssignRoleSchema.partial({inhabitantId: true})
 
     /**
-     * Order query filters (GET /api/order?...)
-     */
-    const OrderQuerySchema = z.object({
-        state: OrderStateSchema.optional(),
-        fromDate: z.coerce.date().optional(),
-        toDate: z.coerce.date().optional()
-    })
-
-    /**
-     * OrderHistory Detail - for GET/:id and mutation returns (ADR-009)
-     * Extends Display with order relation
-     */
-    const OrderHistoryDetailSchema = OrderHistoryDisplaySchema.extend({
-        order: OrderDisplaySchema.nullable()
-    })
-
-    /**
-     * OrderHistory Create - for input validation (PUT)
-     * Omits id (auto-generated) and timestamp (default now())
-     */
-    const OrderHistoryCreateSchema = OrderHistoryDisplaySchema.omit({
-        id: true,
-        timestamp: true,
-        performedByUser: true  // Relation object is for display only, not create (FK is performedByUserId)
-    })
-
-    /**
      * Order snapshot for audit data - captures order state at deletion/release time
      * Derived from OrderDisplaySchema, picking essential fields + provenance data
      * Provenance enables "🔄 fra AR_1" display on claimed tickets
@@ -366,60 +319,6 @@ export const useBookingValidation = () => {
     // ============================================================================
     // Serialization (ADR-010 - Repository layer)
     // ============================================================================
-
-    // Date schema that accepts both strings (wire format) and Date objects (Prisma)
-    const flexibleDateSchema = z.union([z.string(), z.date()]).transform(val => new Date(val))
-    const flexibleDateNullableSchema = z.union([z.string(), z.date()]).nullable().transform(val => val ? new Date(val) : null)
-
-    // Schema for deserializing - accepts strings or Dates, outputs Dates
-    const SerializedOrderSchema = OrderDisplaySchema.omit({
-        releasedAt: true, closedAt: true, createdAt: true, updatedAt: true
-    }).extend({
-        releasedAt: flexibleDateNullableSchema,
-        closedAt: flexibleDateNullableSchema,
-        createdAt: flexibleDateSchema,
-        updatedAt: flexibleDateSchema
-    })
-
-    // Type for serialized output (wire format with string dates)
-    type SerializedOrder = Omit<z.infer<typeof OrderDisplaySchema>, 'releasedAt' | 'closedAt' | 'createdAt' | 'updatedAt'> & {
-        releasedAt: string | null
-        closedAt: string | null
-        createdAt: string
-        updatedAt: string
-    }
-
-    const SerializedOrderHistoryDisplaySchema = OrderHistoryDisplaySchema.extend({
-        timestamp: z.string()
-    })
-
-    function serializeOrder(order: z.infer<typeof OrderDisplaySchema>): SerializedOrder {
-        return {
-            ...order,
-            releasedAt: order.releasedAt?.toISOString() ?? null,
-            closedAt: order.closedAt?.toISOString() ?? null,
-            createdAt: order.createdAt.toISOString(),
-            updatedAt: order.updatedAt.toISOString()
-        }
-    }
-
-    function deserializeOrder(serialized: Record<string, unknown>): z.infer<typeof OrderDisplaySchema> {
-        return SerializedOrderSchema.parse(serialized)
-    }
-
-    function serializeOrderHistoryDisplay(history: z.infer<typeof OrderHistoryDisplaySchema>): z.infer<typeof SerializedOrderHistoryDisplaySchema> {
-        return {
-            ...history,
-            timestamp: history.timestamp.toISOString()
-        }
-    }
-
-    function deserializeOrderHistoryDisplay(serialized: z.infer<typeof SerializedOrderHistoryDisplaySchema>): z.infer<typeof OrderHistoryDisplaySchema> {
-        return {
-            ...serialized,
-            timestamp: new Date(serialized.timestamp)
-        }
-    }
 
     /**
      * Transform DinnerEvent from Prisma format to domain format (ADR-010)
@@ -1046,12 +945,9 @@ export const useBookingValidation = () => {
         AssignRoleSchema,
         MenuSwapStrategySchema,
         RemoveRoleRequestSchema,
-        OrderQuerySchema,
 
         // OrderHistory
         OrderHistoryDisplaySchema,
-        OrderHistoryDetailSchema,
-        OrderHistoryCreateSchema,
         OrderSnapshotSchema,
         OrderAuditChangeSchema,
         OrderAuditDataSchema,
@@ -1064,24 +960,14 @@ export const useBookingValidation = () => {
         OrderAuditSourceSchema,
         AuditContextSchema,
         OrderCreateWithPriceSchema,
-        OrdersBatchSchema,
         CreateOrdersResultSchema,
         ORDER_BATCH_SIZE,
         DELETE_BATCH_SIZE,
         chunkOrderBatch,
         chunkDeleteBatch,
-        chunkFetchIds,
 
         // Transaction Creation (lean batch schema - ADR-009)
         OrderForTransactionSchema,
-
-        // Serialization
-        SerializedOrderSchema,
-        SerializedOrderHistoryDisplaySchema,
-        serializeOrder,
-        deserializeOrder,
-        serializeOrderHistoryDisplay,
-        deserializeOrderHistoryDisplay,
 
         // Transformation (ADR-010)
         deserializeDinnerEvent,
@@ -1158,25 +1044,18 @@ export type ChefMenuForm = z.infer<ReturnType<typeof useBookingValidation>['Chef
 // Order
 export type OrderDisplay = z.infer<ReturnType<typeof useBookingValidation>['OrderDisplaySchema']>
 export type OrderDetail = z.infer<ReturnType<typeof useBookingValidation>['OrderDetailSchema']>
-export type OrderCreate = z.infer<ReturnType<typeof useBookingValidation>['OrderCreateSchema']>
 export type AssignRole = z.infer<ReturnType<typeof useBookingValidation>['AssignRoleSchema']>
 export type MenuSwapStrategy = z.infer<ReturnType<typeof useBookingValidation>['MenuSwapStrategySchema']>
-export type OrderQuery = z.infer<ReturnType<typeof useBookingValidation>['OrderQuerySchema']>
 export type OrderHistoryDisplay = z.infer<ReturnType<typeof useBookingValidation>['OrderHistoryDisplaySchema']>
-export type OrderHistoryDetail = z.infer<ReturnType<typeof useBookingValidation>['OrderHistoryDetailSchema']>
-export type OrderHistoryCreate = z.infer<ReturnType<typeof useBookingValidation>['OrderHistoryCreateSchema']>
 export type OrderSnapshot = z.infer<ReturnType<typeof useBookingValidation>['OrderSnapshotSchema']>
 export type OrderAuditChange = z.infer<ReturnType<typeof useBookingValidation>['OrderAuditChangeSchema']>
 export type OrderAudit = z.infer<ReturnType<typeof useBookingValidation>['OrderAuditSchema']>
-export type SerializedOrder = z.infer<ReturnType<typeof useBookingValidation>['SerializedOrderSchema']>
-export type SerializedOrderHistoryDisplay = z.infer<ReturnType<typeof useBookingValidation>['SerializedOrderHistoryDisplaySchema']>
 
 // Orders Creation (Bulk)
 export type OrderAuditAction = z.infer<ReturnType<typeof useBookingValidation>['OrderAuditActionSchema']>
 export type AuditContext = z.infer<ReturnType<typeof useBookingValidation>['AuditContextSchema']>
 export type OrderAuditSource = z.infer<ReturnType<typeof useBookingValidation>['OrderAuditSourceSchema']>
 export type OrderCreateWithPrice = z.infer<ReturnType<typeof useBookingValidation>['OrderCreateWithPriceSchema']>
-export type OrdersBatch = z.infer<ReturnType<typeof useBookingValidation>['OrdersBatchSchema']>
 export type CreateOrdersResult = z.infer<ReturnType<typeof useBookingValidation>['CreateOrdersResultSchema']>
 
 // Transaction Creation (lean batch schema - ADR-009)
@@ -1185,7 +1064,6 @@ export type OrderForTransaction = z.infer<ReturnType<typeof useBookingValidation
 // Heynabo Event Sync (ADR-013)
 export type HeynaboEventCreate = z.infer<ReturnType<typeof useBookingValidation>['HeynaboEventCreateSchema']>
 export type HeynaboEventResponse = z.infer<ReturnType<typeof useBookingValidation>['HeynaboEventResponseSchema']>
-export type HeynaboEventStatus = z.infer<ReturnType<typeof useBookingValidation>['HeynaboEventStatusSchema']>
 
 // Scaffold Pre-bookings
 export type ScaffoldResult = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldResultSchema']>

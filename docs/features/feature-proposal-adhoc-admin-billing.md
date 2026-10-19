@@ -2,7 +2,7 @@
 
 **Status:** Signed off 2026-10-08; the ledger type, the expense table, the chef endpoints and the budget pane shipped in 0.9; the ad-hoc charges and the spending views are next release (deferred 2026-10-13)
 **Date:** 2026-04-20
-**Updated:** 2026-10-05 — the EXPENSE transaction type joins the scope: a cost record against a dinner's kitchen money, excluded from invoicing (work-roster push, `this-pr/release-0.9.0.md` § Chef spending)
+**Updated:** 2026-10-05 — the EXPENSE transaction type joins the scope: a cost record against a dinner's kitchen money, excluded from invoicing (work-roster push, `archived/release-0.9.0.md` § Chef spending)
 
 ## Problem
 
@@ -162,7 +162,7 @@ model Transaction {
 
 ### Expenses — chef spending ✅ signed 2026-10-08 · ✅ shipped in 0.9
 
-The `Expense` table (a list per dinner, `paidByUserId` with a `userSnapshot`, `description`, `LedgerEntryType`), the chef endpoints (`GET`/`PUT /api/chef/dinner/[id]/expenses`, `DELETE …/[expenseId]`, the note prefilled by `useBilling.expenseNoteWords`), the computed `DinnerEvent.totalCost` (ADR-010 rule 6) and the Budget pane with the Madbestilling editor shipped with release 0.9: `this-pr/release-0.9.0.md` § Chef spending. The basisvarer entry (ADHOC expenses) is `feature-proposal-season-spending.md`.
+The `Expense` table (a list per dinner, `paidByUserId` with a `userSnapshot`, `description`, `LedgerEntryType`), the chef endpoints (`GET`/`PUT /api/chef/dinner/[id]/expenses`, `DELETE …/[expenseId]`, the note prefilled by `useBilling.expenseNoteWords`), the computed `DinnerEvent.totalCost` (ADR-010 rule 6) and the Budget pane with the Madbestilling editor shipped with release 0.9: `archived/release-0.9.0.md` § Chef spending. The basisvarer entry (ADHOC expenses) is `feature-proposal-season-spending.md`.
 
 ### Query ergonomics
 
@@ -260,7 +260,7 @@ No change to `createTransactions` nightly job (scoped to `Order.state: CLOSED`, 
 
 ### Migration (next after `20260416091019_severalhouseholdsonsameadress`)
 
-Part of the 0.9 Prisma bundle (`this-pr/release-0.9.0.md` § Prisma bundle and § Decisions 2026-10-08): `Transaction.type` as
+Part of the 0.9 Prisma bundle (`archived/release-0.9.0.md` § Prisma bundle and § Decisions 2026-10-08): `Transaction.type` as
 `ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT 'REGULAR'`, `Transaction.description` nullable, the `Expense` table,
 `DinnerEvent.totalCost` kept and deprecated (dropped by `chores-0.9.1.md`). Data line: existing `totalCost` values map to REGULAR `Expense` rows (SYSTEM snapshot, no payer); the `type` default covers every existing
 row and the snapshots stay as written.

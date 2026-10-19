@@ -1,6 +1,6 @@
 # 0.9.2 features
 
-**Status:** Proposed | **Date:** 2026-10-16 | **Builds on:** release 0.9 (`this-pr/release-0.9.0.md` § One booking path, end to end)
+**Status:** Proposed | **Date:** 2026-10-16 | **Builds on:** release 0.9 (`archived/release-0.9.0.md` § One booking path, end to end)
 
 | Feature | What | Status |
 |---|---|---|
@@ -75,7 +75,7 @@ endpoint stays until this feature lands.
 D1 runs the chunks of a batch without a transaction (ADR-005). A later chunk that fails leaves the earlier rows without
 their companion row: waiting-list entries without their QUEUE history row, orders without their audit row, deliveries
 without their Delivery row. The retry one by one counts them unchanged, and the admin learns of them from the logs only.
-Writes carry no retries (decided 2026-10-18, `this-pr/release-0.9.0.md` § One intent path).
+Writes carry no retries (decided 2026-10-18, `archived/release-0.9.0.md` § One intent path).
 
 ### Solution
 

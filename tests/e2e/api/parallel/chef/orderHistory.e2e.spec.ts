@@ -63,7 +63,7 @@ test.describe('Chef dinner order history', () => {
 
     test.afterAll(async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
-        await OrderFactory.cleanupOrders(adminContext, orderIds)
+        // The season takes its dinners with their orders
         await SeasonFactory.cleanupSeasons(adminContext, seasonIds)
     })
 

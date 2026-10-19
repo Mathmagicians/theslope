@@ -256,44 +256,6 @@ export async function fetchAllergiesForHousehold(d1Client: D1Database, household
 }
 
 /**
- * Fetch all allergies for a specific allergy type (admin view)
- * Returns AllergyDetail (with allergyType + inhabitant relations)
- */
-export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergyTypeId: number): Promise<AllergyDetail[]> {
-    console.info(`🏥 > ALLERGY > [GET] Fetching allergies for allergy type ID ${allergyTypeId}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyDetailSchema} = useAllergyValidation()
-
-    try {
-        const allergies = await prisma.allergy.findMany({
-            where: {allergyTypeId},
-            include: {
-                allergyType: true,
-                inhabitant: {
-                    select: {
-                        id: true,
-                        heynaboId: true,
-                        userId: true,
-                        householdId: true,
-                        name: true,
-                        lastName: true,
-                        pictureUrl: true,
-                        birthDate: true
-                    }
-                }
-            }
-        })
-
-        console.info(`🏥 > ALLERGY > [GET] Successfully fetched ${allergies.length} allergies for allergy type ${allergyTypeId}`)
-
-        // Validate before returning (ADR-010)
-        return allergies.map(a => AllergyDetailSchema.parse(a))
-    } catch (error) {
-        return throwH3Error(`🏥 > ALLERGY > [GET]: Error fetching allergies for allergy type ${allergyTypeId}`, error)
-    }
-}
-
-/**
  * Fetch single allergy by ID
  * Returns AllergyDetail (with allergyType + inhabitant relations)
  */

@@ -28,16 +28,3 @@ export function parseCSVLine(line: string): string[] {
     result.push(current)
     return result
 }
-
-/**
- * Generate CSV line from array of values
- * Quotes fields containing commas or quotes
- */
-export function toCSVLine(values: string[]): string {
-    return values.map(v => {
-        if (v.includes(',') || v.includes('"')) {
-            return `"${v.replace(/"/g, '""')}"`
-        }
-        return v
-    }).join(',')
-}

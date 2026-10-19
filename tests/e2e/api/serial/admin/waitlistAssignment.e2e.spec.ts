@@ -33,10 +33,8 @@ test.describe('Waiting list assignment', () => {
     let activeSeasonId: number
     let activeSeason: Season
     let adminInhabitantId: number
-    const dinnerIds: number[] = []
     let householdId: number
     const inhabitants: InhabitantDisplay[] = []
-    const teamIds: number[] = []
     const createdSeasonIds: number[] = []
     let adultPrice: TicketPrice
     let childPrice: TicketPrice
@@ -45,14 +43,12 @@ test.describe('Waiting list assignment', () => {
         WaitlistFactory.queue(context, householdId, activeSeasonId, order)
     const householdEntries = async (context: Parameters<typeof WaitlistFactory.entries>[0], dinnerId = dinnerEventId) =>
         (await WaitlistFactory.entries(context, [dinnerId])).filter(entry => entry.order.householdId === householdId)
-    const orderIds: number[] = []
     const sellerHouseholdIds: number[] = []
     // A dinner of the active season past its booking deadline
     const dinnerPastDeadline = async (context: Parameters<typeof WaitlistFactory.queue>[0], title: string) => {
         const dinner = await DinnerEventFactory.createDinnerEvent(context, {
             date: daysFromNow(3), menuTitle: salt(title, temporaryAndRandom()), seasonId: activeSeasonId, cookingTeamId: teamId, chefId: adminInhabitantId
         })
-        dinnerIds.push(dinner.id!)
         return dinner.id!
     }
     // A ticket held on a closed dinner: the admin's bypass books it past the deadline
@@ -78,10 +74,8 @@ test.describe('Waiting list assignment', () => {
         const {team, dinner} = await SeasonFactory.createCookingTeamWithChefAndDinner(context, activeSeason, adminInhabitantId, {
             teamName: 'Ventelistehold', dinner: {date: daysFromNow(2), menuTitle: salt('Ventelistemiddag', testSalt)}
         })
-        teamIds.push(team.id!)
         teamId = team.id!
         dinnerEventId = dinner.id!
-        dinnerIds.push(dinnerEventId)
         for (const place of ['Et', 'To', 'Tre', 'Fire']) {
             inhabitants.push(await HouseholdFactory.createInhabitantWithConfig(context, householdId, {
                 name: salt('Anders', testSalt), lastName: `Venter ${place}`, birthDate: null
@@ -91,15 +85,11 @@ test.describe('Waiting list assignment', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        // The persons go first, their orders and entries with them: a hook that runs out of time leaves none in the shared household
+        // The persons go first, their orders and entries with them: a hook that runs out of time leaves none in the shared household.
+        // The season takes its team and its dinners with their orders and entries
         for (const inhabitant of inhabitants) await HouseholdFactory.deleteInhabitant(context, inhabitant.id!)
-        await OrderFactory.cleanupOrders(context, orderIds)
         await HouseholdFactory.deleteHousehold(context, sellerHouseholdIds)
-        for (const id of dinnerIds) await DinnerEventFactory.deleteDinnerEvent(context, id)
-        for (const id of teamIds) await SeasonFactory.deleteCookingTeam(context, id)
         await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
-        // Hand the singleton active season back to the suites that follow
-        await SeasonFactory.createActiveSeason(context)
     })
 
     test('GIVEN voksen, barn, voksen, barn in the queue WHEN the chef releases 2.5 portions THEN the first three get their tickets and the last barn waits', async ({browser}) => {
@@ -112,7 +102,6 @@ test.describe('Waiting list assignment', () => {
         }
 
         const result = await WaitlistFactory.addExtraPortions(context, dinnerEventId, 2.5)
-        orderIds.push(...result!.assigned.map(assigned => assigned.orderId))
 
         expect(result!.assigned.map(assigned => assigned.inhabitantId)).toEqual(inhabitants.slice(0, 3).map(inhabitant => inhabitant.id))
         expect(result!.assigned.map(assigned => assigned.portions)).toEqual([1, 0.5, 1])
@@ -132,7 +121,6 @@ test.describe('Waiting list assignment', () => {
         const context = await validatedBrowserContext(browser)
 
         const first = await WaitlistFactory.addExtraPortions(context, dinnerEventId, 0.5)
-        orderIds.push(...first!.assigned.map(assigned => assigned.orderId))
         expect(first!.assigned.map(assigned => assigned.inhabitantId)).toEqual([inhabitants[3]!.id])
         expect(first!.waiting).toBe(0)
 
@@ -162,7 +150,6 @@ test.describe('Waiting list assignment', () => {
         const pastDinner = await DinnerEventFactory.createDinnerEvent(context, {
             date: daysFromNow(-1), menuTitle: salt('Gårsdagens middag', temporaryAndRandom()), seasonId: activeSeasonId, cookingTeamId: teamId, chefId: adminInhabitantId
         })
-        dinnerIds.push(pastDinner.id!)
         const result = await queue(context, OrderFactory.createGuestOrder(inhabitants[3]!.id!, pastDinner.id!, childPrice.id!))
         expect(result.totals[Action.QUEUE]).toBe(1)
 
@@ -232,7 +219,6 @@ test.describe('Waiting list assignment', () => {
             const dinner = await DinnerEventFactory.createDinnerEvent(context, {
                 date: daysFromNow(days), menuTitle: salt(title, testSalt), seasonId: activeSeasonId, cookingTeamId: teamId, chefId: adminInhabitantId
             })
-            dinnerIds.push(dinner.id!)
             return dinner
         }
         const closedDinner = await dinnerAt(3, 'Frigivet billet')

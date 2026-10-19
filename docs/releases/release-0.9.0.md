@@ -60,6 +60,6 @@ Nogle efterårsferieaftener gik med at få **Version 0.9** rullet ud. Den store 
 </tr>
 </table>
 
-![Kode](https://api.iconify.design/hugeicons/github-01.svg?height=18&color=%23737373) **Til udviklere:** Framework upgrade, CVE fra upstream npm/nuxt lukket. Releasen er beskrevet i [release-0.9.0.md](../features/this-pr/release-0.9.0.md), arkitekturen i [docs/adr.md](../adr.md) (ADR-011, -016, -017), specs, OpenAPI og BDD-resultater på [developer.skraaningen.dk](https://developer.skraaningen.dk).
+![Kode](https://api.iconify.design/hugeicons/github-01.svg?height=18&color=%23737373) **Til udviklere:** Framework upgrade, CVE fra upstream npm/nuxt lukket. Releasen er beskrevet i [release-0.9.0.md](../features/archived/release-0.9.0.md), arkitekturen i [docs/adr.md](../adr.md) (ADR-011, -016, -017), specs, OpenAPI og BDD-resultater på [developer.skraaningen.dk](https://developer.skraaningen.dk).
 
 **skraaningen.dk** · Ser du fejl, har du forslag? Tryk på ![Hjælp](https://api.iconify.design/heroicons/question-mark-circle.svg?height=18&color=%23737373) i appen og vælg **Rapporter fejl**. · Oktober 2026

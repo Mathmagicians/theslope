@@ -1,4 +1,4 @@
-import {useBookingValidation, DinnerMode as DinnerModeEnum, DinnerState as DinnerStateEnum, OrderState as OrderStateEnum, TicketState as TicketStateEnum, SupplyState as SupplyStateEnum, type TicketState, type SupplyState, type TicketType, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketEvent, type TicketCounts, type OrderAudit} from '~/composables/useBookingValidation'
+import {useBookingValidation, DinnerMode as DinnerModeEnum, DinnerState as DinnerStateEnum, OrderState as OrderStateEnum, TicketState as TicketStateEnum, SupplyState as SupplyStateEnum, type TicketState, type SupplyState, type TicketType, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketEvent, type TicketCounts, type OrderAudit} from '~/composables/useBookingValidation'
 import {useBillingValidation, type TransactionCreateData} from '~/composables/useBillingValidation'
 import {useBilling} from '~/composables/useBilling'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
@@ -94,16 +94,6 @@ const outcomeOf = (bucket: OrderBucket | null, ticketsForSale: number): BookingO
 export type PreviewSupply = (order: DesiredOrder) => {ticketsForSale: number, ticketType?: TicketType}
 export const NOTHING_FOR_SALE: PreviewSupply = () => ({ticketsForSale: 0})
 
-/** The supply a claim finds: its dinner's released tickets of the ticket type its price names */
-export const supplyOfType = (
-    counts: Pick<ReleasedTicketCounts, 'byType'> | null | undefined,
-    ticketPrices: Pick<TicketPrice, 'id' | 'ticketType'>[],
-    ticketPriceId: number
-): ReturnType<PreviewSupply> => {
-    const ticketType = ticketPrices.find(price => price.id === ticketPriceId)?.ticketType
-    return {ticketType, ticketsForSale: ticketType ? counts?.byType[ticketType] ?? 0 : 0}
-}
-
 type SettledOrder = {order: DesiredOrder, outcome: BookingOutcome}
 
 /**
@@ -141,20 +131,6 @@ export const formatPlace = (position: number, ticketType?: TicketType | null): s
 /** A dinner's name: its menu title, else the untitled dinner's word while the chef has written no menu */
 export const formatDinnerName = (dinner: Pick<DinnerEventDisplay, 'menuTitle'>): string =>
     dinner.menuTitle.trim() || BOOKING_WORDS.untitledDinner
-
-/** The buckets whose execution has a supply outcome, in the order a preview reads them */
-export const OUTCOME_BUCKETS = [Bucket.claim, Bucket.create, Bucket.leave, Bucket.requeue] as const
-
-/** Every order of the buckets with its action, the plan the preview shows and the scaffold executes; the claims settle in order against the supply */
-export const plannedActions = (
-    buckets: OrderBucketResult,
-    existingById: Map<number, OrderDisplay>,
-    supply: PreviewSupply = NOTHING_FOR_SALE
-): {order: DesiredOrder, action: BookingAction}[] => [
-    ...OUTCOME_BUCKETS.flatMap(bucket => bookingOutcomes(bucket, buckets[bucket], supply).map(({order, outcome}) => ({order, action: outcome}))),
-    ...buckets.delete.map(order => ({order, action: Action.CANCEL})),
-    ...buckets.update.map(order => ({order, action: actionOfUpdate(order, order.orderId ? existingById.get(order.orderId) : undefined)}))
-]
 
 /** The orders of a run per action, every action present */
 export const countTotals = (items: readonly BookingResult[]): BookingTotals =>
@@ -707,45 +683,10 @@ export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
 export const useBooking = () => {
     // Import configured utilities from useSeason (DRY)
     const {getDefaultDinnerStartTime, getDefaultDinnerDuration, getDinnerTimeRange, splitDinnerEvents, isDinnerPast} = useSeason()
-    const {DinnerStateSchema, OrderSnapshotSchema} = useBookingValidation()
+    const {DinnerStateSchema} = useBookingValidation()
     const {formatNameWithInitials, computeConsensus} = useHousehold()
     const {resolveTicketPrice} = useTicket()
     const DinnerState = DinnerStateSchema.enum
-
-    // ============================================================================
-    // Order Snapshot - Transform function for audit data
-    // ============================================================================
-
-    /**
-     * Build OrderSnapshot from OrderDetail + household shortName.
-     * Used by repository to create audit data with provenance fields.
-     *
-     * @param order - Order with inhabitant (name, lastName, householdId, optional allergies)
-     * @param householdShortname - Household shortName (fetched separately, not on OrderDetail)
-     */
-    type OrderForSnapshot = Pick<OrderDetail, 'id' | 'inhabitantId' | 'dinnerEventId' | 'ticketPriceId' | 'priceAtBooking' | 'dinnerMode' | 'state'> & {
-        inhabitant: Pick<OrderDetail['inhabitant'], 'name' | 'lastName' | 'householdId'> & {
-            allergies?: OrderDetail['inhabitant']['allergies']  // Optional - captured at CREATE, omitted at UPDATE/DELETE
-        }
-    }
-    const buildOrderSnapshot = (
-        order: OrderForSnapshot,
-        householdShortname: string
-    ): OrderSnapshot => OrderSnapshotSchema.parse({
-        // From OrderDisplaySchema
-        id: order.id,
-        inhabitantId: order.inhabitantId,
-        dinnerEventId: order.dinnerEventId,
-        ticketPriceId: order.ticketPriceId,
-        priceAtBooking: order.priceAtBooking,
-        dinnerMode: order.dinnerMode,
-        state: order.state,
-        // Provenance (derived from relations)
-        inhabitantNameWithInitials: formatNameWithInitials(order.inhabitant),
-        householdShortname,
-        householdId: order.inhabitant.householdId,
-        allergies: order.inhabitant.allergies?.map(a => a.allergyType.name) ?? []
-    })
 
     /**
      * Calculate the current step state for a dinner event
@@ -785,37 +726,6 @@ export const useBooking = () => {
         deadlines: { canModifyOrders: (date: Date) => boolean }
     ): StepConfig => {
         return DINNER_STEP_MAP[getDinnerStepState(dinnerEvent, deadlines)]
-    }
-
-    /**
-     * Get deadline info for a dinner event's current step
-     */
-    const getStepDeadline = (
-        dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost'>,
-        deadlines: { canModifyOrders: (date: Date) => boolean }
-    ): StepDeadlineResult => {
-        const {getDinnerTimeRange, getDefaultDinnerStartTime, getCookingDeadlineThresholds} = useSeason()
-        const config = getStepConfig(dinnerEvent, deadlines)
-        const thresholds = getCookingDeadlineThresholds()
-
-        const dinnerTimeRange = getDinnerTimeRange(dinnerEvent.date, getDefaultDinnerStartTime(), 0)
-        const countdown = calculateCountdown(dinnerTimeRange.start)
-
-        return config.getDeadline(countdown, thresholds)
-    }
-
-    /**
-     * Check if a dinner can be announced/re-announced
-     *
-     * Business rules:
-     * - SCHEDULED → can announce (creates Heynabo event)
-     * - ANNOUNCED + no heynaboEventId → can RE-announce (creates missing Heynabo event)
-     * - CANCELLED/CONSUMED → cannot announce
-     */
-    const canAnnounceDinner = (dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'heynaboEventId'>): boolean => {
-        if (dinnerEvent.state === DinnerState.SCHEDULED) return true
-        if (dinnerEvent.state === DinnerState.ANNOUNCED && !dinnerEvent.heynaboEventId) return true
-        return false
     }
 
     /**
@@ -1135,34 +1045,8 @@ export const useBooking = () => {
     })
 
     // ============================================================================
-    // Bucket Resolution - Wrapper for UI components (mirrors server usage)
+    // Desired Orders - grid edits and power changes as one DesiredOrder[]
     // ============================================================================
-
-    /**
-     * Resolve desired orders to buckets for UI preview.
-     * Wraps the pure resolveDesiredOrdersToBuckets with enum wiring.
-     * Use this to show users exactly what the server will do.
-     */
-    const resolveUserBookingBuckets = (
-        desiredOrders: DesiredOrder[],
-        existingOrders: OrderDisplay[],
-        dinnerEvents: DinnerEventDisplay[],
-        deadlines: SeasonDeadlines,
-        existingEntries: TicketWaitlistDisplay[] = []
-    ): OrderBucketResult<DesiredOrder> => {
-        const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
-        const dinnerEventById = new Map(dinnerEvents.map(de => [de.id, de]))
-        return resolveDesiredOrdersToBuckets(
-            desiredOrders,
-            existingOrders,
-            dinnerEventById,
-            deadlines.canModifyOrders,
-            deadlines.canEditDiningMode,
-            DinnerModeSchema.enum,
-            OrderStateSchema.enum,
-            existingEntries
-        )
-    }
 
     /** buildDesiredOrder over a list of intents, priced from the season's ticket prices; unpriced intents drop out */
     const buildDesiredOrders = (
@@ -1276,28 +1160,8 @@ export const useBooking = () => {
     }
 
     // ============================================================================
-    // Action Preview - bucket change detection (formatting lives in useBookingUi)
-    // ============================================================================
-
-    const countChanges = (buckets: OrderBucketResult<DesiredOrder>): number =>
-        buckets.create.length + buckets.delete.length + buckets.update.length + buckets.claim.length + buckets.leave.length + buckets.requeue.length
-
-    const hasChanges = (buckets: OrderBucketResult<DesiredOrder>): boolean => countChanges(buckets) > 0
-
-    // ============================================================================
     // Lock Status - Compute booking lock status for calendar display
     // ============================================================================
-
-    /** Count released orders by dinner ID */
-    const countReleasedOrdersByDinner = (orders: OrderDisplay[]): Map<number, number> => {
-        const counts = new Map<number, number>()
-        for (const order of orders) {
-            if (ticketStateOf(order) === TicketStateEnum.released) {
-                counts.set(order.dinnerEventId, (counts.get(order.dinnerEventId) ?? 0) + 1)
-            }
-        }
-        return counts
-    }
 
     /**
      * Get IDs of locked future dinners from split result
@@ -1587,14 +1451,10 @@ export const useBooking = () => {
     }
 
     return {
-        // Order Snapshot
-        buildOrderSnapshot,
         // Dinner Step State
         getDinnerStepState,
         getStepConfig,
-        getStepDeadline,
         getChefDeadlineAlarm,
-        canAnnounceDinner,
         canCancelDinner,
         buildDinnerUrl,
         createHeynaboEventPayload,
@@ -1614,7 +1474,6 @@ export const useBooking = () => {
         formatScaffoldResult,
         sumScaffoldResults,
         // Lock Status
-        countReleasedOrdersByDinner,
         getLockedFutureDinnerIds,
         computeLockStatus,
         // Booking Options: the modes the decision matrix lands
@@ -1625,14 +1484,11 @@ export const useBooking = () => {
         // Toast Titles
         BOOKING_TOAST_TITLES,
         // Action Preview (show users what will happen before save)
-        resolveUserBookingBuckets,
         buildDesiredOrders,
         buildGuestDesiredOrders,
         buildBookingChanges,
         getPowerChanges,
         getPowerConsensus,
-        hasChanges,
-        countChanges,
         // Ticket changes and the cooking round
         formatMoment,
         formatPerformer,

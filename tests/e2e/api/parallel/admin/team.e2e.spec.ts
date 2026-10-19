@@ -6,7 +6,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
-const {validateCookingTeam, getTeamMemberCounts, CreateTeamsResponseSchema} = useCookingTeamValidation()
+const {CookingTeamDisplaySchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
 const {createWeekDayMapFromSelection} = useWeekDayMapValidation()
 const {headers, validatedBrowserContext, salt, temporaryAndRandom} = testHelpers
 
@@ -37,7 +37,7 @@ test.describe('Admin Teams API', () => {
 
             expect(testTeam.id).toBeGreaterThanOrEqual(0)
             expect(testTeam.seasonId).toEqual(testSeasonId)
-            expect(() => validateCookingTeam(testTeam)).not.toThrow()
+            expect(() => CookingTeamDisplaySchema.parse(testTeam)).not.toThrow()
             expect(testTeam.jokerSlots).toEqual([])
 
             expect(testTeam.id).toBeDefined()
@@ -277,7 +277,7 @@ test.describe('Admin Teams API', () => {
             createdHouseholdIds.push(createdTeam.householdId)
 
             // GIVEN: The team Detail carries three assignments at full allocation, each readable on its own
-            expect(getTeamMemberCounts(createdTeam)).toBe(3)
+            expect(createdTeam.assignments).toHaveLength(3)
             expect(createdTeam.assignments.every(assignment => assignment.allocationPercentage === 100)).toBe(true)
             const assignmentIds = createdTeam.assignments.map(assignment => assignment.id!)
             const assignments = await Promise.all(assignmentIds.map(id => SeasonFactory.getCookingTeamAssignment(context, id)))

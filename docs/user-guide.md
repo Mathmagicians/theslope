@@ -197,12 +197,16 @@ Har et medlem af din husstand allergier, bærer billetten et **allergi-ikon**. K
 I uge- eller månedsvisning kan du hurtigt ændre tilmeldinger for flere dage:
 
 1. Klik på **blyanten** for at aktivere redigeringstilstand
-2. Klik på en celle for at skifte, hvordan du spiser: Spisesal → Sen → Takeaway → Ingen
+2. Klik på en celle for at skifte, hvordan du spiser: Spisesal → Sen → Takeaway → Ingen - det, der ikke kan vælges lige nu, springes over
 3. Brug **Power-rækken** øverst til at ændre alle medlemmer på én gang - dine gæster følger med
 4. Se **forhåndsvisning** af ændringer før du gemmer
 5. Klik **Opdater** når du er færdig - eller **Annuller** for at fortryde
 
 Gæster har deres egen række i gitteret, så du kan ændre deres spisningsform på samme måde som familiens.
+
+> **Forventet bestilling:** Har du ingen billet til en middag endnu, antyder kalenderen, hvad dine præferencer vil booke (**Forventet bestilling ifølge præferencer** i Forklaring). I redigeringstilstand tager første klik den til dig, og vælger du **Ingen**, er du frameldt - så booker præferencerne ikke den dag igen.
+
+> **Aflyst middag:** En aflyst middag står streget over i kalenderen (**Aflyst fællesspisning** i Forklaring), med et **AFLYST**-bånd på dagen og **Aflyst** over kolonnen. Den kan ikke bookes, og du betaler ikke for den.
 
 > **Tip:** Ændringer gemmes først når du klikker Opdater. Du kan frit eksperimentere og annullere.
 
@@ -374,4 +378,4 @@ Kontakt en administrator eller opret et issue på [GitHub](https://github.com/Ma
 
 ---
 
-*Sidst opdateret: Oktober 2026 (ventelisten, køb og frigiv efter fristen, appen på telefonen, Mine indstillinger, allergier på billetten)*
+*Sidst opdateret: Oktober 2026 (ventelisten, køb og frigiv efter fristen, appen på telefonen, Mine indstillinger, allergier på billetten, forventede bestillinger, aflyste middage)*

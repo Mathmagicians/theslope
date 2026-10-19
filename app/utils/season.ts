@@ -167,17 +167,6 @@ export const compareAffinities = (startDay: WeekDay) => (affinity1: NullableWeek
     return Math.sign(distance1 - distance2)
 }
 
-export const compareTeams = (startDay: WeekDay) => (team1: CookingTeamDisplay, team2: CookingTeamDisplay): number => {
-    const compareTeamsByName = team1.name.localeCompare(team2.name)
-    if (!team1.affinity && !team2.affinity) return compareTeamsByName
-    if (!team1.affinity) return 1
-    if (!team2.affinity) return -1
-    const affinityComparator = compareAffinities(startDay)
-    const affinityComparatorResult = affinityComparator(team1.affinity, team2.affinity)
-    return affinityComparatorResult === 0 ? compareTeamsByName : affinityComparatorResult
-}
-
-
 export const createSortedAffinitiesToTeamsMap = (teams: CookingTeamDisplay[], weekDay: WeekDay = WEEKDAYS[0]): Map<WeekDay, CookingTeamDisplay[]> => {
     const sortedKeys: WeekDay[] = teams
         .map(t => t.affinity)

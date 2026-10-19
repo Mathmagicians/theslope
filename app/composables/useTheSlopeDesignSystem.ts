@@ -564,10 +564,6 @@ export const RAINBOW = RAINBOW_FAMILIES.map(stopOf)
 /** The rainbow stop for a position in a list, wrapping at the end of the palette */
 export const getRainbowBand = (index: number): string => RAINBOW[index % RAINBOW.length]!
 
-/** The family behind that stop, for a consumer that needs another rung of the same colour */
-export const getRainbowFamily = (index: number): PantoneFamily =>
-    RAINBOW_FAMILIES[index % RAINBOW_FAMILIES.length]!
-
 /** The selected team row's left tab: the team's own family at the 600 border rung */
 const RAINBOW_ACCENTS: Record<RainbowFamily, string> = {
     pink: BORDER.pink[600],
@@ -3270,7 +3266,6 @@ export const useTheSlopeDesignSystem = () => {
         RAINBOW,
         RAINBOW_FAMILIES,
         getRainbowBand,
-        getRainbowFamily,
         getRainbowAccent,
         getCalendarCountBadge,
         ICONS,
@@ -3326,6 +3321,3 @@ export const useTheSlopeDesignSystem = () => {
         EMPTY_STATE_MESSAGES
     }
 }
-
-// Backwards compatibility alias (deprecated - use useTheSlopeDesignSystem)
-export const useColorSystem = useTheSlopeDesignSystem

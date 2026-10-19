@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears} from 'date-fns'
-import {useBooking, formatPlace, formatDinnerName, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type OrderBucketResult, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
+import {useBooking, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {dateToWeekDay} from '~/utils/season'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -12,7 +12,6 @@ import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
@@ -53,15 +52,11 @@ let getStepConfig: UseBookingT['getStepConfig']
 let getDinnerStepState: UseBookingT['getDinnerStepState']
 let getPastDinnerIds: UseBookingT['getPastDinnerIds']
 let prepareTransactionData: UseBookingT['prepareTransactionData']
-let buildOrderSnapshot: UseBookingT['buildOrderSnapshot']
 let getLockedFutureDinnerIds: UseBookingT['getLockedFutureDinnerIds']
 let computeLockStatus: UseBookingT['computeLockStatus']
-let countReleasedOrdersByDinner: UseBookingT['countReleasedOrdersByDinner']
 let buildGuestOrder: UseBookingT['buildGuestOrder']
 let groupGuestOrders: UseBookingT['groupGuestOrders']
 let getDayBillSummary: UseBookingT['getDayBillSummary']
-let hasChanges: UseBookingT['hasChanges']
-let countChanges: UseBookingT['countChanges']
 let getPowerChanges: UseBookingT['getPowerChanges']
 let getPowerConsensus: UseBookingT['getPowerConsensus']
 let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
@@ -76,15 +71,11 @@ beforeAll(() => {
         getDinnerStepState,
         getPastDinnerIds,
         prepareTransactionData,
-        buildOrderSnapshot,
         getLockedFutureDinnerIds,
         computeLockStatus,
-        countReleasedOrdersByDinner,
         buildGuestOrder,
         groupGuestOrders,
         getDayBillSummary,
-        hasChanges,
-        countChanges,
         getPowerChanges,
         getPowerConsensus
     } = useBooking());
@@ -417,71 +408,6 @@ describe('useBooking', () => {
         })
     })
 
-    describe('buildOrderSnapshot', () => {
-
-        // Base order data reused across tests: Anna of household 7, with one allergy per catalog type
-        const allergyTypes = AllergyFactory.createMockAllergyTypes()
-        const baseOrder = () => {
-            const order = OrderFactory.defaultOrderDetailWithAllergies(10, 'Anna', allergyTypes, {id: 42, dinnerEventId: 5, ticketPriceId: 1, priceAtBooking: 5500})
-            return {...order, inhabitant: {...order.inhabitant, householdId: 7, lastName: 'Berg Larsen'}}
-        }
-
-        it('builds snapshot with all fields from order', () => {
-            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
-
-            expect(snapshot.id).toBe(42)
-            expect(snapshot.inhabitantId).toBe(10)
-            expect(snapshot.dinnerEventId).toBe(5)
-            expect(snapshot.ticketPriceId).toBe(1)
-            expect(snapshot.priceAtBooking).toBe(5500)
-            expect(snapshot.dinnerMode).toBe(DinnerModes.DINEIN)
-            expect(snapshot.state).toBe(OrderStates.BOOKED)
-        })
-
-        it('formats inhabitantNameWithInitials using formatNameWithInitials', () => {
-            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
-            // "Anna Berg Larsen" → "Anna B.L."
-            expect(snapshot.inhabitantNameWithInitials).toBe('Anna B.L.')
-        })
-
-        it('includes householdShortname from parameter', () => {
-            const snapshot = buildOrderSnapshot(baseOrder(), 'S31_2')
-            expect(snapshot.householdShortname).toBe('S31_2')
-        })
-
-        it('includes householdId from inhabitant', () => {
-            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
-            expect(snapshot.householdId).toBe(7)
-        })
-
-        it('extracts allergy type names from nested allergies', () => {
-            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
-            expect(snapshot.allergies).toEqual(allergyTypes.map(type => type.name))
-        })
-
-        it('handles empty allergies array', () => {
-            const order = {...baseOrder(), inhabitant: {...baseOrder().inhabitant, allergies: []}}
-            const snapshot = buildOrderSnapshot(order, 'AR_7')
-            expect(snapshot.allergies).toEqual([])
-        })
-
-        it('handles undefined allergies (defaults to empty)', () => {
-            const order = {...baseOrder(), inhabitant: {...baseOrder().inhabitant, allergies: undefined}}
-            const snapshot = buildOrderSnapshot(order, 'AR_7')
-            expect(snapshot.allergies).toEqual([])
-        })
-
-        it.each([
-            {state: OrderStates.BOOKED},
-            {state: OrderStates.RELEASED},
-            {state: OrderStates.CLOSED}
-        ])('preserves order state $state', ({state}) => {
-            const order = {...baseOrder(), state}
-            const snapshot = buildOrderSnapshot(order, 'AR_7')
-            expect(snapshot.state).toBe(state)
-        })
-    })
-
 })
 
 // =============================================================================
@@ -491,24 +417,6 @@ describe('useBooking', () => {
 // The season's default prices: an order at a ticket type holds that type's price
 const SEASON_PRICES = TicketFactory.defaultTicketPrices()
 const priceIdOf = (ticketType: typeof TicketTypes[keyof typeof TicketTypes]) => SEASON_PRICES.find(price => price.ticketType === ticketType)!.id!
-
-// A claim buys from the dinner's tickets for sale of the ticket type its price names
-describe('supplyOfType', () => {
-    const TicketType = TicketTypes
-    const counts = {...EMPTY_RELEASED_TICKET_COUNTS, total: 3, byType: {[TicketType.ADULT]: 2, [TicketType.CHILD]: 1}}
-
-    it.each([
-        {ticketType: TicketType.ADULT, forSale: 2},
-        {ticketType: TicketType.CHILD, forSale: 1},
-        {ticketType: TicketType.BABY, forSale: 0}
-    ])('a claim at a $ticketType price finds the $forSale tickets for sale of its type', ({ticketType, forSale}) => {
-        expect(supplyOfType(counts, SEASON_PRICES, priceIdOf(ticketType))).toEqual({ticketType, ticketsForSale: forSale})
-    })
-
-    it('a claim at a price outside the season finds nothing for sale', () => {
-        expect(supplyOfType(counts, SEASON_PRICES, 99).ticketsForSale).toBe(0)
-    })
-})
 
 describe('bookingOutcomes', () => {
     const order = OrderFactory.defaultDesiredOrder()
@@ -527,9 +435,14 @@ describe('bookingOutcomes', () => {
 
     // 3V 1B for sale on the dinner: each claim takes from what the claims before it left of its ticket type
     const TicketType = TicketTypes
-    const counts = {...EMPTY_RELEASED_TICKET_COUNTS, total: 4, byType: {[TicketType.ADULT]: 3, [TicketType.CHILD]: 1}}
+    const forSaleByType: Partial<Record<typeof TicketType[keyof typeof TicketType], number>> = {[TicketType.ADULT]: 3, [TicketType.CHILD]: 1}
     const claimAt = (ticketType: typeof TicketType[keyof typeof TicketType]) =>
         OrderFactory.defaultDesiredOrder({ticketPriceId: priceIdOf(ticketType), isGuestTicket: true})
+    // The supply the scaffold hands a claim: the ticket type its price names and the dinner's tickets for sale of that type
+    const supplyOfClaim = (claim: DesiredOrder) => {
+        const ticketType = SEASON_PRICES.find(price => price.id === claim.ticketPriceId)!.ticketType
+        return {ticketType, ticketsForSale: forSaleByType[ticketType] ?? 0}
+    }
 
     it.each([
         {desc: 'ten adult guests: three buy the adult tickets, seven queue', claims: Array.from({length: 10}, () => TicketType.ADULT),
@@ -537,13 +450,13 @@ describe('bookingOutcomes', () => {
         {desc: 'two adults and a child all buy', claims: [TicketType.ADULT, TicketType.CHILD, TicketType.ADULT], expected: [Action.BUY, Action.BUY, Action.BUY]},
         {desc: 'two children share the one child ticket: the first buys, the second queues', claims: [TicketType.CHILD, TicketType.CHILD], expected: [Action.BUY, Action.QUEUE]}
     ])('a list of claims, in order: $desc', ({claims, expected}) => {
-        const outcomes = bookingOutcomes(Bucket.claim, claims.map(claimAt), order => supplyOfType(counts, SEASON_PRICES, order.ticketPriceId))
+        const outcomes = bookingOutcomes(Bucket.claim, claims.map(claimAt), supplyOfClaim)
         expect(outcomes.map(({outcome}) => outcome)).toEqual(expected)
     })
 })
 
 // =============================================================================
-// actionOfUpdate, plannedActions, countTotals - one plan for the preview and the scaffold
+// actionOfUpdate, countTotals - the actions and totals of a scaffold run
 // =============================================================================
 
 describe('actionOfUpdate', () => {
@@ -562,28 +475,6 @@ describe('actionOfUpdate', () => {
         {name: 'a booked ticket in another mode', incoming: incomingOf(OS.BOOKED), existing: existingOf(OS.BOOKED), expected: Action.CHANGE_MODE}
     ])('$name → $expected', ({incoming, existing, expected}) => {
         expect(actionOfUpdate(incoming, existing)).toBe(expected)
-    })
-})
-
-describe('plannedActions', () => {
-    const {OrderStateSchema} = useBookingValidation()
-    const order = (inhabitantId: number, overrides: Partial<DesiredOrder> = {}): DesiredOrder =>
-        ({...OrderFactory.defaultDesiredOrder(), inhabitantId, ...overrides})
-    const released = OrderFactory.defaultOrder(undefined, {id: 50, state: OrderStateSchema.enum.BOOKED, ticketPriceId: 1})
-
-    it('names the action of every order in the buckets, a claim settled by the supply', () => {
-        const buckets = {
-            create: [order(1)], update: [order(2, {orderId: 50, state: OrderStateSchema.enum.RELEASED, ticketPriceId: 1})],
-            idempotent: [order(3)], delete: [order(4)], claim: [order(5, {dinnerEventId: 1}), order(6, {dinnerEventId: 2})],
-            leave: [order(7)], requeue: [order(8)]
-        }
-        const forSale = (desired: DesiredOrder) => ({ticketsForSale: desired.dinnerEventId === 1 ? 1 : 0})
-
-        const actions = plannedActions(buckets, new Map([[50, released]]), forSale)
-
-        expect(actions.map(({order, action}) => [order.inhabitantId, action])).toEqual([
-            [5, Action.BUY], [6, Action.QUEUE], [1, Action.BOOK], [7, Action.LEAVE], [8, Action.REQUEUE], [4, Action.CANCEL], [2, Action.RELEASE]
-        ])
     })
 })
 
@@ -1595,9 +1486,6 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
 // =============================================================================
 
 describe('Lock Status Utilities', () => {
-    const {OrderStateSchema} = useBookingValidation()
-    const OrderState = OrderStateSchema.enum
-
     // Test helpers
     const makeEvent = (id: number, daysFromNow: number) => ({
         id,
@@ -1659,39 +1547,6 @@ describe('Lock Status Utilities', () => {
             it(`returns ${JSON.stringify(expected)}`, () => {
                 const deadlines = makeDeadlines(lockedDays)
                 const result = getLockedFutureDinnerIds(nextDinner, futureDinners, deadlines)
-                expect(result).toEqual(expected)
-            })
-        })
-    })
-
-    describe('countReleasedOrdersByDinner', () => {
-        describe.each([
-            {
-                name: 'counts released orders by dinner',
-                orders: [
-                    {dinnerEventId: 1, state: OrderState.RELEASED},
-                    {dinnerEventId: 1, state: OrderState.RELEASED},
-                    {dinnerEventId: 2, state: OrderState.RELEASED},
-                    {dinnerEventId: 1, state: OrderState.BOOKED}
-                ],
-                expected: new Map([[1, 2], [2, 1]])
-            },
-            {
-                name: 'returns empty map when no released orders',
-                orders: [
-                    {dinnerEventId: 1, state: OrderState.BOOKED},
-                    {dinnerEventId: 2, state: OrderState.CLOSED}
-                ],
-                expected: new Map()
-            },
-            {
-                name: 'handles empty array',
-                orders: [],
-                expected: new Map()
-            }
-        ])('$name', ({orders, expected}) => {
-            it('returns correct counts', () => {
-                const result = countReleasedOrdersByDinner(orders as OrderDisplay[])
                 expect(result).toEqual(expected)
             })
         })
@@ -2008,66 +1863,6 @@ describe('formatDinnerName', () => {
         {desc: 'a menu title of spaces', menuTitle: '   ', name: 'Fællesspisning'}
     ])('GIVEN $desc THEN the dinner reads "$name"', ({menuTitle, name}) => {
         expect(formatDinnerName({menuTitle})).toBe(name)
-    })
-})
-
-// =============================================================================
-// Action Preview - Show users what will happen before save
-// =============================================================================
-
-describe('Action Preview', () => {
-    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
-    const DM = DinnerModeSchema.enum
-    const OS = OrderStateSchema.enum
-
-    // Helper to create DesiredOrder
-    const desired = (overrides: Partial<DesiredOrder> = {}): DesiredOrder => ({
-        inhabitantId: 1,
-        dinnerEventId: 101,
-        dinnerMode: DM.DINEIN,
-        ticketPriceId: 1,
-        isGuestTicket: false,
-        state: OS.BOOKED,
-        ...overrides
-    })
-
-    // Empty buckets helper
-    const emptyBuckets = (): OrderBucketResult<DesiredOrder> => emptyOrderBuckets<DesiredOrder>()
-
-    describe('hasChanges', () => {
-        it.each([
-            {desc: 'all empty → false', buckets: emptyBuckets(), expected: false},
-            {desc: 'only idempotent → false', buckets: {...emptyBuckets(), idempotent: [desired()]}, expected: false},
-            {desc: 'create → true', buckets: {...emptyBuckets(), create: [desired()]}, expected: true},
-            {desc: 'delete → true', buckets: {...emptyBuckets(), delete: [desired()]}, expected: true},
-            {desc: 'update → true', buckets: {...emptyBuckets(), update: [desired()]}, expected: true},
-            {desc: 'claim → true', buckets: {...emptyBuckets(), claim: [desired()]}, expected: true},
-            {desc: 'leave → true', buckets: {...emptyBuckets(), leave: [desired()]}, expected: true},
-            {desc: 'requeue → true', buckets: {...emptyBuckets(), requeue: [desired()]}, expected: true},
-        ])('$desc', ({buckets, expected}) => {
-            expect(hasChanges(buckets)).toBe(expected)
-        })
-    })
-
-    describe('countChanges', () => {
-        it.each([
-            {desc: 'all empty → 0', buckets: emptyBuckets(), expected: 0},
-            {desc: 'only idempotent → 0', buckets: {...emptyBuckets(), idempotent: [desired(), desired()]}, expected: 0},
-            {desc: '1 create → 1', buckets: {...emptyBuckets(), create: [desired()]}, expected: 1},
-            {desc: '2 delete → 2', buckets: {...emptyBuckets(), delete: [desired(), desired()]}, expected: 2},
-            {desc: 'mixed buckets', buckets: {
-                ...emptyBuckets(),
-                create: [desired()],
-                delete: [desired(), desired()],
-                update: [desired()],
-                claim: [desired()],
-                leave: [desired()],
-                requeue: [desired()],
-                idempotent: [desired(), desired(), desired()]  // not counted
-            }, expected: 7},
-        ])('$desc', ({buckets, expected}) => {
-            expect(countChanges(buckets)).toBe(expected)
-        })
     })
 })
 

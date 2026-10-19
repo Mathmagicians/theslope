@@ -3,7 +3,7 @@ import {createDateRange, formatDate, formatDateRange} from '~/utils/date'
 import {useSeason} from '~/composables/useSeason'
 import {ticketTypeCount, ticketTypeLabel, ticketTypeLetter} from '~/composables/useTicket'
 import {useCookingTeam} from '~/composables/useCookingTeam'
-import {useBookingValidation, type TicketType, type OrderDisplay, type DinnerEventInfo, type DinnerEventDetail} from '~/composables/useBookingValidation'
+import {useBookingValidation, type TicketType, type DinnerEventInfo, type DinnerEventDetail} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
 import type {BillingSideEffectStamps, CostEntry, Expense, HouseholdEntry, InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
 
@@ -264,7 +264,6 @@ export const useBilling = () => {
 
     // Specific control types
     type ControlSumResult = ControlResult<number>
-    type TicketCountsControl = ControlResult<string>
 
     /**
      * Create a curried control sum calculator.
@@ -299,41 +298,6 @@ export const useBilling = () => {
      * Use: controlTransactions(transactions, invoice.amount)
      */
     const controlTransactions = createControlSum<TransactionDisplay>(tx => tx.amount)
-
-    /**
-     * Order control result - verifies both ticket counts AND price sum
-     */
-    interface OrderControlResult extends ControlSumResult {
-        ticketCounts: TicketCountsControl
-    }
-
-    /**
-     * Control sum for orders (dinner → orders reconciliation)
-     * Verifies BOTH ticket type counts ("2V 5B") AND price sum match
-     *
-     * @param orders - Orders to verify (OrderDisplay type)
-     * @param expectedAmount - Expected total amount
-     * @param expectedTicketCounts - Expected ticket counts string (e.g., "2V 5B")
-     */
-    const controlOrders = (
-        orders: OrderDisplay[],
-        expectedAmount: number,
-        expectedTicketCounts: string
-    ): OrderControlResult => {
-        const computedAmount = orders.reduce((sum, o) => sum + o.priceAtBooking, 0)
-        const computedTicketCounts = formatTicketCounts(orders)
-
-        return {
-            computed: computedAmount,
-            expected: expectedAmount,
-            isValid: computedAmount === expectedAmount && computedTicketCounts === expectedTicketCounts,
-            ticketCounts: {
-                computed: computedTicketCounts,
-                expected: expectedTicketCounts,
-                isValid: computedTicketCounts === expectedTicketCounts
-            }
-        }
-    }
 
     /**
      * What a closed billing period still needs (ADR-015: the monthly run converges every period). A side effect is
@@ -374,7 +338,6 @@ export const useBilling = () => {
         createControlSum,
         controlInvoices,
         controlTransactions,
-        controlOrders,
         // Monthly run side effects (ADR-015)
         decideBillingSideEffects
     }
@@ -388,8 +351,3 @@ export type ControlResult<T> = {
 }
 
 export type ControlSumResult = ControlResult<number>
-export type TicketCountsControl = ControlResult<string>
-
-export interface OrderControlResult extends ControlSumResult {
-    ticketCounts: TicketCountsControl
-}

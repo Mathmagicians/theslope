@@ -968,34 +968,6 @@ const seasonDetailInclude = {
     ticketPrices: {orderBy: {price: 'asc'}}
 } satisfies Prisma.SeasonInclude
 
-export async function fetchSeasonForRange(d1Client: D1Database, start: string, end: string): Promise<Season | null> {
-    console.info(`🌞 > SEASON > [GET] Fetching season for range ${start} to ${end}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const seasonDatesStr = JSON.stringify({
-            start: start,
-            end: end
-        })
-
-        const season = await prisma.season.findFirst({
-            where: {
-                seasonDates: seasonDatesStr
-            }
-        })
-
-        if (season) {
-            console.info(`🌞 > SEASON > [GET] Found season ${season.shortName} (ID: ${season.id}) for range`)
-            return deserializeSeason(season, useTicket().withPortions)
-        } else {
-            console.info(`🌞 > SEASON > [GET] No season found for range ${start} to ${end}`)
-            return null
-        }
-    } catch (error) {
-        return throwH3Error(`🌞 > SEASON > [FETCH FOR RANGE]: Error fetching season for range ${start} to ${end}`, error)
-    }
-}
-
 /**
  * Fetch the current active season with all relations (DRY wrapper)
  * @returns Full Season with ticketPrices, cookingTeams, dinnerEvents, or null if none active

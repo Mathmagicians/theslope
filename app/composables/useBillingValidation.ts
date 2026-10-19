@@ -267,14 +267,6 @@ export const useBillingValidation = () => {
     }
 
     /**
-     * Generate idempotency key for an order
-     * Orders are unique by: (householdId, dinnerEventId, ticketType)
-     */
-    function getOrderKey(householdId: number, dinnerEventId: number, ticketType: string): string {
-        return `${householdId}-${dinnerEventId}-${ticketType}`
-    }
-
-    /**
      * Schema for parsed household order (used after CSV parsing)
      */
     const ParsedHouseholdOrderSchema = z.object({
@@ -285,29 +277,10 @@ export const useBillingValidation = () => {
     })
 
     // ============================================================================
-    // CostEntry/CostLine Schemas (Economy views)
-    // ============================================================================
-
-    /**
-     * CostEntry - grouped items by dinner event for economy display
-     * Used for both Transactions (billing) and Orders (live bookings)
-     * T must have ticketType for ticket count formatting
-     */
-    const CostEntrySchema = <T extends z.ZodTypeAny>(itemSchema: T) => z.object({
-        dinnerEventId: z.number().int(),
-        date: z.coerce.date(),
-        menuTitle: z.string(),
-        items: z.array(itemSchema),
-        totalAmount: z.number().int(),
-        ticketCounts: z.string()
-    })
-
-    // ============================================================================
     // Household Billing Schemas (ADR-009)
     // ============================================================================
 
     // Expense - the ledger twin of Transaction: a cost paid from the kitchen's money (ADR-009: one shape, no Display/Detail split)
-    const LedgerEntryType = LedgerEntryTypeSchema.enum
     const ExpenseSchema = ExpenseFragmentSchema
     const SerializedExpenseSchema = SerializedExpenseFragmentSchema
 
@@ -782,7 +755,6 @@ export const useBillingValidation = () => {
         // CSV Import Functions
         parseCSV,
         parseCSVLine,
-        getOrderKey,
 
         // CSV Export Functions
         CSV_HEADER,
@@ -810,9 +782,6 @@ export const useBillingValidation = () => {
         HouseholdInvoiceSchema,
         CurrentPeriodBillingSchema,
 
-        // CostEntry/CostLine (Economy views)
-        CostEntrySchema,
-
         // Serialization (ADR-010)
         OrderSnapshotSchema,
         serializeTransaction,
@@ -825,7 +794,6 @@ export const useBillingValidation = () => {
 
         // Expense (ledger)
         LedgerEntryTypeSchema,
-        LedgerEntryType,
         ExpenseSchema,
         SerializedExpenseSchema,
         ExpenseCreateSchema,
@@ -905,7 +873,3 @@ export type HouseholdEntry<T> = HouseholdInfo & {
     computedTotal: number    // Control sum: Σ item amounts
     ticketCounts: string
 }
-
-// Control sum validation - UI uses this to show ✓ or ✗
-export const isControlSumValid = <T>(entry: HouseholdEntry<T>): boolean =>
-    entry.computedTotal === entry.totalAmount

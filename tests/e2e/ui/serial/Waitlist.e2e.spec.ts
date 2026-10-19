@@ -3,7 +3,6 @@ import {addDays, startOfDay} from 'date-fns'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
@@ -30,8 +29,6 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
     const testSalt = temporaryAndRandom()
     let adminContext: BrowserContext
     const createdSeasonIds: number[] = []
-    const createdTeamIds: number[] = []
-    const createdDinnerIds: number[] = []
     let seasonId: number
     let teamId: number
     let dinnerEventId: number
@@ -59,16 +56,12 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
             teamName: salt('Ventelistehold', testSalt), dinner: {menuTitle: salt('Ventelistemiddag', testSalt)}, day: tomorrow
         })
         teamId = team.id!
-        createdTeamIds.push(teamId)
         dinnerEventId = dinner.id!
-        createdDinnerIds.push(dinnerEventId)
         dinnerDate = tomorrow
     })
 
-    // Cleanup accepts a dinner, team or season already gone
+    // The season takes its team and its dinners; cleanup accepts a season already gone
     test.afterAll(async () => {
-        for (const id of createdDinnerIds) await DinnerEventFactory.deleteDinnerEvent(adminContext, id)
-        for (const id of createdTeamIds) await SeasonFactory.deleteCookingTeam(adminContext, id)
         await SeasonFactory.cleanupSeasons(adminContext, createdSeasonIds)
     })
 

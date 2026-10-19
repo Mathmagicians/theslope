@@ -13,8 +13,7 @@ const { serializeWeekDayMap: serializeDinnerPreferences } = useCoreValidation()
 describe('useCookingTeamValidation', () => {
   // Get validation utilities
   const {
-    TeamRoleSchema,
-    getTeamMemberCounts
+    TeamRoleSchema
   } = useCookingTeamValidation()
   const { CHEF, COOK, JUNIORHELPER } = TeamRoleSchema.enum
 
@@ -38,20 +37,6 @@ describe('useCookingTeamValidation', () => {
         expect(result.data).toHaveProperty('seasonId')
         expect(result.data).toHaveProperty('name')
       }
-    })
-  })
-
-  describe('utility functions', () => {
-    it('getTeamMemberCounts should count the team members', () => {
-      const team = SeasonFactory.defaultCookingTeamDisplay({
-        assignments: [
-          SeasonFactory.defaultCookingTeamAssignment({ role: CHEF, inhabitantId: 1 }),
-          SeasonFactory.defaultCookingTeamAssignment({ role: COOK, inhabitantId: 2 }),
-          SeasonFactory.defaultCookingTeamAssignment({ role: COOK, inhabitantId: 3 }),
-          SeasonFactory.defaultCookingTeamAssignment({ role: JUNIORHELPER, inhabitantId: 4 })
-        ]
-      })
-      expect(getTeamMemberCounts(team as CookingTeamDisplay)).toBe(4)
     })
   })
 

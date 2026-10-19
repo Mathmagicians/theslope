@@ -1,6 +1,6 @@
 # 0.9.1 chores
 
-**Status:** Next release | **Date:** 2026-10-08 | **Builds on:** release 0.9 (`this-pr/release-0.9.0.md` § Prisma bundle)
+**Status:** Next release | **Date:** 2026-10-08 | **Builds on:** release 0.9 (`archived/release-0.9.0.md` § Prisma bundle)
 
 The two schema chores share one migration: `make d1-create-migration name=chores-0-9-1`, the rewrites below in the Prisma
 source, then `rm migrations/NNNN_*.sql && make d1-flatten-migrations`. `make d1-verify-<env>` runs before and after
@@ -687,9 +687,9 @@ step is the model.
 ## Booking mail delivery
 
 Priority: medium. Moved from release 0.9 on 2026-10-19 (point 6b of One booking path, end to end; the user: "61, 62,
-63 - descope to 0.9.1"). The mails, their words and their sending after the action shipped in 0.9
-(`app/config/bookingWords.ts`, `notifyBookingOutcomes`, `notifyExtraPortions`); the delivery below is signed and not
-built.
+63 - descope to 0.9.1"); the signed mails followed on 2026-10-19 ("nothing unimplæmented should be in archive").
+In 0.9 the mails go out after the action (`notifyBookingOutcomes`, `notifyExtraPortions`) with the templates of
+`app/config/notificationTemplates.ts`; the signed mails and the delivery below are not built.
 
 ### Problem
 
@@ -713,6 +713,60 @@ buildup included, goes right after the action; daily maintenance gains a step th
 the dinners still to come and resends the missing ones through the same rows, reported like `clearWaitlist`; the
 per-join buildup check in `server/utils/sender/events/waitlist.ts` goes. The chef's deadline reminders belong to daily
 maintenance in `feature-proposal-notification-triggers.md`.
+
+### Mockup — waiting-list mails ✅ signed off 2026-10-17
+
+The mails speak the booking words: they greet the one who hears and name the person they are about, carry the ticket
+line of the booking page and the badge's help text, and link to the dinner's booking page.
+
+```
+WAITLIST_JOINED  → the user who booked
+Emne: Skråningen: Emil står på ventelisten til 20/10/2026 · Lasagne
+  Kære Lene,
+
+  20/10/2026 · Lasagne
+  Emil: 1 på ventelisten (Barn #1)
+  Barn · 35 kr · Spisesal
+
+  Du får automatisk tildelt en billet, hvis en kommer til salg, eller chefkokken frigiver portioner.
+  Du betaler, når du får en billet fra ventelisten.
+  Du kan altid afmelde din ventelisteplads, hvis du ikke har brug for den alligevel.
+
+  Se bookingen: https://skraaningen.dk/dinner?date=20/10/26
+
+WAITLIST_TICKET_ASSIGNED  → the user who booked
+Emne: Skråningen: Emil har fået en billet til 20/10/2026 · Lasagne
+  20/10/2026 · Lasagne
+  Emil: 1 købt
+  Barn · 35 kr · Spisesal · fra Hansen
+  Du betaler for billetten. Vi glæder os til at se jer.
+  Se bookingen: …
+
+WAITLIST_EXTRA_PORTION  → the user who booked
+  20/10/2026 · Lasagne
+  Emil: 1 tilmeldt
+  Barn · 35 kr · Spisesal
+  Køkkenholdet laver flere portioner, og en af dem er til Emil. Vi glæder os til at se jer.
+  Se bookingen: …
+
+TICKET_SOLD  → each user in the selling household
+Emne: Skråningen: 1 billet til 20/10/2026 · Lasagne er solgt
+  20/10/2026 · Lasagne
+  1 billet solgt til ventelisten        (1 billet solgt til Jensen, when a user bought it)
+  Voksen · 55 kr
+  I betaler ikke længere for den.
+  Se bookingen: …
+
+WAITLIST_BUILDUP  → the chef, in the words of the chef's alert
+Emne: Skråningen: 3V 1B på venteliste til 20/10/2026 · Lasagne
+  3V 1B på venteliste · 5 portioner
+  Skrånere mangler billetter til din middag — har du mulighed for at mætte flere munde?
+  Det gør du under Flere på middagen: https://skraaningen.dk/chef
+```
+
+A guest reads "Gæst af Anna". The booking page's waiting-list badge carries the same help text. The join outcome
+carries the guest flag, the ticket price and the eating mode; a sale carries the buyer's booking user, eating mode and
+guest flag.
 
 ### Tests
 

@@ -87,7 +87,7 @@ describe('useOrder', () => {
           createTestOrder({ state: OrderState.CLOSED, priceAtBooking: 5000 }),
           createTestOrder({ state: OrderState.RELEASED, priceAtBooking: 5000 })
         ],
-        expected: { ticketCount: 3, totalRevenue: 15000, kitchenContribution: 750, availableBudget: 14250, availableBudgetExVat: 11400 }
+        expected: { ticketCount: 3, totalRevenue: 15000, kitchenContribution: 750, availableBudget: 14250 }
       }
     ])('GIVEN $scenario', ({ orders, expected }) => {
       it('WHEN calculating budget THEN returns correct values', () => {
@@ -97,7 +97,6 @@ describe('useOrder', () => {
         expect(result.totalRevenue).toBe(expected.totalRevenue)
         expect(result.kitchenContribution).toBe(expected.kitchenContribution)
         expect(result.availableBudget).toBe(expected.availableBudget)
-        expect(result.availableBudgetExVat).toBe(expected.availableBudgetExVat)
       })
     })
 
@@ -108,7 +107,6 @@ describe('useOrder', () => {
 
       expect(result.kitchenContribution).toBe(1000) // 10% of 10000
       expect(result.availableBudget).toBe(9000) // 10000 - 1000
-      expect(result.availableBudgetExVat).toBe(7500) // 9000 / 1.20
       expect(result.kitchenBaseRatePercent).toBe(10)
       expect(result.vatPercent).toBe(20)
     })

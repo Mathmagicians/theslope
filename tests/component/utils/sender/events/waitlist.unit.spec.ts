@@ -1,9 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {createError} from 'h3'
-import {
-    bookingMails, emitTicketSold, emitWaitlistBuildup, emitWaitlistExtraPortion, emitWaitlistJoined, emitWaitlistTicketAssigned,
-    NO_BOOKING_MAILS, notifyBookingOutcomes, notifyExtraPortions, type BookingMails
-} from '~~/server/utils/sender/events/waitlist'
+import {bookingMails, notifyBookingOutcomes, notifyExtraPortions, type BookingMails} from '~~/server/utils/sender/events/waitlist'
 import * as peopleReads from '~~/server/data/prismaRepository'
 import * as dinnerReads from '~~/server/data/financesRepository'
 import {fetchHouseholdsByIds, fetchInhabitantsByIds, fetchSeason, fetchUsersByIds} from '~~/server/data/prismaRepository'
@@ -39,13 +36,21 @@ const to = 'anna@example.com'
 const seller = 'PL_4_4_3'
 const buyer = 'AR_1_2'
 
+// One mail of each kind, as the booking mails of an operation that holds that mail alone
 const events = [
-    {kind: 'WAITLIST_JOINED', send: (channel: EmailChannel) => emitWaitlistJoined(channel, to, 'Anna', dinner, 2, 'Barn')},
-    {kind: 'WAITLIST_TICKET_ASSIGNED', send: (channel: EmailChannel) => emitWaitlistTicketAssigned(channel, to, 'Anna', dinner, 'Voksen', seller, buyer)},
-    {kind: 'WAITLIST_EXTRA_PORTION', send: (channel: EmailChannel) => emitWaitlistExtraPortion(channel, to, 'Anna', dinner, 'Voksen', buyer)},
-    {kind: 'WAITLIST_BUILDUP', send: (channel: EmailChannel) => emitWaitlistBuildup(channel, to, 'Anna', dinner, 5, 4.5)},
-    {kind: 'TICKET_SOLD', send: (channel: EmailChannel) => emitTicketSold(channel, to, 'Lene', dinner, seller, buyer)}
+    {kind: 'WAITLIST_JOINED', mails: NotificationFactory.defaultBookingMails({joined: [{to, name: 'Anna', dinner, position: 2, ticketType: 'Barn'}]})},
+    {kind: 'WAITLIST_TICKET_ASSIGNED', mails: NotificationFactory.defaultBookingMails({assigned: [{to, name: 'Anna', dinner, ticket: 'Voksen', seller, buyer}]})},
+    {kind: 'WAITLIST_EXTRA_PORTION', mails: NotificationFactory.defaultBookingMails({extraPortions: [{to, name: 'Anna', dinner, ticket: 'Voksen', buyer}]})},
+    {kind: 'WAITLIST_BUILDUP', mails: NotificationFactory.defaultBookingMails({buildups: [{to, name: 'Anna', dinner, entries: 5, portions: 4.5}]})},
+    {kind: 'TICKET_SOLD', mails: NotificationFactory.defaultBookingMails({sold: [{to, name: 'Lene', dinner, seller, buyer}]})}
 ]
+const eventOf = (kind: string) => events.find(event => event.kind === kind)!
+
+// The result of an operation's one mail
+const sendAlone = async (channel: EmailChannel, mails: BookingMails): Promise<SenderEmitResult> => {
+    const [result] = await bookingMails(channel, mails)
+    return result!
+}
 
 // The mails the queue took, whichever call carried them
 const sentMessages = (queue: FakeSenderQueue): EmailMessage[] => sentBodies<EmailMessage>(queue)
@@ -75,29 +80,26 @@ describe('booking mails', () => {
     beforeEach(() => Object.values(logs).forEach(spy => spy.mockImplementation(() => {})))
     afterEach(() => Object.values(logs).forEach(spy => spy.mockClear()))
 
-    it.each(events)('$kind queues through the channel when e-mail is on', async ({send}) => {
+    it.each(events)('$kind queues through the channel when e-mail is on', async ({mails}) => {
         const queue = fakeQueue()
 
-        const result = await send(NotificationFactory.channel(queue))
+        const result = await sendAlone(NotificationFactory.channel(queue), mails)
 
         expect(result.queued).toBe(true)
         expect(sentMessages(queue)).toHaveLength(1)
     })
 
-    it.each(events)('$kind reports not sent and logs the missing setting when e-mail is off', async ({kind, send}) => {
-        const result = await send({on: false, missing: 'DEPLOY_URL'})
+    it.each(events)('$kind reports not sent and logs the missing setting when e-mail is off', async ({kind, mails}) => {
+        const result = await sendAlone({on: false, missing: 'DEPLOY_URL'}, mails)
 
         expect(result).toMatchObject({queued: false, degraded: true})
         expect(logs.warn).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`DEPLOY_URL.*${kind}`)))
     })
 
-    it.each([
-        {kind: 'TICKET_SOLD', send: (channel: EmailChannel) => emitTicketSold(channel, to, 'Lene', dinner, seller, buyer)},
-        {kind: 'WAITLIST_TICKET_ASSIGNED', send: (channel: EmailChannel) => emitWaitlistTicketAssigned(channel, to, 'Anna', dinner, 'Voksen', seller, buyer)}
-    ])('$kind names the selling and the buying household', async ({send}) => {
+    it.each(['TICKET_SOLD', 'WAITLIST_TICKET_ASSIGNED'].map(eventOf))('$kind names the selling and the buying household', async ({mails}) => {
         const queue = fakeQueue()
 
-        await send(NotificationFactory.channel(queue))
+        await sendAlone(NotificationFactory.channel(queue), mails)
 
         const [message] = sentMessages(queue)
         expect(message!.text).toContain(seller)
@@ -107,7 +109,7 @@ describe('booking mails', () => {
     it('WAITLIST_EXTRA_PORTION names the buying household', async () => {
         const queue = fakeQueue()
 
-        await emitWaitlistExtraPortion(NotificationFactory.channel(queue), to, 'Anna', dinner, 'Voksen', buyer)
+        await sendAlone(NotificationFactory.channel(queue), eventOf('WAITLIST_EXTRA_PORTION').mails)
 
         expect(sentMessages(queue)[0]!.text).toContain(buyer)
     })
@@ -115,7 +117,7 @@ describe('booking mails', () => {
     it('WAITLIST_JOINED names the place and the ticket type of the line', async () => {
         const queue = fakeQueue()
 
-        await emitWaitlistJoined(NotificationFactory.channel(queue), to, 'Anna', dinner, 2, 'Barn')
+        await sendAlone(NotificationFactory.channel(queue), eventOf('WAITLIST_JOINED').mails)
 
         const [message] = sentMessages(queue)
         expect(message!.text).toContain('#2 i kø')
@@ -157,7 +159,7 @@ describe('bookingMails', () => {
     it('sends nothing for an operation with no mails', async () => {
         const queue = fakeQueue()
 
-        expect(await bookingMails(NotificationFactory.channel(queue), NO_BOOKING_MAILS)).toEqual([])
+        expect(await bookingMails(NotificationFactory.channel(queue), NotificationFactory.defaultBookingMails())).toEqual([])
         expect(sentMessages(queue)).toEqual([])
     })
 })

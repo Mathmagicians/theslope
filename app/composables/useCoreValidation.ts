@@ -182,13 +182,6 @@ export const useCoreValidation = () => {
         id: z.number().int().positive() // ID is required for updates
     })
 
-    // User schema for API responses
-    const UserResponseSchema = BaseUserSchema.required({
-        id: true,
-        email: true,
-        systemRoles: true
-    })
-
     // ========================================================================
     // INHABITANT SCHEMAS - Extend InhabitantFragment with domain-specific fields
     // ========================================================================
@@ -293,16 +286,6 @@ export const useCoreValidation = () => {
                 (data) => siblingMoveOutConstraints.every(c => !isBefore(data.movedInDate, c)),
                 {message: 'Ny familie kan ikke flytte ind, så længe den forrige ikke er flyttet ud', path: ['movedInDate']}
             )
-
-    const HouseholdResponseSchema = BaseHouseholdSchema.required({
-        id: true,
-        heynaboId: true,
-        pbsId: true,
-        name: true,
-        address: true,
-        movedInDate: true,
-        moveOutDate: true
-    })
 
     // ADR-009: Index endpoint - full household scalars + lightweight inhabitant relation
     const HouseholdDisplaySchema = BaseHouseholdSchema.required({
@@ -530,7 +513,6 @@ export const useCoreValidation = () => {
         SerializedUserSchema,
         UserCreateSchema,
         UserUpdateSchema,
-        UserResponseSchema,
         UserDisplaySchema,
         UserDetailSchema,
         UserSessionSchema,
@@ -546,7 +528,6 @@ export const useCoreValidation = () => {
         HouseholdCreateSchema,
         HouseholdCreateFormSchema,
         HouseholdUpdateSchema,
-        HouseholdResponseSchema,
         HouseholdDisplaySchema,
         HouseholdDetailSchema,
         // Functions - User

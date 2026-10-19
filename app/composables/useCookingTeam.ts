@@ -8,17 +8,6 @@ import type {JokerSlot} from '~/composables/useDutyValidation'
 import {startOfDay, endOfDay, isWithinInterval} from 'date-fns'
 
 /**
- * Predicate: the role's current holder is not the given inhabitant.
- * True when the role is vacant OR held by someone else.
- * Used by parents of RoleAssignment to gate `v-if`.
- */
-export const isNotAssignedToMe = (
-    holder: InhabitantDisplay | undefined,
-    myInhabitantId: number | null
-): boolean =>
-    !holder || (myInhabitantId !== null && holder.id !== myInhabitantId)
-
-/**
  * Run the chef auto-claim when the dinner is vacant and the caller has an Inhabitant.
  * Returns the value the caller assigns to `wasAutoClaimed`. Propagates `claim` errors
  * for the caller's wrapper to handle.
@@ -185,7 +174,6 @@ export const useCookingTeam = () => {
         chunkTeamAffinities,
         decideRoleAssignmentWrites,
         countJokerSlotShifts,
-        isNotAssignedToMe,
         tryAutoClaim
     }
 }

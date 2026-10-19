@@ -69,31 +69,6 @@ export async function fetchJobRun(
 }
 
 /**
- * Fetch the most recent job run for a specific job type
- * Returns JobRunDisplay or null if no runs exist
- */
-export async function fetchLatestJobRun(
-    d1Client: D1Database,
-    jobType: JobType
-): Promise<JobRunDisplay | null> {
-    console.info(`${LOG} > [GET] Fetching latest job run for ${jobType}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {JobRunDisplaySchema} = useMaintenanceValidation()
-
-    const jobRun = await prisma.jobRun.findFirst({
-        where: {jobType},
-        orderBy: {startedAt: 'desc'}
-    })
-
-    if (!jobRun) {
-        console.info(`${LOG} > [GET] No job runs found for ${jobType}`)
-        return null
-    }
-
-    return JobRunDisplaySchema.parse(jobRun)
-}
-
-/**
  * Create a new job run with RUNNING status
  * Used at the start of job execution
  */
@@ -114,35 +89,6 @@ export async function createJobRun(
     })
 
     console.info(`${LOG} > [CREATE] Created job run ${jobRun.id}`)
-
-    return JobRunDisplaySchema.parse(jobRun)
-}
-
-/**
- * Update a job run with completion status
- * Used when job completes (success, partial, or failed)
- */
-export async function updateJobRun(
-    d1Client: D1Database,
-    id: number,
-    data: JobRunUpdate
-): Promise<JobRunDisplay> {
-    console.info(`${LOG} > [UPDATE] Updating job run ${id} with status=${data.status}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {JobRunDisplaySchema} = useMaintenanceValidation()
-
-    const jobRun = await prisma.jobRun.update({
-        where: {id},
-        data: {
-            status: data.status,
-            completedAt: data.completedAt ?? Prisma.skip,
-            durationMs: data.durationMs ?? Prisma.skip,
-            resultSummary: data.resultSummary ?? Prisma.skip,
-            errorMessage: data.errorMessage ?? Prisma.skip
-        }
-    })
-
-    console.info(`${LOG} > [UPDATE] Updated job run ${id}`)
 
     return JobRunDisplaySchema.parse(jobRun)
 }

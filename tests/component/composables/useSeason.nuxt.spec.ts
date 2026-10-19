@@ -17,32 +17,26 @@ const {DinnerEventCreateSchema} = useBookingValidation()
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
 type UseSeasonT = ReturnType<typeof useSeason>
 type SeasonDeadlines = ReturnType<UseSeasonT['deadlinesForSeason']>
-let coalesceSeason: UseSeasonT['coalesceSeason']
-let getDefaultSeason: UseSeasonT['getDefaultSeason']
 let getDefaultHolidays: UseSeasonT['getDefaultHolidays']
 let generateDinnerEventDataForSeason: UseSeasonT['generateDinnerEventDataForSeason']
 let assignAffinitiesToTeams: UseSeasonT['assignAffinitiesToTeams']
 let assignTeamsToEvents: UseSeasonT['assignTeamsToEvents']
-let getHolidaysForSeason: UseSeasonT['getHolidaysForSeason']
+let getHolidayDatesFromDateRangeList: UseSeasonT['getHolidayDatesFromDateRangeList']
 let deadlinesForSeason: UseSeasonT['deadlinesForSeason']
 let getMenuAnnouncementDeadlineDays: UseSeasonT['getMenuAnnouncementDeadlineDays']
-let isOnTeam: UseSeasonT['isOnTeam']
 let createPreferenceClipper: UseSeasonT['createPreferenceClipper']
 let getScheduleChangeDesiredEvents: UseSeasonT['getScheduleChangeDesiredEvents']
 let reconcileDinnerEvents: UseSeasonT['reconcileDinnerEvents']
 let isChefFor: UseSeasonT['isChefFor']
 beforeAll(() => {
     ({
-        coalesceSeason,
-        getDefaultSeason,
         getDefaultHolidays,
         generateDinnerEventDataForSeason,
         assignAffinitiesToTeams,
         assignTeamsToEvents,
-        getHolidaysForSeason,
+        getHolidayDatesFromDateRangeList,
         deadlinesForSeason,
         getMenuAnnouncementDeadlineDays,
-        isOnTeam,
         createPreferenceClipper,
         getScheduleChangeDesiredEvents,
         reconcileDinnerEvents,
@@ -148,45 +142,6 @@ describe('useSeasonSchema', () => {
         expect(isActive(afterDate, start, end)).toBe(false)
         expect(isActive(start, start, end)).toBe(true)
         expect(isActive(end, start, end)).toBe(true)
-    })
-})
-
-describe('coalesceSeason', () => {
-
-    it('should return the default season when no season is provided', () => {
-        const defaultSeason = getDefaultSeason()
-        const result = coalesceSeason(undefined, defaultSeason)
-        expect(result).toEqual(defaultSeason)
-    })
-
-    it('should merge provided season with default season', () => {
-        const defaultSeason = getDefaultSeason()
-        const partialSeason: Partial<Season> = {
-            shortName: 'Test Season',
-            isActive: true
-        }
-        const result = coalesceSeason(partialSeason, defaultSeason)
-        expect(result.shortName).toBe(partialSeason.shortName)
-        expect(result.isActive).toBe(partialSeason.isActive)
-        expect(result.seasonDates).toEqual(defaultSeason.seasonDates)
-    })
-
-    it('should deep copy seasonDates and holidays', () => {
-        const defaultSeason = getDefaultSeason()
-        const partialSeason: Partial<Season> = {
-            seasonDates: {
-                start: new Date(1976, 0, 26),
-                end: new Date(1976, 0, 26)
-            },
-            holidays: [
-                { start: new Date(1976, 0, 26), end: new Date(1976, 0, 26) }
-            ]
-        }
-        const result = coalesceSeason(partialSeason, defaultSeason)
-        expect(result.seasonDates).toEqual(partialSeason.seasonDates)
-        expect(result.holidays).toEqual(partialSeason.holidays)
-        expect(result.seasonDates).not.toBe(partialSeason.seasonDates)
-        expect(result.holidays).not.toBe(partialSeason.holidays)
     })
 })
 
@@ -379,7 +334,8 @@ describe('assignTeamsToEvents', () => {
     })
 })
 
-describe('getHolidaysForSeason', () => {
+// The calendars read a season's holidays as the days of its holiday ranges
+describe('getHolidayDatesFromDateRangeList', () => {
 
     it('should return 6 dates for two 3-day holiday ranges', () => {
         // GIVEN: Season with two holiday ranges
@@ -392,7 +348,7 @@ describe('getHolidaysForSeason', () => {
         }
 
         // WHEN: Getting holiday dates
-        const result = getHolidaysForSeason(season)
+        const result = getHolidayDatesFromDateRangeList(season.holidays)
 
         // THEN: Returns one date per day of each range
         expect(result).toHaveLength(6)
@@ -406,7 +362,7 @@ describe('getHolidaysForSeason', () => {
         }
 
         // WHEN: Getting holiday dates
-        const result = getHolidaysForSeason(season)
+        const result = getHolidayDatesFromDateRangeList(season.holidays)
 
         // THEN: Returns all consecutive dates
         expect(result[0]).toEqual(new Date(2025, 0, 1))
@@ -570,39 +526,6 @@ const createTeam = (assignments: Array<{id: number, inhabitantId: number, role: 
             role: a.role
         }))
     })
-
-describe('isOnTeam', () => {
-    const { TeamRoleSchema } = useCookingTeamValidation()
-    const TeamRole = TeamRoleSchema.enum
-
-    // Any role puts an inhabitant on the team: one role stands for all
-    it.each([
-        {
-            description: 'inhabitant is on team as CHEF',
-            inhabitantId: 1,
-            team: createTeam([{id: 1, inhabitantId: 1, role: TeamRole.CHEF}]),
-            expected: true
-        },
-        {
-            description: 'inhabitant is not on team',
-            inhabitantId: 99,
-            team: createTeam([{id: 1, inhabitantId: 1, role: TeamRole.CHEF}]),
-            expected: false
-        },
-        {
-            description: 'team is null',
-            inhabitantId: 1,
-            team: null,
-            expected: false
-        }
-    ])('should return $expected when $description', ({ inhabitantId, team, expected }) => {
-        // WHEN: Checking if inhabitant is on team
-        const result = isOnTeam(inhabitantId, team)
-
-        // THEN: Returns expected result
-        expect(result).toBe(expected)
-    })
-})
 
 describe('createPreferenceClipper', () => {
     const {DinnerModeSchema} = useBookingValidation()

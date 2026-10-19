@@ -3,7 +3,6 @@ import {isSameDay} from 'date-fns'
 import {useBilling, TICKET_COUNTS} from '~/composables/useBilling'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
-import type {OrderDisplay} from '~/composables/useBookingValidation'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 
 describe('useBilling', () => {
@@ -14,7 +13,6 @@ describe('useBilling', () => {
     let getBillingPeriodForDate: Billing['getBillingPeriodForDate']
     let controlInvoices: Billing['controlInvoices']
     let controlTransactions: Billing['controlTransactions']
-    let controlOrders: Billing['controlOrders']
     let formatTicketCounts: Billing['formatTicketCounts']
     let groupByHouseholdEntry: Billing['groupByHouseholdEntry']
     let decideBillingSideEffects: Billing['decideBillingSideEffects']
@@ -27,13 +25,12 @@ describe('useBilling', () => {
             getBillingPeriodForDate,
             controlInvoices,
             controlTransactions,
-            controlOrders,
             formatTicketCounts,
             groupByHouseholdEntry,
             decideBillingSideEffects
         } = useBilling())
     })
-    const {TicketTypeSchema, DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+    const {TicketTypeSchema} = useBookingValidation()
     const TicketType = TicketTypeSchema.enum
     type TicketTypeValue = typeof TicketType[keyof typeof TicketType]
 
@@ -131,46 +128,6 @@ describe('useBilling', () => {
             expect(result.computed).toBe(amounts.reduce((a, b) => a + b, 0))
             expect(result.expected).toBe(expected)
             expect(result.isValid).toBe(shouldBeValid)
-        })
-    })
-
-    describe('controlOrders', () => {
-        const {ADULT, CHILD, BABY} = TicketType
-        const makeOrder = (priceAtBooking: number, ticketType: TicketTypeValue): OrderDisplay => ({
-            id: 1, inhabitantId: 1, dinnerEventId: 1, ticketPriceId: 1,
-            bookedByUserId: 1, dinnerMode: DinnerModeSchema.enum.DINEIN,
-            state: OrderStateSchema.enum.BOOKED, priceAtBooking, isGuestTicket: false, ticketType,
-            releasedAt: null, closedAt: null, createdAt: new Date(), updatedAt: new Date()
-        })
-
-        // The ticket counts' wording is formatTicketCounts', below
-        it.each([
-            // [description, orders, expectedAmount, expectedCounts, shouldBeValid]
-            ['amount + counts match', [[10000, ADULT], [10000, ADULT], [5000, CHILD]], 25000, '2V 1B', true],
-            ['amount mismatch', [[10000, ADULT], [10000, ADULT]], 25000, '2V', false],
-            ['counts mismatch', [[10000, ADULT], [10000, ADULT]], 20000, '3V', false]
-        ] as const)('%s', (_, orderData, expectedAmount, expectedCounts, shouldBeValid) => {
-            const orders = orderData.map(([price, type]) => makeOrder(price, type))
-            const result = controlOrders(orders, expectedAmount, expectedCounts)
-
-            expect(result.isValid).toBe(shouldBeValid)
-            expect(result.expected).toBe(expectedAmount)
-            expect(result.ticketCounts.expected).toBe(expectedCounts)
-        })
-
-        it('returns computed values correctly', () => {
-            const orders = [
-                makeOrder(10000, ADULT),
-                makeOrder(10000, ADULT),
-                makeOrder(5000, CHILD),
-                makeOrder(0, BABY)
-            ]
-            const result = controlOrders(orders, 25000, '2V 1B 1b')
-
-            expect(result.computed).toBe(25000)
-            expect(result.ticketCounts.computed).toBe('2V 1B 1b')
-            expect(result.ticketCounts.isValid).toBe(true)
-            expect(result.isValid).toBe(true)
         })
     })
 

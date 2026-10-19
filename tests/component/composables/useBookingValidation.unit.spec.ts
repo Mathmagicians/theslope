@@ -26,8 +26,6 @@ describe('useBookingValidation', () => {
     OrderDisplaySchema,
     OrderDetailSchema,
     OrderHistoryDisplaySchema,
-    OrderHistoryDetailSchema,
-    OrderHistoryCreateSchema,
     OrderSnapshotSchema,
     OrderAuditChangeSchema,
     OrderAuditActionSchema,
@@ -36,10 +34,6 @@ describe('useBookingValidation', () => {
     DinnerModeSchema,
     createOrderAuditData,
     readOrderAudit,
-    serializeOrder,
-    deserializeOrder,
-    serializeOrderHistoryDisplay,
-    deserializeOrderHistoryDisplay,
     deserializeDinnerEvent,
     deserializeDinnerEventDetail
   } = useBookingValidation()
@@ -100,8 +94,6 @@ describe('useBookingValidation', () => {
 
     it.each([
       {name: 'OrderHistoryDisplaySchema', schema: OrderHistoryDisplaySchema, factory: () => OrderFactory.defaultOrderHistoryDisplay()},
-      {name: 'OrderHistoryDetailSchema', schema: OrderHistoryDetailSchema, factory: () => OrderFactory.defaultOrderHistoryDetail()},
-      {name: 'OrderHistoryCreateSchema', schema: OrderHistoryCreateSchema, factory: () => OrderFactory.defaultOrderHistoryCreate()},
       {name: 'OrderSnapshotSchema', schema: OrderSnapshotSchema, factory: () => OrderFactory.defaultOrderSnapshot()}
     ])('$name GIVEN the factory data WHEN parsing THEN succeeds', ({schema, factory}) => {
       const result: ZodSafeParseResult<unknown> = schema.safeParse(factory())
@@ -180,9 +172,7 @@ describe('useBookingValidation', () => {
     const {
       AuditContextSchema,
       OrderCreateWithPriceSchema,
-      OrdersBatchSchema,
-      CreateOrdersResultSchema,
-      ORDER_BATCH_SIZE
+      CreateOrdersResultSchema
     } = useBookingValidation()
 
     it.each([
@@ -192,85 +182,9 @@ describe('useBookingValidation', () => {
     ])('$name GIVEN the factory data WHEN parsing THEN succeeds', ({parse}) => {
       expect(parse).not.toThrow()
     })
-
-    // The batch size is the D1 limit (ADR-014); one batch belongs to one household
-    describe('OrdersBatchSchema', () => {
-      it('GIVEN batch of max (ORDER_BATCH_SIZE) orders of one household WHEN parsing THEN succeeds', () => {
-        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, ORDER_BATCH_SIZE))).not.toThrow()
-      })
-
-      it('GIVEN a batch exceeding max WHEN parsing THEN throws', () => {
-        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, ORDER_BATCH_SIZE + 1))).toThrow(/Maksimalt/)
-      })
-
-      it('GIVEN batch with different householdIds WHEN parsing THEN throws', () => {
-        const mixedBatch = [
-          OrderFactory.defaultOrderCreateWithPrice(1),
-          OrderFactory.defaultOrderCreateWithPrice(2)
-        ]
-        expect(() => OrdersBatchSchema.parse(mixedBatch)).toThrow(/samme husstand/)
-      })
-    })
   })
 
   describe('Serialization (ADR-010)', () => {
-    describe('serializeOrder / deserializeOrder', () => {
-      it('GIVEN order WHEN round-tripping THEN preserves data', () => {
-        const originalOrder = OrderFactory.defaultOrder()
-        const serialized = serializeOrder(originalOrder)
-        const deserialized = deserializeOrder(serialized)
-        expect(deserialized).toEqual(originalOrder)
-      })
-
-      it.each(['createdAt', 'updatedAt', 'releasedAt', 'closedAt'].map(field => ({field})))(
-        'GIVEN $field WHEN serializing THEN converts Date to string',
-        ({field}) => {
-          const order = OrderFactory.defaultOrder(undefined, {
-            releasedAt: new Date(2025, 0, 15),
-            closedAt: new Date(2025, 0, 20)
-          })
-          const serialized = serializeOrder(order)
-          if (serialized[field as keyof typeof serialized] !== null) {
-            expect(typeof serialized[field as keyof typeof serialized]).toBe('string')
-          }
-        }
-      )
-
-      it.each(['releasedAt', 'closedAt'].map(field => ({field})))(
-        'GIVEN null $field WHEN serializing THEN preserves null',
-        ({field}) => {
-          const order = OrderFactory.defaultOrder(undefined, {[field]: null})
-          const serialized = serializeOrder(order)
-          expect(serialized[field as keyof typeof serialized]).toBeNull()
-
-          const deserialized = deserializeOrder(serialized)
-          expect(deserialized[field as keyof typeof deserialized]).toBeNull()
-        }
-      )
-
-      it.each([
-        {desc: 'without dinnerEvent', context: undefined},
-        {desc: 'with dinnerEvent', context: {id: 1, date: new Date('2025-01-15'), menuTitle: 'Test Menu'}}
-      ])('GIVEN order $desc WHEN round-tripping THEN preserves data', ({context}) => {
-        const order = OrderFactory.defaultOrder(undefined, {dinnerEvent: context})
-        const serialized = serializeOrder(order)
-        const deserialized = deserializeOrder(serialized)
-        expect(deserialized.dinnerEvent?.menuTitle).toBe(context?.menuTitle)
-        if (context) {
-          expect(deserialized.dinnerEvent?.date).toBeInstanceOf(Date)
-        }
-      })
-    })
-
-    describe('serializeOrderHistoryDisplay / deserializeOrderHistoryDisplay', () => {
-      it('GIVEN history WHEN serializing THEN converts timestamp to string, and the round trip preserves the data', () => {
-        const originalHistory = OrderFactory.defaultOrderHistoryDisplay()
-        const serialized = serializeOrderHistoryDisplay(originalHistory)
-        expect(typeof serialized.timestamp).toBe('string')
-        expect(deserializeOrderHistoryDisplay(serialized)).toEqual(originalHistory)
-      })
-    })
-
     describe('deserializeDinnerEvent', () => {
       it('GIVEN allergens as join table WHEN deserializing THEN flattens to array', () => {
         const mockAllergyTypes = AllergyFactory.createMockAllergyTypes()

@@ -1,8 +1,8 @@
 # Feature Proposal: Duty Roster (with Audit Trail + Cross-Team Swap)
 
-**Status:** Signed off (schema 2026-10-07, roster UX 2026-10-05 to 08); deferred to the next release 2026-10-13; the joker slot shipped in 0.9 (`archived/feature-joker-slot.md`) | **Umbrella of the signoffs:** `this-pr/release-0.9.0.md`
+**Status:** Signed off (schema 2026-10-07, roster UX 2026-10-05 to 08); deferred to the next release 2026-10-13; the joker slot shipped in 0.9 (`archived/feature-joker-slot.md`) | **Umbrella of the signoffs:** `archived/release-0.9.0.md`
 **Date:** 2026-04-29
-**Updated:** 2026-10-05 — refreshed for the work-roster push (`this-pr/release-0.9.0.md`): chef-swap shipped (`assign-role`, `remove-role` live; `assignment/swap` did not ship — cross-team duty swap in Phase 5 covers the swap need); instrumentation of shipped endpoints is retroactive; Joker section added; schema lands via the PR's bundled Prisma package
+**Updated:** 2026-10-05 — refreshed for the work-roster push (`archived/release-0.9.0.md`): chef-swap shipped (`assign-role`, `remove-role` live; `assignment/swap` did not ship — cross-team duty swap in Phase 5 covers the swap need); instrumentation of shipped endpoints is retroactive; Joker section added; schema lands via the PR's bundled Prisma package
 **Builds on:** `archived/feature-chef-swap.md` (shipped; its unshipped Phase 4 move-out cascade is carried here under Phase 5)
 
 ## Problem

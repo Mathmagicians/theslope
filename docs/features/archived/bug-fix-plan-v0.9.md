@@ -3,7 +3,7 @@
 **Status:** Shipped, archived 2026-10-06
 **Date:** 2026-08-19
 **Branches:** B0–B4 on the fix/bug-sprint branches (git history); B5 with PR #166/#167; the booking one-path batch on `feature/work-roster` (approved 2026-10-06)
-**Parents:** [release-plan-v0.9.md](../proposals/release-plan-v0.9.md) · [release-0.9.0.md](../this-pr/release-0.9.0.md)
+**Parents:** [release-plan-v0.9.md](../proposals/release-plan-v0.9.md) · [release-0.9.0.md](release-0.9.0.md)
 
 Moved out on archival: B6 → [chores-0.9.1.md](../chores-0.9.1.md) (the Order
 snapshot package, schema in the Prisma bundle); billing delivery report + interrupted job runs →

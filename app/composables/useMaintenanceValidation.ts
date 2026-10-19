@@ -1,8 +1,8 @@
 import {z} from 'zod'
 import {JobTypeSchema, JobStatusSchema} from '~~/prisma/generated/zod'
-import {useBookingValidation, type DailyMaintenanceResult} from './useBookingValidation'
-import {useHeynaboValidation, type HeynaboImportResponse} from './useHeynaboValidation'
-import {useBillingValidation, type MonthlyBillingJobResult} from './useBillingValidation'
+import type {DailyMaintenanceResult} from './useBookingValidation'
+import type {HeynaboImportResponse} from './useHeynaboValidation'
+import type {MonthlyBillingJobResult} from './useBillingValidation'
 
 /**
  * Validation schemas for maintenance/job entities
@@ -14,11 +14,6 @@ export const useMaintenanceValidation = () => {
     // Re-export enums for application code (ADR-001)
     const JobType = JobTypeSchema.enum
     const JobStatus = JobStatusSchema.enum
-
-    // Import result schemas for deserialization
-    const {DailyMaintenanceResultSchema} = useBookingValidation()
-    const {HeynaboImportResponseSchema} = useHeynaboValidation()
-    const {MonthlyBillingJobResultSchema} = useBillingValidation()
 
     /**
      * JobRun Display - for index endpoint (GET /api/admin/job-run)
@@ -97,32 +92,6 @@ export const useMaintenanceValidation = () => {
     const serializeResultSummary = (result: DailyMaintenanceResult | HeynaboImportResponse | MonthlyBillingJobResult | _SeasonImportResponse): string =>
         JSON.stringify(result)
 
-    /**
-     * Deserialize and validate result summary from DB based on job type
-     * Monthly billing returns {results, periods}
-     */
-    const deserializeResultSummary = (
-        jobType: z.infer<typeof JobTypeSchema>,
-        resultSummary: string | null
-    ): DailyMaintenanceResult | HeynaboImportResponse | MonthlyBillingJobResult | _SeasonImportResponse | null => {
-        if (!resultSummary) return null
-
-        const parsed = JSON.parse(resultSummary)
-
-        switch (jobType) {
-            case JobType.DAILY_MAINTENANCE:
-                return DailyMaintenanceResultSchema.parse(parsed)
-            case JobType.HEYNABO_IMPORT:
-                return HeynaboImportResponseSchema.parse(parsed)
-            case JobType.MAINTENANCE_IMPORT:
-                return SeasonImportResponseSchema.parse(parsed)
-            case JobType.MONTHLY_BILLING:
-                return MonthlyBillingJobResultSchema.parse(parsed)
-            default:
-                throw new Error(`Unknown job type: ${jobType}`)
-        }
-    }
-
     return {
         // Enum schemas (from generated layer)
         JobTypeSchema,
@@ -143,8 +112,7 @@ export const useMaintenanceValidation = () => {
         SeasonImportResponseSchema,
 
         // Serialization (ADR-010)
-        serializeResultSummary,
-        deserializeResultSummary
+        serializeResultSummary
     }
 }
 

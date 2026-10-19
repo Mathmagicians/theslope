@@ -1,6 +1,6 @@
 # Waitlist — queue, auto-assign, extra portions (shipped in release 0.9)
 
-**Status:** ✅ shipped: backend 2026-10-09, one booking path and the UI 2026-10-12 | **Signed:** design 2026-10-07, member faces 2026-10-06 and 12, chef side 2026-10-05, one booking path 2026-10-12 | **Umbrella:** `../this-pr/release-0.9.0.md`
+**Status:** ✅ shipped: backend 2026-10-09, one booking path and the UI 2026-10-12 | **Signed:** design 2026-10-07, member faces 2026-10-06 and 12, chef side 2026-10-05, one booking path 2026-10-12 | **Umbrella:** `release-0.9.0.md`
 
 After the booking deadline a member claims a released ticket or stands in line for one; the chef releases extra
 portions; the queue is strict FIFO by portion weight, idempotent and replay-safe.
@@ -15,7 +15,7 @@ portions; the queue is strict FIFO by portion weight, idempotent and replay-safe
 | Maintenance | the daily job clears the entries of consumed dinners (ADR-015) |
 | Member faces: queued as a badge on Ingen, the ghost of the wish after the deadline, the grid cell and legend, the ticket state | `DinnerBookingForm.vue`, `DinnerModeSelector.vue`, `BookingGridView.vue`, `DinnerModeLegend.vue`, `DinnerTicket.vue` (mockups in the headers) |
 | Chef side: demand-driven release, one form with two triggers; the kitchen stats' alternating fourth box | `ChefMenuCard.vue`, `KitchenPreparation.vue` |
-| Notifications: `WAITLIST_JOINED`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_EXTRA_PORTION`, `WAITLIST_BUILDUP`, `TICKET_SOLD`, sent after the booking action from its outcomes | `app/config/notificationTemplates.ts`, `server/utils/sender/events/waitlist.ts` (`notifyBookingOutcomes`, `notifyExtraPortions`); the Delivery-row e2e is the "Waitlist notifications" package in `../this-pr/release-0.9.0.md` |
+| Notifications: `WAITLIST_JOINED`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_EXTRA_PORTION`, `WAITLIST_BUILDUP`, `TICKET_SOLD`, sent after the booking action from its outcomes | `app/config/notificationTemplates.ts`, `server/utils/sender/events/waitlist.ts` (`notifyBookingOutcomes`, `notifyExtraPortions`); the Delivery-row e2e is the "Waitlist notifications" package in `release-0.9.0.md` |
 | Specs | the resolver unit spec, the scaffold and waitlist API specs, the serial `waitlistAssignment` and `Waitlist` e2e, the component specs of the five faces |
 
 Removed with the one booking path: `PUT`/`DELETE`/`GET /api/household/waitlist`, `GET /api/chef/dinner/[id]/waitlist`,

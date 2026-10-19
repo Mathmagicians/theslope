@@ -64,10 +64,6 @@ const sendMails = async (channel: EmailChannel, mails: Promise<OutgoingMail>[]):
     return outgoing.map(mail => 'message' in mail ? queued.shift()! : mail.unsent)
 }
 
-// A booking mail sent on its own
-const alone = <A extends [EmailChannel, ...unknown[]]>(mail: (...args: A) => Promise<OutgoingMail>) =>
-    (...args: A): Promise<SenderEmitResult> => sendMails(args[0], [mail(...args)]).then(([result]) => result!)
-
 const waitlistJoinedMail = (
     channel: EmailChannel, to: string | null, name: string, dinner: WaitlistDinnerContext, position: number, ticketType: string
 ): Promise<OutgoingMail> =>
@@ -101,12 +97,6 @@ const ticketSoldMail = (
 ): Promise<OutgoingMail> =>
     bookingMail(channel, 'TICKET_SOLD', to, dinner, () => ({name, dinner: dinnerLabel(dinner), seller, buyer}))
 
-export const emitWaitlistJoined = alone(waitlistJoinedMail)
-export const emitWaitlistTicketAssigned = alone(waitlistTicketAssignedMail)
-export const emitWaitlistExtraPortion = alone(waitlistExtraPortionMail)
-export const emitWaitlistBuildup = alone(waitlistBuildupMail)
-export const emitTicketSold = alone(ticketSoldMail)
-
 /** The booking mails of one operation, with recipients, names and household shortnames resolved */
 export interface BookingMails {
     joined: {to: string | null, name: string, dinner: WaitlistDinnerContext, position: number, ticketType: string}[]
@@ -115,8 +105,6 @@ export interface BookingMails {
     assigned: {to: string | null, name: string, dinner: WaitlistDinnerContext, ticket: string, seller: string, buyer: string}[]
     extraPortions: {to: string | null, name: string, dinner: WaitlistDinnerContext, ticket: string, buyer: string}[]
 }
-
-export const NO_BOOKING_MAILS: BookingMails = {joined: [], buildups: [], sold: [], assigned: [], extraPortions: []}
 
 export const bookingMails = (channel: EmailChannel, mails: BookingMails): Promise<SenderEmitResult[]> => sendMails(channel, [
     ...mails.joined.map(mail => waitlistJoinedMail(channel, mail.to, mail.name, mail.dinner, mail.position, mail.ticketType)),

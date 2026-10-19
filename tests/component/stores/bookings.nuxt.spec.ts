@@ -452,7 +452,7 @@ describe('Bookings store — one booking write', () => {
 
         store.loadOrdersForDinners({dinnerEventIds: [dinner.id], householdId: MY_HOUSEHOLD_ID})
 
-        await vi.waitFor(() => expect(store.isOrdersErrored).toBe(true))
+        await vi.waitFor(() => expect(asyncDataStatus('bookings-store-orders')).toBe('error'))
         expect(store.isBookingsReloading).toBe(false)
     })
 })
@@ -615,16 +615,15 @@ describe('Bookings store — gated reads', () => {
         expect(endpoint).toHaveBeenCalled()
     })
 
-    it('reads unrequested orders as neither loading, errored, loaded nor empty', async () => {
+    it('reads unrequested orders as neither loading, loaded nor empty', async () => {
         const store = useBookingsStore()
         await flushPromises()
 
         expect({
             isOrdersLoading: store.isOrdersLoading,
-            isOrdersErrored: store.isOrdersErrored,
             isOrdersInitialized: store.isOrdersInitialized,
             isNoOrders: store.isNoOrders
-        }).toEqual({isOrdersLoading: false, isOrdersErrored: false, isOrdersInitialized: false, isNoOrders: false})
+        }).toEqual({isOrdersLoading: false, isOrdersInitialized: false, isNoOrders: false})
     })
 
     it('is ready once the requested orders have loaded', async () => {

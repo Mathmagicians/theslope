@@ -196,7 +196,6 @@ export const useCookingTeamValidation = () => {
     // Type definitions (inside composable to avoid circular reference)
     type CookingTeamDisplay = z.infer<typeof CookingTeamDisplaySchema>
     type CookingTeamDetail = z.infer<typeof CookingTeamDetailSchema>
-    type TeamRole = z.infer<typeof TeamRoleSchema>
 
     // Transform schema for serialization (converts WeekDayMap to JSON string)
     // Assignments in teams being serialized always have inhabitant (came from DB for updates, or empty for creates)
@@ -295,15 +294,6 @@ export const useCookingTeamValidation = () => {
         return CookingTeamDetailSchema.parse(deserialized)
     }
 
-    // Utility functions for team member counts
-    const getTeamMemberCounts = (team: CookingTeamDisplay): number => {
-        return team.assignments.length
-    }
-
-    const getAssignmentIdsForRole = (team: CookingTeamDisplay, role?: TeamRole) =>
-        (role ? team.assignments.filter(c => c.role === role) : team.assignments)
-            .map(c => c.inhabitantId)
-
     /**
      * Transform team data for Prisma create operations
      * Serializes: affinity (WeekDayMap → JSON string)
@@ -330,11 +320,6 @@ export const useCookingTeamValidation = () => {
         return PrismaTeamUpdateDataSchema.parse(result)
     }
 
-    // Validation helper for tests
-    const validateCookingTeam = (team: unknown) => {
-        return CookingTeamDisplaySchema.parse(team)
-    }
-
     // Return schemas and utility functions
     return {
         // Client-facing schemas (ADR-009)
@@ -350,11 +335,7 @@ export const useCookingTeamValidation = () => {
         RoleAssignmentPlanSchema,            // Plan output from decideRoleAssignmentWrites
         TeamRoleSchema,                      // For role enums
         CookingTeamSchema,                   // Base schema
-        // Validation helper
-        validateCookingTeam,
         // Utility functions
-        getTeamMemberCounts,
-        getAssignmentIdsForRole,
         serializeCookingTeam,
         serializeCookingTeamCreate,
         SerializedCookingTeamCreateSchema,

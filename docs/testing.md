@@ -819,7 +819,7 @@ holds dinners after and before the deadline.
 - Events 1-2 days away → **AFTER deadline** (can only RELEASE, CLAIM)
 
 **Minimal seasons:** a season spans the dinners the case proves, one when one is enough, inside the pre-booking
-window (ADR-015 § Test Requirements).
+window (ADR-015 § Test Requirements) unless the case proves a dinner past it (`PAST_THE_SCAFFOLD_WINDOW_DAYS`).
 
 ### Use Application's Deadline Logic
 

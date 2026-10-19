@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, BookingResult, BookingTotals, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, TicketChange, TicketChangesResponse, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, OrderAuditSource,CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
+import type { OrderDisplay, BookingResult, BookingTotals, OrderDetail, OrderHistoryDisplay, TicketChange, TicketChangesResponse, OrderSnapshot, OrderCreateWithPrice, AuditContext, OrderAuditSource,CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
@@ -213,34 +213,6 @@ export class OrderFactory {
   })
 
   /**
-   * OrderHistoryDetail - includes order relation (ADR-009)
-   */
-  static readonly defaultOrderHistoryDetail = (testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderHistoryDetail>): OrderHistoryDetail => ({
-    ...OrderFactory.defaultOrderHistoryDisplay(testSalt),
-    order: OrderFactory.defaultOrder(testSalt),
-    ...overrides
-  })
-
-  /**
-   * OrderHistoryCreate - for input validation (no id, no timestamp)
-   */
-  static readonly defaultOrderHistoryCreate = (overrides?: Partial<OrderHistoryCreate>): OrderHistoryCreate => ({
-    orderId: 1,
-    action: OrderAuditActionSchema.enum.USER_BOOKED,
-    performedByUserId: 1,
-    auditData: JSON.stringify({
-      inhabitantId: 10,
-      bookedByUserId: 1,
-      ticketPriceId: 1,
-      priceAtBooking: 45
-    }),
-    inhabitantId: null,
-    dinnerEventId: null,
-    seasonId: null,
-    ...overrides
-  })
-
-  /**
    * OrderSnapshot - for audit data (derived from OrderDisplaySchema + provenance)
    * Provenance fields enable "🔄 fra AR_1" display on claimed tickets
    */
@@ -300,12 +272,6 @@ export class OrderFactory {
     createdIds: [1, 2, 3],
     ...overrides
   })
-
-  /**
-   * Create a batch of orders for same household (for OrdersBatchSchema tests)
-   */
-  static readonly createOrdersBatch = (householdId: number, count: number): OrderCreateWithPrice[] =>
-    Array.from({length: count}, (_, i) => OrderFactory.defaultOrderCreateWithPrice(householdId, {inhabitantId: i + 1}))
 
   // === API METHODS ===
 

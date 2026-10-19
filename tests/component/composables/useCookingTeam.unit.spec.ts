@@ -188,22 +188,6 @@ describe('useCookingTeam', () => {
     })
   })
 
-  describe('isNotAssignedToMe', () => {
-    const {isNotAssignedToMe} = useCookingTeam()
-    const ME = 42
-    const someoneElse = {id: 99, name: 'Anna', lastName: 'Hansen'} as InhabitantDisplay
-    const me = {id: ME, name: 'Selv', lastName: 'Test'} as InhabitantDisplay
-
-    it.each([
-      {desc: 'no holder, I am authenticated',           holder: undefined,    myInhabitantId: ME,   expected: true},
-      {desc: 'someone else is holder',                  holder: someoneElse,  myInhabitantId: ME,   expected: true},
-      {desc: 'I am the holder',                         holder: me,           myInhabitantId: ME,   expected: false},
-      {desc: 'someone else holds, I am unauthenticated',holder: someoneElse,  myInhabitantId: null, expected: false}
-    ])('$desc → $expected', ({holder, myInhabitantId, expected}) => {
-      expect(isNotAssignedToMe(holder, myInhabitantId)).toBe(expected)
-    })
-  })
-
   describe('countJokerSlotShifts', () => {
     const {countJokerSlotShifts} = useCookingTeam()
     // The team cooks tuesdays and thursdays, from monday 5 October 2026

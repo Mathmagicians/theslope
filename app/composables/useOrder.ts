@@ -212,17 +212,13 @@ export const useOrder = () => {
     const ticketCount = paidOrders.length
     const totalRevenue = sumBy(paidOrders, o => o.priceAtBooking)
     const kitchenContribution = Math.round(totalRevenue * kitchenBaseRatePercent / 100)
-    const kitchenContributionExVat = convertVat(kitchenContribution, vatPercent, true)
     const availableBudget = totalRevenue - kitchenContribution
-    const availableBudgetExVat = convertVat(availableBudget, vatPercent, true)
 
     return {
       ticketCount,
       totalRevenue,
       kitchenContribution,        // inkl. moms
-      kitchenContributionExVat,   // ex moms
       availableBudget,            // inkl. moms
-      availableBudgetExVat,       // ex moms (for grocery shopping)
       kitchenBaseRatePercent,
       vatPercent
     }

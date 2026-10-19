@@ -8,7 +8,6 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {useBookingValidation, type ScaffoldOrdersResponse} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {formatDate} from '~/utils/date'
-import {EMPTY_STATE_MESSAGES} from '~/composables/useTheSlopeDesignSystem'
 import {BookingViewSchema} from '~/composables/useBookingView'
 
 const {memberUIFile, adminUIFile} = authFiles
@@ -222,14 +221,13 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
     test.describe('a selection that no longer exists on the server', () => {
         const dinnerResponse = (page: Page, id: number) =>
             page.waitForResponse(r => r.url().endsWith(`/api/admin/dinner-event/${id}`))
-        const goneLines = (context: keyof typeof EMPTY_STATE_MESSAGES) =>
-            EMPTY_STATE_MESSAGES[context].map(({emoji, text}) => `${emoji} ${text}`)
         const expectNoApiErrorToast = async (page: Page) => {
             await expect(page.getByText('No message')).toHaveCount(0)
             await expect(page.getByText(/^\d{3}: Uh, åh, fejl kan ske/)).toHaveCount(0)
         }
 
-        test('GIVEN /dinner on a dinner WHEN that dinner is deleted and the page navigates THEN the next dinner shows without a reload, and returning to it shows the error page', async ({page}) => {
+        // The error page for a dinner that no longer exists is the bookings store spec's (the dinner on the selected date)
+        test('GIVEN /dinner on a dinner WHEN that dinner is deleted and the page navigates THEN the next dinner shows without a reload', async ({page}) => {
             const gone = await getFutureDinnerEvent(3)
             const next = await getFutureDinnerEvent(4)
             const dateParam = () => new URL(page.url()).searchParams.get('date')
@@ -246,19 +244,6 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
             await expect(page.getByTestId('dinner-detail-header')).toBeVisible()
             expect(await page.evaluate(() => 'sameDocument' in window)).toBe(true)
             await expectNoApiErrorToast(page)
-
-            const goneRequested = dinnerResponse(page, gone.id)
-            await page.getByTestId('date-nav-prev').click()
-
-            expect((await goneRequested).status()).toBe(404)
-            await expect(page.getByText('FEJL 404')).toBeVisible()
-            const pageText = await page.locator('body').innerText()
-            expect(goneLines('dinnerGone').some(line => pageText.includes(line))).toBe(true)
-            await doScreenshot(page, 'dinner/dinner-gone-error-page')
-
-            await page.getByRole('link', {name: /starte forfra/}).click()
-            await expect(page.getByText('FEJL 404')).toHaveCount(0)
-            await expect(page).toHaveURL(/\/($|\?)/)
         })
 
         test.describe('as admin', () => {
