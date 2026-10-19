@@ -739,8 +739,9 @@ export class OrderFactory {
     ticketPriceId: number
     isTestHousehold: boolean
   }> => {
-    // Create season with ticket prices
-    const season = await SeasonFactory.createSeason(context, SeasonFactory.defaultSeason(testSalt))
+    // A one-day season with ticket prices: the season-wide scaffold below runs over its few dinners only
+    const defaultSeason = SeasonFactory.defaultSeason(testSalt)
+    const season = await SeasonFactory.createSeason(context, {...defaultSeason, seasonDates: {start: defaultSeason.seasonDates.start, end: defaultSeason.seasonDates.start}})
 
     // Create dinner event at specified days from now
     const eventDate = new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000)

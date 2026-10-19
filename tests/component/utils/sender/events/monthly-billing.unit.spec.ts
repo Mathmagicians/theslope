@@ -3,6 +3,7 @@ import {buildBillingPeriodClosedEmail, emitBillingPeriodClosed} from '~~/server/
 import {useNotificationValidation} from '~/composables/useNotificationValidation'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
+import {fakeSenderQueue, sentMessages} from '~~/tests/component/utils/sender/fakeSenderQueue'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 
 const {NotificationMessageSchema} = useNotificationValidation()
@@ -59,21 +60,21 @@ describe('emitBillingPeriodClosed', () => {
     afterEach(() => Object.values(logs).forEach(spy => spy.mockClear()))
 
     it('queues the mail through the binding', async () => {
-        const queue = {send: vi.fn().mockResolvedValue(undefined)} as unknown as Queue
+        const queue = fakeSenderQueue()
 
         const result = await emitBillingPeriodClosed(NotificationFactory.channel(queue), summary)
 
         expect(result.queued).toBe(true)
-        expect(queue.send).toHaveBeenCalledOnce()
+        expect(sentMessages(queue)).toHaveLength(1)
     })
 
     it('reports degraded without touching the binding when no accountant mailbox is configured', async () => {
-        const queue = {send: vi.fn()} as unknown as Queue
+        const queue = fakeSenderQueue()
 
         const result = await emitBillingPeriodClosed(NotificationFactory.channel(queue, {accountantEmail: ''}), summary)
 
         expect(result).toMatchObject({queued: false, degraded: true})
-        expect(queue.send).not.toHaveBeenCalled()
+        expect(sentMessages(queue)).toEqual([])
         expect(logs.warn).toHaveBeenCalledOnce()
     })
 

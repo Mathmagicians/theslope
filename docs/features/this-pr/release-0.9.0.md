@@ -64,7 +64,7 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 |---|---|
 | In the tree for the commit | the power row's component cases (#39's coverage, test-only); today's docs (the spec, the poster, the compliance cells) |
 | Rules | #57 to check; #64 the mail opt-out running |
-| CI api e2e | red at 8ed7e42: `scaffold-prebookings:616` fixed in 81ad76e; `maintenance:141` and `sender-event-monthly-billing:22` wait on the admin bypass on a consumed dinner (a/b with the user); `scaffold-prebookings:254` and `:429` on the closed-season activation (a/b with the user) |
+| CI api e2e | red at 8ed7e42: `scaffold-prebookings:616` fixed in 81ad76e; `maintenance:141` and `sender-event-monthly-billing:22` wait on the admin bypass on a consumed dinner (a/b with the user); `scaffold-prebookings:254` and `:429` take one-day seasons (Decisions, minimal test seasons) |
 | CI summary | read on the Actions run page: categories, counts, red ui failures |
 | Close-out | the PR body (highlights, tests, QA) for the packages since 0122723; the guides' sync check; compaction and archive once every package is done |
 
@@ -798,6 +798,9 @@ sign-off.
   by another household).
 - #48 (2026-10-19): a queued wish stays a ghost under the hourglass, in view and edit mode, as #33 shows it — "keep
   it, should be visible you dont have it"; #48 is the check that edit mode matches.
+- Minimal test seasons (2026-10-19): a test season spans the dinners its case proves (`docs/testing.md` § Strategy:
+  Control the Season, Control the Deadline) — "test seasons should be minimal regarding what the test wants to
+  prove"; `scaffold-prebookings:254` and `:429` take one-day seasons.
 - #32 (2026-10-19) One booking path, power mode reaches the household's queue entries: a power change on a dinner
   reaches every place the household holds there — a queued inhabitant's intent names the person's place, every other
   place (the guests', the people outside the targets) gets its own intent at its held price; Ingen leaves, another

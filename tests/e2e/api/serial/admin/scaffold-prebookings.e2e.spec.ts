@@ -255,11 +255,11 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             const context = await validatedBrowserContext(browser)
             const testSalt = temporaryAndRandom()
 
-            // GIVEN: Season with 8-day deadline, 20-day window → both before/after deadline events
+            // GIVEN: a one-day season open at activation, so the preference books its dinner, whose deadline then closes
             const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
                 cookingDays: allDaysCooking,
-                ticketIsCancellableDaysBefore: 8,
-                seasonDates: {start: daysFromNow(1), end: daysFromNow(20)}
+                ticketIsCancellableDaysBefore: 0,
+                seasonDates: {start: daysFromNow(1), end: daysFromNow(1)}
             })
             createdSeasonIds.push(season.id!)
             await SeasonFactory.activateSeason(context, season.id!)
@@ -269,13 +269,17 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             )
             createdHouseholdIds.push(household.id)
 
+            // The preference update scaffolds the household on the season
             const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
             await HouseholdFactory.updateInhabitant(context, inhabitants[0]!.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
-            await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
             const ordersBefore = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
             const inhabitantOrdersBefore = ordersBefore.filter(o => o.inhabitantId === inhabitants[0]!.id)
             expect(inhabitantOrdersBefore.length, 'should have orders before').toBeGreaterThan(0)
+
+            // The season's deadline closes over the dinner
+            const activeSeason = await SeasonFactory.getSeason(context, season.id!)
+            await SeasonFactory.updateSeason(context, {...activeSeason, ticketIsCancellableDaysBefore: SeasonFactory.DEFAULT_BOOKING_DEADLINE_DAYS})
 
             // WHEN: moveOutDate set to yesterday → family is gone, all events ineligible
             const updateResult = await HouseholdFactory.updateHousehold(context, household.id, {moveOutDate: daysFromNow(-1)})

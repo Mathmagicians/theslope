@@ -726,6 +726,29 @@ household has since bought in `failed`; the case has no e2e (`../adr-compliance-
 API e2e: a draft naming the order after its sale; the reply lists it in `failed`, and the buying household keeps the
 ticket.
 
+## Minimal test seasons
+
+Priority: low. Added 2026-10-19 from the e2e work on `scaffold-prebookings.e2e` (release 0.9, the rule in
+`../testing.md` § Strategy: Control the Season, Control the Deadline).
+
+### Problem
+
+These fixtures span more dinners than their cases prove:
+
+| Fixture | Season | The cases prove |
+|---|---|---|
+| `tests/e2e/ui/serial/DinnerBookingForm.e2e.spec.ts:295`, the past-window season | 14 days of weekdays | the second dinner (two dinners) |
+| `tests/e2e/ui/serial/AdminEconomy.e2e.spec.ts:53` | 14 days | a correction of an upcoming order |
+| `tests/e2e/ui/serial/DinnerBookingForm.e2e.spec.ts:62` | 14 days | up to the fifth future dinner |
+| `tests/e2e/ui/serial/HouseholdBookings.e2e.spec.ts:62` | 14 days of weekdays | the phone month grid's columns |
+| `tests/e2e/api/serial/admin/waitlistAssignment.e2e.spec.ts:72` | 10 days | the spec's own dinners; the generated ones go unused |
+| `tests/e2e/ui/serial/HouseholdScaffolding.e2e.spec.ts:82`, `HouseholdBookingsCrossHousehold.e2e.spec.ts:54`, `tests/e2e/api/serial/admin/seasonLiveEdit.e2e.spec.ts:46` | 10 days each | a dinner before and one after the deadline |
+| `tests/e2e/api/serial/admin/scaffold-prebookings.e2e.spec.ts:624`, the released ticket on a cancelled dinner | the default week | one dinner |
+
+### Solution
+
+Each fixture's season shrinks to the dinners its cases prove; each case is checked green when its season shrinks.
+
 ## Deferred from release 0.9
 
 | Work | Where it lives | State |

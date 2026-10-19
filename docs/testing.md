@@ -824,6 +824,9 @@ testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, te
 - Events 3+ days away → **BEFORE deadline** (can CREATE, DELETE)
 - Events 1-2 days away → **AFTER deadline** (can only RELEASE, CLAIM)
 
+**Minimal seasons:** a season spans the dinners the case proves, one when one is enough, inside the pre-booking
+window (ADR-015 § Test Requirements).
+
 ### Use Application's Deadline Logic
 
 **CRITICAL:** Tests MUST use the same deadline calculation as the application.

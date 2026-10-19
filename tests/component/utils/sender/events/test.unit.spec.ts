@@ -2,6 +2,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {buildTestEmail, emitTestEmail} from '~~/server/utils/sender/events/test'
 import {useNotificationValidation} from '~/composables/useNotificationValidation'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
+import {fakeSenderQueue, sentMessages} from '~~/tests/component/utils/sender/fakeSenderQueue'
 import {useUserPreferenceValidation} from '~/composables/useUserPreferenceValidation'
 
 const {NotificationMessageSchema} = useNotificationValidation()
@@ -39,30 +40,30 @@ describe('emitTestEmail', () => {
     afterEach(() => Object.values(logs).forEach(spy => spy.mockClear()))
 
     it('queues the mail through the binding', async () => {
-        const queue = {send: vi.fn().mockResolvedValue(undefined)} as unknown as Queue
+        const queue = fakeSenderQueue()
 
         const result = await emitTestEmail(NotificationFactory.channel(queue))
 
         expect(result.queued).toBe(true)
-        expect(queue.send).toHaveBeenCalledOnce()
+        expect(sentMessages(queue)).toHaveLength(1)
     })
 
     it('queues to a named recipient even when no admin mailbox is configured', async () => {
-        const queue = {send: vi.fn().mockResolvedValue(undefined)} as unknown as Queue
+        const queue = fakeSenderQueue()
 
         const result = await emitTestEmail(NotificationFactory.channel(queue, {adminEmail: ''}), 'anna@example.com')
 
         expect(result).toMatchObject({queued: true, degraded: false})
-        expect(queue.send).toHaveBeenCalledOnce()
+        expect(sentMessages(queue)).toHaveLength(1)
     })
 
     it('reports degraded without touching the binding when no admin mailbox is configured', async () => {
-        const queue = {send: vi.fn()} as unknown as Queue
+        const queue = fakeSenderQueue()
 
         const result = await emitTestEmail(NotificationFactory.channel(queue, {adminEmail: ''}))
 
         expect(result).toMatchObject({queued: false, degraded: true})
-        expect(queue.send).not.toHaveBeenCalled()
+        expect(sentMessages(queue)).toEqual([])
         expect(logs.warn).toHaveBeenCalledOnce()
     })
 

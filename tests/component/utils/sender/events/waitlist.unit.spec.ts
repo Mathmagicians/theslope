@@ -21,6 +21,7 @@ import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {fakeSenderQueue as fakeQueue, sentBatches, sentMessages as sentBodies, type FakeSenderQueue} from '~~/tests/component/utils/sender/fakeSenderQueue'
 
 // The unit runtime has no D1: the lookups answer from the test
 vi.mock('~~/server/data/prismaRepository', () => ({
@@ -46,8 +47,8 @@ const events = [
     {kind: 'TICKET_SOLD', send: (channel: EmailChannel) => emitTicketSold(channel, to, 'Lene', dinner, seller, buyer)}
 ]
 
-const fakeQueue = () => ({send: vi.fn().mockResolvedValue(undefined)}) as unknown as Queue & {send: ReturnType<typeof vi.fn>}
-const sentMessages = (queue: {send: ReturnType<typeof vi.fn>}): EmailMessage[] => queue.send.mock.calls.map(([message]) => message as EmailMessage)
+// The mails the queue took, whichever call carried them
+const sentMessages = (queue: FakeSenderQueue): EmailMessage[] => sentBodies<EmailMessage>(queue)
 
 // The dinners of the mails, the dinner above in season 9 unless named, cooked by the chef; each season holds its prices
 const mockDinners = (chefId: number | null, dinners: {id: number, seasonId: number}[] = [{id: dinner.dinnerEventId, seasonId: 9}]) => {
@@ -80,7 +81,7 @@ describe('booking mails', () => {
         const result = await send(NotificationFactory.channel(queue))
 
         expect(result.queued).toBe(true)
-        expect(queue.send).toHaveBeenCalledOnce()
+        expect(sentMessages(queue)).toHaveLength(1)
     })
 
     it.each(events)('$kind reports not sent and logs the missing setting when e-mail is off', async ({kind, send}) => {
@@ -157,7 +158,7 @@ describe('bookingMails', () => {
         const queue = fakeQueue()
 
         expect(await bookingMails(NotificationFactory.channel(queue), NO_BOOKING_MAILS)).toEqual([])
-        expect(queue.send).not.toHaveBeenCalled()
+        expect(sentMessages(queue)).toEqual([])
     })
 })
 
@@ -181,7 +182,7 @@ describe('booking notifications after the action', () => {
         const queue = fakeQueue()
 
         expect(await notify(NotificationFactory.channel(queue))).toEqual([])
-        expect(queue.send).not.toHaveBeenCalled()
+        expect(sentMessages(queue)).toEqual([])
         expect(logs.error).toHaveBeenCalledWith(expect.stringContaining('D1 down'))
     })
 })
@@ -277,12 +278,24 @@ describe('the people a run\'s mails name', () => {
         expect(readsOf()).toEqual(reads)
     })
 
+    // Three joins, a buildup, a sale to the household's buyer and to the first in line, an extra portion: eight mails
+    const everyKind = () => outcomesOf({
+        joined, ticketsSold: [saleTo(buyer)], waitlistTicketsSold: [saleTo(buyer)], waitlistPortionsAssigned: [portionTo(buyer)]
+    })
+
+    it('GIVEN a run with every kind of mail WHEN its mails resolve THEN they reach the queue in one batch, not one call per mail', async () => {
+        const queue = fakeQueue()
+
+        await notifyBookingOutcomes({} as D1Database, NotificationFactory.channel(queue), everyKind())
+
+        expect(queue.send).not.toHaveBeenCalled()
+        expect(sentBatches(queue).map(batch => batch.length)).toEqual([8])
+    })
+
     it('GIVEN a run with every kind of mail WHEN its mails resolve THEN each reaches its recipient and names its people', async () => {
         const queue = fakeQueue()
 
-        const results = await notifyBookingOutcomes({} as D1Database, NotificationFactory.channel(queue), outcomesOf({
-            joined, ticketsSold: [saleTo(buyer)], waitlistTicketsSold: [saleTo(buyer)], waitlistPortionsAssigned: [portionTo(buyer)]
-        }))
+        const results = await notifyBookingOutcomes({} as D1Database, NotificationFactory.channel(queue), everyKind())
 
         expect(results.every(result => result.queued)).toBe(true)
         expect(sentMessages(queue).map(mailOf).sort()).toEqual([
