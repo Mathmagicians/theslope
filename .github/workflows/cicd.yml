@@ -166,22 +166,15 @@ jobs:
         env:
           ARTIFACT_URL: ${{ steps.upload_ui_serial_report.outputs.artifact-url }}
         run: make test-report report=$E2E_RESULTS_DIR/e2e-ui-serial-results.json title="E2E ui serial tests" link="$ARTIFACT_URL" note="UI serial test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
-      # A release renders docs/releases/release-<v>.md to the one-page PDFs here, where Playwright is installed; create-release
-      # attaches them. The version is the tag's, as create-release derives it (the +sha suffix stripped)
+      # Every build renders docs/releases/*.md to one-page PDFs here, where Playwright is installed; create-release attaches them
       - name: Release notes PDF
-        if: steps.version.outputs.IS_RELEASE == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.version.outputs.RELEASE_VERSION }}"
-          make release-notes version="${VERSION%%+*}"
+        run: make release-notes
       - uses: actions/upload-artifact@v7
-        if: steps.version.outputs.IS_RELEASE == 'true'
         with:
           name: release-notes
-          path: |
-            docs/releases/release-*-a4.pdf
-            docs/releases/release-*-a3.pdf
+          path: docs/releases/*.pdf
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: Determine deployment target
         id: target
@@ -280,25 +273,26 @@ jobs:
         run: |
           VERSION="${{ needs.CICD.outputs.release_version }}"
           TAG="v${VERSION%%+*}"
-          NOTES="docs/releases/release-${VERSION%%+*}.md"
+          PDF="release-${VERSION%%+*}.pdf"
+          # The body links this version's PDF when the artifact holds it
+          NOTES_LINE=""
+          if [ -f "release-notes/$PDF" ]; then NOTES_LINE=$'\n'"**Release notes:** https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$PDF"; fi
           # Check if release already exists
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "⏭️ Release $TAG already exists, skipping"
           else
-            # The release body: the notes, then the deployment record
-            { cat "$NOTES"; echo; echo "---"; echo "**Deployed:** ${{ needs.CICD.outputs.release_date }}
+            gh release create "$TAG" \
+              --title "Release $TAG" \
+              --notes "**Deployed:** ${{ needs.CICD.outputs.release_date }}
 
           **Environment:** production
           **URL:** ${{ needs.CICD.outputs.deployed_url }}
-          **Commit:** ${{ github.sha }}
+          **Commit:** ${{ github.sha }}$NOTES_LINE
 
-          Full version: \`$VERSION\`"; } > release-notes/notes.md
-            gh release create "$TAG" \
-              --title "Release $TAG" \
-              --notes-file release-notes/notes.md
+          Full version: \`$VERSION\`"
             echo "✅ Created release $TAG"
           fi
-          gh release upload "$TAG" "release-notes/release-${VERSION%%+*}-a4.pdf" "release-notes/release-${VERSION%%+*}-a3.pdf" --clobber
+          gh release upload "$TAG" release-notes/*.pdf --clobber
 
   rollback:
     needs: CICD

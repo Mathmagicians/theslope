@@ -1,11 +1,11 @@
 <img src="../../app/assets/logo.svg" width="220" alt="Skråningen">
 
-# Nyt i Skrånerappen
+# Nyt i Theslope aka **Skrånerappen**
 
-**Version 0.9** er rullet ud. Den store nyhed er ventelisten: er en middag udsolgt, stiller du dig i kø, og billetten kommer til dig.
+Nogle efterårsferieaftener gik med at få **Version 0.9** rullet ud. Den store nyhed er ventelisten: er en middag udsolgt, stiller du dig i kø, og billetten kommer til dig.
 
 > [!TIP]
-> <img src="../../public/app-icon.svg" width="72" align="left" alt="Skrånerappen"> **Har du installeret den som en app på din telefon?** Så ligger den på hjemmeskærmen som alle andre apps.
+> <img src="release-0.9.0/qr-login.svg" width="104" align="right" alt="QR-kode til appens login-side"> <img src="../../public/app-icon.svg" width="72" align="left" alt="Skrånerappen"> **Har du installeret den som en app på din telefon?** Så ligger den på hjemmeskærmen som alle andre apps. Scan koden, log ind, og følg guiden i sidepanelet.
 >
 > | Telefon | Browser | Sådan |
 > |---|---|---|
@@ -17,12 +17,12 @@
 <tr>
 <th width="50%" align="left">
 
-![Husstand](https://api.iconify.design/heroicons/home.svg?height=20&color=%23737373) Til alle
+### ![Husstand](https://api.iconify.design/heroicons/home.svg?height=24&color=%23737373) Til alle
 
 </th>
 <th width="50%" align="left">
 
-![Chefkok](https://api.iconify.design/hugeicons/chef-hat.svg?height=20&color=%23737373) Til Chefkokkene
+### ![Chefkok](https://api.iconify.design/hugeicons/chef-hat.svg?height=24&color=%23737373) Til Chefkokkene
 
 </th>
 </tr>

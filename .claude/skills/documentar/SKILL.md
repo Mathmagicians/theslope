@@ -74,6 +74,9 @@ documentar drives the user's sign-off.
 10. A sign-off or decision the user gave in a peer's session is signed: the documentar records it as the user's
     decision, in the spec's own words, without noting where it was given and without asking the user again; the
     reply states what is recorded and moves on.
+11. The table holds only what the user can check now (Verify). Under it, one summary line per state: Running (with
+    the orchestrator or in the tree, package and numbers), Decisions (open choices), Open (not started) — numbers and
+    titles, no rows.
 
 ## Ship matches the spec
 
