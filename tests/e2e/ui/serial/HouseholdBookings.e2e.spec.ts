@@ -288,6 +288,32 @@ test('GIVEN a member on a phone and a month of Mon–Fri dinners WHEN the month 
     await page.close()
 })
 
+test('GIVEN a member on a phone and a month of Mon–Fri dinners WHEN the month grid is in edit mode and scrolled sideways to the last dinner THEN the Annuller and Opdater buttons stay on the phone\'s screen', async ({browser}) => {
+    const memberContext = await memberValidatedBrowserContext(browser)
+    const {householdShortname, householdPbsId} = await getSessionUserInfo(memberContext)
+    // The month's last dinner: the column past the phone's first screen
+    const dinnerEvent = fullestMonth().at(-1)!
+    const page = await memberContext.newPage()
+    await page.setViewportSize(PHONE_VIEWPORT)
+    await gotoHydrated(page, buildBookingsUrl(BookingViewSchema.enum.month, dinnerEvent.date, {shortName: householdShortname, pbsId: householdPbsId}))
+
+    // WHEN: the grid's box scrolls sideways to the last dinner
+    await page.getByTestId('grid-edit').click()
+    await page.getByTestId(`guest-add-${dinnerEvent.id}`).scrollIntoViewIfNeeded()
+
+    // THEN: each button keeps to the part of the box in view, within the phone's width; the page scrolls down to it
+    // alone, so the box keeps its sideways scroll
+    for (const testId of ['grid-cancel', 'grid-save']) {
+        const button = page.getByTestId(testId)
+        await button.evaluate(element => window.scrollBy(0, element.getBoundingClientRect().top - window.innerHeight / 2))
+        await expect(button).toBeInViewport()
+        const box = (await button.boundingBox())!
+        expect(box.x).toBeGreaterThanOrEqual(0)
+        expect(box.x + box.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width)
+    }
+    await page.close()
+})
+
 for (const view of BookingViewSchema.options) {
     test(`GIVEN a household of more inhabitants than the avatar row shows WHEN the ${view} view loads at desktop width THEN the client hydrates the server markup without a mismatch`, async ({page, browser}) => {
         const context = await validatedBrowserContext(browser)

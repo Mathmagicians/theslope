@@ -158,11 +158,11 @@ Hvis middagen ikke kan afholdes:
 3. Klik **Aflys middagen** og bekræft med **Tryk igen for at aflyse [dato]**
 
 **Hvad sker der:**
-- Middagen markeres som AFLYST
-- Billetterne til middagen faktureres aldrig
+- Middagen markeres som AFLYST — i kalenderen, på dagen og i husstandens oversigt
+- Billetterne bliver stående og viser *aflyst*; ingen kan booke middagen, og den faktureres aldrig
 - Heynabo opdateres automatisk
 
-**Fortryd aflysning:** Klik **Annuller aflysning** og bekræft med **Tryk igen for at genåbne [dato]**.
+**Fortryd aflysning:** Klik **Annuller aflysning** og bekræft med **Tryk igen for at genåbne [dato]** — billetterne er tilbage, som de var.
 
 > **Skal du blot melde fra som chefkok?** Brug **Ændre tjans** ved kokkens portræt - så bliver middagen stående, og WANTED-skiltet finder den næste helt.
 
@@ -181,4 +181,4 @@ Se dine holdmedlemmer på [Chef](https://www.skraaningen.dk/chef).
 
 ---
 
-*Sidst opdateret: Oktober 2026 (ventelisten og frigiv portioner, madbestilling og budget, overtag tjansen, allergener per kuvert)*
+*Sidst opdateret: Oktober 2026 (ventelisten og frigiv portioner, madbestilling og budget, overtag tjansen, allergener per kuvert, aflysning)*

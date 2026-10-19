@@ -52,14 +52,19 @@
  * │ └─────────────────────────────┘ │
  * └─────────────────────────────────┘
  *
+ * THE ACTION BAR (edit mode, the body-bottom row): the preview and the buttons keep to the part of the box in view as
+ * the form does (COMPONENTS.bookingGrid.actionPanel); on a phone scrolled to the month's end they stay on screen:
+ * │ Du er ved at ændre familiens booking   │ <- ActionPreview
+ * │                  [Annuller] [Opdater]  │
+ *
  * DAY VIEW: the day-content slot holds DinnerBookingForm (HouseholdBookings). On a phone the household card body has no
  * side padding; the slot (COMPONENTS.bookingGrid.dayContent) carries a card body's, so the form's table keeps its width
  * and scrolls sideways in its box.
  *
  * Visual check: /household/<S>/bookings at 375px and desktop. Week and month: the name cell's three counts. Edit mode on
- * a phone: a guest chevron on a dinner past the first screen opens the form in view. Day view on a phone: the page keeps
- * its width and the form's table scrolls in its box. Edit mode on a planned dinner: the cells and the power cell stay
- * ghosted until clicked.
+ * a phone: a guest chevron on a dinner past the first screen opens the form in view; scrolled sideways, the preview and
+ * the Annuller/Opdater buttons stay on screen. Day view on a phone: the page keeps its width and the form's table
+ * scrolls in its box. Edit mode on a planned dinner: the cells and the power cell stay ghosted until clicked.
  *
  * ROW TYPES:
  * | Row Type    | Icon | VIEW           | EDIT                | Description        |
@@ -1034,7 +1039,8 @@ const getEventSummary = (eventId: number) => {
       <template v-if="formMode === FORM_MODES.EDIT" #body-bottom>
         <tr>
           <td :colspan="columns.length" :class="COMPONENTS.bookingGrid.actionCell">
-            <div :class="COMPONENTS.bookingGrid.actionStack">
+            <!-- Kept to the part of the box in view: on a phone the table scrolls sideways under it -->
+            <div :class="[COMPONENTS.bookingGrid.actionPanel, COMPONENTS.bookingGrid.actionStack]">
               <!-- Action preview: show what will happen when saving -->
               <ActionPreview :days="previewDays" :pending="isPreviewPending" />
 

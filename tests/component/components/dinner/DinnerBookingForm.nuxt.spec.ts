@@ -813,6 +813,17 @@ describe('DinnerBookingForm on a cancelled dinner', () => {
     expect(ribbon.classes()).toEqual(getRibbonClasses('cancel').split(' '))
   })
 
+  // A member edits the dinners still to come: a cancelled dinner is as closed to edits as a past one
+  it.each([
+    {standing: 'a past dinner', dinnerEvent: {...baseProps.dinnerEvent, date: DinnerEventFactory.dinnerEventAt(baseProps.dinnerEvent.id, -1).date}},
+    {standing: 'a cancelled dinner', dinnerEvent: cancelledDinner}
+  ])('GIVEN a member on $standing THEN the form offers no edit mode: no row opens and no guest can be added', async ({dinnerEvent}) => {
+    const wrapper = await mountMemberForm(true, {dinnerEvent})
+
+    const toggles = ['power-power-mode', ...householdWithInhabitants.inhabitants.map(({id}) => `inhabitant-${id}`), 'guest-add-guest'].map(row => `${row}-toggle`)
+    expect(toggles.filter(toggle => findByTestId(wrapper, toggle).exists())).toEqual([])
+  })
+
   it('GIVEN a cancelled dinner THEN every ticket of its rows wears the cancelled face', async () => {
     const wrapper = await mountCancelled()
 

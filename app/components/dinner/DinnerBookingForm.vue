@@ -139,8 +139,8 @@
  * mode goes to every row.
  *
  * ON A CANCELLED DINNER - the cancelled corner ribbon (getRibbonClasses('cancel'), COMPONENTS.ribbon) over the form's
- * top right corner, and every row's ticket on the cancelled face (DinnerTicket cancelled); no row offers a mode, and an
- * expanded row's selector shows the held mode on the cancelled face (DinnerModeSelector cancelled). A parent
+ * top right corner, and every row's ticket on the cancelled face (DinnerTicket cancelled). As on a past dinner the form
+ * offers no edit: no row carries the edit button, and the add-guest row and the legend stay away. A parent
  * that draws the ribbon itself passes `ribbon` false (/dinner, where the form sits inside ChefMenuCard):
  * ┌────────────────────────────────────────────────────────╲ AFLYST ╲┐
  * │ [booking deadline badge] [dining mode deadline badge]   2V · 110 │
@@ -300,11 +300,11 @@ const {expanded} = useExpandableRow({
 
 const canBook = computed(() => canModifyOrders(props.dinnerEvent.date))
 const dinnerHasPassed = computed(() => isDinnerPast(props.dinnerEvent.date))
-// Edit allowed if: permission-based formMode is EDIT AND dinner hasn't passed
-const isEditModeAllowed = computed(() => formMode.value === FORM_MODES.EDIT && !dinnerHasPassed.value)
 // Nothing lands on a cancelled dinner: the form wears the corner ribbon, and every ticket the cancelled face
 const isCancelled = computed(() => props.dinnerEvent.state === DinnerStateSchema.enum.CANCELLED)
 const showRibbon = computed(() => props.ribbon && isCancelled.value)
+// Edit allowed if: permission-based formMode is EDIT AND the dinner has neither passed nor been cancelled
+const isEditModeAllowed = computed(() => formMode.value === FORM_MODES.EDIT && !dinnerHasPassed.value && !isCancelled.value)
 
 // Without a household every day counts
 const isInResidencyOn = computed((): (date: Date) => boolean => household.value

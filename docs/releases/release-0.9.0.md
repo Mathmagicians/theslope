@@ -2,16 +2,16 @@
 
 # Nyt i Theslope aka **Skrånerappen**
 
-Nogle efterårsferieaftener gik med at få **Version 0.9** rullet ud. Den store nyhed er ventelisten: er en middag udsolgt, stiller du dig i kø, og billetten kommer til dig.
+Nogle efterårsferieaftener gik med at få **Version 0.9** rullet ud. Den store nyhed er ventelisten: er en middag udsolgt, kan du få en plads på venteliste.
 
 > [!TIP]
-> <img src="release-0.9.0/qr-login.svg" width="104" align="right" alt="QR-kode til appens login-side"> <img src="../../public/app-icon.svg" width="72" align="left" alt="Skrånerappen"> **Har du installeret den som en app på din telefon?** Så ligger den på hjemmeskærmen som alle andre apps. Scan koden, log ind, og følg guiden i sidepanelet.
+> <img src="release-0.9.0/qr-login.svg" width="104" align="right" alt="QR-kode til appens login-side"> <img src="../../public/app-icon.svg" width="72" align="left" alt="Skrånerappen"> **Har du installeret den som en app på din telefon?** Så ligger den på hjemmeskærmen som alle andre apps.
 >
-> | Telefon | Browser | Sådan |
-> |---|---|---|
-> | Android | Chrome, Edge | Tryk ![Installér](https://api.iconify.design/heroicons/arrow-down-tray.svg?height=16&color=%23737373) **Installér app** på forsiden |
-> | Android | Firefox | Browserens menu → **Føj til startskærm** (Firefox har ingen installér-knap) |
-> | iPhone, iPad | Safari | **Del-menuen** → **Føj til hjemmeskærm** |
+> | Telefon | Browser | Sådan                                                                                                                                          |
+> |---|---|------------------------------------------------------------------------------------------------------------------------------------------------|
+> | Android | Chrome, Edge | Tryk ![Installér](https://api.iconify.design/heroicons/arrow-down-tray.svg?height=16&color=%23737373) **Installér app** knap, lige efter login |
+> | Android | Firefox | Browserens menu → **Føj til startskærm** (Firefox har ingen installér-knap)                                                                    |
+> | iPhone, iPad | Safari | **Del-menuen** → **Føj til hjemmeskærm**                                                                                                       |
 
 <table>
 <tr>
@@ -52,9 +52,9 @@ Nogle efterårsferieaftener gik med at få **Version 0.9** rullet ud. Den store 
 
 ![Venteliste](https://api.iconify.design/hugeicons/hourglass.svg?height=18&color=%23737373) **Kan du frigive portioner?** Bliver køen lang, får du en mail. Er der mad nok, kan du frigive ekstra kuverter — de første i køen får billet og mail.
 
-![Fællesspisning](https://api.iconify.design/hugeicons/dish-02.svg?height=18&color=%23737373) **Hvem kommer og spiser?** Kuverter per spisemåde — Takeaway, Spisesal, Spis sent — plus til salg og venteliste, med allergierne regnet med. Allergenlinjen tæller ramte kuverter, allergen for allergen.
+![Fællesspisning](https://api.iconify.design/hugeicons/dish-02.svg?height=18&color=%23737373) **Hvem kommer og spiser?** Kuverter per spisemåde — Takeaway, Spisesal, Spis sent — plus til salg og venteliste, med allergierne regnet med. Allergenlinjen tæller i kuverter, i forhold til dem som har bestilt en billet til din middag.
 
-![Chefkok](https://api.iconify.design/hugeicons/chef-hat.svg?height=18&color=%23737373) **Hvem laver maden?** **Byt tjans**, eller tag den selv med **Bliv chefkok**. Mangler kokken, lyser WANTED-skiltet. Tre chips tæller ned: Menu, Framelding, Indkøb — grøn, gul, rød. Og kranie, når det er for sent.
+![Chefkok](https://api.iconify.design/hugeicons/chef-hat.svg?height=18&color=%23737373) **Hvem laver maden?** **Byt tjans**, eller tag den selv med **Bliv chefkok**. Mangler kokken, lyser WANTED-skiltet. Tre chips tæller ned: Menu, Framelding, Indkøb — grøn, gul, rød. (Og kranie, når du er for sent på den).
 
 </td>
 </tr>

@@ -690,8 +690,9 @@ const TICKET_FACE = `${TICKET_FRAME} ${BG.ticket}`
 
 // A past calendar day's colours (`CALENDAR.day.past`); a cancelled dinner's ticket and mode badge wear them too
 const PAST_DAY_COLORS = `${BG.mocha[100]} ${TEXT.mocha[900]}`
-// A cancelled dinner is struck through: its calendar day, its tickets and their mode badges
-const CANCELLED_STRIKE = 'line-through'
+// A cancelled dinner is struck through: its calendar day, its tickets and their mode badges. The stroke takes the past-day
+// ink (`TEXT.mocha[900]`), spelled out for the Tailwind scanner; the cancelled fill stays light in the dark, so one value
+const CANCELLED_STRIKE = 'line-through decoration-2 decoration-amber-900'
 
 // The lock chip that carries the waiting-list hourglass: a step above SIZES.lockChip, so the glyph sits with a small inset
 const QUEUE_LOCK_CHIP = {ui: {base: 'h-3.5 min-w-3.5 md:h-4.5 md:min-w-4.5'}, icon: 'size-2.5 md:size-3.5'} as const
@@ -1461,7 +1462,7 @@ export const COMPONENTS = {
         catalogUi: {th: 'px-1', td: `px-1 py-1 md:px-1 md:py-2 ${TABLE_CELL_WRAP}`},
         /** The booking grid: centred day cells, a sticky footer, the power row first in the warning tint, an expanded row tinted */
         gridUi: {
-            // On a phone the scroll box is the size container `bookingGrid.expandedPanel` measures its width against
+            // On a phone the scroll box is the size container `bookingGrid.expandedPanel` and `actionPanel` measure their width against
             root: '@container md:@container-normal',
             th: 'px-1 py-1 md:px-2 md:py-2 text-center',
             td: `px-1 py-1 md:px-2 text-center ${TABLE_CELL_WRAP}`,
@@ -1480,7 +1481,8 @@ export const COMPONENTS = {
      * button, turning through `COMPONENTS.openTurn` while its form is open, and the form's `expandedPanel`: the expanded
      * row spans every column, so where the table scrolls sideways in its box the panel keeps to the part in view, sticky at
      * the cell's inset and no wider than the box; the footer `summary` with its `summaryPrice`, the
-     * edit footer's `actionCell` and `actionStack`, and the `legend` gap. A cell without an order shows the booking the
+     * edit footer's `actionCell` and its `actionPanel`, kept to the box in view as the form's panel is, with its
+     * `actionStack`, and the `legend` gap. A cell without an order shows the booking the
      * preferences give it as `expectedBadge`: the mode ghosted on the waiting list's neutral (`ORDER_STATE_COLORS.queued`),
      * outlined, its glyph and label in the muted ink, as the waiting list's ghost (`COMPONENTS.waitlist.ghostBadge`) shows
      * a wish; the day form's ticket binds it too
@@ -1512,6 +1514,8 @@ export const COMPONENTS = {
         summary: 'flex flex-col items-center',
         summaryPrice: TEXT.muted,
         actionCell: 'px-2 py-2 border-t border-default',
+        // As `expandedPanel`, kept to the box in view; the inset and the cap follow `actionCell`'s own padding (px-2 at every width)
+        actionPanel: 'sticky left-2 max-w-[calc(100cqw-1rem)] overflow-x-auto',
         actionStack: 'flex flex-col gap-2',
         legend: 'mt-4',
         expectedBadge: {color: ORDER_STATE_COLORS.queued, variant: NOISE.medium, ink: TEXT.muted}

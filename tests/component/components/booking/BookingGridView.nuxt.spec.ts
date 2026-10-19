@@ -647,6 +647,17 @@ describe('BookingGridView add-guest button', () => {
     expect([...panel.classList]).toEqual(expect.arrayContaining(COMPONENTS.bookingGrid.expandedPanel.split(' ')))
   })
 
+  // The edit mode's action bar rides under the rows as the guest form does: kept to the box in view, its buttons on screen
+  it.each(VIEWPORTS)('at $viewport width edit mode keeps the preview and the Annuller/Opdater buttons to the part of the table\'s box in view', async ({isMd}) => {
+    const wrapper = await mountWithTooltipProvider(BookingGridView, {props: {...baseProps, ...editProps}, isMd})
+
+    // The bar's cell spans the table; its inner panel holds the preview and the buttons
+    const panel = findByTestId(wrapper, 'grid-save').element.closest('td')!.firstElementChild!
+    expect([...panel.classList]).toEqual(expect.arrayContaining(COMPONENTS.bookingGrid.actionPanel.split(' ')))
+    expect(panel.contains(wrapper.findComponent(ActionPreview).element)).toBe(true)
+    expect(['grid-cancel', 'grid-save'].filter(button => !panel.contains(findByTestId(wrapper, button).element))).toEqual([])
+  })
+
   describe('with the guest form open on one of two dinners', () => {
     const later = DinnerEventFactory.dinnerEventAt(3, 62)
     const twoDinners = {...editProps, dateRange: {start: addDays(future.date, -3), end: addDays(later.date, 3)}, dinnerEvents: [future, later]}

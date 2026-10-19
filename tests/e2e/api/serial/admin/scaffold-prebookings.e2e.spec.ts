@@ -620,12 +620,15 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             const {season} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {ticketIsCancellableDaysBefore: SeasonFactory.DEFAULT_BOOKING_DEADLINE_DAYS})
             createdSeasonIds.push(season.id!)
             const dinner = await teamDinnerOf(context, season, 2, testSalt)
-            // Both eat every day by default: the holder's release is the holder's own act, the buyer's preference speaks alone
-            const {household, inhabitants: [holder, buyer]} = await HouseholdFactory.createHouseholdWithInhabitants(context, HouseholdFactory.defaultHouseholdData(testSalt), 2)
-            createdHouseholdIds.push(household.id)
+            // Both eat every day by default: the holder's release is the holder's own act, the buyer's preference speaks alone.
+            // They live in the admin's household: the release is a member's act under the season's deadline
+            const {householdId} = await getSessionUserInfo(context)
+            const [holder, buyer] = await Promise.all(['Holder', 'Buyer'].map(lastName =>
+                HouseholdFactory.createInhabitantWithConfig(context, householdId, {name: salt('Anders', testSalt), lastName})))
+            createdInhabitantIds.push(holder!.id, buyer!.id)
             const adultPriceId = season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!.id!
             const created = await OrderFactory.createOrder(context, {
-                householdId: household.id, dinnerEventId: dinner.id,
+                householdId, dinnerEventId: dinner.id,
                 orders: [OrderFactory.defaultOrderItem({inhabitantId: holder!.id, ticketPriceId: adultPriceId})]
             })
             const ticketId = created!.createdIds[0]!
