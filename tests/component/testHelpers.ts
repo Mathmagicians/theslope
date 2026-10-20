@@ -1,9 +1,17 @@
-import {nextTick, h, defineComponent, ref, isRef, type Component, type Ref} from 'vue'
-import {expect} from 'vitest'
+import {nextTick, h, defineComponent, ref, isRef, effectScope, watch, type Component, type Ref} from 'vue'
+import {expect, beforeEach, afterEach} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
-import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
+import {useNuxtApp, clearNuxtData, useAppConfig} from '#app'
+import {getActivePinia, setActivePinia, type Pinia} from 'pinia'
 import {flushPromises, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
 import {toCalendarDate} from '~/utils/date'
+import {sumBy} from '~/utils/ledger'
+import {TICKET_COUNTS} from '~/composables/useBilling'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import type {ScaffoldOrdersRequest, ScaffoldOrdersResponse, TicketType} from '~/composables/useBookingValidation'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {getQuery, readBody, type H3Event} from 'h3'
 
 /**
  * Generic polling function for component tests
@@ -32,6 +40,111 @@ export async function pollFor(
     if( shouldFail) throw new Error(`Condition not met after ${maxAttempts} attempts`)
 }
 
+/** The status of a keyed useAsyncData dataset; stores expose flags, the status itself lives under the key */
+export const asyncDataStatus = (key: string) => useNuxtApp()._asyncData[key]?.status.value
+
+/**
+ * Fresh stores over a fresh data layer per test. Every store of the app's pinia and of the active one is disposed,
+ * and the app's pinia stays active, so a spec and the components it mounts share one store instance; clearNuxtData
+ * keeps the keyed entries earlier stores registered, and a store left alive keeps watching them, so those go too
+ */
+export const resetStores = () => {
+    const nuxtApp = useNuxtApp()
+    const appPinia = nuxtApp.$pinia as Pinia
+    new Set([getActivePinia(), appPinia]).forEach(pinia => pinia?._s.forEach(store => store.$dispose()))
+    setActivePinia(appPinia)
+    clearNuxtData()
+    Object.keys(nuxtApp._asyncData).forEach(key => Reflect.deleteProperty(nuxtApp._asyncData, key))
+}
+
+/**
+ * A scope per test for the composables a test body creates: the watchers they start stop with the test, as they do
+ * when a component unmounts, so an earlier test's instance never answers a later test's route
+ */
+export const useTestScope = () => {
+    let scope = effectScope()
+    beforeEach(() => {
+        scope = effectScope()
+    })
+    afterEach(() => scope.stop())
+    return <T>(create: () => T): T => scope.run(create) as T
+}
+
+/** The store instance a mounted component uses: components inject the Nuxt app's pinia, not the spec's active one */
+export const mountedStore = <S>(useStore: (pinia: Pinia) => S): S => useStore(useNuxtApp().$pinia as Pinia)
+
+/** The datasets the stores request on creation, answered empty; a spec's own route for one of them registers after this call, as the last registration of a url answers */
+export const registerEmptyStoreEndpoints = () => {
+    registerEndpoint('/api/admin/season/active', () => null)
+    registerEndpoint('/api/admin/season', () => [])
+    registerEndpoint('/api/admin/household', () => [])
+    registerEndpoint('/api/team/my', () => [])
+    registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
+    registerEndpoint('/api/admin/users', () => [])
+    registerEndpoint('/api/admin/billing/periods', () => [])
+    registerEndpoint('/api/admin/billing/current-period', () => [])
+    registerEndpoint('/api/order', () => [])
+}
+
+/**
+ * An endpoint that answers `body` once the test releases it: the window in which a dataset is pending. The latest
+ * registration of a url answers, so `unregister` hands the url back to the one before it
+ */
+export const holdEndpoint = (url: string, body: unknown) => {
+    let release: () => void = () => {}
+    const released = new Promise<void>(resolve => {
+        release = resolve
+    })
+    const unregister = registerEndpoint(url, async () => {
+        await released
+        return body
+    })
+    return {release, unregister}
+}
+
+type ScaffoldAnswer = (body: ScaffoldOrdersRequest) => ScaffoldOrdersResponse | Promise<ScaffoldOrdersResponse>
+
+/**
+ * The scaffold endpoint a booking surface reads its previews from: each request is kept with its query and body; a
+ * request with orders answers `answers.preview`, one without answers `answers.expected` (the household's expected
+ * bookings). Both answer an empty run until a test sets them; `reset` empties both and the requests kept
+ */
+export const registerScaffoldEndpoint = () => {
+    const sent: {query: Record<string, unknown>, body: ScaffoldOrdersRequest}[] = []
+    const empty: ScaffoldAnswer = () => OrderFactory.defaultScaffoldOrdersResponse()
+    const answers: {preview: ScaffoldAnswer, expected: ScaffoldAnswer} = {preview: empty, expected: empty}
+    registerEndpoint('/api/household/order/scaffold', {
+        method: 'POST',
+        handler: async (event: H3Event) => {
+            const body = await readBody<ScaffoldOrdersRequest>(event)
+            sent.push({query: getQuery(event), body})
+            return body.orders.length > 0 ? answers.preview(body) : answers.expected(body)
+        }
+    })
+    const reset = () => {
+        sent.length = 0
+        answers.preview = empty
+        answers.expected = empty
+    }
+    return {sent, answers, reset}
+}
+
+/** Resolves once `condition` holds, watching the reactive state it reads: no polling window, the test's timeout bounds it */
+export const untilTrue = (condition: () => boolean): Promise<void> => new Promise(resolve => {
+    const stop = watch(condition, holds => {
+        if (!holds) return
+        // An immediate hit runs before `stop` is assigned
+        queueMicrotask(() => stop())
+        resolve()
+    }, {immediate: true})
+})
+
+/** The kitchen's rates the money components calculate with, read from the app config inside a hook or a test */
+export const kitchenConfig = () => {
+    const kitchen = useAppConfig().theslope?.kitchen
+    return {baseRatePercent: kitchen?.baseRatePercent ?? 5, vatPercent: kitchen?.vatPercent ?? 25}
+}
+
 // Anything with find/findAll: a mountSuspended root, a findComponent() result or a DOMWrapper
 type Searchable = Pick<BaseWrapper<Node>, 'find' | 'findAll'>
 
@@ -40,6 +153,15 @@ export const findByTestId = (wrapper: Searchable, testId: string) =>
 
 export const findAllByTestId = (wrapper: Searchable, testId: string) =>
     wrapper.findAll(`[data-testid="${testId}"]`)
+
+/** The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows */
+export const findLoadingRow = (wrapper: Searchable) => wrapper.find('[data-slot="loading"]')
+
+export const findAllLoadingRows = (wrapper: Searchable) => wrapper.findAll('[data-slot="loading"]')
+
+/** Whether the table binds `loading`: UTable runs its loading bar under the column headers, a bar that carries no attribute */
+export const isTableLoading = (wrapper: Pick<VueWrapper, 'findComponent'>): boolean =>
+    wrapper.findComponent({name: 'UTable'}).props('loading') === true
 
 export const clickByTestId = async (wrapper: Searchable, testId: string) => {
     await findByTestId(wrapper, testId).trigger('click')
@@ -61,14 +183,27 @@ export const withTooltipProvider = (component: Component, props: Record<string, 
         render: () => h(TooltipProvider, {}, () => h(component, props))
     })
 
+/** The two layouts a responsive token answers for: the phone, and md and up */
+export const VIEWPORTS = [
+    {viewport: 'phone', isMd: false},
+    {viewport: 'md', isMd: true}
+] as const
+
+type TicketTypeCounts = Partial<Record<TicketType, number>>
+/** A locked dinner's supply from its tickets for sale and its waiting list per ticket type, with the totals and the compact counts */
+export const lockedDinnerSupply = (byType: TicketTypeCounts = {}, queuedByType: TicketTypeCounts = {}): ReleasedTicketCounts => ({
+    total: sumBy(Object.values(byType), count => count), formatted: TICKET_COUNTS.compact.text(byType), byType,
+    queued: sumBy(Object.values(queuedByType), count => count), queuedFormatted: TICKET_COUNTS.compact.text(queuedByType), queuedByType
+})
+
 /**
  * mountSuspended under a TooltipProvider and return the wrapper of the component itself,
  * so find/text/emitted/props read the component rather than the provider shell.
- * `isMd` provides the layout's responsive breakpoint ref when given; pass a ref to change the breakpoint after mount.
+ * `isMd` provides the layout's responsive breakpoint ref when given (null: not measured yet); pass a ref to change the breakpoint after mount.
  */
 export const mountWithTooltipProvider = async <T extends MountableComponent>(
     component: T,
-    {props = {}, isMd}: {props?: Record<string, unknown>, isMd?: boolean | Ref<boolean>} = {}
+    {props = {}, isMd}: {props?: Record<string, unknown>, isMd?: boolean | null | Ref<boolean | null>} = {}
 ) => {
     const root = await mountSuspended(
         withTooltipProvider(component, props),

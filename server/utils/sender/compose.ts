@@ -28,6 +28,9 @@ export type ComposeInput = {
 
 const toBase64 = (utf8: string): string => Buffer.from(utf8, 'utf8').toString('base64')
 
+// A link into the deployment the mail comes from; `path` starts with a slash
+export const siteUrl = (config: NotificationConfig, path: string): string => `https://${config.site}${path}`
+
 /** The variable an event is missing before it can send (its recipient's mailbox), or null */
 export const missingAddress = (config: NotificationConfig, recipient: 'adminEmail' | 'accountantEmail'): string | null =>
     config[recipient] ? null : NOTIFICATION_ADDRESS_VARS[recipient]

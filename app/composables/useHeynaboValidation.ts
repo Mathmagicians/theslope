@@ -21,7 +21,7 @@ export const useHeynaboValidation = () => {
     const HeynaboMemberSchema = z.object({
         id: z.number(),
         type: z.string(),
-        email: z.string().email().or(z.string().transform(() => null)).or(z.null()),
+        email: z.email().or(z.string().transform(() => null)).or(z.null()),
         firstName: z.string(),
         lastName: z.string(),
         phone: z.string().nullable(),
@@ -31,7 +31,7 @@ export const useHeynaboValidation = () => {
         uiStorage: z.string().nullable(),
         role: z.string(),
         roles: z.array(z.string()).nullable().transform((v) => v ?? []),
-        avatar: z.string().url().nullable().transform(stripUrlQuery),
+        avatar: z.url().nullable().transform(stripUrlQuery),
         alias: z.string().nullable(),
         locationId: z.number(),
         isFirstLogin: z.boolean(),
@@ -41,7 +41,7 @@ export const useHeynaboValidation = () => {
     })
 
     const HeynaboUserSchema = HeynaboMemberSchema.extend({
-        email: z.string().email()
+        email: z.email()
     })
 
     const LoggedInHeynaboUserSchema = HeynaboUserSchema.extend({
@@ -271,7 +271,7 @@ export const useHeynaboValidation = () => {
         usersLinked: z.number().default(0),
         adminsAdded: z.number().default(0),
         adminsRemoved: z.number().default(0),
-        sanityCheck: SanityCheckResultSchema.default({})
+        sanityCheck: SanityCheckResultSchema.prefault({})
     })
 
     return {

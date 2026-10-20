@@ -9,14 +9,8 @@
  * - Copyright info
  * - Screen size indicator
  */
-import {type Ref, inject} from 'vue'
-
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
-const screenIcon = computed(() => getIsMd.value ? 'i-heroicons-computer-desktop' : 'i-heroicons-device-phone-mobile')
-
 // Use design system for consistent styling
-const { TYPOGRAPHY, ICONS } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, ICONS, RESPONSIVE_ICONS, NOISE, COMPONENTS } = useTheSlopeDesignSystem()
 
 </script>
 
@@ -25,7 +19,7 @@ const { TYPOGRAPHY, ICONS } = useTheSlopeDesignSystem()
     <template #left>
       <span :class="TYPOGRAPHY.footerText">Copyright @themathmagician  @2025 </span>
     </template>
-    <div :class="`flex flex-col md:flex-row items-center justify-between gap-4 py-4`">
+    <div :class="COMPONENTS.pageFooter.row">
       <span :class="TYPOGRAPHY.footerText">
         Theslope {{ $config.public.RELEASE_VERSION || `v${$config.public.COMMIT_ID?.substring(0, 7)}` }}
         <span v-if="$config.public.RELEASE_DATE"> · {{ $config.public.RELEASE_DATE }}</span>
@@ -35,23 +29,23 @@ const { TYPOGRAPHY, ICONS } = useTheSlopeDesignSystem()
 
     <template #right>
       <UButton
-          variant="ghost"
-          :icon="screenIcon"
+          :variant="NOISE.quiet"
+          :icon="RESPONSIVE_ICONS.screen"
           aria-label="Screen size indicator"
           disabled
-          :ui="{ leadingIcon: TYPOGRAPHY.footerText }"
+          :ui="COMPONENTS.pageFooter.iconButtonUi"
       />
 
-      <UColorModeButton :ui="{ leadingIcon: TYPOGRAPHY.footerText }" />
+      <UColorModeButton :ui="COMPONENTS.pageFooter.iconButtonUi" />
 
       <UTooltip text="Open source project on Github">
         <UButton
-            variant="ghost"
+            :variant="NOISE.quiet"
             to="https://github.com/Mathmagicians/theslope"
             target="_blank"
             :icon="ICONS.github"
             aria-label="GitHub"
-            :ui="{ leadingIcon: TYPOGRAPHY.footerText }"
+            :ui="COMPONENTS.pageFooter.iconButtonUi"
         />
       </UTooltip>
     </template>

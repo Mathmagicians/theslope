@@ -1,17 +1,18 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {setActivePinia, createPinia} from 'pinia'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {flushPromises} from '@vue/test-utils'
-import {clearNuxtData} from '#app'
+import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick} from 'vue'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, pollFor} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, pollFor, resetStores} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import AdminPlanning from '~/components/admin/AdminPlanning.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
 import {useAuthStore} from '~/stores/auth'
 import {FORM_MODES} from '~/types/form'
+import {useCoreValidation} from '~/composables/useCoreValidation'
+
+const SystemRole = useCoreValidation().SystemRoleSchema.enum
 
 // The test environment has no router to navigate: useEntityFormManager writes ?mode=
 // through navigateTo (ADR-006 / ADR-008), which is what this spec asserts on
@@ -30,12 +31,13 @@ registerEndpoint('/api/admin/season', seasonsEndpoint)
 
 // Container spec: every test mounts the whole planning card with the real plan store
 vi.setConfig({testTimeout: 20_000})
+// The next test's resetStores drops the datasets a still-mounted card reads
+enableAutoUnmount(afterEach)
 
 const mountPlanning = async (props: Record<string, unknown> = {}) => {
     await useAuthStore().fetch()
     const store = usePlanStore()
     await store.loadSeasons()
-    store.initPlanStore()
     await pollFor(() => store.isPlanStoreReady, 40, false)
 
     const wrapper = await mountWithTooltipProvider(AdminPlanning, {props: {canEdit: true, ...props}, isMd: true})
@@ -51,25 +53,14 @@ const lastModeQuery = () => {
 
 describe('AdminPlanning', () => {
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
         vi.clearAllMocks()
-        sessionEndpoint.mockReturnValue({user: {id: 1, email: 'admin@skraaningen.dk', systemRoles: ['ADMIN']}})
+        sessionEndpoint.mockReturnValue({user: {id: 1, email: 'admin@skraaningen.dk', systemRoles: [SystemRole.ADMIN]}})
         seasonsEndpoint.mockReturnValue([season])
     })
 
+    // The admin's create action is the one the create mode transition clicks, below
     describe('header controls', () => {
-        it('shows the create action for an admin', async () => {
-            const wrapper = await mountPlanning()
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.create).exists()).toBe(true)
-        })
-
-        it('shows the pencil and no save button in view mode', async () => {
-            const wrapper = await mountPlanning()
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.edit).exists()).toBe(true)
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).exists()).toBe(false)
-        })
-
         it('shows neither create nor edit control for a member', async () => {
             sessionEndpoint.mockReturnValue({user: {id: 2, email: 'member@skraaningen.dk', systemRoles: []}})
             const wrapper = await mountPlanning({canEdit: false})
@@ -86,19 +77,14 @@ describe('AdminPlanning', () => {
     })
 
     describe('mode transitions', () => {
-        it('opens the form in edit mode from the pencil', async () => {
+        it('opens the form in edit mode from the pencil, and returns to view mode from cancel', async () => {
             const wrapper = await mountPlanning()
             await clickByTestId(wrapper, PLANNING_TEST_IDS.edit)
             await flushPromises()
 
             expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).exists()).toBe(true)
             expect(lastModeQuery()).toBe(FORM_MODES.EDIT)
-        })
 
-        it('returns to view mode from cancel', async () => {
-            const wrapper = await mountPlanning()
-            await clickByTestId(wrapper, PLANNING_TEST_IDS.edit)
-            await flushPromises()
             await clickByTestId(wrapper, PLANNING_TEST_IDS.cancel)
             await flushPromises()
 

@@ -1,53 +1,51 @@
-import {z} from 'zod'
+import {defineEventHandler, readValidatedBody} from 'h3'
 import {createFeedbackIssue} from '~~/server/integration/github/githubClient'
-import type {FeedbackPayload, GitHubIssueResponse} from '~~/server/integration/github/githubClient'
-import type {UserDetail} from '~/composables/useCoreValidation'
+import type {FeedbackPayload} from '~~/server/integration/github/githubClient'
+import {useFeedbackValidation, type FeedbackCreate, type FeedbackIssue} from '~/composables/useFeedbackValidation'
+import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
+import {getRequiredUser} from '~~/server/utils/authorizationHelper'
 
-const LOG = '🐙 > FEEDBACK > '
+const {throwH3Error} = eventHandlerHelper
+const LOG = '🐙 > FEEDBACK > [POST]'
 
-const FeedbackBodySchema = z.object({
-    type: z.enum(['bug', 'idea', 'question']),
-    description: z.string().optional(),
-    currentUrl: z.string().optional()
-})
+const {FeedbackCreateSchema} = useFeedbackValidation()
 
 /**
- * POST /api/feedback
- * Create a GitHub issue from user feedback
- * Requires authentication with valid inhabitant
- * ADR-002: Separate validation and business logic try-catch
+ * POST /api/feedback - a GitHub issue from a user's feedback, signed with the user's inhabitant name
+ *
+ * ADR Compliance:
+ * - ADR-002: the session first (401), then validation (400), then business logic (500), each in its own block
+ * - ADR-004: the logs carry the issue number and the user id, never the user object
  */
-export default defineEventHandler(async (event): Promise<GitHubIssueResponse> => {
-    // Auth check - must be logged in with valid inhabitant
-    const session = await getUserSession(event)
-    const user = session?.user as UserDetail | undefined
-    if (!user?.Inhabitant) {
-        throw createError({statusCode: 401, message: 'Du skal være logget ind for at give feedback'})
+export default defineEventHandler(async (event): Promise<FeedbackIssue> => {
+    // The issue is signed with the inhabitant's name, so a user without an inhabitant cannot give feedback
+    const user = await getRequiredUser(event)
+    const inhabitant = user.Inhabitant
+    if (!inhabitant) {
+        return throwH3Error(`${LOG} User ${user.id} has no inhabitant`, new Error('Du skal være logget ind for at give feedback'), 401)
     }
 
     // Validation - FAIL EARLY (400)
-    let body: z.infer<typeof FeedbackBodySchema>
+    let body!: FeedbackCreate
     try {
-        body = await readValidatedBody(event, FeedbackBodySchema.parse)
+        body = await readValidatedBody(event, FeedbackCreateSchema.parse)
     } catch (error) {
-        console.warn(LOG, 'POST > Validation failed', error)
-        throw createError({statusCode: 400, message: 'Invalid feedback data', cause: error})
+        return throwH3Error(`${LOG} Input validation error`, error, 400)
     }
 
     const payload: FeedbackPayload = {
         type: body.type,
         description: body.description || '(Ingen beskrivelse)',
         currentUrl: body.currentUrl || `Ukendt side (${new Date().toISOString()})`,
-        user: {firstName: user.Inhabitant.name, userId: user.id}
+        user: {firstName: inhabitant.name, userId: user.id}
     }
 
     // Business logic (500)
     try {
         const issue = await createFeedbackIssue(payload)
-        console.info(LOG, 'POST > Created issue #', issue.number)
+        console.info(`${LOG} Created issue #${issue.number}`)
         return issue
     } catch (error) {
-        console.error(LOG, 'POST > Failed to create issue', error)
-        throw createError({statusCode: 500, message: 'Failed to create feedback issue', cause: error})
+        return throwH3Error(`${LOG} Failed to create issue`, error)
     }
 })

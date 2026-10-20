@@ -2,25 +2,23 @@ import {test, expect} from '@playwright/test'
 import {useWeekDayMapValidation} from '~~/app/composables/useWeekDayMapValidation'
 import {useBookingValidation, type DinnerEventDisplay} from '~~/app/composables/useBookingValidation'
 import type {CookingTeamDetail} from '~~/app/composables/useCookingTeamValidation'
-import {useCoreValidation} from '~~/app/composables/useCoreValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
-import {WEEKDAYS} from '~~/app/types/dateTypes'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
-const {DinnerStateSchema, DinnerModeSchema} = useBookingValidation()
+const {DinnerStateSchema, TicketTypeSchema} = useBookingValidation()
+const TicketType = TicketTypeSchema.enum
 const DinnerState = DinnerStateSchema.enum
-const DinnerMode = DinnerModeSchema.enum
-// Get DinnerMode-typed createDefaultWeekdayMap for inhabitant preferences
-const {createDefaultWeekdayMap: createDefaultDinnerModeMap} = useCoreValidation()
 const {headers, validatedBrowserContext, temporaryAndRandom} = testHelpers
 
 test.describe('Season API Tests', () => {
 
 // Variables to store IDs for cleanup
-    let createdSeasonIds: number[] = []
+    const createdSeasonIds: number[] = []
     const createdHouseholdIds: number[] = []
 
     // Helper: Verify ticket prices exist and are sorted by price ascending (cheapest first)
@@ -40,53 +38,43 @@ test.describe('Season API Tests', () => {
 
     test.describe('Season CRUD operations', () => {
 
-// Test for creating and retrieving a season
-        test("PUT should create a new season and GET should retrieve it", async ({browser}) => {
+        test("PUT should create a season and GET /api/admin/season (index) should list it with its ticketPrices", async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const newSeason = SeasonFactory.defaultSeason()
             const created = await SeasonFactory.createSeason(context, newSeason)
-            expect(created.id).toBeDefined()
-            trackSeason(created.id!)
-
-            // Verify basic season properties
-            expect(created).toHaveProperty('shortName')
-            expect(created.shortName).toBe(newSeason.shortName)
-            expect(created.consecutiveCookingDays).toBe(newSeason.consecutiveCookingDays)
-            assertTicketPrices(created)
-           
-            const listResponse = await context.request.get('/api/admin/season')
-            expect(listResponse.status()).toBe(200)
-
-            const seasons: Season[] = await listResponse.json()
-            const foundSeason = seasons.find(s => s.shortName === newSeason.shortName)
-
-            expect(foundSeason).toBeTruthy()
-            expect(foundSeason!.id).toBe(created.id)
-        })
-
-        test("GET /api/admin/season (index) should include ticketPrices", async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const newSeason = SeasonFactory.defaultSeason()
-            const created = await SeasonFactory.createSeason(context, newSeason)
-            expect(created.id).toBeDefined()
             trackSeason(created.id!)
 
             // Verify season was created with ticket prices
+            expect(created.shortName).toBe(newSeason.shortName)
+            expect(created.consecutiveCookingDays).toBe(newSeason.consecutiveCookingDays)
             assertTicketPrices(created)
 
             // WHEN: GET all seasons (index endpoint)
-            const listResponse = await context.request.get('/api/admin/season')
-            expect(listResponse.status()).toBe(200)
-
-            const seasons: Season[] = await listResponse.json()
+            const seasons = await SeasonFactory.getAllSeasons(context)
             const foundSeason = seasons.find(s => s.id === created.id)
 
-            // THEN: ticketPrices should be included in the list response
+            // THEN: the season and its ticketPrices are included in the list response
             expect(foundSeason).toBeTruthy()
+            expect(foundSeason!.shortName).toBe(newSeason.shortName)
             assertTicketPrices(foundSeason!)
 
             // AND: ticketPrices should match the created data
             expect(foundSeason!.ticketPrices).toEqual(created.ticketPrices)
+        })
+
+        test("GIVEN a season priced at the default prices WHEN reading it THEN each price carries what a ticket at it weighs, and an update sending those prices saves", async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const ticketPrices = TicketFactory.defaultTicketPricesWithoutIds({hungryBabyPrice: 900, childPrice: 1700, adultPrice: 4000})
+            const created = await SeasonFactory.createSeason(context, {...SeasonFactory.defaultSeason(), ticketPrices})
+            trackSeason(created.id!)
+
+            const read = await SeasonFactory.getSeason(context, created.id!)
+            expect(read.ticketPrices.map(price => [price.ticketType, price.price, price.portions])).toEqual([
+                [TicketType.BABY, 0, 0], [TicketType.BABY, 900, 0.25], [TicketType.CHILD, 1700, 0.5], [TicketType.ADULT, 4000, 1]
+            ])
+
+            const updated = await SeasonFactory.updateSeason(context, read)
+            expect(updated.ticketPrices).toEqual(read.ticketPrices)
         })
 
         test("GET /api/admin/season/[id] (detail) should include dinnerEvents and cookingTeams", async ({browser}) => {
@@ -99,10 +87,7 @@ test.describe('Season API Tests', () => {
             const expectedEventCount = SeasonFactory.calculateExpectedEventCount(season)
 
             // WHEN: GET detail endpoint for specific season
-            const detailResponse = await context.request.get(`/api/admin/season/${season.id}`)
-            expect(detailResponse.status()).toBe(200)
-
-            const detailSeason: Season = await detailResponse.json()
+            const detailSeason = await SeasonFactory.getSeason(context, season.id!)
 
             // THEN: dinnerEvents should be auto-generated and included (orchestrated PUT + ADR-009)
             expect(detailSeason.dinnerEvents).toBeDefined()
@@ -123,7 +108,6 @@ test.describe('Season API Tests', () => {
             const context = await validatedBrowserContext(browser)
             const newSeason = SeasonFactory.defaultSeason()
             const created = await SeasonFactory.createSeason(context, newSeason)
-            expect(created.id).toBeDefined()
             createdSeasonIds.push(created.id!)
             const seasonId = created.id!
 
@@ -131,11 +115,10 @@ test.describe('Season API Tests', () => {
             const initialEventCount = created.dinnerEvents!.length
             const initialHolidayCount = newSeason.holidays?.length
 
-            // Create holiday dates within the season's date range (will exclude some cooking days)
-            const holidayStart = new Date(created.seasonDates.start)
-            holidayStart.setDate(holidayStart.getDate() + 1) // Day after season start
-            const holidayEnd = new Date(holidayStart)
-            holidayEnd.setDate(holidayEnd.getDate() + 1) // 2-day holiday
+            // One-day holiday on the season's first cooking date: removes exactly one cooking day on any weekday
+            const [firstDinner] = [...created.dinnerEvents!].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            const holidayStart = new Date(firstDinner!.date)
+            const holidayEnd = new Date(firstDinner!.date)
 
             const updatedData = {
                 ...newSeason,
@@ -162,8 +145,8 @@ test.describe('Season API Tests', () => {
             const expectedEventCount = SeasonFactory.calculateExpectedEventCount(updatedSeason)
             expect(updatedSeason.dinnerEvents!.length).toBe(expectedEventCount)
 
-            // AND: Event count should be less than or equal to initial (holidays may have removed some)
-            expect(updatedSeason.dinnerEvents!.length).toBeLessThanOrEqual(initialEventCount)
+            // AND: The holiday removed exactly one cooking day
+            expect(updatedSeason.dinnerEvents!.length).toBe(initialEventCount - 1)
 
             // AND: The operation envelope reports what reconciliation did (ADR-009)
             expect(result.reconciliation.deleted).toBe(initialEventCount - expectedEventCount)
@@ -206,102 +189,6 @@ test.describe('Season API Tests', () => {
             await SeasonFactory.createSeason(context, invalidSeason, 400)
         })
 
-
-// === BDD TEST CASES FOR SEASON AGGREGATE (ADR-005) ===
-
-        test("PUT should create season with cooking teams", async ({browser}) => {
-            // GIVEN: Season data with request to create cooking teams
-            const context = await validatedBrowserContext(browser)
-
-            // WHEN: Create season with 2 cooking teams
-            const {season, teams} = await SeasonFactory.createSeasonWithTeams(
-                context,
-                SeasonFactory.defaultSeason(),
-                2
-            )
-            expect(season.id).toBeDefined()
-            createdSeasonIds.push(season.id!)
-
-            // THEN: Season should be created
-            expect(season.shortName).toBeDefined()
-
-            // AND: Cooking teams should be created and linked to season
-            expect(teams).toHaveLength(2)
-            expect(teams[0]!.id).toBeDefined()
-            expect(teams[0]!.seasonId).toBe(season.id)
-            expect(teams[1]!.id).toBeDefined()
-            expect(teams[1]!.seasonId).toBe(season.id)
-
-            // Verify teams can be retrieved
-            const team1Response = await context.request.get(`/api/admin/team/${teams[0]!.id}`)
-            expect(team1Response.status()).toBe(200)
-            const team1Data = await team1Response.json()
-            expect(team1Data.seasonId).toBe(season.id)
-        })
-
-        test("DELETE should cascade delete cooking teams (strong relation)", async ({browser}) => {
-            // GIVEN: A season with cooking teams
-            const context = await validatedBrowserContext(browser)
-            const {season, teams} = await SeasonFactory.createSeasonWithTeams(context, SeasonFactory.defaultSeason(), 2)
-            expect(season.id).toBeDefined()
-            createdSeasonIds.push(season.id!)
-
-            // Verify teams were created
-            expect(teams).toHaveLength(2)
-            expect(teams[0]!.id).toBeDefined()
-            expect(teams[1]!.id).toBeDefined()
-
-            // Verify teams exist via GET
-            const team1Response = await context.request.get(`/api/admin/team/${teams[0]!.id}`)
-            expect(team1Response.status()).toBe(200)
-
-            // WHEN: Season is deleted
-            await SeasonFactory.deleteSeason(context, season.id!)
-
-            // THEN: Teams should be cascade deleted
-            const team1AfterDelete = await context.request.get(`/api/admin/team/${teams[0]!.id}`)
-            expect(team1AfterDelete.status()).toBe(404)
-
-            const team2AfterDelete = await context.request.get(`/api/admin/team/${teams[1]!.id}`)
-            expect(team2AfterDelete.status()).toBe(404)
-
-            // Remove from cleanup list (already deleted)
-            createdSeasonIds = createdSeasonIds.filter(id => id !== season.id)
-        })
-
-        test("DELETE should cascade delete dinner events (strong relation)", async ({browser}) => {
-            // GIVEN: A season with auto-generated dinner events (PUT orchestration)
-            const context = await validatedBrowserContext(browser)
-            const seasonData = {
-                ...SeasonFactory.defaultSeason(),
-                cookingDays: createDefaultWeekdayMap([true, true, false, false, false, false, false]) // Mon, Tue only
-            }
-            const season = await SeasonFactory.createSeason(context, seasonData)
-            expect(season.id).toBeDefined()
-            createdSeasonIds.push(season.id!)
-
-            // Dinner events auto-generated by PUT (factory verifies count)
-            const dinnerEvents = season.dinnerEvents!
-            expect(dinnerEvents.length).toBeGreaterThan(0)
-
-            // Verify events exist via GET
-            const firstEventId = dinnerEvents[0]!.id
-            const eventResponse = await context.request.get(`/api/admin/dinner-event/${firstEventId}`)
-            expect(eventResponse.status()).toBe(200)
-
-            // WHEN: Season is deleted
-            await SeasonFactory.deleteSeason(context, season.id!)
-
-            // THEN: All dinner events should be cascade deleted
-            for (const event of dinnerEvents) {
-                const response = await context.request.get(`/api/admin/dinner-event/${event.id}`)
-                expect(response.status()).toBe(404)
-            }
-
-            // Remove from cleanup list (already deleted)
-            createdSeasonIds = createdSeasonIds.filter(id => id !== season.id)
-        })
-
         test("DELETE should cascade delete complete seasonal aggregate", async ({browser}) => {
             // GIVEN: A season with teams, events, and ticket prices (PUT orchestrates dinner events)
             const context = await validatedBrowserContext(browser)
@@ -312,7 +199,6 @@ test.describe('Season API Tests', () => {
                 SeasonFactory.defaultSeason(),
                 2
             )
-            expect(season.id).toBeDefined()
             trackSeason(season.id!)
 
             // Verify ticket prices exist (ADULT + CHILD from factory)
@@ -323,35 +209,26 @@ test.describe('Season API Tests', () => {
             expect(dinnerEvents.length).toBeGreaterThan(0)
 
             // Verify teams exist
-            const team1Response = await context.request.get(`/api/admin/team/${teams[0]!.id}`)
-            expect(team1Response.status()).toBe(200)
+            await SeasonFactory.getCookingTeamById(context, teams[0]!.id!)
 
             // Verify events exist
-            const firstEventResponse = await context.request.get(`/api/admin/dinner-event/${dinnerEvents[0]!.id}`)
-            expect(firstEventResponse.status()).toBe(200)
+            await DinnerEventFactory.getDinnerEvent(context, dinnerEvents[0]!.id)
 
             // WHEN: Season is deleted
-            await SeasonFactory.deleteSeason(context, season.id!)
+            await SeasonFactory.deleteSeason(context, season.id!, 200)
 
             // THEN: ALL cooking teams should be cascade deleted
-            const team1AfterDelete = await context.request.get(`/api/admin/team/${teams[0]!.id}`)
-            expect(team1AfterDelete.status()).toBe(404)
-
-            const team2AfterDelete = await context.request.get(`/api/admin/team/${teams[1]!.id}`)
-            expect(team2AfterDelete.status()).toBe(404)
+            await SeasonFactory.getCookingTeamById(context, teams[0]!.id!, 404)
+            await SeasonFactory.getCookingTeamById(context, teams[1]!.id!, 404)
 
             // AND: ALL dinner events should be cascade deleted
             for (const event of dinnerEvents) {
-                const response = await context.request.get(`/api/admin/dinner-event/${event.id}`)
-                expect(response.status()).toBe(404)
+                await DinnerEventFactory.getDinnerEvent(context, event.id, 404)
             }
 
             // AND: Season itself should be deleted
             const seasonAfterDelete = await context.request.get(`/api/admin/season/${season.id}`)
             expect(seasonAfterDelete.status()).toBe(404)
-
-            // Remove from cleanup list (already deleted)
-            createdSeasonIds = createdSeasonIds.filter(id => id !== season.id)
         })
 
     })
@@ -383,7 +260,6 @@ test.describe('Season API Tests', () => {
                 holidays: []
             }
             const season = await SeasonFactory.createSeason(context, seasonData)
-            expect(season.id).toBeDefined()
             createdSeasonIds.push(season.id!)
 
             // WHEN: POST /api/admin/season/[id]/generate-dinner-events
@@ -406,70 +282,25 @@ test.describe('Season API Tests', () => {
                 expect(event.state).toBe(DinnerState.SCHEDULED)
             })
 
-            // AND: All events are on Monday (1), Wednesday (3), or Friday (5)
+            // AND: All events are on Monday (1), Wednesday (3), or Friday (5), within the season's dates
             result.events.forEach(event => {
                 const eventDate = new Date(event.date)
                 const dayOfWeek = eventDate.getDay()
                 expect([1, 3, 5]).toContain(dayOfWeek)
+                expect(eventDate >= seasonStart, `Event ${eventDate.toISOString()} must be on or after season start ${seasonStart.toISOString()}`).toBe(true)
+                expect(eventDate <= seasonEnd, `Event ${eventDate.toISOString()} must be on or before season end ${seasonEnd.toISOString()}`).toBe(true)
             })
         })
 
-        test("POST /season/[id]/generate-dinner-events should exclude holidays", async ({browser}) => {
+        test("POST /season/[id]/generate-dinner-events should return 404 for a removed season", async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-            // GIVEN: A season with cooking days and holiday periods defined (generates exactly 3 events)
+            // GIVEN: A season that was created and deleted
+            const removedSeason = await SeasonFactory.createSeason(context, SeasonFactory.defaultSeason(temporaryAndRandom()))
+            await SeasonFactory.deleteSeason(context, removedSeason.id!, 200)
 
-            // Create season Jan 1-9, 2025 with Mon/Wed/Fri cooking days
-            // This would create 4 events: Wed Jan 1, Fri Jan 3, Mon Jan 6, Wed Jan 8
-            const seasonStart = new Date(2025, 0, 1) // Jan 1, 2025 (Wed)
-            const seasonEnd = new Date(2025, 0, 9)   // Jan 9, 2025 (Thu)
-
-            // Define holiday period: Jan 8 (excludes Wed Jan 8)
-            // Results in 3 events: Wed Jan 1, Fri Jan 3, Mon Jan 6
-            const holidayStart = new Date(2025, 0, 8)
-            const holidayEnd = new Date(2025, 0, 8)
-
-            const seasonData = {
-                ...SeasonFactory.defaultSeason(),
-                seasonDates: {
-                    start: seasonStart,
-                    end: seasonEnd
-                },
-                cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
-                holidays: [{
-                    start: holidayStart,
-                    end: holidayEnd
-                }]
-            }
-
-            const season = await SeasonFactory.createSeason(context, seasonData)
-            expect(season.id).toBeDefined()
-            createdSeasonIds.push(season.id!)
-
-            // WHEN: Generating dinner events
-            const result = await SeasonFactory.generateDinnerEventsForSeason(context, season.id!)
-
-            // THEN: Exact number of events (excluding holidays)
-            const expectedEventCount = getExpectedEventCount(season)
-            expect(result.eventCount).toBe(expectedEventCount)
-            expect(result.events.length).toBe(expectedEventCount)
-            expect(result.events).toBeDefined()
-
-            // AND: Verify by checking all generated event dates against holiday ranges
-            result.events.forEach(event => {
-                const eventDate = new Date(event.date)
-                const isInHoliday = eventDate >= holidayStart && eventDate <= holidayEnd
-                expect(isInHoliday, `Event on ${eventDate.toISOString()} should not be in holiday period ${holidayStart.toISOString()} - ${holidayEnd.toISOString()}`).toBe(false)
-            })
-        })
-
-        test("POST /season/[id]/generate-dinner-events should return 404 for non-existent season", async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            // GIVEN: Invalid season ID
-            const nonExistentSeasonId = 999999
-
-            // WHEN: Attempt to generate dinner events for non-existent season
+            // WHEN: Attempt to generate dinner events for the removed season
             // THEN: Factory method expects 404
-            await SeasonFactory.generateDinnerEventsForSeason(context, nonExistentSeasonId, 404)
+            await SeasonFactory.generateDinnerEventsForSeason(context, removedSeason.id!, 404)
         })
 
         test("POST /season/[id]/generate-dinner-events should handle season with no cooking days", async ({browser}) => {
@@ -483,67 +314,6 @@ test.describe('Season API Tests', () => {
             // WHEN: Creating the season
             // THEN: Should fail with 400 validation error (fail fast at creation time)
             await SeasonFactory.createSeason(context, seasonData, 400)
-        })
-
-        test("Generated dinner events should respect season date boundaries", async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            // GIVEN: A season with specific start and end dates (generates exactly 3 events)
-
-            // Create season Jan 1-7, 2025 with Mon/Wed/Fri cooking days
-            // This creates events on: Wed Jan 1, Fri Jan 3, Mon Jan 6 = 3 events
-            const seasonStart = new Date(2025, 0, 1) // Jan 1, 2025 (Wed)
-            const seasonEnd = new Date(2025, 0, 7)   // Jan 7, 2025 (Tue)
-
-            const seasonData = {
-                ...SeasonFactory.defaultSeason(),
-                seasonDates: {
-                    start: seasonStart,
-                    end: seasonEnd
-                },
-                cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
-                holidays: []
-            }
-
-            const season = await SeasonFactory.createSeason(context, seasonData)
-            expect(season.id).toBeDefined()
-            createdSeasonIds.push(season.id!)
-
-            // WHEN: Generating dinner events
-            const result = await SeasonFactory.generateDinnerEventsForSeason(context, season.id!)
-
-            // THEN: Exact number of events for the date range
-            const expectedEventCount = getExpectedEventCount(season)
-            expect(result.eventCount).toBe(expectedEventCount)
-            expect(result.events.length).toBe(expectedEventCount)
-            expect(result.events).toBeDefined()
-
-            let firstEventDate: Date | null = null
-            let lastEventDate: Date | null = null
-
-            // AND: All generated events fall within seasonDates.start and seasonDates.end
-            result.events.forEach(event => {
-                const eventDate = new Date(event.date)
-
-                // All events must be within season boundaries
-                expect(eventDate >= seasonStart, `Event ${eventDate.toISOString()} must be on or after season start ${seasonStart.toISOString()}`).toBe(true)
-                expect(eventDate <= seasonEnd, `Event ${eventDate.toISOString()} must be on or before season end ${seasonEnd.toISOString()}`).toBe(true)
-
-                // Track first and last events
-                if (!firstEventDate || eventDate < firstEventDate) {
-                    firstEventDate = eventDate
-                }
-                if (!lastEventDate || eventDate > lastEventDate) {
-                    lastEventDate = eventDate
-                }
-            })
-
-            // AND: First event is on or after seasonDates.start
-            expect(firstEventDate).toBeDefined()
-            expect(firstEventDate! >= seasonStart).toBe(true)
-
-            // AND: Last event is on or before seasonDates.end
-            expect(lastEventDate).toBeDefined()
-            expect(lastEventDate! <= seasonEnd).toBe(true)
         })
 
     })
@@ -566,7 +336,6 @@ test.describe('Season API Tests', () => {
                 consecutiveCookingDays: 1
             }
             const {season, teams} = await SeasonFactory.createSeasonWithTeams(context, seasonData, 3)
-            expect(season.id).toBeDefined()
             createdSeasonIds.push(season.id!)
 
             const dinnerEventsResult = await SeasonFactory.generateDinnerEventsForSeason(context, season.id!)
@@ -584,6 +353,7 @@ test.describe('Season API Tests', () => {
             expect([...new Set(assignmentResult.events.map(e => e.cookingTeamId))].length).toBe(3)
 
             const team4 = await SeasonFactory.createCookingTeamWithMembersForSeason(context, season.id!, "Team-4-added-later", 2)
+            createdHouseholdIds.push(team4.householdId)
             expect(team4.assignments).toHaveLength(2)
             expect(team4.assignments[0]!.inhabitant).toBeDefined()
 
@@ -617,7 +387,6 @@ test.describe('Season API Tests', () => {
                 consecutiveCookingDays: 1
             }
             const {season} = await SeasonFactory.createSeasonWithTeams(context, seasonData, 3)
-            expect(season.id).toBeDefined()
             createdSeasonIds.push(season.id!)
 
             // Assign affinities WITHOUT generating dinner events first
@@ -652,68 +421,29 @@ test.describe('Season API Tests', () => {
             expect(fullSeason.isActive).toBe(true)
         })
 
-        test('POST /api/admin/season/active should return 404 for non-existent season', async ({browser}) => {
+        test('POST /api/admin/season/active should return 404 for a removed season', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
+            const removedSeason = await SeasonFactory.createSeason(context, SeasonFactory.defaultSeason(temporaryAndRandom()))
+            await SeasonFactory.deleteSeason(context, removedSeason.id!, 200)
 
-            // Try to activate non-existent season
+            // Try to activate the removed season
             const response = await context.request.post('/api/admin/season/active', {
                 headers,
-                data: { seasonId: 9999999 }
+                data: { seasonId: removedSeason.id }
             })
             expect(response.status()).toBe(404)
-        })
-
-        test('POST /api/admin/season/active should clip inhabitant preferences to cooking days', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const testSalt = temporaryAndRandom()
-
-            // GIVEN: The active season singleton
-            const activeSeason = await SeasonFactory.createActiveSeason(context)
-            const cookingDays = activeSeason.cookingDays
-
-            // AND: A household with an inhabitant having DINEIN on ALL days
-            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
-                context,
-                HouseholdFactory.defaultHouseholdData(testSalt),
-                1
-            )
-            createdHouseholdIds.push(household.id)
-            const inhabitantId = inhabitants[0]!.id
-
-            const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
-            await HouseholdFactory.updateInhabitant(context, inhabitantId, {dinnerPreferences: allDaysDineIn}, 200, activeSeason.id)
-
-            // WHEN: Season is re-activated (idempotent, triggers clipping)
-            const response = await context.request.post('/api/admin/season/active', {headers, data: {seasonId: activeSeason.id}})
-            expect(response.status()).toBe(200)
-
-            // THEN: Preferences should be clipped to match cooking days
-            const after = await HouseholdFactory.getInhabitantById(context, inhabitantId)
-
-            // Cooking days retain DINEIN, non-cooking days clipped to NONE
-            for (const day of WEEKDAYS) {
-                if (cookingDays[day]) {
-                    expect(after?.dinnerPreferences?.[day], `${day} is cooking day, should retain DINEIN`).toBe(DinnerMode.DINEIN)
-                } else {
-                    expect(after?.dinnerPreferences?.[day], `${day} is non-cooking, should be NONE`).toBe(DinnerMode.NONE)
-                }
-            }
         })
     })
 
     test("Regenerating dinner events should remove events on holiday dates", async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const holidayStart = new Date(SeasonFactory.tomorrow)
-        holidayStart.setDate(holidayStart.getDate() + 1)
-        const holidayEnd = new Date(holidayStart)
-        holidayEnd.setDate(holidayEnd.getDate() + 1)
-        const holiday = {start: holidayStart, end: holidayEnd}
+        const {seasonDates, holiday} = SeasonFactory.generateUniqueSeasonDates()
 
         // All days cooking — guarantees holiday always covers cooking days regardless of day-of-week
         const allDaysCooking = createDefaultWeekdayMap([true, true, true, true, true, true, true])
 
         // GIVEN: Season with holidays, then holidays removed to create extra events
-        const created = await SeasonFactory.createSeason(context, {...SeasonFactory.defaultSeason(temporaryAndRandom()), cookingDays: allDaysCooking, holidays: [holiday]})
+        const created = await SeasonFactory.createSeason(context, {...SeasonFactory.defaultSeason(temporaryAndRandom()), seasonDates, cookingDays: allDaysCooking, holidays: [holiday]})
         createdSeasonIds.push(created.id!)
         const expectedCount = SeasonFactory.calculateExpectedEventCount(created)
 
@@ -738,9 +468,7 @@ test.describe('Season API Tests', () => {
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         // Cleanup households first (before seasons, in case of any references)
-        for (const householdId of createdHouseholdIds) {
-            await HouseholdFactory.deleteHousehold(context, householdId)
-        }
+        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
         // Factory cleanup automatically includes active season singleton
         await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
     })

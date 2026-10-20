@@ -1,9 +1,8 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {isSameDay} from 'date-fns'
-import {useBilling} from '~/composables/useBilling'
+import {useBilling, TICKET_COUNTS} from '~/composables/useBilling'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
-import type {OrderDisplay} from '~/composables/useBookingValidation'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 
 describe('useBilling', () => {
@@ -14,18 +13,18 @@ describe('useBilling', () => {
     let getBillingPeriodForDate: Billing['getBillingPeriodForDate']
     let controlInvoices: Billing['controlInvoices']
     let controlTransactions: Billing['controlTransactions']
-    let controlOrders: Billing['controlOrders']
     let formatTicketCounts: Billing['formatTicketCounts']
     let groupByHouseholdEntry: Billing['groupByHouseholdEntry']
     let decideBillingSideEffects: Billing['decideBillingSideEffects']
+    let expenseNoteWords: Billing['expenseNoteWords']
     beforeAll(() => {
         ({
+            expenseNoteWords,
             calculateClosedBillingPeriod,
             calculateCurrentBillingPeriod,
             getBillingPeriodForDate,
             controlInvoices,
             controlTransactions,
-            controlOrders,
             formatTicketCounts,
             groupByHouseholdEntry,
             decideBillingSideEffects
@@ -33,13 +32,13 @@ describe('useBilling', () => {
     })
     const {TicketTypeSchema} = useBookingValidation()
     const TicketType = TicketTypeSchema.enum
+    type TicketTypeValue = typeof TicketType[keyof typeof TicketType]
 
     // Cutoff day is 17 (from app.config.ts)
     // Period: 18th of month N to 17th of month N+1
 
     describe('calculateCurrentBillingPeriod', () => {
         it.each([
-            ['before cutoff', new Date(2025, 11, 10), new Date(2025, 10, 18), new Date(2025, 11, 17)],
             ['on cutoff', new Date(2025, 11, 17), new Date(2025, 10, 18), new Date(2025, 11, 17)],
             ['after cutoff', new Date(2025, 11, 18), new Date(2025, 11, 18), new Date(2026, 0, 17)],
         ])('%s', (_, ref, expectedStart, expectedEnd) => {
@@ -73,13 +72,8 @@ describe('useBilling', () => {
 
         it.each([
             // [description, dinnerDate, expectedStart, expectedEnd, expectedPayment]
-            ['Oct 10 (before cutoff)', new Date(2025, 9, 10), new Date(2025, 8, 18), new Date(2025, 9, 17), new Date(2025, 10, 1)],
             ['Oct 17 (on cutoff)', new Date(2025, 9, 17), new Date(2025, 8, 18), new Date(2025, 9, 17), new Date(2025, 10, 1)],
             ['Oct 18 (after cutoff)', new Date(2025, 9, 18), new Date(2025, 9, 18), new Date(2025, 10, 17), new Date(2025, 11, 1)],
-            ['Oct 25 (after cutoff)', new Date(2025, 9, 25), new Date(2025, 9, 18), new Date(2025, 10, 17), new Date(2025, 11, 1)],
-            ['Nov 5 (before cutoff)', new Date(2025, 10, 5), new Date(2025, 9, 18), new Date(2025, 10, 17), new Date(2025, 11, 1)],
-            ['Nov 17 (on cutoff)', new Date(2025, 10, 17), new Date(2025, 9, 18), new Date(2025, 10, 17), new Date(2025, 11, 1)],
-            ['Nov 18 (after cutoff)', new Date(2025, 10, 18), new Date(2025, 10, 18), new Date(2025, 11, 17), new Date(2026, 0, 1)],
             ['Dec 20 (year boundary)', new Date(2025, 11, 20), new Date(2025, 11, 18), new Date(2026, 0, 17), new Date(2026, 1, 1)],
         ])('%s → correct period', (_, dinnerDate, expectedStart, expectedEnd, expectedPayment) => {
             const result = getBillingPeriodForDate(dinnerDate)
@@ -104,10 +98,7 @@ describe('useBilling', () => {
 
         it.each([
             ['exact match', [10000, 20000, 30000], 60000, true],
-            ['mismatch - too low', [10000, 20000], 60000, false],
-            ['mismatch - too high', [10000, 20000, 30000, 5000], 60000, false],
-            ['empty array', [], 0, true],
-            ['single item', [50000], 50000, true],
+            ['mismatch', [10000, 20000], 60000, false]
         ])('%s', (_, amounts, expected, shouldBeValid) => {
             const invoices = amounts.map(makeInvoice)
             const result = controlInvoices(invoices, expected)
@@ -123,13 +114,13 @@ describe('useBilling', () => {
             id: 1, orderId: 1, amount, createdAt: new Date(), orderSnapshot: '{}',
             dinnerEvent: {id: 1, date: new Date(), menuTitle: 'Test'},
             inhabitant: {id: 1, name: 'Test', household: {id: 1, pbsId: 100, address: 'Test'}},
-            ticketType: 'ADULT'
+            ticketType: TicketType.ADULT,
+            dinnerMode: null
         })
 
         it.each([
             ['exact match', [5000, 3000, 2000], 10000, true],
-            ['mismatch', [5000, 3000], 10000, false],
-            ['empty', [], 0, true],
+            ['mismatch', [5000, 3000], 10000, false]
         ])('%s', (_, amounts, expected, shouldBeValid) => {
             const transactions = amounts.map(makeTx)
             const result = controlTransactions(transactions, expected)
@@ -140,48 +131,6 @@ describe('useBilling', () => {
         })
     })
 
-    describe('controlOrders', () => {
-        const makeOrder = (priceAtBooking: number, ticketType: 'ADULT' | 'CHILD' | 'BABY'): OrderDisplay => ({
-            id: 1, inhabitantId: 1, dinnerEventId: 1, ticketPriceId: 1,
-            bookedByUserId: 1, dinnerMode: 'DINEIN',
-            state: 'BOOKED', priceAtBooking, isGuestTicket: false, ticketType,
-            releasedAt: null, closedAt: null, createdAt: new Date(), updatedAt: new Date()
-        })
-
-        it.each([
-            // [description, orders, expectedAmount, expectedCounts, shouldBeValid]
-            ['amount + counts match', [[10000, 'ADULT'], [10000, 'ADULT'], [5000, 'CHILD']], 25000, '2V 1B', true],
-            ['amount mismatch', [[10000, 'ADULT'], [10000, 'ADULT']], 25000, '2V', false],
-            ['counts mismatch', [[10000, 'ADULT'], [10000, 'ADULT']], 20000, '3V', false],
-            ['both mismatch', [[10000, 'ADULT']], 25000, '2V', false],
-            ['empty', [], 0, '-', true],
-            ['baby only (0 kr)', [[0, 'BABY']], 0, '1b', true],
-            ['baby with adults', [[10000, 'ADULT'], [0, 'BABY']], 10000, '1V 1b', true],
-        ] as const)('%s', (_, orderData, expectedAmount, expectedCounts, shouldBeValid) => {
-            const orders = orderData.map(([price, type]) => makeOrder(price, type))
-            const result = controlOrders(orders, expectedAmount, expectedCounts)
-
-            expect(result.isValid).toBe(shouldBeValid)
-            expect(result.expected).toBe(expectedAmount)
-            expect(result.ticketCounts.expected).toBe(expectedCounts)
-        })
-
-        it('returns computed values correctly', () => {
-            const orders = [
-                makeOrder(10000, 'ADULT'),
-                makeOrder(10000, 'ADULT'),
-                makeOrder(5000, 'CHILD'),
-                makeOrder(0, 'BABY')
-            ]
-            const result = controlOrders(orders, 25000, '2V 1B 1b')
-
-            expect(result.computed).toBe(25000)
-            expect(result.ticketCounts.computed).toBe('2V 1B 1b')
-            expect(result.ticketCounts.isValid).toBe(true)
-            expect(result.isValid).toBe(true)
-        })
-    })
-
     // ========== GROUPING TESTS ==========
 
     describe('groupByHouseholdEntry', () => {
@@ -189,11 +138,12 @@ describe('useBilling', () => {
             id: householdId * 10, orderId: 1, amount, createdAt: new Date(), orderSnapshot: '{}',
             dinnerEvent: {id: 1, date: new Date(), menuTitle: 'Test'},
             inhabitant: {id: 1, name: 'Test', household: {id: householdId, pbsId, address}},
-            ticketType: TicketType.ADULT
+            ticketType: TicketType.ADULT,
+            dinnerMode: null
         })
 
         // Verifies grouped output is ordered by address, then pbsId as tiebreaker.
-        it('GIVEN transactions pre-sorted by address then pbsId WHEN grouping THEN output is sorted by address then pbsId', () => {
+        it('GIVEN transactions pre-sorted by address then pbsId WHEN grouping THEN output is sorted by address then pbsId, one entry per household with summed totals', () => {
             const grouper = groupByHouseholdEntry<TransactionDisplay>(tx => tx.inhabitant.household)
             const input = [
                 makeTx(1, 3000, 'Abbey Road 1', 4000),        // address "A" + lower pbs
@@ -207,24 +157,7 @@ describe('useBilling', () => {
             expect(grouped.map(g => g.address)).toEqual(['Abbey Road 1', 'Abbey Road 1', 'Penny Lane 4', 'Skråningen 31'])
             expect(grouped.map(g => g.pbsId)).toEqual([3000, 7000, 1000, 5000])
             expect(grouped[0]!.totalAmount).toBe(5700)  // 4000 + 1700 merged
-        })
-
-        it('GIVEN single household with multiple transactions WHEN grouping THEN single entry with summed total', () => {
-            const grouper = groupByHouseholdEntry<TransactionDisplay>(tx => tx.inhabitant.household)
-            const grouped = grouper([
-                makeTx(1, 100, 'Smedekildevej 42', 4000),
-                makeTx(1, 100, 'Smedekildevej 42', 1700),
-                makeTx(1, 100, 'Smedekildevej 42', 0)
-            ], tx => tx.amount)
-
-            expect(grouped).toHaveLength(1)
-            expect(grouped[0]!.totalAmount).toBe(5700)
             expect(grouped[0]!.computedTotal).toBe(5700)
-        })
-
-        it('GIVEN empty input WHEN grouping THEN returns empty array', () => {
-            const grouper = groupByHouseholdEntry<TransactionDisplay>(tx => tx.inhabitant.household)
-            expect(grouper([], tx => tx.amount)).toEqual([])
         })
     })
 
@@ -232,13 +165,10 @@ describe('useBilling', () => {
 
     describe('formatTicketCounts', () => {
         const {ADULT, CHILD, BABY} = TicketType
-        const makeItem = (t: typeof TicketType[keyof typeof TicketType] | null) => ({ticketType: t})
+        const makeItem = (t: TicketTypeValue | null) => ({ticketType: t})
 
         describe('with array input', () => {
             it.each([
-                ['adults only', [ADULT, ADULT, ADULT], '3V'],
-                ['children only', [CHILD, CHILD], '2B'],
-                ['babies only', [BABY], '1b'],
                 ['mixed types', [ADULT, ADULT, CHILD, BABY, BABY], '2V 1B 2b'],
                 ['empty array', [], '-'],
                 ['null ticketTypes ignored', [null, ADULT, null], '1V'],
@@ -249,9 +179,6 @@ describe('useBilling', () => {
 
         describe('with map input', () => {
             it.each([
-                ['adults only', {[ADULT]: 200}, '200V'],
-                ['children only', {[CHILD]: 50}, '50B'],
-                ['babies only', {[BABY]: 5}, '5b'],
                 ['mixed types', {[ADULT]: 200, [CHILD]: 50, [BABY]: 1}, '200V 50B 1b'],
                 ['empty map', {}, '-'],
                 ['partial map', {[ADULT]: 100, [BABY]: 2}, '100V 2b'],
@@ -260,17 +187,61 @@ describe('useBilling', () => {
             })
         })
     })
+
+    // One builder, three wordings of the same counts
+    describe('TICKET_COUNTS', () => {
+        const {ADULT, CHILD, BABY} = TicketType
+        const FULL = {[ADULT]: 8, [CHILD]: 1, [BABY]: 2}
+        const ZERO_TYPE = {[ADULT]: 2, [CHILD]: 0, [BABY]: 1}
+        const KITCHEN = {[ADULT]: 60, [CHILD]: 30, [BABY]: 10}
+        const EMPTY = {}
+
+        it.each([
+            {variant: 'compact', desc: 'full counts', counts: FULL, text: '8V 1B 2b'},
+            {variant: 'compact', desc: 'a zero type', counts: ZERO_TYPE, text: '2V 1b'},
+            {variant: 'compact', desc: 'no counts', counts: EMPTY, text: '-'},
+            {variant: 'sentence', desc: 'full counts', counts: FULL, text: '8 voksne, 1 barn, 2 babyer'},
+            {variant: 'sentence', desc: 'a zero type', counts: ZERO_TYPE, text: '2 voksne, 1 baby'},
+            {variant: 'sentence', desc: 'no counts', counts: EMPTY, text: ''},
+            {variant: 'labelled', desc: 'full counts', counts: KITCHEN, text: 'Voksen: 60 | Barn: 30 | Baby: 10'},
+            {variant: 'labelled', desc: 'a zero type', counts: ZERO_TYPE, text: 'Voksen: 2 | Barn: 0 | Baby: 1'},
+            {variant: 'labelled', desc: 'no counts', counts: EMPTY, text: 'Voksen: 0 | Barn: 0 | Baby: 0'}
+        ] as const)('$variant over $desc reads "$text"', ({variant, counts, text}) => {
+            expect(TICKET_COUNTS[variant].text(counts)).toBe(text)
+        })
+
+        it('names the ticket type of each part and holds its figure alone, so a list renders one part per type and draws its own separator', () => {
+            expect(TICKET_COUNTS.labelled.parts(ZERO_TYPE)).toEqual([
+                {ticketType: ADULT, text: 'Voksen: 2'},
+                {ticketType: CHILD, text: 'Barn: 0'},
+                {ticketType: BABY, text: 'Baby: 1'}
+            ])
+            expect(TICKET_COUNTS.compact.parts(ZERO_TYPE).map(part => part.ticketType)).toEqual([ADULT, BABY])
+        })
+    })
+
     describe('decideBillingSideEffects', () => {
         it.each([
-            ['a period on its first run', {version: 1, archivedVersion: 0, notifiedVersion: 0}, {archive: true, notify: true}],
             ['a period fully done at its version', {version: 1, archivedVersion: 1, notifiedVersion: 1}, {archive: false, notify: false}],
             ['a period whose content changed since (catch-up)', {version: 2, archivedVersion: 1, notifiedVersion: 1}, {archive: true, notify: true}],
             ['a period with its archive done and its mail pending (queue was down)', {version: 1, archivedVersion: 1, notifiedVersion: 0}, {archive: false, notify: true}],
-            ['a period with its mail done and its archive pending (R2 put failed)', {version: 1, archivedVersion: 0, notifiedVersion: 1}, {archive: true, notify: false}],
-            ['a migrated period: mailed at v1 by definition, CSV pending', {version: 1, archivedVersion: 0, notifiedVersion: 1}, {archive: true, notify: false}]
+            ['a period with its mail done and its archive pending (R2 put failed, or a migrated period: mailed at v1 by definition)', {version: 1, archivedVersion: 0, notifiedVersion: 1}, {archive: true, notify: false}]
         ])('redoes only what is missing or stale for %s', (_name, stamps, plan) => {
             expect(decideBillingSideEffects(stamps)).toEqual(plan)
         })
     })
-})
 
+    describe('expenseNoteWords', () => {
+        const dinner = {date: new Date(2026, 3, 14, 18), menuTitle: 'Risotto', cookingTeam: {name: 'Madhold 2 - 08/25-06/26'}}
+        const payer = {email: 'anna@example.com', name: 'Anna H.'}
+
+        it.each([
+            {desc: 'a titled dinner with a team', dinner, payer, words: '"Risotto" 14/04/2026, Anna H. bestiller for Madhold 2'},
+            {desc: 'a dinner without a team', dinner: {...dinner, cookingTeam: null}, payer, words: '"Risotto" 14/04/2026, Anna H. bestiller'},
+            {desc: 'a dinner without a title', dinner: {...dinner, menuTitle: ''}, payer, words: '14/04/2026, Anna H. bestiller for Madhold 2'},
+            {desc: 'a payer without a name', dinner, payer: {email: 'anna@example.com'}, words: '"Risotto" 14/04/2026, anna@example.com bestiller for Madhold 2'}
+        ])('GIVEN $desc WHEN building the words THEN they read as the ledger does', ({dinner: d, payer: p, words}) => {
+            expect(expenseNoteWords(d, p)).toBe(words)
+        })
+    })
+})

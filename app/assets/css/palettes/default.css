@@ -24,6 +24,7 @@ html:not([data-palette]) {
     --color-gray-500: #616878;
     --color-green-500: #00a23f;
     --color-green-600: #007e2d;
+    --color-green-700: #007932;
     --color-orange-200: #ac8467;
     --color-orange-600: #c33200;
     --color-party-600: #ca2357;
@@ -55,7 +56,6 @@ html.dark:not([data-palette]) {
     --color-amber-300: #d3b8a0;
     --color-amber-500: #835a46;
     --color-amber-600: #b48375;
-    --color-amber-800: #633f3d;
     --color-blue-400: #48cedc;
     --color-blue-600: #3c9bad;
     --color-blue-700: #5298a9;
@@ -67,6 +67,7 @@ html.dark:not([data-palette]) {
     --color-gray-600: #8390a1;
     --color-gray-700: #838fa4;
     --color-green-300: #7bf1a8;
+    --color-green-400: #05df72;
     --color-green-500: #00c950;
     --color-orange-200: #f9ceaf;
     --color-orange-300: #f4ab7d;

@@ -1,5 +1,7 @@
 import {defineEventHandler, setResponseStatus, getQuery} from "h3"
 import {runDailyMaintenance} from "~~/server/utils/dailyMaintenanceService"
+import {emailChannel} from "~~/server/utils/sender/config"
+import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
 import {useBookingValidation, type DailyMaintenanceResult} from "~/composables/useBookingValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
@@ -24,6 +26,7 @@ export default defineEventHandler(async (event): Promise<DailyMaintenanceResult>
 
     try {
         const result = await runDailyMaintenance(d1Client, triggeredBy)
+        if (result.scaffold) await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), result.scaffold.outcomes)
         setResponseStatus(event, 200)
         return DailyMaintenanceResultSchema.parse(result)
     } catch (error) {

@@ -19,10 +19,10 @@ export class TicketFactory {
      * - ADULT (12+ years): 5000 øre
      */
     static readonly defaultTicketPricesData: TicketPrice[] = [
-        createTicketPrice(TicketType.BABY, 0, undefined, 'Baby (under 2 år)', 2),
-        createTicketPrice(TicketType.BABY, 1500, undefined, 'Sulten baby (under 2 år)', 2),
-        createTicketPrice(TicketType.CHILD, 3000, undefined, 'Barn (under 12 år)', 12),
-        createTicketPrice(TicketType.ADULT, 5000, undefined, 'Voksen (12+ år)', undefined)
+        createTicketPrice({ticketType: TicketType.BABY, price: 0, description: 'Baby (under 2 år)', maximumAgeLimit: 2, portions: 0}),
+        createTicketPrice({ticketType: TicketType.BABY, price: 1500, description: 'Sulten baby (under 2 år)', maximumAgeLimit: 2, portions: 0.25}),
+        createTicketPrice({ticketType: TicketType.CHILD, price: 3000, description: 'Barn (under 12 år)', maximumAgeLimit: 12, portions: 0.5}),
+        createTicketPrice({ticketType: TicketType.ADULT, price: 5000, description: 'Voksen (12+ år)', portions: 1})
     ]
 
     /**
@@ -49,42 +49,24 @@ export class TicketFactory {
         childPrice?: number
         adultPrice?: number
         seasonId?: number
-    }): TicketPrice[] => {
-        return [
-            createTicketPrice(
-                TicketType.BABY,
-                overrides?.babyPrice ?? 0,
-                overrides?.seasonId,
-                'Baby (under 2 år)',
-                overrides?.babyAge ?? 2,
-                1
-            ),
-            createTicketPrice(
-                TicketType.BABY,
-                overrides?.hungryBabyPrice ?? 1500,
-                overrides?.seasonId,
-                'Sulten baby (under 2 år)',
-                overrides?.hungryBabyAge ?? 2,
-                2
-            ),
-            createTicketPrice(
-                TicketType.CHILD,
-                overrides?.childPrice ?? 3000,
-                overrides?.seasonId,
-                'Barn (under 12 år)',
-                overrides?.childAge ?? 12,
-                3
-            ),
-            createTicketPrice(
-                TicketType.ADULT,
-                overrides?.adultPrice ?? 5000,
-                overrides?.seasonId,
-                'Voksen (12+ år)',
-                undefined,
-                4
-            )
-        ]
-    }
+    }): TicketPrice[] => [
+        createTicketPrice({
+            id: 1, seasonId: overrides?.seasonId, ticketType: TicketType.BABY, price: overrides?.babyPrice ?? 0,
+            description: 'Baby (under 2 år)', maximumAgeLimit: overrides?.babyAge ?? 2, portions: 0
+        }),
+        createTicketPrice({
+            id: 2, seasonId: overrides?.seasonId, ticketType: TicketType.BABY, price: overrides?.hungryBabyPrice ?? 1500,
+            description: 'Sulten baby (under 2 år)', maximumAgeLimit: overrides?.hungryBabyAge ?? 2, portions: 0.25
+        }),
+        createTicketPrice({
+            id: 3, seasonId: overrides?.seasonId, ticketType: TicketType.CHILD, price: overrides?.childPrice ?? 3000,
+            description: 'Barn (under 12 år)', maximumAgeLimit: overrides?.childAge ?? 12, portions: 0.5
+        }),
+        createTicketPrice({
+            id: 4, seasonId: overrides?.seasonId, ticketType: TicketType.ADULT, price: overrides?.adultPrice ?? 5000,
+            description: 'Voksen (12+ år)', portions: 1
+        })
+    ]
 
     /**
      * Get default ticket prices without IDs (for create scenarios in reconciliation tests)

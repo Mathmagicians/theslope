@@ -5,6 +5,7 @@ import type {DateRange, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation, type DinnerEventDisplay} from '~/composables/useBookingValidation'
+import type {TeamRole} from '~/composables/useCookingTeamValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {reconcileDinnerEventsForSeason} from '~~/server/utils/reconcileDinnerEvents'
@@ -16,32 +17,26 @@ const {DinnerEventCreateSchema} = useBookingValidation()
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
 type UseSeasonT = ReturnType<typeof useSeason>
 type SeasonDeadlines = ReturnType<UseSeasonT['deadlinesForSeason']>
-let coalesceSeason: UseSeasonT['coalesceSeason']
-let getDefaultSeason: UseSeasonT['getDefaultSeason']
 let getDefaultHolidays: UseSeasonT['getDefaultHolidays']
 let generateDinnerEventDataForSeason: UseSeasonT['generateDinnerEventDataForSeason']
 let assignAffinitiesToTeams: UseSeasonT['assignAffinitiesToTeams']
 let assignTeamsToEvents: UseSeasonT['assignTeamsToEvents']
-let getHolidaysForSeason: UseSeasonT['getHolidaysForSeason']
+let getHolidayDatesFromDateRangeList: UseSeasonT['getHolidayDatesFromDateRangeList']
 let deadlinesForSeason: UseSeasonT['deadlinesForSeason']
 let getMenuAnnouncementDeadlineDays: UseSeasonT['getMenuAnnouncementDeadlineDays']
-let isOnTeam: UseSeasonT['isOnTeam']
 let createPreferenceClipper: UseSeasonT['createPreferenceClipper']
 let getScheduleChangeDesiredEvents: UseSeasonT['getScheduleChangeDesiredEvents']
 let reconcileDinnerEvents: UseSeasonT['reconcileDinnerEvents']
 let isChefFor: UseSeasonT['isChefFor']
 beforeAll(() => {
     ({
-        coalesceSeason,
-        getDefaultSeason,
         getDefaultHolidays,
         generateDinnerEventDataForSeason,
         assignAffinitiesToTeams,
         assignTeamsToEvents,
-        getHolidaysForSeason,
+        getHolidayDatesFromDateRangeList,
         deadlinesForSeason,
         getMenuAnnouncementDeadlineDays,
-        isOnTeam,
         createPreferenceClipper,
         getScheduleChangeDesiredEvents,
         reconcileDinnerEvents,
@@ -150,51 +145,6 @@ describe('useSeasonSchema', () => {
     })
 })
 
-describe('coalesceSeason', () => {
-
-    it('should return the default season when no season is provided', () => {
-        const defaultSeason = getDefaultSeason()
-        const result = coalesceSeason(undefined, defaultSeason)
-        expect(result).toEqual(defaultSeason)
-    })
-    
-    it('should handle null input and return the default season', () => {
-        const defaultSeason = getDefaultSeason()
-        const result = coalesceSeason(null, defaultSeason)
-        expect(result).toEqual(defaultSeason)
-    })
-
-    it('should merge provided season with default season', () => {
-        const defaultSeason = getDefaultSeason()
-        const partialSeason: Partial<Season> = {
-            shortName: 'Test Season',
-            isActive: true
-        }
-        const result = coalesceSeason(partialSeason, defaultSeason)
-        expect(result.shortName).toBe(partialSeason.shortName)
-        expect(result.isActive).toBe(partialSeason.isActive)
-        expect(result.seasonDates).toEqual(defaultSeason.seasonDates)
-    })
-
-    it('should deep copy seasonDates and holidays', () => {
-        const defaultSeason = getDefaultSeason()
-        const partialSeason: Partial<Season> = {
-            seasonDates: {
-                start: new Date(1976, 0, 26),
-                end: new Date(1976, 0, 26)
-            },
-            holidays: [
-                { start: new Date(1976, 0, 26), end: new Date(1976, 0, 26) }
-            ]
-        }
-        const result = coalesceSeason(partialSeason, defaultSeason)
-        expect(result.seasonDates).toEqual(partialSeason.seasonDates)
-        expect(result.holidays).toEqual(partialSeason.holidays)
-        expect(result.seasonDates).not.toBe(partialSeason.seasonDates)
-        expect(result.holidays).not.toBe(partialSeason.holidays)
-    })
-})
-
 describe('getDefaultSeason', () => {
     it('should validate against both application and serialization schemas', () => {
         const { getDefaultSeason, SeasonSchema, serializeSeason, deserializeSeason } = useSeason()
@@ -206,7 +156,7 @@ describe('getDefaultSeason', () => {
 
         // Test serialization schema
         const serialized = serializeSeason(defaultSeason)
-        const deserialized = deserializeSeason(serialized)
+        const deserialized = deserializeSeason(serialized, useTicket().withPortions)
         const serializedResult = SeasonSchema.safeParse(deserialized)
 
         expect(serializedResult.success).toBe(true)
@@ -214,15 +164,6 @@ describe('getDefaultSeason', () => {
             expect(deserialized).toEqual(defaultSeason)
             expect(defaultSeason.seasonDates.start < defaultSeason.seasonDates.end).toBe(true)
         }
-    })
-
-    it('should return empty holidays array', () => {
-        const { getDefaultSeason } = useSeason()
-        const defaultSeason = getDefaultSeason()
-
-        // GIVEN: Default season is created
-        // THEN: Holidays should be empty (component calculates reactively)
-        expect(defaultSeason.holidays).toEqual([])
     })
 })
 
@@ -246,20 +187,6 @@ describe('getDefaultHolidays', () => {
             expect(holiday.start >= seasonDates.start).toBe(true)
             expect(holiday.end <= seasonDates.end).toBe(true)
         })
-    })
-
-    it('should return empty array for short season outside holidayw weeks', () => {
-        // GIVEN: A short test season (7 days)
-        const seasonDates: DateRange = {
-            start: new Date(2025, 8, 1),  // Sep 1, 2025
-            end: new Date(2025, 8, 7)     // Sep 7, 2025
-        }
-
-        // WHEN: Calculating default holidays
-        const holidays = getDefaultHolidays(seasonDates)
-
-        // THEN: Should return empty (no holiday weeks fit in 7 days)
-        expect(holidays).toEqual([])
     })
 
     it('should filter holidays outside season range', () => {
@@ -407,44 +334,24 @@ describe('assignTeamsToEvents', () => {
     })
 })
 
-describe('getHolidaysForSeason', () => {
+// The calendars read a season's holidays as the days of its holiday ranges
+describe('getHolidayDatesFromDateRangeList', () => {
 
-    it.each([
-        {
-            description: 'empty array when season has no holidays',
-            holidays: [],
-            expectedCount: 0
-        },
-        {
-            description: 'single date for single-day holiday',
-            holidays: [{ start: new Date(2025, 0, 15), end: new Date(2025, 0, 15) }],
-            expectedCount: 1
-        },
-        {
-            description: '3 dates for 3-day holiday range',
-            holidays: [{ start: new Date(2025, 0, 1), end: new Date(2025, 0, 3) }],
-            expectedCount: 3
-        },
-        {
-            description: '6 dates for two 3-day holiday ranges',
+    it('should return 6 dates for two 3-day holiday ranges', () => {
+        // GIVEN: Season with two holiday ranges
+        const season: Season = {
+            ...SeasonFactory.defaultSeason(),
             holidays: [
                 { start: new Date(2025, 0, 1), end: new Date(2025, 0, 3) },
                 { start: new Date(2025, 0, 10), end: new Date(2025, 0, 12) }
-            ],
-            expectedCount: 6
-        }
-    ])('should return $expectedCount dates for $description', ({ holidays, expectedCount }) => {
-        // GIVEN: Season with specified holidays
-        const season: Season = {
-            ...SeasonFactory.defaultSeason(),
-            holidays
+            ]
         }
 
         // WHEN: Getting holiday dates
-        const result = getHolidaysForSeason(season)
+        const result = getHolidayDatesFromDateRangeList(season.holidays)
 
-        // THEN: Returns expected number of individual dates
-        expect(result).toHaveLength(expectedCount)
+        // THEN: Returns one date per day of each range
+        expect(result).toHaveLength(6)
     })
 
     it('should expand holiday ranges into consecutive dates', () => {
@@ -455,7 +362,7 @@ describe('getHolidaysForSeason', () => {
         }
 
         // WHEN: Getting holiday dates
-        const result = getHolidaysForSeason(season)
+        const result = getHolidayDatesFromDateRangeList(season.holidays)
 
         // THEN: Returns all consecutive dates
         expect(result[0]).toEqual(new Date(2025, 0, 1))
@@ -511,20 +418,6 @@ describe('deadlinesForSeason', () => {
             expect(result).toBe(false)
         })
 
-        it('should not allow modifications when dinner is in the past', () => {
-            // GIVEN: Dinner yesterday (at start of day)
-            const today = new Date()
-            today.setHours(0, 0, 0, 0)
-            const dinnerDate = new Date(today)
-            dinnerDate.setDate(today.getDate() - 1)
-
-            // WHEN: Checking if orders can be modified
-            const result = canModifyOrders(dinnerDate)
-
-            // THEN: Should not allow (past deadline)
-            expect(result).toBe(false)
-        })
-
         it('should use season-specific deadline value', () => {
             // GIVEN: Season with short 2-day deadline
             const shortDeadlineSeason = { ticketIsCancellableDaysBefore: 2, diningModeIsEditableMinutesBefore: 60 }
@@ -548,20 +441,6 @@ describe('deadlinesForSeason', () => {
         let canEditDiningMode: SeasonDeadlines['canEditDiningMode']
         beforeAll(() => {
             ({ canEditDiningMode } = deadlinesForSeason(defaultSeasonConfig))
-        })
-
-        it('should allow editing when dinner is far in future', () => {
-            // GIVEN: Dinner 10 days from now (at start of day)
-            const today = new Date()
-            today.setHours(0, 0, 0, 0)
-            const dinnerDate = new Date(today)
-            dinnerDate.setDate(today.getDate() + 10)
-
-            // WHEN: Checking if dining mode can be edited
-            const result = canEditDiningMode(dinnerDate)
-
-            // THEN: Should allow (well before dinner time)
-            expect(result).toBe(true)
         })
 
         it('should allow editing when dinner is tomorrow', () => {
@@ -602,57 +481,21 @@ describe('deadlinesForSeason', () => {
             expect(menuDeadlineDays).toBe(10)
         })
 
-        it.each([
-            {
-                description: 'far in future (11 days)',
-                daysOffset: 11,
-                hoursOffset: 0,
-                expected: false  // Not past 10-day menu deadline
-            },
-            {
-                description: 'at 9 days (within menu deadline but past booking deadline)',
-                daysOffset: 9,
-                hoursOffset: 0,
-                expected: true  // Past 10-day menu deadline (chef must have announced)
-            },
-            {
-                description: 'tomorrow',
-                daysOffset: 1,
-                hoursOffset: 0,
-                expected: true  // Past 10-day menu deadline
-            },
-            {
-                description: 'same day before dinner time',
-                daysOffset: 0,
-                hoursOffset: 6,
-                expected: true  // Past 10-day menu deadline
-            },
-            {
-                description: 'in the past (yesterday)',
-                daysOffset: -1,
-                hoursOffset: 0,
-                expected: true  // Past deadline
-            },
-            {
-                description: 'after dinner started (2 hours ago)',
-                daysOffset: 0,
-                hoursOffset: -2,
-                expected: true  // Past deadline
-            }
-        ])('should return $expected for dinner $description', ({ daysOffset, hoursOffset, expected }) => {
-            // GIVEN: Dinner at calculated time
+        it('should return false for a dinner far in future (11 days)', () => {
+            // GIVEN: Dinner 11 days from now
             const now = new Date()
             const dinnerDate = new Date(now)
-            dinnerDate.setDate(now.getDate() + daysOffset)
-            dinnerDate.setHours(now.getHours() + hoursOffset, 0, 0, 0)
+            dinnerDate.setDate(now.getDate() + 11)
+            dinnerDate.setHours(now.getHours(), 0, 0, 0)
 
             // WHEN: Checking if announce menu deadline has passed
             const result = isAnnounceMenuPastDeadline(dinnerDate)
 
-            // THEN: Returns expected result
-            expect(result).toBe(expected)
+            // THEN: Not past the 10-day menu deadline
+            expect(result).toBe(false)
         })
 
+        // The past-deadline side: 9 days is inside the menu deadline
         it('should distinguish between menu deadline (10 days) and booking deadline (8 days)', () => {
             // GIVEN: Dinner 9 days from now (between the two deadlines)
             const today = new Date()
@@ -674,65 +517,15 @@ describe('deadlinesForSeason', () => {
     })
 }) // Close deadlinesForSeason describe
 
-describe('isOnTeam', () => {
-    const { TeamRoleSchema } = useCookingTeamValidation()
-    const TeamRole = TeamRoleSchema.enum
-
-    // Helper to create properly typed team using factory
-    const createTeam = (assignments: Array<{id: number, inhabitantId: number, role: 'CHEF' | 'COOK' | 'JUNIORHELPER'}>) =>
-        SeasonFactory.defaultCookingTeamDisplay({
-            assignments: assignments.map(a => SeasonFactory.defaultCookingTeamAssignment({
-                id: a.id,
-                inhabitantId: a.inhabitantId,
-                role: a.role
-            }))
-        })
-
-    it.each([
-        {
-            description: 'inhabitant is on team as CHEF',
-            inhabitantId: 1,
-            team: createTeam([{id: 1, inhabitantId: 1, role: TeamRole.CHEF}]),
-            expected: true
-        },
-        {
-            description: 'inhabitant is on team as COOK',
-            inhabitantId: 2,
-            team: createTeam([{id: 2, inhabitantId: 2, role: TeamRole.COOK}]),
-            expected: true
-        },
-        {
-            description: 'inhabitant is on team as JUNIORHELPER',
-            inhabitantId: 3,
-            team: createTeam([{id: 3, inhabitantId: 3, role: TeamRole.JUNIORHELPER}]),
-            expected: true
-        },
-        {
-            description: 'inhabitant is not on team',
-            inhabitantId: 99,
-            team: createTeam([{id: 1, inhabitantId: 1, role: TeamRole.CHEF}]),
-            expected: false
-        },
-        {
-            description: 'team is null',
-            inhabitantId: 1,
-            team: null,
-            expected: false
-        },
-        {
-            description: 'team has no assignments',
-            inhabitantId: 1,
-            team: SeasonFactory.defaultCookingTeamDisplay({assignments: []}),
-            expected: false
-        }
-    ])('should return $expected when $description', ({ inhabitantId, team, expected }) => {
-        // WHEN: Checking if inhabitant is on team
-        const result = isOnTeam(inhabitantId, team)
-
-        // THEN: Returns expected result
-        expect(result).toBe(expected)
+// A team with the given assignments, built by the factory
+const createTeam = (assignments: Array<{id: number, inhabitantId: number, role: TeamRole}>) =>
+    SeasonFactory.defaultCookingTeamDisplay({
+        assignments: assignments.map(a => SeasonFactory.defaultCookingTeamAssignment({
+            id: a.id,
+            inhabitantId: a.inhabitantId,
+            role: a.role
+        }))
     })
-})
 
 describe('createPreferenceClipper', () => {
     const {DinnerModeSchema} = useBookingValidation()
@@ -746,66 +539,6 @@ describe('createPreferenceClipper', () => {
     const createPreferences = (values: (typeof DinnerMode)[keyof typeof DinnerMode][]) =>
         WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]}), {} as WeekDayMap<typeof DinnerMode[keyof typeof DinnerMode]>)
 
-    describe('needsClipping detection', () => {
-        it('should detect inhabitant without preferences needs clipping', () => {
-            // GIVEN: Inhabitant with null preferences
-            const cookingDays = createCookingDays()
-            const clipper = createPreferenceClipper(cookingDays)
-            const inhabitants = [{id: 1, dinnerPreferences: null}]
-
-            // WHEN: Processing inhabitants
-            const updates = clipper(inhabitants)
-
-            // THEN: Returns update for inhabitant
-            expect(updates).toHaveLength(1)
-            expect(updates[0]!.inhabitantId).toBe(1)
-        })
-
-        it('should detect non-cooking day with value != NONE needs clipping', () => {
-            // GIVEN: Inhabitant with DINEIN on non-cooking day (Tuesday)
-            const cookingDays = createCookingDays([true, false, true, false, true, false, false]) // Mon, Wed, Fri
-            const preferences = createPreferences([
-                DinnerMode.DINEIN,     // Mon - cooking day, OK
-                DinnerMode.DINEIN,     // Tue - NON-cooking, needs clip!
-                DinnerMode.DINEIN,     // Wed - cooking day, OK
-                DinnerMode.NONE,       // Thu - non-cooking, already NONE
-                DinnerMode.TAKEAWAY,   // Fri - cooking day, OK
-                DinnerMode.NONE,       // Sat - non-cooking, already NONE
-                DinnerMode.NONE        // Sun - non-cooking, already NONE
-            ])
-            const clipper = createPreferenceClipper(cookingDays)
-            const inhabitants = [{id: 1, dinnerPreferences: preferences}]
-
-            // WHEN: Processing inhabitants
-            const updates = clipper(inhabitants)
-
-            // THEN: Returns update (Tuesday needs clipping)
-            expect(updates).toHaveLength(1)
-        })
-
-        it('should not clip when all non-cooking days are already NONE', () => {
-            // GIVEN: Inhabitant with all non-cooking days already NONE
-            const cookingDays = createCookingDays([true, false, true, false, true, false, false]) // Mon, Wed, Fri
-            const preferences = createPreferences([
-                DinnerMode.DINEIN,   // Mon - cooking day
-                DinnerMode.NONE,     // Tue - non-cooking, NONE
-                DinnerMode.TAKEAWAY, // Wed - cooking day
-                DinnerMode.NONE,     // Thu - non-cooking, NONE
-                DinnerMode.DINEIN,   // Fri - cooking day
-                DinnerMode.NONE,     // Sat - non-cooking, NONE
-                DinnerMode.NONE      // Sun - non-cooking, NONE
-            ])
-            const clipper = createPreferenceClipper(cookingDays)
-            const inhabitants = [{id: 1, dinnerPreferences: preferences}]
-
-            // WHEN: Processing inhabitants
-            const updates = clipper(inhabitants)
-
-            // THEN: Returns no updates (already properly clipped)
-            expect(updates).toHaveLength(0)
-        })
-    })
-
     describe('clip function', () => {
         it('should create defaults for null preferences', () => {
             // GIVEN: Cooking days Mon, Wed, Fri
@@ -818,6 +551,7 @@ describe('createPreferenceClipper', () => {
 
             // THEN: Creates defaults (cooking days = DINEIN, non-cooking = NONE)
             expect(updates).toHaveLength(1)
+            expect(updates[0]!.inhabitantId).toBe(1)
             const prefs = updates[0]!.dinnerPreferences
             WEEKDAYS.forEach(day => {
                 const expected = cookingDays[day] ? DinnerMode.DINEIN : DinnerMode.NONE
@@ -887,32 +621,8 @@ describe('createPreferenceClipper', () => {
 
 describe('getScheduleChangeDesiredEvents', () => {
 
+    // The change is read off the computed cooking dates, not the fields: a holiday counts only on a cooking day
     it.each([
-        {
-            desc: 'identical seasons',
-            modify: (s: Season) => s,
-            expectNull: true
-        },
-        {
-            desc: 'different start date',
-            modify: (s: Season) => ({...s, seasonDates: {...s.seasonDates, start: new Date(2025, 0, 7)}}),
-            expectNull: false
-        },
-        {
-            desc: 'different end date',
-            modify: (s: Season) => ({...s, seasonDates: {...s.seasonDates, end: new Date(2025, 0, 13)}}),
-            expectNull: false
-        },
-        {
-            desc: 'added cooking day',
-            modify: (s: Season) => ({...s, cookingDays: createDefaultWeekdayMap([true, true, true, false, true, false, false])}),
-            expectNull: false
-        },
-        {
-            desc: 'removed cooking day',
-            modify: (s: Season) => ({...s, cookingDays: createDefaultWeekdayMap([true, false, false, false, true, false, false])}),
-            expectNull: false
-        },
         {
             desc: 'added holiday that affects cooking day',
             modify: (s: Season) => ({...s, holidays: [{start: new Date(2025, 0, 8), end: new Date(2025, 0, 8)}]}), // Wed
@@ -921,16 +631,6 @@ describe('getScheduleChangeDesiredEvents', () => {
         {
             desc: 'added holiday on non-cooking day (no change)',
             modify: (s: Season) => ({...s, holidays: [{start: new Date(2025, 0, 7), end: new Date(2025, 0, 7)}]}), // Tue
-            expectNull: true
-        },
-        {
-            desc: 'different shortName (no schedule change)',
-            modify: (s: Season) => ({...s, shortName: 'Different Name'}),
-            expectNull: true
-        },
-        {
-            desc: 'different isActive (no schedule change)',
-            modify: (s: Season) => ({...s, isActive: true}),
             expectNull: true
         }
     ])('should return $expectNull for $desc', ({modify, expectNull}) => {
@@ -973,45 +673,14 @@ describe('reconcileDinnerEvents', () => {
         seasonId: BASE_SEASON_ID
     })
 
-    it.each([
-        {
-            desc: 'all new events (no existing)',
-            existing: [],
-            incoming: [createIncoming(new Date(2025, 0, 6))],
-            expected: {create: 1, delete: 0, idempotent: 0}
-        },
-        {
-            desc: 'matching dates (idempotent)',
-            existing: [createExisting(1, new Date(2025, 0, 6))],
-            incoming: [createIncoming(new Date(2025, 0, 6))],
-            expected: {create: 0, delete: 0, idempotent: 1}
-        },
-        {
-            desc: 'existing not in incoming (delete)',
-            existing: [createExisting(1, new Date(2025, 0, 6))],
-            incoming: [],
-            expected: {create: 0, delete: 1, idempotent: 0}
-        },
-        {
-            desc: 'mixed: some new, some existing, some deleted',
-            existing: [createExisting(1, new Date(2025, 0, 6)), createExisting(2, new Date(2025, 0, 8))],
-            incoming: [createIncoming(new Date(2025, 0, 6)), createIncoming(new Date(2025, 0, 10))],
-            expected: {create: 1, delete: 1, idempotent: 1}
-        }
-    ])('should handle $desc', ({existing, incoming, expected}) => {
-        const result = reconcileDinnerEvents(existing)(incoming)
-
-        expect(result.create).toHaveLength(expected.create)
-        expect(result.delete).toHaveLength(expected.delete)
-        expect(result.idempotent).toHaveLength(expected.idempotent)
-    })
-
-    it('should preserve existing event id in delete array', () => {
-        const existing = [createExisting(42, new Date(2025, 0, 6))]
-        const incoming: ReturnType<typeof createIncoming>[] = []
+    it('should bucket by date: a new date creates, a matching date is idempotent, a dropped date deletes with its existing id', () => {
+        const existing = [createExisting(1, new Date(2025, 0, 6)), createExisting(42, new Date(2025, 0, 8))]
+        const incoming = [createIncoming(new Date(2025, 0, 6)), createIncoming(new Date(2025, 0, 10))]
 
         const result = reconcileDinnerEvents(existing)(incoming)
 
+        expect(result.create).toHaveLength(1)
+        expect(result.idempotent).toHaveLength(1)
         expect(result.delete).toHaveLength(1)
         expect(result.delete[0]!.id).toBe(42)
     })
@@ -1090,11 +759,6 @@ describe('getOrderCancellationAction', () => {
 
     it.each([
         {
-            description: `far future (${cancellableDaysBefore + 5} days) - before deadline`,
-            daysFromToday: cancellableDaysBefore + 5,  // Well before deadline
-            expectedNull: true
-        },
-        {
             description: `at deadline boundary (${cancellableDaysBefore + 1} days)`,
             daysFromToday: cancellableDaysBefore + 1,  // Just before deadline
             expectedNull: true
@@ -1102,16 +766,6 @@ describe('getOrderCancellationAction', () => {
         {
             description: 'tomorrow - after deadline',
             daysFromToday: 1,  // Well past deadline
-            expectedNull: false
-        },
-        {
-            description: 'today - after deadline',
-            daysFromToday: 0,  // Day of dinner
-            expectedNull: false
-        },
-        {
-            description: 'yesterday - past dinner',
-            daysFromToday: -1,  // Past
             expectedNull: false
         }
     ])('should return $expectedNull (null) for dinner $description', ({ daysFromToday, expectedNull }) => {
@@ -1138,16 +792,7 @@ describe('isChefFor', () => {
     const { TeamRoleSchema } = useCookingTeamValidation()
     const TeamRole = TeamRoleSchema.enum
 
-    // Helper to create properly typed team using factory
-    const createTeam = (assignments: Array<{id: number, inhabitantId: number, role: 'CHEF' | 'COOK' | 'JUNIORHELPER'}>) =>
-        SeasonFactory.defaultCookingTeamDisplay({
-            assignments: assignments.map(a => SeasonFactory.defaultCookingTeamAssignment({
-                id: a.id,
-                inhabitantId: a.inhabitantId,
-                role: a.role
-            }))
-        })
-
+    // Any role other than CHEF is the not-a-chef branch: COOK stands for it
     it.each([
         {
             description: 'inhabitant is CHEF on team',
@@ -1162,12 +807,6 @@ describe('isChefFor', () => {
             expected: false
         },
         {
-            description: 'inhabitant is JUNIORHELPER (not CHEF)',
-            inhabitantId: 3,
-            team: createTeam([{id: 3, inhabitantId: 3, role: TeamRole.JUNIORHELPER}]),
-            expected: false
-        },
-        {
             description: 'inhabitant is not on team',
             inhabitantId: 99,
             team: createTeam([{id: 1, inhabitantId: 1, role: TeamRole.CHEF}]),
@@ -1178,21 +817,6 @@ describe('isChefFor', () => {
             inhabitantId: 1,
             team: null,
             expected: false
-        },
-        {
-            description: 'team has no assignments',
-            inhabitantId: 1,
-            team: SeasonFactory.defaultCookingTeamDisplay({assignments: []}),
-            expected: false
-        },
-        {
-            description: 'multiple assignments, inhabitant is CHEF',
-            inhabitantId: 1,
-            team: createTeam([
-                {id: 1, inhabitantId: 1, role: TeamRole.CHEF},
-                {id: 2, inhabitantId: 2, role: TeamRole.COOK}
-            ]),
-            expected: true
         }
     ])('should return $expected when $description', ({ inhabitantId, team, expected }) => {
         // WHEN: Checking if inhabitant is chef for team

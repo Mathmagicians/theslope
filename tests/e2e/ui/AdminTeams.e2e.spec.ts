@@ -1,13 +1,14 @@
-import {test, expect, type BrowserContext, type Page, type Response} from '@playwright/test'
+import {test, expect, type BrowserContext, type Page} from '@playwright/test'
 import {authFiles} from '~~/tests/e2e/config'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
+import {JOKER_SLOT_IDS} from '~~/tests/component/components/cooking-team/jokerSlotIds'
 import type {Season} from '~/composables/useSeasonValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot} = testHelpers
+const {validatedBrowserContext, pollUntil, doScreenshot, gotoHydrated, waitForApi, temporaryAndRandom} = testHelpers
 
 test.describe('AdminTeams Form UI', () => {
     const adminTeamsUrl = '/admin/teams'
@@ -24,22 +25,6 @@ test.describe('AdminTeams Form UI', () => {
         }
     })
 
-    test('Can load admin teams page', async ({page, browser}) => {
-        const context = await validatedBrowserContext(browser)
-        const season = await SeasonFactory.createSeason(context)
-        createdSeasonIds.push(season.id!)
-
-        await page.goto(`${adminTeamsUrl}?season=${season.shortName}`)
-
-        // Wait for page to be interactive - the header create button marks store init (poll)
-        await pollUntil(
-            async () => await page.getByTestId('create-team').isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
-        await expect(page.getByTestId('create-team')).toBeVisible()
-    })
-
     test('GIVEN a season without madhold WHEN viewing it THEN the table renders its own empty state with the create CTA',
         async ({page, browser}) => {
             const context = await validatedBrowserContext(browser)
@@ -53,7 +38,7 @@ test.describe('AdminTeams Form UI', () => {
 
             // THEN: The empty state is the table's own #empty slot, not an alert rendered instead of the table
             const table = page.locator('table')
-            await expect(table).toBeVisible({timeout: 10000})
+            await pollUntil(() => table.isVisible(), visible => visible)
             await expect(table.getByTestId('teams-empty-state')).toBeVisible()
             await expect(table.getByTestId('create-new-team')).toBeVisible()
         })
@@ -71,7 +56,7 @@ test.describe('AdminTeams Form UI', () => {
 
             // THEN: ONE empty state, the table's own - not the "Vælg et madhold" master-detail placeholder
             const table = page.locator('table')
-            await expect(table).toBeVisible({timeout: 10000})
+            await pollUntil(() => table.isVisible(), visible => visible)
             await expect(table.getByTestId('teams-empty-state')).toBeVisible()
             await expect(table.getByTestId('create-new-team')).toBeVisible()
             await expect(page.getByText('Vælg et madhold for at redigere')).toBeHidden()
@@ -89,10 +74,10 @@ test.describe('AdminTeams Form UI', () => {
                 const initialTeams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
                 expect(initialTeams.length).toBe(0)
 
-                await page.goto(`${adminTeamsUrl}?mode=create&season=${season.shortName}`)
+                await gotoHydrated(page, `${adminTeamsUrl}?mode=create&season=${season.shortName}`)
                 // Wait on UI state, not on a season API response: with SSR payload transfer
                 // the client may legitimately never re-fetch /api/admin/season (CI-flaky otherwise)
-                await expect(page.locator('input#team-count')).toBeVisible({timeout: 10000})
+                await expect(page.locator('input#team-count')).toBeVisible()
 
                 // WHEN: Create 2 teams
                 await page.locator('input#team-count').fill('2')
@@ -102,7 +87,7 @@ test.describe('AdminTeams Form UI', () => {
                 const teams = await pollUntil(
                     () => SeasonFactory.getCookingTeamsForSeason(context, season.id!),
                     (teams) => teams.length === 2,
-                    10
+                    6
                 )
                 expect(teams.length).toBe(2)
                 expect(teams[0]!.name).toContain('Madhold 1')
@@ -117,8 +102,8 @@ test.describe('AdminTeams Form UI', () => {
                 const season = await SeasonFactory.createSeason(context)
                 createdSeasonIds.push(season.id!)
 
-                await page.goto(`${adminTeamsUrl}?mode=create&season=${season.shortName}`)
-                await expect(page.locator('input#team-count')).toBeVisible({timeout: 10000})
+                await gotoHydrated(page, `${adminTeamsUrl}?mode=create&season=${season.shortName}`)
+                await expect(page.locator('input#team-count')).toBeVisible()
 
                 // WHEN: the session dies before the save
                 await page.context().clearCookies()
@@ -152,34 +137,7 @@ test.describe('AdminTeams Form UI', () => {
 
             // Navigate to edit mode with season in URL
             await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
-            await pollUntil(
-                async () => await page.getByTestId('admin-teams').isVisible(),
-                (isVisible) => isVisible === true,
-                10
-            )
-        })
-
-        test('GIVEN season with teams WHEN user switches to edit mode THEN teams are shown', async () => {
-            // GIVEN: Create teams for the season
-            await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team A')
-            await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team B')
-
-            // Navigate to see the teams
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
-            await pollUntil(
-                async () => await page.getByTestId('admin-teams').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
-
-            // THEN: Verify the master table lists both teams in the overview (nothing opened)
-            const teamRows = page.locator('[data-testid^="team-row-"]')
-            await expect(teamRows.first()).toBeVisible()
-            await expect(teamRows).toHaveCount(2)
-            await expect(page.getByTestId('team-name-input')).toBeHidden()
-
-            // Documentation screenshot: Admin Teams management view
-            await doScreenshot(page, 'admin/admin-teams-edit', true)
+            await pollUntil(() => page.getByTestId('admin-teams').isVisible(), visible => visible)
         })
 
         test('GIVEN user in edit mode WHEN renaming team THEN team name is updated immediately', async () => {
@@ -187,12 +145,8 @@ test.describe('AdminTeams Form UI', () => {
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Name')
 
             // Navigate with the team open in the edit face
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
-            await pollUntil(
-                async () => await page.getByTestId('admin-teams').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
+            await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
+            await expect(page.getByTestId('admin-teams')).toBeVisible()
 
             // Wait for team input to be visible
             const teamInput = page.getByTestId('team-name-input').first()
@@ -204,11 +158,8 @@ test.describe('AdminTeams Form UI', () => {
             await teamInput.type('Q')
 
             // Setup response wait BEFORE blur to avoid race condition.
-            // 15s timeout tolerates parallel-load latency; POST triggers dinner event reconciliation (ADR-015).
-            const responsePromise = page.waitForResponse(
-                (response: Response) => response.url().includes('/api/admin/team/') && response.request().method() === 'POST',
-                { timeout: 15000 }
-            )
+            // The POST triggers dinner event reconciliation (ADR-015), so the wait is on its response.
+            const responsePromise = waitForApi(page, '/api/admin/team/', 'POST')
             await teamInput.blur() // Trigger save on blur
             await responsePromise
 
@@ -224,12 +175,8 @@ test.describe('AdminTeams Form UI', () => {
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team to Delete')
 
             // Navigate with the team open in the edit face
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
-            await pollUntil(
-                async () => await page.getByTestId('admin-teams').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
+            await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
+            await expect(page.getByTestId('admin-teams')).toBeVisible()
 
             // Verify team is shown
             const teamInput = page.getByTestId('team-name-input').first()
@@ -243,10 +190,7 @@ test.describe('AdminTeams Form UI', () => {
             await deleteButton.click()
 
             // Second click: actually trigger delete
-            const responsePromise = page.waitForResponse(
-                (response: Response) => response.url().includes('/api/admin/team/') && response.request().method() === 'DELETE',
-                { timeout: 5000 }
-            )
+            const responsePromise = waitForApi(page, '/api/admin/team/', 'DELETE')
             await deleteButton.click()
             await responsePromise
 
@@ -266,27 +210,29 @@ test.describe('AdminTeams Form UI', () => {
             const gamma = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Gamma')
 
             // Navigate to see the teams
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
-            await pollUntil(
-                async () => await page.getByTestId('admin-teams').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
+            await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            await expect(page.getByTestId('admin-teams')).toBeVisible()
 
-            // Wait for the master table rows to load
+            // THEN: the master table lists the teams in the overview (nothing opened)
             const teamRows = page.locator('[data-testid^="team-row-"]')
+            const teamInput = page.getByTestId('team-name-input')
             await expect(teamRows.first()).toBeVisible()
             await expect(teamRows).toHaveCount(3)
-            await testHelpers.waitForHydration(page)
+            await expect(teamInput).toBeHidden()
+
+            // Documentation screenshot: Admin Teams management view
+            await doScreenshot(page, 'admin/admin-teams-edit', true)
 
             // WHEN/THEN: clicking a row shows that team in the detail panel
-            const teamInput = page.getByTestId('team-name-input')
             for (const {team, name} of [
                 {team: beta, name: 'Team Beta'},
                 {team: gamma, name: 'Team Gamma'},
                 {team: alpha, name: 'Team Alpha'}
             ]) {
+                // The panel fills from the selected team's detail, fetched on the click
+                const detailLoaded = waitForApi(page, `/api/admin/team/${team.id}`, 'GET')
                 await page.getByTestId(`team-row-${team.id}`).click()
+                await detailLoaded
                 await expect(teamInput).toHaveValue(new RegExp(name))
             }
 
@@ -298,31 +244,29 @@ test.describe('AdminTeams Form UI', () => {
 
         test('GIVEN user in edit mode WHEN adding a member to a team THEN the assignment is saved', async ({browser: _browser}) => {
             // GIVEN: a team and an inhabitant to add
-            const testSalt = Date.now().toString()
+            const testSalt = temporaryAndRandom()
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Medlem')
             const household = await HouseholdFactory.createHousehold(context)
             createdHouseholdIds.push(household.id)
             await HouseholdFactory.createInhabitantForHousehold(context, household.id, `Medlem-${testSalt} Testesen`)
 
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
-            await pollUntil(
-                async () => await page.getByTestId('admin-teams').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
+            await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
+            await expect(page.getByTestId('admin-teams')).toBeVisible()
 
             // WHEN: adding the inhabitant through the member finder
             const search = page.getByPlaceholder('Søg efter navn...')
             await expect(search).toBeVisible()
             await search.fill(`Medlem-${testSalt}`)
-            // The row action expands the add form (its label flips to 'Luk'), so the
-            // remaining 'Tilføj' button is the form's submit
-            await page.getByRole('button', {name: 'Tilføj'}).first().click()
-            const responsePromise = page.waitForResponse(
-                (response: Response) => response.url().includes('/api/admin/team/assignment') && response.request().method() === 'PUT',
-                {timeout: 15000}
-            )
-            await page.getByRole('button', {name: 'Tilføj', exact: true}).click()
+            // The finder filters on the typed name; the member's row action then expands the add form under
+            // the row (its label flips to Luk)
+            await expect(page.getByText(`Medlem-${testSalt}`)).toBeVisible()
+            const memberRow = page.getByRole('row').filter({hasText: `Medlem-${testSalt}`})
+            await memberRow.getByRole('button', {name: 'Tilføj', exact: true}).click()
+            await expect(memberRow.getByRole('button', {name: 'Luk', exact: true})).toBeVisible()
+            const responsePromise = waitForApi(page, '/api/admin/team/assignment', 'PUT')
+            // The expanded row holds the member form; the joker row's Tilføj sits outside the finder
+            const memberForm = page.getByRole('row').filter({has: page.getByTestId('team-member-role-select')})
+            await memberForm.getByRole('button', {name: 'Tilføj', exact: true}).click()
             const response = await responsePromise
             expect(response.status()).toBe(201)
 
@@ -336,6 +280,27 @@ test.describe('AdminTeams Form UI', () => {
             // AND: the page stays in edit mode with the member finder on screen
             await expectMode(FORM_MODES.EDIT)
             await expect(search).toBeVisible()
+        })
+
+        test('GIVEN a team in edit mode WHEN adding a joker slot through the form THEN the Jokere box lists it', async () => {
+            // GIVEN: a team open in the edit face
+            const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Joker')
+            await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
+            await expect(page.getByTestId(JOKER_SLOT_IDS.add)).toBeVisible()
+
+            // WHEN: opening the form, ticking a weekday and creating the slot
+            await page.getByTestId(JOKER_SLOT_IDS.add).click()
+            const form = page.getByTestId(JOKER_SLOT_IDS.form)
+            await form.getByRole('checkbox').first().check()
+            const responsePromise = waitForApi(page, `/api/admin/team/${team.id}/joker-slot`, 'PUT')
+            await page.getByTestId(JOKER_SLOT_IDS.submit).click()
+            expect((await responsePromise).status()).toBe(201)
+
+            // THEN: the Jokere box shows the slot line, and the team counts it
+            await expect(page.getByTestId('team-joker-box').getByTestId('team-joker-slot')).toHaveCount(1)
+            const teams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
+            expect(teams.find(t => t.id === team.id)?.jokerSlotCount).toBe(1)
+            await expectMode(FORM_MODES.EDIT)
         })
     })
 })

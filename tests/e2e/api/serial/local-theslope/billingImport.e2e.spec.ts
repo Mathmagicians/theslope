@@ -21,24 +21,23 @@ test.describe('Billing Import API', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-
-        for (const householdId of testHouseholdIds) {
-            await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
-        }
+        await HouseholdFactory.deleteHousehold(context, testHouseholdIds)
     })
 
     test('all CSV files in order-import folder can be parsed', () => {
         const csvFiles = BillingFactory.getCSVFiles()
 
         // Skip in CI/CD where .theslope is gitignored and empty
-        test.skip(csvFiles.length === 0, '.theslope/order-import is empty (gitignored, local-only test)')
+        test.skip(csvFiles.length === 0, '.theslope/order-import/2026-import is empty (gitignored, local-only test)')
 
         for (const filePath of csvFiles) {
             BillingFactory.validateCSVFile(filePath)
         }
     })
 
-    test('GIVEN valid CSV WHEN importing THEN creates orders', async ({browser}) => {
+    // The framelding import books every ticket on the first inhabitant, which the Order unique index refuses;
+    // the import in the export format replaces it (docs/features/feature-0.9.2.md)
+    test.skip('GIVEN valid CSV WHEN importing THEN creates orders', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
 

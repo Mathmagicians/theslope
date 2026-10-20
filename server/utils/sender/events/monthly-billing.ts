@@ -4,8 +4,9 @@
  * replaces the earlier mail) for every later one. Raised by runMonthlyBilling and re-sent by its HTTP twin
  * (POST /api/admin/sender/event/monthly-billing).
  */
-import {emit} from '~~/server/utils/sender/emit'
-import {composeEmail, missingAddress} from '~~/server/utils/sender/compose'
+import {channelOff, emit, notSent} from '~~/server/utils/sender/emit'
+import type {EmailChannel} from '~~/server/utils/sender/config'
+import {composeEmail, missingAddress, siteUrl} from '~~/server/utils/sender/compose'
 import {useBillingValidation, type BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 import type {EmailMessage, NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
 
@@ -28,7 +29,7 @@ export const buildBillingPeriodClosedEmail = (config: NotificationConfig, summar
             billingPeriod: summary.billingPeriod,
             householdCount: String(summary.householdCount),
             totalAmount: formatKroner(summary.totalAmount),
-            summaryUrl: `https://${config.site}/public/billing/${summary.shareToken}`,
+            summaryUrl: siteUrl(config, `/public/billing/${summary.shareToken}`),
             ...(kind === 'BILLING_PERIOD_UPDATED' ? {version: String(summary.version)} : {})
         },
         attachments: [{filename: generateCsvFilename(summary), contentType: 'text/csv; charset=utf-8', content: generateBillingCsv(summary)}],
@@ -37,11 +38,13 @@ export const buildBillingPeriodClosedEmail = (config: NotificationConfig, summar
     })
 }
 
-export const emitBillingPeriodClosed = (queue: Queue | undefined, config: NotificationConfig, summary: BillingPeriodSummaryDetail): Promise<SenderEmitResult> => {
+export const emitBillingPeriodClosed = (channel: EmailChannel, summary: BillingPeriodSummaryDetail): Promise<SenderEmitResult> => {
+    if (!channel.on) return channelOff(billingMailKind(summary.version), channel.missing, summary.billingPeriod)
+    const {queue, config} = channel
     const missing = missingAddress(config, 'accountantEmail')
     if (missing) {
         console.warn(`${LOG} ${missing} not set — mail not sent`, {billingPeriod: summary.billingPeriod, version: summary.version})
-        return Promise.resolve({queued: false, dedupeKey: `${billingMailKind(summary.version)}:EMAIL:unconfigured:${summary.billingPeriod}`, degraded: true})
+        return notSent(billingMailKind(summary.version), 'unconfigured', summary.billingPeriod)
     }
-    return emit(queue, buildBillingPeriodClosedEmail(config, summary))
+    return emit(queue, buildBillingPeriodClosedEmail(config, summary)).then(([result]) => result!)
 }

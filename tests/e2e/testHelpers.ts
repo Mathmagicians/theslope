@@ -1,4 +1,4 @@
-import type {Browser, Page, BrowserContext, BrowserContextOptions, Locator} from "@playwright/test"
+import type {Browser, Page, BrowserContext, BrowserContextOptions, Locator, Response} from "@playwright/test"
 import {expect} from "@playwright/test"
 import {authFiles} from './config'
 import {randomUUID} from 'crypto'
@@ -141,7 +141,7 @@ async function doScreenshot(page: Page, name: string, isDocumentation: boolean =
 
 /**
  * Select an option from a dropdown by test ID
- * Uses .first() to avoid strict mode violations on Linux where dropdown shows text twice
+ * Matches the option by its exact name: a substring name also matches the options whose names contain it
  * With reactive stores (useFetch immediate:true by default), dropdown data loads automatically on page load
  *
  * @param page - Playwright Page object
@@ -159,14 +159,14 @@ async function selectDropdownOption(
     const dropdown = page.getByTestId(dropdownTestId)
 
     // Wait for dropdown to be visible
-    await dropdown.waitFor({ state: 'visible', timeout: 10000 })
+    await dropdown.waitFor({ state: 'visible' })
 
     // Click dropdown to open it
     await dropdown.click()
 
     // Wait for the specific option to be visible
-    const option = page.getByRole('option', {name: optionName}).first()
-    await option.waitFor({ state: 'visible', timeout: 5000 })
+    const option = page.getByRole('option', {name: optionName, exact: true})
+    await option.waitFor({ state: 'visible' })
 
     // Click the option
     await option.click()
@@ -182,11 +182,12 @@ async function selectDropdownOption(
  * @example
  * const { householdId, inhabitantId } = await getSessionUserInfo(context)
  */
-async function getSessionUserInfo(context: BrowserContext): Promise<{ userId: number, householdId: number, inhabitantId: number, householdShortname: string, householdPbsId: number }> {
+async function getSessionUserInfo(context: BrowserContext): Promise<{ userId: number, userEmail: string, householdId: number, inhabitantId: number, householdShortname: string, householdPbsId: number }> {
     const response = await context.request.get('/api/_auth/session', { headers })
     expect(response.status()).toBe(200)
     const session = await response.json()
     const userId = session.user?.id
+    const userEmail = session.user?.email
     const householdId = session.user?.Inhabitant?.householdId
     const inhabitantId = session.user?.Inhabitant?.id
     const householdShortname = session.user?.Inhabitant?.household?.shortName
@@ -196,7 +197,7 @@ async function getSessionUserInfo(context: BrowserContext): Promise<{ userId: nu
     expect(inhabitantId, 'Session user must have inhabitantId').toBeDefined()
     expect(householdShortname, 'Session user must have householdShortname').toBeDefined()
     expect(householdPbsId, 'Session user must have householdPbsId').toBeDefined()
-    return { userId, householdId, inhabitantId, householdShortname, householdPbsId }
+    return { userId, userEmail, householdId, inhabitantId, householdShortname, householdPbsId }
 }
 
 /**
@@ -249,10 +250,48 @@ async function waitForHydration(page: Page): Promise<void> {
     )
 }
 
+/** Navigates and waits for hydration: the entry point for a test that interacts with the page */
+const gotoHydrated = async (page: Page, url: string): Promise<void> => {
+    await page.goto(url)
+    await waitForHydration(page)
+}
+
+/** Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation */
+const collectHydrationWarnings = (page: Page): string[] => {
+    const warnings: string[] = []
+    page.on('console', message => {
+        if (message.text().includes('Hydration')) warnings.push(message.text())
+    })
+    return warnings
+}
+
+/** Navigates, waits for hydration and asserts Vue logged no hydration mismatch on the way */
+const expectHydratedWithoutMismatch = async (page: Page, url: string): Promise<void> => {
+    const warnings = collectHydrationWarnings(page)
+    await gotoHydrated(page, url)
+    expect(warnings).toEqual([])
+}
+
+/** The next response to a `method` request whose url contains `path`; attach it before the action that sends the request */
+const waitForApi = (page: Page, path: string, method: string, options?: {timeout?: number}): Promise<Response> =>
+    page.waitForResponse(response => response.url().includes(path) && response.request().method() === method, options)
+
+/** A response of the household's booking write, its save or its dry run (`preview=true`) */
+const isScaffold = (response: Response): boolean =>
+    response.url().includes('/api/household/order/scaffold') && response.request().method() === 'POST'
+/** The save of the household's booking write */
+const isScaffoldSave = (response: Response): boolean => isScaffold(response) && !response.url().includes('preview=true')
+/** A booking view's read of the expected bookings: the dry run without orders, answered with what the preferences book */
+const isExpectedRead = (response: Response): boolean =>
+    isScaffold(response) && response.url().includes('preview=true') && response.request().postDataJSON().orders.length === 0
+
+// Hardcoded beside app.config.ts prebookingWindowDays (60; Nuxt auto-imports not available in Playwright): a day past it
+const PAST_THE_SCAFFOLD_WINDOW_DAYS = 62
+
 /**
  * Types a dd/MM/yyyy date into a UInputDate field: clicks the field's day segment and
  * types the digits - the segments auto-advance through day, month and year.
- * `scope` holds the picker (e.g. `page.locator('[name="seasonDates"]')`); a range picker
+ * `scope` holds the picker (e.g. `page.locator('div[name="seasonDates"]')`); a range picker
  * has two fields, `field` picks one.
  */
 const fillDateField = async (scope: Locator, field: 'start' | 'end', date: string) => {
@@ -278,10 +317,14 @@ const readDateField = async (scope: Locator, field: 'start' | 'end'): Promise<Da
     return new Date(await segment('year'), await segment('month') - 1, await segment('day'))
 }
 
+// The phone every screen fits (iPhone X)
+const PHONE_VIEWPORT = {width: 375, height: 812}
+
 const testHelpers = {
     salt,
     saltedId,
     temporaryAndRandom,
+    PHONE_VIEWPORT,
     headers,
     validatedBrowserContext,
     memberValidatedBrowserContext,
@@ -293,6 +336,13 @@ const testHelpers = {
     assertNoOrdersWithOrphanPrices,
     daysFromNow,
     waitForHydration,
+    gotoHydrated,
+    collectHydrationWarnings,
+    expectHydratedWithoutMismatch,
+    waitForApi,
+    isScaffoldSave,
+    isExpectedRead,
+    PAST_THE_SCAFFOLD_WINDOW_DAYS,
     fillDateField,
     readDateField
 }

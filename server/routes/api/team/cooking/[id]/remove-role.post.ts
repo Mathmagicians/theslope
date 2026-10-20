@@ -7,7 +7,8 @@ import type {DinnerEventDetail} from '~/composables/useBookingValidation'
 import {getRequiredUser} from '~~/server/utils/authorizationHelper'
 import {isAdmin} from '~/composables/usePermissions'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
-import {z} from 'zod'
+import type {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
 const {RemoveRoleRequestSchema, DinnerStateSchema} = useBookingValidation()
@@ -16,9 +17,7 @@ const DinnerState = DinnerStateSchema.enum
 const TeamRole = TeamRoleSchema.enum
 const PREFIX = '👩‍🍳 > TEAM > COOKING > REMOVE_ROLE > [POST] > '
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 /**
  * Remove a chef from a dinner event ("Meld afbud").
@@ -38,7 +37,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     let id!: number
     let body!: z.infer<typeof RemoveRoleRequestSchema>
     try {
-        ({id} = await getValidatedRouterParams(event, idSchema.parse))
+        ({id} = await getValidatedRouterParams(event, paramSchema.parse))
         body = await readValidatedBody(event, RemoveRoleRequestSchema.parse)
     } catch (error) {
         return throwH3Error(PREFIX + 'Input validation error', error, 400)

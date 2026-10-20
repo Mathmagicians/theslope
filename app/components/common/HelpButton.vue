@@ -23,56 +23,59 @@ HelpButton - Context-sensitive help with inline feedback form
 │         🐙 Se issue #42              │  ◄─── Links to GitHub issue
 └──────────────────────────────────────┘
 
-┌─ Error ──────────────────────────────┐
-│   ❌ Kunne ikke sende feedback       │
-│          Fejlbesked her              │
-└──────────────────────────────────────┘
+A failed send is the standard error toast; the form keeps the draft.
 
 Features:
 - Route-based help text lookup from config/help-texts.ts
 - Inline collapsible feedback form (UCollapsible)
-- Creates GitHub issue via /api/feedback (requires auth)
+- Creates GitHub issue through the auth store's submitFeedback (requires auth)
 - Success state links directly to created issue
 -->
 <script setup lang="ts">
 import { HELP_TEXTS } from '~/config/help-texts'
-import type { FeedbackPayload, GitHubIssueResponse } from '~~/server/integration/github/githubClient'
+import type { FeedbackIssue, FeedbackType } from '~/composables/useFeedbackValidation'
 
 const route = useRoute()
 const requestUrl = useRequestURL()
 const isOpen = ref(false)
 const doClose = () => isOpen.value = false
 
-const { NAVIGATION, ICONS, SIZES, COLOR, TYPOGRAPHY, BUTTONS } = useTheSlopeDesignSystem()
+const { NAVIGATION, ICONS, SIZES, COLOR, TYPOGRAPHY, BUTTONS, NOISE, COMPONENTS } = useTheSlopeDesignSystem()
+const { FeedbackTypeSchema } = useFeedbackValidation()
+const Feedback = FeedbackTypeSchema.enum
 
 // Feedback form
-type FeedbackType = FeedbackPayload['type']
-const feedbackType = ref<FeedbackType>('bug')
+const feedbackType = ref<FeedbackType>(Feedback.bug)
 const feedbackDescription = ref('')
 const showFeedbackForm = ref(false)
 
 const feedbackOptions: Array<{ label: string, value: FeedbackType }> = [
-    { label: '🐛 Fejl', value: 'bug' },
-    { label: '💡 Forslag', value: 'idea' },
-    { label: '❓ Spørgsmål', value: 'question' }
+    { label: '🐛 Fejl', value: Feedback.bug },
+    { label: '💡 Forslag', value: Feedback.idea },
+    { label: '❓ Spørgsmål', value: Feedback.question }
 ]
 
-const { execute: submitFeedback, status, data: feedbackResult, error: feedbackError } = useAsyncData<GitHubIssueResponse>(
-    'feedback-submit',
-    () => $fetch<GitHubIssueResponse>('/api/feedback', {
-        method: 'POST',
-        body: {
+const authStore = useAuthStore()
+const feedbackResult = ref<FeedbackIssue | null>(null)
+const isSubmitting = ref(false)
+
+const submitFeedback = async () => {
+    isSubmitting.value = true
+    feedbackResult.value = null
+    try {
+        feedbackResult.value = await authStore.submitFeedback({
             type: feedbackType.value,
             description: feedbackDescription.value,
             currentUrl: requestUrl.href
-        }
-    }),
-    { immediate: false }
-)
+        })
+    } catch {
+        // The store reported it (toast + ADR-004 log); the form keeps the draft
+    } finally {
+        isSubmitting.value = false
+    }
+}
 
-const isSubmitting = computed(() => status.value === 'pending')
-const isSuccess = computed(() => status.value === 'success' && feedbackResult.value !== null)
-const isError = computed(() => status.value === 'error')
+const isSuccess = computed(() => feedbackResult.value !== null)
 
 const cancelFeedback = () => {
     showFeedbackForm.value = false
@@ -118,7 +121,7 @@ watch(() => route.path, () => {
   <UPopover
       v-if="helpContent"
       v-model:open="isOpen"
-      :popper="{ placement: 'bottom-start' }"
+      :content="COMPONENTS.helpButton.popoverContent"
   >
     <UButton
         :icon="ICONS.help"
@@ -127,37 +130,38 @@ watch(() => route.path, () => {
     />
 
     <template #content>
-      <UCard class="max-w-xs sm:max-w-sm mx-2" variant="outline">
+      <UCard :class="COMPONENTS.helpButton.card" :variant="NOISE.medium">
         <template #header>
-          <div class="flex justify-between items-center gap-2">
+          <div :class="COMPONENTS.helpButton.header">
             <span :class="TYPOGRAPHY.cardTitle">{{ helpContent.title }}</span>
             <UButton
                 :icon="ICONS.xMark"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :size="SIZES.small"
-                class="flex-shrink-0"
+                :class="COMPONENTS.helpButton.close"
                 @click="doClose()"
             />
           </div>
         </template>
 
-        <p :class="[TYPOGRAPHY.bodyTextSmall, 'text-pretty break-words']">{{ helpContent.content }}</p>
+        <p :class="[TYPOGRAPHY.bodyTextSmall, COMPONENTS.helpButton.content]">{{ helpContent.content }}</p>
 
         <template #footer>
-          <div class="flex flex-col gap-1 md:gap-2">
+          <div :class="COMPONENTS.helpButton.actions">
             <UButton
                 to="https://github.com/Mathmagicians/theslope/blob/main/docs/user-guide.md"
                 target="_blank"
                 :icon="ICONS.book"
                 label="Læs manualen"
                 :size="SIZES.small"
-                variant="ghost"
+                :variant="NOISE.quiet"
             />
             <UButton
                 :icon="ICONS.github"
+                data-testid="help-feedback-toggle"
                 label="Rapporter fejl"
                 :size="SIZES.small"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 v-bind="BUTTONS.flipOpen(showFeedbackForm)"
                 @click="showFeedbackForm = !showFeedbackForm"
             />
@@ -165,9 +169,9 @@ watch(() => route.path, () => {
             <!-- Expandable feedback form -->
             <UCollapsible v-model:open="showFeedbackForm" :unmount-on-hide="false">
               <template #content>
-                <div class="pt-2 md:pt-3 space-y-2 md:space-y-3">
-                  <div v-if="isSuccess" class="text-center py-3 md:py-4 space-y-3">
-                    <UBadge :color="COLOR.success" variant="soft">✅ Tak for din feedback!</UBadge>
+                <div :class="COMPONENTS.helpButton.feedbackForm">
+                  <div v-if="isSuccess" data-testid="help-feedback-success" :class="COMPONENTS.helpButton.success">
+                    <UBadge :color="COLOR.success" :variant="NOISE.soft">✅ Tak for din feedback!</UBadge>
                     <UButton
                         v-if="feedbackResult?.html_url"
                         :to="feedbackResult.html_url"
@@ -175,32 +179,29 @@ watch(() => route.path, () => {
                         :icon="ICONS.github"
                         :label="`Se issue #${feedbackResult.number}`"
                         :size="SIZES.small"
-                        variant="link"
-                        class="block mx-auto underline decoration-dashed underline-offset-4"
+                        :variant="NOISE.link"
+                        :class="COMPONENTS.helpButton.issueLink"
                     />
-                  </div>
-                  <div v-else-if="isError" class="text-center py-2 md:py-3 space-y-1">
-                    <UBadge :color="COLOR.error" variant="soft">❌ Kunne ikke sende feedback</UBadge>
-                    <p :class="[TYPOGRAPHY.finePrint, 'text-muted']">{{ feedbackError?.message || 'Ukendt fejl' }}</p>
                   </div>
                   <template v-else>
                     <URadioGroup
                         v-model="feedbackType"
                         :items="feedbackOptions"
                         value-key="value"
-                        :ui="{ fieldset: 'flex flex-col md:flex-row gap-2 md:gap-4' }"
+                        :ui="COMPONENTS.helpButton.feedbackTypesUi"
                     />
                     <UTextarea
                         v-model="feedbackDescription"
+                        data-testid="help-feedback-description"
                         placeholder="Beskriv din feedback..."
                         :size="SIZES.small"
                         :rows="3"
-                        class="w-full"
+                        :class="COMPONENTS.helpButton.description"
                     />
-                    <UFieldGroup orientation="horizontal" class="gap-2 md:gap-3">
+                    <UFieldGroup orientation="horizontal" :class="COMPONENTS.helpButton.formButtons">
                       <UButton
                           :color="COLOR.neutral"
-                          variant="ghost"
+                          :variant="NOISE.quiet"
                           :icon="ICONS.xMark"
                           :size="SIZES.small"
                           @click="cancelFeedback"
@@ -209,12 +210,13 @@ watch(() => route.path, () => {
                       </UButton>
                       <UButton
                           :color="COLOR.primary"
-                          variant="solid"
+                          :variant="NOISE.loud"
                           :icon="ICONS.github"
                           :trailing-icon="ICONS.arrowRight"
                           :size="SIZES.small"
                           :loading="isSubmitting"
                           :disabled="isSubmitting"
+                          data-testid="help-feedback-submit"
                           @click="() => submitFeedback()"
                       >
                         {{ isSubmitting ? 'Sender...' : 'Send' }}

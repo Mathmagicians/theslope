@@ -5,24 +5,26 @@
  * Features:
  * - Calendar view: Shows team assignments on calendar with colored badges
  * - Selection support: Click to select dinner event (optional via emit)
- * - Multi-team support: team n wears rainbow stop n (`getRainbowBand`); team 9 repeats team 1
+ * - Multi-team support: a team wears the rainbow stop of its number (`getTeamNumber` over the season's teams, `getRainbowBand`); the stops repeat after the last
  * - Holiday awareness: Displays holidays as green rings
  *
  * Uses BaseCalendar for consistent calendar structure.
  *
  * Used in:
- * - /admin/teams (admin overview - no selection)
+ * - /admin/teams (all-teams overview - no selection)
+ * - CookingTeamCard (the team's own calendar, on /admin/teams)
  */
 import type {DateRange} from '~/types/dateTypes'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type{DayEventList} from '~/composables/useCalendarEvents'
 import type {DateValue} from '@internationalized/date'
-import { isSameDay } from 'date-fns'
+import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 
 interface Props {
   seasonDates: DateRange
   teams: CookingTeamDisplay[]
+  seasonTeams: CookingTeamDisplay[] // The season's full team list: the number fallback for a team whose name carries none
   dinnerEvents: DinnerEventDisplay[]
   holidays?: DateRange[]
   selectedDinnerId?: number | null // For chef page selection
@@ -40,8 +42,19 @@ const emit = defineEmits<{
 }>()
 
 const {createEventList} = useCalendarEvents()
+const {getDinnerForDay} = useTemporalCalendar()
 const {getHolidayDatesFromDateRangeList} = useSeason()
-const {CALENDAR, dayCircleClasses, getRainbowBand} = useTheSlopeDesignSystem()
+const {CALENDAR, COMPONENTS, dayCircleClasses, getRainbowBand, SIZES} = useTheSlopeDesignSystem()
+const {getTeamNumber} = useCookingTeam()
+const teamBandIndex = (team: CookingTeamDisplay) => getTeamNumber(team, props.seasonTeams) - 1
+
+// Legend: each team wears the rainbow stop of its number, then the holiday ring when the season has holidays
+const legendItems = computed((): CalendarLegendItem[] => [
+  ...props.teams.map(team => ({label: team.name, kind: 'badge' as const, badgeClass: getRainbowBand(teamBandIndex(team))})),
+  ...(props.holidays && props.holidays.length > 0
+    ? [{label: 'Ferie', kind: 'circle' as const, circleClass: dayCircleClasses(CALENDAR.holiday)}]
+    : [])
+])
 
 // Expand holiday ranges into individual dates
 const holidayDates = computed(() => {
@@ -51,7 +64,7 @@ const holidayDates = computed(() => {
 
 // Transform team assignments into event lists (one per team for color coding)
 const teamEventLists = computed(() => {
-  return props.teams.map((team, teamIndex) => {
+  return props.teams.map(team => {
     // Filter events for this team
     const teamEvents = props.dinnerEvents
       .filter(event => event.cookingTeamId === team.id)
@@ -59,7 +72,7 @@ const teamEventLists = computed(() => {
 
     return createEventList(teamEvents, `team-${team.id}`, 'badge', {
       label: team.name,
-      color: teamIndex,
+      color: teamBandIndex(team),
       metadata: { teamId: team.id, teamName: team.name }
     })
   })
@@ -79,26 +92,21 @@ const getTeamEventList = (eventLists: DayEventList[]) => {
 }
 
 // Calendar selection support - match agenda view behavior
-const getDinnerForDay = (day: DateValue): DinnerEventDisplay | undefined => {
-  const dayAsDate = toDate(day)
-  return props.dinnerEvents.find(event => isSameDay(new Date(event.date), dayAsDate))
-}
-
 const handleCalendarDayClick = (day: DateValue) => {
   if (!props.showSelection) return
-  const dinner = getDinnerForDay(day)
+  const dinner = getDinnerForDay(props.dinnerEvents, day)
   if (dinner) emit('select', dinner.id)
 }
 
 const isCalendarDaySelected = (day: DateValue): boolean => {
   if (!props.selectedDinnerId || !props.showSelection) return false
-  const dinner = getDinnerForDay(day)
+  const dinner = getDinnerForDay(props.dinnerEvents, day)
   return dinner?.id === props.selectedDinnerId
 }
 
 const getCalendarDayClasses = (day: DateValue) => [
-  props.showSelection ? 'cursor-pointer hover:ring-2 hover:ring-offset-1' : '',
-  isCalendarDaySelected(day) ? 'ring-2 ring-primary ring-offset-1' : ''
+  props.showSelection ? COMPONENTS.teamCalendar.selectableDay : '',
+  isCalendarDaySelected(day) ? COMPONENTS.teamCalendar.selectedDay : ''
 ]
 </script>
 
@@ -119,7 +127,8 @@ const getCalendarDayClasses = (day: DateValue) => [
             :text="getTeamEventList(eventLists)!.events[0]?.label"
           >
             <UBadge
-              size="md"
+              :size="SIZES.md"
+              data-testid="team-calendar-day"
               :class="[getRainbowBand(getTeamEventList(eventLists)!.color as number), ...getCalendarDayClasses(day)]"
               @click="handleCalendarDayClick(day)"
             >
@@ -128,32 +137,12 @@ const getCalendarDayClasses = (day: DateValue) => [
           </UTooltip>
 
           <!-- Regular day -->
-          <span v-else class="text-sm">{{ day.day }}</span>
+          <span v-else :class="COMPONENTS.teamCalendar.plainDay">{{ day.day }}</span>
         </template>
 
-        <!-- Legend: Responsive layout matching calendar months (1 col mobile, 3 cols desktop) -->
+        <!-- Legend -->
         <template #legend>
-          <div class="px-4 py-6 md:px-6 md:py-8 border-t mt-auto text-sm grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
-            <!-- Teams -->
-            <div v-for="(team, index) in teams" :key="team.id" class="flex items-center gap-3" data-testid="team-legend-entry">
-              <UBadge
-                size="md"
-                :class="[getRainbowBand(index), 'w-8 h-8 flex items-center justify-center shrink-0']"
-                data-testid="team-legend-badge"
-              >
-                1
-              </UBadge>
-              <span class="truncate">{{ team.name }}</span>
-            </div>
-
-            <!-- Holidays -->
-            <div v-if="holidays && holidays.length > 0" class="flex items-center gap-3">
-              <div :class="dayCircleClasses(CALENDAR.holiday, 'shrink-0')">
-                1
-              </div>
-              <span>Ferie</span>
-            </div>
-          </div>
-    </template>
+          <CalendarLegend :items="legendItems" />
+        </template>
   </BaseCalendar>
 </template>

@@ -12,12 +12,12 @@ const LOG = '🎟️ > DAILY > [CLOSE_ORDERS]'
  * RELEASED = released after deadline but not sold, still charged
  * CANCELLED = dinner was cancelled, not charged (excluded)
  *
- * ADR-011: Creates SYSTEM_CLOSED audit entries for all closed orders
+ * ADR-011: Creates a SYSTEM_UPDATED audit entry with the change CLOSE for each closed order
  *
  * @returns CloseOrdersResult with count of closed orders
  */
 export async function closeOrders(d1Client: D1Database): Promise<CloseOrdersResult> {
-    const {OrderStateSchema, OrderAuditActionSchema, DinnerModeSchema} = useBookingValidation()
+    const {OrderStateSchema, OrderAuditActionSchema, OrderAuditChangeSchema} = useBookingValidation()
 
     // Get system user for audit trail (ADR-013: system operations use cached admin user)
     const systemUserId = await getSystemUserId(d1Client)
@@ -36,12 +36,13 @@ export async function closeOrders(d1Client: D1Database): Promise<CloseOrdersResu
     const updates: OrderBatchUpdate[] = pendingOrders.map(order => ({
         orderId: order.id,
         state: OrderStateSchema.enum.CLOSED,
-        dinnerMode: DinnerModeSchema.enum.DINEIN, // Preserve existing mode - not actually changing
+        dinnerMode: order.dinnerMode,
         ticketPriceId: null, // No change
         priceAtBooking: null, // No change
         isNewRelease: false,
         audit: {
             action: OrderAuditActionSchema.enum.SYSTEM_UPDATED,
+            change: OrderAuditChangeSchema.enum.CLOSE,
             performedByUserId: systemUserId,
             inhabitantId: order.inhabitantId,
             dinnerEventId: order.dinnerEventId,

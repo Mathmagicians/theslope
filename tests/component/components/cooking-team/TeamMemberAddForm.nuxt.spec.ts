@@ -1,37 +1,42 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
-import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import TeamMemberAddForm from '~/components/cooking-team/TeamMemberAddForm.vue'
-import {nextTick, ref} from 'vue'
+import {nextTick, type ComponentPublicInstance} from 'vue'
+import {enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
+import {mountWithTooltipProvider, findByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {ROLE_ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
+
+enableAutoUnmount(afterEach)
 
 describe('TeamMemberAddForm', () => {
 
     const {TeamRoleSchema} = useCookingTeamValidation()
     const Role = TeamRoleSchema.enum
 
+    beforeEach(() => {
+        resetStores()
+    })
+
     const mount = (props: Record<string, unknown> = {}) =>
-        mountSuspended(TeamMemberAddForm, {
-            props: {...props},
-            global: {provide: {isMd: ref(true)}}
-        })
+        mountWithTooltipProvider(TeamMemberAddForm, {props, isMd: true})
+
+    type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
+    // The glyphs on the role select's trigger
+    const triggerGlyphs = (wrapper: VueWrapper) => {
+        const select = findByTestId(wrapper, 'team-member-role-select')
+        return (wrapper.findAllComponents({name: 'UIcon'}) as IconWrapper[])
+            .filter(icon => select.element.contains(icon.element))
+            .map(icon => icon.props('name'))
+    }
 
     // ========== RENDERING ==========
 
-    it.each([
-        ['Vælg rolle på hold'], ['Arbejdstid'], ['Kan kun følgende ugedage'], ['Annuller']
-    ])('shows label "%s"', async ([label]) => {
+    it('add mode shows its labels and the "Tilføj" button', async () => {
+        const labels = ['Vælg rolle på hold', 'Arbejdstid', 'Kan kun følgende ugedage', 'Annuller', 'Tilføj']
         const wrapper = await mount()
-        expect(wrapper.text()).toContain(label)
-    })
-
-    it.each([
-        ['add mode', undefined, 'Tilføj'],
-        ['edit mode', Role.CHEF, 'Gem']
-    ])('%s shows "%s" button', async (_, initialRole, expected) => {
-        const wrapper = await mount(initialRole ? {initialRole} : {})
-        expect(wrapper.text()).toContain(expected)
+        labels.forEach(label => expect(wrapper.text(), label).toContain(label))
     })
 
     // ========== EDIT MODE PRE-FILL ==========
@@ -40,9 +45,11 @@ describe('TeamMemberAddForm', () => {
         [Role.CHEF, 'Chefkok'],
         [Role.COOK, 'Kok'],
         [Role.JUNIORHELPER, 'Kokkespire']
-    ])('pre-fills role %s as "%s"', async (role, expectedLabel) => {
+    ])('edit mode pre-fills role %s as "%s" with its glyph on the trigger, and shows "Gem"', async (role, expectedLabel) => {
         const wrapper = await mount({initialRole: role})
         expect(wrapper.text()).toContain(expectedLabel)
+        expect(triggerGlyphs(wrapper)).toContain(ROLE_ICONS[role])
+        expect(wrapper.text()).toContain('Gem')
     })
 
     it('pre-fills percentage', async () => {
@@ -79,5 +86,18 @@ describe('TeamMemberAddForm', () => {
         const text = wrapper.text()
         expect(text).toContain('mandag')
         expect(text).not.toContain('tirsdag')
+    })
+
+    // ========== ROLE GLYPH ON THE TRIGGER ==========
+
+    it('the role select trigger follows a change of selection', async () => {
+        const wrapper = await mount({initialRole: Role.COOK})
+        const select = wrapper.findAllComponents({name: 'USelectMenu'})
+            .find(menu => findByTestId(menu, 'team-member-role-select').exists())
+        select!.vm.$emit('update:modelValue', Role.CHEF)
+        await nextTick()
+        const glyphs = triggerGlyphs(wrapper)
+        expect(glyphs).toContain(ROLE_ICONS[Role.CHEF])
+        expect(glyphs).not.toContain(ROLE_ICONS[Role.COOK])
     })
 })

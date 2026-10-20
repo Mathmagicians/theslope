@@ -14,6 +14,9 @@ import {subDays} from "date-fns/subDays"
 import {subMinutes} from "date-fns/subMinutes"
 import {addMinutes} from "date-fns/addMinutes"
 
+/** The four season statuses as a union of their values */
+export type SeasonStatusValue = typeof SEASON_STATUS[keyof typeof SEASON_STATUS]
+
 export const isThisACookingDay = (date: Date, cookingDays: WeekDayMap): boolean => {
     const isoDay = getISODay(date)
     const weekDay = WEEKDAYS[isoDay - 1]
@@ -163,17 +166,6 @@ export const compareAffinities = (startDay: WeekDay) => (affinity1: NullableWeek
 
     return Math.sign(distance1 - distance2)
 }
-
-export const compareTeams = (startDay: WeekDay) => (team1: CookingTeamDisplay, team2: CookingTeamDisplay): number => {
-    const compareTeamsByName = team1.name.localeCompare(team2.name)
-    if (!team1.affinity && !team2.affinity) return compareTeamsByName
-    if (!team1.affinity) return 1
-    if (!team2.affinity) return -1
-    const affinityComparator = compareAffinities(startDay)
-    const affinityComparatorResult = affinityComparator(team1.affinity, team2.affinity)
-    return affinityComparatorResult === 0 ? compareTeamsByName : affinityComparatorResult
-}
-
 
 export const createSortedAffinitiesToTeamsMap = (teams: CookingTeamDisplay[], weekDay: WeekDay = WEEKDAYS[0]): Map<WeekDay, CookingTeamDisplay[]> => {
     const sortedKeys: WeekDay[] = teams
@@ -344,7 +336,7 @@ export const canSeasonBeActive = (season: Season, referenceDate: Date = new Date
  * @param referenceDate - Date to compare against (defaults to now)
  * @returns 'aktiv' | 'kommende' | 'i gang' | 'afsluttet'
  */
-export const getSeasonStatus = (season: Season, referenceDate: Date = new Date()): SeasonStatus => {
+export const getSeasonStatus = (season: Season, referenceDate: Date = new Date()): SeasonStatusValue => {
     // Active takes precedence regardless of dates
     if (season.isActive) {
         return SEASON_STATUS.ACTIVE
@@ -365,7 +357,7 @@ export const getSeasonStatus = (season: Season, referenceDate: Date = new Date()
 }
 
 /**
- * Sort seasons by active priority: aktiv → kommende (closest) → i gang → afsluttet (recent)
+ * Sort seasons by active priority: aktiv → i gang → kommende (closest) → afsluttet (recent)
  * @param seasons - Seasons to sort
  * @param referenceDate - Date to compare against (defaults to now)
  * @returns Sorted seasons array (does not mutate input)
@@ -375,11 +367,11 @@ export const sortSeasonsByActivePriority = (seasons: Season[], referenceDate: Da
         const statusA = getSeasonStatus(a, referenceDate)
         const statusB = getSeasonStatus(b, referenceDate)
 
-        // Priority order: aktiv > kommende > i gang > afsluttet
+        // Priority order: aktiv > i gang > kommende > afsluttet
         const statusPriority: Record<SeasonStatus, number> = {
             [SEASON_STATUS.ACTIVE]: 0,
-            [SEASON_STATUS.FUTURE]: 1,
-            [SEASON_STATUS.CURRENT]: 2,
+            [SEASON_STATUS.CURRENT]: 1,
+            [SEASON_STATUS.FUTURE]: 2,
             [SEASON_STATUS.PAST]: 3
         }
 
@@ -398,7 +390,7 @@ export const sortSeasonsByActivePriority = (seasons: Season[], referenceDate: Da
 
 /**
  * Select the most appropriate season to activate
- * Priority: 1) Future closest to today, 2) Current
+ * Priority: 1) Active, 2) Current, 3) Future closest to today
  * IMPORTANT: Past seasons cannot be activated (business rule)
  * @param seasons - Seasons to choose from
  * @param referenceDate - Date to compare against (defaults to now)
@@ -407,12 +399,12 @@ export const sortSeasonsByActivePriority = (seasons: Season[], referenceDate: Da
 export const selectMostAppropriateActiveSeason = (seasons: Season[], referenceDate: Date = new Date()): Season | null => {
     if (seasons.length === 0) return null
 
-    // Filter to only eligible (non-past, non-active) seasons
-    const eligible = seasons.filter(s => !s.isActive && canSeasonBeActive(s, referenceDate))
+    // An active season that has ended is not eligible, so the pick moves on
+    const eligible = seasons.filter(s => canSeasonBeActive(s, referenceDate))
 
     if (eligible.length === 0) return null
 
-    // Sort and return first (future closest, or current if no future)
+    // Sort and return first (active, else current, else future closest)
     const sorted = sortSeasonsByActivePriority(eligible, referenceDate)
     return sorted[0]!
 }

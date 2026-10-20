@@ -9,31 +9,19 @@ import { pruneAndCreate } from '~/utils/batchUtils'
  * Prices are stored in øre (1 DKK = 100 øre)
  */
 export const useTicketPriceValidation = () => {
-    /**
-     * Schema for a single TicketPrice
-     */
     const TicketPriceSchema = z.object({
         id: z.number().int().positive().optional(),
         seasonId: z.number().int().positive().optional(),
         ticketType: TicketTypeSchema,
         price: z.number().int().nonnegative(), // Non-negative integer in øre, no upper limit
         description: z.string().optional().nullable(),
-        maximumAgeLimit: z.number().int().nonnegative().optional().nullable()
+        maximumAgeLimit: z.number().int().nonnegative().optional().nullable(),
+        portions: z.number().nonnegative() // What a ticket at this price weighs on the kitchen's count
     })
 
     type TicketPrice = z.infer<typeof TicketPriceSchema>
 
-    const createTicketPrice = (ticketType: string, price: number, seasonId?: number, description?: string, maximumAgeLimit?: number, id?: number): TicketPrice => {
-        const ticketPrice = {
-            id,
-            ticketType,
-            price,
-            seasonId,
-            description,
-            maximumAgeLimit
-        }
-        return TicketPriceSchema.parse(ticketPrice)
-    }
+    const createTicketPrice = (ticketPrice: z.input<typeof TicketPriceSchema>): TicketPrice => TicketPriceSchema.parse(ticketPrice)
 
     /**
      * - at least one ticket type
@@ -51,24 +39,8 @@ export const useTicketPriceValidation = () => {
             message: "Alle billetpriser skal tilhøre samme sæson"
         })
 
-    /**
-     * Validate a single ticket price
-     */
-    const validateTicketPrice = (price: unknown): TicketPrice => {
-        return TicketPriceSchema.parse(price)
-    }
-
-    /**
-     * Validate an array of ticket prices
-     */
-    const validateTicketPrices = (prices: unknown): TicketPrice[] => {
-        return TicketPricesArraySchema.parse(prices)
-    }
-
-    /**
-     * Schema for creating ticket prices - excludes id and seasonId (auto-assigned by database)
-     */
-    const CreateTicketPriceSchema = TicketPriceSchema.omit({ id: true, seasonId: true })
+    // Creating a price: the database assigns id and seasonId, and the price row holds no portions (the server fills them on read)
+    const CreateTicketPriceSchema = TicketPriceSchema.omit({id: true, seasonId: true, portions: true})
     const CreateTicketPricesArraySchema = z.array(CreateTicketPriceSchema).min(1)
 
     /**
@@ -103,12 +75,13 @@ export const useTicketPriceValidation = () => {
         TicketPricesArraySchema,
         CreateTicketPriceSchema,
         CreateTicketPricesArraySchema,
-        validateTicketPrice,
-        validateTicketPrices,
         createTicketPrice,
         reconcileTicketPrices
     }
 }
 
-// Re-export the TicketPrice type
 export type TicketPrice = z.infer<ReturnType<typeof useTicketPriceValidation>['TicketPriceSchema']>
+// The two fields a ticket's portions are looked up by
+export type PortionTicket = Pick<TicketPrice, 'ticketType' | 'price'>
+// A price row's id and the portions a ticket at it weighs
+export type PricePortions = Pick<TicketPrice, 'id' | 'portions'>

@@ -1,7 +1,8 @@
 # Feature Proposal: Ad-hoc Admin Billing
 
-**Status:** Proposal
+**Status:** Signed off 2026-10-08; the ledger type, the expense table, the chef endpoints and the budget pane shipped in 0.9; the ad-hoc charges and the spending views are next release (deferred 2026-10-13)
 **Date:** 2026-04-20
+**Updated:** 2026-10-05 — the EXPENSE transaction type joins the scope: a cost record against a dinner's kitchen money, excluded from invoicing (work-roster push, `archived/release-0.9.0.md` § Chef spending)
 
 ## Problem
 
@@ -139,62 +140,37 @@ Credit:  Kreditering oprettet (-<amount> kr)
 New on `Transaction`:
 
 ```prisma
-enum TransactionType {
-  ORDER_CHARGE
-  ADHOC_CHARGE
+enum LedgerEntryType {
+  REGULAR
+  ADHOC
 }
 
 model Transaction {
   // existing fields preserved — userSnapshot + userEmailHandle also capture the admin for adhoc
-  type        TransactionType @default(ORDER_CHARGE)
-  householdId Int?
-  household   Household?      @relation(fields: [householdId], references: [id], onDelete: SetNull)
+  type        LedgerEntryType @default(REGULAR)
   description String?
 
-  @@index([householdId])
   @@index([type])
 }
 ```
 
 `Transaction.orderId` stays nullable (existing `SetNull`). `Invoice.householdId` already nullable. Both FKs on the Transaction use `SetNull` so the row survives deletion of related entities.
 
-### Shared-root snapshot (DRY)
+### Snapshot per kind ✅ signed 2026-10-08 · ✅ shipped in 0.9
 
-The `orderSnapshot` JSON column is widened to a discriminated union with a common root carrying the denormalized `household`. Existing rows are migrated in-place.
+`Transaction.type` (`LedgerEntryType`) and `Transaction.description` are in the schema since migration `0017_roster`; the REGULAR snapshot keeps the shape stored today, the ADHOC snapshot carries the charged household at its root and the deserializer picks the schema by `type` (`useBillingValidation`).
 
-```ts
-TransactionSnapshotBase = z.object({
-  type:      TransactionTypeSchema,    // discriminator
-  household: HouseholdInfoSchema       // always present post-migration
-})
+### Expenses — chef spending ✅ signed 2026-10-08 · ✅ shipped in 0.9
 
-OrderChargeSnapshotSchema = TransactionSnapshotBase.extend({
-  type:        z.literal('ORDER_CHARGE'),
-  dinnerEvent: z.object({id, date, menuTitle}),
-  inhabitant:  z.object({id, name}),    // household hoisted to root
-  ticketType:  TicketTypeSchema.nullable()
-})
-
-AdhocChargeSnapshotSchema = TransactionSnapshotBase.extend({
-  type:        z.literal('ADHOC_CHARGE'),
-  description: z.string()
-})
-
-OrderSnapshotSchema = z.discriminatedUnion('type', [
-  OrderChargeSnapshotSchema,
-  AdhocChargeSnapshotSchema
-])
-```
-
-`TransactionDisplay` mirrors this shape. Top-level `household` is always populated, resolved as: live `Transaction.household` relation → else `snapshot.household`. Same live-first pattern the order variant already uses for `inhabitant` / `dinnerEvent`.
+The `Expense` table (a list per dinner, `paidByUserId` with a `userSnapshot`, `description`, `LedgerEntryType`), the chef endpoints (`GET`/`PUT /api/chef/dinner/[id]/expenses`, `DELETE …/[expenseId]`, the note prefilled by `useBilling.expenseNoteWords`), the computed `DinnerEvent.totalCost` (ADR-010 rule 6) and the Budget pane with the Madbestilling editor shipped with release 0.9: `archived/release-0.9.0.md` § Chef spending. The basisvarer entry (ADHOC expenses) is `feature-proposal-season-spending.md`.
 
 ### Query ergonomics
 
 ```sql
-WHERE type = 'ADHOC_CHARGE'
-WHERE type = 'ORDER_CHARGE' AND orderId IS NULL     -- orphaned deleted-orders
-WHERE type = 'ORDER_CHARGE' AND orderId IS NOT NULL -- normal order-charges
-WHERE type = 'ADHOC_CHARGE' AND householdId = ? AND invoiceId IS NULL
+WHERE type = 'ADHOC'
+WHERE type = 'REGULAR' AND orderId IS NULL     -- orphaned deleted-orders
+WHERE type = 'REGULAR' AND orderId IS NOT NULL -- normal order-charges
+WHERE type = 'ADHOC' AND invoiceId IS NULL           -- the household is read from the snapshot
 ```
 
 The enum earns its keep by distinguishing "deleted order" from "adhoc" when `orderId IS NULL`.
@@ -206,14 +182,14 @@ The enum earns its keep by distinguishing "deleted order" from "adhoc" when `ord
 ```
 POST /api/admin/billing/adhoc
   body: { householdId: number, amount: number, description: string }
-  -> TransactionDisplay (type: ADHOC_CHARGE)
+  -> TransactionDisplay (type: ADHOC)
 ```
 
 **Delete (unbilled only)**
 
 ```
 DELETE /api/admin/billing/adhoc/:id
-  -> 204 when invoiceId === null && type === ADHOC_CHARGE
+  -> 204 when invoiceId === null && type === ADHOC
   -> 409 when already billed
 ```
 
@@ -261,7 +237,7 @@ HouseholdEconomy.vue (extend)
 
 CostLine.vue (extend)
   - Item shape adds description?, type?
-  - When type === ADHOC_CHARGE: description as primary label, hide dinner-mode
+  - When type === ADHOC: description as primary label, hide dinner-mode
     and order-state badges, render small "Ekstra" badge
 ```
 
@@ -277,22 +253,21 @@ reverseAdhocCharge(transactionId, reason)           -> POST /adhoc/:id/reverse, 
 
 - Period assignment: branch on `tx.type` — adhoc uses `tx.createdAt` (no dinner date)
 - Household grouping: use top-level `tx.household` (resolved via live-first fallback)
-- `BillingPeriodSummary.ticketCount` filters to `ORDER_CHARGE` only — adhoc contributes to `totalAmount` but not to ticket counts
+- `BillingPeriodSummary.ticketCount` filters to `REGULAR` only — adhoc contributes to `totalAmount` but not to ticket counts
 - CSV "Note" column: populate `"+N ekstra opkrævning(er)"` when invoice contains adhoc
 
 No change to `createTransactions` nightly job (scoped to `Order.state: CLOSED`, invisible to adhoc), `dailyMaintenanceService`, `monthlyBillingService`, or `/public/billing/[token]`.
 
 ### Migration (next after `20260416091019_severalhouseholdsonsameadress`)
 
-1. `ALTER TABLE Transaction` — add `type`, `householdId`, `description` columns + indexes
-2. `UPDATE Transaction SET type = 'ORDER_CHARGE'`
-3. Rewrite every existing `orderSnapshot` JSON: inject `type: 'ORDER_CHARGE'`, hoist `inhabitant.household` → top-level `household`, strip `household` from `inhabitant`
-
-Step 3 is idempotent. Keeps all downstream zod free of legacy-shape handling.
+Part of the 0.9 Prisma bundle (`archived/release-0.9.0.md` § Prisma bundle and § Decisions 2026-10-08): `Transaction.type` as
+`ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT 'REGULAR'`, `Transaction.description` nullable, the `Expense` table,
+`DinnerEvent.totalCost` kept and deprecated (dropped by `chores-0.9.1.md`). Data line: existing `totalCost` values map to REGULAR `Expense` rows (SYSTEM snapshot, no payer); the `type` default covers every existing
+row and the snapshots stay as written.
 
 ### ADR Compliance
 
-- **ADR-001**: `AdhocChargeCreateSchema` / `AdhocChargeReverseSchema` in `useBillingValidation`; `TransactionTypeSchema` re-exported
+- **ADR-001**: `AdhocChargeCreateSchema` / `AdhocChargeReverseSchema` in `useBillingValidation`; `LedgerEntryTypeSchema` re-exported
 - **ADR-002**: Separate try-catch for validation vs business logic in all three endpoints
 - **ADR-004**: `console.info` structured logging on create / delete / reverse; no sensitive fields
 - **ADR-005**: `SetNull` on `Transaction.household` (mirrors `Transaction.order`, `Invoice.household`)
@@ -319,7 +294,7 @@ Step 3 is idempotent. Keeps all downstream zod free of legacy-shape handling.
 Review + sign-off.
 
 ### Phase 1: Schema + serialization
-- Prisma migration (3 steps: columns, set type, rewrite snapshots)
+- ✅ shipped (`0017_roster`): the type and description columns; snapshots stay as written
 - Shared-root union zod schemas in `useBillingValidation`
 - Rewrite `deserializeTransaction` with live-FK-first fallback for `household`
 - Filter adhoc out of `computeStatsFromSnapshots`

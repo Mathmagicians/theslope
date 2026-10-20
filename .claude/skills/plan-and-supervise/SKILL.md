@@ -1,6 +1,6 @@
 ---
 name: plan-and-supervise
-description: Use when writing or updating a feature / bug-fix plan doc in docs/features, when asked to "assess and plan the work left", or when supervising subagents that implement such a plan. Encodes the user's working preferences - named packages (no codes), ASCII mockups signed off in the doc and moved to the component header on implementation, implemented fixes trimmed to pointers, per-package approval before any agent starts, endpoint→API spec and component→BDD spec coverage, design-system tokens over raw Nuxt UI props, code traced before claims.
+description: Use when writing or updating a feature / bug-fix plan doc in docs/features, when asked to "assess and plan the work left", when iterating a design (schema group, model, UX surface, package decision) with the user round by round, or when supervising subagents that implement such a plan. Encodes the user's working preferences - named packages (no codes), ASCII mockups signed off in the doc and moved to the component header on implementation, implemented fixes trimmed to pointers, per-package approval before any agent starts, endpoint→API spec and component→BDD spec coverage, design-system tokens over raw Nuxt UI props, code traced before claims.
 ---
 
 # Plan and Supervise
@@ -36,6 +36,16 @@ at a time behind an explicit approval. The plan document is the deliverable; the
   (each child as a labelled box, no internals); each child's header mockup draws its own internals. No drawing line appears
   in two files.
 - No implementation of a UX package before its mockup is ✅.
+- A mockup carries the agreed words and formats literally; a decision taken in an earlier round on wording or format
+  outranks any shorthand the mockup draws. A glyph is drawn only where a glyph was agreed, and named by its icon.
+- A moment in a mockup names the domain event it comes from and the helper that yields it; a deadline is never chosen by
+  the drawer.
+- Anything not in the mockup is presented to the architect for approval first, and the mockup is updated with it. UX
+  improvements are welcome as suggestions; the architect signs them off before they are built.
+- When a design round changes a signed mockup, the spec is updated before the first line of code, and each changed block
+  is signed on its own.
+- The report that closes a package assesses what was built against the spec, block by block, and names every deviation
+  with the decision that led to it; a deviation never passes silently.
 
 ## Cleaning up the doc once a fix is implemented
 
@@ -73,7 +83,7 @@ at a time behind an explicit approval. The plan document is the deliverable; the
 | Change | Required tests |
 |---|---|
 | New or changed endpoint | Playwright API spec under `tests/e2e/api/` (parallel, or serial when it needs the active season) |
-| New or changed UX component / behaviour | BDD e2e (GIVEN/WHEN/THEN, Playwright) **and** a component spec (Vitest, real components and stores, `registerEndpoint` for HTTP) |
+| New or changed UX component / behaviour | a component spec (Vitest, real components and stores, `registerEndpoint` for HTTP); a BDD e2e (GIVEN/WHEN/THEN, Playwright) only for the interaction or integration the component spec cannot prove: a flow across pages, the URL, the server (`docs/testing.md` Rule 0) |
 | Utility / composable | unit spec |
 | Test-id changes | an old → new contract table |
 
@@ -96,6 +106,9 @@ Wait for approval or fine-tuning. Launch one agent per package with the brief, t
 - The brief covers the ask and nothing wider: the smallest change that does what the user asked. A wider idea is one optional
   line after the brief, never part of its scope or its decisions. "Measure the contrast correctly" is the pairs the components
   paint, not their hover states, checkbox parts and a button sweep; "change the default palette" is a selector, not a rebase.
+- A domain rule outside the brief — a decision-matrix row, a bucket's path, an ADR line, a test case asserting a new
+  rule — stops the agent: it goes to the architect as a decision, and the closing report names it. No subagent writes
+  `docs/adr.md`; an ADR line is the architect's text, written after the yes on it.
 - The brief points the agent at `.claude/skills/code-comments/SKILL.md` and never dictates comment text. Source comments
   carry no dates, decisions, sign-offs or doc references — those live in the plan doc; the architect's diff review checks
   the comments too.
@@ -103,7 +116,17 @@ Wait for approval or fine-tuning. Launch one agent per package with the brief, t
 ## Per-package gate
 
 1. Red run output shown → 2. green run output shown → 3. `npm run pre:all` → 4. architect diff review against the brief, the coverage
-matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*.md`) updated in the same change → 6. the **user commits**.
+matrix and the design-system rule, reading every ADR line and decision row in the diff against the brief → 5. compliance rows (`docs/adr-compliance-*.md`) updated in the same change → 6. the **user commits**.
+
+A package moves through three states, and the release spec and every briefing name the state:
+- implemented: red and green shown, pre:all clean, diff reviewed, compliance rows updated;
+- in your test: the green report is out with the files to commit; the orchestrator hands the package to documentar
+  with its visual check (route and state → what to see), and documentar presents it to the user;
+- signed off: the user's yes after the browser check, recorded by documentar with its date. Only signed off is done.
+
+A finding in the user's test reopens the same package: it is fixed and reported there, never split into a new
+package. A finding in the same view and with the same symptom belongs to the package too. Anything outside the
+package's ask is one optional line.
 
 ## Hard rules (from `working-style-rules`)
 
@@ -121,9 +144,7 @@ matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*
 
 ## One e2e runner at a time
 
-- Never let two agents run Playwright concurrently: they share the local dev server and the D1 database, so one agent's
-  `beforeAll` season activation or a server restart shows up as random timeouts in the other's suite. Sequence packages that
-  run e2e; if a suite looks flaky, rerun it alone before blaming the change. No DB reseed between test runs.
+The test-engineer session owns the e2e slot; the sessions, claims and holds follow `/peer-sessions`.
 
 ## Visual check before a package is done
 
@@ -163,3 +184,39 @@ matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*
 
 - A plan or proposal refers to a future ADR by title only ("the settings ADR"). The number is the next free one in
   `docs/adr.md` at the moment the ADR is written; numbers grow by one per decision and are never reserved or hardcoded.
+
+## Iterating a design round by round
+
+A schema group, a model, a UX surface or a package decision is settled in chat one round at a time; the document and the
+file follow the sign-off.
+
+- **One item per round.** One package, entity group or decision per message; a decision the answer raises goes into the
+  next round. Several decisions in one message are rejected unread.
+- **Re-present the full change every round**, as the user will read it in the file: a schema change as a diff against the
+  live block (`+` on the added lines, untouched columns kept for context — a full model without markers hides the change);
+  a UX change as the mockup; a decision as `a) … b) … c) …` with one line of pro and con each, the drafted choice marked
+  "as drawn", never applied silently. A mid-round correction is applied to the block and the whole block shown again. The
+  round ends with "Decisions in this round:" and nothing else.
+- **"I don't understand" asks for facts**: where the item comes from, why it is a problem, a concrete example ("Anna books
+  Tuesday twice"), and a suggested solution — not the question rephrased. A comparison request gets the comparison, no
+  steering. A claim is verified against the generated output or the current docs before it is presented, never carried
+  from a spike or a memory (`strictUndefinedChecks` was presented as default in Prisma 7; the generated types said
+  preview). A decision the user may have taken in another session or document is checked there first.
+- **"Gibberish" falls back to the schema and the code.** The next answer quotes the Prisma model, the writer and the
+  reader with `file:line`, names rows and fields by their schema names, and drops every paraphrase and metaphor. A briefing
+  for a decision states the problem, the options, the effort and the blast radius, in that order and compactly.
+- **Sign-off semantics.** A briefing ends with the status in three labelled lists, never with a request to sign off:
+  **Running** (agents at work), **Next** (signed, waiting its turn), **Needs your decision** (briefed, unsigned). The user
+  signs off when the briefing is strong enough for the decision. A file changes only after an explicit yes on the exact block presented; "y"
+  signs the last presented block. "prepare", "don't wait", "go on", "continue" mean bring the next draft. A model change that alters a
+  signed mockup shows the revised mockup in the same round for its own sign-off. After the yes: the feature document
+  (the signed block, dated), then the file, then a sweep of the document for the vocabulary the round replaced.
+- **Language.** The user's domain terms, precisely (a roster duty on a dinner, a template duty, a vacant duty — never a
+  word the user did not use); comments per `code-comments` (no process knowledge such as "the scaffolder expands it", no
+  colloquialisms); terse chat without glyphs.
+- **Modelling rules from the rounds.** Symmetric siblings share a shape (`LedgerEntryType { REGULAR, ADHOC }` on both
+  ledgers); an enum value never repeats its type's name; a denormalized copy carries no provenance FK; a fact that follows
+  from other rows is derived, not stored (completed, roster signed, a dinner's cost); an either-or is structure (a 1:1
+  extension, a nullable column with a partial unique index), not a flag explained in a comment; a sibling table beats a
+  column rebuild on D1, the user deciding; a back-relation exists because a read needs it, and attribution names the party
+  the read serves (the inhabitant to reimburse, not the account that typed the row).

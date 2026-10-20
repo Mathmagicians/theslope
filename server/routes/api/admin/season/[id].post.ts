@@ -5,7 +5,10 @@ import {useSeason} from "~/composables/useSeason"
 import {reconcileDinnerEventsForSeason} from "~~/server/utils/reconcileDinnerEvents"
 import {clipPreferences} from "~~/server/utils/initializePreferences"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
-import * as z from 'zod'
+import {useBooking} from "~/composables/useBooking"
+import {emailChannel} from "~~/server/utils/sender/config"
+import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
+import {idParams} from '~/composables/useCoreValidation'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {throwH3Error} = eventHandlerHelper
@@ -14,9 +17,7 @@ const {throwH3Error} = eventHandlerHelper
 const {SeasonSchema, SeasonUpdateResponseSchema} = useSeasonValidation()
 
 // Schema for route parameters
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('Season ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 // Create a function that returns a refined schema for POST operations with ID validation
 const createPostSeasonSchema = (expectedId: number) =>
@@ -46,7 +47,7 @@ export default defineEventHandler(async (event): Promise<SeasonUpdateResponse> =
     let id!: number
     let seasonData!: Season
     try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
+        const params = await getValidatedRouterParams(event, paramSchema.parse)
         id = params.id
         seasonData = await readValidatedBody(event, createPostSeasonSchema(id).parse)
     } catch (error) {
@@ -91,7 +92,8 @@ export default defineEventHandler(async (event): Promise<SeasonUpdateResponse> =
             console.info(`🌞 > SEASON > [POST] Clipped ${clipResult.initialized} inhabitants`)
 
             scaffold = await scaffoldPrebookings(d1Client, {seasonId: id})
-            console.info(`🌞 > SEASON > [POST] Scaffolded ${scaffold?.created ?? 0} orders`)
+            await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffold.outcomes)
+            console.info(`🌞 > SEASON > [POST] Scaffolded: ${useBooking().formatScaffoldResult(scaffold)}`)
         }
 
         // Return full season with dinnerEvents (ADR-009: detail endpoint)

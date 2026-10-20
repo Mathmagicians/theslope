@@ -1,9 +1,11 @@
-import {z} from 'zod'
 import {maskPassword} from '~/utils/utils'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
+import {useFeedbackValidation, type FeedbackIssue, type FeedbackType} from '~/composables/useFeedbackValidation'
 
 const LOG = '🐙 > GITHUB > '
 const {throwH3Error} = eventHandlerHelper
+const {FeedbackTypeSchema, FeedbackIssueSchema} = useFeedbackValidation()
+const Feedback = FeedbackTypeSchema.enum
 
 /* ==== TYPES ==== */
 
@@ -13,45 +15,35 @@ export interface FeedbackUser {
 }
 
 export interface FeedbackPayload {
-    type: 'bug' | 'idea' | 'question'
+    type: FeedbackType
     description: string
     currentUrl: string
     user?: FeedbackUser
 }
 
-const GitHubIssueResponseSchema = z.object({
-    id: z.number(),
-    number: z.number(),
-    html_url: z.string(),
-    title: z.string(),
-    state: z.string()
-})
-
-export type GitHubIssueResponse = z.infer<typeof GitHubIssueResponseSchema>
-
 /* ==== HELPER FUNCTIONS ==== */
 
-function getFeedbackLabel(type: FeedbackPayload['type']): string {
+function getFeedbackLabel(type: FeedbackType): string {
     switch (type) {
-        case 'bug': return 'bug'
-        case 'idea': return 'enhancement'
-        case 'question': return 'question'
+        case Feedback.bug: return 'bug'
+        case Feedback.idea: return 'enhancement'
+        case Feedback.question: return 'question'
     }
 }
 
-function getFeedbackEmoji(type: FeedbackPayload['type']): string {
+function getFeedbackEmoji(type: FeedbackType): string {
     switch (type) {
-        case 'bug': return '🐛'
-        case 'idea': return '💡'
-        case 'question': return '❓'
+        case Feedback.bug: return '🐛'
+        case Feedback.idea: return '💡'
+        case Feedback.question: return '❓'
     }
 }
 
-function getFeedbackPrefix(type: FeedbackPayload['type']): string {
+function getFeedbackPrefix(type: FeedbackType): string {
     switch (type) {
-        case 'bug': return 'Fejl'
-        case 'idea': return 'Forslag'
-        case 'question': return 'Spørgsmål'
+        case Feedback.bug: return 'Fejl'
+        case Feedback.idea: return 'Forslag'
+        case Feedback.question: return 'Spørgsmål'
     }
 }
 
@@ -91,7 +83,7 @@ ${payload.description}
  * @param payload - Feedback data from user
  * @returns Created issue with URL
  */
-export async function createFeedbackIssue(payload: FeedbackPayload): Promise<GitHubIssueResponse> {
+export async function createFeedbackIssue(payload: FeedbackPayload): Promise<FeedbackIssue> {
     const config = useRuntimeConfig()
     const {GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO} = config
 
@@ -111,9 +103,9 @@ export async function createFeedbackIssue(payload: FeedbackPayload): Promise<Git
         labels: [getFeedbackLabel(payload.type), 'user-feedback']
     }
 
-    let response: GitHubIssueResponse
+    let response: FeedbackIssue
     try {
-        response = await $fetch<GitHubIssueResponse>(url, {
+        response = await $fetch<FeedbackIssue>(url, {
             method: 'POST',
             body,
             headers: {
@@ -127,7 +119,7 @@ export async function createFeedbackIssue(payload: FeedbackPayload): Promise<Git
     }
 
     try {
-        const validated = GitHubIssueResponseSchema.parse(response)
+        const validated = FeedbackIssueSchema.parse(response)
         console.info(LOG, 'ISSUE CREATE > Created issue #', validated.number, validated.html_url)
         return validated
     } catch (error: unknown) {

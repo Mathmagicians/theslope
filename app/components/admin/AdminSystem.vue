@@ -52,8 +52,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, ALERTS, BUTTONS, COMPONENTS, columnVisibility, getRandomEmptyMessage } = useTheSlopeDesignSystem()
-const isMd = inject<Ref<boolean>>('isMd', ref(false))
+const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, ALERTS, BUTTONS, COMPONENTS, columnVisibility, getRandomEmptyMessageText, NOISE, breakpoint } = useTheSlopeDesignSystem()
 
 // Maintenance helpers
 const {
@@ -129,8 +128,7 @@ const getLatestJobRunByType = (jobType: string): JobRunDisplay | null => {
 }
 
 // Empty state for job history table
-const jobHistoryEmptyMessage = getRandomEmptyMessage('jobHistory')
-const jobHistoryEmpty = `${jobHistoryEmptyMessage.emoji} ${jobHistoryEmptyMessage.text}`
+const jobHistoryEmpty = getRandomEmptyMessageText('jobHistory')
 
 // ============================================================================
 // JOB HISTORY TABLE
@@ -142,7 +140,7 @@ const HIDDEN_FROM_MD = ['expand'] as const
 
 const { expanded } = useExpandableRow()
 // A row opened on a phone has no chevron to close it from md (a phone turned to landscape)
-watch(isMd, () => { expanded.value = {} })
+watch(breakpoint.isMd, () => { expanded.value = {} })
 
 const jobHistoryColumns = [
   { id: 'expand' },
@@ -197,7 +195,7 @@ const configTreeItems = computed(() => objectToTreeItems(appConfig.theslope as R
 // ============================================================================
 
 const jobIconsMap = {
-  DAILY_MAINTENANCE: [ICONS.checkCircle, ICONS.ticket, ICONS.shoppingCart, ICONS.edit, ICONS.ticket],
+  DAILY_MAINTENANCE: [ICONS.checkCircle, ICONS.ticket, ICONS.shoppingCart, ICONS.waitlist, ICONS.edit, ICONS.ticket],
   MONTHLY_BILLING: [ICONS.calendar, ICONS.ticket, ICONS.shoppingCart, ICONS.economy],
   HEYNABO_IMPORT: [ICONS.household, ICONS.users, ICONS.user]
 } as const
@@ -347,9 +345,9 @@ const jobDefinitions = computed(() => {
 </script>
 
 <template>
-  <div data-testid="admin-system" class="space-y-6">
+  <div data-testid="admin-system" :class="COMPONENTS.adminSystem.root">
     <!-- Header -->
-    <div class="flex items-center gap-3">
+    <div :class="COMPONENTS.adminSystem.header">
       <UIcon :name="ICONS.sync" :class="TYPOGRAPHY.sectionIconLight" />
       <h1 :class="TYPOGRAPHY.sectionSubheadingLight">Systemjobs</h1>
     </div>
@@ -359,16 +357,16 @@ const jobDefinitions = computed(() => {
       <UCard
         v-for="job in jobDefinitions"
         :key="job.key"
-        :ui="{ root: 'h-full flex flex-col', body: 'flex-1 flex flex-col' }"
+        v-bind="COMPONENTS.adminSystem.jobCard"
       >
         <!-- Colored header with icon -->
         <template #header>
           <div
-            :class="[job.headerBg, 'rounded-t-lg -mx-4 -mt-4 px-4 py-6 md:py-8 flex flex-col items-center justify-center gap-2']"
+            :class="[job.headerBg, COMPONENTS.adminSystem.jobHeader]"
           >
             <UIcon
               :name="job.isRunning ? ICONS.sync : job.icon"
-              :class="['text-5xl md:text-6xl opacity-80', job.isRunning ? 'animate-spin' : '']"
+              :class="[COMPONENTS.adminSystem.jobIcon, job.isRunning && COMPONENTS.adminSystem.jobIconRunning]"
             />
             <span :class="TYPOGRAPHY.bodyTextSmall">
               {{ job.schedule }}
@@ -377,24 +375,24 @@ const jobDefinitions = computed(() => {
         </template>
 
         <!-- Title -->
-        <h3 :class="[TYPOGRAPHY.cardTitle, 'mb-2']">
+        <h3 :class="COMPONENTS.adminSystem.jobTitle">
           {{ job.title }}
         </h3>
 
         <!-- Description - fixed height area -->
-        <p :class="[TYPOGRAPHY.bodyTextMuted, 'mb-4 min-h-[3rem]']">
+        <p :class="COMPONENTS.adminSystem.jobDescription">
           {{ job.description }}
         </p>
 
         <!-- Status / Stats - this area grows to fill available space -->
-        <div class="flex-1">
-          <div v-if="job.hasResult && job.stats.length > 0" class="space-y-1">
+        <div :class="COMPONENTS.adminSystem.jobBody">
+          <div v-if="job.hasResult && job.stats.length > 0" :class="COMPONENTS.adminSystem.stats">
             <div
               v-for="(stat, index) in job.stats"
               :key="index"
-              class="flex items-center gap-2"
+              :class="COMPONENTS.adminSystem.stat"
             >
-              <UIcon :name="stat.icon" class="text-sm text-success-500" />
+              <UIcon :name="stat.icon" :class="COMPONENTS.adminSystem.statIcon" />
               <span :class="TYPOGRAPHY.bodyTextSmall">{{ stat.text }}</span>
             </div>
           </div>
@@ -409,14 +407,14 @@ const jobDefinitions = computed(() => {
           </UAlert>
 
           <!-- Skeleton placeholder for not-implemented jobs OR jobs that haven't run yet -->
-          <div v-else class="space-y-2">
-            <div class="flex items-center gap-2">
-              <USkeleton class="h-4 w-4 rounded-full" />
-              <USkeleton class="h-4 w-32" />
+          <div v-else :class="COMPONENTS.adminSystem.skeletons">
+            <div :class="COMPONENTS.adminSystem.skeletonRow">
+              <USkeleton :class="COMPONENTS.adminSystem.skeletonDot" />
+              <USkeleton :class="COMPONENTS.adminSystem.skeletonLong" />
             </div>
-            <div class="flex items-center gap-2">
-              <USkeleton class="h-4 w-4 rounded-full" />
-              <USkeleton class="h-4 w-24" />
+            <div :class="COMPONENTS.adminSystem.skeletonRow">
+              <USkeleton :class="COMPONENTS.adminSystem.skeletonDot" />
+              <USkeleton :class="COMPONENTS.adminSystem.skeletonShort" />
             </div>
           </div>
         </div>
@@ -454,9 +452,9 @@ const jobDefinitions = computed(() => {
     <!-- Job History Panel -->
     <UCard>
       <template #header>
-        <div class="flex items-center gap-2">
-          <UIcon name="i-heroicons-clock" class="text-lg" />
-          <span class="font-semibold">Jobhistorik</span>
+        <div :class="COMPONENTS.adminSystem.panelHeader">
+          <UIcon :name="ICONS.clock" :class="COMPONENTS.adminSystem.panelIcon" />
+          <span :class="COMPONENTS.adminSystem.panelTitle">Jobhistorik</span>
         </div>
       </template>
 
@@ -465,9 +463,8 @@ const jobDefinitions = computed(() => {
         :data="jobHistoryRows"
         :columns="jobHistoryColumns"
         :loading="isJobHistoryLoading"
-        :empty="jobHistoryEmpty"
         caption="Seneste jobkørsler"
-        class="w-full"
+        :class="COMPONENTS.adminSystem.historyTable"
         :ui="COMPONENTS.table.ui"
         :column-visibility="columnVisibility(HIDDEN_ON_PHONE, HIDDEN_FROM_MD)"
       >
@@ -484,18 +481,27 @@ const jobDefinitions = computed(() => {
 
         <!-- Custom status cell with color and icon -->
         <template #status-cell="{ row }">
-          <UBadge :color="row.original.statusColor" variant="subtle" class="gap-1">
-            <UIcon :name="row.original.statusIcon" class="text-xs" />
+          <UBadge :color="row.original.statusColor" :variant="NOISE.subtle" :class="COMPONENTS.adminSystem.statusBadge">
+            <UIcon :name="row.original.statusIcon" :class="COMPONENTS.adminSystem.statusIcon" />
             {{ row.original.statusLabel }}
           </UBadge>
         </template>
 
+        <template #loading>
+          <div :class="COMPONENTS.table.loadingRow">
+            <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
+            Henter jobhistorik...
+          </div>
+        </template>
+
+        <template #empty>{{ jobHistoryEmpty }}</template>
+
         <!-- Phone: the columns hidden on a phone -->
         <template #expanded="{ row }">
-          <div :class="['p-4 space-y-1', BG.panel]" data-testid="job-history-details">
+          <div :class="COMPONENTS.adminSystem.details" data-testid="job-history-details">
             <p>
-              <span class="font-semibold">Varighed</span> {{ row.original.durationMs }} ·
-              <span class="font-semibold">Kilde</span> {{ row.original.triggeredBy }}
+              <span :class="COMPONENTS.adminSystem.detailLabel">Varighed</span> {{ row.original.durationMs }} ·
+              <span :class="COMPONENTS.adminSystem.detailLabel">Kilde</span> {{ row.original.triggeredBy }}
             </p>
             <p>{{ row.original.resultSummary }}</p>
           </div>
@@ -506,9 +512,9 @@ const jobDefinitions = computed(() => {
     <!-- System Settings - App Config Tree -->
     <UCard>
       <template #header>
-        <div class="flex items-center gap-2">
-          <UIcon name="i-heroicons-adjustments-horizontal" class="text-lg" />
-          <span class="font-semibold">Systemindstillinger</span>
+        <div :class="COMPONENTS.adminSystem.panelHeader">
+          <UIcon :name="ICONS.preferences" :class="COMPONENTS.adminSystem.panelIcon" />
+          <span :class="COMPONENTS.adminSystem.panelTitle">Systemindstillinger</span>
         </div>
       </template>
 

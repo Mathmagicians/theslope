@@ -3,7 +3,9 @@
  * Following ADR-001: Business logic in composables
  * Following ADR-001: Import enums from validation composables (NOT from generated layer)
  */
-import type {OrderDisplay, OrderDetail} from '~/composables/useBookingValidation'
+import {useBookingValidation, TicketState, type OrderDisplay, type OrderDetail, type TicketType} from '~/composables/useBookingValidation'
+import {ticketStateOf} from '~/composables/useBooking'
+import {sumBy} from '~/utils/ledger'
 
 /**
  * Statistics for one dining mode in kitchen display
@@ -16,46 +18,16 @@ export interface DiningModeStats {
   orderCount: number
 }
 
-/**
- * Order display config structure (parallel to ticketTypeConfig in useTicket)
- */
-export interface OrderDisplayConfig {
-  label: string
-  color: 'primary' | 'error' | 'info' | 'neutral'
-  icon: string
-}
+export type SpendingFigures = {budgetGross: number, spentGross: number}
 
-/**
- * Formatted order display properties returned by formatOrder()
- */
-export interface FormattedOrder {
-  guest: OrderDisplayConfig | null
-  stateText: string
-  stateColor: OrderDisplayConfig['color']
-  stateIcon: string
-  isClaimed: boolean
-}
+const {OrderStateSchema, DinnerModeSchema} = useBookingValidation()
+const OrderState = OrderStateSchema.enum
+const DinnerMode = DinnerModeSchema.enum
 
 export const useOrder = () => {
   // Import enum schemas from validation layer (ADR-001)
-  const {OrderStateSchema, TicketTypeSchema} = useBookingValidation()
-  const OrderState = OrderStateSchema.enum
+  const {TicketTypeSchema} = useBookingValidation()
   const TicketType = TicketTypeSchema.enum
-
-  // Get icons from design system
-  const {ICONS} = useTheSlopeDesignSystem()
-
-  /**
-   * Order state display config keyed by OrderState enum + 'claimed' variant
-   * Claimed is BOOKED with provenance (overrides display)
-   */
-  const orderStateConfig = {
-    [OrderState.BOOKED]: { label: 'Bestilt', color: 'primary' as const, icon: ICONS.clipboard },
-    [OrderState.RELEASED]: { label: 'Frigivet', color: 'error' as const, icon: ICONS.released },
-    [OrderState.CLOSED]: { label: 'Lukket', color: 'neutral' as const, icon: ICONS.archive },
-    [OrderState.CANCELLED]: { label: 'Annulleret', color: 'error' as const, icon: ICONS.xMark },
-    claimed: { label: 'Købt fra anden', color: 'info' as const, icon: ICONS.claim }
-  }
 
   /**
    * Format guest label consistently across UI
@@ -66,110 +38,32 @@ export const useOrder = () => {
     bookerName ? `Gæst af ${bookerName}` : 'Gæst'
 
   /**
-   * Format order for display - returns all display properties
-   * @param order - Order to format
-   * @param bookerName - Optional booker name for guest tickets
-   */
-  const formatOrder = (order: OrderDisplay, bookerName?: string): FormattedOrder => {
-    const isClaimed = !!order.provenanceHousehold
-
-    // Claimed overrides BOOKED display
-    const stateConfig = (order.state === OrderState.BOOKED && isClaimed)
-      ? orderStateConfig.claimed
-      : orderStateConfig[order.state]
-
-    return {
-      guest: order.isGuestTicket ? {
-        label: formatGuestLabel(bookerName),
-        color: 'info',
-        icon: ICONS.userPlus
-      } : null,
-      stateText: stateConfig.label,
-      stateColor: stateConfig.color,
-      stateIcon: stateConfig.icon,
-      isClaimed
-    }
-  }
-
-  /**
-   * Check if order is active (counts for kitchen preparation)
-   * Active = BOOKED or CLOSED (not released for sale)
-   */
-  const isActiveOrder = (order: OrderDisplay): boolean => {
-    return order.state !== OrderState.RELEASED
-  }
-
-  /**
-   * Check if order is released (available for sale/swap)
-   */
-  const isReleasedOrder = (order: OrderDisplay): boolean => {
-    return order.state === OrderState.RELEASED
-  }
-
-  /**
-   * Filter orders by active state
+   * The orders the kitchen cooks for: every order not released
    * Generic to preserve OrderDisplay or OrderDetail type
    */
   const getActiveOrders = <T extends OrderDisplay>(orders: T[]): T[] => {
-    return orders.filter(o => isActiveOrder(o))
+    return orders.filter(o => ticketStateOf(o) !== TicketState.released)
   }
 
   /**
-   * Filter orders by released state
+   * The released orders
    * Generic to preserve OrderDisplay or OrderDetail type
    */
   const getReleasedOrders = <T extends OrderDisplay>(orders: T[]): T[] => {
-    return orders.filter(o => isReleasedOrder(o))
+    return orders.filter(o => ticketStateOf(o) === TicketState.released)
   }
 
-  /**
-   * Get portions for a ticket type (simple mapping)
-   * ADULT=1, CHILD=0.5, BABY=0
-   */
-  const getPortionsForTicketType = (ticketType: typeof TicketType[keyof typeof TicketType]): number => {
-    if (ticketType === TicketType.ADULT) return 1
-    if (ticketType === TicketType.CHILD) return 0.5
-    return 0 // BABY
-  }
-
-  /**
-   * Calculate portion count from ticket price
-   * TODO: When portionSize field is added to TicketPrice model, use that instead
-   * For now: Uses getPortionsForTicketType with description overrides for special cases
-   */
-  const getPortionsForTicketPrice = (ticketPrice: { ticketType: typeof TicketType[keyof typeof TicketType], description: string | null }): number => {
-    // Future: return ticketPrice.portionSize ?? 0
-
-    // For now: Use ticket type as base, with description overrides
-    const description = ticketPrice.description?.toLowerCase() || ''
-
-    // Special cases based on description
-    if (description.includes('sulten') || description.includes('hungry')) {
-      if (ticketPrice.ticketType === TicketType.BABY) return 0.25
-      if (ticketPrice.ticketType === TicketType.CHILD) return 0.75
-    }
-
-    // Default: delegate to simple ticket type mapping
-    return getPortionsForTicketType(ticketPrice.ticketType)
-  }
-
-  /**
-   * Calculate total portions from orders
-   * Uses order.ticketType (priceAtBooking preserves the price)
-   */
-  const calculateTotalPortionsFromPrices = (orders: OrderDetail[]): number => {
-    return orders.reduce((sum, order) => {
-      return sum + (order.ticketType ? getPortionsForTicketType(order.ticketType) : 0)
-    }, 0)
-  }
+  // The kitchen's count of the orders: a ticket weighs its price's portions; a ticket whose price row is gone weighs 0
+  const calculateTotalPortions = (orders: OrderDetail[]): number =>
+    sumBy(orders, order => order.ticketPrice?.portions ?? 0)
 
   /**
    * Group orders by ticket type with counts, portions, and revenue
    * Uses order.ticketType and priceAtBooking (frozen at booking time)
    */
   const groupByTicketType = (orders: OrderDetail[]) => {
-    const groups = new Map<string, {
-      ticketType: string
+    const groups = new Map<TicketType, {
+      ticketType: TicketType
       count: number
       portions: number
       unitPrice: number
@@ -196,7 +90,7 @@ export const useOrder = () => {
 
       const group = groups.get(ticketType)!
       group.count++
-      group.portions += getPortionsForTicketType(ticketType)
+      group.portions += order.ticketPrice?.portions ?? 0
       group.revenue += order.priceAtBooking
 
       const currentCount = group.descriptions.get(description) || 0
@@ -223,12 +117,9 @@ export const useOrder = () => {
    * @returns Array of stats per dining mode + RELEASED, with portion-based percentages
    */
   const calculateDiningModeStats = (orders: OrderDetail[]): DiningModeStats[] => {
-    const { DinnerModeSchema } = useBookingValidation()
-    const DinnerMode = DinnerModeSchema.enum
-
     const activeOrders = getActiveOrders(orders)
     const releasedOrders = getReleasedOrders(orders)
-    const totalPortions = calculateTotalPortionsFromPrices(orders)
+    const totalPortions = calculateTotalPortions(orders)
 
     const modes = [
       { key: DinnerMode.TAKEAWAY, label: 'TAKEAWAY' },
@@ -238,7 +129,7 @@ export const useOrder = () => {
 
     const stats: DiningModeStats[] = modes.map(({ key, label }) => {
       const modeOrders = activeOrders.filter(o => o.dinnerMode === key)
-      const portions = calculateTotalPortionsFromPrices(modeOrders)
+      const portions = calculateTotalPortions(modeOrders)
       const percentage = totalPortions > 0 ? Math.round((portions / totalPortions) * 100) : 0
 
       return {
@@ -251,9 +142,9 @@ export const useOrder = () => {
     })
 
     // Add released tickets panel
-    const releasedPortions = calculateTotalPortionsFromPrices(releasedOrders)
+    const releasedPortions = calculateTotalPortions(releasedOrders)
     stats.push({
-      key: 'RELEASED',
+      key: OrderState.RELEASED,
       label: 'TIL SALG',
       percentage: totalPortions > 0 ? Math.round((releasedPortions / totalPortions) * 100) : 0,
       portions: Math.round(releasedPortions),
@@ -279,7 +170,7 @@ export const useOrder = () => {
 
     // Apply minimum, track how much we've used
     const withMin = stats.map(s => ({ key: s.key, width: Math.max(s.percentage, minWidth) }))
-    const total = withMin.reduce((sum, s) => sum + s.width, 0)
+    const total = sumBy(withMin, s => s.width)
 
     // Scale to 100% if needed
     const scale = total > 0 ? 100 / total : 1
@@ -308,36 +199,48 @@ export const useOrder = () => {
   /**
    * Calculate budget breakdown from orders
    * Returns all financial figures for kitchen/chef planning
+   *
+   * Revenue counts every ticket that is paid: a ticket released after the booking deadline stays paid by its household
+   * or by the one who claims it, so it stays in the budget; kuverter are the kitchen's own count (getActiveOrders)
    */
   const calculateBudget = (
     orders: OrderDisplay[],
     kitchenBaseRatePercent = DEFAULT_KITCHEN_BASE_RATE_PERCENT,
     vatPercent = DEFAULT_VAT_PERCENT
   ) => {
-    const activeOrders = orders.filter(isActiveOrder)
-    const ticketCount = activeOrders.length
-    const totalRevenue = activeOrders.reduce((sum, o) => sum + o.priceAtBooking, 0)
+    const paidOrders = orders.filter(order => order.state !== OrderState.CANCELLED)
+    const ticketCount = paidOrders.length
+    const totalRevenue = sumBy(paidOrders, o => o.priceAtBooking)
     const kitchenContribution = Math.round(totalRevenue * kitchenBaseRatePercent / 100)
-    const kitchenContributionExVat = convertVat(kitchenContribution, vatPercent, true)
     const availableBudget = totalRevenue - kitchenContribution
-    const availableBudgetExVat = convertVat(availableBudget, vatPercent, true)
 
     return {
       ticketCount,
       totalRevenue,
       kitchenContribution,        // inkl. moms
-      kitchenContributionExVat,   // ex moms
       availableBudget,            // inkl. moms
-      availableBudgetExVat,       // ex moms (for grocery shopping)
       kitchenBaseRatePercent,
       vatPercent
     }
   }
 
+  /**
+   * The spending figures of a dinner or a run of dinners, gross øre: the allowance and what was spent. A sum over rows,
+   * what is left, and whether the figure still waits for tickets (no allowance yet) all come from here; components bind
+   */
+  /** A typed kroner amount as gross øre: an ex moms amount gains the VAT, an inkl. moms amount is the figure itself */
+  const typedKrToGrossOre = (amountKr: number, exVat: boolean, vatPercent: number = DEFAULT_VAT_PERCENT): number =>
+    exVat ? convertVat(Math.round(amountKr * 100), vatPercent, false) : Math.round(amountKr * 100)
+  /** The other unit of a typed kroner amount, for the hint beside the field */
+  const typedKrOtherUnitOre = (amountKr: number, exVat: boolean, vatPercent: number = DEFAULT_VAT_PERCENT): number =>
+    exVat ? typedKrToGrossOre(amountKr, true, vatPercent) : convertVat(Math.round(amountKr * 100), vatPercent, true)
+
+  const spendingTotals = (rows: SpendingFigures[]): SpendingFigures =>
+    ({budgetGross: sumBy(rows, row => row.budgetGross), spentGross: sumBy(rows, row => row.spentGross)})
+  const spendingLeft = (figures: SpendingFigures): number => figures.budgetGross - figures.spentGross
+  const spendingAwaitsTickets = (figures: SpendingFigures): boolean => figures.budgetGross === 0
+
   return {
-    // Order display formatting
-    orderStateConfig,
-    formatOrder,
     formatGuestLabel,
 
     // State filtering
@@ -346,8 +249,7 @@ export const useOrder = () => {
 
     // Grouping and calculations
     groupByTicketType,
-    calculateTotalPortionsFromPrices,
-    getPortionsForTicketPrice,
+    calculateTotalPortions,
     requiresChair,
 
     // Kitchen statistics
@@ -356,6 +258,11 @@ export const useOrder = () => {
 
     // Budget & VAT
     calculateBudget,
+    spendingTotals,
+    spendingLeft,
+    spendingAwaitsTickets,
+    typedKrToGrossOre,
+    typedKrOtherUnitOre,
     convertVat
   }
 }

@@ -3,13 +3,11 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {getValidatedRouterParams, setResponseStatus, createError} from "h3"
 import {fetchHousehold} from "~~/server/data/prismaRepository"
 import type {HouseholdDetail} from "~/composables/useCoreValidation"
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
 // Define schema for ID parameter
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('household ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
     const {cloudflare} = event.context
@@ -18,7 +16,7 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
     // Input validation try-catch - FAIL EARLY
     let id!: number
     try {
-        ({id}  = await getValidatedRouterParams(event, idSchema.parse))
+        ({id}  = await getValidatedRouterParams(event, paramSchema.parse))
     } catch (error) {
         throwH3Error('🏠 > HOUSEHOLD > [GET] Input validation error', error)
     }

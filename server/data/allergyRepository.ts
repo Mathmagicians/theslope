@@ -1,6 +1,5 @@
-import {PrismaD1} from "@prisma/adapter-d1"
-import {PrismaClient} from "@prisma/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
+import {getPrismaClientConnection} from '~~/server/utils/database'
 import type {
     AllergyTypeCreate,
     AllergyTypeUpdate,
@@ -14,16 +13,6 @@ import type {
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 
 const {throwH3Error} = eventHandlerHelper
-
-/**
- * Get Prisma client connection to D1 database
- */
-export async function getPrismaClientConnection(d1Client: D1Database) {
-    const adapter = new PrismaD1(d1Client)
-    const prisma = new PrismaClient({adapter})
-    await prisma.$connect()
-    return prisma
-}
 
 /*** ALLERGY TYPES ***/
 
@@ -263,44 +252,6 @@ export async function fetchAllergiesForHousehold(d1Client: D1Database, household
         return allergies.map(a => AllergyDetailSchema.parse(a))
     } catch (error) {
         return throwH3Error(`🏥 > ALLERGY > [GET]: Error fetching allergies for household ${householdId}`, error)
-    }
-}
-
-/**
- * Fetch all allergies for a specific allergy type (admin view)
- * Returns AllergyDetail (with allergyType + inhabitant relations)
- */
-export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergyTypeId: number): Promise<AllergyDetail[]> {
-    console.info(`🏥 > ALLERGY > [GET] Fetching allergies for allergy type ID ${allergyTypeId}`)
-    const prisma = await getPrismaClientConnection(d1Client)
-    const {AllergyDetailSchema} = useAllergyValidation()
-
-    try {
-        const allergies = await prisma.allergy.findMany({
-            where: {allergyTypeId},
-            include: {
-                allergyType: true,
-                inhabitant: {
-                    select: {
-                        id: true,
-                        heynaboId: true,
-                        userId: true,
-                        householdId: true,
-                        name: true,
-                        lastName: true,
-                        pictureUrl: true,
-                        birthDate: true
-                    }
-                }
-            }
-        })
-
-        console.info(`🏥 > ALLERGY > [GET] Successfully fetched ${allergies.length} allergies for allergy type ${allergyTypeId}`)
-
-        // Validate before returning (ADR-010)
-        return allergies.map(a => AllergyDetailSchema.parse(a))
-    } catch (error) {
-        return throwH3Error(`🏥 > ALLERGY > [GET]: Error fetching allergies for allergy type ${allergyTypeId}`, error)
     }
 }
 

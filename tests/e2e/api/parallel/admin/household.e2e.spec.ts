@@ -7,6 +7,8 @@ const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInf
 
 // Variables to store IDs for cleanup
 const testHouseholdIds: number[] = []
+// Seeded households renamed by a test; the cleanup puts the original name back
+const renamedHouseholds: {id: number, name: string}[] = []
 
 /**
  * Helper: Verify household response structure
@@ -48,17 +50,6 @@ function verifyLightweightInhabitant(inhabitant: InhabitantDisplay, context: str
 
 test.describe('Household /api/admin/household CRUD operations', () => {
 
-    test('PUT can create household with valid structure', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // Create household (factory validates 201 and id exists)
-        const household = await HouseholdFactory.createHousehold(context)
-        testHouseholdIds.push(household.id)
-
-        // Verify response structure (server validates against HouseholdDetail schema)
-        verifyHouseholdStructure(household, 'PUT household')
-    })
-
     // POST /api/household/[id]/update — self-service with optional admin bypass
     const updateCases = [
         {desc: 'member updates own household', actor: 'member' as const, ownHousehold: true, adminBypass: false, expected: 200},
@@ -75,6 +66,10 @@ test.describe('Household /api/admin/household CRUD operations', () => {
             const householdId = ownHousehold
                 ? (await getSessionUserInfo(memberContext)).householdId
                 : (await HouseholdFactory.createHousehold(adminContext, HouseholdFactory.defaultHouseholdData(temporaryAndRandom())).then(h => { testHouseholdIds.push(h.id); return h })).id
+            if (ownHousehold) {
+                const current = await HouseholdFactory.getHouseholdById(adminContext, householdId)
+                renamedHouseholds.push({id: householdId, name: current!.name})
+            }
 
             const result = await HouseholdFactory.updateHousehold(actorContext, householdId, {name: `Updated-${desc}`}, expected, adminBypass)
 
@@ -87,14 +82,15 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         })
     })
 
-    test('DELETE can remove household with valid structure', async ({browser}) => {
+    test('DELETE can remove household with valid structure, and a removed household answers 404', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
         // Create household
         const household = await HouseholdFactory.createHousehold(context)
+        testHouseholdIds.push(household.id)
 
         // Delete household
-        const [deletedHousehold] = await HouseholdFactory.deleteHousehold(context, household.id)
+        const [deletedHousehold] = await HouseholdFactory.deleteHousehold(context, household.id, 200)
 
         // Verify response structure (server validates against HouseholdDetail schema)
         expect(deletedHousehold).toBeDefined()
@@ -102,9 +98,9 @@ test.describe('Household /api/admin/household CRUD operations', () => {
 
         expect(deletedHousehold!.id).toBe(household.id)
 
-        // Verify household is deleted - should get 404
-        const response = await context.request.get(`/api/admin/household/${household.id}`)
-        expect(response.status()).toBe(404)
+        // Verify household is deleted - GET and DELETE answer 404
+        await HouseholdFactory.getHouseholdById(context, household.id, 404)
+        await HouseholdFactory.deleteHousehold(context, household.id, 404)
     })
 
     test('PUT can create household with inhabitants', async ({browser}) => {
@@ -175,12 +171,8 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         )
         testHouseholdIds.push(household.id)
 
-        // WHEN: Fetch household by ID (detail endpoint)
-        const response = await context.request.get(`/api/admin/household/${household.id}`)
-
-        // THEN: Response is valid HouseholdDetail (server validates against schema)
-        expect(response.status()).toBe(200)
-        const fetchedHousehold = await response.json()
+        // WHEN: Fetch household by ID (detail endpoint) - THEN: Response is valid HouseholdDetail (the factory parses it)
+        const fetchedHousehold = (await HouseholdFactory.getHouseholdById(context, household.id))!
 
         // Verify response structure
         verifyHouseholdStructure(fetchedHousehold, 'GET /api/admin/household/[id]')
@@ -199,47 +191,18 @@ test.describe('Household /api/admin/household CRUD operations', () => {
             HouseholdFactory.defaultHouseholdData(testSalt),
             2
         )
-        // Don't add to cleanup - we're testing deletion
+        testHouseholdIds.push(result.household.id)
 
         // Verify inhabitants were created
-        expect(result.household.id).toBeGreaterThan(0)
         expect(result.inhabitants.length).toBe(2)
 
         const inhabitantIds = result.inhabitants.map(i => i.id)
 
         // WHEN: Household is deleted
-        await HouseholdFactory.deleteHousehold(context, result.household.id)
+        await HouseholdFactory.deleteHousehold(context, result.household.id, 200)
 
         // THEN: All inhabitants should be cascade deleted
-        const checksAfter = await Promise.all(
-            inhabitantIds.map(id => context.request.get(`/api/admin/household/inhabitants/${id}`))
-        )
-        checksAfter.forEach(response => {
-            expect(response.status()).toBe(404)
-        })
-    })
-
-    // Parametrized 404 tests
-    test.describe('404 error handling', () => {
-        const nonExistentId = 99999
-
-        const testCases = [
-            {method: 'GET', description: 'GET detail'},
-            {method: 'DELETE', description: 'DELETE'}
-        ]
-
-        testCases.forEach(({method, description}) => {
-            test(`${description} returns 404 for non-existent household`, async ({browser}) => {
-                const context = await validatedBrowserContext(browser)
-
-                if (method === 'DELETE') {
-                    await HouseholdFactory.deleteHousehold(context, nonExistentId, 404)
-                } else {
-                    const response = await context.request.get(`/api/admin/household/${nonExistentId}`)
-                    expect(response.status()).toBe(404)
-                }
-            })
-        })
+        await Promise.all(inhabitantIds.map(id => HouseholdFactory.getInhabitantById(context, id, 404)))
     })
 
     test('createAtExistingAddress copies heynaboId + name from sibling (Phase 4 frontend flow)', async ({browser}) => {
@@ -249,7 +212,7 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         // GIVEN: a seed household at an address
         const seed = await HouseholdFactory.createHousehold(context, {
             ...HouseholdFactory.defaultHouseholdData(testSalt),
-            name: salt('Leaving', testSalt),
+            name: salt('Test Leaving', testSalt),
             address: salt('Shared Lane 7', testSalt),
             moveOutDate: new Date('2026-09-01')
         })
@@ -271,6 +234,10 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         expect(sibling.pbsId).not.toBe(seed.pbsId)
         expect(sibling.moveOutDate).toBeNull()
 
+        // THEN: each is fetchable by its own id
+        const fetchedSibling = await HouseholdFactory.getHouseholdById(context, sibling.id)
+        expect(fetchedSibling!.heynaboId).toBe(seed.heynaboId)
+
         // THEN: index returns both
         const all = await HouseholdFactory.getAllHouseholds(context)
         const siblingsAtAddress = all.filter(h => h.heynaboId === seed.heynaboId)
@@ -284,64 +251,23 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         const seed = await HouseholdFactory.createHousehold(context, HouseholdFactory.defaultHouseholdData(testSalt))
         testHouseholdIds.push(seed.id)
 
-        // Attempt to create another household reusing the same pbsId — server rejects.
-        // (Prisma unique constraint surfaces as 500 today; see proposal Phase 4: promote to 400.)
+        // A second household with the same pbsId conflicts with the unique constraint
         await HouseholdFactory.createAtExistingAddress(
             context,
             seed,
             {pbsId: seed.pbsId, movedInDate: new Date('2026-08-15')},
-            500
+            409
         )
-    })
-
-    test('two households with same heynaboId can coexist', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-        const testSalt = temporaryAndRandom()
-        const sharedHeynaboId = saltedId(900000, testSalt)
-        const sharedAddress = salt('Shared Street 1', testSalt)
-
-        // Create leaving household (has moveOutDate) and arriving household (no moveOutDate)
-        const leaving = await HouseholdFactory.createHousehold(context, {
-            heynaboId: sharedHeynaboId, pbsId: saltedId(900001, testSalt),
-            name: salt('Leaving', testSalt), address: sharedAddress,
-            movedInDate: new Date('2020-01-01'), moveOutDate: new Date('2026-06-01')
-        })
-        testHouseholdIds.push(leaving.id)
-
-        const arriving = await HouseholdFactory.createHousehold(context, {
-            heynaboId: sharedHeynaboId, pbsId: saltedId(900002, testSalt),
-            name: salt('Arriving', testSalt), address: sharedAddress,
-            movedInDate: new Date('2026-05-15'), moveOutDate: null
-        })
-        testHouseholdIds.push(arriving.id)
-
-        // Both share heynaboId but have distinct ids
-        expect(leaving.heynaboId).toBe(sharedHeynaboId)
-        expect(arriving.heynaboId).toBe(sharedHeynaboId)
-        expect(leaving.id).not.toBe(arriving.id)
-
-        // Both individually fetchable
-        const [fetchedLeaving, fetchedArriving] = await Promise.all([
-            HouseholdFactory.getHouseholdById(context, leaving.id),
-            HouseholdFactory.getHouseholdById(context, arriving.id)
-        ])
-        expect(fetchedLeaving!.heynaboId).toBe(sharedHeynaboId)
-        expect(fetchedArriving!.heynaboId).toBe(sharedHeynaboId)
-
-        // Index returns both
-        const response = await context.request.get('/api/admin/household')
-        const allHouseholds: HouseholdDisplay[] = await response.json()
-        expect(allHouseholds.filter(h => h.heynaboId === sharedHeynaboId).length).toBe(2)
     })
 
     // Cleanup after all tests
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
+        // Seeded households get their name back
+        await Promise.all(renamedHouseholds.map(({id, name}) => HouseholdFactory.updateHousehold(context, id, {name}, 200, true)))
+
         // Clean up all created households
-        await Promise.all(testHouseholdIds.map(id => HouseholdFactory.deleteHousehold(context, id).catch(error => {
-            // Ignore cleanup errors
-            console.warn(`Failed to cleanup household ${id}:`, error)
-        })))
+        await HouseholdFactory.deleteHousehold(context, testHouseholdIds)
     })
 })

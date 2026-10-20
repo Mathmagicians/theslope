@@ -1,11 +1,12 @@
-import {Prisma} from "@prisma/client"
-import {ZodError} from "zod"
+import {Prisma} from "~~/prisma/generated/client/client"
+import {z, ZodError} from "zod"
 import {H3Error} from "h3"
 import type {H3Event} from 'h3'
 import type {NuxtError} from 'nuxt/app'
 import type {UserDetail} from '~/composables/useCoreValidation'
 
 const PRISMA_RECORD_NOT_FOUND = 'P2025'
+const PRISMA_UNIQUE_VIOLATION = 'P2002'
 
 /**
  * Check if error is Prisma "record not found" (P2025)
@@ -13,6 +14,11 @@ const PRISMA_RECORD_NOT_FOUND = 'P2025'
  */
 const isPrismaNotFound = (error: unknown): boolean =>
     error instanceof Prisma.PrismaClientKnownRequestError && error.code === PRISMA_RECORD_NOT_FOUND
+
+// A unique violation, raw from Prisma or already mapped to 409 by throwH3Error
+const isConflict = (error: unknown): boolean =>
+    (error instanceof H3Error && error.statusCode === 409)
+    || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === PRISMA_UNIQUE_VIOLATION)
 
 type SerializableError = {
     name: string
@@ -41,7 +47,7 @@ const getSerializableCause = (error: unknown): SerializableError => {
             message: error.message,
             issues: error.issues.map(issue => ({
                 code: issue.code,
-                path: issue.path,
+                path: issue.path.map(segment => typeof segment === 'symbol' ? String(segment) : segment),
                 message: issue.message
             }))
         }
@@ -79,12 +85,8 @@ const nuxtErrorFromCatch = (prepend: string = 'uh oh, an error', error: unknown,
     if (error instanceof ZodError || errorCause?.status === 400 || errorCause?.statusMessage === 'Validation Error') {
         let causeMessage = errorCause?.message || ''
 
-        // If ZodError, extract detailed validation issues
         if (error instanceof ZodError) {
-            const issueDetails = error.issues.map(issue =>
-                `${issue.path.join('.')}: ${issue.message}`
-            ).join(', ')
-            causeMessage = issueDetails || error.message
+            causeMessage = z.prettifyError(error)
         }
 
         return createError({
@@ -124,6 +126,13 @@ const nuxtErrorFromPrismaError = (prepend: string = 'uh oh, a prisma error', err
         statusCode: 404,
         statusMessage: 'Not Found',
         message: `${prepend}: Record not found in database: ${error.message} (Code: ${error.code})`,
+        cause: getSerializableCause(error)
+    })
+
+    if (error.code === PRISMA_UNIQUE_VIOLATION) return createError({
+        statusCode: 409,
+        statusMessage: 'Conflict',
+        message: `${prepend}: Record already exists: ${error.message} (Code: ${error.code})`,
         cause: getSerializableCause(error)
     })
 
@@ -205,6 +214,7 @@ const getSessionUserId = async (event: H3Event): Promise<number | null> => {
 
 const eventHandlerHelper = {
     isPrismaNotFound,
+    isConflict,
     nuxtErrorFromCatch,
     nuxtErrorFromPrismaError,
     logNuxtError,

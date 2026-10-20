@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
+import type {Form, FormSubmitEvent} from '@nuxt/ui'
+import type {AllergyTypeCreate, AllergyTypeDetail} from '~/composables/useAllergyValidation'
+import {FORM_MODES} from '~/types/form'
 
 // Design system
-const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, TYPOGRAPHY, TEXT, RING, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, TYPOGRAPHY, TEXT, RING, getRandomEmptyMessage, NOISE } = useTheSlopeDesignSystem()
 
 // PROPS - allergyType absent in edit mode means CREATE.
 // householdShortNames is supplied by the parent (ADR-007: no server data in this card).
 const props = defineProps<{
   allergyType?: AllergyTypeDetail
-  mode?: 'view' | 'edit'
+  mode?: typeof FORM_MODES.VIEW | typeof FORM_MODES.EDIT
   compact?: boolean
   householdShortNames?: Record<number, string>
 }>()
@@ -16,18 +18,20 @@ const props = defineProps<{
 const getHouseholdShortName = (householdId: number) => props.householdShortNames?.[householdId] ?? ''
 
 // Age category badge - the active season's ticket prices carry the age limits
-const {getTicketTypeConfig} = useTicket()
 const {activeSeason} = storeToRefs(usePlanStore())
 const ageBadge = (birthDate: Date | null | undefined) =>
-    getTicketTypeConfig(birthDate ?? null, activeSeason.value?.ticketPrices)
+    resolveTicketTypePresentation(birthDate ?? null, activeSeason.value?.ticketPrices)
 
 // EMITS
 const emit = defineEmits<{
-  save: [data: {name: string, description: string, icon?: string}]
+  save: [data: AllergyTypeCreate]
   cancel: []
 }>()
 
 // FORM STATE (edit mode only) - empty when creating
+const {AllergyTypeCreateSchema} = useAllergyValidation()
+const formRef = useTemplateRef<Form<AllergyTypeCreate>>('formRef')
+
 const resetForm = () => ({
   name: props.allergyType?.name ?? '',
   description: props.allergyType?.description ?? '',
@@ -42,13 +46,7 @@ watch(() => props.allergyType, () => {
 })
 
 // HANDLERS
-const handleSave = () => {
-  emit('save', {
-    name: formData.value.name,
-    description: formData.value.description,
-    icon: formData.value.icon ?? undefined
-  })
-}
+const handleSave = (event: FormSubmitEvent<AllergyTypeCreate>) => emit('save', event.data)
 
 const handleCancel = () => {
   formData.value = resetForm()
@@ -68,34 +66,42 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
 
 <template>
   <!-- EDIT MODE -->
-  <div v-if="mode === 'edit'" data-testid="allergy-type-form" class="w-full max-w-2xl space-y-4">
-    <h3 class="text-md font-semibold">{{ isCreate ? 'Opret allergi' : 'Rediger allergi' }}</h3>
+  <UForm
+      v-if="mode === FORM_MODES.EDIT"
+      ref="formRef"
+      :schema="AllergyTypeCreateSchema"
+      :state="formData"
+      data-testid="allergy-type-form"
+      :class="COMPONENTS.allergyTypeCard.form"
+      @submit="handleSave"
+  >
+    <h3 :class="COMPONENTS.allergyTypeCard.formTitle">{{ isCreate ? 'Opret allergi' : 'Rediger allergi' }}</h3>
 
-    <UFormField label="Navn" required>
+    <UFormField label="Navn" name="name" required>
       <UInput
           v-model="formData.name"
           placeholder="F.eks. Jordnødder"
           name="allergy-name"
-          class="w-full"
+          :class="COMPONENTS.allergyTypeCard.field"
       />
     </UFormField>
 
-    <UFormField label="Ikon (emoji)">
+    <UFormField label="Ikon (emoji)" name="icon">
       <UInput
           v-model="formData.icon"
           placeholder="F.eks. 🥜"
           name="allergy-icon"
-          class="w-full"
+          :class="COMPONENTS.allergyTypeCard.field"
       />
     </UFormField>
 
-    <UFormField label="Beskrivelse" required>
+    <UFormField label="Beskrivelse" name="description" required>
       <UTextarea
           v-model="formData.description"
           placeholder="Beskriv allergien..."
           name="allergy-description"
           :rows="3"
-          class="w-full"
+          :class="COMPONENTS.allergyTypeCard.field"
       />
     </UFormField>
 
@@ -111,33 +117,32 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
       <UButton
           v-bind="BUTTONS.save"
           :class="LAYOUTS.cardActionButton"
-          :disabled="!formData.name || !formData.description"
           data-testid="save-allergy-type"
-          @click="handleSave"
+          @click="formRef?.submit()"
       >
         Gem
       </UButton>
     </div>
-  </div>
+  </UForm>
 
   <!-- COMPACT VIEW -->
-  <div v-else-if="allergyType && compact" class="flex items-center gap-3 p-3">
+  <div v-else-if="allergyType && compact" :class="COMPONENTS.allergyTypeCard.compact">
     <!-- Icon -->
-    <div :class="['flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 flex-shrink-0', RING.red[700]]">
+    <div :class="[COMPONENTS.allergyTypeCard.compactGlyph, RING.red[700]]">
       <UIcon
           v-if="allergyType.icon?.startsWith('i-')"
           :name="allergyType.icon"
-          class="text-xl"
+          :class="COMPONENTS.allergyTypeCard.compactIcon"
       />
-      <span v-else class="text-xl">
+      <span v-else :class="COMPONENTS.allergyTypeCard.compactIcon">
         {{ allergyType.icon || '🏷️' }}
       </span>
     </div>
 
     <!-- Content -->
-    <div class="flex-1 min-w-0">
-      <div class="flex items-center gap-2">
-        <h4 class="font-medium text-sm">{{ allergyType.name }}</h4>
+    <div :class="COMPONENTS.allergyTypeCard.content">
+      <div :class="COMPONENTS.allergyTypeCard.titleRow">
+        <h4 :class="COMPONENTS.allergyTypeCard.compactName">{{ allergyType.name }}</h4>
         <UIcon v-if="hasRecentAllergies" :name="ICONS.new" :class="COMPONENTS.rowIconClass"/>
       </div>
       <p :class="[TYPOGRAPHY.finePrint, TEXT.toned]">
@@ -147,51 +152,51 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
   </div>
 
   <!-- FULL VIEW -->
-  <div v-else-if="allergyType" class="space-y-4">
+  <div v-else-if="allergyType" :class="COMPONENTS.allergyTypeCard.full">
     <!-- Header with Icon and Title -->
-    <div class="flex items-start gap-4">
-      <div :class="['flex items-center justify-center w-16 h-16 rounded-full ring-1 md:ring-2 flex-shrink-0', RING.red[700]]">
+    <div :class="COMPONENTS.allergyTypeCard.header">
+      <div :class="[COMPONENTS.allergyTypeCard.fullGlyph, RING.red[700]]">
         <UIcon
             v-if="allergyType.icon?.startsWith('i-')"
             :name="allergyType.icon"
-            class="text-3xl"
+            :class="COMPONENTS.allergyTypeCard.fullIcon"
         />
-        <span v-else class="text-3xl">
+        <span v-else :class="COMPONENTS.allergyTypeCard.fullIcon">
           {{ allergyType.icon || '🏷️' }}
         </span>
       </div>
 
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2">
-          <h3 class="text-lg font-semibold break-words">{{ allergyType.name }}</h3>
+      <div :class="COMPONENTS.allergyTypeCard.content">
+        <div :class="COMPONENTS.allergyTypeCard.titleRow">
+          <h3 :class="COMPONENTS.allergyTypeCard.fullName">{{ allergyType.name }}</h3>
           <UIcon v-if="hasRecentAllergies" :name="ICONS.new" :class="COMPONENTS.rowIconClass"/>
         </div>
-        <p :class="[TYPOGRAPHY.bodyTextMuted, 'mt-1 break-words']">
+        <p :class="[TYPOGRAPHY.bodyTextMuted, COMPONENTS.allergyTypeCard.description]">
           {{ allergyType.description }}
         </p>
       </div>
     </div>
 
     <!-- Inhabitants List -->
-    <div v-if="allergyType.inhabitants && allergyType.inhabitants.length > 0" class="space-y-3">
+    <div v-if="allergyType.inhabitants && allergyType.inhabitants.length > 0" :class="COMPONENTS.allergyTypeCard.inhabitantSection">
       <h4 :class="TYPOGRAPHY.sectionSubheading">
         Berørte beboere ({{ inhabitantCount }})
       </h4>
 
-      <div class="space-y-3">
+      <div :class="COMPONENTS.allergyTypeCard.inhabitantList">
         <div
             v-for="inhabitant in allergyType.inhabitants"
             :key="inhabitant.id"
-            class="space-y-2"
+            :class="COMPONENTS.allergyTypeCard.inhabitant"
         >
           <!-- Inhabitant with avatar and name; household + age category as per-person badges -->
           <UserListItem :inhabitants="inhabitant">
             <template #badge="{inhabitant: listed}">
-              <div class="flex items-center gap-1">
+              <div :class="COMPONENTS.allergyTypeCard.badges">
                 <UBadge
                     v-if="getHouseholdShortName(listed.householdId)"
                     :color="COLOR.neutral"
-                    variant="subtle"
+                    :variant="NOISE.subtle"
                     :size="SIZES.small"
                     :icon="ICONS.household"
                 >
@@ -199,7 +204,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
                 </UBadge>
                 <UBadge
                     :color="ageBadge(listed.birthDate).color"
-                    variant="subtle"
+                    :variant="NOISE.subtle"
                     :size="SIZES.small"
                     data-testid="inhabitant-age-badge"
                 >
@@ -210,8 +215,8 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
           </UserListItem>
 
           <!-- Additional info: Comment and timestamp -->
-          <div v-if="inhabitant.inhabitantComment || inhabitant.allergyUpdatedAt" class="pl-14 space-y-1">
-            <div v-if="inhabitant.inhabitantComment" :class="[TYPOGRAPHY.finePrint, TEXT.strong, 'italic']">
+          <div v-if="inhabitant.inhabitantComment || inhabitant.allergyUpdatedAt" :class="COMPONENTS.allergyTypeCard.details">
+            <div v-if="inhabitant.inhabitantComment" :class="[TYPOGRAPHY.finePrint, TEXT.strong, COMPONENTS.allergyTypeCard.comment]">
               "{{ inhabitant.inhabitantComment }}"
             </div>
             <!-- NuxtTime: wall-clock text can never match between SSR and hydration -->

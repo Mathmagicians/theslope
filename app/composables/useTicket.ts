@@ -1,43 +1,37 @@
-import {useBookingValidation} from '~/composables/useBookingValidation'
-import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import {useBookingValidation, type TicketType} from '~/composables/useBookingValidation'
+import type {TicketPrice, PortionTicket} from '~/composables/useTicketPriceValidation'
 import {calculateAgeOnDate} from '~/utils/date'
 
-/**
- * UI configuration for ticket type display
- */
-export interface TicketTypeConfig {
-    label: string
-    compactLabel: 'V' | 'B' | 'b'
-    color: 'primary' | 'success' | 'neutral'
-    icon: string
+const {TicketTypeSchema} = useBookingValidation()
+const TicketType = TicketTypeSchema.enum
+
+// The words a ticket type goes by: its label, its letter in a ticket count ("2V 1B"), and its noun for one and for many;
+// its colour and glyph live in useBookingUi (ADR-017)
+const ticketTypeWords: Record<TicketType, {label: string, letter: string, one: string, many: string}> = {
+    [TicketType.ADULT]: {label: 'Voksen', letter: 'V', one: 'voksen', many: 'voksne'},
+    [TicketType.CHILD]: {label: 'Barn', letter: 'B', one: 'barn', many: 'børn'},
+    [TicketType.BABY]: {label: 'Baby', letter: 'b', one: 'baby', many: 'babyer'}
 }
 
-/**
- * Ticket price item for USelectMenu display
- */
-export interface TicketPriceSelectItem {
-    id: number | undefined
-    ticketType: 'ADULT' | 'CHILD' | 'BABY'
-    price: number
-    config: TicketTypeConfig
-    label: string
-    description?: string
-}
+/** A ticket type's label: "Voksen" */
+export const ticketTypeLabel = (type: TicketType): string => ticketTypeWords[type].label
+
+/** A ticket type's letter in a ticket count: "V" */
+export const ticketTypeLetter = (type: TicketType): string => ticketTypeWords[type].letter
+
+/** A count of one ticket type in words: "1 barn", "8 voksne" */
+export const ticketTypeCount = (type: TicketType, count: number): string =>
+    `${count} ${count === 1 ? ticketTypeWords[type].one : ticketTypeWords[type].many}`
 
 /**
  * Business logic for working with tickets and ticket types
  *
  * Handles:
  * - Ticket type determination based on age and season pricing
- * - Ticket type display configuration (labels, colors, icons)
+ * - The portions a ticket weighs, from the default prices in app config
  * - Ticket-related domain operations
- * - Default ticket prices from app config
  */
 export const useTicket = () => {
-    // Get ticket type enum from validation composable
-    const {TicketTypeSchema} = useBookingValidation()
-    const TicketType = TicketTypeSchema.enum
-
     /**
      * Get default ticket prices from app config
      * Used as fallback when no season ticket prices are available
@@ -47,30 +41,14 @@ export const useTicket = () => {
         return appConfig.theslope?.defaultSeason?.ticketPrices ?? []
     }
 
-    /**
-     * UI configuration for ticket type display
-     * Maps ticket types to their display properties (label, color, icon)
-     */
-    const ticketTypeConfig = {
-        [TicketType.ADULT]: {
-            label: 'Voksen',
-            compactLabel: 'V' as const,
-            color: 'primary' as const,
-            icon: 'i-heroicons-user'
-        },
-        [TicketType.CHILD]: {
-            label: 'Barn',
-            compactLabel: 'B' as const,
-            color: 'success' as const,
-            icon: 'i-heroicons-user-circle'
-        },
-        [TicketType.BABY]: {
-            label: 'Baby',
-            compactLabel: 'b' as const,
-            color: 'neutral' as const,
-            icon: 'i-heroicons-face-smile'
-        }
+    // The default price with the ticket's type and price names its portions, else its type's first default price
+    const portionsOf = ({ticketType, price}: PortionTicket): number => {
+        const ofType = getDefaultTicketPrices().filter(defaultPrice => defaultPrice.ticketType === ticketType)
+        return (ofType.find(defaultPrice => defaultPrice.price === price) ?? ofType[0])?.portions ?? 0
     }
+
+    // A price row read from the database, with the portions the row does not store
+    const withPortions = <T extends PortionTicket>(ticketPrice: T): T & {portions: number} => ({...ticketPrice, portions: portionsOf(ticketPrice)})
 
     /**
      * Determine ticket type based on age and season ticket prices
@@ -121,33 +99,30 @@ export const useTicket = () => {
     }
 
     /**
-     * Get ticket type configuration for display (label, color, icon)
-     * Uses resolveTicketPrice internally for DRY code path.
+     * The ticket type of a person or an order: the resolved price's type, else the age limits'
      *
      * @param birthDate - Date of birth (preferred for inhabitants)
      * @param ticketPrices - Season ticket prices
      * @param referenceDate - Date to calculate age on (default: today)
      * @param priceAtBooking - Frozen price from order (fallback for guests/orphans)
-     * @returns Ticket type display config (label, color, icon)
      */
-    const getTicketTypeConfig = (
+    const resolveTicketType = (
         birthDate: Date | null,
         ticketPrices?: TicketPrice[],
         referenceDate?: Date,
         priceAtBooking?: number | null
-    ) => {
+    ): TicketType => {
         const resolved = resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
         // Without a resolvable price (e.g. empty price list) the age limits still decide the category
-        const ticketType = resolved?.ticketType ?? determineTicketType(birthDate, ticketPrices, referenceDate)
-        return ticketTypeConfig[ticketType]
+        return resolved?.ticketType ?? determineTicketType(birthDate, ticketPrices, referenceDate)
     }
 
     /**
      * Group inhabitants into ticket categories, classified live from birthDate.
      * Inhabitant counterpart to useOrder.groupByTicketType (which buckets orders
      * by their frozen ticketType). Returns all categories in fixed ADULT, CHILD,
-     * BABY order (empty ones included) with the shared display config; each
-     * inhabitant is stamped with its ticketType so results feed formatTicketCounts directly.
+     * BABY order (empty ones included); each inhabitant is stamped with its ticketType
+     * so results feed formatTicketCounts directly.
      */
     const groupInhabitantsByTicketCategory = <T extends {birthDate?: Date | null}>(
         inhabitants: T[],
@@ -160,7 +135,7 @@ export const useTicket = () => {
         }))
         return [TicketType.ADULT, TicketType.CHILD, TicketType.BABY].map(ticketType => {
             const members = classified.filter(i => i.ticketType === ticketType)
-            return {ticketType, config: ticketTypeConfig[ticketType], inhabitants: members, count: members.length}
+            return {ticketType, inhabitants: members, count: members.length}
         })
     }
 
@@ -228,42 +203,6 @@ export const useTicket = () => {
     }
 
     /**
-     * @deprecated Use resolveTicketPrice instead
-     * Get the matching TicketPrice for an inhabitant based on their age
-     */
-    const getTicketPriceForInhabitant = (
-        birthDate: Date | null,
-        ticketPrices?: TicketPrice[],
-        referenceDate?: Date
-    ): TicketPrice | undefined => {
-        return resolveTicketPrice(birthDate, undefined, ticketPrices, referenceDate)
-    }
-
-    /**
-     * Get ticket prices formatted for USelectMenu display
-     * Each item includes config for styled badge rendering
-     *
-     * @param ticketPrices - Season ticket prices
-     * @param compact - If true, only label + price. If false, include description + age limit
-     * @returns Items with id, label, description, and config for styled display
-     */
-    const getTicketPriceSelectItems = (ticketPrices: TicketPrice[], compact = false): TicketPriceSelectItem[] =>
-        ticketPrices.map(p => {
-            const config = ticketTypeConfig[p.ticketType]
-            const ageLimit = p.maximumAgeLimit ? `Under ${p.maximumAgeLimit} år` : undefined
-            const description = compact ? undefined : [ageLimit, p.description].filter(Boolean).join(' · ') || undefined
-
-            return {
-                id: p.id,
-                ticketType: p.ticketType,
-                price: p.price,
-                config,
-                label: `${config.label} · ${formatPrice(p.price)} kr`,
-                description
-            }
-        })
-
-    /**
      * Convert price from øre to DKK (integer)
      * @param dkkFraction - Price in øre (100 øre = 1 kr)
      * @returns Price in DKK as integer
@@ -278,14 +217,13 @@ export const useTicket = () => {
     const formatPrice = (dkkFraction: number): string => convertPriceToDecimalFormat(dkkFraction).toLocaleString('da-DK')
 
     return {
-        ticketTypeConfig,
         determineTicketType,
-        getTicketTypeConfig,
+        resolveTicketType,
         groupInhabitantsByTicketCategory,
         findTicketPriceByType,
         resolveTicketPrice,
-        getTicketPriceForInhabitant,
-        getTicketPriceSelectItems,
+        portionsOf,
+        withPortions,
         convertPriceToDecimalFormat,
         formatPrice
     }

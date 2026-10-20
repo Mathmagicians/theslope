@@ -1,192 +1,69 @@
 # theslope
 
-## 🖥️ User Interface
+The community dining app for Skråningen: the dinner calendar, bookings and the waiting list, cooking teams, allergies
+and billing. Nuxt on Cloudflare Workers with a D1 database. Every document and what it holds: [docs/README.md](docs/README.md).
 
-### Navigation
-#### Admin URLs
-- **Admin Dashboard**: `/admin` (redirects to `/admin/planning`)
-- **Planning**: `/admin/planning` - Plan dinners, events, calendar, seasons
-- **Households**: `/admin/households` - Manage households, allergies, moves
-- **Allergies**: `/admin/allergies` - View and manage allergies, print poster
-- **Users**: `/admin/users` - Import HeyNabo data, manage users
-- **Economy**: `/admin/economy` - Financial overview, chef budgets, PBS reports
-- **Settings**: `/admin/settings` - System configuration
+## Develop
 
-## 👩🏽‍💻How to develop
-- npm + node  installeret
-- git installeret
-
-### 🌍 Development Environments
-
-TheSlope uses **three distinct Wrangler environments** defined in `wrangler.toml`:
-
-| Environment | Worker Name | Database | Usage | URL |
-|-------------|-------------|----------|-------|-----|
-| **Top-level (local)** | `theslope-local` | `theslope` (local D1) | Local development (`nuxt dev`, Playwright tests) | `localhost:3000` |
-| **dev** | `theslope-dev` | `theslope` (remote D1) | Dev deployment (PRs, testing) | `dev.skraaningen.dk` |
-| **prod** | `theslope-prod` | `theslope-prod` (remote D1) | Production deployment | `www.skraaningen.dk` |
-
-###  🏗️ Start applikationen lokalt
-Clone the repo from github:
+Requires Node and npm.
 
 ```bash
-git clone https://github.com/your-org/theslope.git
+git clone https://github.com/Mathmagicians/theslope.git
 cd theslope
 npm install
+npm run dev          # http://localhost:3000, the API under /api, the local D1 database
 ```
 
-Run on development server (uses **top-level** environment):
+| Command | Runs |
+|---|---|
+| `npm run pre:all` | Lint and the typechecks, the CI gate |
+| `npm run test:unit` | Vitest: unit and component specs |
+| `npm run test:e2e` | Playwright: API and UI specs against the dev server |
+
+The test rules, helpers and factories: [docs/testing.md](docs/testing.md). The full command list: [CLAUDE.md](CLAUDE.md) § Commands.
+Utility targets (Heynabo calls, imports, deploys) live in the [Makefile](Makefile).
+
+## Environments
+
+| Environment | Worker | Database | URL |
+|---|---|---|---|
+| local (top level of `wrangler.toml`) | `theslope-local` | `theslope`, local D1 | `localhost:3000` |
+| dev | `theslope-dev` | `theslope`, remote D1 | `dev.skraaningen.dk` |
+| prod | `theslope-prod` | `theslope-prod`, remote D1 | `www.skraaningen.dk` |
+
+Deploy, release, the sender worker, secrets and the Cloudflare resources: [docs/ops-runbook.md](docs/ops-runbook.md).
+
+## Architecture
+
+C4, two levels. The context is drawn by hand; the containers come from `wrangler.toml`, `workers/sender/wrangler.toml` and
+`nuxt.config.ts` through `make c4`, which also renders both diagrams to SVG (`docs/architecture/`).
+
+![C4 system context](docs/architecture/c4-context.svg)
+
+![C4 containers](docs/architecture/c4-container.svg)
+
+## Database
+
+D1 (SQLite) through Prisma. The model is `prisma/schema.prisma`; schema and migration work follows
+[.claude/skills/prisma/SKILL.md](.claude/skills/prisma/SKILL.md), and the Make targets produce every migration file.
 
 ```bash
-npm run dev  # Uses theslope-local worker with local D1 database
+make d1-create-migration name=<name>   # a migration from the schema change
+make d1-flatten-migrations             # copy it into migrations/, the directory wrangler applies
+make d1-prisma                         # the generated client and the zod enums
+make d1-migrate-local                  # apply and seed the local database
+make d1-migrate-dev                    # apply to dev; d1-migrate-prod for prod
+npx wrangler d1 execute theslope --local --command="SELECT * FROM User"   # --remote for dev
 ```
 
-- Frontend is available on `localhost:3000`.
-- Api is available on `localhost:3000/api`.
-- Tailwind styles are on `localhost:3000/_tailwind`.
-- Lint inspector: run `npx @eslint/config-inspector.` and browse on` ` http://localhost:7777 `
-- Nuxt DevTools is enabled by default in Nuxt v3.8.0. You can press Shift + Alt / ⇧ Shift + ⌥ Option + D in your app to open it up.
+D1 runs no transactions: a delete relies on the schema's cascades (ADR-005 in [docs/adr.md](docs/adr.md)).
+Cloudflare's guide: [D1 and Prisma ORM](https://developers.cloudflare.com/d1/tutorials/d1-and-prisma-orm/).
 
-**Local database operations** (NO --env flag):
-```bash
-npm run db:migrate:local      # Apply migrations to local database
-npm run db:seed:local         # Seed local database with test data
-npx wrangler d1 execute theslope --local --command="SELECT * FROM User"
-```
+To recreate a database: `npx wrangler d1 delete theslope`, `npx wrangler d1 create theslope`, put the new id in
+`wrangler.toml`, then `make d1-migrate-local` (or the environment's target).
 
-### 🚀 Deploy to Cloudflare
+## Heynabo
 
-**Deploy to dev environment:**
-```bash
-npm run deploy  # Builds and deploys to dev.skraaningen.dk (theslope-dev worker)
-```
-
-**Deploy to production environment:**
-```bash
-npm run deploy:prod  # Builds and deploys to www.skraaningen.dk (theslope-prod worker)
-```
-
-**Remote database operations:**
-```bash
-# Dev environment
-npm run db:migrate            # Migrate remote dev database
-npm run db:seed               # Seed remote dev database
-
-# Prod environment
-npm run db_prod:migrate       # Migrate remote prod database
-npm run db_prod:seed          # Seed remote prod database
-```
-
-Useful commands are defined in the [Makefile](./Makefile)
-
-## 🤖 How to test
-Check out more information at: [test documentation](docs/testing.md)
-```bash
-npm run test:e2e # run e2e tests
-npm run test # run unit & component tests
-```
-### Test environments
--  Heynabo test space: - [ ] https://demo.spaces.heynabo.com/, bruger mail `agata@mathmagicians.dk`, kode spørg @themathmagician
-
-## Tech stuff
-
-### Tech Stack
-- Tailwind CSS - frontend css framework
-- Nuxt.js 3  + typescript - frontend framework
-- Nuxt.js 3  + typescript - server backend
-- Cloudflare - serverless deployment  / cloud provider
-- SQLite - database D1 from cloudflare. Note, does not support transactions
-- CICD - Github actions
-- Andre cloud resourcer - Terraform
-
-Note about databse - it doesnt support transactions:
-```
-  ℹ 👥 > TEAM > [CREATE] Creating team team-for-removal-1759187480120                                                                  01.11.20
-[01.11.20] ℹ prisma:warn Cloudflare D1 does not support transactions yet. 
-When using Prisma's D1 adapter, implicit & explicit transactions will be ignored and run as individual queries, which breaks the guarantees of the ACID properties of transactions. For more details see https://pris.ly/d/d1-transactions
-```
-
-### 3️⃣ 3rd party services
-#### Heynabo
-- Heynabo API - se  [dokumentation](https://heynabo.atlassian.net/wiki/external/N2QzNGVkM2ZiMzg1NDkwZDk2NTBiYWYyMzA0ZWJjNmQ)
-- There is a Makefile to test the heynabo api. you must have an .env file with username and password. Fx the following will return a list of neighbors:
-```make heynabo-get-nhbrs-dev```
-
-
-## 📚 Documentation
-
-### Architecture & Compliance
-
-**Critical:** TheSlope follows strict Architecture Decision Records (ADRs) to ensure consistency and quality.
-
-- **[ADR Documentation](docs/adr.md)** - Architecture patterns and decisions
-- **[Backend Compliance](docs/adr-compliance-backend.md)** - API endpoint ADR compliance tracking
-- **[Frontend Compliance](docs/adr-compliance-frontend.md)** - Component, store, and route ADR compliance tracking
-
-**When to update compliance documents:**
-- ✅ After implementing new API endpoints (update backend compliance)
-- ✅ After creating new components or stores (update frontend compliance)
-- ✅ When test coverage changes (update test status columns)
-- ✅ When fixing ADR violations (mark as compliant)
-
-**How to keep docs DRY:**
-- Compliance docs reference ADRs, don't duplicate them
-- Component tables show routes without duplicating route documentation
-- Status markers (✅ ⚠️ ❌) provide quick overview without verbose explanations
-
-### NPM
-We have the standard npm scripts defined in `package.json`. Here are some key ones:
-- `npm run dev` - Start local development server
-- `npm run test:e2e` - Run end-to-end tests
-- `npm run lint:all` - Run linter and ts checker
-### Database - schemas, ORM, migrations
-We use D1 - a cloudflare database built on top of SQLite with Prisma ORM for the repository client.
-
-See [Development Environments](#-development-environments) for information about local, dev, and prod database configurations.
-
-#### Database Setup Process
-
-##### Creating a new database
-```bash
-npx wrangler d1 create theslope
-```
-
-After creating the database, update the database ID in `wrangler.toml`.
-
-##### Schema Management
-1. Define your data models in `prisma/schema.prisma`
-2. Generate migration:
-   ```bash
-   # Initial migration
-   make d1-create-migration name=initial
-
-   # Subsequent migrations
-   make d1-create-migration name=add_feature_name
-   ```
-3. Generate Prisma client: `make d1-prisma`
-4. Apply migrations:
-   - Local: `make d1-migrate-local` (applies migrations + seeds)
-   - Dev: `make d1-migrate-dev`
-   - Production: `make d1-migrate-prod`
-   - All: `make d1-migrate-all`
-
-> ⚠️ Important: Follow [Cloudflare's guidelines](https://developers.cloudflare.com/d1/tutorials/d1-and-prisma-orm/) for D1 and Prisma, not the standard Prisma migration model.
-
-##### Database Recreation
-If you need to recreate the database completely:
-1. Delete the database: `npx wrangler d1 delete theslope`
-2. Create a new database: `npx wrangler d1 create theslope`
-3. Update the database ID in `wrangler.toml`
-4. Apply migrations and seed as described above
-
-##### Interacting with the Database
-Query the database:
-```bash
-# View local data
-npx wrangler d1 execute theslope --local --command="SELECT * FROM User"
-
-# View production data
-npx wrangler d1 execute theslope --remote --command="SELECT * FROM User"
-```
-
-![Prisma workflow](https://www.prisma.io/docs/assets/images/prisma-client-generation-workflow-3b42c24d27aef3025f2eb4ffc4644642.png)
+The app imports households, inhabitants and users from Heynabo: [API documentation](https://heynabo.atlassian.net/wiki/external/N2QzNGVkM2ZiMzg1NDkwZDk2NTBiYWYyMzA0ZWJjNmQ).
+`make heynabo-get-nhbrs-dev` lists the neighbours with the credentials in `.env`. The test space is
+https://demo.spaces.heynabo.com/ with `<heynabo test account>`.

@@ -2,8 +2,8 @@ import type {
     HouseholdDisplay,
     HouseholdDetail
 } from '~/composables/useCoreValidation'
-import type {ScaffoldResult, InhabitantUpdateResponse, HouseholdUpdateResponse} from '~/composables/useBookingValidation'
-import {useBooking} from '~/composables/useBooking'
+import {useBookingValidation, type ScaffoldResult} from '~/composables/useBookingValidation'
+import {useBooking, countTotals} from '~/composables/useBooking'
 
 /**
  * Household store - manages household data and API operations
@@ -13,11 +13,10 @@ import {useBooking} from '~/composables/useBooking'
 export const useHouseholdsStore = defineStore("Households", () => {
 
     // DEPENDENCIES
-    const {handleApiError} = useApiHandler()
-    const {formatScaffoldResult} = useBooking()
-
-    // STATE - Server data only
-    const selectedHouseholdId = ref<number | null>(null)
+    const {storeAsyncData, loadOrThrow, apiRequest, toastSaved, notFoundToast} = useApiHandler()
+    const {formatScaffoldResult, sumScaffoldResults} = useBooking()
+    const {HouseholdDisplaySchema, HouseholdDetailSchema} = useCoreValidation()
+    const {InhabitantUpdateResponseSchema, HouseholdUpdateResponseSchema} = useBookingValidation()
 
     // Last preference update result (persists across component remounts)
     const lastPreferenceResult = ref<ScaffoldResult | null>(null)
@@ -26,91 +25,28 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const lastMoveOutResult = ref<ScaffoldResult | null>(null)
 
     // ========================================
-    // State - useAsyncData with useRequestFetch for SSR-safe auth context
-    // Using useRequestFetch ensures cookies are properly forwarded during both SSR and CSR
+    // State (ADR-007)
     // ========================================
-    const requestFetch = useRequestFetch()
 
     // Get auth state to gate fetching - prevents 401 race condition
     // PageHeader instantiates this store before session is hydrated
     const {loggedIn} = useUserSession()
 
+    const householdsDataset = storeAsyncData('households-store-households', '/api/admin/household', {
+        schema: HouseholdDisplaySchema.array(),
+        default: () => [],
+        enabled: () => loggedIn.value,
+        errorMessage: 'Kunne ikke hente husstande'
+    })
     const {
         data: households,
-        status: householdsStatus,
         error: householdsError,
-        refresh: refreshHouseholds
-    } = useAsyncData<HouseholdDisplay[]>(
-        'households-store-households',
-        () => {
-            // Don't fetch until session is ready - prevents 401 on initial load
-            if (!loggedIn.value) {
-                console.info('🏠 > HOUSEHOLDS_STORE > Skipping fetch - not logged in yet')
-                return Promise.resolve([])
-            }
-            return requestFetch<HouseholdDisplay[]>('/api/admin/household', {
-                onResponseError: ({response}) => {
-                    console.error(`🏠 > HOUSEHOLDS_STORE > fetchHouseholds failed: ${response.status} ${response.statusText}`)
-                    handleApiError(response._data, 'Kunne ikke hente husstande')
-                }
-            })
-        },
-        {
-            default: () => [],
-            watch: [loggedIn],  // Re-fetch when login state changes
-            transform: (data: HouseholdDisplay[]) => {
-                const {HouseholdDisplaySchema} = useCoreValidation()
-                return data.map(h => HouseholdDisplaySchema.parse(h))
-            }
-        }
-    )
+        refresh: refreshHouseholds,
+        isLoading: isHouseholdsLoading,
+        isErrored: isHouseholdsErrored,
+        isInitialized: isHouseholdsInitialized
+    } = householdsDataset
 
-    // Use useAsyncData for detail endpoint - allows manual execute() without context issues
-    const selectedHouseholdKey = computed(() => `/api/admin/household/${selectedHouseholdId.value || 'null'}`)
-
-    const {HouseholdDetailSchema} = useCoreValidation()
-
-    const {
-        data: selectedHousehold,
-        status: selectedHouseholdStatus,
-        error: selectedHouseholdError,
-        refresh: refreshSelectedHousehold
-    } = useAsyncData<HouseholdDetail | null>(
-        selectedHouseholdKey,
-        () => {
-            if (!selectedHouseholdId.value) return Promise.resolve(null)
-            return useRequestFetch()<HouseholdDetail>(`/api/admin/household/${selectedHouseholdId.value}`, {
-                onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente husstand') }
-            })
-        },
-        {
-            default: () => null,
-            transform: (data: unknown) => {
-                if (!data) return null
-                // Repository validates data per ADR-010, schema handles HTTP JSON deserialization (ISO strings → Date objects)
-                return HouseholdDetailSchema.parse(data)
-            }
-        }
-    )
-
-    // ========================================
-    // Computed - Public API (derived from status)
-    // ========================================
-    const isHouseholdsLoading = computed(() => householdsStatus.value === 'pending')
-    const isHouseholdsErrored = computed(() => householdsStatus.value === 'error')
-    const isHouseholdsInitialized = computed(() => householdsStatus.value === 'success')
-    const isNoHouseholds = computed(() => isHouseholdsInitialized.value && households.value.length === 0)
-
-    const isSelectedHouseholdLoading = computed(() => selectedHouseholdStatus.value === 'pending')
-    const isSelectedHouseholdErrored = computed(() => selectedHouseholdStatus.value === 'error')
-    const isSelectedHouseholdInitialized = computed(() => selectedHouseholdStatus.value === 'success' && selectedHousehold.value !== null)
-
-    // Convenience computed for components - true when store is fully initialized and ready to use
-    const isHouseholdsStoreReady = computed(() =>
-        isHouseholdsInitialized.value && (isNoHouseholds.value || isSelectedHouseholdInitialized.value)
-    )
-
-    // DEPENDENCIES - access auth store
     const authStore = useAuthStore()
 
     /**
@@ -120,6 +56,60 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const myHousehold = computed(() => {
         return authStore.user?.Inhabitant?.household ?? null
     })
+
+    // The page names the household its URL carries; the choice resolves once the households have loaded (ADR-006)
+    type HouseholdChoice = {shortName?: string, pbsId?: number} | number | null
+    const householdChoice = shallowRef<() => HouseholdChoice>(() => null)
+    const resolveHouseholdId = (choice: HouseholdChoice): number | null => {
+        if (choice === null) return null
+        if (typeof choice === 'number') return households.value.find(h => h.id === choice)?.id ?? null
+        const byPbs = households.value.find(h => choice.pbsId !== undefined && h.pbsId === choice.pbsId)
+        if (byPbs) return byPbs.id
+        const byShortName = households.value.filter(h => h.shortName === choice.shortName)
+        return (byShortName.find(h => h.id === myHousehold.value?.id) ?? byShortName[0])?.id ?? null
+    }
+    const selectedHouseholdId = computed(() => resolveHouseholdId(householdChoice.value()) ?? myHousehold.value?.id ?? null)
+
+    // The key stays constant: a pbs resolves after the households load, mid-render on the server
+    const selectedHouseholdDataset = storeAsyncData(
+        'households-store-selected-household',
+        () => `/api/admin/household/${selectedHouseholdId.value}`,
+        {
+            schema: HouseholdDetailSchema.nullable(),
+            default: () => null,
+            enabled: () => !!selectedHouseholdId.value,
+            dependsOn: [householdsDataset],
+            errorMessage: 'Kunne ikke hente husstand',
+            // The page's getter keeps driving the choice; the gone household re-derives to my household
+            notFound: {
+                recover: async () => {
+                    skipGoneId(householdChoice, selectedHouseholdId.value, resolveHouseholdId)
+                    await refreshHouseholds()
+                },
+                retries: 1,
+                toast: notFoundToast(households, selectedHouseholdId, 'husstanden'),
+                message: () => getRandomEmptyMessageText('household')
+            }
+        }
+    )
+    const {
+        data: selectedHousehold,
+        error: selectedHouseholdError,
+        refresh: refreshSelectedHousehold,
+        isLoading: isSelectedHouseholdLoading,
+        isErrored: isSelectedHouseholdErrored,
+        isInitialized: isSelectedHouseholdInitialized
+    } = selectedHouseholdDataset
+
+    // ========================================
+    // Computed - Public API (derived from status)
+    // ========================================
+    const isNoHouseholds = computed(() => isHouseholdsInitialized.value && households.value.length === 0)
+
+    // Convenience computed for components - true when store is fully initialized and ready to use
+    const isHouseholdsStoreReady = computed(() =>
+        isHouseholdsInitialized.value && (isNoHouseholds.value || isSelectedHouseholdInitialized.value)
+    )
 
     const myInhabitant = computed(() => authStore.user?.Inhabitant ?? null)
 
@@ -133,38 +123,32 @@ export const useHouseholdsStore = defineStore("Households", () => {
     // ========================================
     // Store Actions
     // ========================================
-    const loadHouseholds = async () => {
-        await refreshHouseholds()
-        if (householdsError.value) {
-            handleApiError(householdsError.value, 'loadHouseholds')
-            throw householdsError.value
-        }
-        console.info(`🏠 > HOUSEHOLDS_STORE > Loaded ${households.value.length} households`)
-    }
+    const loadHouseholds = () => loadOrThrow(householdsDataset, () => `🏠 > HOUSEHOLDS_STORE > Loaded ${households.value.length} households`)
 
-    /**
-     * Fetch single household with inhabitants
-     * Setting selectedHouseholdId triggers reactive useAsyncData fetch
-     */
-    const loadHousehold = (id: number) => {
-        selectedHouseholdId.value = id
-        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Loading household ID: ${id}`)
+    const selectHousehold = (choice: MaybeRefOrGetter<HouseholdChoice>) => {
+        householdChoice.value = () => toValue(choice)
     }
 
     /**
      * Fetch household detail without affecting selectedHousehold
      * Use for admin operations that need HouseholdDetail but shouldn't change navigation state
      */
-    const fetchHouseholdDetail = async (householdId: number): Promise<HouseholdDetail> => {
-        try {
-            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Fetching household detail: ${householdId}`)
-            const data = await $fetch<HouseholdDetail>(`/api/admin/household/${householdId}`)
-            return HouseholdDetailSchema.parse(data)
-        } catch (e: unknown) {
-            handleApiError(e, `Kunne ikke hente husstand ${householdId}`)
-            throw e
-        }
+    const fetchHouseholdDetail = (householdId: number): Promise<HouseholdDetail> => {
+        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Fetching household detail: ${householdId}`)
+        return apiRequest(`/api/admin/household/${householdId}`, {
+            schema: HouseholdDetailSchema,
+            action: 'fetchHouseholdDetail',
+            errorMessage: `Kunne ikke hente husstand ${householdId}`
+        })
     }
+
+    /** The session user's calendar feed URL; null when the request fails (already toasted) */
+    const fetchCalendarFeed = (): Promise<string | null> =>
+        apiRequest<string>('/api/calendar/feed', {action: 'fetchCalendarFeed'}).catch(() => null)
+
+    const preferencesUrl = (inhabitantId: number, adminBypass: boolean) => adminBypass
+        ? `/api/household/inhabitants/${inhabitantId}/preferences?adminBypass=true`
+        : `/api/household/inhabitants/${inhabitantId}/preferences`
 
     /**
      * Update inhabitant dinner preferences
@@ -173,31 +157,25 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param preferences - WeekDayMap of DinnerMode preferences
      */
     const updateInhabitantPreferences = async (inhabitantId: number, preferences: Record<string, string>, adminBypass = false) => {
-        try {
-            console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}${adminBypass ? ' (admin bypass)' : ''}`)
+        console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}${adminBypass ? ' (admin bypass)' : ''}`)
 
-            const url = adminBypass
-                ? `/api/household/inhabitants/${inhabitantId}/preferences?adminBypass=true`
-                : `/api/household/inhabitants/${inhabitantId}/preferences`
-            const result = await $fetch<InhabitantUpdateResponse>(url, {
-                method: 'POST',
-                body: { dinnerPreferences: preferences }
-            })
+        const result = await useBookingsStore().writeBookings(() => apiRequest(preferencesUrl(inhabitantId, adminBypass), {
+            method: 'POST',
+            body: { dinnerPreferences: preferences },
+            schema: InhabitantUpdateResponseSchema,
+            action: 'updateInhabitantPreferences'
+        }))
 
-            // Store result for persistent UI display
-            lastPreferenceResult.value = result.scaffoldResult
-            console.info(`🏠 > HOUSEHOLDS_STORE > Preferences updated for inhabitant ${inhabitantId}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
+        // Store result for persistent UI display
+        lastPreferenceResult.value = result.scaffoldResult
+        console.info(`🏠 > HOUSEHOLDS_STORE > Preferences updated for inhabitant ${inhabitantId}: ${formatScaffoldResult(result.scaffoldResult)}`)
 
-            // Refresh the selected household to get updated data
-            if (selectedHouseholdId.value) {
-                await refreshSelectedHousehold()
-            }
-
-            return result.scaffoldResult
-        } catch (e: unknown) {
-            handleApiError(e, 'updateInhabitantPreferences')
-            throw e
+        // Refresh the selected household to get updated data
+        if (selectedHouseholdId.value) {
+            await refreshSelectedHousehold()
         }
+
+        return result.scaffoldResult
     }
 
     /**
@@ -207,59 +185,67 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param preferences - WeekDayMap of DinnerMode preferences to apply to all inhabitants
      */
     const updateAllInhabitantPreferences = async (householdId: number, preferences: Record<string, string>, adminBypass = false) => {
-        try {
-            // Get the household to access inhabitants
-            const household = households.value.find(h => h.id === householdId)
-            if (!household) {
-                throw new Error(`Household ${householdId} not found`)
-            }
+        // Get the household to access inhabitants
+        const household = households.value.find(h => h.id === householdId)
+        if (!household) throw new Error(`Household ${householdId} not found`)
 
-            console.info(`🏠 > HOUSEHOLDS_STORE > Power mode: Updating preferences for all ${household.inhabitants.length} inhabitants in household ${householdId}${adminBypass ? ' (admin bypass)' : ''}`)
+        console.info(`🏠 > HOUSEHOLDS_STORE > Power mode: Updating preferences for all ${household.inhabitants.length} inhabitants in household ${householdId}${adminBypass ? ' (admin bypass)' : ''}`)
 
-            // Update all inhabitants SEQUENTIALLY to avoid race conditions in scaffolding
-            // Each update triggers scaffoldPrebookings for the same household - parallel execution
-            // causes FK constraint errors when multiple scaffolds try to delete the same orders
-            const results = []
+        // Update all inhabitants SEQUENTIALLY to avoid race conditions in scaffolding
+        // Each update triggers scaffoldPrebookings for the same household - parallel execution
+        // causes FK constraint errors when multiple scaffolds try to delete the same orders
+        const results = await useBookingsStore().writeBookings(async () => {
+            const responses = []
             for (const inhabitant of household.inhabitants) {
-                const url = adminBypass
-                    ? `/api/household/inhabitants/${inhabitant.id}/preferences?adminBypass=true`
-                    : `/api/household/inhabitants/${inhabitant.id}/preferences`
-                const result = await $fetch<InhabitantUpdateResponse>(url, {
+                responses.push(await apiRequest(preferencesUrl(inhabitant.id, adminBypass), {
                     method: 'POST',
-                    body: { dinnerPreferences: preferences }
-                })
-                results.push(result)
+                    body: { dinnerPreferences: preferences },
+                    schema: InhabitantUpdateResponseSchema,
+                    action: 'updateAllInhabitantPreferences'
+                }))
             }
+            return responses
+        })
 
-            // Refresh the selected household once after all updates
-            if (selectedHouseholdId.value === householdId) {
-                await refreshSelectedHousehold()
-            }
-
-            // Aggregate scaffold results from all updates
-            const aggregatedResult: ScaffoldResult = results.reduce((acc, r) => ({
-                seasonId: r.scaffoldResult.seasonId,  // All results should have same seasonId
-                created: acc.created + r.scaffoldResult.created,
-                deleted: acc.deleted + r.scaffoldResult.deleted,
-                released: acc.released + r.scaffoldResult.released,
-                claimed: acc.claimed + r.scaffoldResult.claimed,
-                claimRejected: acc.claimRejected + r.scaffoldResult.claimRejected,
-                priceUpdated: acc.priceUpdated + r.scaffoldResult.priceUpdated,
-                modeUpdated: acc.modeUpdated + r.scaffoldResult.modeUpdated,
-                unchanged: acc.unchanged + r.scaffoldResult.unchanged,
-                households: 1,  // Power mode updates single household
-                errored: acc.errored + r.scaffoldResult.errored
-            }), { seasonId: null, created: 0, deleted: 0, released: 0, claimed: 0, claimRejected: 0, priceUpdated: 0, modeUpdated: 0, unchanged: 0, households: 1, errored: 0 } as ScaffoldResult)
-
-            // Store result for persistent UI display
-            lastPreferenceResult.value = aggregatedResult
-            console.info(`🏠 > HOUSEHOLDS_STORE > Power mode complete: ${household.inhabitants.length} inhabitants, scaffold: ${formatScaffoldResult(aggregatedResult, 'compact')}`)
-
-            return aggregatedResult
-        } catch (e: unknown) {
-            handleApiError(e, 'updateAllInhabitantPreferences')
-            throw e
+        // Refresh the selected household once after all updates
+        if (selectedHouseholdId.value === householdId) {
+            await refreshSelectedHousehold()
         }
+
+        // Power mode updates a single household
+        const aggregatedResult = {...sumScaffoldResults(results.map(r => r.scaffoldResult)), households: 1}
+
+        // Store result for persistent UI display
+        lastPreferenceResult.value = aggregatedResult
+        console.info(`🏠 > HOUSEHOLDS_STORE > Power mode complete: ${household.inhabitants.length} inhabitants, scaffold: ${formatScaffoldResult(aggregatedResult)}`)
+
+        return aggregatedResult
+    }
+
+    /**
+     * What a save of the draft preferences would do, read without writing: the preview of each inhabitant the save
+     * writes, combined. One inhabitant, or every inhabitant of the household in power mode
+     */
+    const previewPreferences = async (inhabitantIds: number[], preferences: Record<string, string>, adminBypass = false): Promise<ScaffoldResult> => {
+        console.info(`🏠 > HOUSEHOLDS_STORE > Previewing preferences for inhabitants ${inhabitantIds.join(', ')}${adminBypass ? ' (admin bypass)' : ''}`)
+        // A preview writes nothing, so the previews run side by side where the saves run one after another
+        const responses = await Promise.all(inhabitantIds.map(inhabitantId => apiRequest(preferencesUrl(inhabitantId, adminBypass), {
+            method: 'POST',
+            body: {dinnerPreferences: preferences},
+            query: {preview: true},
+            schema: InhabitantUpdateResponseSchema,
+            action: 'previewPreferences'
+        })))
+        // One person's preview is the save's whole result, the other members' corrections included
+        if (responses.length === 1) return responses[0]!.scaffoldResult
+        // In power mode an inhabitant's lines come from the preview holding that inhabitant's draft; another member's
+        // preview decides them by the stored preferences
+        const ownLines = responses.map(({scaffoldResult}, index) => {
+            const results = scaffoldResult.results.filter(line => line.inhabitantId === inhabitantIds[index])
+            return {...scaffoldResult, results, totals: countTotals(results)}
+        })
+        // The inhabitants share one household
+        return {...sumScaffoldResults(ownLines), households: 1}
     }
 
     /**
@@ -270,34 +256,27 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param moveOutDate - Date to set, or null to clear
      */
     const setMoveOutDate = async (householdId: number, moveOutDate: Date | null, adminBypass = false) => {
-        try {
-            console.info(`🏠 > HOUSEHOLDS_STORE > Setting moveOutDate for household ${householdId}: ${moveOutDate?.toISOString() ?? 'null'}`)
-            const result = await $fetch<HouseholdUpdateResponse>(`/api/household/${householdId}/update`, {
-                method: 'POST',
-                body: { moveOutDate },
-                query: {adminBypass}
-            })
+        console.info(`🏠 > HOUSEHOLDS_STORE > Setting moveOutDate for household ${householdId}: ${moveOutDate?.toISOString() ?? 'null'}`)
+        const result = await useBookingsStore().writeBookings(() => apiRequest(`/api/household/${householdId}/update`, {
+            method: 'POST',
+            body: { moveOutDate },
+            query: {adminBypass},
+            schema: HouseholdUpdateResponseSchema,
+            action: 'setMoveOutDate'
+        }))
 
-            // Store scaffold result for persistent UI display
-            lastMoveOutResult.value = result.scaffoldResult
-            console.info(`🏠 > HOUSEHOLDS_STORE > moveOutDate updated for household ${householdId}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
+        // Store scaffold result for persistent UI display
+        lastMoveOutResult.value = result.scaffoldResult
+        console.info(`🏠 > HOUSEHOLDS_STORE > moveOutDate updated for household ${householdId}: ${formatScaffoldResult(result.scaffoldResult)}`)
 
-            // Refresh selected household to get updated data
-            if (selectedHouseholdId.value === householdId) {
-                await refreshSelectedHousehold()
-            }
-            // Also refresh household list to update display badges
-            await refreshHouseholds()
-
-            // Refresh bookings so UI reflects scaffold changes (deleted/created orders)
-            const bookingsStore = useBookingsStore()
-            await bookingsStore.refreshOrders()
-
-            return result.scaffoldResult
-        } catch (e: unknown) {
-            handleApiError(e, 'setMoveOutDate')
-            throw e
+        // Refresh selected household to get updated data
+        if (selectedHouseholdId.value === householdId) {
+            await refreshSelectedHousehold()
         }
+        // Also refresh household list to update display badges
+        await refreshHouseholds()
+
+        return result.scaffoldResult
     }
 
     // Last move result (persists across component remounts)
@@ -306,74 +285,62 @@ export const useHouseholdsStore = defineStore("Households", () => {
     /**
      * Move an inhabitant to a different household
      * Updates householdId via admin endpoint, triggers re-scaffold on target household
+     * Resolves undefined when the move fails; the request has already toasted it
      */
     const moveInhabitant = async (inhabitantId: number, targetHouseholdId: number) => {
-        const toast = useToast()
-        try {
-            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Moving inhabitant ${inhabitantId} to household ${targetHouseholdId}`)
-            const result = await $fetch<InhabitantUpdateResponse>(`/api/admin/household/inhabitants/${inhabitantId}`, {
-                method: 'POST',
-                body: {householdId: targetHouseholdId}
-            })
+        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Moving inhabitant ${inhabitantId} to household ${targetHouseholdId}`)
+        const result = await useBookingsStore().writeBookings(() => apiRequest(`/api/admin/household/inhabitants/${inhabitantId}`, {
+            method: 'POST',
+            body: {householdId: targetHouseholdId},
+            schema: InhabitantUpdateResponseSchema,
+            action: 'moveInhabitant'
+        })).catch(() => null)
+        if (!result) return
 
-            lastMoveResult.value = result.scaffoldResult
-            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Inhabitant moved: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
+        lastMoveResult.value = result.scaffoldResult
+        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Inhabitant moved: ${formatScaffoldResult(result.scaffoldResult)}`)
 
-            if (selectedHouseholdId.value) {
-                await refreshSelectedHousehold()
-            }
-            await refreshHouseholds()
-
-            const bookingsStore = useBookingsStore()
-            await bookingsStore.refreshOrders()
-
-            const targetHousehold = households.value.find(h => h.id === targetHouseholdId)
-            const targetLabel = targetHousehold ? `${targetHousehold.shortName} (PBS ${targetHousehold.pbsId})` : `husstand ${targetHouseholdId}`
-            const scaffoldSummary = formatScaffoldResult(result.scaffoldResult)
-            const hasOrderChanges = result.scaffoldResult.created > 0 || result.scaffoldResult.deleted > 0 || result.scaffoldResult.released > 0
-
-            toast.add({
-                title: `${result.inhabitant.name} ${result.inhabitant.lastName} flyttet til ${targetLabel}`,
-                description: hasOrderChanges ? scaffoldSummary : undefined,
-                color: 'success'
-            })
-
-            return result
-        } catch (e: unknown) {
-            handleApiError(e, 'moveInhabitant')
+        if (selectedHouseholdId.value) {
+            await refreshSelectedHousehold()
         }
+        await refreshHouseholds()
+
+        const targetHousehold = households.value.find(h => h.id === targetHouseholdId)
+        const targetLabel = targetHousehold ? `${targetHousehold.shortName} (PBS ${targetHousehold.pbsId})` : `husstand ${targetHouseholdId}`
+        const scaffoldSummary = formatResultLines(result.scaffoldResult, targetHousehold?.inhabitants.map(({id}) => id))
+        const {BookingActionSchema} = useBookingValidation()
+        const Action = BookingActionSchema.enum
+        const hasOrderChanges = [Action.BOOK, Action.CANCEL, Action.RELEASE].some(action => result.scaffoldResult.totals[action] > 0)
+
+        toastSaved(`${result.inhabitant.name} ${result.inhabitant.lastName} flyttet til ${targetLabel}`, hasOrderChanges ? scaffoldSummary : undefined,
+            scaffoldToastLook(result.scaffoldResult).ui)
+
+        return result
     }
 
     /**
      * Delete a household (CASCADE removes inhabitants, ADR-005)
+     * Resolves without deleting when the request fails; the request has already toasted it
      */
     const deleteHousehold = async (householdId: number) => {
-        const toast = useToast()
         // Capture identity before deletion (lookup disappears after refreshHouseholds)
         const deleted = households.value.find(h => h.id === householdId)
-        try {
-            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Deleting household ${householdId}`)
-            await $fetch(`/api/admin/household/${householdId}`, {method: 'DELETE'})
-            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Household ${householdId} deleted`)
+        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Deleting household ${householdId}`)
+        const isDeleted = await apiRequest(`/api/admin/household/${householdId}`, {method: 'DELETE', action: 'deleteHousehold'})
+            .then(() => true, () => false)
+        if (!isDeleted) return
+        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Household ${householdId} deleted`)
 
-            if (selectedHouseholdId.value === householdId) {
-                selectedHouseholdId.value = null
-            }
-            await refreshHouseholds()
+        skipGoneId(householdChoice, householdId, resolveHouseholdId)
+        await refreshHouseholds()
 
-            toast.add({
-                title: 'Husstand slettet',
-                description: deleted ? `${deleted.shortName} · PBS ${deleted.pbsId}` : undefined,
-                color: 'success'
-            })
-        } catch (e: unknown) {
-            handleApiError(e, 'deleteHousehold')
-        }
+        toastSaved('Husstand slettet', deleted ? `${deleted.shortName} · PBS ${deleted.pbsId}` : undefined)
     }
 
     /**
      * Create a new household at an existing Heynabo address, optionally applying
      * move-out updates to prev owners at the same address (reuses setMoveOutDate).
+     * Resolves null when a request fails; the request has already toasted it.
      */
     const createHousehold = async (payload: {
         pbsId: number
@@ -383,13 +350,13 @@ export const useHouseholdsStore = defineStore("Households", () => {
         name: string
         prevOwnerMoveOutUpdates?: {id: number, moveOutDate: Date}[]
     }): Promise<HouseholdDetail | null> => {
-        const toast = useToast()
         const {prevOwnerMoveOutUpdates = [], ...createBody} = payload
         try {
             console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Creating household at ${payload.address} (PBS ${payload.pbsId})`)
-            const created = await $fetch<HouseholdDetail>('/api/admin/household', {
+            const created = await apiRequest<HouseholdDetail>('/api/admin/household', {
                 method: 'PUT',
-                body: createBody
+                body: createBody,
+                action: 'createHousehold'
             })
             console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Created household ${created.id} at ${created.address}`)
 
@@ -398,38 +365,19 @@ export const useHouseholdsStore = defineStore("Households", () => {
             }
 
             await refreshHouseholds()
-            toast.add({title: 'Husstand oprettet', description: `${created.shortName} · PBS ${created.pbsId}`, color: 'success'})
+            toastSaved('Husstand oprettet', `${created.shortName} · PBS ${created.pbsId}`)
             return created
-        } catch (e: unknown) {
-            handleApiError(e, 'createHousehold')
+        } catch {
             return null
         }
     }
-
-    /**
-     * Initialize store - ensures households are fetched and auto-selects user's own household
-     * Used by components that just need "ensure store is initialized" (AdminHouseholds, AdminEconomy, DinnerBookingForm)
-     * The household page uses useQueryParam('pbs') for URL-driven resolution instead.
-     */
-    const initHouseholdsStore = () => {
-        if (isHouseholdsInitialized.value && !selectedHouseholdId.value && myHousehold.value?.id) {
-            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > initHouseholdsStore > auto-selecting myHousehold: ${myHousehold.value.id}`)
-            loadHousehold(myHousehold.value.id)
-        }
-    }
-
-    // AUTO-INITIALIZATION - Watch for households to load, then auto-select user's household
-    watch([isHouseholdsInitialized, selectedHouseholdId, myHousehold], () => {
-        if (!isHouseholdsInitialized.value) return
-        if (selectedHouseholdId.value) return // Already selected
-        initHouseholdsStore()
-    })
 
     return {
         // State
         households,
         selectedHousehold,
         selectedHouseholdId,
+        selectedHouseholdDataset: markRaw(selectedHouseholdDataset),
         lastPreferenceResult,
         lastMoveOutResult,
         lastMoveResult,
@@ -448,12 +396,13 @@ export const useHouseholdsStore = defineStore("Households", () => {
         selectedHouseholdError,
         // Actions
         loadHouseholds,
-        loadHousehold,
+        selectHousehold,
         fetchHouseholdDetail,
+        fetchCalendarFeed,
         refreshSelectedHousehold,
-        initHouseholdsStore,
         updateInhabitantPreferences,
         updateAllInhabitantPreferences,
+        previewPreferences,
         setMoveOutDate,
         moveInhabitant,
         deleteHousehold,

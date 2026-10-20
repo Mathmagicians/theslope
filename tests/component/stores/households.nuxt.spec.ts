@@ -1,29 +1,34 @@
 // @vitest-environment nuxt
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
+import { ref } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { registerEndpoint, mockNuxtImport } from '@nuxt/test-utils/runtime'
+import { getQuery, readBody, type H3Event } from 'h3'
 import type {
   HouseholdDisplay,
   HouseholdDetail
 } from '~/composables/useCoreValidation'
-import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useBookingValidation, type BookingAction, type BookingResult } from '~/composables/useBookingValidation'
+import { countTotals } from '~/composables/useBooking'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
+import { UserFactory } from '~~/tests/e2e/testDataFactories/userFactory'
+import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
+import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { useHouseholdsStore } from '~/stores/households'
+import { useBookingsStore } from '~/stores/bookings'
+const Action = useBookingValidation().BookingActionSchema.enum
+const DinnerMode = useBookingValidation().DinnerModeSchema.enum
 
-// Mock useUserSession to return loggedIn: true
-// This prevents the store from skipping fetch due to auth check
-const { mockLoggedIn } = vi.hoisted(() => ({ mockLoggedIn: { value: true } }))
-mockNuxtImport('useUserSession', () => () => ({
-  loggedIn: mockLoggedIn,
-  user: { value: null },
-  session: { value: null },
-  clear: vi.fn(),
-  fetch: vi.fn()
-}))
+// nuxt-auth-utils has no session in the test environment; the spec logs in and out and sets the session user
+const { session, useUserSession } = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
+mockNuxtImport('useUserSession', () => useUserSession)
+// Logged in without a session user: the reads gate on the flag alone
+session.loggedIn.value = true
 
 // Schema for validating mock responses
-const { InhabitantUpdateResponseSchema, ScaffoldResultSchema } = useBookingValidation()
+const { InhabitantUpdateResponseSchema } = useBookingValidation()
 
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
@@ -40,10 +45,21 @@ registerEndpoint('/api/household/inhabitants/2/preferences', preferencesEndpoint
 // Generic (no method) registered BEFORE method-specific so method-specific wins (reverse-order lookup)
 registerEndpoint('/api/admin/household/1', householdByIdEndpoint)
 registerEndpoint('/api/admin/household/2', householdByIdEndpoint)
+const GONE_HOUSEHOLD_ID = 3
+registerEndpoint(`/api/admin/household/${GONE_HOUSEHOLD_ID}`, () => {
+  throw createError({ statusCode: 404 })
+})
 registerEndpoint('/api/admin/household/inhabitants/1', { handler: moveInhabitantEndpoint, method: 'POST' })
 registerEndpoint('/api/admin/household/1', { handler: deleteHouseholdEndpoint, method: 'DELETE' })
 registerEndpoint('/api/admin/household/2', { handler: deleteHouseholdEndpoint, method: 'DELETE' })
 registerEndpoint('/api/admin/household', householdIndexEndpoint)
+// Method-specific after the generic index above (reverse-order lookup)
+const createHouseholdEndpoint = vi.fn()
+const moveOutEndpoint = vi.fn()
+registerEndpoint('/api/admin/household', { handler: createHouseholdEndpoint, method: 'PUT' })
+registerEndpoint('/api/household/1/update', { handler: moveOutEndpoint, method: 'POST' })
+const calendarFeedEndpoint = vi.fn()
+registerEndpoint('/api/calendar/feed', calendarFeedEndpoint)
 
 // ========================================
 // Test Helpers - Use factory data + schema validation
@@ -104,27 +120,10 @@ const createMockHouseholdDetail = (): HouseholdDetail => {
   }
 }
 
-const createMockScaffoldResult = (overrides = {}) => {
-  const result = {
-    seasonId: 1,
-    created: 5,
-    deleted: 0,
-    released: 0,
-    priceUpdated: 0,
-    modeUpdated: 0,
-    unchanged: 0,
-    households: 1,
-    errored: 0,
-    ...overrides
-  }
-  // Validate with schema
-  return ScaffoldResultSchema.parse(result)
-}
-
 const createMockInhabitantUpdateResponse = (inhabitantId = 1) => {
   const response = {
     inhabitant: createMockInhabitant(inhabitantId, 1),
-    scaffoldResult: createMockScaffoldResult()
+    scaffoldResult: OrderFactory.defaultScaffoldResult()
   }
   // Validate with schema
   return InhabitantUpdateResponseSchema.parse(response)
@@ -166,6 +165,7 @@ describe('Households Store', () => {
     const store = await setupStore()
 
     expect(store.isHouseholdsInitialized).toBe(true)
+    expect(store.isNoHouseholds).toBe(false)
     expect(store.households).toHaveLength(2)
   })
 
@@ -184,77 +184,25 @@ describe('Households Store', () => {
     expect(store.householdsError?.statusCode).toBe(500)
   })
 
-  it.each([
-    { data: [], expected: true, description: 'empty array' },
-    { data: createMockHouseholds(), expected: false, description: 'with data' }
-  ])('isNoHouseholds detects $description', async ({ data, expected }) => {
-    householdIndexEndpoint.mockReturnValue(data)
+  it('isNoHouseholds detects an empty household list', async () => {
+    householdIndexEndpoint.mockReturnValue([])
 
     const store = await setupStore()
 
-    expect(store.isNoHouseholds).toBe(expected)
-    expect(store.households).toHaveLength(data.length)
-  })
-
-  describe('initHouseholdsStore', () => {
-    beforeEach(() => {
-      setActivePinia(createPinia())
-    })
-
-    it('auto-selects when no household is selected and store is initialized', async () => {
-      const store = await setupStore()
-      householdByIdEndpoint.mockClear()
-
-      // No household selected yet, initHouseholdsStore should auto-select
-      store.initHouseholdsStore()
-
-      // Should attempt to load a household (falls back to first available since no myHousehold)
-      // The exact behavior depends on resolveHouseholdId which is tested in household.unit.spec.ts
-    })
-
-    it('does not re-select when household is already selected', async () => {
-      const store = await setupStore()
-
-      // First select a household
-      store.loadHousehold(1)
-      await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
-
-      householdByIdEndpoint.mockClear()
-
-      // Second call should not re-select
-      store.initHouseholdsStore()
-
-      expect(householdByIdEndpoint).not.toHaveBeenCalled()
-    })
+    expect(store.isNoHouseholds).toBe(true)
+    expect(store.households).toHaveLength(0)
   })
 
   describe('updateInhabitantPreferences', () => {
-    it('calls API endpoint', async () => {
+    it('calls the API and returns the scaffold result, kept in lastPreferenceResult', async () => {
       const store = await setupStore()
-      const preferences = { MONDAY: 'DINEIN', TUESDAY: 'TAKEAWAY' }
+      const mockResponse = createMockInhabitantUpdateResponse()
+      preferencesEndpoint1.mockReturnValue(mockResponse)
 
-      await store.updateInhabitantPreferences(1, preferences)
+      const result = await store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN, TUESDAY: DinnerMode.TAKEAWAY })
 
       expect(preferencesEndpoint1).toHaveBeenCalled()
-    })
-
-    it('returns scaffold result from API response', async () => {
-      const store = await setupStore()
-      const mockResponse = createMockInhabitantUpdateResponse()
-      preferencesEndpoint1.mockReturnValue(mockResponse)
-
-      const result = await store.updateInhabitantPreferences(1, { MONDAY: 'DINEIN' })
-
       expect(result).toEqual(mockResponse.scaffoldResult)
-    })
-
-    it('stores scaffold result in lastPreferenceResult', async () => {
-      const store = await setupStore()
-      const mockResponse = createMockInhabitantUpdateResponse()
-      preferencesEndpoint1.mockReturnValue(mockResponse)
-
-      await store.updateInhabitantPreferences(1, { MONDAY: 'DINEIN' })
-
       expect(store.lastPreferenceResult).toEqual(mockResponse.scaffoldResult)
     })
 
@@ -262,13 +210,13 @@ describe('Households Store', () => {
       const store = await setupStore()
 
       // Load household detail to set selectedHouseholdId
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
 
       // Clear previous calls
       householdByIdEndpoint.mockClear()
 
-      await store.updateInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+      await store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
 
       // Verify refresh was called
       expect(householdByIdEndpoint).toHaveBeenCalled()
@@ -284,66 +232,43 @@ describe('Households Store', () => {
       })
 
       await expect(
-        store.updateInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+        store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
       ).rejects.toThrow()
     })
   })
 
   describe('updateAllInhabitantPreferences', () => {
-    it('calls API for each inhabitant in household', async () => {
-      const store = await setupStore()
-
-      // Load household detail with 2 inhabitants
-      store.loadHousehold(1)
-      await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
-
-      const preferences = { MONDAY: 'DINEIN', TUESDAY: 'TAKEAWAY' }
-      await store.updateAllInhabitantPreferences(1, preferences)
-
-      // Should call preferences endpoint for both inhabitants
-      expect(preferencesEndpoint1).toHaveBeenCalled()
-      expect(preferencesEndpoint2).toHaveBeenCalled()
-    })
-
     it('aggregates scaffold results from all inhabitants', async () => {
       const store = await setupStore()
 
       // Setup household with 2 inhabitants
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
 
       // Mock different results for each inhabitant - use factory + schema validation
       preferencesEndpoint1.mockReturnValue(InhabitantUpdateResponseSchema.parse({
         inhabitant: createMockInhabitant(1, 1),
-        scaffoldResult: createMockScaffoldResult({ created: 3, deleted: 1, unchanged: 2 })
+        scaffoldResult: OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 3, [Action.CANCEL]: 1}, unchanged: 2})
       }))
       preferencesEndpoint2.mockReturnValue(InhabitantUpdateResponseSchema.parse({
         inhabitant: createMockInhabitant(2, 1),
-        scaffoldResult: createMockScaffoldResult({ created: 2, deleted: 1, released: 1, priceUpdated: 1, unchanged: 1 })
+        scaffoldResult: OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 2, [Action.CANCEL]: 1, [Action.RELEASE]: 1, [Action.CHANGE_PRICE]: 1}, unchanged: 1})
       }))
 
-      await store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+      await store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
 
       // Verify aggregated result (includes all ScaffoldResult fields)
-      expect(store.lastPreferenceResult).toEqual({
-        seasonId: 1,     // Same for all (household in same season)
-        created: 5,      // 3 + 2
-        deleted: 2,      // 1 + 1
-        released: 1,     // 0 + 1
-        priceUpdated: 1, // 0 + 1
-        modeUpdated: 0,  // 0 + 0
+      expect(store.lastPreferenceResult).toEqual(OrderFactory.defaultScaffoldResult({
+        totals: {[Action.BOOK]: 5, [Action.CANCEL]: 2, [Action.RELEASE]: 1, [Action.CHANGE_PRICE]: 1},
         unchanged: 3,    // 2 + 1
-        households: 1,   // Power mode = single household
-        errored: 0,      // 0 + 0
-        claimed: 0,      // 0 + 0
-        claimRejected: 0 // 0 + 0
-      })
+        households: 1    // Power mode = single household
+      }))
     })
 
-    it('updates inhabitants sequentially to avoid race conditions', async () => {
+    it('calls the API for each inhabitant, sequentially to avoid race conditions', async () => {
       const store = await setupStore()
 
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
 
       const callOrder: number[] = []
@@ -357,7 +282,7 @@ describe('Households Store', () => {
         return createMockInhabitantUpdateResponse()
       })
 
-      await store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+      await store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
 
       // Verify sequential execution (order preserved)
       expect(callOrder).toEqual([1, 2])
@@ -366,13 +291,13 @@ describe('Households Store', () => {
     it('refreshes selected household once after all updates', async () => {
       const store = await setupStore()
 
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
 
       // Clear previous calls from loadHousehold
       householdByIdEndpoint.mockClear()
 
-      await store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+      await store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
 
       // Should be called exactly once after all updates
       expect(householdByIdEndpoint).toHaveBeenCalledTimes(1)
@@ -382,14 +307,14 @@ describe('Households Store', () => {
       const store = await setupStore()
 
       await expect(
-        store.updateAllInhabitantPreferences(999, { MONDAY: 'DINEIN' })
+        store.updateAllInhabitantPreferences(999, { MONDAY: DinnerMode.DINEIN })
       ).rejects.toThrow('Household 999 not found')
     })
 
     it('handles API errors during batch update', async () => {
       const store = await setupStore()
 
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
 
       // First inhabitant succeeds, second fails
@@ -402,76 +327,78 @@ describe('Households Store', () => {
       })
 
       await expect(
-        store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+        store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
       ).rejects.toThrow()
     })
   })
 
+  // A preview reads what the save of the draft would do: the save's request per inhabitant with ?preview=true, outside
+  // the booking write. Dinner 13 has not been scaffolded: each preview books the other member on it by their stored
+  // preferences, while both drafts want no dinner on its weekday
+  describe('previewPreferences', () => {
+    const draft = { MONDAY: DinnerMode.NONE, TUESDAY: DinnerMode.TAKEAWAY }
+    const line = (inhabitantId: 1 | 2, dinnerEventId: number, action: BookingAction) =>
+      OrderFactory.defaultBookingResult({inhabitantId, inhabitantName: inhabitantId === 1 ? 'Anna' : 'Bo', dinnerEventId, action})
+    const ownLines = {1: [line(1, 11, Action.CANCEL), line(1, 12, Action.RELEASE)], 2: [line(2, 14, Action.CHANGE_MODE)]}
+    const otherMemberLine = {1: line(2, 13, Action.BOOK), 2: line(1, 13, Action.BOOK)}
+    const resultOf = (lines: BookingResult[]) => OrderFactory.defaultScaffoldResult({results: lines, totals: countTotals(lines)})
+    const previewOf = {1: resultOf([...ownLines[1], otherMemberLine[1]]), 2: resultOf([...ownLines[2], otherMemberLine[2]])}
+    const eachOwnLineOnce = resultOf([...ownLines[1], ...ownLines[2]])
+
+    it.each([
+      {mode: 'one inhabitant', returns: 'its whole preview', inhabitantIds: [1], adminBypass: false, query: {preview: 'true'}, expected: previewOf[1]},
+      {mode: 'power mode', returns: 'each line once, from its own inhabitant\'s preview', inhabitantIds: [1, 2], adminBypass: false, query: {preview: 'true'}, expected: eachOwnLineOnce},
+      {mode: 'an admin\'s power mode', returns: 'each line once, from its own inhabitant\'s preview', inhabitantIds: [1, 2], adminBypass: true, query: {adminBypass: 'true', preview: 'true'}, expected: eachOwnLineOnce}
+    ])('$mode: sends the draft to each inhabitant\'s preview, outside the booking write, and returns $returns', async ({inhabitantIds, adminBypass, query, expected}) => {
+      const sent: {inhabitantId: number, query: Record<string, unknown>, body: unknown}[] = []
+      const answer = (inhabitantId: 1 | 2) => async (event: H3Event) => {
+        sent.push({inhabitantId, query: getQuery(event), body: await readBody(event)})
+        return InhabitantUpdateResponseSchema.parse({
+          inhabitant: createMockInhabitant(inhabitantId, 1),
+          scaffoldResult: previewOf[inhabitantId]
+        })
+      }
+      preferencesEndpoint1.mockImplementation(answer(1))
+      preferencesEndpoint2.mockImplementation(answer(2))
+      const store = await setupStore()
+      const lastSaved = store.lastPreferenceResult
+
+      const preview = store.previewPreferences(inhabitantIds, draft, adminBypass)
+      expect(useBookingsStore().isProcessingBookings).toBe(false)
+
+      expect(await preview).toEqual(expected)
+      expect(sent).toEqual(inhabitantIds.map(inhabitantId => ({inhabitantId, query, body: {dinnerPreferences: draft}})))
+      expect(store.lastPreferenceResult).toBe(lastSaved)
+    })
+  })
+
   describe('moveInhabitant', () => {
-    it('calls POST /api/admin/household/inhabitants/:id with target householdId', async () => {
-      const store = await setupStore()
-
-      await store.moveInhabitant(1, 2)
-
-      expect(moveInhabitantEndpoint).toHaveBeenCalledTimes(1)
-    })
-
-    it('stores scaffold result in lastMoveResult', async () => {
-      const store = await setupStore()
-      const mockResponse = createMockInhabitantUpdateResponse()
-      moveInhabitantEndpoint.mockReturnValue(mockResponse)
-
-      await store.moveInhabitant(1, 2)
-
-      expect(store.lastMoveResult).toEqual(mockResponse.scaffoldResult)
-    })
-
-    it('returns an InhabitantUpdateResponse with inhabitant and scaffoldResult', async () => {
+    it('posts the move once and returns an InhabitantUpdateResponse with inhabitant and scaffoldResult, kept in lastMoveResult', async () => {
       const store = await setupStore()
       const mockResponse = createMockInhabitantUpdateResponse()
       moveInhabitantEndpoint.mockReturnValue(mockResponse)
 
       const result = await store.moveInhabitant(1, 2)
 
+      expect(moveInhabitantEndpoint).toHaveBeenCalledTimes(1)
       // $fetch returns JSON-deserialized data (dates as strings), so compare non-date fields
       expect(result?.inhabitant.id).toBe(mockResponse.inhabitant.id)
       expect(result?.scaffoldResult).toEqual(mockResponse.scaffoldResult)
+      expect(store.lastMoveResult).toEqual(mockResponse.scaffoldResult)
     })
 
-    it('refreshes selected household after move when one is selected', async () => {
+    it('refreshes the household list and the selected household after the move', async () => {
       const store = await setupStore()
 
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
       householdByIdEndpoint.mockClear()
-
-      await store.moveInhabitant(1, 2)
-
-      expect(householdByIdEndpoint).toHaveBeenCalled()
-    })
-
-    it('refreshes household list after move', async () => {
-      const store = await setupStore()
       householdIndexEndpoint.mockClear()
 
       await store.moveInhabitant(1, 2)
 
+      expect(householdByIdEndpoint).toHaveBeenCalled()
       expect(householdIndexEndpoint).toHaveBeenCalled()
-    })
-
-    it.each([
-      { description: 'no order changes (created=0, deleted=0, released=0)', scaffoldOverrides: { created: 0, deleted: 0, released: 0 } },
-      { description: 'with order changes (created=3)', scaffoldOverrides: { created: 3, deleted: 0, released: 0 } }
-    ])('does not throw on success with $description', async ({ scaffoldOverrides }) => {
-      const store = await setupStore()
-      moveInhabitantEndpoint.mockReturnValue(
-        InhabitantUpdateResponseSchema.parse({
-          inhabitant: createMockInhabitant(1, 2),
-          scaffoldResult: createMockScaffoldResult(scaffoldOverrides)
-        })
-      )
-
-      await expect(store.moveInhabitant(1, 2)).resolves.not.toThrow()
     })
 
     it('does not throw on API error (calls handleApiError instead)', async () => {
@@ -486,20 +413,13 @@ describe('Households Store', () => {
   })
 
   describe('deleteHousehold', () => {
-    it('calls DELETE /api/admin/household/:id', async () => {
-      const store = await setupStore()
-
-      await store.deleteHousehold(1)
-
-      expect(deleteHouseholdEndpoint).toHaveBeenCalledTimes(1)
-    })
-
-    it('refreshes household list after deletion', async () => {
+    it('calls DELETE /api/admin/household/:id and refreshes the household list', async () => {
       const store = await setupStore()
       householdIndexEndpoint.mockClear()
 
       await store.deleteHousehold(1)
 
+      expect(deleteHouseholdEndpoint).toHaveBeenCalledTimes(1)
       expect(householdIndexEndpoint).toHaveBeenCalled()
     })
 
@@ -509,7 +429,7 @@ describe('Households Store', () => {
     ])('clears selectedHouseholdId when $description', async ({ selectedId, expectedAfter }) => {
       const store = await setupStore()
 
-      store.loadHousehold(selectedId)
+      store.selectHousehold(selectedId)
       await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(selectedId))
 
       await store.deleteHousehold(1)
@@ -526,5 +446,331 @@ describe('Households Store', () => {
       // deleteHousehold catches errors with handleApiError and does not rethrow
       await expect(store.deleteHousehold(1)).resolves.toBeUndefined()
     })
+  })
+
+  // A write that changes bookings goes through the bookings store's one write, which re-reads what a booking touches
+  describe('booking writes', () => {
+    it.each([
+      {write: 'a preference change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })},
+      {write: 'a power mode change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })},
+      {write: 'a move-out date', run: (store: ReturnType<typeof useHouseholdsStore>) => store.setMoveOutDate(1, new Date())},
+      {write: 'a move to another household', run: (store: ReturnType<typeof useHouseholdsStore>) => store.moveInhabitant(1, 2)}
+    ])('$write goes through the one booking write', async ({run}) => {
+      moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult: OrderFactory.defaultScaffoldResult() })
+      const store = await setupStore()
+      const bookingsStore = useBookingsStore()
+
+      const write = run(store)
+      expect(bookingsStore.isProcessingBookings).toBe(true)
+      await write
+
+      expect(bookingsStore.isProcessingBookings).toBe(false)
+    })
+  })
+
+  describe('setMoveOutDate', () => {
+    it('returns the scaffold result and keeps it in lastMoveOutResult', async () => {
+      const scaffoldResult = OrderFactory.defaultScaffoldResult({totals: {[Action.CANCEL]: 4}})
+      moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult })
+      const store = await setupStore()
+
+      const result = await store.setMoveOutDate(1, new Date())
+
+      expect(result).toEqual(scaffoldResult)
+      expect(store.lastMoveOutResult).toEqual(scaffoldResult)
+    })
+
+    it('rethrows a failed update', async () => {
+      moveOutEndpoint.mockImplementation(() => {
+        throw createError({ statusCode: 500, statusMessage: 'Server error' })
+      })
+      const store = await setupStore()
+
+      await expect(store.setMoveOutDate(1, null)).rejects.toThrow()
+    })
+  })
+
+  describe('createHousehold', () => {
+    const payload = () => {
+      const { pbsId, address, movedInDate, heynaboId, name } = createMockHouseholdDetail()
+      return { pbsId, address, movedInDate, heynaboId, name }
+    }
+
+    it('returns the created household and refreshes the list', async () => {
+      createHouseholdEndpoint.mockReturnValue(createMockHouseholdDetail())
+      const store = await setupStore()
+      householdIndexEndpoint.mockClear()
+
+      const created = await store.createHousehold(payload())
+
+      expect(created?.id).toBe(createMockHouseholdDetail().id)
+      expect(householdIndexEndpoint).toHaveBeenCalled()
+    })
+
+    it('resolves null when the create fails', async () => {
+      createHouseholdEndpoint.mockImplementation(() => {
+        throw createError({ statusCode: 400, statusMessage: 'Bad request' })
+      })
+      const store = await setupStore()
+
+      await expect(store.createHousehold(payload())).resolves.toBeNull()
+    })
+  })
+})
+
+describe('Households Store - calendar feed', () => {
+  const FEED_URL = 'webcal://example.test/api/calendar/feed.ics'
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it.each([
+    { description: 'returns the feed URL', respond: () => FEED_URL, expected: FEED_URL },
+    { description: 'resolves null when the request fails', respond: () => { throw createError({ statusCode: 500 }) }, expected: null }
+  ])('fetchCalendarFeed $description', async ({ respond, expected }) => {
+    calendarFeedEndpoint.mockImplementation(respond)
+    const store = useHouseholdsStore()
+
+    await expect(store.fetchCalendarFeed()).resolves.toBe(expected)
+  })
+})
+
+describe('Households Store - gated reads', () => {
+  const HOUSEHOLDS_KEY = 'households-store-households'
+  const SELECTED_KEY = 'households-store-selected-household'
+
+  beforeEach(() => {
+    resetStores()
+    vi.clearAllMocks()
+    session.loggedIn.value = true
+    householdIndexEndpoint.mockReturnValue(createMockHouseholds())
+    householdByIdEndpoint.mockReturnValue(createMockHouseholdDetail())
+    deleteHouseholdEndpoint.mockReturnValue(null)
+  })
+
+  afterEach(() => {
+    session.loggedIn.value = true
+  })
+
+  const readFlags = (store: ReturnType<typeof useHouseholdsStore>) => ({
+    isHouseholdsLoading: store.isHouseholdsLoading,
+    isHouseholdsErrored: store.isHouseholdsErrored,
+    isHouseholdsInitialized: store.isHouseholdsInitialized,
+    isNoHouseholds: store.isNoHouseholds,
+    isHouseholdsStoreReady: store.isHouseholdsStoreReady
+  })
+  const IDLE_FLAGS = {
+    isHouseholdsLoading: false,
+    isHouseholdsErrored: false,
+    isHouseholdsInitialized: false,
+    isNoHouseholds: false,
+    isHouseholdsStoreReady: false
+  }
+
+  describe('households list (login gate, constant key)', () => {
+    it('is idle and unrequested while logged out, and the store is not ready', async () => {
+      session.loggedIn.value = false
+
+      const store = useHouseholdsStore()
+      await flushPromises()
+
+      expect(householdIndexEndpoint).not.toHaveBeenCalled()
+      expect(asyncDataStatus(HOUSEHOLDS_KEY)).toBe('idle')
+      expect(readFlags(store)).toEqual(IDLE_FLAGS)
+    })
+
+    it('fetches once the user logs in', async () => {
+      session.loggedIn.value = false
+      const store = useHouseholdsStore()
+      await flushPromises()
+
+      session.loggedIn.value = true
+
+      await vi.waitFor(() => expect(asyncDataStatus(HOUSEHOLDS_KEY)).toBe('success'))
+      expect(householdIndexEndpoint).toHaveBeenCalled()
+      expect(store.households).toHaveLength(createMockHouseholds().length)
+    })
+
+    it('empties on logout', async () => {
+      const store = await setupStore()
+      expect(store.households).toHaveLength(createMockHouseholds().length)
+
+      session.loggedIn.value = false
+
+      await vi.waitFor(() => expect(asyncDataStatus(HOUSEHOLDS_KEY)).toBe('idle'))
+      expect(store.households).toEqual([])
+      expect(readFlags(store)).toEqual(IDLE_FLAGS)
+    })
+  })
+
+  describe('selected household (id in the key)', () => {
+    it('is idle and unrequested with no household selected', async () => {
+      const store = await setupStore()
+
+      expect(householdByIdEndpoint).not.toHaveBeenCalled()
+      expect(asyncDataStatus(SELECTED_KEY)).toBe('idle')
+      expect(store.isSelectedHouseholdLoading).toBe(false)
+      expect(store.isSelectedHouseholdInitialized).toBe(false)
+      expect(store.isHouseholdsStoreReady).toBe(false)
+    })
+
+    it('fetches once a household is selected, and the store is ready', async () => {
+      const store = await setupStore()
+
+      store.selectHousehold(1)
+
+      await vi.waitFor(() => expect(store.isHouseholdsStoreReady).toBe(true))
+      expect(asyncDataStatus(SELECTED_KEY)).toBe('success')
+      expect(householdByIdEndpoint).toHaveBeenCalled()
+    })
+
+    it('lands on the empty default when the selected household is deleted', async () => {
+      const store = await setupStore()
+      store.selectHousehold(1)
+      await vi.waitFor(() => expect(store.isSelectedHouseholdInitialized).toBe(true))
+
+      await store.deleteHousehold(1)
+
+      await vi.waitFor(() => expect(asyncDataStatus(SELECTED_KEY)).toBe('idle'))
+      expect(store.selectedHousehold).toBeNull()
+    })
+  })
+})
+
+describe('Households Store - household selection', () => {
+  const [mine, other] = createMockHouseholds()
+
+  beforeEach(() => {
+    resetStores()
+    vi.clearAllMocks()
+    session.user.value = UserFactory.defaultUserWithInhabitant('households-selection')
+    householdIndexEndpoint.mockReturnValue(createMockHouseholds())
+    householdByIdEndpoint.mockReturnValue(createMockHouseholdDetail())
+    deleteHouseholdEndpoint.mockReturnValue(null)
+  })
+
+  afterEach(() => {
+    session.user.value = null
+  })
+
+  it('selects my household by default once the households load', async () => {
+    const store = useHouseholdsStore()
+
+    await vi.waitFor(() => expect(store.isHouseholdsStoreReady).toBe(true))
+    expect(store.selectedHouseholdId).toBe(mine!.id)
+  })
+
+  type Choice = {shortName?: string, pbsId?: number} | number | null
+
+  it.each([
+    {by: 'its id', choice: other!.id as Choice},
+    {by: 'its pbs', choice: {pbsId: other!.pbsId}},
+    {by: 'its short name', choice: {shortName: other!.shortName}},
+    {by: 'its pbs, over another household\'s short name', choice: {pbsId: other!.pbsId, shortName: mine!.shortName}}
+  ])('a getter naming a household by $by loads that household', async ({choice}) => {
+    const store = await setupStore()
+
+    store.selectHousehold(() => choice)
+
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
+    await vi.waitFor(() => expect(asyncDataStatus('households-store-selected-household')).toBe('success'))
+    expect(householdByIdEndpoint).toHaveBeenCalled()
+  })
+
+  it.each([
+    {by: 'an unknown id', choice: 999 as Choice},
+    {by: 'an unknown pbs', choice: {pbsId: -1}},
+    {by: 'an unknown short name', choice: {shortName: 'nowhere'}},
+    {by: 'nothing', choice: null}
+  ])('a getter naming $by selects my household', async ({choice}) => {
+    const store = await setupStore()
+
+    store.selectHousehold(() => choice)
+
+    await vi.waitFor(() => expect(store.isHouseholdsStoreReady).toBe(true))
+    expect(store.selectedHouseholdId).toBe(mine!.id)
+  })
+
+  it.each([
+    {description: 'my household among them selects mine', sharing: () => [mine!, {...other!, shortName: mine!.shortName}], shortName: mine!.shortName, expected: mine!.id},
+    {description: 'my household not among them selects the first', sharing: () => [mine!, other!, {...other!, id: 4, pbsId: other!.pbsId + 1}], shortName: other!.shortName, expected: other!.id}
+  ])('a short name several households carry: $description', async ({sharing, shortName, expected}) => {
+    householdIndexEndpoint.mockReturnValue(sharing())
+    const store = await setupStore()
+
+    store.selectHousehold(() => ({shortName}))
+
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(expected))
+  })
+
+  it('follows its getter with no further setter call, and a cleared choice returns to my household', async () => {
+    const store = await setupStore()
+    const choice = ref<Choice>({pbsId: other!.pbsId})
+
+    store.selectHousehold(choice)
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
+
+    choice.value = null
+
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(mine!.id))
+  })
+
+  it('keeps the choice out of the store state', async () => {
+    const store = await setupStore()
+    const choice = {pbsId: other!.pbsId}
+
+    store.selectHousehold(() => choice)
+
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
+    expect(Object.values(store.$state)).not.toContainEqual(choice)
+  })
+
+  it('deleting the selected household returns to my household', async () => {
+    const store = await setupStore()
+    store.selectHousehold(other!.id)
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
+
+    await store.deleteHousehold(other!.id)
+
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(mine!.id))
+  })
+
+  // After the households have loaded is the "by its pbs" row above
+  it('selects the household a pbs names, requested before the households have loaded', async () => {
+    const store = useHouseholdsStore()
+
+    store.selectHousehold(() => ({pbsId: other!.pbsId}))
+
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
+    await vi.waitFor(() => expect(store.isHouseholdsStoreReady).toBe(true))
+  })
+
+  it('a chosen household that no longer exists: toasts it, drops the choice and refreshes the households, so my household loads', async () => {
+    const gone = {...other!, id: GONE_HOUSEHOLD_ID, shortName: 'gone'}
+    householdIndexEndpoint.mockReturnValue([...createMockHouseholds(), gone])
+    const store = await setupStore()
+    householdIndexEndpoint.mockReturnValue(createMockHouseholds())
+    const householdListRequests = householdIndexEndpoint.mock.calls.length
+
+    store.selectHousehold(GONE_HOUSEHOLD_ID)
+
+    await vi.waitFor(() => expect(householdIndexEndpoint.mock.calls.length).toBeGreaterThan(householdListRequests))
+    await vi.waitFor(() => expect(store.selectedHousehold?.id).toBe(mine!.id))
+    expect(store.selectedHouseholdId).toBe(mine!.id)
+    expect(useToast().toasts.value.at(-1)?.title).toBe(`Kan ikke finde husstanden ${gone.shortName}`)
+  })
+
+  it('after a 404 the page\'s getter still drives the selection', async () => {
+    householdIndexEndpoint.mockReturnValue([...createMockHouseholds(), {...other!, id: GONE_HOUSEHOLD_ID, shortName: 'gone'}])
+    const store = await setupStore()
+    householdIndexEndpoint.mockReturnValue(createMockHouseholds())
+    const choice = ref<Choice>(GONE_HOUSEHOLD_ID)
+    store.selectHousehold(choice)
+    await vi.waitFor(() => expect(store.selectedHousehold?.id).toBe(mine!.id))
+
+    choice.value = {pbsId: other!.pbsId}
+
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
   })
 })

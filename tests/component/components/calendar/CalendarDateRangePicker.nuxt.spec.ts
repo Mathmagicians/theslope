@@ -1,9 +1,10 @@
 // @vitest-environment nuxt
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
+import { enableAutoUnmount } from '@vue/test-utils'
 import CalendarDateRangePicker from '~/components/calendar/CalendarDateRangePicker.vue'
-import { nextTick, ref } from 'vue'
-import { openPopover, expectSharedCalendarGrid, findDateSegments, typeIntoSegment, calendarDay } from '~~/tests/component/testHelpers'
+import { ref } from 'vue'
+import { openPopover, expectSharedCalendarGrid, findDateSegments, typeIntoSegment, calendarDay, resetStores } from '~~/tests/component/testHelpers'
 import { CALENDAR, createDayCircleClasses } from '~/composables/useTheSlopeDesignSystem'
 import type { DateRange } from '~/types/dateTypes'
 
@@ -12,12 +13,12 @@ const dayCircleClasses = createDayCircleClasses(ref(IS_MD))
 
 const JAN_1 = new Date(2025, 0, 1)
 const JAN_5 = new Date(2025, 0, 5)
-const JAN_10 = new Date(2025, 0, 10)
 
 type PickerVm = {
   errors: Map<string, string[]>
-  updateDateRange: (range: { start: Date; end: Date }) => boolean
 }
+
+enableAutoUnmount(afterEach)
 
 const mountPicker = async (modelValue: { start: Date; end: Date }, props: Record<string, unknown> = {}) =>
   await mountSuspended(CalendarDateRangePicker, {
@@ -28,15 +29,21 @@ const mountPicker = async (modelValue: { start: Date; end: Date }, props: Record
 describe('CalendarDateRangePicker', () => {
 
   // The popover teleports into the body; clear it so each test reads its own calendar
-  beforeEach(() => { document.body.innerHTML = '' })
+  beforeEach(() => {
+    resetStores()
+    document.body.innerHTML = ''
+  })
 
-  it('renders start and end dates in typed segments', async () => {
+  it('renders start and end dates in typed segments, and a calendar on the shared grid token', async () => {
     const wrapper = await mountPicker({ start: JAN_1, end: JAN_5 })
     const days = findDateSegments(wrapper, 'day')
     expect(days.length).toBe(2)
     expect(days[0]!.attributes('aria-valuenow')).toBe('1')
     expect(days[1]!.attributes('aria-valuenow')).toBe('5')
     findDateSegments(wrapper, 'year').forEach(year => expect(year.attributes('aria-valuenow')).toBe('2025'))
+
+    await openPopover(wrapper)
+    expectSharedCalendarGrid(wrapper)
   })
 
   it('typing the start day updates start and preserves end', async () => {
@@ -59,12 +66,6 @@ describe('CalendarDateRangePicker', () => {
     expect(allErrors.some((msg: string) => msg.includes('Tidsmaskinen'))).toBe(true)
   })
 
-  it('configures its calendar from the shared design-system grid token', async () => {
-    const wrapper = await mountPicker({ start: JAN_1, end: JAN_5 })
-    await openPopover(wrapper)
-    expectSharedCalendarGrid(wrapper)
-  })
-
   // What is being picked decides how a selected day reads - the variants live in CALENDAR.picker
   describe.each(['cookingDay', 'holiday'] as const)('selection=%s', (selection) => {
     it('draws every picked day with the design-system circle for that selection', async () => {
@@ -79,14 +80,5 @@ describe('CalendarDateRangePicker', () => {
         .flatMap(token => token.split(' '))
         .forEach(cls => expect(circle!.classList.contains(cls)).toBe(true))
     })
-  })
-
-  it('rejects end before start', async () => {
-    const wrapper = await mountPicker({ start: JAN_5, end: JAN_10 })
-    const vm = wrapper.vm as unknown as PickerVm
-    expect(vm.updateDateRange({ start: JAN_5, end: JAN_1 })).toBe(false)
-    await nextTick()
-    const allErrors = Array.from(vm.errors.values()).flat()
-    expect(allErrors.some((msg: string) => msg.includes('Tidsmaskinen'))).toBe(true)
   })
 })

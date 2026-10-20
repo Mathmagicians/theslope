@@ -1,12 +1,10 @@
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {fetchOrder} from "~~/server/data/financesRepository"
-import {z} from "zod"
+import {idParams} from '~/composables/useCoreValidation'
 import type { OrderDetail } from '~/composables/useBookingValidation'
 const {throwH3Error} = eventHandlerHelper
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 /** GET /api/order/[id] - Open to any authenticated user */
 export default defineEventHandler(async (event):Promise<OrderDetail> => {
@@ -16,7 +14,7 @@ export default defineEventHandler(async (event):Promise<OrderDetail> => {
     let id!: number
     let order: OrderDetail | null
     try {
-        ({id} = await getValidatedRouterParams(event, idSchema.parse))
+        ({id} = await getValidatedRouterParams(event, paramSchema.parse))
     } catch (error) {
         return throwH3Error('🎟️ > ORDER > [GET] Input validation error', error)
     }

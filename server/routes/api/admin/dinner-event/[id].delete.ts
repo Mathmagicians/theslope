@@ -2,14 +2,12 @@ import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h
 import {deleteDinnerEvent, fetchDinnerEvent} from "~~/server/data/financesRepository"
 import {deleteHeynaboEventAsSystem} from "~~/server/integration/heynabo/heynaboClient"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {z} from "zod"
+import {idParams} from '~/composables/useCoreValidation'
 import type {DinnerEventDetail} from "~/composables/useBookingValidation"
 
 const {throwH3Error} = eventHandlerHelper
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 /**
  * Delete dinner event (admin operation)
@@ -25,7 +23,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     // Input validation - FAIL EARLY
     let id!: number
     try {
-        ({id} = await getValidatedRouterParams(event, idSchema.parse))
+        ({id} = await getValidatedRouterParams(event, paramSchema.parse))
     } catch (error) {
         return throwH3Error(`${PREFIX} Input validation error`, error)
     }

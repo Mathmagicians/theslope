@@ -15,7 +15,9 @@ import {scaffoldPrebookings} from '~~/server/utils/scaffoldPrebookings'
 import {fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
+import {deleteWaitlistForConsumedDinners} from '~~/server/data/waitlistRepository'
 import type {DailyMaintenanceResult} from '~/composables/useBookingValidation'
+import {useBooking} from '~/composables/useBooking'
 
 const LOG = '🔧 > DAILY > [MAINTENANCE]'
 
@@ -43,6 +45,10 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
         const transactResult = await createTransactions(d1Client)
         console.info(`${LOG} Step 3 complete: created ${transactResult.created} transactions`)
 
+        // 4. A consumed dinner has no queue
+        const clearWaitlist = await deleteWaitlistForConsumedDinners(d1Client)
+        console.info(`${LOG} Step 4 complete: cleared ${clearWaitlist.cleared} waiting-list entries`)
+
         // Initialize NULL preferences + scaffold pre-bookings (requires active season)
         const activeSeasonId = await fetchActiveSeasonId(d1Client)
         let initPrefsResult = {initialized: 0}
@@ -53,7 +59,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             console.info(`${LOG} initPrefs: initialized ${initPrefsResult.initialized} inhabitants`)
 
             scaffoldResult = await scaffoldPrebookings(d1Client, {seasonId: activeSeasonId})
-            console.info(`${LOG} scaffold: created ${scaffoldResult?.created ?? 0} orders`)
+            console.info(`${LOG} scaffold: ${useBooking().formatScaffoldResult(scaffoldResult)}`)
         } else {
             console.info(`${LOG} initPrefs/scaffold skipped: no active season`)
         }
@@ -63,6 +69,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             consume: consumeResult,
             close: closeResult,
             transact: transactResult,
+            clearWaitlist,
             initPrefs: initPrefsResult,
             scaffold: scaffoldResult
         }

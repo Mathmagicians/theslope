@@ -1,23 +1,31 @@
 import {test, expect} from '@playwright/test'
 import {SeasonFactory} from "~~/tests/e2e/testDataFactories/seasonFactory"
+import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
+import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 
 const {validatedBrowserContext} = testHelpers
+const {TeamRoleSchema} = useCookingTeamValidation()
 
 const MY_TEAM_ENDPOINT = '/api/team/my'
 
 let activeSeason: Season
+const createdTeamIds: number[] = []
 
 test.describe('Team API - My Teams', () => {
 
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        // Create singleton active season (shared across workers, cleaned up by global teardown)
+        // GET /api/team/my reads the active season: the singleton (shared across workers, cleaned up by global teardown)
         activeSeason = await SeasonFactory.createActiveSeason(context)
     })
 
-    // NOTE: Cleanup handled by global teardown (runs once after all workers finish)
+    // The spec's own teams on the singleton go here; their assignments cascade, their dinners keep no team (SET NULL)
+    test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        for (const id of createdTeamIds) await SeasonFactory.deleteCookingTeam(context, id)
+    })
 
     test.describe('GET /api/team/my', () => {
 
@@ -25,23 +33,23 @@ test.describe('Team API - My Teams', () => {
             const context = await validatedBrowserContext(browser)
 
             // Get the logged-in user's inhabitant ID
-            const userResponse = await context.request.get('/api/admin/users', { headers: testHelpers.headers })
-            expect(userResponse.status(), 'GET /api/admin/users should return 200').toBe(200)
-            const users = await userResponse.json()
-            const testUser = users.find((u: { email: string }) => u.email === process.env.HEY_NABO_USERNAME)
+            const users = await UserFactory.getUsers(context)
+            const testUser = users.find(u => u.email === process.env.HEY_NABO_USERNAME)
             expect(testUser, `Test user with email ${process.env.HEY_NABO_USERNAME} should exist`).toBeDefined()
-            expect(testUser.Inhabitant, `Test user should have an Inhabitant. User: ${JSON.stringify(testUser, null, 2)}`).toBeDefined()
-            const testInhabitantId = testUser.Inhabitant.id
+            expect(testUser!.Inhabitant, `Test user should have an Inhabitant. User: ${JSON.stringify(testUser, null, 2)}`).toBeDefined()
+            const testInhabitantId = testUser!.Inhabitant!.id
             expect(testInhabitantId, 'Test inhabitant ID should be defined').toBeGreaterThan(0)
 
             // Create teams and assign logged-in user to them
             const team1 = await SeasonFactory.createCookingTeamForSeason(context, activeSeason.id!, "My-Team-1")
-            const assignment1 = await SeasonFactory.assignMemberToTeam(context, team1.id!, testInhabitantId, 'CHEF')
+            createdTeamIds.push(team1.id!)
+            const assignment1 = await SeasonFactory.assignMemberToTeam(context, team1.id!, testInhabitantId, TeamRoleSchema.enum.CHEF)
             expect(assignment1, 'Team 1 assignment should be created').not.toBeNull()
             expect(assignment1!.inhabitantId, 'Assignment 1 should reference test inhabitant').toBe(testInhabitantId)
 
             const team2 = await SeasonFactory.createCookingTeamForSeason(context, activeSeason.id!, "My-Team-2")
-            const assignment2 = await SeasonFactory.assignMemberToTeam(context, team2.id!, testInhabitantId, 'COOK')
+            createdTeamIds.push(team2.id!)
+            const assignment2 = await SeasonFactory.assignMemberToTeam(context, team2.id!, testInhabitantId, TeamRoleSchema.enum.COOK)
             expect(assignment2, 'Team 2 assignment should be created').not.toBeNull()
             expect(assignment2!.inhabitantId, 'Assignment 2 should reference test inhabitant').toBe(testInhabitantId)
 
@@ -71,6 +79,7 @@ test.describe('Team API - My Teams', () => {
             expect(myTeam.seasonId).toBe(activeSeason.id!)
             expect(Array.isArray(myTeam.dinnerEvents)).toBe(true)
             expect(Array.isArray(myTeam.assignments)).toBe(true)
+            expect(myTeam.jokerSlots).toEqual([])
             expect(myTeam.assignments.length).toBe(1)
             expect(myTeam.assignments[0].inhabitantId).toBe(testInhabitantId)
         })
@@ -80,6 +89,7 @@ test.describe('Team API - My Teams', () => {
 
             // Create team without assignments for logged-in user
             const otherTeam = await SeasonFactory.createCookingTeamForSeason(context, activeSeason.id!)
+            createdTeamIds.push(otherTeam.id!)
 
             // Fetch my teams
             const response = await context.request.get(MY_TEAM_ENDPOINT)

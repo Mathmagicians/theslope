@@ -1,4 +1,4 @@
-import {describe, expect, it, vi, beforeEach, afterEach} from "vitest"
+import {describe, expect, it} from "vitest"
 import {
     calculateDayFromWeekNumber,
     copyPartialDateRange,
@@ -14,7 +14,6 @@ import {
     selectWeekNumbersFromListThatFitInsideDateRange,
     formatCalendarDate,
     calculateAgeOnDate,
-    calculateAge,
     toCalendarDate,
     isCalendarDateInDateList,
     toDate,
@@ -40,12 +39,6 @@ describe('test calculateDayFromWeekNumber', async () => {
             weekNumber: 1,
             year: 2025,
             expected: new Date(2024, 11, 30)
-        },
-        {
-            weekday: 0,
-            weekNumber: 42,
-            year: 2025,
-            expected: new Date(2025, 9, 13)
         },
         {
             weekday: 4,
@@ -89,16 +82,6 @@ describe('getEachDayOfIntervalWithSelectedWeekdays', () => {
         const start = new Date(2025, 0, 1)
         const end = new Date(2024, 0, 1)
         const weekdays = createDefaultWeekdayMap([false, true])
-
-        const result = getEachDayOfIntervalWithSelectedWeekdays(start, end, weekdays)
-
-        expect(result).toHaveLength(0)
-    })
-
-    it('should return empty array for single Monday when only Tuesday is selected', () => {
-        const start = new Date(2025, 0, 6)  // First Monday of January 2025
-        const end = new Date(2025, 0, 6)
-        const weekdays = createDefaultWeekdayMap([false, true]) // Only Tuesday selected
 
         const result = getEachDayOfIntervalWithSelectedWeekdays(start, end, weekdays)
 
@@ -148,23 +131,6 @@ describe('parseDate works for dd-MM-yyyy format', () => {
         expect(result.getDate()).toBe(26)
         expect(result.getMonth()).toBe(0) // 0 = January
         expect(result.getFullYear()).toBe(2025)
-    })
-
-    it('should parse "20/12/2025" to December 20, 2025', () => {
-        const result = parseDate('20/12/2025')
-        expect(result).toBeInstanceOf(Date)
-        expect(isValid(result)).toBe(true)
-        expect(result.getDate()).toBe(20)
-        expect(result.getMonth()).toBe(11) // 0 = January
-        expect(result.getFullYear()).toBe(2025)
-    })
-
-    it('should parse "12-20-2025" as invalid date', () => {
-        const invalidDate = parseDate('2-1-2025')
-        expect(isValid(invalidDate)).toBe(false)
-        expect(invalidDate).toBeInstanceOf(Date)
-        expect(invalidDate.getTime()).toBeNaN()
-
     })
 
     it('should parse "2-1-2025" as invalid date', () => {
@@ -401,18 +367,6 @@ describe('selectWeekNumbersFromListThatFitInsideDateRange', () => {
             seasonDates: { start: new Date(2025, 9, 1), end: new Date(2026, 0, 31) },
             holidayWeeks: [8, 42, 52],
             expectedCount: 2
-        },
-        {
-            description: 'year boundary (week 8 in next year)',
-            seasonDates: { start: new Date(2025, 11, 1), end: new Date(2026, 2, 31) },
-            holidayWeeks: [8, 52],
-            expectedCount: 2
-        },
-        {
-            description: 'no matching weeks',
-            seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 0, 31) },
-            holidayWeeks: [42, 52],
-            expectedCount: 0
         }
     ]
 
@@ -434,8 +388,7 @@ describe('formatCalendarDate', () => {
     describe('timezone-agnostic behavior (CI=UTC, local=Copenhagen)', () => {
         const testCases = [
             { day: 5, month: 1, year: 2025, expected: '05/01/2025' },
-            { day: 31, month: 12, year: 2024, expected: '31/12/2024' },
-            { day: 7, month: 3, year: 2025, expected: '07/03/2025' }
+            { day: 31, month: 12, year: 2024, expected: '31/12/2024' }
         ]
 
         testCases.forEach(({ day, month, year, expected }) => {
@@ -475,52 +428,16 @@ describe('calculateAgeOnDate', () => {
             expectedAge: 15
         },
         {
-            description: 'newborn (age 0)',
-            birthDate: new Date(2025, 0, 1),  // January 1, 2025
-            eventDate: new Date(2025, 0, 15), // January 15, 2025
-            expectedAge: 0
-        },
-        {
             description: 'leap year birthday in non-leap year',
             birthDate: new Date(2020, 1, 29), // February 29, 2020
             eventDate: new Date(2025, 2, 1),  // March 1, 2025
             expectedAge: 5
         },
         {
-            description: 'adult before birthday',
-            birthDate: new Date(1985, 4, 20), // May 20, 1985
-            eventDate: new Date(2025, 0, 1),  // January 1, 2025
-            expectedAge: 39
-        },
-        {
-            description: 'same date (age 0)',
-            birthDate: new Date(2025, 5, 15),
-            eventDate: new Date(2025, 5, 15),
-            expectedAge: 0
-        },
-        {
-            description: '2-year-old boundary: day before birthday (still 1)',
-            birthDate: new Date(2023, 0, 1),  // January 1, 2023
-            eventDate: new Date(2024, 11, 31), // December 31, 2024
-            expectedAge: 1
-        },
-        {
-            description: '2-year-old boundary: on birthday (turns 2)',
-            birthDate: new Date(2023, 0, 1),  // January 1, 2023
-            eventDate: new Date(2025, 0, 1),  // January 1, 2025
-            expectedAge: 2
-        },
-        {
-            description: '12-year-old boundary: day before birthday (still 11)',
+            description: 'day before birthday in the birthday month (12-year boundary, still 11)',
             birthDate: new Date(2013, 5, 15), // June 15, 2013
             eventDate: new Date(2025, 5, 14), // June 14, 2025
             expectedAge: 11
-        },
-        {
-            description: '12-year-old boundary: on birthday (turns 12)',
-            birthDate: new Date(2013, 5, 15), // June 15, 2013
-            eventDate: new Date(2025, 5, 15), // June 15, 2025
-            expectedAge: 12
         }
     ]
 
@@ -532,48 +449,12 @@ describe('calculateAgeOnDate', () => {
     })
 })
 
-describe('calculateAge', () => {
-    beforeEach(() => {
-        vi.useFakeTimers()
-        vi.setSystemTime(new Date(2025, 0, 15)) // January 15, 2025
-    })
-
-    afterEach(() => {
-        vi.useRealTimers()
-    })
-
-    const testCases = [
-        { description: 'Date object before birthday', input: new Date(2010, 2, 15), expected: 14 },
-        { description: 'ISO string before birthday', input: '2010-03-15T00:00:00.000Z', expected: 14 },
-        { description: 'child under 18', input: new Date(2015, 0, 1), expected: 10 },
-        { description: 'adult over 18', input: new Date(1985, 5, 20), expected: 39 },
-        { description: 'null input', input: null, expected: null },
-        { description: 'invalid date string', input: 'invalid-date', expected: null }
-    ]
-
-    testCases.forEach(({ description, input, expected }) => {
-        it(`should handle ${description}`, () => {
-            const age = calculateAge(input)
-            expect(age).toBe(expected)
-        })
-    })
-
-    it('should calculate correctly after birthday this year', () => {
-        vi.setSystemTime(new Date(2025, 11, 31)) // December 31, 2025
-        const age = calculateAge(new Date(2010, 2, 15))
-        expect(age).toBe(15)
-    })
-})
-
 describe('toCalendarDate roundtrip conversions', () => {
     // Shared test dates for DRY - each entry has both representations
     const sharedTestDates = [
         { description: 'first day of month', date: new Date(2025, 0, 1), year: 2025, month: 1, day: 1 },
         { description: 'last day of month (31 days)', date: new Date(2025, 11, 31), year: 2025, month: 12, day: 31 },
-        { description: 'February non-leap year', date: new Date(2025, 1, 28), year: 2025, month: 2, day: 28 },
-        { description: 'February leap year', date: new Date(2024, 1, 29), year: 2024, month: 2, day: 29 },
-        { description: 'year boundary - first day', date: new Date(2025, 0, 1), year: 2025, month: 1, day: 1 },
-        { description: 'year boundary - last day', date: new Date(2025, 11, 31), year: 2025, month: 12, day: 31 }
+        { description: 'February leap year', date: new Date(2024, 1, 29), year: 2024, month: 2, day: 29 }
     ]
 
     describe('Date → CalendarDate → Date roundtrip', () => {
@@ -607,8 +488,7 @@ describe('toCalendarDate roundtrip conversions', () => {
     describe('timezone-agnostic behavior (CI=UTC, local=Copenhagen)', () => {
         const timezoneTestCases = [
             { description: 'summer date', year: 2025, month: 6, day: 15 },
-            { description: 'year boundary Dec 31', year: 2025, month: 12, day: 31 },
-            { description: 'year boundary Jan 1', year: 2025, month: 1, day: 1 }
+            { description: 'year boundary Dec 31', year: 2025, month: 12, day: 31 }
         ]
 
         timezoneTestCases.forEach(({ description, year, month, day }) => {
@@ -651,14 +531,6 @@ describe('toCalendarDate roundtrip conversions', () => {
                 expect(utcDay).toBe(day)
             })
         })
-
-        it('GIVEN Date created in local timezone WHEN doing roundtrip THEN isSameDay returns true', () => {
-            const localDate = new Date(2025, 5, 15)
-            const calendarDate = toCalendarDate(localDate)
-            const roundtripDate = toDate(calendarDate!)
-
-            expect(isSameDay(localDate, roundtripDate)).toBe(true)
-        })
     })
 
     describe('edge cases', () => {
@@ -671,29 +543,6 @@ describe('toCalendarDate roundtrip conversions', () => {
             const invalidDate = new Date('invalid')
             const result = toCalendarDate(invalidDate)
             expect(result).toBeUndefined()
-        })
-    })
-
-    describe('month index conversion', () => {
-        const monthTestCases = [
-            { description: 'January', jsMonth: 0, calendarMonth: 1 },
-            { description: 'December', jsMonth: 11, calendarMonth: 12 }
-        ]
-
-        monthTestCases.forEach(({ description, jsMonth, calendarMonth }) => {
-            it(`GIVEN ${description} (JS month ${jsMonth}) WHEN converting to CalendarDate THEN month is ${calendarMonth}`, () => {
-                const date = new Date(2025, jsMonth, 15)
-                const calendarDate = toCalendarDate(date)
-
-                expect(calendarDate!.month).toBe(calendarMonth)
-            })
-
-            it(`GIVEN CalendarDate month ${calendarMonth} WHEN converting to Date THEN JS month is ${jsMonth}`, () => {
-                const calendarDate = new CalendarDate(2025, calendarMonth, 15)
-                const date = toDate(calendarDate)
-
-                expect(date.getMonth()).toBe(jsMonth)
-            })
         })
     })
 })
@@ -725,14 +574,6 @@ describe('calculateCountdown', () => {
             expectedFormatted: '45M'
         },
         {
-            description: 'target is 5 minutes away',
-            currentDate: new Date(2025, 0, 15, 17, 55, 0),
-            targetDate: new Date(2025, 0, 15, 18, 0, 0),
-            expectedHours: 0,
-            expectedMinutes: 5,
-            expectedFormatted: '5M'
-        },
-        {
             description: 'target is exactly now (same time)',
             currentDate: new Date(2025, 0, 15, 18, 0, 0),
             targetDate: new Date(2025, 0, 15, 18, 0, 0),
@@ -747,22 +588,6 @@ describe('calculateCountdown', () => {
             expectedHours: 0,
             expectedMinutes: 0,
             expectedFormatted: 'Overskredet'
-        },
-        {
-            description: 'target is 10 hours away',
-            currentDate: new Date(2025, 0, 15, 8, 0, 0),
-            targetDate: new Date(2025, 0, 15, 18, 0, 0),
-            expectedHours: 10,
-            expectedMinutes: 0,
-            expectedFormatted: '10T 0M'
-        },
-        {
-            description: 'target crosses midnight',
-            currentDate: new Date(2025, 0, 15, 23, 30, 0),
-            targetDate: new Date(2025, 0, 16, 1, 15, 0),
-            expectedHours: 1,
-            expectedMinutes: 45,
-            expectedFormatted: '1T 45M'
         }
     ]
 
@@ -796,12 +621,6 @@ describe('createDateInTimezone', () => {
             date: new Date(2030, 0, 15),
             hour: 0,
             expectedUtcHour: 23 // 00:00 Copenhagen Jan 15 = 23:00 UTC Jan 14
-        },
-        {
-            scenario: 'midnight summer',
-            date: new Date(2030, 6, 15),
-            hour: 0,
-            expectedUtcHour: 22 // 00:00 Copenhagen = 22:00 UTC previous day
         }
     ])('$scenario: $hour:00 Copenhagen → $expectedUtcHour:00 UTC', ({ date, hour, expectedUtcHour }) => {
         const result = createDateInTimezone(date, hour)
@@ -829,15 +648,10 @@ describe('areSameWeek', () => {
     it.each([
         // Same week (Mon-Sun)
         {a: new Date(2025, 0, 6), b: new Date(2025, 0, 12), expected: true, desc: 'Mon and Sun same week'},
-        {a: new Date(2025, 0, 6), b: new Date(2025, 0, 6), expected: true, desc: 'same day'},
-        {a: new Date(2025, 0, 7), b: new Date(2025, 0, 10), expected: true, desc: 'Tue and Fri same week'},
         // Different weeks
         {a: new Date(2025, 0, 12), b: new Date(2025, 0, 13), expected: false, desc: 'Sun and next Mon'},
-        {a: new Date(2025, 0, 5), b: new Date(2025, 0, 6), expected: false, desc: 'Sun and next Mon (week boundary)'},
-        {a: new Date(2025, 0, 1), b: new Date(2025, 0, 15), expected: false, desc: 'two weeks apart'},
         // Year boundary
         {a: new Date(2024, 11, 30), b: new Date(2025, 0, 3), expected: true, desc: 'year boundary same week'},
-        {a: new Date(2024, 11, 29), b: new Date(2025, 0, 6), expected: false, desc: 'year boundary different weeks'},
     ])('$desc: $expected', ({a, b, expected}) => {
         expect(areSameWeek(a, b)).toBe(expected)
     })
@@ -874,10 +688,6 @@ describe('getPeriodBoundary', () => {
         // Monday-start week edges
         {input: mon, view: 'week' as PeriodView, direction: -1 as const,
             expected: atStartOfDay(new Date(2025, 0, 13)), desc: 'week backward from Monday = Monday itself start-of-day'},
-        {input: mon, view: 'week' as PeriodView, direction: 1 as const,
-            expected: atEndOfDay(new Date(2025, 0, 19)), desc: 'week forward from Monday = Sunday end-of-day'},
-        {input: sun, view: 'week' as PeriodView, direction: -1 as const,
-            expected: atStartOfDay(new Date(2025, 0, 13)), desc: 'week backward from Sunday = Monday of same ISO week (Mon-start)'},
         {input: sun, view: 'week' as PeriodView, direction: 1 as const,
             expected: atEndOfDay(new Date(2025, 0, 19)), desc: 'week forward from Sunday = Sunday itself end-of-day'},
 

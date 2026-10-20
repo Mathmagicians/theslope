@@ -2,6 +2,9 @@
 
 TheSlope is a community dining management platform for Skråningen co-housing. It handles meal booking, cooking team coordination, billing, and integration with external systems (Heynabo, PBS).
 
+This overview is for architects: what the system does, its roles, entities and architecture. The guides show how to
+use it; mockups live in the component headers.
+
 > **User Guides:** [User Guide](../user-guide.md) | [Chef Guide](../chef-guide.md) | [Admin Guide](../admin-guide.md)
 
 ---
@@ -69,178 +72,35 @@ User (Bruger)
 | **Monthly Billing** | Generate invoices, magic link sharing, CSV export | [Admin Guide](../admin-guide.md#økonomi) |
 | **Job History Panel** | View/trigger system jobs, track run history | [Admin Guide](../admin-guide.md#systemvedligeholdelse) |
 | **Authorization** | Role-based access control (Admin, AllergyManager) | — |
+| **Waitlist** | Claim a released ticket or queue for one through the booking form; the chef releases portions; queue mails (ADR-016) | [User Guide](../user-guide.md) |
+| **Chef Budget** | Income, allowance and kitchen share per dinner, grocery lines with VAT and a prefilled note, the team's round, ticket changes | [Chef Guide](../chef-guide.md#6-madbestilling-og-budget) |
+| **Joker Slots** | A time-bound team vacancy with a period, weekdays, role and note, managed in the team card | [Admin Guide](../admin-guide.md#cooking-teams) |
+| **Allergy Lines** | Allergy kuverter per dining mode in the kitchen stats, allergen counts in the chef's allergen row, a booked inhabitant's allergies on the ticket | [Chef Guide](../chef-guide.md) |
+| **Dead-session Re-login** | A request that meets a 401 loads the login page with the current URL as redirect and returns there after sign-in | — |
 
 ### Partially Implemented
 
 | Feature | Remaining Work |
 |---------|----------------|
-| **Ticket Claim UI** | Backend done, need UI for claiming released tickets |
 | **Chef Components** | Missing component tests for DinnerStatusStepper, TeamRoleStatus, DinnerDetailPanel |
 
 ### Planned
 
 | Feature | Description |
 |---------|-------------|
-| **Ticket Claim UI** | Claim released tickets from other households (backend ready) |
 | **PBS Export** | Direct PBS file generation |
-| **Chef Budget View** | Calculate budget from ticket counts |
+| **Duty Roster** | Templates, duties, audit trail, derived sign-off and cross-team swap (`feature-proposal-duty-roster.md`) |
+| **Season Spending** | Sæsontrend per chef, admin Forbrug with scopes, basisvarer entry (`feature-proposal-season-spending.md`) |
+| **Ad-hoc Charges** | Admin charges on a household, reversal, the spending views (`feature-proposal-adhoc-admin-billing.md`) |
+| **Notification Triggers** | Chef deadlines, roster and shift reminders, job failed, dinner cancelled, duty swapped (`feature-proposal-notification-triggers.md`) |
+| **Developer Companion** | E2E as Gherkin features with playwright-bdd, `make bdd-report` in the summaries, `developer.skraaningen.dk` with the living documentation and the API reference per environment (`feature-proposal-developer-companion.md`) |
 
 ---
 
-## Screenshots
+## Guides
 
-### User Dashboard
-![User Dashboard](screenshots/user/dashboard.png)
-*Dashboard shown after login with quick actions for Dinner, Household, and Cooking Team*
-
-### Dinner Calendar
-![Dinner Calendar](screenshots/dinner/dinner-calendar.png)
-*Public dinner calendar showing upcoming events with booking status*
-
-### Household Views
-![Household Bookings](screenshots/household/household-bookings.png)
-*Household booking view showing family members and their reservations*
-
-![Weekly Preferences](screenshots/household/household-members-view-mode.png)
-*VIEW mode: Compact badges show preferences. Click ✏️ to edit individual, ⚡ for power mode*
-
-![Editing Preferences](screenshots/household/household-card-preferences-editing.png)
-*EDIT mode: Button groups for each day with immediate save*
-
-### Chef Views
-![Chef Dashboard](screenshots/chef/chef-dashboard.png)
-*Chef view showing upcoming cooking assignments*
-
-![Chef Menu Card](screenshots/chef/chef-menu-card.png)
-*Menu card with team info and allergen tracking*
-
-### Admin Views
-![Admin Planning](screenshots/admin/admin-planning-loaded.png)
-*Season planning with cooking days and holiday configuration*
-
-![Season Selector](screenshots/admin/season-selector-dropdown-status-indicators.png)
-*Season selector with status indicators: 🟢 Active | 🌱 Future | ⚪ Past*
-
-![Admin Teams](screenshots/admin/admin-teams-edit.png)
-*Team management with master-detail interface*
-
-![Admin Households](screenshots/admin/admin-households-list.png)
-*Household list with inhabitants — inline edit-panel expands per row for move/delete*
-
-![Household Settings](screenshots/household/household-settings.png)
-*Husstandens indstillinger — set/clear move-out date via pencil-gate*
-
----
-
-## ASCII Mockups
-
-### Season Selector
-```
-┌─────────────────────────────────┐
-│ 📅 Forår 2025            🟢 ▼ │  ← Selected (active season)
-│ ─────────────────────────────── │
-│ 📅 Forår 2025            🟢    │  ← ACTIVE - visible to all
-│ 📅 Efterår 2025          🌱    │  ← FUTURE - can activate
-│ 📅 Vinter 2025           🟡    │  ← CURRENT - dates match now
-│ 📦 Efterår 2024          ⚪    │  ← PAST - archived
-└─────────────────────────────────┘
-
-Legend: 🟢 Active | 🌱 Future | 🟡 Current | ⚪ Past
-```
-
-### Team Management Interface
-```
-┌─────────────────┬────────────────────────────────────────────────┐
-│ TEAMS (Left)    │ EDIT TEAM (Right)                              │
-│                 │                                                │
-│ □ Hold 1 [8]    │ 🍳 [Hold 2___________] 👤👤👤 [6 medlemmer]  │
-│ ■ Hold 2 [6]    │                                                │
-│ □ Hold 3 [0]    │ ┌Madlavningsdage─┬─Holdkalender──────────────┐ │
-│ □ Hold 4 [5]    │ │☑ Mon  ☐ Fri    │ Oct  Nov  Dec             │ │
-│ ...             │ │☑ Wed  ☐ Sat    │ 🔵1 🔵8  🔵15 🔵5  🔵12   │ │
-│                 │ │☐ Thu  ☐ Sun    │ 🔵3 🔵10 ...              │ │
-│                 │ └────────────────┴───────────────────────────┘ │
-│                 │                                                │
-│                 │ Holdmedlemmer                                  │
-│                 │ ┌Chefkok────┬Kok─────────┬Kokkespire─────────┐ │
-│                 │ │👤 Anna    │👤 Bob      │👤 Diana          │ │
-│                 │ └───────────┴────────────┴───────────────────┘ │
-└─────────────────┴────────────────────────────────────────────────┘
-```
-
-### Weekly Preferences Interface
-```
-┌───────────────────────────────────────────────────────────────┐
-│ UCARD: Husstandens ugentlige booking præferencer              │
-├───────────────────────────────────────────────────────────────┤
-│ [⚡] Alle medlemmer  👥👥👥   🍽️ 🍽️ 🍽️ 🍽️ 🛍️  ← Power mode │
-├───────────────────────────────────────────────────────────────┤
-│ [✏️] Voksen  👤 Anna           🍽️ 🍽️ 🍽️ 🍽️ 🛍️              │
-│ [✏️] Voksen  👤 Bob            🍽️ 🍽️ ❌ 🍽️ 🛍️              │
-│ [✏️] Barn    👤 Clara          🍽️ 🍽️ 🍽️ 🍽️ 🛍️              │
-│ [✏️] Baby    👤 David          ❌ ❌ ❌ ❌ ❌               │
-└───────────────────────────────────────────────────────────────┘
-
-EXPANDED ROW (Edit mode):
-┌───────────────────────────────────────────────────────────────┐
-│ [▼] Voksen  👤 Anna                                          │
-│ ──────────────────────────────────────────────────────────── │
-│  Mon: [🍽️ Spis][🕐 Sen][🛍️ Take][❌ Ingen]                  │
-│  Tue: [🍽️ Spis][🕐 Sen][🛍️ Take][❌ Ingen]                  │
-│  Wed: [🍽️ Spis][🕐 Sen][🛍️ Take][❌ Ingen]                  │
-│  Thu: [🍽️ Spis][🕐 Sen][🛍️ Take][❌ Ingen]                  │
-└───────────────────────────────────────────────────────────────┘
-
-Legend: ⚡ Power mode | ✏️ Edit | 🍽️ Dine in | 🕐 Late | 🛍️ Takeaway | ❌ None
-```
-
-### Admin Household Edit Panel
-```
-┌─ Husstande på Skråningen ─────────────────────── [+ Ny husstand] ─┐
-│ ▾ │ Skr_14 │ 115 ➡ Fraflytter │ Skråningen 14 │ Emil, Frida │    │
-│ ╔═════════════════════════════════════════════════════════════╗  │
-│ ║ Stamdata    PBS 115 · HN 42 · Skråningen 14    (read-only)  ║  │
-│ ║ Residens    Indflyttet 15/08/2020  ➡ 01/06/2026      [✎]   ║  │
-│ ║ Beboere     [🔍 søg…]                        [⇅ Status]     ║  │
-│ ║  👤 Emil  │ [Skr_14 · PBS 115] ✓  │ (i denne husstand)      ║  │
-│ ║  👤 Anna  │ [Skr_12 · PBS 100]    │ [→ Flyt hertil]         ║  │
-│ ║  👤 Greta │ [Skr_20 · PBS 102] ⊗  │ (fraflyttet)            ║  │
-│ ║ [🗑 Slet husstand]  (2-click DangerButton)       [✕ Luk]   ║  │
-│ ╚═════════════════════════════════════════════════════════════╝  │
-└────────────────────────────────────────────────────────────────────┘
-```
-
-### Move-Out Date (Household Settings)
-```
-┌─ Fraflytning ───────────────────────────────┐
-│ ☀ Familien har ingen flytteplaner      [✎] │  ← view, no date
-└─────────────────────────────────────────────┘
-
-┌─ Fraflytning ───────────────────────────────┐
-│ ➡ Fraflytter 15/03/2026                [✎] │  ← view, has date
-│ [« Fortryd flytning]  (2-click)             │
-└─────────────────────────────────────────────┘
-
-┌─ Fraflytning ───────────────────────────────┐
-│ (!) Bookinger efter datoen slettes.         │  ← edit mode
-│ Dato: [ 15/03/2026  📅 ]                    │
-├─────────────────────────────────────────────┤
-│ [✕ Annullér]              [✓ Gem]           │
-└─────────────────────────────────────────────┘
-
-🤖 Sidste ændring · 3 bookinger slettet · 12 uændret
-```
-
-### Unified Booking Arrow Nav
-```
- period boundary per view → getAdjacentDinner → next/prev dinner
-
- day   ◀── startOfDay(date)   ·   endOfDay(date)   ──▶
- week  ◀── startOfWeek(date)  ·   endOfWeek(date)  ──▶   (Mon-start)
- month ◀── startOfMonth(date) ·   endOfMonth(date) ──▶
-
- null ⇒ arrow hidden  (hasPrev / hasNext = false)
-```
+The guides show the app with screenshots, in Danish: [user guide](../user-guide.md) for members,
+[chef guide](../chef-guide.md) for the chef and the cooking team, [admin guide](../admin-guide.md) for admins.
 
 ---
 
@@ -259,8 +119,8 @@ Legend: ⚡ Power mode | ✏️ Edit | 🍽️ Dine in | 🕐 Late | 🛍️ Tak
 - **ADR-010:** Domain-driven serialization (repository layer)
 - **ADR-015:** Idempotent automated jobs with rolling window
 
-> **For developers:** See [Architecture Decision Records](adr.md) for detailed patterns.
+> **For developers:** See [Architecture Decision Records](../adr.md) for detailed patterns.
 
 ---
 
-*Last Updated: April 2026*
+*Last Updated: October 2026*

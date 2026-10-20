@@ -48,3 +48,6 @@ prisma/dev.db
 prisma/dev.db-journal
 .theslope/
 .nuxtrc
+
+# Release notes PDFs (make release-notes; the page it prints lands under .output)
+docs/releases/*.pdf

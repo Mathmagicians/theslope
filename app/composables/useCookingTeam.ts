@@ -3,17 +3,9 @@ import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
 import {formatDate} from '~/utils/date'
-
-/**
- * Predicate: the role's current holder is not the given inhabitant.
- * True when the role is vacant OR held by someone else.
- * Used by parents of RoleAssignment to gate `v-if`.
- */
-export const isNotAssignedToMe = (
-    holder: InhabitantDisplay | undefined,
-    myInhabitantId: number | null
-): boolean =>
-    !holder || (myInhabitantId !== null && holder.id !== myInhabitantId)
+import {dateToWeekDay} from '~/utils/season'
+import type {JokerSlot} from '~/composables/useDutyValidation'
+import {startOfDay, endOfDay, isWithinInterval} from 'date-fns'
 
 /**
  * Run the chef auto-claim when the dinner is vacant and the caller has an Inhabitant.
@@ -33,7 +25,7 @@ export const tryAutoClaim = async <T>(
 /**
  * Business logic for working with cooking teams
  *
- * A team's colour is not here: it is the brand rainbow stop of the team's number, which a
+ * A team's colour is not here: it is the brand rainbow stop of the team's number (`getTeamNumber`), which a
  * consumer takes from `getRainbowBand` in the design system (ADR-017, ADR-018).
  */
 export const useCookingTeam = () => {
@@ -53,15 +45,26 @@ export const useCookingTeam = () => {
     }
 
     /**
+     * A team's number: the one in its name when it is 1 or more, else its position in the season's full team list + 1,
+     * else 1. Names are free text, so every site passes the same season list to agree on the fallback.
+     */
+    const getTeamNumber = (team: Pick<CookingTeamDisplay, 'id' | 'name'>, seasonTeams: Array<Pick<CookingTeamDisplay, 'id'>>): number => {
+        const named = extractTeamNumber(team.name)
+        return named !== null && named >= 1
+            ? named
+            : seasonTeams.findIndex(seasonTeam => seasonTeam.id === team.id) + 1 || 1
+    }
+
+    /** Number of CHEF-role assignments on a team */
+    const countChefs = (assignments: Pick<CookingTeamAssignment, 'role'>[]): number =>
+        assignments.filter(assignment => assignment.role === TeamRoleSchema.enum.CHEF).length
+
+    /**
      * Get a compact short name for display in badges and tight UI spaces
      * Format: "Madhold X" (e.g., "Madhold 2 - 08/25-06/26" → "Madhold 2")
      * Cuts off everything after the first dash
      * Fallback: Returns full name if no dash found
      */
-    /** Number of CHEF-role assignments on a team */
-    const countChefs = (assignments: Pick<CookingTeamAssignment, 'role'>[]): number =>
-        assignments.filter(assignment => assignment.role === TeamRoleSchema.enum.CHEF).length
-
     const getTeamShortName = (teamName: string): string => {
         const dashIndex = teamName.indexOf(' - ')
         return dashIndex !== -1 ? teamName.substring(0, dashIndex) : teamName
@@ -87,6 +90,7 @@ export const useCookingTeam = () => {
             name: createDefaultTeamName(seasonShortName, teamNumber),
             assignments: [],
             cookingDaysCount: 0,
+            jokerSlotCount: 0,
             ...overrides
         }
     }
@@ -145,10 +149,23 @@ export const useCookingTeam = () => {
         }
     }
 
+    /**
+     * The shifts a joker slot covers: the team's cooking dates inside the slot's period (both ends
+     * inclusive) that fall on one of the slot's weekdays
+     */
+    const countJokerSlotShifts = (
+        slot: Pick<JokerSlot, 'startDate' | 'endDate' | 'affinity'>,
+        cookingDates: Date[]
+    ): number => {
+        const period = {start: startOfDay(slot.startDate), end: endOfDay(slot.endDate)}
+        return cookingDates.filter(date => isWithinInterval(date, period) && slot.affinity[dateToWeekDay(date)]).length
+    }
+
     return {
         CookingTeamSchema,
         createDefaultTeamName,
         extractTeamNumber,
+        getTeamNumber,
         countChefs,
         getTeamShortName,
         formatRoleClaimedTitle,
@@ -156,7 +173,7 @@ export const useCookingTeam = () => {
         mergeInhabitantsWithAssignments,
         chunkTeamAffinities,
         decideRoleAssignmentWrites,
-        isNotAssignedToMe,
+        countJokerSlotShifts,
         tryAutoClaim
     }
 }

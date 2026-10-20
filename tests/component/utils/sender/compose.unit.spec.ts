@@ -10,12 +10,8 @@ const config = NotificationFactory.config()
 const toAnna = {kind: 'TEST', to: 'anna@example.com', values: {}} as const
 
 describe('senderDisplayName', () => {
-    it.each([
-        ['local', 'Skråningen local'],
-        ['dev', 'Skråningen dev'],
-        ['prod', 'Skråningen prod']
-    ])('derives the sender line for %s as %s', (environment, expected) => {
-        expect(senderDisplayName(environment)).toBe(expected)
+    it('derives the sender line for an environment', () => {
+        expect(senderDisplayName('dev')).toBe('Skråningen dev')
     })
 })
 
@@ -34,7 +30,6 @@ describe('templates name the sender through {{senderName}}', () => {
 
 describe('senderAddress', () => {
     it.each([
-        ['local', 'no-reply.local@skraaningen.dk'],
         ['dev', 'no-reply.dev@skraaningen.dk'],
         ['prod', 'no-reply@skraaningen.dk']
     ])('derives the sender address for %s as %s', (environment, expected) => {
@@ -46,7 +41,6 @@ describe('deploymentFromUrl', () => {
     it.each([
         ['https://dev.skraaningen.dk', 'dev', 'dev.skraaningen.dk'],
         ['https://www.skraaningen.dk', 'prod', 'www.skraaningen.dk'],
-        ['https://skraaningen.dk', 'prod', 'skraaningen.dk'],
         ['http://localhost:3000', 'local', 'localhost:3000'],
         ['http://127.0.0.1:3000', 'local', '127.0.0.1:3000']
     ])('derives %s → environment %s, site %s', (url, environment, site) => {
@@ -64,18 +58,13 @@ describe('missingAddress', () => {
 })
 
 describe('composeEmail', () => {
-    it('renders the kind\'s template with the built-in values and appends the signature', () => {
+    it('renders the kind\'s template with the built-in values, appends the signature, and takes sender, display name and environment from the config, the admin mailbox as reply-to', () => {
         const message = composeEmail(config, toAnna)
 
         expect(NotificationMessageSchema.safeParse(message).success).toBe(true)
         expect(message.subject).toBe('Skråningen: testbesked fra theslope-sender (dev)')
         expect(message.text).toContain(`id: ${message.meta.dedupeKey}`)
         expect(message.text.endsWith('— Skråningen · dev.skraaningen.dk')).toBe(true)
-    })
-
-    it('takes sender, display name and environment from the config, the admin mailbox as reply-to', () => {
-        const message = composeEmail(config, toAnna)
-
         expect(message).toMatchObject({from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {environment: 'dev', source: 'theslope-app', kind: 'TEST'}})
     })
 

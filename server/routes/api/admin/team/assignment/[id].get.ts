@@ -2,14 +2,12 @@ import {defineEventHandler, getValidatedRouterParams, createError} from "h3"
 import {fetchTeamAssignment} from "~~/server/data/prismaRepository"
 import type {CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('Assignment ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 export default defineEventHandler(async (event): Promise<CookingTeamAssignment> => {
     const {cloudflare} = event.context
@@ -18,7 +16,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
     // Input validation try-catch - FAIL EARLY
     let id!: number
     try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
+        const params = await getValidatedRouterParams(event, paramSchema.parse)
         id = params.id
     } catch (error) {
         return throwH3Error('👥🔗 > ASSIGNMENT > [GET] Input validation error', error)

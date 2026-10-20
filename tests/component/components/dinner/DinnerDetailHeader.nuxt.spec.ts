@@ -1,13 +1,18 @@
-import {describe, it, expect, vi, beforeEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {resetStores} from '~~/tests/component/testHelpers'
 import DinnerDetailHeader from '~/components/dinner/DinnerDetailHeader.vue'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+
+enableAutoUnmount(afterEach)
 
 // HEY_NABO_API comes from the nuxt project's runtimeConfig override (vitest.config.ts):
 // a useRuntimeConfig mock replaces the whole config and breaks the test runtime boot
 
 describe('DinnerDetailHeader', () => {
     beforeEach(() => {
+        resetStores()
         vi.clearAllMocks()
     })
 

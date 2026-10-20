@@ -1,9 +1,10 @@
 // @vitest-environment nuxt
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
+import { enableAutoUnmount } from '@vue/test-utils'
 import CalendarDatePicker from '~/components/calendar/CalendarDatePicker.vue'
 import { ref } from 'vue'
-import { openPopover, expectSharedCalendarGrid, findDateSegments, typeIntoSegment, calendarDay } from '~~/tests/component/testHelpers'
+import { openPopover, expectSharedCalendarGrid, findDateSegments, typeIntoSegment, calendarDay, resetStores } from '~~/tests/component/testHelpers'
 
 const JAN_1 = new Date(2025, 0, 1)
 
@@ -11,6 +12,12 @@ type PickerVm = {
   errors: Map<string, string[]>
   updateDate: (date: Date | null) => boolean
 }
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+  resetStores()
+})
 
 const mountPicker = async (modelValue: Date | null, extraProps: Record<string, unknown> = {}) =>
   await mountSuspended(CalendarDatePicker, {
@@ -20,10 +27,14 @@ const mountPicker = async (modelValue: Date | null, extraProps: Record<string, u
 
 describe('CalendarDatePicker', () => {
 
-  it('renders the model date in typed day/month/year segments', async () => {
+  it('renders the model date in typed day/month/year segments under the default label, and a calendar on the shared grid token', async () => {
     const wrapper = await mountPicker(JAN_1)
     expect(findDateSegments(wrapper, 'day')[0]!.attributes('aria-valuenow')).toBe('1')
     expect(findDateSegments(wrapper, 'year')[0]!.attributes('aria-valuenow')).toBe('2025')
+    expect(wrapper.html()).toContain('Dato')
+
+    await openPopover(wrapper)
+    expectSharedCalendarGrid(wrapper)
   })
 
   it('renders empty segments with a null model', async () => {
@@ -35,17 +46,6 @@ describe('CalendarDatePicker', () => {
   it('renders custom label', async () => {
     const wrapper = await mountPicker(JAN_1, { label: 'Udflytningsdato' })
     expect(wrapper.html()).toContain('Udflytningsdato')
-  })
-
-  it('renders default label', async () => {
-    const wrapper = await mountPicker(JAN_1)
-    expect(wrapper.html()).toContain('Dato')
-  })
-
-  it('configures its calendar from the shared design-system grid token', async () => {
-    const wrapper = await mountPicker(JAN_1)
-    await openPopover(wrapper)
-    expectSharedCalendarGrid(wrapper)
   })
 
   it('typing digits in the segments updates the model', async () => {

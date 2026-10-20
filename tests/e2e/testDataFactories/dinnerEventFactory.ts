@@ -1,12 +1,15 @@
-import {addDays, startOfDay} from "date-fns"
+import {addDays, isSameDay, startOfDay} from "date-fns"
 import {
     type DinnerEventDisplay,
     type DinnerEventDetail,
     type DinnerEventCreate,
     type HeynaboEventResponse,
+    type MenuSwapStrategy,
     useBookingValidation
 } from "~/composables/useBookingValidation"
 import type { TeamRole } from "~/composables/useCookingTeamValidation"
+import type {Season} from "~/composables/useSeasonValidation"
+import {computeCookingDates} from "~/utils/season"
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 
@@ -27,7 +30,6 @@ export class DinnerEventFactory {
         menuDescription: 'A delicious test menu',
         menuPictureUrl: null,
         state: DinnerStateSchema.enum.SCHEDULED,
-        totalCost: 0,
         chefId: null,
         cookingTeamId: null,
         heynaboEventId: null,
@@ -74,6 +76,17 @@ export class DinnerEventFactory {
         date: startOfDay(addDays(new Date(), daysFromToday))
     })
 
+    /**
+     * A dinner on each of the season's cooking days in the week that starts `daysFromToday` days ahead, holidays left
+     * out: a week holds every weekday once, so each cooking day gets one dinner whatever weekday today is. Ids count up
+     * from `firstId`
+     */
+    static readonly dinnerEventsOnCookingDays = (season: Season, daysFromToday: number, firstId: number = 1): DinnerEventDisplay[] => {
+        const start = startOfDay(addDays(new Date(), daysFromToday))
+        return computeCookingDates(season.cookingDays, {start, end: addDays(start, 6)}, season.holidays)
+            .map((date, index) => ({...this.defaultDinnerEventDisplay(), id: firstId + index, date, seasonId: season.id ?? null}))
+    }
+
     static readonly defaultDinnerEventDetail = (testSalt?: string): DinnerEventDetail => ({
         ...this.defaultDinnerEventDisplay(testSalt),
         menuDescription: 'A delicious test menu',
@@ -85,7 +98,8 @@ export class DinnerEventFactory {
         updatedAt: this.today,
         chef: null,
         cookingTeam: null,
-        tickets: []
+        tickets: [],
+        expenses: []
     })
 
     /**
@@ -114,7 +128,8 @@ export class DinnerEventFactory {
         chef: overrides.chef ?? null,
         cookingTeam: overrides.cookingTeam ?? null,
         tickets: overrides.tickets ?? [],
-        allergens: overrides.allergens ?? []
+        allergens: overrides.allergens ?? [],
+        expenses: []
     })
 
     /**
@@ -171,6 +186,62 @@ export class DinnerEventFactory {
         return await response.json()
     }
 
+    /**
+     * A browser spec's dinner stands alone on its day: the dinner and chef pages select a dinner by date, so a second
+     * dinner on a day hides one of them. Picks a free day of the season at random, after the season's last dinner where
+     * one is free, creates the dinner there and lists the season again; a day that turned double in the meantime gives
+     * the dinner up and another day is tried.
+     */
+    static readonly createDinnerEventOnFreeDay = async (
+        context: BrowserContext,
+        season: Season,
+        dinnerEventData: Partial<Omit<DinnerEventCreate, 'date'>> = {},
+        attempts: number = 4
+    ): Promise<DinnerEventDisplay> => {
+        const first = startOfDay(new Date(Math.max(new Date(season.seasonDates.start).getTime(), this.tomorrow.getTime())))
+        const last = startOfDay(new Date(season.seasonDates.end))
+        const givenUp: Date[] = []
+        for (let attempt = 0; attempt < attempts; attempt++) {
+            const dinners = await this.getDinnerEventsForSeason(context, season.id!)
+            const occupied = [...dinners.map(dinner => new Date(dinner.date)), ...givenUp]
+            const freeDays: Date[] = []
+            for (let day = first; day <= last; day = addDays(day, 1)) {
+                if (!occupied.some(date => isSameDay(date, day))) freeDays.push(day)
+            }
+            const lastDinner = occupied.length > 0 ? startOfDay(new Date(Math.max(...occupied.map(date => date.getTime())))) : null
+            const afterLast = lastDinner ? freeDays.filter(day => day > lastDinner) : freeDays
+            const candidates = afterLast.length > 0 ? afterLast : freeDays
+            expect(candidates.length, `season ${season.shortName} has a free day for the spec's dinner`).toBeGreaterThan(0)
+            const day = candidates[Math.floor(Math.random() * candidates.length)]!
+
+            const dinner = await this.createDinnerEvent(context, {...dinnerEventData, date: day, seasonId: season.id!})
+            if ((await this.dinnersOnDay(context, season.id!, day)).length === 1) return dinner
+            await this.deleteDinnerEvent(context, dinner.id!, 200)
+            givenUp.push(day)
+        }
+        throw new Error(`No day of season ${season.shortName} stayed free for the spec's dinner in ${attempts} attempts`)
+    }
+
+    /**
+     * A serial spec's dinner alone on `day`: the dinners the season already holds on that day give way, since the
+     * dinner and chef pages select a dinner by date. Serial only: a parallel spec's dinner on the day would go with them.
+     */
+    static readonly createDinnerEventAloneOnDay = async (
+        context: BrowserContext,
+        season: Season,
+        day: Date,
+        dinnerEventData: Partial<Omit<DinnerEventCreate, 'date'>> = {}
+    ): Promise<DinnerEventDisplay> => {
+        for (const dinner of await this.dinnersOnDay(context, season.id!, day)) {
+            await this.deleteDinnerEvent(context, dinner.id!, 200)
+        }
+        return await this.createDinnerEvent(context, {...dinnerEventData, date: day, seasonId: season.id!})
+    }
+
+    /** The season's dinners on `day` */
+    private static readonly dinnersOnDay = async (context: BrowserContext, seasonId: number, day: Date): Promise<DinnerEventDisplay[]> =>
+        (await this.getDinnerEventsForSeason(context, seasonId)).filter(dinner => isSameDay(new Date(dinner.date), day))
+
     static readonly getDinnerEvent = async (
         context: BrowserContext,
         dinnerEventId: number,
@@ -216,21 +287,21 @@ export class DinnerEventFactory {
         return null
     }
 
+    /**
+     * Delete a dinner event, returns the deleted dinner event
+     * Cleanup (afterAll): no expectedStatus - a dinner event already gone counts as removed, any other status fails
+     * API tests: pass expectedStatus - the deletion answers it
+     */
     static readonly deleteDinnerEvent = async (
         context: BrowserContext,
         dinnerEventId: number,
-        expectedStatus: number = 200
+        expectedStatus?: number
     ): Promise<DinnerEventDisplay | null> => {
         const response = await context.request.delete(`${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`)
-
         const status = response.status()
-        expect(status, `Expected status ${expectedStatus}`).toBe(expectedStatus)
-
-        if (expectedStatus === 200) {
-            return await response.json()
-        }
-
-        return null
+        const body = await response.text()
+        expect(expectedStatus === undefined ? [200, 404] : [expectedStatus], `Unexpected status deleting dinner event ${dinnerEventId}: ${body}`).toContain(status)
+        return status === 200 ? JSON.parse(body) : null
     }
 
     static readonly getDinnerEventsForSeason = async (
@@ -261,7 +332,7 @@ export class DinnerEventFactory {
         inhabitantId: number,
         role: TeamRole,
         expectedStatus: number = 200,
-        menuStrategy?: 'PRESERVE' | 'CLEAR'
+        menuStrategy?: MenuSwapStrategy
     ): Promise<DinnerEventDetail | null> => {
         const {DinnerEventDetailSchema} = useBookingValidation()
         const response = await context.request.post(
@@ -344,27 +415,16 @@ export class DinnerEventFactory {
      *
      * @param context - Browser context for API requests
      * @param heynaboEventIds - Array of Heynabo event IDs to delete
-     * @throws Error if cleanup fails (logged but doesn't fail tests)
      */
     static readonly cleanupHeynaboEvents = async (
         context: BrowserContext,
         heynaboEventIds: number[] = []
     ): Promise<void> => {
-        console.info(`Cleaning up Heynabo events (${heynaboEventIds.length} explicit + nuke)...`)
-
         const response = await context.request.post('/api/test/heynabo/cleanup', {
             headers: headers,
             data: { eventIds: heynaboEventIds, nuke: true }
         })
-
-        const status = response.status()
-        if (status !== 200) {
-            const errorBody = await response.text()
-            console.warn(`Heynabo cleanup failed with status ${status}: ${errorBody}`)
-        } else {
-            const result = await response.json()
-            console.info(`Heynabo cleanup successful: ${JSON.stringify(result)}`)
-        }
+        expect(response.status(), `Unexpected status cleaning up Heynabo events: ${await response.text()}`).toBe(200)
     }
 
     /**

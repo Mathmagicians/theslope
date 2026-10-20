@@ -1,3 +1,5 @@
+import {z} from 'zod'
+
 /**
  * Generic curried chunk function
  * @param size - batch size
@@ -28,23 +30,36 @@ export const groupBy = <T, K extends string | number>(getKey: (item: T) => K) =>
     (items: T[]): Map<K, T[]> =>
         items.reduce((map, item) => {
             const key = getKey(item)
-            const group = map.get(key) ?? []
-            return map.set(key, [...group, item])
+            const group = map.get(key)
+            if (group) group.push(item)
+            else map.set(key, [item])
+            return map
         }, new Map<K, T[]>())
+
+/** Lines from rows: the rows with one key make one line, the lines in the given order */
+export const linesBy = <Row, Line, Key extends string | number>(
+    keyOf: (row: Row) => Key,
+    toLine: (rows: Row[], key: Key) => Line,
+    order: (a: Line, b: Line) => number
+) => (rows: Row[]): Line[] =>
+    Array.from(groupBy(keyOf)(rows), ([key, group]) => toLine(group, key)).sort(order)
+
+/** Splits a list by a predicate: the items that match, then the rest */
+export const partition = <T>(predicate: (item: T) => boolean) => (items: T[]): [T[], T[]] =>
+    [items.filter(predicate), items.filter(item => !predicate(item))]
+
+// The reconciler's buckets; the order buckets extend them
+export const ReconciliationBucketSchema = z.enum(['create', 'update', 'idempotent', 'delete'])
+export type ReconciliationBucket = z.infer<typeof ReconciliationBucketSchema>
 
 /**
  * Result of pruneAndCreate operation
  * @template E - Type of existing items (used for delete array)
  * @template I - Type of incoming items (used for create/update/idempotent arrays)
  */
-export interface PruneAndCreateResult<E, I = E> {
-    create: I[]
-    update: I[]
-    idempotent: I[]
-    delete: E[]
+export type PruneAndCreateResult<E, I = E> = {
+    [Bucket in ReconciliationBucket]: Bucket extends typeof ReconciliationBucketSchema.enum.delete ? E[] : I[]
 }
-
-export type ReconciliationBucket = keyof PruneAndCreateResult<unknown>
 
 /**
  * Curried function to compare two arrays and categorize items into create/update/idempotent/delete
@@ -125,4 +140,50 @@ export const pruneAndCreate = <E, I = E, K = number | string>(
             return key !== undefined && !seenKeys.has(key)
         })
     }
+}
+
+/**
+ * Writes a batch in one call; when the call fails, writes the items one at a time so a single failing item costs only
+ * itself. Each item lands in onDone or onFailed.
+ */
+export const writeBatchOrEach = async <T>(
+    items: T[],
+    write: (batch: T[]) => Promise<unknown>,
+    onDone: (items: T[]) => void,
+    onFailed: (item: T, error: unknown) => void
+): Promise<void> => {
+    if (items.length === 0) return
+    try {
+        await write(items)
+        onDone(items)
+    } catch {
+        for (const item of items) {
+            try {
+                await write([item])
+                onDone([item])
+            } catch (error) {
+                onFailed(item, error)
+            }
+        }
+    }
+}
+
+/**
+ * Writes a batch in one attempt: when the call fails, every item of the batch lands in onFailed with its error and
+ * nothing is written again
+ */
+export const writeBatchOnce = async <T>(
+    items: T[],
+    write: (batch: T[]) => Promise<unknown>,
+    onDone: (items: T[]) => void,
+    onFailed: (item: T, error: unknown) => void
+): Promise<void> => {
+    if (items.length === 0) return
+    try {
+        await write(items)
+    } catch (error) {
+        for (const item of items) onFailed(item, error)
+        return
+    }
+    onDone(items)
 }

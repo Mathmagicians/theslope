@@ -4,19 +4,22 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import type {UserDisplay} from '~/composables/useCoreValidation'
 
-const {validatedBrowserContext} = testHelpers
+const {validatedBrowserContext, salt, temporaryAndRandom} = testHelpers
 const {UserDisplaySchema, SystemRoleSchema} = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum
 
 // Constants for seeded data
 const SEEDED_ADMIN_EMAIL = 'agata@mathmagicians.dk'
 
+// Emails are unique: salted per run, so parallel runs and reruns do not collide
+const testSalt = temporaryAndRandom()
+
 // Variable to store ID for cleanup
 const createdUserIds: number[] = []
-const newUser = UserFactory.defaultUser()
+const newUser = UserFactory.defaultUser(testSalt)
 
 // Test for creating and retrieving a user
-test("PUT /api/admin/users should create a new user and GET should retrieve it", async ({browser}) => {
+test("PUT /api/admin/users should create a new user and GET should list it among valid users", async ({browser}) => {
     const context = await validatedBrowserContext(browser)
     const created = await UserFactory.createUser(context, newUser)
     // Save ID for cleanup
@@ -27,15 +30,14 @@ test("PUT /api/admin/users should create a new user and GET should retrieve it",
     expect(created.email).toBe(newUser.email)
 
     // Get user list to verify it appears there
-    const listResponse = await context.request.get('/api/admin/users')
-    expect(listResponse.status()).toBe(200)
-
-    const users = await listResponse.json()
-    const foundUser = users.find((u: UserDisplay) => u.email === newUser.email)
+    const users = await UserFactory.getUsers(context)
+    const foundUser = users.find(u => u.email === newUser.email)
 
     expect(foundUser).toBeTruthy()
-    UserDisplaySchema.parse(foundUser) // Validate structure
     expect(foundUser!.id).toBe(created.id)
+
+    // Every user the index returns is a valid UserDisplay
+    users.forEach(user => UserDisplaySchema.parse(user))
 })
 
 // Test for validation
@@ -54,22 +56,7 @@ test("PUT /api/admin/users validation should fail for invalid user data", async 
     expect(response.status()).toBe(400)
 })
 
-test('GET /api/admin/users should return a list of users from the database', async ({browser}) => {
-    const context = await validatedBrowserContext(browser)
-
-    const response = await context.request.get('/api/admin/users')
-    expect(response.ok(), `Expected 200, got ${response.status()}: ${await response.text()}`).toBeTruthy()
-
-    const users = await response.json()
-    expect(Array.isArray(users)).toBe(true)
-
-    // Validate each user with schema instead of manual property checks
-    if (users.length > 0) {
-        users.forEach((user: UserDisplay) => UserDisplaySchema.parse(user))
-    }
-})
-
-test('GET /api/admin/users/by-role/[role] should return users with specific role', async ({browser}) => {
+test('GET /api/admin/users/by-role/[role] should return the users holding the role, multi-role users in each list', async ({browser}) => {
     const context = await validatedBrowserContext(browser)
 
     const adminUser = await UserFactory.createUser(context, UserFactory.createAdmin())
@@ -80,6 +67,10 @@ test('GET /api/admin/users/by-role/[role] should return users with specific role
 
     const regularUser = await UserFactory.createUser(context, UserFactory.defaultUser())
     createdUserIds.push(regularUser.id as number)
+
+    // Create user with both ADMIN and ALLERGYMANAGER roles
+    const multiRoleUser = await UserFactory.createUser(context, UserFactory.createAdminAndAllergyManager())
+    createdUserIds.push(multiRoleUser.id as number)
 
     const adminResponse = await context.request.get(`/api/admin/users/by-role/${SystemRole.ADMIN}`)
     expect(adminResponse.status()).toBe(200)
@@ -99,95 +90,25 @@ test('GET /api/admin/users/by-role/[role] should return users with specific role
     UserDisplaySchema.parse(foundAllergyManager) // Validate structure including Inhabitant
     expect(foundAllergyManager!.systemRoles).toContain(SystemRole.ALLERGYMANAGER)
 
-    // Verify at least one allergy manager has Inhabitant relation
-    const adminManager = allergyManagers.find((m: UserDisplay) => m.systemRoles.includes(SystemRole.ALLERGYMANAGER) && m.Inhabitant)
-    if (adminManager) {
-        UserDisplaySchema.parse(adminManager) // Schema validates Inhabitant structure
-    }
-
-    const regularUserInAdminList = adminUsers.find((u: UserDisplay) => u.id === regularUser.id)
-    expect(regularUserInAdminList).toBeFalsy()
-})
-
-test('GET /api/admin/users/by-role/ALLERGYMANAGER should return seeded admin with Inhabitant', async ({browser}) => {
-    const context = await validatedBrowserContext(browser)
-
-    const response = await context.request.get(`/api/admin/users/by-role/${SystemRole.ALLERGYMANAGER}`)
-    expect(response.status()).toBe(200)
-
-    const allergyManagers = await response.json()
-    expect(Array.isArray(allergyManagers)).toBe(true)
-
+    // The seeded admin is an allergy manager and comes with its Inhabitant
     const seededAdmin = allergyManagers.find((u: UserDisplay) => u.email === SEEDED_ADMIN_EMAIL)
     expect(seededAdmin).toBeTruthy()
     UserDisplaySchema.parse(seededAdmin) // Validates Inhabitant structure
     expect(seededAdmin!.Inhabitant).toBeTruthy()
-    expect(seededAdmin!.Inhabitant).not.toBeNull()
-})
 
-test('GET /api/admin/users/by-role/[role] should return users with multiple roles', async ({browser}) => {
-    const context = await validatedBrowserContext(browser)
+    const regularUserInAdminList = adminUsers.find((u: UserDisplay) => u.id === regularUser.id)
+    expect(regularUserInAdminList).toBeFalsy()
 
-    // Create user with both ADMIN and ALLERGYMANAGER roles
-    const multiRoleUser = await UserFactory.createUser(context, UserFactory.createAdminAndAllergyManager())
-    createdUserIds.push(multiRoleUser.id as number)
-
-    // User should appear in ADMIN list
-    const adminResponse = await context.request.get(`/api/admin/users/by-role/${SystemRole.ADMIN}`)
-    expect(adminResponse.status()).toBe(200)
-    const adminUsers = await adminResponse.json()
-    const foundInAdminList = adminUsers.find((u: UserDisplay) => u.id === multiRoleUser.id)
-    expect(foundInAdminList).toBeTruthy()
-    UserDisplaySchema.parse(foundInAdminList) // Validate structure
-
-    // User should also appear in ALLERGYMANAGER list
-    const allergyManagerResponse = await context.request.get(`/api/admin/users/by-role/${SystemRole.ALLERGYMANAGER}`)
-    expect(allergyManagerResponse.status()).toBe(200)
-    const allergyManagers = await allergyManagerResponse.json()
-    const foundInAllergyManagerList = allergyManagers.find((u: UserDisplay) => u.id === multiRoleUser.id)
-    expect(foundInAllergyManagerList).toBeTruthy()
-    UserDisplaySchema.parse(foundInAllergyManagerList) // Validate structure
-    expect(foundInAllergyManagerList!.systemRoles).toEqual(expect.arrayContaining([SystemRole.ADMIN, SystemRole.ALLERGYMANAGER]))
+    // The multi-role user appears in both lists, carrying both roles
+    expect(adminUsers.find((u: UserDisplay) => u.id === multiRoleUser.id)).toBeTruthy()
+    const multiRoleInAllergyManagers = allergyManagers.find((u: UserDisplay) => u.id === multiRoleUser.id)
+    expect(multiRoleInAllergyManagers).toBeTruthy()
+    expect(multiRoleInAllergyManagers!.systemRoles).toEqual(expect.arrayContaining([SystemRole.ADMIN, SystemRole.ALLERGYMANAGER]))
 })
 
 // POST /api/admin/users/[id] - Role update tests (ADR: TS owns ALLERGYMANAGER, HN owns ADMIN)
+// Role reconciliation is unit-tested in useUserRoles.unit.spec.ts; these prove it end to end
 test.describe('POST /api/admin/users/[id] role updates', () => {
-    test('should add ALLERGYMANAGER role (TS-owned)', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // Create user with no roles
-        const user = await UserFactory.createUser(context, UserFactory.defaultUser())
-        createdUserIds.push(user.id as number)
-        expect(user.systemRoles).toEqual([])
-
-        // Add ALLERGYMANAGER via POST
-        const response = await context.request.post(`/api/admin/users/${user.id}`, {
-            data: { systemRoles: [SystemRole.ALLERGYMANAGER] }
-        })
-        expect(response.status()).toBe(200)
-
-        const updated = await response.json()
-        expect(updated.systemRoles).toContain(SystemRole.ALLERGYMANAGER)
-    })
-
-    test('should remove ALLERGYMANAGER role (TS-owned)', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // Create user with ALLERGYMANAGER
-        const user = await UserFactory.createUser(context, UserFactory.createAllergyManager())
-        createdUserIds.push(user.id as number)
-        expect(user.systemRoles).toContain(SystemRole.ALLERGYMANAGER)
-
-        // Remove by sending empty roles
-        const response = await context.request.post(`/api/admin/users/${user.id}`, {
-            data: { systemRoles: [] }
-        })
-        expect(response.status()).toBe(200)
-
-        const updated = await response.json()
-        expect(updated.systemRoles).not.toContain(SystemRole.ALLERGYMANAGER)
-    })
-
     test('should preserve ADMIN role (HN-owned) when updating TS-owned roles', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
@@ -197,12 +118,7 @@ test.describe('POST /api/admin/users/[id] role updates', () => {
         expect(user.systemRoles).toContain(SystemRole.ADMIN)
 
         // Try to add ALLERGYMANAGER - ADMIN should be preserved
-        const response = await context.request.post(`/api/admin/users/${user.id}`, {
-            data: { systemRoles: [SystemRole.ALLERGYMANAGER] }
-        })
-        expect(response.status()).toBe(200)
-
-        const updated = await response.json()
+        const updated = await UserFactory.setSystemRoles(context, user.id as number, [SystemRole.ALLERGYMANAGER])
         expect(updated.systemRoles).toContain(SystemRole.ADMIN) // HN-owned preserved
         expect(updated.systemRoles).toContain(SystemRole.ALLERGYMANAGER) // TS-owned added
     })
@@ -217,12 +133,7 @@ test.describe('POST /api/admin/users/[id] role updates', () => {
         expect(user.systemRoles).toContain(SystemRole.ALLERGYMANAGER)
 
         // Send empty roles - should only remove ALLERGYMANAGER, preserve ADMIN
-        const response = await context.request.post(`/api/admin/users/${user.id}`, {
-            data: { systemRoles: [] }
-        })
-        expect(response.status()).toBe(200)
-
-        const updated = await response.json()
+        const updated = await UserFactory.setSystemRoles(context, user.id as number, [])
         expect(updated.systemRoles).toContain(SystemRole.ADMIN) // HN-owned preserved
         expect(updated.systemRoles).not.toContain(SystemRole.ALLERGYMANAGER) // TS-owned removed
     })
@@ -236,26 +147,28 @@ test.describe('POST /api/admin/users/[id] role updates', () => {
         expect(response.status()).toBe(400)
     })
 
-    test('should return 500 for non-existent user ID', async ({browser}) => {
+    test('should return 404 for a removed user ID', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+        const removedUser = await UserFactory.createUser(context, UserFactory.defaultUser(salt('removed', testSalt)))
+        await UserFactory.deleteUser(context, removedUser.id as number)
 
-        const response = await context.request.post('/api/admin/users/999999', {
+        const response = await context.request.post(`/api/admin/users/${removedUser.id}`, {
             data: { systemRoles: [] }
         })
-        expect(response.status()).toBe(500)
+        expect(response.status()).toBe(404)
     })
 })
 
 // POST /api/admin/users/[id] contact updates — happy-path integration smoke
-// Schema edge cases are unit-tested in useCoreValidation.unit.spec.ts; these tests
-// prove the body → UserUpdateSchema (picked) → repository → response wiring works.
+// Schema edge cases (RFC 5322 normalization, phone format) are unit-tested in useCoreValidation.unit.spec.ts;
+// these tests prove the body → UserUpdateSchema (picked) → repository → response wiring works.
+const updatedEmail = `${salt('updated', testSalt)}@andeby.dk`
 const contactUpdateCases: Array<{
     label: string
     body: {email?: string; phone?: string | null}
     expected: {email?: string; phone?: string | null}
 }> = [
-    {label: 'plain email persists',                body: {email: 'updated@andeby.dk'},          expected: {email: 'updated@andeby.dk'}},
-    {label: 'RFC 5322 email is normalized',        body: {email: 'Donald <donald@andeby.dk>'},  expected: {email: 'donald@andeby.dk'}},
+    {label: 'plain email persists',                body: {email: updatedEmail},                 expected: {email: updatedEmail}},
     {label: 'phone persists',                      body: {phone: '+45 12 34 56 78'},            expected: {phone: '+45 12 34 56 78'}},
     {label: 'phone null clears value',             body: {phone: null},                         expected: {phone: null}}
 ]
@@ -277,8 +190,6 @@ for (const {label, body, expected} of contactUpdateCases) {
 
 // Cleanup after all tests
 test.afterAll(async ({browser}) => {
-    if (createdUserIds.length > 0) {
-        const context = await validatedBrowserContext(browser)
-        await UserFactory.cleanupUsers(context, createdUserIds)
-    }
+    const context = await validatedBrowserContext(browser)
+    await UserFactory.cleanupUsers(context, createdUserIds)
 })

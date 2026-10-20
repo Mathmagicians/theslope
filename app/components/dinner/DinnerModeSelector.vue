@@ -20,6 +20,23 @@
  * └─────┘
  * Spisesal   - Fine print label below
  *
+ * SELECTOR VIEW MODE, ghost (a wish on the waiting list):
+ * ┌ ─ ─ ┐
+ *   [mode]   - The same glyph on COMPONENTS.waitlist.ghostBadge: no fill, the muted ghostInk
+ * └ ─ ─ ┘
+ * Spisesal   - The label in the same ink
+ *
+ * SELECTOR VIEW MODE, expected (no order yet: the booking the preferences give the cell):
+ * ┌ ─ ─ ┐
+ *   [mode]   - The glyph ghosted on the waiting list's neutral (COMPONENTS.bookingGrid.expectedBadge), in its muted ink
+ * └ ─ ─ ┘
+ * Spisesal   - The label in the same ink
+ *
+ * SELECTOR VIEW MODE, cancelled (the dinner is cancelled; edit mode alike, toggle and buttons):
+ * ┌─────┐
+ * │-[m]-│  - The glyph on COMPONENTS.dinnerModeSelector.cancelledFace: the cancelled ticket's colours, struck through
+ * └─────┘    Nothing to click: a cancelled dinner offers no mode
+ *
  * SELECTOR EDIT MODE - BUTTONS (interaction="buttons", default, showLabel=true):
  * ┌────────────────────────┐
  * │ [🍽️][🕐][🛍️][❌]     │  - Icon buttons
@@ -28,10 +45,27 @@
  *
  * SELECTOR EDIT MODE - TOGGLE (interaction="toggle"):
  * ┌─────┐
- * │ 🍽️  │ - Single button, click cycles: DINEIN→LATE→TAKE→NONE
- * └─────┘   Compact for grid cells (no label)
+ * │ 🍽️  │ - Single button, click cycles: DINEIN→LATE→TAKE→NONE, through the enabledModes only
+ * └─────┘   Compact for grid cells (no label); disabled while no mode is enabled
+ *
+ * SELECTOR EDIT MODE on a plan (expected): the plan stays a ghost until it is touched; solid is a booking or an intent
+ *   BUTTONS: no button selected, the plan's button hinted (COMPONENTS.dinnerModeSelector.plannedButton):
+ *   ┌────────────────────────┐
+ *   │ [  ][  ](mode)[  ]     │  - (mode) = the planned hint; a click picks its mode, on the hint it adopts the plan
+ *   └────────────────────────┘
+ *          Takeaway             - The plan's label in the expected booking's muted ink
+ *   TOGGLE: the view face's expected ghost (COMPONENTS.bookingGrid.expectedBadge):
+ *   ┌ ─ ─ ┐
+ *     [mode]   - The first click adopts the plan (emits the shown mode), the next ones cycle as above
+ *   └ ─ ─ ┘
+ *
+ * SELECTOR EDIT MODE - TOGGLE on a wish (ghost): the view face's ghost (COMPONENTS.waitlist.ghostBadge, the ghostInk)
+ *   ┌ ─ ─ ┐
+ *     [mode]   - A click cycles as above; the parent's draft then replaces the ghost
+ *   └ ─ ─ ┘
  */
 import {DinnerMode} from '~/composables/useBookingValidation'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 import {WEEKDAYS, type WeekDay} from '~/types/dateTypes'
 import {FORM_MODES, type FormMode} from '~/types/form'
 import type {BadgeProps, ButtonProps} from '@nuxt/ui'
@@ -41,17 +75,11 @@ type BadgeVariant = NonNullable<BadgeProps['variant']>
 type ButtonSize = NonNullable<ButtonProps['size']>
 type ButtonVariant = NonNullable<ButtonProps['variant']>
 
-// Local styling constant (field group only - badge size from design system)
-const FIELD_GROUP_CLASSES = 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-default gap-0 md:gap-1'
-// A mode badge or button is a square segment on a phone. The view badge sits in its own wrapper, where the
-// field group's corner rules never reach it, so both faces carry the corners themselves
-const MODE_SEGMENT_CLASSES = 'rounded-none md:rounded-md'
-
 interface Props {
   modelValue?: WeekDay | DinnerMode // Optional - defaults to NONE when no order exists
   formMode?: FormMode
   disabled?: boolean
-  disabledModes?: DinnerMode[] // Specific modes to disable (e.g., after deadline)
+  enabledModes?: DinnerMode[] // The modes the row may pick (getBookingOptions)
   name?: string
   showLabel?: boolean // Show mode label text below selector (both VIEW and EDIT modes)
   size?: ButtonSize
@@ -59,20 +87,26 @@ interface Props {
   interaction?: 'buttons' | 'toggle' // buttons = show all options, toggle = click cycles through modes
   orientation?: 'horizontal' | 'vertical' | 'responsive' // Override default responsive orientation (vertical mobile, horizontal desktop)
   isModified?: boolean // Grid booking: show left border accent when cell has unsaved changes
+  ghost?: boolean // The mode is a wish on the waiting list, not a booking, untouched
+  expected?: boolean // The mode is the booking the preferences give a cell without an order, untouched
+  cancelled?: boolean // The dinner is cancelled: the view face in every form mode, on the cancelled face
 }
 
 const props = withDefaults(defineProps<Props>(), {
   modelValue: DinnerMode.NONE, // Default when no order exists
   formMode: FORM_MODES.VIEW,
   disabled: false,
-  disabledModes: () => [],
+  enabledModes: () => DINNER_MODE_ORDER,
   name: 'dinner-mode-selector',
   showLabel: false,
   size: undefined, // Falls back to responsive SIZES.small
   consensus: undefined,
   interaction: 'buttons',
   orientation: 'responsive', // Default: vertical on mobile, horizontal on desktop
-  isModified: false
+  isModified: false,
+  ghost: false,
+  expected: false,
+  cancelled: false
 })
 
 const emit = defineEmits<{
@@ -88,21 +122,18 @@ watch(() => props.consensus, () => {
 })
 
 // Design system
-const { WEEKDAY, ORIENTATIONS, ICONS, SIZES, TYPOGRAPHY, TEXT } = useTheSlopeDesignSystem()
+const { WEEKDAY, ORIENTATIONS, ICONS, SIZES, TYPOGRAPHY, COMPONENTS, COLOR, NOISE } = useTheSlopeDesignSystem()
+const selector = COMPONENTS.dinnerModeSelector
+const waitlistFace = COMPONENTS.waitlist
+const expectedFace = COMPONENTS.bookingGrid.expectedBadge
 
 // Responsive size: use prop if provided, otherwise use responsive default
 const responsiveSize = computed(() => props.size ?? SIZES.small)
 
-// Icon size class based on size prop (scales with button/badge size)
+// Icon size class based on size prop (scales with button/badge size); without a size it follows the weekday badge
 const iconSizeClass = computed(() => {
   const size = props.size
-  if (size === 'xs') return 'size-3'
-  if (size === 'sm') return 'size-3'
-  if (size === 'md') return 'size-4'
-  if (size === 'lg') return 'size-5'
-  if (size === 'xl') return 'size-6'
-  // Default: use design system responsive size
-  return WEEKDAY.badgeContentSize
+  return size && size in selector.iconSize ? selector.iconSize[size as keyof typeof selector.iconSize] : WEEKDAY.badgeContentSize
 })
 
 // Determine if we're in title mode (showing weekday) or selector mode (showing dinner mode)
@@ -114,14 +145,6 @@ const buttonOrientation = computed(() => {
   return props.orientation
 })
 
-// Dinner mode order for iteration
-const dinnerModeOrder: DinnerMode[] = [
-  DinnerMode.DINEIN,
-  DinnerMode.DINEINLATE,
-  DinnerMode.TAKEAWAY,
-  DinnerMode.NONE
-]
-
 // Display config type
 type ModeDisplayConfig = {
   label: string
@@ -132,56 +155,50 @@ type ModeDisplayConfig = {
   editInactiveVariant: ButtonVariant
 }
 
-// Dinner mode display config
+// Dinner mode display config: the words (label, glyph) come from MODE_WORDS, the colours and variants live here
 const dinnerModeConfig: Record<DinnerMode, ModeDisplayConfig> = {
   [DinnerMode.DINEIN]: {
-    label: 'Spisesal',
-    icon: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
-    activeColor: 'success',
-    viewVariant: 'solid',
-    editActiveVariant: 'solid',
-    editInactiveVariant: 'soft'
+    ...MODE_WORDS[DinnerMode.DINEIN],
+    activeColor: COLOR.success,
+    viewVariant: NOISE.loud,
+    editActiveVariant: NOISE.loud,
+    editInactiveVariant: NOISE.soft
   },
   [DinnerMode.DINEINLATE]: {
-    label: 'Sen',
-    icon: 'i-heroicons-moon',
-    activeColor: 'success',
-    viewVariant: 'solid',
-    editActiveVariant: 'solid',
-    editInactiveVariant: 'soft'
+    ...MODE_WORDS[DinnerMode.DINEINLATE],
+    activeColor: COLOR.success,
+    viewVariant: NOISE.loud,
+    editActiveVariant: NOISE.loud,
+    editInactiveVariant: NOISE.soft
   },
   [DinnerMode.TAKEAWAY]: {
-    label: 'Takeaway',
-    icon: 'i-heroicons-shopping-bag',
-    activeColor: 'success',
-    viewVariant: 'solid',
-    editActiveVariant: 'solid',
-    editInactiveVariant: 'soft'
+    ...MODE_WORDS[DinnerMode.TAKEAWAY],
+    activeColor: COLOR.success,
+    viewVariant: NOISE.loud,
+    editActiveVariant: NOISE.loud,
+    editInactiveVariant: NOISE.soft
   },
   [DinnerMode.NONE]: {
-    label: 'Ingen',
-    icon: 'i-heroicons-x-circle',
-    activeColor: 'error',
-    viewVariant: 'soft',
-    editActiveVariant: 'soft',
-    editInactiveVariant: 'ghost'
+    ...MODE_WORDS[DinnerMode.NONE],
+    activeColor: COLOR.error,
+    viewVariant: NOISE.soft,
+    editActiveVariant: NOISE.soft,
+    editInactiveVariant: NOISE.quiet
   }
 }
 
 // Mixed/no consensus config (used when consensus === false)
 const mixedModeConfig: ModeDisplayConfig = {
-  label: 'Blandet',
+  label: BOOKING_WORDS.mixedModes,
   icon: ICONS.help,
-  activeColor: 'neutral',
-  viewVariant: 'outline',
-  editActiveVariant: 'outline',
-  editInactiveVariant: 'ghost'
+  activeColor: COLOR.neutral,
+  viewVariant: NOISE.medium,
+  editActiveVariant: NOISE.medium,
+  editInactiveVariant: NOISE.quiet
 }
 
-// Check if a specific mode is disabled
-const isModeDisabled = (mode: DinnerMode): boolean => {
-  return props.disabled || props.disabledModes.includes(mode)
-}
+const isModeDisabled = (mode: DinnerMode): boolean => props.disabled || !props.enabledModes.includes(mode)
+const isToggleDisabled = computed(() => props.disabled || props.enabledModes.length === 0)
 
 // Update value (selector mode only)
 const updateMode = (value: DinnerMode) => {
@@ -190,14 +207,19 @@ const updateMode = (value: DinnerMode) => {
   emit('update:modelValue', value)
 }
 
-// Toggle to next mode (for toggle interaction)
+// Toggle to the next enabled mode after the current one; with no other, the toggle stays put.
+// On a plan the first click adopts the shown mode as the person's own instead
 const toggleMode = () => {
-  if (props.disabled || props.formMode === FORM_MODES.VIEW || isTitle.value) return
-  const currentIndex = dinnerModeOrder.indexOf(dinnerMode.value)
-  // Find next enabled mode (skip disabled ones)
-  for (let i = 1; i <= dinnerModeOrder.length; i++) {
-    const nextIndex = (currentIndex + i) % dinnerModeOrder.length
-    const nextMode = dinnerModeOrder[nextIndex]!
+  if (isToggleDisabled.value || props.formMode === FORM_MODES.VIEW || isTitle.value) return
+  if (props.expected && !isModeDisabled(dinnerMode.value)) {
+    hasUserSelected.value = true
+    emit('update:modelValue', dinnerMode.value)
+    return
+  }
+  const currentIndex = DINNER_MODE_ORDER.indexOf(dinnerMode.value)
+  for (let i = 1; i < DINNER_MODE_ORDER.length; i++) {
+    const nextIndex = (currentIndex + i) % DINNER_MODE_ORDER.length
+    const nextMode = DINNER_MODE_ORDER[nextIndex]!
     if (!isModeDisabled(nextMode)) {
       hasUserSelected.value = true
       emit('update:modelValue', nextMode)
@@ -218,25 +240,41 @@ const getViewConfig = (): ModeDisplayConfig => {
 // Get icon for current mode (VIEW mode uses mixedModeConfig when no consensus)
 const getModeIcon = (): string => getViewConfig().icon
 
-// Get badge color for VIEW mode
-const getBadgeColor = (): BadgeColor => getViewConfig().activeColor
-
-// Get badge variant for VIEW mode
-const getBadgeVariant = (): BadgeVariant => getViewConfig().viewVariant
+// VIEW mode badge: the mode's colour and variant, the ghost of a wish on the waiting list, or an expected booking's ghost
+const getBadgeColor = (): BadgeColor => {
+  if (props.ghost) return waitlistFace.ghostBadge.color
+  return props.expected ? expectedFace.color : getViewConfig().activeColor
+}
+const getBadgeVariant = (): BadgeVariant => {
+  if (props.ghost) return waitlistFace.ghostBadge.variant
+  return props.expected ? expectedFace.variant : getViewConfig().viewVariant
+}
+// A cancelled dinner's badge wears the cancelled face whatever the mode
+const badgeFace = computed(() => props.cancelled
+  ? selector.cancelledFace
+  : {color: getBadgeColor(), variant: getBadgeVariant()})
+// The glyph and the label of a wish or an expected booking take a muted ink; on a cancelled dinner they keep the face's
+const planInk = computed(() => props.expected && !props.cancelled ? expectedFace.ink : undefined)
+const inkClass = computed(() => props.ghost && !props.cancelled ? waitlistFace.ghostInk : planInk.value)
 
 // Get mode label (VIEW mode uses mixedModeConfig when no consensus)
 const getModeLabel = (): string => getViewConfig().label
 
-// Get button color for EDIT mode (active vs inactive)
-const getButtonColor = (mode: DinnerMode): BadgeColor => {
-  const isActive = dinnerMode.value === mode
-  return isActive ? dinnerModeConfig[mode]!.activeColor : 'neutral'
-}
+type ButtonFace = {color: BadgeColor, variant: ButtonVariant}
 
-// Get button variant for EDIT mode (active vs inactive)
-const getButtonVariant = (mode: DinnerMode): ButtonVariant => {
-  const isActive = dinnerMode.value === mode
-  return isActive ? dinnerModeConfig[mode]!.editActiveVariant : dinnerModeConfig[mode]!.editInactiveVariant
+// The toggle wears a wish's or a plan's ghost, as the view face does, until a click; else the shown mode's colour
+const toggleFace = computed((): ButtonFace => {
+  if (props.ghost) return waitlistFace.ghostBadge
+  return props.expected
+    ? {color: expectedFace.color, variant: expectedFace.variant}
+    : {color: dinnerModeConfig[dinnerMode.value]!.activeColor, variant: dinnerModeConfig[dinnerMode.value]!.editActiveVariant}
+})
+const toggleIconClass = computed(() => inkClass.value ? `${iconSizeClass.value} ${inkClass.value}` : iconSizeClass.value)
+
+// A button of the group: the selected mode in its colour, on a plan the plan's mode hinted and none selected
+const buttonFace = (mode: DinnerMode): ButtonFace => {
+  if (dinnerMode.value !== mode) return {color: COLOR.neutral, variant: dinnerModeConfig[mode]!.editInactiveVariant}
+  return props.expected ? selector.plannedButton : {color: dinnerModeConfig[mode]!.activeColor, variant: dinnerModeConfig[mode]!.editActiveVariant}
 }
 
 // Check if button should pulse (DINEIN is fallback default without consensus)
@@ -248,7 +286,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
 </script>
 
 <template>
-  <div :class="{ 'border-l-2 border-warning pl-0.5': isModified }">
+  <div :class="isModified && selector.modified">
     <!-- TITLE MODE: Weekday header badge -->
     <template v-if="isTitle">
       <UBadge
@@ -257,7 +295,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
         :name="name"
         :data-testid="name"
       >
-        <div :class="`${iconSizeClass} flex items-center justify-center ${TYPOGRAPHY.caption} ${TEXT.ink}`">
+        <div :class="[iconSizeClass, selector.weekdayLabel]">
           {{ WEEKDAY.getLabel(modelValue as WeekDay) }}
         </div>
       </UBadge>
@@ -265,59 +303,57 @@ const shouldPulse = (mode: DinnerMode): boolean => {
 
     <!-- SELECTOR MODE: Dinner mode selection -->
     <template v-else>
-    <!-- VIEW MODE: Badge + fine print label below -->
-    <div v-if="formMode === FORM_MODES.VIEW" class="flex flex-col items-center gap-0.5">
+    <!-- VIEW MODE: Badge + fine print label below; a ghost wish takes the waiting list's ghost face, a cancelled dinner the
+         cancelled face in every form mode -->
+    <div v-if="formMode === FORM_MODES.VIEW || cancelled" :class="selector.stack">
       <UBadge
-        :color="getBadgeColor()"
-        :variant="getBadgeVariant()"
+        v-bind="badgeFace"
         :size="responsiveSize"
-        :class="MODE_SEGMENT_CLASSES"
+        :class="selector.segment"
         :name="name"
         :data-testid="name"
       >
-        <UIcon :name="getModeIcon()" :class="iconSizeClass" />
+        <UIcon :name="getModeIcon()" :class="[iconSizeClass, inkClass]" />
       </UBadge>
-      <span v-if="showLabel" :class="TYPOGRAPHY.finePrint">{{ getModeLabel() }}</span>
+      <span v-if="showLabel" :class="[TYPOGRAPHY.finePrint, inkClass]">{{ getModeLabel() }}</span>
     </div>
 
     <!-- EDIT MODE: Toggle (single button, click cycles) - no label for compact grid use -->
     <UButton
       v-else-if="formMode === FORM_MODES.EDIT && interaction === 'toggle'"
+      v-bind="toggleFace"
       :icon="getModeIcon()"
-      :color="dinnerModeConfig[dinnerMode]!.activeColor"
-      :variant="dinnerModeConfig[dinnerMode]!.editActiveVariant"
-      :disabled="disabled"
+      :disabled="isToggleDisabled"
       :size="responsiveSize"
       :name="name"
       :data-testid="name"
-      :ui="{ leadingIcon: iconSizeClass }"
+      :ui="selector.buttonUi(toggleIconClass)"
       @click="toggleMode"
     />
 
     <!-- EDIT MODE: Button group + fine print label below -->
-    <div v-else-if="formMode === FORM_MODES.EDIT" class="flex flex-col items-center gap-0.5">
+    <div v-else-if="formMode === FORM_MODES.EDIT" :class="selector.stack">
       <UFieldGroup
         :size="responsiveSize"
         :orientation="buttonOrientation"
-        :class="FIELD_GROUP_CLASSES"
+        :class="selector.fieldGroup"
         :name="name"
         :data-testid="name"
       >
         <UButton
-          v-for="mode in dinnerModeOrder"
+          v-for="mode in DINNER_MODE_ORDER"
           :key="mode"
+          v-bind="buttonFace(mode)"
           :icon="dinnerModeConfig[mode]!.icon"
-          :color="getButtonColor(mode)"
-          :variant="getButtonVariant(mode)"
           :disabled="isModeDisabled(mode)"
           :size="responsiveSize"
           :data-testid="`${name}-${mode}`"
-          :class="[MODE_SEGMENT_CLASSES, { 'animate-pulse': shouldPulse(mode) }]"
-          :ui="{ leadingIcon: iconSizeClass }"
+          :class="[selector.segment, shouldPulse(mode) && selector.pulse]"
+          :ui="selector.buttonUi(iconSizeClass)"
           @click="updateMode(mode)"
         />
       </UFieldGroup>
-      <span v-if="showLabel" :class="TYPOGRAPHY.finePrint">{{ getModeLabel() }}</span>
+      <span v-if="showLabel" :class="[TYPOGRAPHY.finePrint, planInk]">{{ getModeLabel() }}</span>
     </div>
     </template>
   </div>

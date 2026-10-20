@@ -65,10 +65,26 @@ help: ## Show this help
 .PHONY: palettes
 
 palettes: ## Regenerate the palette presets from the design system (rerun after a change to main.css scales, app.config ui.colors or a fill/ink token)
-	@npx jiti scripts/palettes/generate.ts
+	@JITI_ALIAS='{"~~":"$(CURDIR)","~":"$(CURDIR)/app"}' npx jiti scripts/palettes/generate.ts
+
+# --- Wrangler configs → C4 diagrams (docs/architecture: the container .mmd generated, every .svg rendered, committed)
+.PHONY: c4 c4-check
+
+C4_CONTAINER := docs/architecture/c4-container.mmd
+# wrangler loads through Node: jiti's CommonJS interop breaks the miniflare bundle it requires
+C4_GENERATE = JITI_NATIVE_MODULES='["wrangler"]' npx jiti scripts/c4/generate.ts
+
+c4: ## Generate the C4 container diagram from the wrangler configs and render docs/architecture/*.mmd to SVG through kroki.io
+	@$(C4_GENERATE) $(C4_CONTAINER)
+	@for mmd in docs/architecture/*.mmd; do \
+		curl -sSf -X POST https://kroki.io/mermaid/svg -H 'Content-Type: text/plain' --data-binary @$$mmd -o $${mmd%.mmd}.svg || exit 1; \
+	done
+
+c4-check: ## Fail when the C4 container diagram differs from the wrangler configs
+	@$(C4_GENERATE) | diff -u $(C4_CONTAINER) - || { echo "$(C4_CONTAINER) is stale - run make c4"; exit 1; }
 
 # --- Schema → migration files → Prisma client + zod (prisma/generated, committed)
-.PHONY: d1-prisma-zod d1-prisma d1-create-migration d1-flatten-migrations
+.PHONY: d1-prisma-zod d1-prisma d1-prisma-check d1-create-migration d1-flatten-migrations
 
 d1-prisma-zod:
 	@npx prisma generate zod
@@ -77,6 +93,9 @@ d1-prisma: d1-prisma-zod ## Generate Prisma client and Zod types
 	@npx prisma format
 	@npx prisma validate
 	@npm run db:generate-client
+
+d1-prisma-check: d1-prisma ## Fail when the committed generated layer differs from the schema
+	@git diff --exit-code --stat prisma/generated prisma/schema.prisma
 
 d1-create-migration: ## Create migration (name=xxx)
 	@echo "📝 Creating new Prisma migration..."
@@ -282,7 +301,93 @@ d1-copy-dev-to-local: ## Replace the local D1 with a copy of dev (schema, data, 
 # ============================================================================
 # TESTING
 # ============================================================================
-.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod
+.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod test-report bdd-report bdd-steps developer-resolve developer-assemble developer-build developer-publish
+
+# The summary tables are jq programs under scripts/ (test-report.jq, bdd-report.jq); the step reuse is
+# scripts/bdd-steps.mjs, which matches the feature lines through playwright-bdd's generator
+TEST_REPORT_USAGE := usage: make test-report report=<playwright json> title=<text> [note=<warning shown when failed > 0>]
+
+test-report: ## Markdown summary of a Playwright suite - report=<json> title=<text> [note=<text>]
+	@test -n "$(report)" -a -n "$(title)" || { echo "$(TEST_REPORT_USAGE)"; exit 1; }
+	@if [ -f "$(report)" ]; then \
+		jq -r -f scripts/test-report.jq --arg title "$(title)" --arg note "$(note)" "$(report)" \
+			|| echo "## ⚠️ $(title) — could not parse $(report)"; \
+	else \
+		echo "## ⚠️ $(title) — no results file at $(report)"; \
+	fi
+
+# The suite's Cucumber JSON, as npm run test:e2e:<suite> writes it
+suite ?= api
+bdd_report = .output/bdd/reports/e2e-$(suite)-bdd.json
+
+bdd-report: ## BDD summary of a suite - [suite=api|ui|smoke] [report=<cucumber json>] [title=<text>] [note=<text>]
+	@report="$(or $(report),$(bdd_report))"; title="$(or $(title),BDD $(suite) tests)"; \
+	if [ -f "$$report" ]; then \
+		jq -r -f scripts/bdd-report.jq --arg title "$$title" --arg note "$(note)" "$$report" \
+			|| echo "## ⚠️ $$title — could not parse $$report"; \
+	else \
+		echo "## ⚠️ $$title — no results file at $$report (npm run test:e2e:$(suite) writes it)"; \
+	fi
+
+bdd-steps: ## Step reuse across the features, each line against the definition bddgen matches - [summary=1 for the one line alone]
+	@node scripts/bdd-steps.mjs $(if $(summary),--summary,)
+
+# Developer companion (docs/features/feature-proposal-developer-companion.md): everything generated lives under
+# .output/developer — the downloaded artifacts, the Nuxt build (.nuxt, nitro, public; developer/nuxt.config.ts), the gh-pages checkout
+DEVELOPER_OUT := .output/developer
+DEVELOPER_PUBLIC := $(DEVELOPER_OUT)/public
+site ?= $(DEVELOPER_OUT)/site
+artifacts ?= $(DEVELOPER_OUT)/artifacts
+DEVELOPER_SUITES := api ui smoke
+DEVELOPER_ASSEMBLE_USAGE := usage: make developer-assemble env=<dev|prod> run=<pipeline run id> version=<version> sha=<commit> [url=<app url>] [site=] [artifacts=]
+# A pipeline run that deploys uploads the artifact `deployment`: its version-info lines plus ENV and URL
+developer-resolve: ## What a pipeline run published, from its deployment artifact, as env lines - run=<pipeline run id> [artifacts=]
+	@test -n "$(run)" || { echo "usage: make developer-resolve run=<pipeline run id> [artifacts=artifacts]"; exit 1; }
+	@rm -rf "$(artifacts)/deployment"; \
+	if gh run download "$(run)" -n deployment -D "$(artifacts)/deployment" > /dev/null 2>&1 && [ -f "$(artifacts)/deployment/deployment.env" ]; then \
+		echo "PUBLISH=true"; echo "RUN_ID=$(run)"; cat "$(artifacts)/deployment/deployment.env"; \
+	else \
+		echo "PUBLISH=false"; \
+	fi
+
+developer-assemble: ## Lay a run's results and manifest under site/environments - env= run= version= sha= [url=] [site=] [artifacts=]
+	@test -n "$(env)" -a -n "$(run)" -a -n "$(version)" -a -n "$(sha)" || { echo "$(DEVELOPER_ASSEMBLE_USAGE)"; exit 1; }
+	@rm -rf "$(site)/environments/$(env)" && mkdir -p "$(site)/environments/$(env)"
+	@suites='{}'; for suite in $(DEVELOPER_SUITES); do \
+		dest="$(site)/environments/$(env)/$$suite"; \
+		bdd="$(artifacts)/bdd-$$suite"; cucumber="$$bdd/e2e-$$suite-bdd.json"; \
+		if [ -f "$$cucumber" ]; then \
+			mkdir -p "$$dest" && cp "$$cucumber" "$$dest/" && cp -R "$$bdd/e2e-$$suite-bdd/." "$$dest/"; \
+			result=$$(jq -c -f scripts/bdd-report.jq --arg title "" --arg note "" --arg counts 1 "$$cucumber" \
+				| jq -c '{passed, failed: (.failed + .undefined), flaky: 0, skipped: .other, report: "index.html"}'); \
+		else \
+			echo "developer-assemble: no $$cucumber"; continue; \
+		fi; \
+		suites=$$(jq -c --arg suite "$$suite" --argjson result "$$result" '. + {($$suite): $$result}' <<< "$$suites"); \
+	done; \
+	jq -n --arg environment "$(env)" --arg version "$(version)" --arg sha "$(sha)" --arg url "$(url)" --arg run "$(run)" --arg deployedAt "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson suites "$$suites" \
+		'{environment: $$environment, version: $$version, sha: $$sha, deployedAt: $$deployedAt, run: ($$run | tonumber? // $$run), suites: $$suites} + (if ($$url | length) > 0 then {url: $$url} else {} end)' > "$(site)/environments/$(env).json"
+	@for manifest in "$(site)"/environments/*.json; do name=$$(basename "$$manifest" .json); [ "$$name" = index ] || echo "$$name"; done | sort | jq -R . | jq -s . > "$(site)/environments/index.json"
+	@[ ! -f "$(artifacts)/openapi/_openapi.json" ] || cp "$(artifacts)/openapi/_openapi.json" "$(site)/environments/$(env)/openapi.json"
+	@cat "$(site)/environments/$(env).json"
+
+# The hashed chunks live under _nuxt; the previous build's go before the copy so they do not pile up on gh-pages
+developer-build: ## Generate the site into the gh-pages checkout - nuxi generate, CNAME and .nojekyll [site=]
+	@npx nuxi generate developer
+	@mkdir -p "$(site)" && rm -rf "$(site)/_nuxt" && cp -R "$(DEVELOPER_PUBLIC)/." "$(site)/" && \
+	echo developer.skraaningen.dk > "$(site)/CNAME" && touch "$(site)/.nojekyll"
+
+developer-publish: ## Force-push site/ as the single commit of gh-pages - [env=<env>] [site=]
+	@test -d "$(site)" || { echo "usage: make developer-publish [env=<env>] [site=site] (run developer-build first)"; exit 1; }
+	@cd "$(site)" && \
+	{ [ -d .git ] || git init -q; } && \
+	{ git remote get-url origin > /dev/null 2>&1 || git remote add origin "https://github.com/$${GITHUB_REPOSITORY:?GITHUB_REPOSITORY missing and $(site) has no origin}.git"; } && \
+	{ [ -z "$$GITHUB_TOKEN" ] || git config http.https://github.com/.extraheader "AUTHORIZATION: basic $$(printf 'x-access-token:%s' "$$GITHUB_TOKEN" | base64 | tr -d '\n')"; } && \
+	git add -A && \
+	commit=$$(git -c user.name="$$(git config user.name || echo 'github-actions[bot]')" -c user.email="$$(git config user.email || echo 'github-actions[bot]@users.noreply.github.com')" \
+		commit-tree "$$(git write-tree)" -m "Developer companion $$(date -u +%Y-%m-%dT%H:%MZ) $(env)") && \
+	git update-ref refs/heads/gh-pages "$$commit" && \
+	git push -q --force origin refs/heads/gh-pages:refs/heads/gh-pages
 
 unit-test: ## Run all unit tests
 	@npx vitest --run
@@ -342,6 +447,30 @@ version-info: ## Output all version components as env vars
 	@echo "COMMIT_SHA=$(GIT_SHA)"
 	@echo "IS_RELEASE=$(if $(RELEASE_VERSION),true,false)"
 	@echo "SHORT_VERSION=$(VERSION)"
+
+# ============================================================================
+# RELEASE NOTES — every docs/releases/<name>.md as a one-page A4 PDF beside it (docs/releases/<name>.pdf, gitignored)
+# ============================================================================
+.PHONY: release-notes
+
+# Per notes file: GitHub renders the markdown (gh api /markdown, gfm; -F reads the file, -f would send the literal
+# "@path"), docs/releases/poster.head.html carries the stylesheet, the print scaling and the BASE_HREF placeholder,
+# replaced with the file URL of docs/releases/ so the pictures in docs/releases/<name>/ resolve, and Playwright prints
+# the page from .output (gitignored); --wait-for-timeout gives the stylesheet and the icons on cdnjs/iconify time to load
+RELEASE_NOTES_HEAD := docs/releases/poster.head.html
+RELEASE_NOTES_OUT := .output/release-notes
+RELEASE_NOTES := $(wildcard docs/releases/*.md)
+
+release-notes: ## Render every docs/releases/<name>.md to docs/releases/<name>.pdf (A4, one page)
+	@test -f "$(RELEASE_NOTES_HEAD)" || { echo "make $@: no poster head at $(RELEASE_NOTES_HEAD)"; exit 1; }
+	@mkdir -p "$(RELEASE_NOTES_OUT)"; for md in $(RELEASE_NOTES); do \
+		name=$$(basename "$$md" .md); html="$(RELEASE_NOTES_OUT)/$$name.html"; \
+		{ sed 's|BASE_HREF|file://$(CURDIR)/docs/releases/|' "$(RELEASE_NOTES_HEAD)" && \
+		  gh api /markdown -X POST -f mode=gfm -F text=@"$$md" && \
+		  printf '\n</article>\n</body>\n</html>\n'; } > "$$html" && \
+		npx playwright pdf --paper-format A4 --wait-for-timeout 3000 "file://$(CURDIR)/$$html" "docs/releases/$$name.pdf" || exit 1; \
+	done
+	@if [ -n "$(RELEASE_NOTES)" ]; then ls -l $(RELEASE_NOTES:.md=.pdf); else echo "no release notes in docs/releases/"; fi
 
 # ============================================================================
 # DEPLOYMENT & LOGS
@@ -541,22 +670,6 @@ theslope-export-teams: ## Export the active season's team members as a teams CSV
 	@echo "$$(($$(wc -l < $(out)) - 1)) members → $(out)"
 
 # ============================================================================
-# HEAL USER BOOKINGS (bugfix - one-time healing)
-# ============================================================================
-# Usage: make heal-local hid=123 dryrun=false
-# Default: dryrun=true (preview mode)
-.PHONY: heal-local heal-dev heal-prod
-
-heal-local: ## Heal user bookings (local) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_local),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
-
-heal-dev: ## Heal user bookings (dev) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_dev),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
-
-heal-prod: ## Heal user bookings (prod) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_prod),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
-
-# ============================================================================
 # REGENERATE DINNER EVENTS (reconcile with season config - fixes stale holiday events)
 # ============================================================================
 # Usage: make regen-dinner-events-prod sid=2
@@ -641,36 +754,33 @@ generate-session-secret: ## Generate a session secret
 	@cat .env | sed 's/=.*$$/=/g' > .env.example
 
 # ============================================================================
-# CLAUDE MODES
+# CLAUDE MODES - each mode starts its agent from .claude/agents/
 # ============================================================================
-.PHONY: claude-senior-dev claude-test claude-adr claude-ux claude-doc claude-pair claude-devops
+.PHONY: claude-senior-dev claude-test claude-adr claude-ux claude-doc claude-pair claude-devops claude-code-review claude-orchestrator
 
 claude-senior-dev: ## Claude as senior dev
-	@claude --system-prompt "You are a senior nuxt developer, and your task is to develop the next feature described in the docs. Remember about @docs/adr-compliance-frontend.md and @docs/adr-compliance-backend.md. You must point out if any significant parts of the project are missing or could be improved. You must also ensure that existing code follows best practices, is secure, and well tested. You are not allowed to commit to git, and you are not allowed to start dev server, the user does that. You should start by asking about what feature we are implementing, and what the business requirements are."
+	@claude --agent nuxt-typescript-developer
 
 claude-test: ## Claude as test engineer
-	@claude --system-prompt "You are a senior test automation engineer, and you know how to write dry parametrized tests, both unit, component, e2e api and e2e ui. Your task is to make sure our tests are green, test factories well maintained, and coverage is comprehensive. You MUST point out if test cases are missing. You must take care to update our adr-compliance documents."
+	@claude --agent test-automation-engineer
 
 claude-adr: ## Claude as architect
-	@claude --system-prompt "You are a senior software architect, and your task is to make sure our architecture decision records (ADRs) are up to date and comprehensive. You must point out if any ADRs are missing for significant decisions made in the project. You must also ensure that existing ADRs are well written and follow best practices."
+	@claude --agent senior-architect
 
 claude-ux: ## Claude as UX designer
-	@claude --system-prompt "You are a a wizard UX designer, with great frontend coding skill, and your task is to help us design a friendly, and consistent user interface. Your task is to design ascii mockups for new features, implement components with Nuxtui, stay consistent with our DesignSystem, and update it along the way. Your code needs to conform to the @docs/adr-compliance-frontend.md. Start by asking what feature we are designing, and what the business requirements are"
+	@claude --agent frontend-engineer
 
-claude-doc: ## Claude as tech writer
-	@claude --system-prompt "You are a technical writer, and your task is to make sure our documentation is up to date, but compact. You must point out if any significant parts of the project are missing documentation. You must also ensure that existing documentation is well written and follows best practices. You have to maintain the @docs/features.md when developers finish a feature, add asci art from feature to the file, together with 1 documentation screenshot generated by e2e test for that feature."
+claude-doc: ## Claude as documentar
+	@claude --agent documentar
 
 claude-pair: ## Claude as pair programmer
-	@claude --system-prompt "You are my pair programmer, use the pair programmer subagent until I tell you otherwise. I write code, you assist with tests, discussions and clarifications. Be assertive, I am a senior engineer, no trivialities, watch how the implementation is progressing and discuss fine details."
+	@claude --agent tdd-pair-programmer
 
 claude-devops: ## Claude as DevOps engineer
-	@claude --system-prompt "You are a senior DevOps engineer, use the devops subagent ONLY. Your task is to make sure our deployment pipelines, infrastructure as code, and cloud resources are well managed and optimized. You must point out if any significant parts of our DevOps practices are missing or could be improved. You must also ensure that existing configurations follow best practices and are secure. You are not allowed to commit to git, but you are allowed to merge pr on request."
+	@claude --agent devops-engineer
 
 claude-code-review: ## Claude PR review against ADRs
-	@claude --system-prompt "Review this PR for ADR compliance and documentation maintenance.\n\n\
-	1. Read: docs/adr.md, docs/adr-compliance-backend.md, docs/adr-compliance-frontend.md, prisma/schema.prisma, docs/testing.md\n\n\
-	2. Check code changes against ALL ADRs - flag violations with specific references.\n\n\
-	3. Check compliance doc maintenance:\n\
-	   - server/routes/api/** changes → adr-compliance-backend.md MUST be updated\n\
-	   - app/components/**, app/pages/**, app/stores/** changes → adr-compliance-frontend.md MUST be updated\n\n\
-	4. Check test coverage: New endpoints need E2E tests with factories, new components need tests, tests must be DRY."
+	@claude --agent documentar "/code-review"
+
+claude-orchestrator: ## Claude orchestrator for multi-agent collaboration
+	@claude --agent senior-architect --append-system-prompt "You are in charge of peer sesssions, use the /orchestrator skill to interact with the human Architect, and my sure what is produced lives up to the standards /dry, and is adr compliant"

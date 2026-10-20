@@ -1,0 +1,34 @@
+C4Context
+    title Skråningen, system context
+    UpdateLayoutConfig($c4ShapeInRow="4", $c4BoundaryInRow="1")
+    Boundary(users, "Users") {
+        Person(member, "Member", "A user: books dinners, sets weekday preferences, joins waiting lists")
+        Person(chef, "Chef", "Team role CHEF on a dinner: announces the menu, buys groceries, releases portions")
+        Person(admin, "Admin", "System role ADMIN: plans seasons and teams, corrects bookings, runs the billing")
+        Person(allergyManager, "Allergy manager", "System role ALLERGYMANAGER: keeps the allergy catalog")
+    }
+    Boundary(system, "") {
+        System(theslope, "TheSlope", "Fællesspisning: bookings, waiting lists, chef duty, billing")
+    }
+    Boundary(external, "External systems") {
+        System_Ext(heynabo, "Heynabo", "Residents and households; login; the community calendar")
+        System_Ext(mail, "E-mail", "Cloudflare Email Sending")
+        System_Ext(github, "GitHub", "A feedback becomes an issue")
+        System_Ext(accountant, "Accountant / PBS", "The monthly billing CSV")
+    }
+    Rel(member, theslope, "Books, sets preferences", "HTTPS, PWA")
+    Rel(chef, theslope, "Announces, releases portions", "HTTPS")
+    Rel(admin, theslope, "Plans, corrects, bills", "HTTPS")
+    Rel(allergyManager, theslope, "Keeps the allergy catalog", "HTTPS")
+    Rel(theslope, heynabo, "Logs users in, imports households, pushes dinner events", "HTTPS")
+    Rel(theslope, mail, "Booking, chef and billing mails")
+    Rel(theslope, github, "Creates feedback issues")
+    Rel(theslope, accountant, "Mails the billing CSV")
+    UpdateRelStyle(member, theslope, $offsetX="-40", $offsetY="-40")
+    UpdateRelStyle(chef, theslope, $offsetX="-30", $offsetY="10")
+    UpdateRelStyle(admin, theslope, $offsetX="30", $offsetY="-40")
+    UpdateRelStyle(allergyManager, theslope, $offsetX="40", $offsetY="10")
+    UpdateRelStyle(theslope, heynabo, $offsetX="-60", $offsetY="30")
+    UpdateRelStyle(theslope, mail, $offsetX="-30", $offsetY="-20")
+    UpdateRelStyle(theslope, github, $offsetX="30", $offsetY="30")
+    UpdateRelStyle(theslope, accountant, $offsetX="60", $offsetY="-20")

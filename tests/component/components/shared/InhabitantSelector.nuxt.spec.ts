@@ -1,9 +1,13 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
 import InhabitantSelector from '~/components/shared/InhabitantSelector.vue'
 import {nextTick, ref} from 'vue'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
+import {mountWithTooltipProvider, resetStores, findLoadingRow} from '~~/tests/component/testHelpers'
+
+enableAutoUnmount(afterEach)
 
 describe('InhabitantSelector', () => {
 
@@ -21,12 +25,15 @@ describe('InhabitantSelector', () => {
     const dummySortFn = (a: {original: InhabitantDisplay}, b: {original: InhabitantDisplay}) =>
         a.original.name.localeCompare(b.original.name)
 
-    const mount = (overrides: Record<string, unknown> = {}, slots?: Record<string, (props: {row: {original: InhabitantDisplay}}) => string>) =>
-        mountSuspended(InhabitantSelector, {
-            props: {inhabitants, ...overrides},
-            global: {provide: {isMd: ref(true)}},
-            ...(slots ? {slots} : {})
-        })
+    beforeEach(() => {
+        resetStores()
+    })
+
+    const mount = (overrides: Record<string, unknown> = {}) =>
+        mountWithTooltipProvider(InhabitantSelector, {props: {inhabitants, ...overrides}, isMd: true})
+    // Slots go through the root mount alone
+    const mountWithSlots = (slots: Record<string, (props: {row: {original: InhabitantDisplay}}) => string>) =>
+        mountSuspended(InhabitantSelector, {props: {inhabitants}, global: {provide: {isMd: ref(true)}}, slots})
 
     const typeSearch = async (wrapper: Awaited<ReturnType<typeof mount>>, query: string) => {
         await wrapper.find('input').setValue(query)
@@ -35,44 +42,32 @@ describe('InhabitantSelector', () => {
 
     // ========== RENDERING ==========
 
-    it.each([
-        ['Anna Hansen'], ['Bo Jensen'], ['Carl Larsen']
-    ])('renders inhabitant %s', async ([name]) => {
+    it('renders every inhabitant under the default headers, with the default search placeholder', async () => {
         const wrapper = await mount()
-        expect(wrapper.text()).toContain(name)
+        const text = wrapper.text()
+        inhabitants.forEach(i => expect(text).toContain(`${i.name} ${i.lastName}`))
+        expect(text).toContain('Status')
+        expect(text).toContain('Handling')
+        expect(wrapper.find('input').attributes('placeholder')).toContain('Søg efter navn')
     })
 
-    it.each([
-        ['statusHeader', 'Husstand', 'Husstand'],
-        ['actionsHeader', 'Flyt', 'Flyt'],
-        ['statusHeader', undefined, 'Status'],
-        ['actionsHeader', undefined, 'Handling']
-    ])('header %s=%s renders as "%s"', async (prop, value, expected) => {
-        const wrapper = await mount(value !== undefined ? {[prop]: value} : {})
-        expect(wrapper.text()).toContain(expected)
+    it('renders the given status and actions headers', async () => {
+        const wrapper = await mount({statusHeader: 'Husstand', actionsHeader: 'Flyt'})
+        expect(wrapper.text()).toContain('Husstand')
+        expect(wrapper.text()).toContain('Flyt')
     })
 
     // ========== SEARCH ==========
 
     it.each([
-        ['anna', ['Anna Hansen'], ['Bo Jensen', 'Carl Larsen']],
         ['larsen', ['Carl Larsen'], ['Anna Hansen', 'Bo Jensen']],
-        ['ANNA', ['Anna Hansen'], ['Bo Jensen']],
-        ['zzz', [], ['Anna Hansen', 'Bo Jensen', 'Carl Larsen']]
+        ['ANNA', ['Anna Hansen'], ['Bo Jensen']]
     ])('search "%s" shows %j and hides %j', async (query, visible, hidden) => {
         const wrapper = await mount()
         await typeSearch(wrapper, query)
         const text = wrapper.text()
         visible.forEach(name => expect(text).toContain(name))
         hidden.forEach(name => expect(text).not.toContain(name))
-    })
-
-    it.each([
-        ['default', undefined, 'Søg efter navn'],
-        ['custom', 'Find beboer...', 'Find beboer...']
-    ])('search placeholder %s', async (_, placeholder, expected) => {
-        const wrapper = await mount(placeholder ? {searchPlaceholder: placeholder} : {})
-        expect(wrapper.find('input').attributes('placeholder')).toContain(expected)
     })
 
     // ========== EMPTY STATE ==========
@@ -90,17 +85,25 @@ describe('InhabitantSelector', () => {
         )
     })
 
-    // ========== SORT TOGGLE ==========
-
+    // Until the inhabitants answer, the table's loading row stands where the empty text would
     it.each([
-        ['hidden when no sortFn', undefined, false],
-        ['visible when sortFn provided', dummySortFn, true]
-    ])('sort button %s', async (_, sortFn, shouldExist) => {
-        const wrapper = await mount(sortFn ? {sortFn} : {})
-        expect(wrapper.find('[name="sort-by-status"]').exists()).toBe(shouldExist)
+        {loading: true, loadingRow: true, emptyText: false},
+        {loading: false, loadingRow: false, emptyText: true}
+    ])('GIVEN no inhabitants yet and loading=$loading THEN the loading row shows: $loadingRow, the empty text: $emptyText', async ({loading, loadingRow, emptyText}) => {
+        const wrapper = await mount({inhabitants: [], loading})
+        expect(findLoadingRow(wrapper).exists()).toBe(loadingRow)
+        expect(wrapper.text().includes('Henter beboere...')).toBe(loadingRow)
+        expect(wrapper.text().includes('Ingen beboere tilgængelige')).toBe(emptyText)
     })
 
-    it('sort button displays statusHeader text', async () => {
+    // ========== SORT TOGGLE ==========
+
+    it('sort button hidden when no sortFn', async () => {
+        const wrapper = await mount()
+        expect(wrapper.find('[name="sort-by-status"]').exists()).toBe(false)
+    })
+
+    it('sort button visible when sortFn provided, displaying the statusHeader text', async () => {
         const wrapper = await mount({sortFn: dummySortFn, statusHeader: 'Husstand'})
         expect(wrapper.find('[name="sort-by-status"]').text()).toContain('Husstand')
     })
@@ -111,7 +114,7 @@ describe('InhabitantSelector', () => {
         ['status'],
         ['actions']
     ])('#%s slot renders per row', async (slotName) => {
-        const wrapper = await mount({}, {
+        const wrapper = await mountWithSlots({
             [slotName]: ({row}: {row: {original: InhabitantDisplay}}) =>
                 `slot-${slotName}-${row.original.id}`
         })

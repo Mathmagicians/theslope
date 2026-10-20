@@ -4,14 +4,12 @@ import {fetchDinnerEvents} from "~~/server/data/financesRepository"
 import type {DinnerEventDisplay} from "~/composables/useBookingValidation"
 import {reconcileDinnerEventsForSeason, type ReconciliationResult} from "~~/server/utils/reconcileDinnerEvents"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {z} from "zod"
+import {idParams} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
 const LOG = '🗓️ > SEASON > [GENERATE_EVENTS]'
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('Season ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 type GenerateDinnerEventsResponse = {
     seasonId: number
@@ -36,7 +34,7 @@ export default defineEventHandler(async (event): Promise<GenerateDinnerEventsRes
     // Input validation - FAIL EARLY
     let seasonId!: number
     try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
+        const params = await getValidatedRouterParams(event, paramSchema.parse)
         seasonId = params.id
     } catch (error) {
         return throwH3Error(`${LOG} Input validation error`, error)

@@ -7,9 +7,10 @@
  * - Detail (Booking panel): 2/3 width, shows selected day details
  */
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
-import type {DesiredOrder, DinnerMode} from '~/composables/useBookingValidation'
+import type {DesiredOrder} from '~/composables/useBookingValidation'
+import {EMPTY_RELEASED_TICKET_COUNTS, type BookingChanges} from '~/composables/useBooking'
 import {useQueryParam} from '~/composables/useQueryParam'
-import {useDinnerDateParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
+import {useDinnerDateParam, useCalendarOpenParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 
 interface Props {
   household: HouseholdDetail
@@ -24,22 +25,18 @@ const props = withDefaults(defineProps<Props>(), {
 const {household} = toRefs(props)
 
 const {deadlinesForSeason} = useSeason()
-const {formatScaffoldResult, BOOKING_TOAST_TITLES} = useBooking()
-const {handleApiError} = useApiHandler()
-const {ICONS, ALERTS} = useTheSlopeDesignSystem()
-const toast = useToast()
+const {BOOKING_TOAST_TITLES, buildBookingChanges} = useBooking()
+const {ICONS, ALERTS, COMPONENTS} = useTheSlopeDesignSystem()
 
 const planStore = usePlanStore()
 const {selectedSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
-planStore.initPlanStore()
 
 const bookingsStore = useBookingsStore()
-const {orders, isProcessingBookings, lockStatus} = storeToRefs(bookingsStore)
+const {orders, isProcessingBookings, isBookingsReloading, lockStatus, householdWaitlist} = storeToRefs(bookingsStore)
 
 // Allergies store for guest booking form
 const allergiesStore = useAllergiesStore()
 const {allergyTypes} = storeToRefs(allergiesStore)
-allergiesStore.initAllergiesStore()
 
 // Households store for booker ID (current user's inhabitant)
 const householdsStore = useHouseholdsStore()
@@ -79,9 +76,7 @@ const {dateRange, hasPrev, hasNext, navigate} = useBookingView({
   dinnerDates: () => dinnerDates.value
 })
 
-// Calendar collapsed by default on mobile
-const isMd = inject<Ref<boolean>>('isMd')
-const calendarOpen = ref(isMd?.value ?? false)
+const {value: calendarOpen} = useCalendarOpenParam(syncWhen)
 
 const handleDateSelected = (date: Date) => setDate(date)
 const handleNavigate = (direction: 'prev' | 'next') => navigate(direction === 'next' ? 1 : -1)
@@ -104,11 +99,11 @@ const visibleDinnerEventIds = computed(() =>
 
 // Load orders for visible dinner events (grid view doesn't need provenance)
 // Pass household.id to fetch orders for the viewed household (not session user's)
-watchEffect(() => {
-  if (visibleDinnerEventIds.value.length > 0 && household.value?.id) {
-    bookingsStore.loadOrdersForDinners(visibleDinnerEventIds.value, !isGridView.value, household.value.id)
-  }
-})
+bookingsStore.loadOrdersForDinners(() => ({
+  dinnerEventIds: household.value?.id ? visibleDinnerEventIds.value : [],
+  householdId: household.value?.id,
+  includeProvenance: !isGridView.value
+}))
 
 // Season data for view components
 const ticketPrices = computed(() => selectedSeason.value?.ticketPrices ?? [])
@@ -117,51 +112,23 @@ const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selec
 // Grid view form mode
 const gridFormMode = ref<'view' | 'edit'>('view')
 
-// Handle grid save - build DesiredOrders and call scaffold endpoint
-const {getTicketPriceForInhabitant} = useTicket()
-const {OrderStateSchema} = useBookingValidation()
-const OrderState = OrderStateSchema.enum
+// The order a save's toast names the people in
+const householdOrder = computed(() => household.value.inhabitants.map(({id}) => id))
 
-const handleGridSave = async (changes: { inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode }[]) => {
-  if (!selectedSeason.value || changes.length === 0) return
+const handleGridSave = async (changes: BookingChanges) => {
+  const desiredOrders = buildBookingChanges(changes, orders.value, household.value.inhabitants, dinnerEvents.value, ticketPrices.value)
+  if (!selectedSeason.value || desiredOrders.length === 0) return
 
   // Only process dinner events that have changes (not all visible events!)
-  const changedEventIds = [...new Set(changes.map(c => c.dinnerEventId))]
+  const changedEventIds = [...new Set(desiredOrders.map(o => o.dinnerEventId))]
 
-  const desiredOrders = changes.map(change => {
-    const inhabitant = household.value.inhabitants.find(i => i.id === change.inhabitantId)
-    const event = dinnerEvents.value.find(e => e.id === change.dinnerEventId)
-    const ticketPrice = getTicketPriceForInhabitant(inhabitant?.birthDate ?? null, ticketPrices.value, event?.date ?? new Date())
-    const existingOrder = orders.value.find(o => o.inhabitantId === change.inhabitantId && o.dinnerEventId === change.dinnerEventId)
-
-    // Existing order: preserve ticketPriceId. New booking: compute from age.
-    const resolvedTicketPriceId = existingOrder?.ticketPriceId ?? ticketPrice?.id
-    if (!resolvedTicketPriceId) {
-      throw new Error(`Cannot resolve ticketPriceId for inhabitant ${change.inhabitantId}`)
-    }
-
-    return {
-      inhabitantId: change.inhabitantId,
-      dinnerEventId: change.dinnerEventId,
-      dinnerMode: change.dinnerMode,
-      ticketPriceId: resolvedTicketPriceId,
-      isGuestTicket: false,
-      orderId: existingOrder?.id,
-      state: OrderState.BOOKED
-    }
-  })
-
-  const result = await bookingsStore.processMultipleEventsBookings(
+  await bookingsStore.processMultipleEventsBookings(
     household.value.id,
     changedEventIds,
     desiredOrders,
-    props.adminBypass
+    props.adminBypass,
+    {title: BOOKING_TOAST_TITLES.grid, householdOrder: householdOrder.value}
   )
-  toast.add({
-    title: BOOKING_TOAST_TITLES.grid,
-    description: formatScaffoldResult(result.scaffoldResult, 'past'),
-    color: 'success'
-  })
 }
 
 // Day view save handler - DinnerBookingForm emits DesiredOrder[]
@@ -169,17 +136,13 @@ const handleDayViewSave = async (desiredOrders: DesiredOrder[]) => {
   const dinnerEventId = selectedDinnerEvent.value?.id
   if (!dinnerEventId || desiredOrders.length === 0) return
 
-  const result = await bookingsStore.processSingleEventBookings(
+  await bookingsStore.processSingleEventBookings(
     household.value.id,
     dinnerEventId,
     desiredOrders,
-    props.adminBypass
+    props.adminBypass,
+    {title: BOOKING_TOAST_TITLES.day, householdOrder: householdOrder.value}
   )
-  toast.add({
-    title: BOOKING_TOAST_TITLES.day,
-    description: formatScaffoldResult(result.scaffoldResult, 'past'),
-    color: 'success'
-  })
 }
 
 // Grid view guest booking - receives DesiredOrder[] from GuestBookingForm (all goes through scaffolder)
@@ -192,21 +155,13 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
   const event = dinnerEvents.value.find(e => e.id === eventId)
   const dateStr = event ? formatDate(new Date(event.date)) : ''
 
-  try {
-    const result = await bookingsStore.processSingleEventBookings(
-      household.value.id,
-      eventId,
-      guestOrders,
-      props.adminBypass
-    )
-    toast.add({
-      title: BOOKING_TOAST_TITLES.guest,
-      description: `${formatScaffoldResult(result.scaffoldResult, 'past')} d. ${dateStr}`,
-      color: 'success'
-    })
-  } catch (e) {
-    handleApiError(e, 'handleAddGuest', 'Kunne ikke tilføje gæst')
-  }
+  await bookingsStore.processSingleEventBookings(
+    household.value.id,
+    eventId,
+    guestOrders,
+    props.adminBypass,
+    {title: BOOKING_TOAST_TITLES.guest, suffix: ` d. ${dateStr}`, householdOrder: householdOrder.value}
+  )
 }
 </script>
 
@@ -215,9 +170,9 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
   <ViewError v-else-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
   <div v-else-if="isSelectedSeasonInitialized && selectedSeason" data-testid="household-bookings">
     <!-- Layout: Flex row on desktop, stack on mobile -->
-    <div class="flex flex-col md:flex-row gap-6">
+    <div :class="COMPONENTS.householdBookings.layout">
       <!-- Calendar sidebar (day/week views only, collapsible) -->
-      <div v-if="view !== 'month' && calendarOpen" class="md:basis-1/3">
+      <div v-if="view !== 'month' && calendarOpen" :class="COMPONENTS.householdBookings.calendar">
         <DinnerCalendarDisplay
           :season-dates="seasonDates"
           :holidays="holidays"
@@ -230,9 +185,9 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
       </div>
 
       <!-- Booking panel (grows to fill) -->
-      <div class="flex-1">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-sm font-semibold">Familiens bookinger</h3>
+      <div :class="COMPONENTS.householdBookings.panel">
+        <div :class="COMPONENTS.householdBookings.panelHeader">
+          <h3 :class="COMPONENTS.householdBookings.panelTitle">Familiens bookinger</h3>
           <BookingViewSwitcher v-model="view" />
         </div>
         <BookingGridView
@@ -248,11 +203,14 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
           :ticket-prices="ticketPrices"
           :deadlines="deadlines"
           :lock-status="lockStatus"
+          :waitlist-entries="householdWaitlist"
           :allergy-types="allergyTypes"
           :booker-id="bookerId"
           :is-saving="isProcessingBookings"
+          :loading="isBookingsReloading"
           :has-prev="hasPrev"
           :has-next="hasNext"
+          :admin-bypass="adminBypass"
           @save="handleGridSave"
           @navigate="handleNavigate"
           @add-guest="handleAddGuest"
@@ -266,8 +224,11 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
               :orders="orders"
               :ticket-prices="ticketPrices"
               :deadlines="deadlines"
-              :released-ticket-counts="lockStatus.get(selectedDinnerEvent.id) ?? { total: 0, formatted: '-' }"
+              :released-ticket-counts="lockStatus.get(selectedDinnerEvent.id) ?? EMPTY_RELEASED_TICKET_COUNTS"
               :can-edit-admin-override="adminBypass ? () => canEdit : undefined"
+              :admin-bypass="adminBypass"
+              :waitlist-entries="householdWaitlist"
+              :loading="isBookingsReloading"
               @save-bookings="handleDayViewSave"
             />
             <UAlert

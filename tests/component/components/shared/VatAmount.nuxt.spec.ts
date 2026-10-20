@@ -1,0 +1,65 @@
+// @vitest-environment nuxt
+import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
+import {enableAutoUnmount} from '@vue/test-utils'
+import VatAmount from '~/components/shared/VatAmount.vue'
+import {useOrder} from '~/composables/useOrder'
+import {useTicket} from '~/composables/useTicket'
+import {mountWithTooltipProvider, findByTestId, kitchenConfig, resetStores} from '~~/tests/component/testHelpers'
+
+/**
+ * VatAmount: one gross figure rendered in both units, the ex moms half first; a balance carries its sign and icon.
+ */
+const {convertVat} = useOrder()
+const {formatPrice} = useTicket()
+
+let vatPercent: number
+beforeAll(() => {
+    ({vatPercent} = kitchenConfig())
+})
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
+
+const mount = (props: {gross: number, balance?: boolean, pending?: boolean}) => mountWithTooltipProvider(VatAmount, {props, isMd: true})
+
+describe('VatAmount', () => {
+    it('GIVEN a gross amount WHEN rendering THEN the ex moms figure comes first and the inkl. moms half after the slash, with the icon slot there and empty so kr lines up with a balance row', async () => {
+        const wrapper = await mount({gross: 178100})
+        expect(findByTestId(wrapper, 'vat-amount-ex').text()).toBe(formatPrice(convertVat(178100, vatPercent, true)))
+        expect(findByTestId(wrapper, 'vat-amount-incl').text()).toBe(`/ ${formatPrice(178100)} kr`)
+        expect(findByTestId(wrapper, 'vat-amount-ok').exists()).toBe(false)
+        expect(findByTestId(wrapper, 'vat-amount-over').exists()).toBe(false)
+
+        const slot = findByTestId(wrapper, 'vat-amount-slot')
+        expect(slot.exists()).toBe(true)
+        expect(slot.text()).toBe('')
+        expect(slot.find('span, svg').exists()).toBe(false)
+    })
+
+    it.each([
+        {desc: 'at or above zero', gross: 14300, sign: '+', icon: 'vat-amount-ok', other: 'vat-amount-over'},
+        {desc: 'below zero', gross: -14400, sign: '-', icon: 'vat-amount-over', other: 'vat-amount-ok'}
+    ])('GIVEN a balance $desc WHEN rendering THEN both halves carry the sign and the matching icon shows inside the slot', async ({gross, sign, icon, other}) => {
+        const wrapper = await mount({gross, balance: true})
+        expect(findByTestId(wrapper, 'vat-amount-ex').text()).toBe(`${sign}${formatPrice(Math.abs(convertVat(gross, vatPercent, true)))}`)
+        expect(findByTestId(wrapper, 'vat-amount-incl').text()).toBe(`/ ${sign}${formatPrice(Math.abs(gross))} kr`)
+        expect(findByTestId(findByTestId(wrapper, 'vat-amount-slot'), icon).exists()).toBe(true)
+        expect(findByTestId(wrapper, other).exists()).toBe(false)
+    })
+
+    it('GIVEN nothing to balance yet WHEN rendering THEN the waiting glyph fills the slot, with no sign and no check', async () => {
+        const wrapper = await mount({gross: 0, balance: true, pending: true})
+        expect(findByTestId(wrapper, 'vat-amount-ex').text()).toBe(formatPrice(0))
+        expect(findByTestId(wrapper, 'vat-amount-pending').exists()).toBe(true)
+        expect(findByTestId(wrapper, 'vat-amount-ok').exists()).toBe(false)
+    })
+
+    it('GIVEN a balance of zero WHEN rendering THEN it reads as in balance', async () => {
+        const wrapper = await mount({gross: 0, balance: true})
+        expect(findByTestId(wrapper, 'vat-amount-ex').text()).toBe(`+${formatPrice(0)}`)
+        expect(findByTestId(wrapper, 'vat-amount-ok').exists()).toBe(true)
+    })
+})

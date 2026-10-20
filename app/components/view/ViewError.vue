@@ -9,7 +9,7 @@ export interface ViewErrorProps {
 }
 const props = defineProps<ViewErrorProps>()
 
-const {COLOR, TYPOGRAPHY, TEXT, BG} = useTheSlopeDesignSystem()
+const {COLOR, TYPOGRAPHY, TEXT, BG, SIZES, NOISE, ICONS} = useTheSlopeDesignSystem()
 
 const icons = Array.from({length: 16}, (_, i) => i)
 
@@ -72,9 +72,9 @@ v-if="props.error"
       <UPopover v-if="props.cause">
         <UButton
             :color="COLOR.error"
-            size="sm"
-            variant="ghost"
-            icon="i-heroicons-exclamation-triangle"
+            :size="SIZES.sm"
+            :variant="NOISE.quiet"
+            :icon="ICONS.warning"
             label="Se stacktrace"/>
         <template #content>
           <div :class="[TYPOGRAPHY.finePrint, TEXT.gray[400], 'whitespace-pre-wrap overflow-auto max-h-[300px] p-2']">

@@ -1,10 +1,9 @@
 /**
  * Unit tests for domain fragments
- * Validates that fragments parse factory data correctly and support extension pattern
+ * Validates that fragments parse factory data correctly (extending a fragment is zod's `.extend`)
  */
 
 import {describe, it, expect} from 'vitest'
-import {z} from 'zod'
 import {
     UserFragmentSchema,
     InhabitantFragmentSchema,
@@ -37,18 +36,6 @@ describe('UserFragmentSchema', () => {
         expect(result.email).toBe(user.email)
         expect(result.systemRoles).toEqual(user.systemRoles)
     })
-
-    it('should support fragment extension pattern', () => {
-        const ExtendedUserSchema = UserFragmentSchema.extend({
-            passwordHash: z.string()
-        })
-
-        const user = {...UserFactory.defaultUser(), id: 1}
-        const result = ExtendedUserSchema.parse(user)
-
-        expect(result.passwordHash).toBe(user.passwordHash)
-        expect(result.email).toBe(user.email)
-    })
 })
 
 describe('InhabitantFragmentSchema', () => {
@@ -59,17 +46,6 @@ describe('InhabitantFragmentSchema', () => {
         expect(result.id).toBe(inhabitant.id)
         expect(result.name).toBe(inhabitant.name)
         expect(result.lastName).toBe(inhabitant.lastName)
-    })
-
-    it('should support fragment extension pattern', () => {
-        const ExtendedInhabitantSchema = InhabitantFragmentSchema.extend({
-            householdId: z.number()
-        })
-
-        const inhabitant = {...HouseholdFactory.defaultInhabitantData(), id: 1, householdId: 42}
-        const result = ExtendedInhabitantSchema.parse(inhabitant)
-
-        expect(result.householdId).toBe(42)
     })
 })
 
@@ -164,37 +140,3 @@ describe('AllergyTypeFragmentSchema', () => {
     })
 })
 
-// ============================================================================
-// FRAGMENT PATTERN VALIDATION
-// ============================================================================
-
-describe('Fragment Pattern - Cross-domain reuse', () => {
-    it('should allow same fragment to be extended differently by different domains', () => {
-        // Domain 1: Household context - extends with householdId
-        const HouseholdInhabitantSchema = InhabitantFragmentSchema.extend({
-            householdId: z.number()
-        })
-
-        // Domain 2: User context - extends with userId
-        const UserInhabitantSchema = InhabitantFragmentSchema.extend({
-            userId: z.number().nullable().optional()
-        })
-
-        const coreData = {...HouseholdFactory.defaultInhabitantData(), id: 1}
-
-        // Both domains parse core data successfully
-        const householdResult = HouseholdInhabitantSchema.parse({
-            ...coreData,
-            householdId: 42
-        })
-        const userResult = UserInhabitantSchema.parse({
-            ...coreData,
-            userId: 123
-        })
-
-        expect(householdResult.name).toBe(coreData.name)
-        expect(userResult.name).toBe(coreData.name)
-        expect(householdResult.householdId).toBe(42)
-        expect(userResult.userId).toBe(123)
-    })
-})

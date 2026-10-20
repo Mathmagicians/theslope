@@ -4,7 +4,7 @@
  *
  * Layout (Monitor Style):
  * ┌─────────────────────────────────────────────────────────────┐
- * │  | { label: string; type: 'circle'; circleClass: string[] }            COUNTDOWN TIMER (Train Station Style)          │
+ * │              COUNTDOWN TIMER (Train Station Style)          │
  * │  ┌───────────────────────────────────────────────────────┐  │
  * │  │         DAGENS FÆLLESSPISNING                         │  │
  * │  │              MAN 15/11                                │  │
@@ -17,16 +17,33 @@
  * │  │  M   T   O   T   F   L   S              │                │
  * │  │  1   2   3   4   5   6   7              │                │
  * │  │  8  [9] 10  11  12  13  14              │                │
- * │  │ 15  16 [17] 18  19  20  21              │                │
+ * │  │ 15  16 [17]n 18w 19* 20  21             │                │
+ * │  │ 22  -23- 24  25  26  27  28             │                │
  * │  └─────────────────────────────────────────┘                │
+ * │  Forklaring                                                 │
+ * │  (1) Næste fællesspisning   (1) Valgt dato                  │
+ * │  (1) Planlagt fællesspisning   (1) Tidligere fællesspisning │
+ * │  -(1)- Aflyst fællesspisning                                │
+ * │  (1) Ferie                                                  │
+ * │  (1)*  Lukket for framelding                                │
+ * │  (1)n  Ledige billetter                                     │
+ * │  (1)w  Venteliste, ingen ledige billetter                   │
  * └─────────────────────────────────────────────────────────────┘
+ *
+ * Lock chips (SIZES.lockChip), on an upcoming dinner past its booking deadline (`lockChip`):
+ *   n = yellow, reading the tickets for sale
+ *   w = yellow, the hourglass ICONS.waitlist inset in a chip a size up (COMPONENTS.dinnerCalendar.queueChip): a waiting list, nothing for sale
+ *   * = peach, no number: closed, nothing for sale and nobody waiting
+ * The legend (CalendarLegend) draws each chip on a planned-day circle, the hourglass chip at COMPONENTS.legend.iconChip.
+ *
+ * -23- = a cancelled dinner: the past circle struck through (CALENDAR.day.past + CALENDAR.day.cancelled), as the chef
+ * calendar draws it, whether past or upcoming, and without a lock chip.
  *
  * Displays:
  * - Countdown timer (train station style with configurable colors from event list)
  * - Holidays (green rings)
  * - Generated dinner events (pink filled) - actual events created for the season
  * - Next dinner (special highlight) - uses color from 'next-dinner' event list
- * - Lock chips (optional) - red for locked, yellow for locked with tickets available
  *
  * Uses BaseCalendar for consistent calendar structure and event management.
  * Domain-specific rendering via slots (rings for holidays, filled for actual).
@@ -35,9 +52,10 @@ import type {DateRange} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
-import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {isCalendarDateInDateList, toDate} from '~/utils/date'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 interface Props {
   seasonDates: DateRange
@@ -63,8 +81,9 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const {getHolidayDatesFromDateRangeList} = useSeason()
-const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
-const {CALENDAR, DINNER_CALENDAR, SIZES, ICONS, BOOKING_LOCK_STATUS, getLockStatusConfig, dayCircleClasses} = useTheSlopeDesignSystem()
+const {useTemporalSplit, createTemporalEventLists, getDinnerForDay, isCancelledDay} = useTemporalCalendar()
+const {CALENDAR, DINNER_CALENDAR, COMPONENTS, SIZES, ICONS, BOOKING_LOCK_STATUS, dayCircleClasses} = useTheSlopeDesignSystem()
+const {lockChip} = useBookingUi()
 
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
 
@@ -85,24 +104,11 @@ const isHoliday = (day: DateValue): boolean => {
   return isCalendarDateInDateList(day, holidayDates.value)
 }
 
-// Get dinner event for a specific day
-const getDinnerForDay = (day: DateValue): DinnerEventDisplay | undefined => {
-  const dayDate = toDate(day)
-  return props.dinnerEvents?.find(event =>
-    dayDate.toDateString() === new Date(event.date).toDateString()
-  )
-}
-
-// Get lock status config for a day (null if not locked or no lockStatus provided)
-// Returns both config and count (same pattern as BookingGridView.getEventLockStatus)
-const getLockStatusForDay = (day: DateValue): { config: NonNullable<ReturnType<typeof getLockStatusConfig>>, count: number } | null => {
+// The lock chip of the day's dinner; null without a lock status or a locked dinner on the day
+const getLockChipForDay = (day: DateValue) => {
   if (!props.lockStatus) return null
-  const dinner = getDinnerForDay(day)
-  if (!dinner) return null
-  const released = props.lockStatus.get(dinner.id) ?? null
-  if (released === null) return null
-  const config = getLockStatusConfig(released.total)
-  return config ? { config, count: released.total } : null
+  const dinner = getDinnerForDay(props.dinnerEvents, day)
+  return dinner ? lockChip(props.lockStatus.get(dinner.id)) : null
 }
 
 // Day type detection - returns 'next' | 'future' | 'past' | null
@@ -119,25 +125,23 @@ const getDayColorClass = (type: DayType): string => {
   return type === 'past' ? CALENDAR.day.past : DINNER_CALENDAR.day[type]
 }
 
-// Legend item types
-type LegendItem =
-  | { label: string; type: 'circle'; circleClass: string[] }
-  | { label: string; type: 'chip'; chipColor: NuxtUIColor; showCount: boolean }
-
-// Legend items using design system classes
-const legendItems = computed((): LegendItem[] => {
-  const items: LegendItem[] = [
-    { label: 'Næste fællesspisning', type: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.next) },
-    { label: 'Valgt dato', type: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.next, DINNER_CALENDAR.selection) },
-    { label: 'Planlagt fællesspisning', type: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.future) },
-    { label: 'Tidligere fællesspisning', type: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past) },
-    { label: 'Ferie', type: 'circle', circleClass: dayCircleClasses(CALENDAR.holiday) }
+// Legend items: the lock chips wrap a planned-day circle at the lock chip's size, as the day cells do
+const legendItems = computed((): CalendarLegendItem[] => {
+  const items: CalendarLegendItem[] = [
+    { label: 'Næste fællesspisning', kind: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.next) },
+    { label: 'Valgt dato', kind: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.next, DINNER_CALENDAR.selection) },
+    { label: 'Planlagt fællesspisning', kind: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.future) },
+    { label: 'Tidligere fællesspisning', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past) },
+    { label: BOOKING_WORDS.cancelledDinner.legend, kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past, CALENDAR.day.cancelled) },
+    { label: 'Ferie', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.holiday) }
   ]
 
   if (props.lockStatus) {
+    const chipCircle = dayCircleClasses(DINNER_CALENDAR.day.future)
     items.push(
-      { label: 'Lukket for framelding', type: 'chip', chipColor: BOOKING_LOCK_STATUS.locked.color, showCount: false },
-      { label: 'Ledige billetter', type: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color, showCount: true }
+      { label: DEADLINE_LABELS.BOOKING_CLOSED.closedText, kind: 'chip', chipColor: BOOKING_LOCK_STATUS.locked.color, circleClass: chipCircle, chipSize: SIZES.lockChip },
+      { label: 'Billetter til salg', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color, circleClass: chipCircle, chipSize: SIZES.lockChip, count: '1' },
+      { label: 'Venteliste, ingen billetter til salg', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithQueue.color, circleClass: chipCircle, chipSize: SIZES.lockChip, icon: BOOKING_LOCK_STATUS.lockedWithQueue.icon }
     )
   }
 
@@ -177,7 +181,7 @@ const isSelected = (day: DateValue): boolean => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div :class="COMPONENTS.dinnerCalendar.root">
     <!-- Countdown Timer (Train Station Style) -->
     <CountdownTimer
       v-if="showCountdown"
@@ -192,16 +196,16 @@ const isSelected = (day: DateValue): boolean => {
     />
 
     <!-- Calendar Accordion with custom leading slot -->
-    <UAccordion v-model="accordionValue" :items="accordionItems" class="flex-1">
+    <UAccordion v-model="accordionValue" :items="accordionItems" :class="COMPONENTS.dinnerCalendar.accordion">
       <template #leading>
-        <div class="flex items-center gap-2">
+        <div :class="COMPONENTS.dinnerCalendar.leading">
           <UIcon :name="ICONS.calendarDays" />
           <span>Fællesspisninger</span>
         </div>
       </template>
       <template #calendar-content>
         <!-- Calendar Display -->
-        <div class="flex-1">
+        <div :class="COMPONENTS.dinnerCalendar.calendar">
           <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="numberOfMonths" :focus-date="selectedDate">
             <template #day="{ day, eventLists }">
               <!-- Holiday takes precedence (green ring) -->
@@ -212,13 +216,24 @@ const isSelected = (day: DateValue): boolean => {
                 {{ day.day }}
               </div>
 
+              <!-- Cancelled dinner: the past circle struck through, as the chef calendar draws it, and no lock chip -->
+              <div
+                v-else-if="isCancelledDay(dinnerEvents, day)"
+                :data-testid="`calendar-dinner-date-${day.day}`"
+                :class="dayCircleClasses(CALENDAR.day.past, CALENDAR.day.cancelled, isSelected(day) && DINNER_CALENDAR.selection)"
+                @click="handleDateClick(day)"
+              >
+                {{ day.day }}
+              </div>
+
               <!-- Locked dinner with chip (next/future, not past) -->
               <UChip
-                v-else-if="getLockStatusForDay(day) && getDayType(eventLists) !== 'past'"
+                v-else-if="getLockChipForDay(day) && getDayType(eventLists) !== 'past'"
                 show
                 :size="SIZES.lockChip"
-                :color="getLockStatusForDay(day)!.config.color"
-                :text="getLockStatusForDay(day)!.count > 0 ? String(getLockStatusForDay(day)!.count) : undefined"
+                :color="getLockChipForDay(day)!.color"
+                :text="getLockChipForDay(day)!.text"
+                :ui="getLockChipForDay(day)!.icon ? COMPONENTS.dinnerCalendar.queueChip.ui : undefined"
                 :data-testid="`calendar-dinner-date-${day.day}`"
               >
                 <div
@@ -227,6 +242,13 @@ const isSelected = (day: DateValue): boolean => {
                 >
                   {{ day.day }}
                 </div>
+                <template v-if="getLockChipForDay(day)!.icon" #content>
+                  <UIcon
+                    :name="getLockChipForDay(day)!.icon!"
+                    :class="COMPONENTS.dinnerCalendar.queueChip.icon"
+                    :data-testid="`calendar-dinner-waitlist-${day.day}`"
+                  />
+                </template>
               </UChip>
 
               <!-- Regular dinner event (next/future/past) - no lock -->
@@ -240,24 +262,11 @@ const isSelected = (day: DateValue): boolean => {
               </div>
 
               <!-- Regular day -->
-              <span v-else class="text-sm">{{ day.day }}</span>
+              <span v-else :class="COMPONENTS.dinnerCalendar.plainDay">{{ day.day }}</span>
             </template>
 
-            <!-- Legend -->
             <template #legend>
-              <div class="px-4 py-6 md:px-6 md:py-8 space-y-3 border-t mt-auto" :class="TYPOGRAPHY.bodyTextSmall">
-                <div v-for="legendItem in legendItems" :key="legendItem.label" class="flex items-center gap-4">
-                  <!-- Chip for lock indicators (text shows released count badge only for "ledige billetter") -->
-                  <UChip v-if="legendItem.type === 'chip'" show :size="SIZES.lockChip" :color="legendItem.chipColor" :text="legendItem.showCount ? '1' : undefined">
-                    <div :class="dayCircleClasses(DINNER_CALENDAR.day.future)">1</div>
-                  </UChip>
-                  <!-- Circle for other indicators -->
-                  <div v-else :class="legendItem.circleClass">
-                    1
-                  </div>
-                  <span>{{ legendItem.label }}</span>
-                </div>
-              </div>
+              <CalendarLegend :items="legendItems" />
             </template>
           </BaseCalendar>
         </div>

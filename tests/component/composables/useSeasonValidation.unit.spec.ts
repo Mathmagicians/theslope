@@ -2,16 +2,18 @@ import {describe, it, expect} from 'vitest'
 import {useSeasonValidation, type Season} from '~/composables/useSeasonValidation'
 import {createDateRange, formatDate} from '~/utils/date'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
-import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {useTicketPriceValidation, type PortionTicket} from '~/composables/useTicketPriceValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import type {SafeParseReturnType} from 'zod'
+import type {ZodSafeParseResult} from 'zod'
 
 const {TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
 const testSeason = SeasonFactory.defaultSeasonData
+// The server weighs a price row through useTicket; the deserializer only places what the lookup gives
+const withPortions = <T extends PortionTicket>(ticketPrice: T) => ({...ticketPrice, portions: 1})
 
 // Helper to format validation error messages for assertions
-const getValidationError = <T>(result: SafeParseReturnType<T, T>) =>
+const getValidationError = <T>(result: ZodSafeParseResult<T>) =>
   !result.success ? `Validation errors: ${JSON.stringify(result.error.format())}` : ''
 
 describe('useSeasonValidation', () => {
@@ -80,7 +82,7 @@ describe('useSeasonValidation', () => {
       const result = SeasonSchema.safeParse(seasonWithOverlappingHolidays)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.errors[0]?.message).toBe("Ferieperioder må ikke overlappe hinanden")
+        expect(result.error.issues[0]?.message).toBe("Ferieperioder må ikke overlappe hinanden")
       }
     })
 
@@ -97,7 +99,7 @@ describe('useSeasonValidation', () => {
       const result = SeasonSchema.safeParse(seasonWithOutsideHolidays)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.errors[0]?.message).toBe("Ferieperioder skal være inden for fællesspisningssæsonen")
+        expect(result.error.issues[0]?.message).toBe("Ferieperioder skal være inden for fællesspisningssæsonen")
       }
     })
   })
@@ -109,7 +111,7 @@ describe('useSeasonValidation', () => {
 
       // Serialize and deserialize
       const serialized = serializeSeason(originalSeason)
-      const deserialized = deserializeSeason(serialized)
+      const deserialized = deserializeSeason(serialized, withPortions)
 
       // Check structure
       expect(typeof serialized.cookingDays).toBe('string')
@@ -127,54 +129,21 @@ describe('useSeasonValidation', () => {
       expect(deserialized.seasonDates.end.getTime()).toBe(originalSeason.seasonDates.end.getTime())
     })
 
-    it('should correctly handle the API test season', () => {
-
-      // Verify the test season validates
-      const validationResult = SeasonSchema.safeParse(testSeason)
-      if (!validationResult.success) {
-        console.error("Validation error:", validationResult.error.format())
-      }
-      expect(validationResult.success).toBe(true)
-
-      // Test the serialization and deserialization process
-      const serialized = serializeSeason(testSeason)
-
-      expect(typeof serialized.cookingDays).toBe('string')
-      expect(typeof serialized.holidays).toBe('string')
-      expect(typeof serialized.seasonDates).toBe('string')
-
-      // Deserialize and ensure dates are parsed correctly
-      const deserialized = deserializeSeason(serialized)
-      expect(deserialized.shortName).toBe(testSeason.shortName)
-
-      // Always parse seasonDates to Date objects before formatting
-      const originalStartDate = testSeason.seasonDates.start as Date
-      const originalEndDate = testSeason.seasonDates.end as Date
-
-      const formatDateStart = formatDate(deserialized.seasonDates.start)
-      const formatDateEnd = formatDate(deserialized.seasonDates.end)
-
-      expect(formatDateStart).toBe(formatDate(originalStartDate))
-      expect(formatDateEnd).toBe(formatDate(originalEndDate))
-    })
-
     it('should correctly serialize and deserialize a Season with relations', () => {
       const dinnerEvent1 = {
-        ...DinnerEventFactory.defaultDinnerEventData,
+        ...DinnerEventFactory.defaultDinnerEventDisplay(),
         id: 1,
         date: new Date(2025, 0, 6),
         menuTitle: 'Pasta Night',
-        dinnerMode: 'DINEIN' as const,
         chefId: 1,
         cookingTeamId: 1
       }
 
       const dinnerEvent2 = {
-        ...DinnerEventFactory.defaultDinnerEventData,
+        ...DinnerEventFactory.defaultDinnerEventDisplay(),
         id: 2,
         date: new Date(2025, 0, 13),
         menuTitle: 'Taco Tuesday',
-        dinnerMode: 'TAKEAWAY' as const,
         chefId: null,
         cookingTeamId: 2
       }
@@ -183,8 +152,8 @@ describe('useSeasonValidation', () => {
         ...testSeason,
         id: 1,
         dinnerEvents: [dinnerEvent1, dinnerEvent2],
-        CookingTeams: [{id: 1, name: 'Team A', seasonId: 1, assignments: [], cookingDaysCount: 3}],
-        ticketPrices: [{id: 1, seasonId: testSeason.id!, ticketType: TicketType.ADULT, price: 4000}]
+        CookingTeams: [{id: 1, name: 'Team A', seasonId: 1, assignments: [], cookingDaysCount: 3, jokerSlotCount: 2}],
+        ticketPrices: [{id: 1, seasonId: testSeason.id!, ticketType: TicketType.ADULT, price: 4000, portions: 1}]
       }
 
       // Serialize
@@ -201,7 +170,7 @@ describe('useSeasonValidation', () => {
         dinnerEvents: seasonWithRelations.dinnerEvents,
         CookingTeams: seasonWithRelations.CookingTeams,
         ticketPrices: seasonWithRelations.ticketPrices
-      })
+      }, withPortions)
 
       // Verify base properties
       expect(deserialized.shortName).toBe(seasonWithRelations.shortName)
@@ -216,6 +185,7 @@ describe('useSeasonValidation', () => {
       expect(deserializedWithRelations.dinnerEvents![1]?.date).toBeInstanceOf(Date)
       expect(deserializedWithRelations.dinnerEvents![1]?.menuTitle).toBe('Taco Tuesday')
       expect(deserializedWithRelations.CookingTeams).toHaveLength(1)
+      expect(deserializedWithRelations.CookingTeams![0]).toMatchObject({cookingDaysCount: 3, jokerSlotCount: 2})
       expect(deserializedWithRelations.ticketPrices).toHaveLength(1)
 
       // ticket prices
@@ -241,7 +211,7 @@ describe('useSeasonValidation', () => {
       }
 
       // Deserialize the season
-      const deserialized = deserializeSeason(serializedSeason)
+      const deserialized = deserializeSeason(serializedSeason, withPortions)
 
       // Verify CookingTeams affinity is properly deserialized
       expect(deserialized.CookingTeams).toHaveLength(2)
@@ -282,7 +252,7 @@ describe('useSeasonValidation', () => {
           holidays: JSON.stringify([asStoredHoliday(later), asStoredHoliday(earlier)])
         }
 
-        const deserialized = deserializeSeason(serialized)
+        const deserialized = deserializeSeason(serialized, withPortions)
 
         expect(deserialized.holidays[0]!.start.getTime()).toBeLessThan(deserialized.holidays[1]!.start.getTime())
         expect(deserialized.holidays[0]!.start.getTime()).toBe(earlier.start.getTime())

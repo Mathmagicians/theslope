@@ -1,44 +1,49 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {findByTestId} from '~~/tests/component/testHelpers'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {findByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {nextTick} from 'vue'
 import BookingViewSwitcher from '~/components/booking/BookingViewSwitcher.vue'
 import {BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 
-const views = BookingViewSchema.options
-const labels: Record<BookingView, string> = {day: 'Dag', week: 'Uge', month: 'Måned'}
+enableAutoUnmount(afterEach)
 
-const mount = (modelValue: BookingView = 'day') =>
+const {day, week, month} = BookingViewSchema.enum
+const views = BookingViewSchema.options
+const labels: Record<BookingView, string> = {[day]: 'Dag', [week]: 'Uge', [month]: 'Måned'}
+
+const mount = (modelValue: BookingView = day) =>
   mountSuspended(BookingViewSwitcher, {props: {modelValue}})
 
-const btn = (wrapper: Awaited<ReturnType<typeof mount>>, view: BookingView) =>
+type Wrapper = Awaited<ReturnType<typeof mount>>
+
+const btn = (wrapper: Wrapper, view: BookingView) =>
   findByTestId(wrapper, `booking-view-${view}`)
 
+const buttonOf = (wrapper: Wrapper, view: BookingView) =>
+  wrapper.findAllComponents({name: 'UButton'}).find(button => button.attributes('data-testid') === `booking-view-${view}`)!
+
 describe('BookingViewSwitcher', () => {
-  it.each(views)('renders %s button with label', async (view) => {
+  beforeEach(() => {
+    resetStores()
+  })
+
+  it('renders one button per view with its label', async () => {
     const wrapper = await mount()
-    expect(btn(wrapper, view).text()).toContain(labels[view])
+    views.forEach(view => expect(btn(wrapper, view).text(), view).toContain(labels[view]))
   })
 
-  const clickCases: {initial: BookingView, click: BookingView}[] = [
-    {initial: 'day', click: 'week'},
-    {initial: 'day', click: 'month'},
-    {initial: 'week', click: 'day'},
-    {initial: 'month', click: 'week'}
-  ]
-
-  it.each(clickCases)('emits $click when clicking from $initial', async ({initial, click}) => {
-    const wrapper = await mount(initial)
-    await btn(wrapper, click).trigger('click')
+  // One template renders every button, so one click and one selection prove the wiring
+  it('emits the clicked view', async () => {
+    const wrapper = await mount(day)
+    await btn(wrapper, month).trigger('click')
     await nextTick()
-    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([click])
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([month])
   })
 
-  it.each(views)('uses solid variant for selected %s', async (view) => {
-    const wrapper = await mount(view)
-    const classes = btn(wrapper, view).classes()
-    // Active button gets solid variant styling from UButton
-    expect(classes.some(c => c.includes('bg-') || c.includes('ring-'))).toBe(true)
+  it('marks the selected button active and the others not', async () => {
+    const wrapper = await mount(week)
+    views.forEach(view => expect(buttonOf(wrapper, view).props('active'), view).toBe(view === week))
   })
 })

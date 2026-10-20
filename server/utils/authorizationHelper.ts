@@ -1,5 +1,6 @@
 import type {H3Event} from 'h3'
 import type {UserDetail} from '~/composables/useCoreValidation'
+import type {DinnerEventDetail} from '~/composables/useBookingValidation'
 import {getRoutePermission, isInHousehold} from '~/composables/usePermissions'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {SETTING_REGISTRY, type SettingKey} from '~/composables/useSettingValidation'
@@ -108,7 +109,7 @@ export const requireSettingWriteAccess = async (
  *
  * No admin bypass.
  *
- * @returns the authenticated UserDetail on success
+ * @returns the authenticated UserDetail and the dinner's Detail on success
  * @throws 401 when not authenticated
  * @throws 403 when user has no Inhabitant or is not a CHEF on the team
  * @throws 404 when dinner is missing or has no cookingTeamId
@@ -116,7 +117,7 @@ export const requireSettingWriteAccess = async (
 export const requireChefForDinner = async (
     event: H3Event,
     dinnerEventId: number
-): Promise<UserDetail> => {
+): Promise<{user: UserDetail, dinner: DinnerEventDetail}> => {
     const user = await getRequiredUser(event)
     const myInhabitantId = user.Inhabitant?.id
 
@@ -160,7 +161,7 @@ export const requireChefForDinner = async (
         )
     }
 
-    return user
+    return {user, dinner}
 }
 
 const authorizationHelper = {

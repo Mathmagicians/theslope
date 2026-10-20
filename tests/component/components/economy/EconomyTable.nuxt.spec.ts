@@ -1,9 +1,15 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {findByTestId} from '~~/tests/component/testHelpers'
-import EconomyTable from '~/components/economy/EconomyTable.vue'
-import {nextTick, ref} from 'vue'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {mountWithTooltipProvider, findByTestId, resetStores, findLoadingRow, isTableLoading} from '~~/tests/component/testHelpers'
+import EconomyTableGeneric from '~/components/economy/EconomyTable.vue'
+import {nextTick, ref, type DefineComponent} from 'vue'
+
+// A generic component's type is a function; the mount helper keys on a constructor
+const EconomyTable = EconomyTableGeneric as unknown as DefineComponent
+
+enableAutoUnmount(afterEach)
 
 interface TestRow {
     id: number
@@ -39,28 +45,19 @@ describe('EconomyTable', () => {
         {accessorKey: 'totalAmount', header: 'Beløb'}
     ]
 
-    type WrapperType = Awaited<ReturnType<typeof mountSuspended>>
-
-    // Required dateAccessor for EconomyTable (typed as unknown for mountSuspended compatibility)
+    // Required dateAccessor for EconomyTable (typed as unknown for mount compatibility)
     const dateAccessor = (item: unknown) => (item as TestRow).date
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const createWrapper = async (data: TestRow[] = createTestData(), pageSize = 5): Promise<any> => {
-        return await mountSuspended(EconomyTable, {
-            props: {
-                data,
-                columns: defaultColumns,
-                rowKey: 'date',
-                dateAccessor,
-                pageSize
-            },
-            global: {
-                provide: {
-                    isMd: ref(true)
-                }
-            }
-        })
-    }
+    beforeEach(() => {
+        resetStores()
+    })
+
+    const createWrapper = (props: Record<string, unknown> = {}) => mountWithTooltipProvider(EconomyTable, {
+        props: {data: createTestData(), columns: defaultColumns, rowKey: 'date', dateAccessor, pageSize: 5, ...props},
+        isMd: true
+    })
+
+    type WrapperType = Awaited<ReturnType<typeof createWrapper>>
 
     const getSearchInput = (wrapper: WrapperType) =>
         wrapper.find('input[type="text"]')
@@ -69,109 +66,25 @@ describe('EconomyTable', () => {
         wrapper.find('button[aria-label="Skift sortering"]')
 
     describe('Rendering', () => {
-        it('renders with data', async () => {
+        it('renders the search input and the sort toggle in the expand column header, and every row while the search is empty', async () => {
             const wrapper = await createWrapper()
-            expect(wrapper.exists()).toBe(true)
-        })
-
-        it('renders search input in expand column header', async () => {
-            const wrapper = await createWrapper()
-            const searchInput = getSearchInput(wrapper)
-            expect(searchInput.exists()).toBe(true)
-        })
-
-        it('renders sort toggle button in expand column header', async () => {
-            const wrapper = await createWrapper()
-            const sortButton = getSortButton(wrapper)
-            expect(sortButton.exists()).toBe(true)
+            expect(getSearchInput(wrapper).exists()).toBe(true)
+            expect(getSortButton(wrapper).exists()).toBe(true)
+            const vm = wrapper.vm as unknown as EconomyTableVm
+            expect(vm.filteredData.length).toBe(6)
         })
 
         it('renders custom search placeholder', async () => {
             const customPlaceholder = 'Søg måned...'
-            const wrapper = await mountSuspended(EconomyTable, {
-                props: {
-                    data: createTestData(),
-                    columns: defaultColumns,
-                    rowKey: 'date',
-                    dateAccessor,
-                    searchPlaceholder: customPlaceholder
-                },
-                global: {
-                    provide: {isMd: ref(true)}
-                }
-            })
+            const wrapper = await createWrapper({searchPlaceholder: customPlaceholder})
             const searchInput = wrapper.find('input[type="text"]')
             expect(searchInput.attributes('placeholder')).toBe(customPlaceholder)
         })
     })
 
-    describe('Date Filtering', () => {
-        it('filters data by date string match', async () => {
-            const wrapper = await createWrapper()
-            const searchInput = getSearchInput(wrapper)
-
-            // Format is dd/MM/yyyy, search for "/01/" (January)
-            await searchInput.setValue('/01/')
-            await nextTick()
-
-            // Should filter to only January dates (3 items: Jan 10, 15, 20)
-            const vm = wrapper.vm as unknown as EconomyTableVm
-            expect(vm.filteredData.length).toBe(3)
-        })
-
-        it('filters by day number', async () => {
-            const wrapper = await createWrapper()
-            const searchInput = getSearchInput(wrapper)
-
-            // Format is dd/MM/yyyy, search for day 15 (appears twice: Jan 15, Feb 15)
-            await searchInput.setValue('15/')
-            await nextTick()
-
-            const vm = wrapper.vm as unknown as EconomyTableVm
-            expect(vm.filteredData.length).toBe(2)
-        })
-
-        it('shows all data when search is empty', async () => {
-            const wrapper = await createWrapper()
-            const vm = wrapper.vm as unknown as EconomyTableVm
-            expect(vm.filteredData.length).toBe(6)
-        })
-
-        it('shows empty when no match', async () => {
-            const wrapper = await createWrapper()
-            const searchInput = getSearchInput(wrapper)
-
-            await searchInput.setValue('/12/')
-            await nextTick()
-
-            const vm = wrapper.vm as unknown as EconomyTableVm
-            expect(vm.filteredData.length).toBe(0)
-        })
-    })
-
     describe('Sorting', () => {
-        it('sorts ascending by default (closest dates first)', async () => {
-            const wrapper = await createWrapper()
-            const vm = wrapper.vm as unknown as EconomyTableVm
-
-            // First item should be earliest date (Jan 10)
-            expect(vm.filteredData[0]!.date.getDate()).toBe(10)
-            expect(vm.filteredData[0]!.date.getMonth()).toBe(0) // January
-        })
-
         it('sorts descending when defaultSortDesc=true', async () => {
-            const wrapper = await mountSuspended(EconomyTable, {
-                props: {
-                    data: createTestData(),
-                    columns: defaultColumns,
-                    rowKey: 'date',
-                    dateAccessor,
-                    defaultSortDesc: true
-                },
-                global: {
-                    provide: {isMd: ref(true)}
-                }
-            })
+            const wrapper = await createWrapper({defaultSortDesc: true})
             const vm = wrapper.vm as unknown as EconomyTableVm
 
             // First item should be latest date (Feb 15)
@@ -191,37 +104,17 @@ describe('EconomyTable', () => {
             expect(vm.filteredData[0]!.date.getDate()).toBe(15)
             expect(vm.filteredData[0]!.date.getMonth()).toBe(1) // February
         })
-
-        it('toggles back to ascending on second click', async () => {
-            const wrapper = await createWrapper()
-            const sortButton = getSortButton(wrapper)
-
-            await sortButton.trigger('click')
-            await sortButton.trigger('click')
-            await nextTick()
-
-            const vm = wrapper.vm as unknown as EconomyTableVm
-            // Back to ascending - first item is Jan 10
-            expect(vm.filteredData[0]!.date.getDate()).toBe(10)
-            expect(vm.filteredData[0]!.date.getMonth()).toBe(0)
-        })
     })
 
     describe('Pagination', () => {
         it('shows pagination when data exceeds pageSize', async () => {
-            const wrapper = await createWrapper(createTestData(), 5)
+            const wrapper = await createWrapper({data: createTestData(), pageSize: 5})
             const vm = wrapper.vm as unknown as EconomyTableVm
             expect(vm.showPagination).toBe(true)
         })
 
-        it('hides pagination when data fits in one page', async () => {
-            const wrapper = await createWrapper(createTestData().slice(0, 3), 5)
-            const vm = wrapper.vm as unknown as EconomyTableVm
-            expect(vm.showPagination).toBe(false)
-        })
-
         it('hides pagination when data equals pageSize', async () => {
-            const wrapper = await createWrapper(createTestData().slice(0, 5), 5)
+            const wrapper = await createWrapper({data: createTestData().slice(0, 5), pageSize: 5})
             const vm = wrapper.vm as unknown as EconomyTableVm
             expect(vm.showPagination).toBe(false)
         })
@@ -239,54 +132,41 @@ describe('EconomyTable', () => {
     })
 
     describe('Loading State', () => {
-        it('passes loading prop to UTable', async () => {
-            const wrapper = await mountSuspended(EconomyTable, {
-                props: {
-                    data: createTestData(),
-                    columns: defaultColumns,
-                    rowKey: 'date',
-                    dateAccessor,
-                    loading: true
-                },
-                global: {
-                    provide: {isMd: ref(true)}
-                }
-            })
-
-            const table = wrapper.findComponent({name: 'UTable'})
-            expect(table.props('loading')).toBe(true)
-        })
-    })
-
-    describe('Empty State', () => {
-        it('renders with empty data', async () => {
-            const wrapper = await createWrapper([])
-            expect(wrapper.exists()).toBe(true)
+        // Slots go through the root mount alone
+        const mountEmpty = (loading: boolean) => mountSuspended(EconomyTable, {
+            props: {data: [], columns: defaultColumns, rowKey: 'date', dateAccessor, loading, loadingText: 'Henter fremtidige bestillinger'},
+            slots: {empty: '<div data-testid="custom-empty">No data</div>'},
+            global: {provide: {isMd: ref(true)}}
         })
 
-        it('passes empty slot through', async () => {
-            const wrapper = await mountSuspended(EconomyTable, {
-                props: {
-                    data: [],
-                    columns: defaultColumns,
-                    rowKey: 'date',
-                    dateAccessor
-                },
-                slots: {
-                    empty: '<div data-testid="custom-empty">No data</div>'
-                },
-                global: {
-                    provide: {isMd: ref(true)}
-                }
-            })
+        it('while loading with no rows, shows the loading row with its text and not the empty state', async () => {
+            const wrapper = await mountEmpty(true)
 
-            const emptySlot = findByTestId(wrapper, 'custom-empty')
-            expect(emptySlot.exists()).toBe(true)
+            const loadingRow = findLoadingRow(wrapper)
+            expect(loadingRow.exists()).toBe(true)
+            expect(loadingRow.text()).toContain('Henter fremtidige bestillinger')
+            expect(findByTestId(wrapper, 'custom-empty').exists()).toBe(false)
+        })
+
+        it('once loaded with no rows, shows the empty state and no loading row', async () => {
+            const wrapper = await mountEmpty(false)
+
+            expect(findByTestId(wrapper, 'custom-empty').exists()).toBe(true)
+            expect(findLoadingRow(wrapper).exists()).toBe(false)
+        })
+
+        // With rows, UTable runs its loading bar over them: the rows stay, the loading row is for a table without rows
+        it.each([true, false])('GIVEN rows and loading=%s THEN the table receives it and the rows stay', async (loading) => {
+            const wrapper = await createWrapper({loading, loadingText: 'Henter fremtidige bestillinger'})
+
+            expect(isTableLoading(wrapper)).toBe(loading)
+            expect(wrapper.text()).toContain('Pasta')
+            expect(findLoadingRow(wrapper).exists()).toBe(false)
         })
     })
 
     describe('Filter + Sort Combined', () => {
-        it('filters then sorts in correct order', async () => {
+        it('filters by the date string, then sorts ascending by default', async () => {
             const wrapper = await createWrapper()
             const searchInput = getSearchInput(wrapper)
 

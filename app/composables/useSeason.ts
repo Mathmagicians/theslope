@@ -1,18 +1,17 @@
 import type {DateRange, WeekDayMap} from '~/types/dateTypes'
 import {WEEKDAYS} from '~/types/dateTypes'
-import type {DateValue} from '@internationalized/date'
-import {isSameDay, isWithinInterval, isBefore, subDays, subMinutes} from "date-fns"
+import {isWithinInterval, isBefore, subDays, subMinutes} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
-import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, useBookingValidation} from '~/composables/useBookingValidation'
+import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, type OrderState as OrderStateEnum, useBookingValidation} from '~/composables/useBookingValidation'
 import {useCookingTeamValidation, type CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
-import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates, getNextDinnerDate, getAdjacentDinner, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
     selectMostAppropriateActiveSeason, isBeforeDeadline} from "~/utils/season"
 import {getEachDayOfIntervalWithSelectedWeekdays, formatDate, calculateDayFromWeekNumber, formatDateRange, DATE_SETTINGS,
-    selectWeekNumbersFromListThatFitInsideDateRange, copyPartialDateRange, eachDayOfManyIntervals, toDate} from "~/utils/date"
+    selectWeekNumbersFromListThatFitInsideDateRange, eachDayOfManyIntervals} from "~/utils/date"
 import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
 
 /**
@@ -20,6 +19,12 @@ import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
  * 0 = On track, 1 = Warning, 2 = Critical
  */
 export type DeadlineUrgency = 0 | 1 | 2
+
+/** The two predicates the booking generator decides by */
+export type BookingDeadlines = Pick<SeasonDeadlines, 'canModifyOrders' | 'canEditDiningMode'>
+
+/** Every dinner books, cancels and changes mode as if before its deadlines: an admin's correction */
+export const OPEN_DEADLINES: BookingDeadlines = {canModifyOrders: () => true, canEditDiningMode: () => true}
 
 /**
  * Season-configured deadline functions.
@@ -37,7 +42,7 @@ export type SeasonDeadlines = {
     canEditDiningMode: (dinnerEventDate: Date) => boolean
     isAnnounceMenuPastDeadline: (dinnerEventDate: Date) => boolean
     getOrderCancellationAction: (dinnerEventDate: Date) => {
-        updates: { dinnerMode: DinnerMode, state: 'RELEASED', releasedAt: Date }
+        updates: { dinnerMode: DinnerMode, state: typeof OrderStateEnum.RELEASED, releasedAt: Date }
         auditAction: OrderAuditAction
     } | null
 }
@@ -74,8 +79,7 @@ export const useSeason = () => {
     // Get app configuration
     const appConfig = useAppConfig()
     const {theslope} = appConfig
-    const {createTicketPrice, TicketTypeSchema} = useTicketPriceValidation()
-    const TicketType = TicketTypeSchema.enum
+    const {createTicketPrice} = useTicketPriceValidation()
 
     /**
      * Create a default season based on app configuration.
@@ -88,12 +92,8 @@ export const useSeason = () => {
             end: calculateDayFromWeekNumber(4, theslope.defaultSeason.endWeek, thisYear + 1)
         }
 
-        const ticketPrices = theslope.defaultSeason.ticketPrices?.map((
-            // Explicit shape: app.config types resolve to `any` under the server tsconfig
-            {ticketType, price, description, maximumAgeLimit}: {ticketType: string; price: number; description?: string; maximumAgeLimit?: number}
-        ) => createTicketPrice(
-                ticketType, price, undefined, description, maximumAgeLimit)) ??
-            [createTicketPrice(TicketType.ADULT, 4000)]
+        // Explicit type: app.config types resolve to `any` under the server tsconfig
+        const ticketPrices = theslope.defaultSeason.ticketPrices.map((defaultPrice: TicketPrice) => createTicketPrice(defaultPrice))
 
         return {
             shortName: createSeasonName(dateRange),
@@ -134,23 +134,6 @@ export const useSeason = () => {
     }
 
     /**
-     * Merge a partial season with defaults
-     */
-    const coalesceSeason = (season?: Partial<Season> | null, defaultSeason: Season = getDefaultSeason()): Season => {
-        // If season is falsy (null, undefined, etc.), just return the default season
-        if (!season) return defaultSeason;
-
-        return <Season>{
-            ...defaultSeason,
-            ...season,
-            seasonDates: copyPartialDateRange(season.seasonDates ?? defaultSeason.seasonDates),
-            cookingDays: {...(season.cookingDays ?? defaultSeason.cookingDays)},
-            holidays: season.holidays?.map(copyPartialDateRange) ?? defaultSeason.holidays
-        }
-    }
-
-
-    /**
      * Generate dinner event data for a season
      *
      * Interprets season configuration (dates, cooking days, holidays) to determine
@@ -173,7 +156,6 @@ export const useSeason = () => {
             menuDescription: null,
             menuPictureUrl: null,
             state: DinnerState.SCHEDULED,
-            totalCost: 0,
             heynaboEventId: null,
             chefId: null,
             cookingTeamId: null,
@@ -287,7 +269,6 @@ export const useSeason = () => {
         return nextDinner ? [nextDinner, ...futureDinners] : futureDinners
     }
 
-    const getHolidaysForSeason = (season: Season): Date[] =>getHolidayDatesFromDateRangeList(season.holidays)
     const getHolidayDatesFromDateRangeList = (ranges: DateRange[]): Date[] => eachDayOfManyIntervals(ranges)
 
     // ========================================================================
@@ -347,19 +328,6 @@ export const useSeason = () => {
      */
     const getMenuAnnouncementDeadlineDays = (): number =>
         theslope.defaultSeason?.menuIsAnnouncedDaysBefore ?? 10
-
-    /**
-     * Check if a calendar day is the next upcoming dinner event
-     * @param day - Calendar day to check
-     * @param nextDinner - Next dinner event (or null if none)
-     * @returns True if the day matches the next dinner date
-     */
-    const isNextDinnerDate = (day: DateValue, nextDinner: { date: Date } | null): boolean => {
-        if (!nextDinner) return false
-        const dayAsDate = toDate(day)
-        const nextDinnerDate = new Date(nextDinner.date)
-        return isSameDay(dayAsDate, nextDinnerDate)
-    }
 
     // Pre-configured with defaults from appConfig
     const configuredSplitDinnerEvents = splitDinnerEvents(getDefaultDinnerStartTime(), getDefaultDinnerDuration())
@@ -451,29 +419,6 @@ export const useSeason = () => {
     }
 
     /**
-     * Get all cooking teams that an inhabitant is assigned to in a season
-     * @param inhabitantId - ID of the inhabitant
-     * @param season - Season containing cooking teams
-     * @returns Array of teams the inhabitant is assigned to (empty if none)
-     */
-    const getTeamsForInhabitant = (inhabitantId: number, season: Season | null): CookingTeam[] => {
-        if (!season) return []
-        const teams = season.CookingTeams ?? []
-        return teams.filter((team: CookingTeam) => hasAssignment(inhabitantId, team))
-    }
-
-    /**
-     * Check if an inhabitant is on a specific team (any role)
-     * @param inhabitantId - ID of the inhabitant to check
-     * @param team - Cooking team with assignments
-     * @returns True if inhabitant is assigned to this team in any role
-     */
-    const isOnTeam = (inhabitantId: number, team: CookingTeam | null): boolean => {
-        if (!team) return false
-        return hasAssignment(inhabitantId, team)
-    }
-
-    /**
      * Check if an inhabitant is a chef for a specific team
      * @param inhabitantId - ID of the inhabitant to check
      * @param team - Cooking team with assignments
@@ -523,7 +468,6 @@ export const useSeason = () => {
         getDefaultHolidays,
         createSeasonName,
         isActive,
-        coalesceSeason,
         serializeSeason,
         deserializeSeason,
         generateDinnerEventDataForSeason,
@@ -538,14 +482,12 @@ export const useSeason = () => {
         // Pre-booking scaffolding (season activation)
         getScaffoldableDinnerEvents,
 
-        getHolidaysForSeason,
         getHolidayDatesFromDateRangeList,
         computeCookingDates,
         getDefaultDinnerStartTime,
         getDefaultDinnerDuration,
         getPrebookingWindowDays,
         getMenuAnnouncementDeadlineDays,
-        isNextDinnerDate,
         getDinnerTimeRange,
         getNextDinnerDate: configuredGetNextDinnerDate,
         getAdjacentDinner: configuredGetAdjacentDinner,
@@ -553,8 +495,6 @@ export const useSeason = () => {
         sortDinnerEventsByTemporal,
         deadlinesForSeason,
         isDinnerPast,
-        getTeamsForInhabitant,
-        isOnTeam,
         isChefFor,
         getDeadlineUrgency,
         getCookingDeadlineThresholds,

@@ -19,7 +19,7 @@ const props = withDefaults(defineProps<Props>(), {
     prominent: false
 })
 
-const {ICONS, SIZES, TYPOGRAPHY, COLOR} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, TYPOGRAPHY, COLOR, NOISE} = useTheSlopeDesignSystem()
 
 // Compute base URL lazily - useRequestURL is SSR-safe
 const baseUrl = computed(() => useRequestURL().origin)
@@ -54,7 +54,7 @@ const copyCsvLink = async () => {
     >
       <UButton
           :color="COLOR.neutral"
-          variant="ghost"
+          :variant="NOISE.quiet"
           :icon="ICONS.externalLink"
           :size="SIZES.small"
           aria-label="Åbn offentlig side"

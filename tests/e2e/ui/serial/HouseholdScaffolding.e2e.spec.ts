@@ -4,21 +4,20 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {isBeforeDeadline, getDinnerTimeRange} from '~/utils/season'
+import {isBeforeDeadline, getDinnerTimeRange, dateToWeekDay} from '~/utils/season'
+import {formatDate} from '~/utils/date'
 
 // Hardcoded from app.config.ts (Nuxt auto-imports not available in Playwright)
 const DEFAULT_DINNER_START_HOUR = 18
 
 const {memberUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated, waitForApi} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
-
-// Boolean WeekDayMap for cookingDays (uses default options)
-const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
 
 // DinnerMode WeekDayMap for inhabitant preferences
 const {createDefaultWeekdayMap: createDinnerModeWeekdayMap} = useWeekDayMapValidation({
@@ -58,7 +57,7 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
 
     // Helper to navigate to household members page
     const goToHouseholdMembers = async (page: import('@playwright/test').Page) => {
-        await page.goto(`/household/${encodeURIComponent(shortName)}/members?pbs=${pbsId}`)
+        await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/members?pbs=${pbsId}`)
         await pollUntil(
             async () => await page.locator('[data-testid="household-members"]').isVisible(),
             (isVisible) => isVisible
@@ -79,35 +78,17 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
 
         // Create dedicated season for scaffolding tests:
         // - ALL days cooking (Mon-Sun) for predictable event count regardless of day-of-week
-        // - 10 days duration starting tomorrow
         // - 2-day deadline: tomorrow is always AFTER deadline (deadline was yesterday)
-        // All days cooking: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
-        const allDaysCooking = createBooleanWeekdayMap([true, true, true, true, true, true, true])
-
-        const tomorrow = new Date()
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        tomorrow.setHours(0, 0, 0, 0)
-
-        const tenDaysFromTomorrow = new Date(tomorrow)
-        tenDaysFromTomorrow.setDate(tenDaysFromTomorrow.getDate() + 10)
-
-        testSeason = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {
-            cookingDays: allDaysCooking,
-            seasonDates: {start: tomorrow, end: tenDaysFromTomorrow},
-            ticketIsCancellableDaysBefore: 2
-        })
+        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 10, deadline: 2, cookingDays: 'all'})
         createdSeasonIds.push(testSeason.season.id!)
-
-        // Activate the test season
-        await SeasonFactory.activateSeason(adminContext, testSeason.season.id!)
     })
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Clean up inhabitants first (they reference households)
+        // Clean up inhabitants first (they reference households); an inhabitant already gone counts as removed
         for (const inhabitantId of createdInhabitantIds) {
-            await HouseholdFactory.deleteInhabitant(context, inhabitantId).catch(() => {})
+            await HouseholdFactory.deleteInhabitant(context, inhabitantId)
         }
 
         // Clean up seasons (cascade deletes dinner events and orders)
@@ -173,15 +154,12 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         await page.getByTestId(`inhabitant-${inhabitant.id}-preferences-edit-fredag-DINEIN`).click()
 
         // Save
+        const saved = waitForApi(page, `/api/household/inhabitants/${inhabitant.id}/preferences`, 'POST')
         await page.getByTestId('save-preferences').click()
+        await saved
 
-        // THEN: Wait for edit mode to collapse (indicates save completed)
-        await pollUntil(
-            async () => await page.locator(`[data-testid="inhabitant-${inhabitant.id}-edit-preferences"]`).isVisible(),
-            (isVisible) => isVisible,
-            15,
-            500
-        )
+        // THEN: the row collapses once the save lands (the toggle reads 'Luk' while open)
+        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer')
 
         // THEN: Verify orders created only for before-deadline events via API
         const ordersAfter = await pollUntil(
@@ -201,89 +179,39 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         }
     })
 
-    test('RELEASE bucket: GIVEN inhabitant with orders WHEN changing to NONE after deadline THEN orders are RELEASED not deleted', async ({browser}) => {
+    test('GIVEN a member holding a ticket on a dinner past its deadline WHEN the member sets that day to Ingen THEN the bookings tab\'s calendar chip shows the ticket for sale without a reload', async ({page, browser}) => {
         const adminContext = await validatedBrowserContext(browser)
-
-        // Get admin user ID for order creation
-        const {userId: adminUserId} = await getSessionUserInfo(adminContext)
-
-        // GIVEN: Create inhabitant with DINEIN preferences (will get orders via scaffold)
-        const dineInPrefs = createDinnerModeWeekdayMap(DinnerMode.DINEIN)
+        const lockedDay = new Date([...testSeason.dinnerEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]!.date)
+        // The case's own dinner on the first day: the lines the earlier cases queued on that day go with the dinner it replaces,
+        // so the released ticket finds nobody waiting (ADR-016 rule 11 sells it to the first in line otherwise)
+        await DinnerEventFactory.createDinnerEventAloneOnDay(adminContext, testSeason.season, lockedDay, {menuTitle: salt('Frigivet', testSalt)})
         const inhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {
             name: salt('Anders', testSalt),
-            lastName: salt('Release', testSalt),
-            dinnerPreferences: dineInPrefs
+            lastName: 'Frida Frigiver',
+            dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
         })
         createdInhabitantIds.push(inhabitant.id)
+        // The scaffold books the inhabitant while every dinner is open, as the nightly run does; the season's own deadline then closes the first
+        await SeasonFactory.updateSeason(adminContext, {...testSeason.season, ticketIsCancellableDaysBefore: 0})
+        await HouseholdFactory.updateInhabitantPreferences(adminContext, inhabitant.id, createDinnerModeWeekdayMap(DinnerMode.DINEIN), 200, testSeason.season.id!, undefined, true)
+        await SeasonFactory.updateSeason(adminContext, testSeason.season)
 
-        // GIVEN: Get dinner events and categorize by deadline using application logic
-        const dinnerEvents = testSeason.dinnerEvents
+        await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}&date=${formatDate(lockedDay)}`)
+        // UChip hands its test id to the day circle; the chip's indicator sits beside the circle
+        const dayChip = page.getByTestId(`calendar-dinner-date-${lockedDay.getDate()}`).locator('xpath=..').locator('[data-slot="base"]')
+        await expect(dayChip, 'Closed with nothing for sale').toHaveText('')
 
-        // Use same deadline logic as application (ADR-016) - pure utilities, no Nuxt auto-imports
-        const canModifyOrders = (dinnerEventDate: Date): boolean => {
-            const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, DEFAULT_DINNER_START_HOUR, 0).start
-            return isBeforeDeadline(testSeason.season.ticketIsCancellableDaysBefore, 0)(dinnerStartTime)
-        }
-        const afterDeadlineEvents = dinnerEvents.filter(de => !canModifyOrders(de.date))
-        const beforeDeadlineEvents = dinnerEvents.filter(de => canModifyOrders(de.date))
+        await page.getByRole('tab', {name: 'Præferencer'}).click()
+        await page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`).click()
+        await page.getByTestId(`inhabitant-${inhabitant.id}-preferences-edit-${dateToWeekDay(lockedDay)}-${DinnerMode.NONE}`).click()
+        const saved = waitForApi(page, `/api/household/inhabitants/${inhabitant.id}/preferences`, 'POST')
+        await page.getByTestId('save-preferences').click()
+        await saved
+        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer')
 
-        // Trigger scaffold by calling preferences API with explicit seasonId
-        // This creates orders for BEFORE-deadline events using the test season's deadline config
-        await HouseholdFactory.updateInhabitantPreferences(
-            adminContext,
-            inhabitant.id,
-            dineInPrefs,
-            200,
-            testSeason.season.id!  // Explicit seasonId ensures correct deadline calculation
-        )
+        await page.getByRole('tab', {name: 'Tilmeldinger'}).click()
 
-        // GIVEN: Manually create orders for AFTER-deadline events (scaffold can't create these)
-        // Simulates orders created when events were still before deadline
-        const ticketPrice = testSeason.season.ticketPrices.find(tp => tp.ticketType === 'ADULT')
-        if (!ticketPrice?.id) throw new Error('Test setup: missing ADULT ticket price')
-        const ticketPriceId = ticketPrice.id
-
-        for (const afterDeadlineEvent of afterDeadlineEvents) {
-            await OrderFactory.createOrder(adminContext, {
-                householdId,
-                dinnerEventId: afterDeadlineEvent.id,
-                orders: [{
-                    inhabitantId: inhabitant.id,
-                    bookedByUserId: adminUserId,
-                    ticketPriceId,
-                    dinnerMode: DinnerMode.DINEIN,
-                    isGuestTicket: false
-                }]
-            })
-        }
-
-        // Verify orders exist initially for all events (before + after deadline)
-        const initialOrders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, dinnerEvents.map(e => e.id))
-        const inhabitantInitialOrders = initialOrders.filter(o => o.inhabitantId === inhabitant.id)
-        const expectedTotalOrders = beforeDeadlineEvents.length + afterDeadlineEvents.length
-        expect(inhabitantInitialOrders.length, `Should have ${expectedTotalOrders} orders (${beforeDeadlineEvents.length} before + ${afterDeadlineEvents.length} after deadline)`).toBe(expectedTotalOrders)
-
-        // WHEN: Change preferences to NONE via API with explicit seasonId
-        // This ensures the scaffold uses the test season's deadline config (2 days)
-        const nonePrefs = createDinnerModeWeekdayMap(DinnerMode.NONE)
-        await HouseholdFactory.updateInhabitantPreferences(
-            adminContext,
-            inhabitant.id,
-            nonePrefs,
-            200,
-            testSeason.season.id!  // Explicit seasonId ensures correct deadline calculation
-        )
-
-        // THEN: After-deadline orders should be RELEASED, before-deadline orders should be DELETED
-        const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, dinnerEvents.map(e => e.id))
-        const inhabitantOrdersAfter = ordersAfter.filter(o => o.inhabitantId === inhabitant.id)
-
-        // Should have RELEASED orders for after-deadline events
-        const releasedOrders = inhabitantOrdersAfter.filter(o => o.state === OrderState.RELEASED)
-        expect(releasedOrders.length, 'After-deadline orders should be RELEASED').toBe(afterDeadlineEvents.length)
-
-        // Before-deadline orders should be deleted (not in results)
-        const bookedOrders = inhabitantOrdersAfter.filter(o => o.state === OrderState.BOOKED)
-        expect(bookedOrders.length, 'Before-deadline orders should be deleted').toBe(0)
+        // The released ticket is for sale
+        await pollUntil(async () => (await dayChip.textContent())?.trim(), forSale => forSale === '1')
     })
 })

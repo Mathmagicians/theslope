@@ -2,9 +2,11 @@ import {test, expect, type Page} from '@playwright/test'
 import {authFiles} from '../config'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import testHelpers from '../testHelpers'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom, salt, saltedId, doScreenshot, waitForHydration, fillDateField, readDateField} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom, salt, saltedId, doScreenshot, gotoHydrated, fillDateField, readDateField, waitForApi} = testHelpers
+const {HouseholdDetailSchema} = useCoreValidation()
 
 /**
  * UI TEST STRATEGY:
@@ -21,30 +23,18 @@ test.describe('AdminHouseholds View', () => {
 
     /**
      * Helper: Navigate to households page and wait for data to load
-     * Uses pollUntil with exponential backoff for robustness under load
      */
     const navigateToHouseholds = async (page: Page) => {
-        await page.goto(adminHouseholdsUrl)
+        await gotoHydrated(page, adminHouseholdsUrl)
 
         // Wait for container to be visible
-        await pollUntil(
-            async () => await page.locator('[data-testid="admin-households"]').isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
+        await expect(page.locator('[data-testid="admin-households"]')).toBeVisible()
         // Wait for store to finish loading - either data rows appear OR custom empty state shows
         // Custom empty state: "Ingen er flyttet ind i appen endnu"
-        await pollUntil(
-            async () => {
-                const hasEmptyState = await page.getByText('Ingen er flyttet ind i appen endnu').count() > 0
-                const hasDataRows = await page.locator('[data-testid="admin-households"] tbody tr td').count() > 1
-                return hasEmptyState || hasDataRows
-            },
-            (ready) => ready,
-            10
-        )
-        // Rows above are SSR markup; clicks and fills only register once Vue has hydrated
-        await waitForHydration(page)
+        // (a data row has more than the one cell of the loading or empty row)
+        const emptyState = page.getByText('Ingen er flyttet ind i appen endnu')
+        const secondDataCell = page.locator('[data-testid="admin-households"] tbody tr td').nth(1)
+        await expect(emptyState.or(secondDataCell).first()).toBeAttached()
     }
 
     /**
@@ -58,21 +48,12 @@ test.describe('AdminHouseholds View', () => {
 
         await page.locator('[data-testid="household-search"]').fill(searchTerm)
 
-        await pollUntil(
-            async () => await page.locator(`[data-testid="household-address-${householdId}"]`).isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
+        await expect(page.locator(`[data-testid="household-address-${householdId}"]`)).toBeVisible()
     }
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
-    })
-
-    test('Can load admin households page', async ({page}) => {
-        await navigateToHouseholds(page)
-        await expect(page.locator('[data-testid="admin-households"]')).toBeVisible()
     })
 
     test('admin creates a new household at an existing address via the inline form', async ({page, browser}) => {
@@ -99,32 +80,31 @@ test.describe('AdminHouseholds View', () => {
         await pbsInput.fill(String(newPbsId))
         await expect(pbsInput).toHaveValue(String(newPbsId))
 
-        // The form renders ONE date field at this step (the prevOwner pickers mount after the address pick)
-        await fillDateField(page.locator('body'), 'start', '15/05/2026')
-        expect((await readDateField(page.locator('body'), 'start')).getTime())
+        // The move-in date field: the date group that holds the field's named input
+        const movedInField = page.getByRole('group').filter({has: page.locator('input[name="movedInDate"]')})
+        await fillDateField(movedInField, 'start', '15/05/2026')
+        expect((await readDateField(movedInField, 'start')).getTime())
             .toBe(new Date(2026, 4, 15).getTime())
 
         // Now pick the seed's address (USelect offers "{address} · HN {heynaboId}")
         await page.getByTestId('create-household-address').click()
-        const addressOption = page.getByRole('option', {name: new RegExp(seed.address)}).first()
+        const addressOption = page.getByRole('option', {name: `${seed.address} · HN ${seed.heynaboId}`, exact: true})
         await expect(addressOption).toBeVisible()
         await addressOption.click()
 
+        const saved = waitForApi(page, '/api/admin/household', 'PUT')
         await page.getByTestId('create-household-submit').click()
+        const response = await saved
+        const savedHousehold = HouseholdDetailSchema.parse(await response.json())
+        createdHouseholdIds.push(savedHousehold.id)
+        expect(response.status()).toBe(201)
 
         // THEN: server persists a sibling household (heynaboId + name inherited from seed)
-        const newHousehold = await pollUntil(
-            () => HouseholdFactory.getAllHouseholds(context).then(all =>
-                all.find(h => h.pbsId === newPbsId)
-            ),
-            (h) => h !== undefined,
-            10
-        )
-        expect(newHousehold).toBeDefined()
+        const newHousehold = await HouseholdFactory.getHouseholdById(context, savedHousehold.id)
+        expect(newHousehold!.pbsId).toBe(newPbsId)
         expect(newHousehold!.heynaboId).toBe(seed.heynaboId)
         expect(newHousehold!.name).toBe(seed.name)
         expect(newHousehold!.address).toBe(seed.address)
-        createdHouseholdIds.push(newHousehold!.id)
 
         // THEN: table row shows the new household (after the inline form closes)
         await navigateAndFindHousehold(page, newHousehold!.id, seed.address, true)
@@ -208,16 +188,16 @@ test.describe('AdminHouseholds View', () => {
 
         // WHEN: Navigate to households, find target, expand edit panel
         await navigateAndFindHousehold(page, target.id, target.address, true)
+        // The edit button is the row's one button
         const targetRow = page.locator(`[data-testid="household-address-${target.id}"]`).locator('xpath=ancestor::tr')
-        await targetRow.getByRole('button').first().click()
+        await targetRow.getByRole('button').click()
 
         // WHEN: Find inhabitant in the selector and click "Flyt hertil"
-        await pollUntil(
-            async () => await page.getByText(inhabitant.name).first().isVisible().catch(() => false),
-            (visible) => visible
-        )
-        const moveBtn = page.getByText('Flyt hertil').first()
-        await moveBtn.click()
+        // The panel's Beboere section holds the selector; the source row's badge also shows the first name
+        const moveSelector = page.locator('section').filter({has: page.getByRole('heading', {name: 'Beboere', exact: true})})
+        const inhabitantRow = moveSelector.getByRole('row').filter({hasText: `${inhabitant.name} ${inhabitant.lastName}`})
+        await expect(inhabitantRow).toBeVisible()
+        await inhabitantRow.getByRole('button', {name: 'Flyt hertil', exact: true}).click()
 
         // THEN: Inhabitant moved to target (verify via API)
         const moved = await pollUntil(
@@ -233,18 +213,19 @@ test.describe('AdminHouseholds View', () => {
 
         // GIVEN: Empty household
         const household = await HouseholdFactory.createHousehold(context, HouseholdFactory.defaultHouseholdData(testSalt + '-delete'))
-        // Don't add to cleanup — we're deleting it
+        // Tracked in case the UI delete does not land; cleanup counts a household already gone as removed
+        createdHouseholdIds.push(household.id)
 
         // WHEN: Navigate, find household, expand edit panel
         await navigateAndFindHousehold(page, household.id, household.address, true)
         const row = page.locator(`[data-testid="household-address-${household.id}"]`).locator('xpath=ancestor::tr')
-        await row.getByRole('button').first().click()
+        await row.getByRole('button').click()
 
         // WHEN: Click delete (DangerButton two-click)
-        const deleteBtn = page.getByText(new RegExp(`Slet.*PBS ${household.pbsId}`)).first()
+        const deleteBtn = page.getByRole('button', {name: new RegExp(`Slet.*PBS ${household.pbsId}`)})
         await deleteBtn.click()
-        // Second click (confirm)
-        await page.getByText(/Tryk igen/).first().click()
+        // Second click (confirm): the same button, its label armed
+        await page.getByRole('button', {name: new RegExp(`Tryk igen.*PBS ${household.pbsId}`)}).click()
 
         // THEN: Household no longer in list (verify via API)
         await pollUntil(

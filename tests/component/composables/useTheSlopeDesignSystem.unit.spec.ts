@@ -1,6 +1,6 @@
 import {describe, it, expect, afterEach} from 'vitest'
 import {ref} from 'vue'
-import {getRandomEmptyMessage, EMPTY_STATE_MESSAGES, createResponsiveAlerts, createColumnVisibility} from '~/composables/useTheSlopeDesignSystem'
+import {getRandomEmptyMessage, EMPTY_STATE_MESSAGES, createResponsiveAlerts, createColumnVisibility, createBreakpoint, createMasterDetail, ORDER_STATE_COLORS, COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
 
 const contexts = Object.keys(EMPTY_STATE_MESSAGES) as Array<keyof typeof EMPTY_STATE_MESSAGES>
 
@@ -11,14 +11,16 @@ describe('getRandomEmptyMessage', () => {
     const sameUtcDayMorning = new Date('2026-08-19T06:00:00Z')
     const utcSeed = 20260819
 
-    it.each(contexts)('%s: seeds by UTC date, independent of the runtime timezone', (context) => {
-        const expectedMessage = EMPTY_STATE_MESSAGES[context][utcSeed % EMPTY_STATE_MESSAGES[context].length]
-        expect(getRandomEmptyMessage(context, danishEveningInstant)).toBe(expectedMessage)
+    it('every context seeds by UTC date, independent of the runtime timezone', () => {
+        const misses = contexts.filter(context =>
+            getRandomEmptyMessage(context, danishEveningInstant) !== EMPTY_STATE_MESSAGES[context][utcSeed % EMPTY_STATE_MESSAGES[context].length])
+        expect(misses).toEqual([])
     })
 
-    it.each(contexts)('%s: every render on the same UTC day picks the same message', (context) => {
-        expect(getRandomEmptyMessage(context, sameUtcDayMorning))
-            .toBe(getRandomEmptyMessage(context, danishEveningInstant))
+    it('every context picks the same message on every render of the same UTC day', () => {
+        const misses = contexts.filter(context =>
+            getRandomEmptyMessage(context, sameUtcDayMorning) !== getRandomEmptyMessage(context, danishEveningInstant))
+        expect(misses).toEqual([])
     })
 })
 
@@ -59,5 +61,31 @@ describe('createColumnVisibility', () => {
     ] as const)('isMd=%s with an expand column hidden from md → %j', (md, visibility) => {
         isMd.value = md
         expect(columnVisibility(['durationMs'], ['expand'])).toEqual(visibility)
+    })
+})
+
+describe('createBreakpoint', () => {
+    it.each([
+        [null, false],
+        [false, true]
+    ] as const)('isMd=%s → measured %s', (md, measured) => {
+        expect(createBreakpoint(ref(md)).measured.value).toBe(measured)
+    })
+})
+
+describe('ORDER_STATE_COLORS', () => {
+    it('the waiting list ghost badge and chip wear the queued state colour', () => {
+        expect([COMPONENTS.waitlist.ghostBadge.color, COMPONENTS.waitlist.chip.color])
+            .toEqual([ORDER_STATE_COLORS.queued, ORDER_STATE_COLORS.queued])
+    })
+})
+
+describe('createMasterDetail', () => {
+    // An unmeasured viewport renders the phone's dock, as the server render does
+    it.each([
+        [null, false],
+        [true, true]
+    ] as const)('isMd=%s → detail renders as a pane: %s', (md, asPane) => {
+        expect(createMasterDetail(ref(md)).detailAsPane).toBe(asPane)
     })
 })

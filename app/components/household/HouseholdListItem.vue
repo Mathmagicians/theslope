@@ -10,19 +10,19 @@ const props = withDefaults(defineProps<Props>(), {
     compact: false
 })
 
-const {COLOR, TEXT, BG} = useTheSlopeDesignSystem()
+const {COLOR, TEXT, BG, SIZES, NOISE, ICONS, COMPONENTS} = useTheSlopeDesignSystem()
 
 const hasInhabitants = computed(() => props.household.inhabitants?.length > 0)
 </script>
 
 <template>
     <div v-if="compact" class="flex flex-col md:flex-row md:items-center gap-3">
-        <UAvatarGroup size="sm" :max="3">
+        <UAvatarGroup :size="COMPONENTS.avatar.compact.size" :ui="{base: COMPONENTS.avatar.compact.fit}" :max="COMPONENTS.avatar.listItemMax">
             <UTooltip v-for="inhabitant in household.inhabitants" :key="inhabitant.id" :text="inhabitant.name">
                 <UAvatar
                     :src="inhabitant.pictureUrl ?? undefined"
                     :alt="inhabitant.name"
-                    icon="i-heroicons-user"
+                    :icon="ICONS.user"
                 />
             </UTooltip>
         </UAvatarGroup>
@@ -31,8 +31,8 @@ const hasInhabitants = computed(() => props.household.inhabitants?.length > 0)
             <UBadge
                 v-for="inhabitant in household.inhabitants"
                 :key="inhabitant.id"
-                size="md"
-                variant="subtle"
+                :size="SIZES.md"
+                :variant="NOISE.subtle"
                 :color="COLOR.secondary"
             >
                 {{ inhabitant.name }}

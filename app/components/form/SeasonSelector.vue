@@ -1,29 +1,23 @@
 <!--
-UX MOCKUP: Season Selector with Status Indicators
+SeasonSelector: one option per season, sorted active, in progress, upcoming, ended; a calendar icon leads, the archive
+icon for an ended season, and the season's status glyph follows the name
 
 ┌─────────────────────────────────┐
-│ 📅 Forår 2025            🟢 ▼ │  ◄─── Selected (ACTIVE - green circle)
+│ [cal] Forår 2025        (●)  ▼ │  the selected season, its glyph trailing
 │ ─────────────────────────────── │
-│ 📅 Forår 2025            🟢    │  ◄─── ACTIVE (calendar icon, green circle)
-│ 📅 Efterår 2025          🌱    │  ◄─── FUTURE (calendar icon, seedling)
-│ 📅 Efterår 2025          🟡    │  ◄─── CURRENT (calendar icon, yellow circle)
-│ 📦 Efterår 2024          ⚪    │  ◄─── PAST (archive icon, grey circle)
+│ [cal] Forår 2025        (●)    │  active: green disc
+│ [cal] Efterår 2025      (●)    │  in progress, not activated: yellow disc
+│ [cal] Efterår 2025      (sp)   │  upcoming: the green sprout
+│ [box] Efterår 2024      (●)    │  ended: grey disc
 └─────────────────────────────────┘
 
-Season Status Legend:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟢 ACTIVE    - Synlig for alle brugere (solid green)
-🌱 FUTURE    - Fremtidig sæson (green seedling)
-🟡 CURRENT   - Igangværende men ikke aktiv (yellow)
-⚪ PAST      - Arkiveret sæson (grey/white)
-
-Icons: 📅 Calendar for active/future/current, 📦 Archive for past
-Sorting: Active → Future → Current → Past (by date)
+[cal] = ICONS.calendar, [box] = ICONS.seasonPast; the discs and the sprout are UBadges with SEASON_STATUS_GLYPHS as their settings
 -->
 
 <script setup lang="ts">
 import type {Season} from '~/composables/useSeasonValidation'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import type {SeasonStatusValue} from '~/utils/season'
 
 interface Props {
   modelValue: number | null | undefined
@@ -44,57 +38,19 @@ const emit = defineEmits<{
 }>()
 
 const {getSeasonStatus, sortSeasonsByActivePriority} = useSeason()
-const {COLOR} = useTheSlopeDesignSystem()
+const {COLOR, SIZES, ICONS, COMPONENTS, SEASON_STATUS_GLYPHS} = useTheSlopeDesignSystem()
 
-// Inject responsive breakpoint
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
-
-// Get status icon for a season
-const getStatusIcon = (season: Season): string => {
-  const status = getSeasonStatus(season)
-
-  switch (status) {
-    case SEASON_STATUS.ACTIVE:
-      return 'i-heroicons-calendar'
-    case SEASON_STATUS.FUTURE:
-      return 'i-heroicons-calendar'
-    case SEASON_STATUS.CURRENT:
-      return 'i-heroicons-calendar'
-    case SEASON_STATUS.PAST:
-      return 'i-heroicons-archive-box-solid'
-    default:
-      return 'i-question-mark-circle'
-  }
-}
-
-// Get status emoji circle
-const getStatusEmoji = (season: Season): string => {
-  const status = getSeasonStatus(season)
-
-  switch (status) {
-    case SEASON_STATUS.ACTIVE:
-      return '🟢'  // Solid green circle
-    case SEASON_STATUS.FUTURE:
-      return '🌱'  // Green heart (no green outline emoji exists)
-    case SEASON_STATUS.CURRENT:
-      return '🟡'  // Solid yellow circle
-    case SEASON_STATUS.PAST:
-    default:
-      return '⚪'  // Grey circle
-  }
-}
-
-// Sort seasons and add icons for USelect
-type SeasonWithIcon = Season & { icon: string; suffix: string }
+// Sorted for USelect, each season carrying its status and its leading icon, the archive box for an ended season
+type SeasonWithIcon = Season & { status: SeasonStatusValue; icon: string }
 
 const sortedSeasonsWithIcons = computed<SeasonWithIcon[]>(() => {
-  return sortSeasonsByActivePriority(props.seasons).map(season => ({
-    ...season,
-    icon: getStatusIcon(season),
-    suffix: getStatusEmoji(season)
-  }))
+  return sortSeasonsByActivePriority(props.seasons).map(season => {
+    const status = getSeasonStatus(season)
+    return {...season, status, icon: status === SEASON_STATUS.PAST ? ICONS.seasonPast : ICONS.calendar}
+  })
 })
+
+const selectedOption = computed(() => sortedSeasonsWithIcons.value.find(s => s.id === selectedSeasonId.value))
 
 const selectedSeasonId = computed({
   get: () => props.modelValue ?? undefined,  // USelect doesn't accept null, convert to undefined
@@ -114,24 +70,20 @@ const selectedSeasonId = computed({
       label-key="shortName"
       value-key="id"
       icon-key="icon"
-      suffix-key="suffix"
       leading
       trailing
       :disabled="props.disabled || props.seasons.length === 0"
-      :class="props.class"
-      :size="getIsMd ? 'lg' : 'sm'"
-      class="min-w-48"
+      :class="[COMPONENTS.seasonSelector.select, props.class]"
+      :size="SIZES.seasonSelect"
   >
     <template #leading>
-      <UIcon
-        v-if="selectedSeasonId && sortedSeasonsWithIcons.find(s => s.id === selectedSeasonId)"
-        :name="sortedSeasonsWithIcons.find(s => s.id === selectedSeasonId)!.icon"
-      />
+      <UIcon v-if="selectedOption" :name="selectedOption.icon" />
     </template>
     <template #trailing>
-      <span v-if="selectedSeasonId && sortedSeasonsWithIcons.find(s => s.id === selectedSeasonId)">
-        {{ sortedSeasonsWithIcons.find(s => s.id === selectedSeasonId)!.suffix }}
-      </span>
+      <UBadge v-if="selectedOption" v-bind="SEASON_STATUS_GLYPHS[selectedOption.status]" data-testid="season-status-mark" />
+    </template>
+    <template #item-trailing="{ item }">
+      <UBadge v-bind="SEASON_STATUS_GLYPHS[item.status]" />
     </template>
   </USelect>
 </template>

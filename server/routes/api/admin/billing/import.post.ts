@@ -27,7 +27,7 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
     const d1Client = cloudflare.env.DB
 
     const {BillingImportRequestSchema, parseCSV, TicketType, DinnerMode, OrderState} = useBillingValidation()
-    const {chunkOrderBatch} = useBookingValidation()
+    const {chunkOrderBatch, OrderAuditActionSchema, OrderAuditSourceSchema} = useBookingValidation()
     const {findTicketPriceByType} = useTicket()
 
     const LOG = '📦 > BILLING > [IMPORT] > '
@@ -137,9 +137,9 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
 
         // Audit context for batch import
         const auditContext: AuditContext = {
-            action: 'SYSTEM_CREATED',
+            action: OrderAuditActionSchema.enum.SYSTEM_CREATED,
             performedByUserId: systemUserId,
-            source: 'csv_billing',
+            source: OrderAuditSourceSchema.enum.csv_billing,
             seasonId: null  // Billing import is cross-season, no specific season
         }
 

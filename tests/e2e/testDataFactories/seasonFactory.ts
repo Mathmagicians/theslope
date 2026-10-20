@@ -1,16 +1,21 @@
 import {useSeasonValidation, type Season, type SeasonUpdateResponse} from "~/composables/useSeasonValidation"
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
+import {DeletedCountSchema, IdSchema} from "~/composables/useCoreValidation"
 import type {
     CookingTeamDisplay,
     CookingTeamDetail,
     CookingTeamAssignment,
+    CookingTeamAssignmentUpdate,
     CookingTeamCreate,
     TeamRole
 } from "~/composables/useCookingTeamValidation"
-import {useBookingValidation, type DinnerEventDisplay, type ScaffoldResult, type DailyMaintenanceResult} from "~/composables/useBookingValidation"
+import {useBookingValidation, type DinnerEventCreate, type DinnerEventDisplay, type ScaffoldResult, type DailyMaintenanceResult} from "~/composables/useBookingValidation"
 import {useMaintenanceValidation, type JobRunDisplay} from "~/composables/useMaintenanceValidation"
+import {useDutyValidation, type JokerSlot, type JokerSlotCreate} from "~/composables/useDutyValidation"
 import {getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
+import type {DateRange} from '~/types/dateTypes'
+import {addDays, nextMonday} from 'date-fns'
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 import {HouseholdFactory} from "./householdFactory"
@@ -23,7 +28,10 @@ type CookingTeamCreateAssignment = NonNullable<CookingTeamCreate['assignments']>
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
-const {CookingTeamDetailSchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
+const {CookingTeamDetailSchema, CookingTeamDisplaySchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema, TeamRoleSchema} = useCookingTeamValidation()
+const {RoleSchema, JokerSlotSchema} = useDutyValidation()
+const {DinnerStateSchema} = useBookingValidation()
+const {JobType, JobStatus} = useMaintenanceValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
@@ -46,6 +54,8 @@ export class SeasonFactory {
 
     // Fixed singleton name for parallel-safe active season (shared across all test workers)
     static readonly E2E_SINGLETON_NAME = 'TestSeason-E2E-Singleton'
+    // The booking deadline of a factory season (app.config.ts default); the e2e singleton alone is created open
+    static readonly DEFAULT_BOOKING_DEADLINE_DAYS = 8
     // createActiveSeason retries once: the list→activate window races with workers recreating or cleaning the singleton
     static readonly CREATE_ACTIVE_SEASON_RETRIES = 1
 
@@ -63,6 +73,18 @@ export class SeasonFactory {
         const randomMonth = Math.floor(Math.random() * 12) // 0-11
         const year = 4025 + randomYearOffset
         return new Date(year, randomMonth, 1)
+    }
+
+    /**
+     * A unique season week with a holiday inside it, for parallel runs and reruns: Monday to Sunday in a random
+     * far-future month (generateUniqueDate), so the weekdays are fixed; the holiday runs Wednesday to Friday
+     */
+    static readonly generateUniqueSeasonDates = (): { seasonDates: DateRange, holiday: DateRange } => {
+        const start = nextMonday(this.generateUniqueDate())
+        return {
+            seasonDates: {start, end: addDays(start, 6)},
+            holiday: {start: addDays(start, 2), end: addDays(start, 4)}
+        }
     }
 
     /**
@@ -108,7 +130,7 @@ export class SeasonFactory {
         cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
         consecutiveCookingDays: 1,
         ticketPrices: TicketFactory.defaultTicketPrices(),
-        ticketIsCancellableDaysBefore: 8,  // Booking deadline (matches app.config.ts)
+        ticketIsCancellableDaysBefore: this.DEFAULT_BOOKING_DEADLINE_DAYS,
         diningModeIsEditableMinutesBefore: 90
     }
 
@@ -128,6 +150,7 @@ export class SeasonFactory {
         seasonId: 1,
         name: "TestTeam",
         cookingDaysCount: 0,
+        jokerSlotCount: 0,
         assignments: [],
         ...overrides
     })
@@ -142,7 +165,7 @@ export class SeasonFactory {
                 menuTitle: 'Test Menu 1',
                 menuDescription: 'Test Description',
                 menuPictureUrl: null,
-                state: 'SCHEDULED' as const,
+                state: DinnerStateSchema.enum.SCHEDULED,
                 totalCost: 0,
                 chefId: null,
                 cookingTeamId: 1,
@@ -152,6 +175,7 @@ export class SeasonFactory {
                 updatedAt: new Date()
             } as DinnerEventDisplay
         ],
+        jokerSlots: [],
         ...overrides
     })
 
@@ -160,7 +184,7 @@ export class SeasonFactory {
      */
     static readonly defaultCookingTeamCreateAssignment = (overrides: Partial<CookingTeamCreateAssignment> = {}): CookingTeamCreateAssignment => ({
         inhabitantId: 42,
-        role: 'CHEF' as const,
+        role: TeamRoleSchema.enum.CHEF,
         allocationPercentage: 100,
         affinity: null,
         ...overrides
@@ -186,7 +210,7 @@ export class SeasonFactory {
         const data = {
             cookingTeamId: 1,
             inhabitantId,
-            role: 'CHEF' as const,
+            role: TeamRoleSchema.enum.CHEF,
             allocationPercentage: 100,
             inhabitant: {
                 id: inhabitantId,
@@ -210,6 +234,17 @@ export class SeasonFactory {
             shortName: salt(this.defaultSeasonData.shortName, testSalt)
         }
     }
+
+    /** SeasonUpdateResponse data for component tests (no API call): the saved season and what the save set in motion */
+    static readonly defaultSeasonUpdateResponse = (
+        season: Season,
+        overrides: Partial<Omit<SeasonUpdateResponse, 'season'>> = {}
+    ): SeasonUpdateResponse => ({
+        season,
+        reconciliation: {created: 0, idempotent: 0, deleted: 0},
+        scaffold: null,
+        ...overrides
+    })
 
     static readonly createSeason = async (
         context: BrowserContext,
@@ -246,7 +281,7 @@ export class SeasonFactory {
 
             // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
             const result = SeasonSchema.safeParse(responseBody)
-            expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+            expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
 
             const season = result.data!
 
@@ -285,7 +320,7 @@ export class SeasonFactory {
         if (expectedStatus !== 200) return responseBody
 
         const result = SeasonUpdateResponseSchema.safeParse(responseBody)
-        expect(result.success, `API should return a valid SeasonUpdateResponse. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+        expect(result.success, `API should return a valid SeasonUpdateResponse. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
         return result.data!
     }
 
@@ -410,6 +445,8 @@ export class SeasonFactory {
 
         try {
             createdSeason = await this.createSeason(context, {
+                // The singleton is open: every dinner books as before the deadline; a closed season is a spec's own
+                ticketIsCancellableDaysBefore: 0,
                 ...aSeason,
                 shortName: this.E2E_SINGLETON_NAME // Override to fixed singleton name
             })
@@ -438,7 +475,7 @@ export class SeasonFactory {
                     return season as Season
                 },
                 (season: Season) => season.isActive === true,
-                10 // Max attempts with exponential backoff
+                6 // ~15s with doubling backoff - inside the 30s hook timeout
             )
 
             console.info('🌞 > SEASON_FACTORY > Singleton season is already active')
@@ -460,7 +497,7 @@ export class SeasonFactory {
                 return season as Season
             },
             (season: Season) => season.isActive === true,
-            10 // Max attempts with exponential backoff
+            6 // ~15s with doubling backoff - inside the 30s hook timeout
         )
 
         // Cache the active season
@@ -518,7 +555,7 @@ export class SeasonFactory {
      * Clean up the cached active season singleton
      * Deletes the test season from database, clears the cache, and restores appropriate active season
      * Uses selectMostAppropriateActiveSeason to find the best season to activate (DB lookup, not in-memory)
-     * Gracefully handles parallel workers trying to delete the same singleton (ignores 404)
+     * A singleton another worker already deleted counts as removed
      * @param context BrowserContext for API requests
      */
     static readonly cleanupActiveSeason = async (context: BrowserContext): Promise<void> => {
@@ -526,16 +563,7 @@ export class SeasonFactory {
         const allSeasons = await this.getAllSeasons(context)
         const singleton = allSeasons.find(s => s.shortName === this.E2E_SINGLETON_NAME)
 
-        if (singleton) {
-            console.info('🌞 > SEASON_FACTORY > Cleaning up singleton season:', singleton.shortName)
-            try {
-                await this.deleteSeason(context, singleton.id!)
-                console.info('🌞 > SEASON_FACTORY > Singleton season deleted')
-            } catch {
-                // Ignore 404 errors - another worker already deleted the singleton
-                console.info('🌞 > SEASON_FACTORY > Season already deleted (by another worker), skipping')
-            }
-        }
+        if (singleton) await this.deleteSeason(context, singleton.id!)
 
         // Clear in-memory cache (may be null if global teardown process)
         this.activeSeason = null
@@ -549,20 +577,14 @@ export class SeasonFactory {
         // Use selectMostAppropriateActiveSeason to find the best candidate
         const {selectMostAppropriateActiveSeason} = await import('~/utils/season')
         const seasonToActivate = selectMostAppropriateActiveSeason(nonTestSeasons)
+        const activeSeasonId = await this.getActiveSeasonId(context)
 
-        if (seasonToActivate) {
-            console.info('🌞 > SEASON_FACTORY > Activating most appropriate season:', seasonToActivate.shortName)
+        if (seasonToActivate && seasonToActivate.id !== activeSeasonId) {
             const response = await context.request.post('/api/admin/season/active', {
                 headers: headers,
                 data: { seasonId: seasonToActivate.id }
             })
-            if (response.status() === 200) {
-                console.info('🌞 > SEASON_FACTORY > Season activated successfully')
-            } else {
-                console.warn('🌞 > SEASON_FACTORY > Failed to activate season:', response.status())
-            }
-        } else {
-            console.info('🌞 > SEASON_FACTORY > No eligible non-test seasons to activate')
+            expect(response.status(), `Unexpected status activating season ${seasonToActivate.shortName}: ${await response.text()}`).toBe(200)
         }
     }
 
@@ -584,7 +606,7 @@ export class SeasonFactory {
         // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
         const parsedSeasons = rawData.map((season: unknown) => {
             const result = SeasonSchema.safeParse(season)
-            expect(result.success, `API should return valid Season objects. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+            expect(result.success, `API should return valid Season objects. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
             expect(result.data!.ticketPrices.length, `Season ${result.data!.shortName} must have ticket prices`).toBeGreaterThan(0)
             return result.data!
         })
@@ -604,42 +626,32 @@ export class SeasonFactory {
 
         // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
         const result = SeasonSchema.safeParse(rawData)
-        expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+        expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
 
         return result.data!
     }
 
+    /**
+     * Delete a season, returns the deleted season
+     * Cleanup (afterAll): no expectedStatus - a season already gone counts as removed, any other status fails
+     * API tests: pass expectedStatus - the deletion answers it
+     */
     static readonly deleteSeason = async (
         context: BrowserContext,
         id: number,
-        expectedStatus: number = 200
+        expectedStatus?: number
     ): Promise<Season | null> => {
-        try {
-            const deleteResponse = await context.request.delete(`/api/admin/season/${id}`)
-
-            if (deleteResponse.status() === expectedStatus) {
-                if (expectedStatus === 200) {
-                    return await deleteResponse.json()
-                }
-                return null
-            } else if (deleteResponse.status() === 404 && expectedStatus === 200) {
-                return null
-            } else {
-                const errorBody = await deleteResponse.text()
-                console.warn(`❌ Cleanup failed: Season ${id} deletion returned ${deleteResponse.status()} (expected ${expectedStatus}):`, errorBody)
-                return null
-            }
-        } catch (deleteError) {
-            console.warn(`❌ Cleanup failed: Exception deleting season ${id}:`, deleteError)
-            return null
-        }
+        const response = await context.request.delete(`/api/admin/season/${id}`)
+        const status = response.status()
+        const body = await response.text()
+        expect(expectedStatus === undefined ? [200, 404] : [expectedStatus], `Unexpected status deleting season ${id}: ${body}`).toContain(status)
+        return status === 200 ? JSON.parse(body) : null
     }
 
     /**
      * Cleanup multiple seasons by ID (for test afterAll hooks)
      * NOTE: Does NOT delete singleton active season - that's cleaned up by global teardown
      * Worker-safe: Filters out singleton by name (E2E_SINGLETON_NAME) not by ID
-     * Gracefully handles 404 errors for already-deleted seasons
      */
     static readonly cleanupSeasons = async (
         context: BrowserContext,
@@ -651,26 +663,9 @@ export class SeasonFactory {
         const allSeasons = await this.getAllSeasons(context)
         const singletonId = allSeasons.find(s => s.shortName === this.E2E_SINGLETON_NAME)?.id
 
-        // Filter out singleton season ID if present
-        const filteredIds = seasonIds.filter(id => id !== singletonId)
-
-        if (filteredIds.length === 0) {
-            console.info('🌞 > SEASON_FACTORY > No seasons to cleanup (singleton excluded)')
-            return
-        }
-
-        console.info(`🌞 > SEASON_FACTORY > Cleaning up ${filteredIds.length} test season(s)`)
-
-        // Delete all seasons in parallel
-        await Promise.all(
-            filteredIds.map(async (id) => {
-                try {
-                    await this.deleteSeason(context, id)
-                } catch (error) {
-                    console.error(`Failed to delete test season with ID ${id}:`, error)
-                }
-            })
-        )
+        await Promise.all(seasonIds
+            .filter(id => id !== singletonId)
+            .map(id => this.deleteSeason(context, id)))
     }
 
     static readonly createSeasonWithTeams = async (
@@ -809,10 +804,64 @@ export class SeasonFactory {
 
         const {SeasonSchema} = useSeasonValidation()
         const result = SeasonSchema.safeParse(rawSeason)
-        expect(result.success, `API should return valid Season. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+        expect(result.success, `API should return valid Season. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
 
         expect(result.data!.isActive, 'Season should be active').toBe(true)
         return result.data!
+    }
+
+    /**
+     * A serial spec's own active season: starts `startInDays` days from today at midnight (tomorrow by default) and
+     * ends `days` days after the start, inside the pre-booking window (ADR-015). `cookingDays` picks all seven days
+     * or Monday to Friday over the default Mon/Wed/Fri; `deadline` is the cancel deadline in days. Serial only:
+     * activating it displaces the singleton active season.
+     */
+    static readonly createActiveSeasonFromTomorrow = async (
+        context: BrowserContext,
+        testSalt: string,
+        {days, deadline, cookingDays, startInDays = 1}: {days: number, deadline?: number, cookingDays?: 'all' | 'weekdays', startInDays?: number}
+    ): Promise<{ season: Season, dinnerEvents: DinnerEventDisplay[] }> => {
+        const start = new Date()
+        start.setDate(start.getDate() + startInDays)
+        start.setHours(0, 0, 0, 0)
+        const end = new Date(start)
+        end.setDate(end.getDate() + days)
+        const cookingDayMaps = {
+            all: createDefaultWeekdayMap([true, true, true, true, true, true, true]),
+            weekdays: createDefaultWeekdayMap([true, true, true, true, true, false, false])
+        }
+        const created = await this.createSeasonWithDinnerEvents(context, testSalt, {
+            seasonDates: {start, end},
+            cookingDays: cookingDays === undefined ? this.defaultSeasonData.cookingDays : cookingDayMaps[cookingDays],
+            ticketIsCancellableDaysBefore: deadline ?? this.DEFAULT_BOOKING_DEADLINE_DAYS
+        })
+        await this.activateSeason(context, created.season.id!)
+        return created
+    }
+
+    /**
+     * A dinner of a cooking team with its chef: a team in `season` with `chefInhabitantId` as CHEF and a dinner of the
+     * team with that chef, returned as `{team, dinner}`, the team read back with its assignment and dinner. `dinner` sets
+     * the dinner's fields (`chefId: null` leaves the duty vacant); `day` places it on a free day of the season (`'free'`,
+     * a browser spec, Rule 3) or alone on that day (a serial spec), else on the date `dinner` names, tomorrow by default.
+     */
+    static readonly createCookingTeamWithChefAndDinner = async (
+        context: BrowserContext,
+        season: Season,
+        chefInhabitantId: number,
+        {teamName = 'ChefTeam', dinner = {}, day}: {teamName?: string, dinner?: Partial<Omit<DinnerEventCreate, 'seasonId' | 'cookingTeamId'>>, day?: 'free' | Date} = {}
+    ): Promise<{ team: CookingTeamDetail, dinner: DinnerEventDisplay }> => {
+        const created = await this.createCookingTeamForSeason(context, season.id!, teamName)
+        await this.assignMemberToTeam(context, created.id!, chefInhabitantId, TeamRoleSchema.enum.CHEF)
+        const dinnerData = {chefId: chefInhabitantId, ...dinner, cookingTeamId: created.id!}
+        const placeDinner = () => {
+            if (day === 'free') return DinnerEventFactory.createDinnerEventOnFreeDay(context, season, dinnerData)
+            if (day) return DinnerEventFactory.createDinnerEventAloneOnDay(context, season, day, dinnerData)
+            return DinnerEventFactory.createDinnerEvent(context, {...dinnerData, seasonId: season.id!})
+        }
+        const teamDinner = await placeDinner()
+        const team = await this.getCookingTeamById(context, created.id!)
+        return {team: team!, dinner: teamDinner}
     }
 
     /**
@@ -881,7 +930,7 @@ export class SeasonFactory {
         )
 
         // Assign members to team with different roles
-        const roles: TeamRole[] = ['CHEF', 'COOK', 'JUNIORHELPER']
+        const roles: TeamRole[] = [TeamRoleSchema.enum.CHEF, TeamRoleSchema.enum.COOK, TeamRoleSchema.enum.JUNIORHELPER]
         await Promise.all(
             householdWithInhabitants.inhabitants.map((inhabitant, index: number) =>
                 this.assignMemberToTeam(context, team.id!, inhabitant.id, roles[index % roles.length]!)
@@ -964,6 +1013,27 @@ export class SeasonFactory {
         return null
     }
 
+    static readonly updateTeamMember = async (
+        context: BrowserContext,
+        assignmentId: number,
+        data: CookingTeamAssignmentUpdate,
+        expectedStatus: number = 200
+    ): Promise<CookingTeamAssignment | null> => {
+        const response = await context.request.post(`${ADMIN_TEAM_ENDPOINT}/assignment/${assignmentId}`, {
+            headers: headers,
+            data
+        })
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            return CookingTeamAssignmentSchema.parse(await response.json())
+        }
+        return null
+    }
+
     static readonly removeMemberFromTeam = async (
         context: BrowserContext,
         _teamId: number,
@@ -976,42 +1046,84 @@ export class SeasonFactory {
         expect(status, 'Unexpected status').toBe(expectedStatus)
 
         if (expectedStatus === 200) {
-            return await response.json() as number
+            return DeletedCountSchema.parse(await response.json())
         }
         return null
     }
 
     /**
-     * Delete cooking team (for 1a test scenarios)
+     * Delete a cooking team, returns the deleted team's id
+     * Cleanup (afterAll): no expectedStatus - a team already gone counts as removed, any other status fails
+     * API tests: pass expectedStatus - the deletion answers it
      */
     static readonly deleteCookingTeam = async (
         context: BrowserContext,
         teamId: number,
-        expectedStatus: number = 200
-    ): Promise<CookingTeamDetail | null> => {
+        expectedStatus?: number
+    ): Promise<number | null> => {
         const response = await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/${teamId}`)
-
         const status = response.status()
-        expect(status, 'Unexpected status').toBe(expectedStatus)
-        if (expectedStatus === 200) {
-            return CookingTeamDetailSchema.parse(await response.json())
-        }
-        return null
+        const body = await response.text()
+        expect(expectedStatus === undefined ? [200, 404] : [expectedStatus], `Unexpected status deleting cooking team ${teamId}: ${body}`).toContain(status)
+        return status === 200 ? IdSchema.parse(JSON.parse(body)) : null
+    }
+
+    // === JOKER SLOT METHODS ===
+
+    static readonly defaultJokerSlot = (overrides: Partial<JokerSlotCreate> = {}): JokerSlotCreate => ({
+        role: RoleSchema.enum.COOK,
+        allocationPercentage: 100,
+        affinity: createDefaultWeekdayMap([true, false, true, false, false, false, false]),
+        startDate: this.tomorrow,
+        endDate: this.oneWeekFromTomorrow,
+        note: null,
+        ...overrides
+    })
+
+    static readonly createJokerSlot = async (
+        context: BrowserContext,
+        teamId: number,
+        slot: JokerSlotCreate = this.defaultJokerSlot(),
+        expectedStatus: number = 201
+    ): Promise<JokerSlot | null> => {
+        const response = await context.request.put(`${ADMIN_TEAM_ENDPOINT}/${teamId}/joker-slot`, {
+            headers: headers,
+            data: slot
+        })
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        return expectedStatus === 201 ? JokerSlotSchema.parse(await response.json()) : null
+    }
+
+    static readonly deleteJokerSlot = async (
+        context: BrowserContext,
+        teamId: number,
+        slotId: number,
+        expectedStatus: number = 200
+    ): Promise<number | null> => {
+        const response = await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/${teamId}/joker-slot/${slotId}`)
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        return expectedStatus === 200 ? IdSchema.parse(await response.json()) : null
     }
 
     static readonly getCookingTeamsForSeason = async (
         context: BrowserContext,
         seasonId: number
-    ): Promise<CookingTeamDetail[]> => {
+    ): Promise<CookingTeamDisplay[]> => {
         const response = await context.request.get(`${ADMIN_TEAM_ENDPOINT}?seasonId=${seasonId}`)
         expect(response.status()).toBe(200)
 
         const responseBody = await response.json()
         expect(Array.isArray(responseBody)).toBe(true)
-        return CookingTeamDetailSchema.array().parse(responseBody)
+        return CookingTeamDisplaySchema.array().parse(responseBody)
     }
 
-    static readonly getAllCookingTeams = async (context: BrowserContext): Promise<CookingTeamDetail[]> => {
+    static readonly getAllCookingTeams = async (context: BrowserContext): Promise<CookingTeamDisplay[]> => {
         const response = await context.request.get(ADMIN_TEAM_ENDPOINT)
         const status = response.status()
         const errorBody = status !== 200 ? await response.text() : ''
@@ -1019,7 +1131,7 @@ export class SeasonFactory {
 
         const responseBody = await response.json()
         expect(Array.isArray(responseBody)).toBe(true)
-        return CookingTeamDetailSchema.array().parse(responseBody)
+        return CookingTeamDisplaySchema.array().parse(responseBody)
     }
 
     static readonly assignTeamAffinities = async (context: BrowserContext, seasonId: number): Promise<{seasonId: number, teamCount: number, teams: CookingTeamDetail[]}> => {
@@ -1071,8 +1183,8 @@ export class SeasonFactory {
     /** A completed daily-maintenance run, as GET /api/admin/maintenance/job-run returns it */
     static readonly defaultJobRun = (overrides: Partial<JobRunDisplay> = {}): JobRunDisplay => ({
         id: 1,
-        jobType: 'DAILY_MAINTENANCE',
-        status: 'SUCCESS',
+        jobType: JobType.DAILY_MAINTENANCE,
+        status: JobStatus.SUCCESS,
         startedAt: new Date('2026-09-17T21:33:00Z'),
         completedAt: new Date('2026-09-17T21:33:04Z'),
         durationMs: 4500,

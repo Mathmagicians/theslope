@@ -58,15 +58,10 @@ test.describe('Public Billing Page', () => {
         // Verify share button exists (CSV link is in popover)
         await expect(page.getByRole('button', {name: 'Del links'})).toBeVisible()
 
-        // Test CSV endpoint directly (unauthenticated request)
-        const csvUrl = `/api/public/billing/${shareToken}/csv`
-        const response = await page.request.get(csvUrl)
-        expect(response.status()).toBe(200)
-
-        const contentType = response.headers()['content-type']
+        // Test CSV endpoint directly (unauthenticated request: the page's context has no session)
+        const {csv, contentType} = await BillingFactory.getBillingCsvByToken(page.context(), shareToken)
         expect(contentType).toContain('text/csv')
 
-        const csv = await response.text()
         const header = csv.split('\n')[0]
         expect(header).toContain('Kunde nr')
         expect(header).toContain('Adresse')

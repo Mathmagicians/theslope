@@ -13,6 +13,7 @@ import {CalendarDate, type DateValue, toZoned, toCalendarDateTime, Time} from '@
 export const DATE_SETTINGS =
     {
         DATE_MASK: 'dd/MM/yyyy',
+        DAY_MONTH_MASK: 'dd/MM',
         locale: da,
         localeString: 'da-DK',
         USER_MASK: 'dd/mm/åååå',
@@ -231,18 +232,6 @@ export function isNew(dateString: string | Date): boolean {
 }
 
 /**
- * Calculate current age from birth date
- * @param birthDate - Date of birth (Date, string, or null)
- * @returns Age in complete years, or null if birthDate is null/invalid
- */
-export function calculateAge(birthDate: Date | string | null): number | null {
-    if (!birthDate) return null
-    const birth = typeof birthDate === 'string' ? new Date(birthDate) : birthDate
-    if (!isValid(birth)) return null
-    return calculateAgeOnDate(birth, new Date())
-}
-
-/**
  * Format date with Danish 3-letter weekday abbreviation
  * @param date - Date to format
  * @returns Formatted string like "Man 15/11"
@@ -286,7 +275,7 @@ export function formatMonthYear(date: Date): string {
  */
 export function formatWeekRange(start: Date, end: Date): string {
     const weekNum = getISOWeek(start)
-    return `Uge ${weekNum}: ${formatDate(start, 'dd/MM')}-${formatDate(end, 'dd/MM')}`
+    return `Uge ${weekNum}: ${formatDate(start, DATE_SETTINGS.DAY_MONTH_MASK)}-${formatDate(end, DATE_SETTINGS.DAY_MONTH_MASK)}`
 }
 
 /**

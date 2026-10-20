@@ -28,7 +28,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const {SIZES, ICONS, TYPOGRAPHY, BUTTONS, COLOR, TEXT, BG, LAYOUTS} = useTheSlopeDesignSystem()
+const {SIZES, ICONS, TYPOGRAPHY, BUTTONS, COLOR, TEXT, BG, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
 
 // ========== RESIDENS ==========
 
@@ -80,7 +80,7 @@ const householdLabel = computed(() => `${props.household.shortName} (PBS ${props
         </div>
         <div>
           <span :class="TEXT.neutral[500]">Adresse</span>
-          <div class="font-medium">{{ household.address }} <UBadge :color="COLOR.neutral" variant="outline" :size="SIZES.small">Heynabo</UBadge></div>
+          <div class="font-medium">{{ household.address }} <UBadge :color="COLOR.neutral" :variant="NOISE.medium" :size="SIZES.small">Heynabo</UBadge></div>
         </div>
         <div>
           <span :class="TEXT.neutral[500]">Heynabo-ID</span>
@@ -100,7 +100,7 @@ const householdLabel = computed(() => `${props.household.shortName} (PBS ${props
           v-if="residency"
           :color="residency.color"
           :icon="residency.icon"
-          variant="subtle"
+          :variant="NOISE.subtle"
           :size="SIZES.small"
       >
         {{ residency.badgeText }}
@@ -139,7 +139,7 @@ const householdLabel = computed(() => `${props.household.shortName} (PBS ${props
           <UButton
               v-else
               :color="COLOR.primary"
-              variant="soft"
+              :variant="NOISE.soft"
               :size="SIZES.small"
               :loading="loading"
               @click="emit('move:inhabitant', row.original.id)"

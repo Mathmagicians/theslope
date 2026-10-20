@@ -21,7 +21,7 @@ export const KindSchema = z.string().regex(/^[A-Z][A-Z0-9_]{2,63}$/)
 /** Must stay in parity with ENVIRONMENTS in workers/common/cloudflare.ts (asserted in contract.unit.spec.ts). */
 export const EnvironmentSchema = z.enum(['local', 'dev', 'prod'])
 
-export const EmailAddressSchema = z.string().email().max(254)
+export const EmailAddressSchema = z.email().max(254)
 
 /** Danish msisdn without '+', normalized producer-side. */
 export const MsisdnSchema = z.string().regex(/^45\d{8}$/)
@@ -48,7 +48,7 @@ export const MetaSchema = z.object({
     dedupeKey: z.string().min(1).max(200),
     source: z.literal('theslope-app'),
     environment: EnvironmentSchema,
-    enqueuedAt: z.string().datetime(),
+    enqueuedAt: z.iso.datetime(),
     /** jobRunId / dinnerEventId / billingPeriod — never PII. */
     correlationId: z.string().max(100).optional(),
     userId: z.number().int().positive().optional()

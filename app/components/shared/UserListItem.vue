@@ -22,6 +22,8 @@
 │  showNames      - Display names (default: true)                 │
 │  useFullName    - Full name vs first name (default: false)      │
 │  label          - Group mode label, e.g., "bofæller"            │
+│  max            - Group faces before the overflow count         │
+│                   (default: COMPONENTS.avatar.max)              │
 │  linkToProfile  - Avatar links to Heynabo (default: true)       │
 │  icon           - Avatar fallback icon (default: ICONS.user)    │
 │                                                                 │
@@ -48,9 +50,10 @@ interface Props {
   icon?: string
   label?: string        // Group mode label, e.g. "bofæller"
   labelPlural?: string  // Plural form of label
+  max?: number
 }
 
-const {ICONS, COLOR, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, TYPOGRAPHY, TEXT, COMPONENTS, SIZES} = useTheSlopeDesignSystem()
 
 const props = withDefaults(defineProps<Props>(), {
   compact: false,
@@ -64,8 +67,11 @@ const props = withDefaults(defineProps<Props>(), {
   linkToProfile: true,
   icon: undefined,
   label: undefined,
-  labelPlural: undefined
+  labelPlural: undefined,
+  max: undefined
 })
+
+const userListItem = COMPONENTS.userListItem
 
 const avatarIcon = computed(() => props.icon ?? ICONS.user)
 
@@ -129,17 +135,12 @@ const groupNamesDisplay = computed(() => {
   return inhabitantsList.value.map(formatName).join(' · ')
 })
 
-// Responsive breakpoint injection - default keeps layout-less pages (e.g. print) warning-free
-const isMd = inject<Ref<boolean>>('isMd', ref(false))
-const getIsMd = computed((): boolean => isMd?.value ?? false)
-
-// Avatar display settings
-const maxAvatars = computed(() => getIsMd.value ? 5 : 3)
+// An explicit size is fixed; the defaults step up from md through CSS
 const avatarSize = computed(() => {
-  if (props.size) return props.size
-  if (props.compact) return getIsMd.value ? 'md' : 'sm'
-  return getIsMd.value ? 'lg' : 'md'
+  if (props.size) return {size: props.size, fit: ''}
+  return props.compact ? COMPONENTS.avatar.compact : COMPONENTS.avatar.regular
 })
+const avatarClass = computed(() => [avatarSize.value.fit, props.ringColor ? userListItem.ring(props.ringColor) : ''])
 
 // Heynabo integration
 const {getUserUrl} = useHeynabo()
@@ -147,27 +148,27 @@ const {getUserUrl} = useHeynabo()
 
 <template>
   <!-- GROUP MODE -->
-  <div v-if="isGroup" class="flex flex-col gap-1">
+  <div v-if="isGroup" :class="userListItem.group">
     <!-- Description (shows above) -->
     <span v-if="description && !compact" :class="[TYPOGRAPHY.finePrint, TEXT.muted]">{{ description }}</span>
 
     <!-- Avatars + Names row -->
-    <div class="flex items-center gap-2">
+    <div :class="userListItem.groupRow">
       <!-- Avatar group -->
-      <UAvatarGroup :max="maxAvatars" :size="avatarSize">
+      <UAvatarGroup :max="max ?? COMPONENTS.avatar.max" :size="avatarSize.size" :ui="{base: avatarSize.fit}">
         <template v-for="inhabitant in inhabitantsList" :key="inhabitant.heynaboId">
           <ULink
             v-if="linkToProfile"
             :to="getUserUrl(inhabitant.heynaboId)"
             target="_blank"
-            class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block"
+            :class="userListItem.link"
           >
             <UTooltip :text="`${inhabitant.name} ${inhabitant.lastName}`" :delay-duration="0">
               <UAvatar
                 :src="inhabitant.pictureUrl ?? undefined"
                 :alt="`${inhabitant.name} ${inhabitant.lastName}`"
                 :icon="avatarIcon"
-                :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
+                :class="avatarClass"
               />
             </UTooltip>
           </ULink>
@@ -176,53 +177,53 @@ const {getUserUrl} = useHeynabo()
               :src="inhabitant.pictureUrl ?? undefined"
               :alt="`${inhabitant.name} ${inhabitant.lastName}`"
               :icon="avatarIcon"
-              :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
+              :class="avatarClass"
             />
           </UTooltip>
         </template>
       </UAvatarGroup>
 
       <!-- Names (when showNames=true) -->
-      <span v-if="showNames && groupNamesDisplay" class="text-sm font-medium">
+      <span v-if="showNames && groupNamesDisplay" :class="TYPOGRAPHY.bodyTextMedium">
         {{ groupNamesDisplay }}
       </span>
 
       <!-- Count badge (when showNames=false) -->
-      <UBadge v-if="!showNames" size="sm" :color="COLOR.primary">
+      <UBadge v-if="!showNames" :size="SIZES.sm" :color="COLOR.primary">
         {{ count }}
       </UBadge>
     </div>
   </div>
 
   <!-- SINGLE MODE -->
-  <div v-else-if="singleInhabitant" class="flex items-start gap-3">
+  <div v-else-if="singleInhabitant" :class="userListItem.single">
     <!-- Avatar -->
     <ULink
       v-if="linkToProfile"
       :to="getUserUrl(singleInhabitant.heynaboId)"
       target="_blank"
-      class="hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block flex-shrink-0"
+      :class="userListItem.singleLink"
     >
       <UAvatar
         :src="singleInhabitant.pictureUrl ?? undefined"
         :alt="`${singleInhabitant.name} ${singleInhabitant.lastName}`"
-        :size="avatarSize"
+        :size="avatarSize.size"
         :icon="avatarIcon"
-        :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
+        :class="avatarClass"
       />
     </ULink>
     <UAvatar
       v-else
       :src="singleInhabitant.pictureUrl ?? undefined"
       :alt="`${singleInhabitant.name} ${singleInhabitant.lastName}`"
-      :size="avatarSize"
+      :size="avatarSize.size"
       :icon="avatarIcon"
-      :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
+      :class="avatarClass"
     />
 
     <!-- Name + badge slot -->
-    <div v-if="showNames" class="flex flex-col gap-1">
-      <span :class="compact ? 'text-sm font-medium' : 'font-semibold'">
+    <div v-if="showNames" :class="userListItem.nameStack">
+      <span :class="compact ? TYPOGRAPHY.bodyTextMedium : userListItem.name">
         {{ formatName(singleInhabitant) }}
       </span>
       <slot name="badge" :inhabitant="singleInhabitant" />

@@ -1,7 +1,7 @@
 import {defineEventHandler, readValidatedBody, createError, setResponseStatus} from 'h3'
 import {useNotificationValidation, type SenderEmitResult} from '~/composables/useNotificationValidation'
 import {notifyBillingPeriod} from '~~/server/utils/monthlyBillingService'
-import {getNotificationConfig} from '~~/server/utils/sender/config'
+import {emailChannel} from '~~/server/utils/sender/config'
 import {fetchBillingPeriodSummary} from '~~/server/data/prismaRepository'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
@@ -42,7 +42,7 @@ export default defineEventHandler(async (event): Promise<SenderEmitResult> => {
     }
 
     try {
-        const result = await notifyBillingPeriod(env.DB, env.SENDER, getNotificationConfig(event), summary)
+        const result = await notifyBillingPeriod(env.DB, emailChannel(env), summary)
         console.info(`${LOG} ${result.queued ? 'queued' : 'not queued'}`, {dedupeKey: result.dedupeKey, degraded: result.degraded})
         setResponseStatus(event, 200)
         return result

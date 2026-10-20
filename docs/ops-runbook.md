@@ -73,7 +73,7 @@ npx wrangler queues info theslope-sender-dev              # expect: Queue ID + 0
 
 ### App config `.env` (local `nuxt dev`)
 
-`runtimeConfig.notifications` holds the mailboxes, read from `NUXT_NOTIFICATIONS_*`: `.env` locally, worker secrets deployed. An unset mailbox makes the mail that needs it report `degraded` and log the variable name. Environment and site derive from `DEPLOY_URL` (`wrangler.toml` `[env.*.vars]`), locally from the request (`localhost:<port>` → `local`); sender address and display name derive from the environment.
+`runtimeConfig.notifications` holds the mailboxes, read from `NUXT_NOTIFICATIONS_*`: `.env` locally, worker secrets deployed. An unset mailbox makes the mail that needs it report `degraded` and log the variable name. Environment and site derive from `DEPLOY_URL`: `wrangler.toml` `[env.*.vars]` deployed, `npm run dev` sets `http://localhost:3000` locally, where mails land in the local queue. Unset, e-mail is off: each notification logs its kind and `DEPLOY_URL` and reports not sent. Sender address and display name derive from the environment.
 
 | Key | Local value |
 |-----|-------------|
@@ -412,6 +412,28 @@ make deploy-prod
 ```bash
 curl https://www.skraaningen.dk/api/public/health | jq '.version'
 # Should return: "0.1.4+oldsha"
+```
+
+---
+
+## Developer companion
+
+`developer.skraaningen.dk` serves the `gh-pages` branch through GitHub Pages: the manifest and the results per environment under `environments/`, the docs under `docs/`. Design: `docs/features/feature-proposal-developer-companion.md`; source: `developer/`.
+
+| Item | Value |
+|------|-------|
+| Workflow | `.github/workflows/developer.yml` — runs when the CI/CD pipeline completes and publishes the run that uploaded the artifact `deployment` (a deploy to `dev` or `prod`), and on `workflow_dispatch` |
+| Make targets | `make developer-resolve run=`, `make developer-assemble env= run= version= sha= [url=]`, `make developer-build`, `make developer-publish` |
+| Site build | `make developer-build` runs `npx nuxi generate developer` and copies `.output/developer/public/` into the `gh-pages` checkout |
+| Local preview | `npx nuxi dev developer` |
+| Pages setting | Source: branch `gh-pages`, folder `/ (root)`; custom domain `developer.skraaningen.dk` |
+| DNS (zone `skraaningen.dk`) | `CNAME developer → mathmagicians.github.io`, DNS only |
+
+Republish an environment from a CI/CD run:
+
+```bash
+gh workflow run developer.yml -f run_id=<id>   # <id>: the CI/CD run that deployed; the environment comes from its artifact
+gh run watch
 ```
 
 ---

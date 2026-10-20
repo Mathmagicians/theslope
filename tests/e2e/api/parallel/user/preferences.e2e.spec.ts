@@ -1,9 +1,13 @@
 import {test, expect} from '@playwright/test'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
-import type {Appearance, NotificationChannel} from '~/composables/useUserPreferenceValidation'
+import {useUserPreferenceValidation, type Appearance, type NotificationChannel} from '~/composables/useUserPreferenceValidation'
 
 const {validatedBrowserContext, memberValidatedBrowserContext} = testHelpers
+const {NotificationChannelSchema, PaletteSchema, TextScaleSchema, DEFAULT_APPEARANCE} = useUserPreferenceValidation()
+const Channel = NotificationChannelSchema.enum
+const Palette = PaletteSchema.enum
+const TextScale = TextScaleSchema.enum
 
 /**
  * POST /api/user/preferences and POST /api/user/notifications/test - the member's own settings.
@@ -16,7 +20,7 @@ test.describe('User preferences', () => {
     test.describe.configure({mode: 'serial'})
 
     let originalChannels: NotificationChannel[] = []
-    let originalAppearance: Appearance = {palette: 'default', textScale: 'normal'}
+    let originalAppearance: Appearance = {...DEFAULT_APPEARANCE}
     let originalPhone: string | null = null
     let memberUserId = 0
 
@@ -41,9 +45,9 @@ test.describe('User preferences', () => {
 
     test('GIVEN a member WHEN saving channels and appearance THEN the response and the session both carry them', async ({browser}) => {
         const context = await memberValidatedBrowserContext(browser)
-        const preferences = {
-            notificationChannels: ['EMAIL'] as NotificationChannel[],
-            appearance: {palette: 'high-contrast', textScale: 'large'} as Appearance
+        const preferences: {notificationChannels: NotificationChannel[], appearance: Appearance} = {
+            notificationChannels: [Channel.EMAIL],
+            appearance: {palette: Palette['high-contrast'], textScale: TextScale.large}
         }
 
         const updated = await UserFactory.updateMyPreferences(context, preferences)
@@ -58,48 +62,32 @@ test.describe('User preferences', () => {
 
     test('GIVEN a member WHEN saving only the appearance THEN the channels are untouched', async ({browser}) => {
         const context = await memberValidatedBrowserContext(browser)
-        await UserFactory.updateMyPreferences(context, {notificationChannels: ['EMAIL']})
+        await UserFactory.updateMyPreferences(context, {notificationChannels: [Channel.EMAIL]})
 
-        const updated = await UserFactory.updateMyPreferences(context, {
-            appearance: {palette: 'default', textScale: 'larger'}
-        })
+        const appearance = {palette: Palette.default, textScale: TextScale.larger}
+        const updated = await UserFactory.updateMyPreferences(context, {appearance})
 
-        expect(updated!.notificationChannels).toEqual(['EMAIL'])
-        expect(updated!.appearance).toEqual({palette: 'default', textScale: 'larger'})
+        expect(updated!.notificationChannels).toEqual([Channel.EMAIL])
+        expect(updated!.appearance).toEqual(appearance)
     })
 
+    // The endpoint's 400: a business rule, not a field rule (an unlisted palette is the useUserPreferenceValidation unit spec's)
     test('GIVEN a member without a phone WHEN asking for SMS THEN 400', async ({browser}) => {
         const memberContext = await memberValidatedBrowserContext(browser)
         const adminContext = await validatedBrowserContext(browser)
 
         await UserFactory.setPhone(adminContext, memberUserId, null)
         try {
-            await UserFactory.updateMyPreferences(memberContext, {notificationChannels: ['EMAIL', 'SMS']}, 400)
+            await UserFactory.updateMyPreferences(memberContext, {notificationChannels: [Channel.EMAIL, Channel.SMS]}, 400)
         } finally {
             await UserFactory.setPhone(adminContext, memberUserId, originalPhone)
         }
     })
 
-    test('GIVEN an unlisted palette WHEN saving THEN 400', async ({browser}) => {
-        const context = await memberValidatedBrowserContext(browser)
-
-        const response = await context.request.post('/api/user/preferences', {
-            headers: testHelpers.headers,
-            data: {appearance: {palette: 'neon', textScale: 'normal'}}
-        })
-
-        expect(response.status()).toBe(400)
-    })
-
     test('GIVEN no session WHEN saving preferences THEN 401', async ({browser}) => {
         const anonymous = await browser.newContext()
 
-        const response = await anonymous.request.post('/api/user/preferences', {
-            headers: testHelpers.headers,
-            data: {notificationChannels: ['EMAIL']}
-        })
-
-        expect(response.status()).toBe(401)
+        await UserFactory.updateMyPreferences(anonymous, {notificationChannels: [Channel.EMAIL]}, 401)
     })
 
     test('GIVEN a member WHEN asking for a test message THEN it is queued to the member', async ({browser}) => {
@@ -107,6 +95,6 @@ test.describe('User preferences', () => {
 
         const result = await UserFactory.sendTestNotification(context)
 
-        expect(result!.dedupeKey).toMatch(/^TEST:EMAIL:/)
+        expect(result!.dedupeKey).toMatch(new RegExp(`^TEST:${Channel.EMAIL}:`))
     })
 })

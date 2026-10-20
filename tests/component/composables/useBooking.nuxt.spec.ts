@@ -1,26 +1,49 @@
 import {describe, it, expect, beforeAll} from 'vitest'
-import {addDays, differenceInDays, nextDay, type Day} from 'date-fns'
-import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, type OrderDecisionInput} from '~/composables/useBooking'
+import {addDays, addYears} from 'date-fns'
+import {useBooking, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
-import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder} from '~/composables/useBookingValidation'
+import {dateToWeekDay} from '~/utils/season'
+import {useCoreValidation} from '~/composables/useCoreValidation'
+import {sumBy} from '~/utils/ledger'
+import {useBookingValidation, TicketState, SupplyState, type OrderDisplay, type DinnerMode, type DinnerState, type DesiredOrder, type OrderAuditAction, type OrderAuditChange, type OrderAuditSource, type OrderSnapshot, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
+import {BOOKING_WORDS} from '~/config/bookingWords'
+import {useHousehold} from '~/composables/useHousehold'
+import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
-import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
+import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
+import type {WeekDayMap} from '~/types/dateTypes'
 import appConfig from '~/app.config'
 
 // Shared test constant: days offset for dinners before cancellation deadline
-const FAR_FUTURE_DAYS = appConfig.theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
+const {OrderBucketSchema, BookingActionSchema, DinnerStateSchema: DinnerStateEnumSchema, OrderStateSchema: OrderStateEnumSchema, DinnerModeSchema: DinnerModeEnumSchema, TicketTypeSchema: TicketTypeEnumSchema} = useBookingValidation()
+const Bucket = OrderBucketSchema.enum
+const Action = BookingActionSchema.enum
+const DinnerStates = DinnerStateEnumSchema.enum
+const OrderStates = OrderStateEnumSchema.enum
+const DinnerModes = DinnerModeEnumSchema.enum
+const TicketTypes = TicketTypeEnumSchema.enum
+const {DINEIN, TAKEAWAY, NONE} = DinnerModeEnumSchema.enum
+const {BOOKED, RELEASED} = OrderStateEnumSchema.enum
+const {CANCELLED, CONSUMED} = DinnerStateEnumSchema.enum
+// The modes in the app's order, the order the selector shows and getBookingOptions keeps
+const ALL = DINNER_MODE_ORDER
 
-// Helper: days from today to next occurrence of weekday (0=Sun..6=Sat), at least minDaysAhead from now
+const FAR_FUTURE_DAYS = appConfig.theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
 const today = new Date()
-const daysToWeekday = (dayOfWeek: Day, minDaysAhead: number = FAR_FUTURE_DAYS): number =>
-    differenceInDays(nextDay(addDays(today, minDaysAhead), dayOfWeek), today)
+
+// The default season cooks three days a week: one dinner on each, ids 101, 102 and 103, far enough ahead that no deadline applies
+const farFutureDinners = DinnerEventFactory.dinnerEventsOnCookingDays(SeasonFactory.defaultSeason(), FAR_FUTURE_DAYS, 101)
+const farFutureDinnerIds = farFutureDinners.map(de => de.id)
+const {createWeekDayMapFromSelection: dinnerModeMapFromSelection, createDefaultWeekdayMap: dinnerModeMap} = useCoreValidation()
+// DINEIN on the weekdays of those dinners, NONE on the rest
+const dineInOnDinnerDays = dinnerModeMapFromSelection(farFutureDinners.map(de => dateToWeekDay(de.date)), DinnerModes.DINEIN, DinnerModes.NONE)
 
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
 type UseBookingT = ReturnType<typeof useBooking>
-type UseBookingUiT = ReturnType<typeof useBookingUi>
 let buildDinnerUrl: UseBookingT['buildDinnerUrl']
 let createHeynaboEventPayload: UseBookingT['createHeynaboEventPayload']
 let HEYNABO_EVENT_TEMPLATE: UseBookingT['HEYNABO_EVENT_TEMPLATE']
@@ -29,18 +52,15 @@ let getStepConfig: UseBookingT['getStepConfig']
 let getDinnerStepState: UseBookingT['getDinnerStepState']
 let getPastDinnerIds: UseBookingT['getPastDinnerIds']
 let prepareTransactionData: UseBookingT['prepareTransactionData']
-let buildOrderSnapshot: UseBookingT['buildOrderSnapshot']
 let getLockedFutureDinnerIds: UseBookingT['getLockedFutureDinnerIds']
 let computeLockStatus: UseBookingT['computeLockStatus']
-let countReleasedOrdersByDinner: UseBookingT['countReleasedOrdersByDinner']
-let getBookingOptions: UseBookingT['getBookingOptions']
+let buildGuestOrder: UseBookingT['buildGuestOrder']
 let groupGuestOrders: UseBookingT['groupGuestOrders']
 let getDayBillSummary: UseBookingT['getDayBillSummary']
-let hasChanges: UseBookingT['hasChanges']
-let countChanges: UseBookingT['countChanges']
-let formatActionPreview: UseBookingUiT['formatActionPreview']
-let ACTION_PREVIEW: UseBookingUiT['ACTION_PREVIEW']
+let getPowerChanges: UseBookingT['getPowerChanges']
+let getPowerConsensus: UseBookingT['getPowerConsensus']
 let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
+let resolveTicketPrice: ReturnType<typeof useTicket>['resolveTicketPrice']
 beforeAll(() => {
     ({
         buildDinnerUrl,
@@ -51,17 +71,15 @@ beforeAll(() => {
         getDinnerStepState,
         getPastDinnerIds,
         prepareTransactionData,
-        buildOrderSnapshot,
         getLockedFutureDinnerIds,
         computeLockStatus,
-        countReleasedOrdersByDinner,
-        getBookingOptions,
+        buildGuestOrder,
         groupGuestOrders,
         getDayBillSummary,
-        hasChanges,
-        countChanges
+        getPowerChanges,
+        getPowerConsensus
     } = useBooking());
-    ({formatActionPreview, ACTION_PREVIEW} = useBookingUi())
+    resolveTicketPrice = useTicket().resolveTicketPrice
 
     const {deadlinesForSeason} = useSeason()
     defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
@@ -134,25 +152,23 @@ describe('useBooking', () => {
                 expect(payload.name).toBe('Fællesspisning - Pasta Carbonara')
             })
 
-            it.each([
-                {field: 'status', expected: 'PUBLISHED'},
-                {field: 'public', expected: false},
-                {field: 'locationText', expected: 'Fælleshuset'},
-                {field: 'guestsAllowed', expected: true},
-                {field: 'takeAwayAllowed', expected: true},
-                {field: 'commentsAllowed', expected: true},
-                {field: 'visibleToEveryone', expected: true},
-                {field: 'vegetarian', expected: false}
-            ])('sets $field to $expected', ({field, expected}) => {
+            it('sets the constant event fields', () => {
                 const payload = createHeynaboEventPayload(futureDinnerEvent(), baseUrl)
-                expect(payload[field as keyof typeof payload]).toBe(expected)
-            })
-
-            it.each([
-                'type', 'groupId', 'locationId', 'minParticipants', 'maxParticipants'
-            ])('sets %s to null', (field) => {
-                const payload = createHeynaboEventPayload(futureDinnerEvent(), baseUrl)
-                expect(payload[field as keyof typeof payload]).toBeNull()
+                expect(payload).toMatchObject({
+                    status: 'PUBLISHED',
+                    public: false,
+                    locationText: 'Fælleshuset',
+                    guestsAllowed: true,
+                    takeAwayAllowed: true,
+                    commentsAllowed: true,
+                    visibleToEveryone: true,
+                    vegetarian: false,
+                    type: null,
+                    groupId: null,
+                    locationId: null,
+                    minParticipants: null,
+                    maxParticipants: null
+                })
             })
 
             it('sets price to zero for all categories', () => {
@@ -241,10 +257,10 @@ describe('useBooking', () => {
 
     describe('canCancelDinner', () => {
         it.each([
-            {state: 'SCHEDULED', expected: true, description: 'can cancel SCHEDULED dinners'},
-            {state: 'ANNOUNCED', expected: true, description: 'can cancel ANNOUNCED dinners'},
-            {state: 'CANCELLED', expected: false, description: 'cannot cancel already CANCELLED dinners'},
-            {state: 'CONSUMED', expected: false, description: 'cannot cancel CONSUMED dinners'}
+            {state: DinnerStates.SCHEDULED, expected: true, description: 'can cancel SCHEDULED dinners'},
+            {state: DinnerStates.ANNOUNCED, expected: true, description: 'can cancel ANNOUNCED dinners'},
+            {state: DinnerStates.CANCELLED, expected: false, description: 'cannot cancel already CANCELLED dinners'},
+            {state: DinnerStates.CONSUMED, expected: false, description: 'cannot cancel CONSUMED dinners'}
         ])('$description', ({state, expected}) => {
             const dinnerEvent = {state: state as keyof typeof DinnerState}
             expect(canCancelDinner(dinnerEvent)).toBe(expected)
@@ -269,35 +285,35 @@ describe('useBooking', () => {
         it.each([
             {
                 description: 'returns SCHEDULED for SCHEDULED state',
-                state: 'SCHEDULED',
+                state: DinnerStates.SCHEDULED,
                 date: futureDate(),
                 totalCost: 0,
                 expected: DinnerStepState.SCHEDULED
             },
             {
                 description: 'returns ANNOUNCED for ANNOUNCED with open booking',
-                state: 'ANNOUNCED',
+                state: DinnerStates.ANNOUNCED,
                 date: futureDate(),
                 totalCost: 0,
                 expected: DinnerStepState.ANNOUNCED
             },
             {
                 description: 'returns BOOKING_CLOSED for ANNOUNCED with closed booking',
-                state: 'ANNOUNCED',
+                state: DinnerStates.ANNOUNCED,
                 date: pastDate(),
                 totalCost: 0,
                 expected: DinnerStepState.BOOKING_CLOSED
             },
             {
                 description: 'returns GROCERIES_DONE for ANNOUNCED with closed booking and groceries done',
-                state: 'ANNOUNCED',
+                state: DinnerStates.ANNOUNCED,
                 date: pastDate(),
                 totalCost: 10000,
                 expected: DinnerStepState.GROCERIES_DONE
             },
             {
                 description: 'returns CONSUMED for CONSUMED state',
-                state: 'CONSUMED',
+                state: DinnerStates.CONSUMED,
                 date: pastDate(),
                 totalCost: 10000,
                 expected: DinnerStepState.CONSUMED
@@ -321,15 +337,15 @@ describe('useBooking', () => {
             const futureDate = new Date()
             futureDate.setDate(futureDate.getDate() + 14)
 
-            const dinnerEvent = {state: 'SCHEDULED' as const, date: futureDate, totalCost: 0}
+            const dinnerEvent = {state: DinnerStates.SCHEDULED, date: futureDate, totalCost: 0}
             expect(getStepConfig(dinnerEvent, defaultDeadlines).step).toBe(0)
         })
     })
 
     describe('State Constants', () => {
         it.each([
-            {constant: CONSUMABLE_DINNER_STATES, included: ['SCHEDULED', 'ANNOUNCED'], excluded: ['CANCELLED', 'CONSUMED']},
-            {constant: CLOSABLE_ORDER_STATES, included: ['BOOKED', 'RELEASED'], excluded: ['CANCELLED', 'CLOSED']}
+            {constant: CONSUMABLE_DINNER_STATES, included: [DinnerStates.SCHEDULED, DinnerStates.ANNOUNCED], excluded: [DinnerStates.CANCELLED, DinnerStates.CONSUMED]},
+            {constant: CLOSABLE_ORDER_STATES, included: [OrderStates.BOOKED, OrderStates.RELEASED], excluded: [OrderStates.CANCELLED, OrderStates.CLOSED]}
         ])('$constant includes correct states and excludes others', ({constant, included, excluded}) => {
             expect(constant).toHaveLength(2)
             included.forEach(s => expect(constant).toContain(s))
@@ -383,103 +399,92 @@ describe('useBooking', () => {
             const snapshot = OrderSnapshotSchema.parse(JSON.parse(results[0]!.orderSnapshot))
             expect(snapshot.isGuestTicket).toBe(isGuestTicket)
         })
-    })
 
-    describe('buildOrderSnapshot', () => {
-
-        // Base order data reused across tests
-        const baseOrder = () => ({
-            id: 42,
-            inhabitantId: 10,
-            dinnerEventId: 5,
-            ticketPriceId: 1,
-            priceAtBooking: 5500,
-            dinnerMode: 'DINEIN' as const,
-            state: 'BOOKED' as const,
-            inhabitant: {
-                id: 10,
-                heynaboId: 1001,
-                householdId: 7,
-                name: 'Anna',
-                lastName: 'Berg Larsen',
-                pictureUrl: null,
-                allergies: [
-                    {id: 1, inhabitantId: 10, allergyTypeId: 1, inhabitantComment: null, allergyType: {id: 1, name: 'Peanuts', description: 'Nut allergy', icon: '🥜'}, createdAt: new Date(), updatedAt: new Date()},
-                    {id: 2, inhabitantId: 10, allergyTypeId: 2, inhabitantComment: null, allergyType: {id: 2, name: 'Gluten', description: 'Wheat allergy', icon: '🌾'}, createdAt: new Date(), updatedAt: new Date()}
-                ]
-            }
-        })
-
-        it('builds snapshot with all fields from order', () => {
-            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
-
-            expect(snapshot.id).toBe(42)
-            expect(snapshot.inhabitantId).toBe(10)
-            expect(snapshot.dinnerEventId).toBe(5)
-            expect(snapshot.ticketPriceId).toBe(1)
-            expect(snapshot.priceAtBooking).toBe(5500)
-            expect(snapshot.dinnerMode).toBe('DINEIN')
-            expect(snapshot.state).toBe('BOOKED')
-        })
-
-        it('formats inhabitantNameWithInitials using formatNameWithInitials', () => {
-            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
-            // "Anna Berg Larsen" → "Anna B.L."
-            expect(snapshot.inhabitantNameWithInitials).toBe('Anna B.L.')
-        })
-
-        it('includes householdShortname from parameter', () => {
-            const snapshot = buildOrderSnapshot(baseOrder(), 'S31_2')
-            expect(snapshot.householdShortname).toBe('S31_2')
-        })
-
-        it('includes householdId from inhabitant', () => {
-            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
-            expect(snapshot.householdId).toBe(7)
-        })
-
-        it('extracts allergy type names from nested allergies', () => {
-            const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
-            expect(snapshot.allergies).toEqual(['Peanuts', 'Gluten'])
-        })
-
-        it('handles empty allergies array', () => {
-            const order = {...baseOrder(), inhabitant: {...baseOrder().inhabitant, allergies: []}}
-            const snapshot = buildOrderSnapshot(order, 'AR_7')
-            expect(snapshot.allergies).toEqual([])
-        })
-
-        it('handles undefined allergies (defaults to empty)', () => {
-            const order = {...baseOrder(), inhabitant: {...baseOrder().inhabitant, allergies: undefined}}
-            const snapshot = buildOrderSnapshot(order, 'AR_7')
-            expect(snapshot.allergies).toEqual([])
-        })
-
-        it.each([
-            {state: 'BOOKED' as const},
-            {state: 'RELEASED' as const},
-            {state: 'CLOSED' as const}
-        ])('preserves order state $state', ({state}) => {
-            const order = {...baseOrder(), state}
-            const snapshot = buildOrderSnapshot(order, 'AR_7')
-            expect(snapshot.state).toBe(state)
+        // The close keeps each order's mode: a released ticket nobody bought is billed with Ingen
+        it.each([DinnerModes.NONE, DinnerModes.TAKEAWAY])('an order closed with %s keeps its eating mode in the snapshot', (dinnerMode) => {
+            const order = {...OrderFactory.defaultOrderForTransaction('mode-test'), dinnerMode}
+            const snapshot = OrderSnapshotSchema.parse(JSON.parse(prepareTransactionData([order])[0]!.orderSnapshot))
+            expect(snapshot.dinnerMode).toBe(dinnerMode)
         })
     })
 
 })
 
 // =============================================================================
-// getNewOrderAction - Shared decision logic for new bookings
+// bookingOutcomes - what a bucket's orders do to the supply, in the order they execute
 // =============================================================================
 
-describe('getNewOrderAction', () => {
+// The season's default prices: an order at a ticket type holds that type's price
+const SEASON_PRICES = TicketFactory.defaultTicketPrices()
+const priceIdOf = (ticketType: typeof TicketTypes[keyof typeof TicketTypes]) => SEASON_PRICES.find(price => price.ticketType === ticketType)!.id!
+
+describe('bookingOutcomes', () => {
+    const order = OrderFactory.defaultDesiredOrder()
+
     it.each([
-        { canModify: true, hasReleased: false, expected: 'process' },
-        { canModify: true, hasReleased: true, expected: 'process' },  // before deadline always wins
-        { canModify: false, hasReleased: true, expected: 'claim' },
-        { canModify: false, hasReleased: false, expected: null }
-    ])('canModify=$canModify, hasReleased=$hasReleased → $expected', ({ canModify, hasReleased, expected }) => {
-        expect(getNewOrderAction(canModify, hasReleased)).toBe(expected)
+        {bucket: Bucket.create, ticketsForSale: 0, expected: Action.BOOK},
+        {bucket: Bucket.claim, ticketsForSale: 2, expected: Action.BUY},
+        {bucket: Bucket.claim, ticketsForSale: 0, expected: Action.QUEUE},
+        {bucket: Bucket.leave, ticketsForSale: 0, expected: Action.LEAVE},
+        {bucket: Bucket.requeue, ticketsForSale: 1, expected: Action.REQUEUE},
+        {bucket: Bucket.idempotent, ticketsForSale: 1, expected: Action.CHANGE_MODE},
+        {bucket: null, ticketsForSale: 1, expected: Action.CHANGE_MODE}
+    ])('one order: $bucket with $ticketsForSale for sale → $expected', ({bucket, ticketsForSale, expected}) => {
+        expect(bookingOutcomes(bucket, order, () => ({ticketsForSale}))).toEqual([{order, outcome: expected}])
+    })
+
+    // 3V 1B for sale on the dinner: each claim takes from what the claims before it left of its ticket type
+    const TicketType = TicketTypes
+    const forSaleByType: Partial<Record<typeof TicketType[keyof typeof TicketType], number>> = {[TicketType.ADULT]: 3, [TicketType.CHILD]: 1}
+    const claimAt = (ticketType: typeof TicketType[keyof typeof TicketType]) =>
+        OrderFactory.defaultDesiredOrder({ticketPriceId: priceIdOf(ticketType), isGuestTicket: true})
+    // The supply the scaffold hands a claim: the ticket type its price names and the dinner's tickets for sale of that type
+    const supplyOfClaim = (claim: DesiredOrder) => {
+        const ticketType = SEASON_PRICES.find(price => price.id === claim.ticketPriceId)!.ticketType
+        return {ticketType, ticketsForSale: forSaleByType[ticketType] ?? 0}
+    }
+
+    it.each([
+        {desc: 'ten adult guests: three buy the adult tickets, seven queue', claims: Array.from({length: 10}, () => TicketType.ADULT),
+            expected: [...Array.from({length: 3}, () => Action.BUY), ...Array.from({length: 7}, () => Action.QUEUE)]},
+        {desc: 'two adults and a child all buy', claims: [TicketType.ADULT, TicketType.CHILD, TicketType.ADULT], expected: [Action.BUY, Action.BUY, Action.BUY]},
+        {desc: 'two children share the one child ticket: the first buys, the second queues', claims: [TicketType.CHILD, TicketType.CHILD], expected: [Action.BUY, Action.QUEUE]}
+    ])('a list of claims, in order: $desc', ({claims, expected}) => {
+        const outcomes = bookingOutcomes(Bucket.claim, claims.map(claimAt), supplyOfClaim)
+        expect(outcomes.map(({outcome}) => outcome)).toEqual(expected)
+    })
+})
+
+// =============================================================================
+// actionOfUpdate, countTotals - the actions and totals of a scaffold run
+// =============================================================================
+
+describe('actionOfUpdate', () => {
+    const {OrderStateSchema} = useBookingValidation()
+    const OS = OrderStateSchema.enum
+    const existingOf = (state: typeof OS[keyof typeof OS], ticketPriceId = 1) =>
+        (OrderFactory.defaultOrder(undefined, {id: 10, state, ticketPriceId}))
+    const incomingOf = (state: typeof OS[keyof typeof OS], ticketPriceId = 1) =>
+        ({...OrderFactory.defaultDesiredOrder(), orderId: 10, state, ticketPriceId})
+
+    it.each([
+        {name: 'a booked ticket released', incoming: incomingOf(OS.RELEASED), existing: existingOf(OS.BOOKED), expected: Action.RELEASE},
+        {name: 'a released ticket booked again', incoming: incomingOf(OS.BOOKED), existing: existingOf(OS.RELEASED), expected: Action.RECLAIM},
+        {name: 'a booked ticket at another price', incoming: incomingOf(OS.BOOKED, 2), existing: existingOf(OS.BOOKED), expected: Action.CHANGE_PRICE},
+        {name: 'a released ticket at another price', incoming: incomingOf(OS.RELEASED, 2), existing: existingOf(OS.RELEASED), expected: Action.CHANGE_PRICE},
+        {name: 'a booked ticket in another mode', incoming: incomingOf(OS.BOOKED), existing: existingOf(OS.BOOKED), expected: Action.CHANGE_MODE}
+    ])('$name → $expected', ({incoming, existing, expected}) => {
+        expect(actionOfUpdate(incoming, existing)).toBe(expected)
+    })
+})
+
+describe('countTotals', () => {
+    it('counts the items per action, every action present', () => {
+        const item = (action: typeof Action[keyof typeof Action]) => ({...OrderFactory.defaultBookingResult(), action})
+
+        const totals = countTotals([item(Action.BOOK), item(Action.BOOK), item(Action.RELEASE)])
+
+        expect(totals).toEqual({...Object.fromEntries(BookingActionSchema.options.map(action => [action, 0])), [Action.BOOK]: 2, [Action.RELEASE]: 1})
     })
 })
 
@@ -521,8 +526,8 @@ describe('decideOrderAction', () => {
         existing: OrderDisplay | null,
         beforeCancellationDeadline = true,
         canEditMode = true,
-        hasReleasedTickets = false
-    ): OrderDecisionInput => ({ desired, existing, beforeCancellationDeadline, canEditMode, hasReleasedTickets })
+        existingEntry: TicketWaitlistDisplay | null = null
+    ): OrderDecisionInput => ({ desired, existing, existingEntry, beforeCancellationDeadline, canEditMode })
 
     describe('decision matrix (9 cases)', () => {
         it.each([
@@ -533,42 +538,28 @@ describe('decideOrderAction', () => {
                 existing: null,
                 beforeDeadline: true,
                 canEditMode: true,
-                hasReleased: false,
-                expectedBucket: 'create',
+                expectedBucket: Bucket.create,
                 expectedState: OrderState.BOOKED
             },
-            // Case 2: No orderId + NONE → null (skip)
+            // Case 2: No orderId + NONE → delete: the cancellation is recorded with no order to delete
             {
-                desc: 'no orderId + NONE → skip (null)',
+                desc: 'no orderId + NONE → delete (records the cancellation)',
                 desired: createDesired({ dinnerMode: DinnerMode.NONE }),
                 existing: null,
                 beforeDeadline: true,
                 canEditMode: true,
-                hasReleased: false,
-                expectedBucket: null,
-                expectedState: null
+                expectedBucket: Bucket.delete,
+                expectedState: undefined  // delete doesn't set state
             },
-            // Case 3: No orderId + eating mode + after deadline + released available → claim
+            // Case 3: No orderId + eating mode + after deadline → claim (a released ticket, else the queue)
             {
-                desc: 'no orderId + DINEIN + after deadline + hasReleased → claim BOOKED',
+                desc: 'no orderId + DINEIN + after deadline → claim BOOKED',
                 desired: createDesired({ dinnerMode: DinnerMode.DINEIN }),
                 existing: null,
                 beforeDeadline: false,
                 canEditMode: false,
-                hasReleased: true,
-                expectedBucket: 'claim',
+                expectedBucket: Bucket.claim,
                 expectedState: OrderState.BOOKED
-            },
-            // Case 4: No orderId + eating mode + after deadline + no released → null (no capacity)
-            {
-                desc: 'no orderId + DINEIN + after deadline + !hasReleased → skip (null)',
-                desired: createDesired({ dinnerMode: DinnerMode.DINEIN }),
-                existing: null,
-                beforeDeadline: false,
-                canEditMode: false,
-                hasReleased: false,
-                expectedBucket: null,
-                expectedState: null
             },
             // Case 5: orderId + NONE + before deadline → delete
             {
@@ -577,8 +568,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting(),
                 beforeDeadline: true,
                 canEditMode: true,
-                hasReleased: false,
-                expectedBucket: 'delete',
+                expectedBucket: Bucket.delete,
                 expectedState: undefined  // delete doesn't set state
             },
             // Case 6: orderId + NONE + after deadline → update (RELEASED)
@@ -588,8 +578,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting(),
                 beforeDeadline: false,
                 canEditMode: false,
-                hasReleased: false,
-                expectedBucket: 'update',
+                expectedBucket: Bucket.update,
                 expectedState: OrderState.RELEASED
             },
             // Case 7: orderId + RELEASED + eating mode → update (BOOKED, reclaim own)
@@ -599,8 +588,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ state: OrderState.RELEASED }),
                 beforeDeadline: false,
                 canEditMode: false,
-                hasReleased: false,
-                expectedBucket: 'update',
+                expectedBucket: Bucket.update,
                 expectedState: OrderState.BOOKED
             },
             // Case 8a: orderId + eating mode + unchanged BOOKED → idempotent (preserves state)
@@ -610,8 +598,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ dinnerMode: DinnerMode.DINEIN, ticketPriceId: 1, state: OrderState.BOOKED }),
                 beforeDeadline: true,
                 canEditMode: true,
-                hasReleased: false,
-                expectedBucket: 'idempotent',
+                expectedBucket: Bucket.idempotent,
                 expectedState: OrderState.BOOKED  // preserved from existing
             },
             // Case 8b: orderId + NONE unchanged on RELEASED → idempotent (preserves RELEASED state)
@@ -621,8 +608,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ dinnerMode: DinnerMode.NONE, ticketPriceId: 1, state: OrderState.RELEASED }),
                 beforeDeadline: false,  // after deadline
                 canEditMode: false,
-                hasReleased: false,
-                expectedBucket: 'idempotent',
+                expectedBucket: Bucket.idempotent,
                 expectedState: OrderState.RELEASED  // preserved from existing
             },
             // Case 9a: orderId + mode changed → update
@@ -632,8 +618,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ dinnerMode: DinnerMode.DINEIN }),
                 beforeDeadline: true,
                 canEditMode: true,
-                hasReleased: false,
-                expectedBucket: 'update',
+                expectedBucket: Bucket.update,
                 expectedState: OrderState.BOOKED
             },
             // Case 9b: orderId + price changed → update
@@ -643,8 +628,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ ticketPriceId: 1 }),
                 beforeDeadline: true,
                 canEditMode: true,
-                hasReleased: false,
-                expectedBucket: 'update',
+                expectedBucket: Bucket.update,
                 expectedState: OrderState.BOOKED
             },
             // Case 10: Price healing - RELEASED + NONE + price mismatch → update (not idempotent)
@@ -655,8 +639,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ state: OrderState.RELEASED, ticketPriceId: 1 }),
                 beforeDeadline: false,
                 canEditMode: false,
-                hasReleased: false,
-                expectedBucket: 'update',
+                expectedBucket: Bucket.update,
                 expectedState: OrderState.RELEASED
             },
             // Case 11: Price healing - RELEASED + NONE + null ticketPriceId → update
@@ -667,12 +650,11 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ state: OrderState.RELEASED, ticketPriceId: null as unknown as number }),
                 beforeDeadline: false,
                 canEditMode: false,
-                hasReleased: false,
-                expectedBucket: 'update',
+                expectedBucket: Bucket.update,
                 expectedState: OrderState.RELEASED
             }
-        ])('$desc', ({ desired, existing, beforeDeadline, canEditMode, hasReleased, expectedBucket, expectedState }) => {
-            const input = createInput(desired, existing, beforeDeadline, canEditMode, hasReleased)
+        ])('$desc', ({ desired, existing, beforeDeadline, canEditMode, expectedBucket, expectedState }) => {
+            const input = createInput(desired, existing, beforeDeadline, canEditMode)
             const result = decideOrderAction(input, DinnerMode, OrderState)
 
             if (expectedBucket === null) {
@@ -709,13 +691,57 @@ describe('decideOrderAction', () => {
         })
     })
 
-    describe('error cases', () => {
-        it('throws when orderId provided but existing not found', () => {
-            const desired = createDesired({ orderId: 999 })
-            const input = createInput(desired, null, true, true)
+    // The rows the rules matrix reads: a guest never added has nothing to cancel; after the mode deadline a claim and a
+    // reclaim land Spisesal, as an update keeps the held mode
+    describe('the rows the rules matrix reads', () => {
+        const decision = (label: string, input: OrderDecisionInput) => ({...input, label})
+        const guestIngen = decision('guest, no orderId, Ingen', createInput(createDesired({dinnerMode: NONE, isGuestTicket: true}), null))
+        const lockedClaim = decision('no orderId, Takeaway, after the deadline, mode locked', createInput(createDesired({dinnerMode: TAKEAWAY}), null, false, false))
+        const lockedReclaim = decision('a RELEASED order, Takeaway, mode locked', createInput(createDesired({orderId: 42, dinnerMode: TAKEAWAY}), createExisting({state: RELEASED, dinnerMode: NONE}), false, false))
 
-            expect(() => decideOrderAction(input, DinnerMode, OrderState))
-                .toThrow('Order 999 not found in existing orders')
+        it.each`
+            input             | bucket           | dinnerMode
+            ${guestIngen}     | ${null}          | ${null}
+            ${lockedClaim}    | ${Bucket.claim}  | ${DINEIN}
+            ${lockedReclaim}  | ${Bucket.update} | ${DINEIN}
+        `('$input.label → $bucket on $dinnerMode', ({input, bucket, dinnerMode}) => {
+            const result = decideOrderAction(input, DinnerMode, OrderState)
+
+            expect({bucket: result?.bucket ?? null, dinnerMode: result?.order.dinnerMode ?? null}).toEqual({bucket, dinnerMode})
+        })
+    })
+
+    describe('queue entry rows', () => {
+        const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 101, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 1})
+
+        it.each([
+            {desc: 'NONE on an entry → leave', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.NONE}), canEditMode: true, expectedBucket: Bucket.leave, expectedMode: DinnerMode.NONE},
+            {desc: 'another mode on an entry → requeue', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.TAKEAWAY}), canEditMode: true, expectedBucket: Bucket.requeue, expectedMode: DinnerMode.TAKEAWAY},
+            {desc: 'another price on an entry → requeue', desired: createDesired({waitlistEntryId: 7, ticketPriceId: 2}), canEditMode: true, expectedBucket: Bucket.requeue, expectedMode: DinnerMode.DINEIN},
+            {desc: 'the entry unchanged → idempotent', desired: createDesired({waitlistEntryId: 7}), canEditMode: true, expectedBucket: Bucket.idempotent, expectedMode: DinnerMode.DINEIN},
+            {desc: 'another mode after the mode deadline → idempotent, the wish keeps its mode', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.TAKEAWAY}), canEditMode: false, expectedBucket: Bucket.idempotent, expectedMode: DinnerMode.DINEIN}
+        ])('$desc', ({desired, canEditMode, expectedBucket, expectedMode}) => {
+            const result = decideOrderAction(createInput(desired, null, false, canEditMode, entry), DinnerMode, OrderState)
+
+            expect(result).toMatchObject({bucket: expectedBucket, order: {waitlistEntryId: 7, dinnerMode: expectedMode}})
+        })
+
+        it('skips a desired order naming an entry that left the queue (placed or swept)', () => {
+            const result = decideOrderAction(createInput(createDesired({waitlistEntryId: 7}), null, false, false), DinnerMode, OrderState)
+
+            expect(result).toBeNull()
+        })
+    })
+
+    // ADR-016: an orderId among no existing orders is stale (bought by another household, or deleted)
+    describe('stale orders', () => {
+        it.each([
+            {desc: 'an eating mode before the deadline', dinnerMode: DinnerMode.DINEIN, beforeDeadline: true},
+            {desc: 'Ingen after the deadline', dinnerMode: DinnerMode.NONE, beforeDeadline: false}
+        ])('skips $desc on an order no longer among the existing orders', ({dinnerMode, beforeDeadline}) => {
+            const result = decideOrderAction(createInput(createDesired({orderId: 999, dinnerMode}), null, beforeDeadline, true), DinnerMode, OrderState)
+
+            expect(result).toBeNull()
         })
     })
 })
@@ -764,35 +790,30 @@ describe('resolveDesiredOrdersToBuckets', () => {
             desc: 'all new orders (no existing)',
             desired: [createDesired(1, 101)],
             existing: [],
-            releasedKeys: new Set<string>(),
             expected: { create: 1, update: 0, delete: 0, idempotent: 0, claim: 0 }
         },
         {
             desc: 'existing matches incoming (idempotent)',
             desired: [createDesired(1, 101, { orderId: 42 })],
             existing: [createExisting(42, 1, 101)],
-            releasedKeys: new Set<string>(),
             expected: { create: 0, update: 0, delete: 0, idempotent: 1, claim: 0 }
         },
         {
             desc: 'mode change → update',
             desired: [createDesired(1, 101, { orderId: 42, dinnerMode: DinnerMode.TAKEAWAY })],
             existing: [createExisting(42, 1, 101, { dinnerMode: DinnerMode.DINEIN })],
-            releasedKeys: new Set<string>(),
             expected: { create: 0, update: 1, delete: 0, idempotent: 0, claim: 0 }
         },
         {
             desc: 'price change → update',
             desired: [createDesired(1, 101, { orderId: 42, ticketPriceId: 2 })],
             existing: [createExisting(42, 1, 101, { ticketPriceId: 1 })],
-            releasedKeys: new Set<string>(),
             expected: { create: 0, update: 1, delete: 0, idempotent: 0, claim: 0 }
         },
         {
             desc: 'NONE before deadline → delete',
             desired: [createDesired(1, 101, { orderId: 42, dinnerMode: DinnerMode.NONE })],
             existing: [createExisting(42, 1, 101)],
-            releasedKeys: new Set<string>(),
             expected: { create: 0, update: 0, delete: 1, idempotent: 0, claim: 0 }
         },
         {
@@ -802,10 +823,9 @@ describe('resolveDesiredOrdersToBuckets', () => {
                 createDesired(2, 101)  // no orderId = new
             ],
             existing: [createExisting(42, 1, 101)],
-            releasedKeys: new Set<string>(),
             expected: { create: 1, update: 0, delete: 0, idempotent: 1, claim: 0 }
         }
-    ])('$desc', ({ desired, existing, releasedKeys, expected }) => {
+    ])('$desc', ({ desired, existing, expected }) => {
         const result = resolveDesiredOrdersToBuckets(
             desired,
             existing,
@@ -813,8 +833,7 @@ describe('resolveDesiredOrdersToBuckets', () => {
             canModifyOrders,
             canEditDiningMode,
             DinnerMode,
-            OrderState,
-            releasedKeys
+            OrderState
         )
 
         expect(result.create).toHaveLength(expected.create)
@@ -824,7 +843,7 @@ describe('resolveDesiredOrdersToBuckets', () => {
         expect(result.claim).toHaveLength(expected.claim)
     })
 
-    describe('claim bucket (after deadline with released tickets)', () => {
+    describe('claim and queue buckets (after deadline)', () => {
         // Past date - after all deadlines
         const pastDate = new Date()
         pastDate.setDate(pastDate.getDate() + 1)  // Tomorrow = after deadline
@@ -833,45 +852,55 @@ describe('resolveDesiredOrdersToBuckets', () => {
         const cannotModify = () => false
         const cannotEdit = () => false
 
+        const regularEntry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 201, ticketPriceId: 1})
+
         it.each([
             {
-                desc: 'new order after deadline + released → claim',
-                desired: [createDesired(1, 201)],
-                existing: [],
-                releasedKeys: new Set(['201-1']),  // eventId-priceId
-                expected: { create: 0, claim: 1 }
+                desc: 'new orders after deadline → claim each, whatever is for sale',
+                desired: [createDesired(1, 201, { ticketPriceId: 1 }), createDesired(2, 201, { ticketPriceId: 2 })],
+                entries: [],
+                expected: { claim: 2, leave: 0, requeue: 0, idempotent: 0 }
             },
             {
-                desc: 'new order after deadline + no released → skip',
-                desired: [createDesired(1, 201)],
-                existing: [],
-                releasedKeys: new Set<string>(),
-                expected: { create: 0, claim: 0 }
+                desc: 'NONE on the entry it names → leave',
+                desired: [createDesired(1, 201, { waitlistEntryId: 7, dinnerMode: DinnerMode.NONE })],
+                entries: [regularEntry],
+                expected: { claim: 0, leave: 1, requeue: 0, idempotent: 0 }
             },
             {
-                desc: 'multiple new orders + released for one price → claim only matching',
-                desired: [
-                    createDesired(1, 201, { ticketPriceId: 1 }),
-                    createDesired(2, 201, { ticketPriceId: 2 })
-                ],
-                existing: [],
-                releasedKeys: new Set(['201-1']),  // Only price 1 has released
-                expected: { create: 0, claim: 1 }
+                desc: 'a new price on the entry it names → requeue',
+                desired: [createDesired(1, 201, { waitlistEntryId: 7, ticketPriceId: 2 })],
+                entries: [regularEntry],
+                expected: { claim: 0, leave: 0, requeue: 1, idempotent: 0 }
+            },
+            {
+                desc: 'a regular order for an inhabitant already queued → the entry, unchanged',
+                desired: [createDesired(1, 201)],
+                entries: [regularEntry],
+                expected: { claim: 0, leave: 0, requeue: 0, idempotent: 1 }
+            },
+            {
+                desc: 'a guest order of a queued member → claim, a guest is never the member\'s own entry',
+                desired: [createDesired(1, 201, { isGuestTicket: true })],
+                entries: [regularEntry],
+                expected: { claim: 1, leave: 0, requeue: 0, idempotent: 0 }
             }
-        ])('$desc', ({ desired, existing, releasedKeys, expected }) => {
+        ])('$desc', ({ desired, entries, expected }) => {
             const result = resolveDesiredOrdersToBuckets(
                 desired,
-                existing,
+                [],
                 pastEventById,
                 cannotModify,
                 cannotEdit,
                 DinnerMode,
                 OrderState,
-                releasedKeys
+                entries
             )
 
-            expect(result.create).toHaveLength(expected.create)
-            expect(result.claim).toHaveLength(expected.claim)
+            expect(result.create).toHaveLength(0)
+            expect({
+                claim: result.claim.length, leave: result.leave.length, requeue: result.requeue.length, idempotent: result.idempotent.length
+            }).toEqual(expected)
         })
     })
 
@@ -891,6 +920,182 @@ describe('resolveDesiredOrdersToBuckets', () => {
 })
 
 // =============================================================================
+// buildDesiredOrder - one booking intent → DesiredOrder (grid, preview, day view)
+// =============================================================================
+
+describe('buildDesiredOrder', () => {
+    const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+    const OrderState = OrderStateSchema.enum
+    const TicketType = TicketTypeSchema.enum
+
+    const ticketPrices = TicketFactory.defaultTicketPrices()
+    const priceIdOf = (ticketType: typeof TicketType[keyof typeof TicketType]) =>
+        ticketPrices.find(tp => tp.ticketType === ticketType)!.id!
+    const resolver: TicketPriceResolver = (birthDate, priceAtBooking, referenceDate) =>
+        resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
+
+    const EVENT_DAYS_AHEAD = 30
+    const dinnerEvent = DinnerEventFactory.dinnerEventAt(101, EVENT_DAYS_AHEAD)
+    const inhabitant = {...HouseholdFactory.defaultInhabitantData(), id: 1}
+    const intent: BookingIntent = {inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, dinnerMode: DinnerMode.TAKEAWAY}
+
+    const order = (id: number, isGuestTicket: boolean): OrderDisplay =>
+        OrderFactory.defaultOrder(undefined, {id, inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, ticketPriceId: priceIdOf(TicketType.ADULT), isGuestTicket})
+    const REGULAR_ID = 42
+    const GUEST_ID = 7
+
+    const build = (existingOrders: OrderDisplay[], inhabitants = [inhabitant], resolve = resolver) =>
+        buildDesiredOrder(intent, existingOrders, inhabitants, [dinnerEvent], resolve, OrderState.BOOKED)
+
+    it.each([
+        {desc: 'new booking', existingOrders: [], expectedOrderId: undefined},
+        {desc: 'existing regular order', existingOrders: [order(REGULAR_ID, false)], expectedOrderId: REGULAR_ID},
+        {desc: 'guest-only order on the event', existingOrders: [order(GUEST_ID, true)], expectedOrderId: undefined},
+        {desc: 'guest listed before regular order', existingOrders: [order(GUEST_ID, true), order(REGULAR_ID, false)], expectedOrderId: REGULAR_ID}
+    ])('$desc → orderId $expectedOrderId', ({existingOrders, expectedOrderId}) => {
+        expect(build(existingOrders)).toEqual({
+            ...intent,
+            ticketPriceId: priceIdOf(TicketType.ADULT),
+            isGuestTicket: false,
+            orderId: expectedOrderId,
+            state: OrderState.BOOKED
+        })
+    })
+
+    it('prices a new booking by age on the dinner date', () => {
+        // 11 today, 12 on the dinner date
+        const birthDate = addDays(addYears(today, -12), EVENT_DAYS_AHEAD - 10)
+        expect(build([], [{...inhabitant, birthDate}])?.ticketPriceId).toBe(priceIdOf(TicketType.ADULT))
+    })
+
+    it('returns null when no ticket price resolves', () => {
+        expect(build([], [inhabitant], () => undefined)).toBeNull()
+    })
+
+    describe('findRegularOrder', () => {
+        it.each([
+            {desc: 'no orders', orders: [], expectedId: undefined},
+            {desc: 'guest-only order', orders: [order(GUEST_ID, true)], expectedId: undefined},
+            {desc: 'guest listed before regular order', orders: [order(GUEST_ID, true), order(REGULAR_ID, false)], expectedId: REGULAR_ID}
+        ])('$desc → order $expectedId', ({orders, expectedId}) => {
+            expect(findRegularOrder(orders, inhabitant.id, dinnerEvent.id)?.id).toBe(expectedId)
+        })
+
+        it('finds the inhabitant\'s own queue entry, never a guest entry they booked', () => {
+            const entries = [true, false].map((isGuestTicket, index) =>
+                WaitlistFactory.defaultEntry({id: index + 1, inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, isGuestTicket}))
+            expect(findRegularOrder(entries, inhabitant.id, dinnerEvent.id)?.id).toBe(2)
+        })
+    })
+
+    describe('buildGuestDesiredOrder', () => {
+        const guestOrders = [order(GUEST_ID, true), order(GUEST_ID + 1, true)]
+        const buildGuest = (orders: OrderDisplay[], resolve = resolver) =>
+            buildGuestDesiredOrder({guestOrders: orders, dinnerMode: DinnerMode.TAKEAWAY}, resolve, OrderState.BOOKED)
+
+        it('turns a guest group of N orders into N guest DesiredOrders in the new mode', () => {
+            expect(buildGuest(guestOrders)).toEqual(guestOrders.map(o => ({
+                inhabitantId: inhabitant.id,
+                dinnerEventId: dinnerEvent.id,
+                dinnerMode: DinnerMode.TAKEAWAY,
+                ticketPriceId: priceIdOf(TicketType.ADULT),
+                isGuestTicket: true,
+                orderId: o.id,
+                state: OrderState.BOOKED
+            })))
+        })
+
+        it('prices a group whose ticket price is gone by its price at booking', () => {
+            const adultPrice = ticketPrices.find(tp => tp.ticketType === TicketType.ADULT)!.price
+            const orphaned = guestOrders.map(o => ({...o, ticketPriceId: null, priceAtBooking: adultPrice}))
+            expect(buildGuest(orphaned).map(o => o.ticketPriceId)).toEqual(guestOrders.map(() => priceIdOf(TicketType.ADULT)))
+        })
+
+        it.each([
+            {desc: 'an empty group', orders: [], resolve: resolver},
+            {desc: 'a group with no resolvable price', orders: guestOrders.map(o => ({...o, ticketPriceId: null})), resolve: () => undefined}
+        ])('returns [] for $desc', ({orders, resolve}) => {
+            expect(buildGuest(orders, resolve)).toEqual([])
+        })
+    })
+
+    describe('buildEntryDesiredOrder', () => {
+        it('names a queued guest\'s place at its held price, with the guest flag and the allergies', () => {
+            const queued = WaitlistFactory.defaultEntry({id: 28, inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, isGuestTicket: true, ticketPriceId: priceIdOf(TicketType.CHILD)})
+            const entry = {...queued, order: {...queued.order, allergyTypeIds: [3]}}
+
+            expect(buildEntryDesiredOrder({entry, dinnerMode: DinnerMode.NONE}, OrderState.BOOKED)).toEqual({
+                inhabitantId: inhabitant.id,
+                dinnerEventId: dinnerEvent.id,
+                dinnerMode: DinnerMode.NONE,
+                ticketPriceId: priceIdOf(TicketType.CHILD),
+                isGuestTicket: true,
+                allergyTypeIds: [3],
+                state: OrderState.BOOKED,
+                waitlistEntryId: entry.id
+            })
+        })
+    })
+
+    describe('power mode targets', () => {
+        const otherEvent = DinnerEventFactory.dinnerEventAt(102, EVENT_DAYS_AHEAD + 1)
+        const guestOn = (id: number, dinnerEventId: number, dinnerMode: DinnerMode): OrderDisplay =>
+            ({...order(id, true), dinnerEventId, dinnerMode})
+        const regular = {...order(REGULAR_ID, false), dinnerMode: DinnerMode.DINEIN}
+        const guest = guestOn(GUEST_ID, dinnerEvent.id, DinnerMode.DINEINLATE)
+        const orders = [regular, guest, guestOn(GUEST_ID + 1, otherEvent.id, DinnerMode.TAKEAWAY)]
+
+        it('targets every inhabitant and only the guest groups of the dinner', () => {
+            expect(getPowerChanges([inhabitant.id], orders, [], dinnerEvent.id, DinnerMode.TAKEAWAY)).toEqual({
+                intents: [{inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, dinnerMode: DinnerMode.TAKEAWAY}],
+                guestIntents: [{guestOrders: [guest], dinnerMode: DinnerMode.TAKEAWAY}],
+                entryIntents: []
+            })
+        })
+
+        it.each([
+            {desc: 'saved modes, guest differs', drafts: {}, expected: {value: DinnerMode.DINEIN, consensus: false}},
+            {desc: 'a guest draft matching the inhabitant', drafts: {guestGroup: () => DinnerMode.DINEIN}, expected: {value: DinnerMode.DINEIN, consensus: true}},
+            {desc: 'an inhabitant draft matching the guest', drafts: {inhabitant: () => DinnerMode.DINEINLATE}, expected: {value: DinnerMode.DINEINLATE, consensus: true}}
+        ])('consensus over $desc', ({drafts, expected}) => {
+            expect(getPowerConsensus([inhabitant.id], orders, [], dinnerEvent.id, drafts)).toEqual(expected)
+        })
+
+        describe('the household\'s places on the waiting list', () => {
+            // A second inhabitant without a ticket, queued on the dinner
+            const QUEUED_ID = 2
+            const place = (id: number, inhabitantId: number, dinnerMode: DinnerMode, isGuestTicket = false, dinnerEventId = dinnerEvent.id): TicketWaitlistDisplay =>
+                WaitlistFactory.defaultEntry({id, inhabitantId, dinnerEventId, isGuestTicket, dinnerMode})
+            const ownPlace = place(11, QUEUED_ID, DinnerMode.DINEIN)
+            const guestPlace = place(28, inhabitant.id, DinnerMode.DINEIN, true)
+
+            it('names a queued inhabitant\'s own place in their intent, reaches every other place on the dinner, and leaves a place its holder\'s order supersedes', () => {
+                const entries = [ownPlace, guestPlace, place(29, QUEUED_ID, DinnerMode.DINEIN, false, otherEvent.id), place(30, inhabitant.id, DinnerMode.DINEIN)]
+
+                expect(getPowerChanges([inhabitant.id, QUEUED_ID], orders, entries, dinnerEvent.id, DinnerMode.NONE)).toEqual({
+                    intents: [
+                        {inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, dinnerMode: DinnerMode.NONE},
+                        {inhabitantId: QUEUED_ID, dinnerEventId: dinnerEvent.id, dinnerMode: DinnerMode.NONE, waitlistEntryId: ownPlace.id}
+                    ],
+                    guestIntents: [{guestOrders: [guest], dinnerMode: DinnerMode.NONE}],
+                    entryIntents: [{entry: guestPlace, dinnerMode: DinnerMode.NONE}]
+                })
+            })
+
+            it.each([
+                {desc: 'queued wishes matching the ticket', entries: [ownPlace, guestPlace], drafts: {}, expected: {value: DinnerMode.DINEIN, consensus: true}},
+                {desc: 'a queued guest wishing another mode', entries: [ownPlace, place(28, inhabitant.id, DinnerMode.TAKEAWAY, true)], drafts: {}, expected: {value: DinnerMode.DINEIN, consensus: false}},
+                {desc: 'a queued inhabitant wishing another mode', entries: [place(11, QUEUED_ID, DinnerMode.TAKEAWAY), guestPlace], drafts: {}, expected: {value: DinnerMode.DINEIN, consensus: false}},
+                {desc: 'a draft on the queued guest matching the ticket', entries: [ownPlace, place(28, inhabitant.id, DinnerMode.TAKEAWAY, true)], drafts: {entry: () => DinnerMode.DINEIN}, expected: {value: DinnerMode.DINEIN, consensus: true}}
+            ])('consensus over $desc', ({entries, drafts, expected}) => {
+                expect(getPowerConsensus([inhabitant.id, QUEUED_ID], [regular], entries, dinnerEvent.id, drafts)).toEqual(expected)
+            })
+        })
+    })
+})
+
+// =============================================================================
 // generateDesiredOrdersFromPreferences - System mode generator tests
 // =============================================================================
 
@@ -898,176 +1103,53 @@ describe('generateDesiredOrdersFromPreferences', () => {
     const {DinnerModeSchema} = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
 
-    // Helper to create preferences
-    const createPreferences = (values: DinnerMode[]): WeekDayMap<DinnerMode> =>
-        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]}), {} as WeekDayMap<DinnerMode>)
-
     // Helper to create inhabitant
-    const createInhabitant = (id: number, prefs: DinnerMode[] | null) => ({
+    const createInhabitant = (id: number, dinnerPreferences: WeekDayMap<DinnerMode> | null) => ({
         ...HouseholdFactory.defaultInhabitantData(),
         id,
-        dinnerPreferences: prefs ? createPreferences(prefs) : null
+        dinnerPreferences
     })
-
-    // Test dinner events (Mon=101, Wed=102, Fri=103)
-    const dinnerEvents = [
-        DinnerEventFactory.dinnerEventAt(101, 30),  // Far future Monday
-        DinnerEventFactory.dinnerEventAt(102, 32),  // Far future Wednesday
-        DinnerEventFactory.dinnerEventAt(103, 34)   // Far future Friday
-    ]
-
-    // Mon, Wed, Fri DINEIN preferences
-    const allDineIn: DinnerMode[] = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
-    const allNone: DinnerMode[] = Array(7).fill(DinnerMode.NONE)
 
     const ticketPrices = SeasonFactory.defaultSeason().ticketPrices
 
     it('generates orders for all dinner events matching preferences', () => {
-        const inhabitants = [createInhabitant(1, allDineIn)]
+        const inhabitants = [createInhabitant(1, dineInOnDinnerDays)]
         const result = generateDesiredOrdersFromPreferences(
             inhabitants,
-            dinnerEvents,
+            farFutureDinners,
             [],
-            new Set(),  // confirmedKeys
+            [],  // queue entries
             new Set(),  // cancelledKeys
             ticketPrices
         )
 
-        expect(result).toHaveLength(3)
-        expect(result.map(o => o.dinnerEventId).sort()).toEqual([101, 102, 103])
+        expect(result).toHaveLength(farFutureDinners.length)
+        expect(result.map(o => o.dinnerEventId).sort()).toEqual(farFutureDinnerIds)
     })
 
-    describe('cancelledKeys handling', () => {
-        const {OrderStateSchema} = useBookingValidation()
-        const OrderState = OrderStateSchema.enum
+    it('a key with a user intent gets no booking', () => {
+        const inhabitants = [createInhabitant(1, dineInOnDinnerDays)]
 
-        it.each([
-            {desc: 'no existing → skip (dont recreate)', existingOrders: [], expectedEvents: [101, 103], expectedLength: 2},
-            // RELEASED orders in cancelledKeys are NOT generated - orphan detection handles them
-            {desc: 'RELEASED → skip (orphan detection handles)', existingOrders: [
-                OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: 1, dinnerEventId: 102, state: OrderState.RELEASED, ticketPriceId: 1})
-            ], expectedEvents: [101, 103], expectedLength: 2}
-        ])('$desc', ({existingOrders, expectedEvents, expectedLength}) => {
-            const inhabitants = [createInhabitant(1, allDineIn)]
-            const cancelledKeys = new Set(['1-102'])
+        const result = generateDesiredOrdersFromPreferences(inhabitants, farFutureDinners, [], [], new Set(['1-102']), ticketPrices)
 
-            const result = generateDesiredOrdersFromPreferences(
-                inhabitants,
-                dinnerEvents,
-                existingOrders,
-                new Set(),  // confirmedKeys
-                cancelledKeys,
-                ticketPrices
-            )
-
-            expect(result).toHaveLength(expectedLength)
-            expect(result.map(o => o.dinnerEventId).sort()).toEqual(expectedEvents)
-        })
-
-        it('RELEASED order not in generator result (orphan detection preserves it)', () => {
-            const inhabitants = [createInhabitant(1, allDineIn)]
-            const cancelledKeys = new Set(['1-102'])
-            const releasedOrder = OrderFactory.defaultOrder(undefined, {
-                id: 42, inhabitantId: 1, dinnerEventId: 102, state: OrderState.RELEASED, ticketPriceId: 1
-            })
-
-            const result = generateDesiredOrdersFromPreferences(
-                inhabitants,
-                dinnerEvents,
-                [releasedOrder],
-                new Set(),  // confirmedKeys
-                cancelledKeys,
-                ticketPrices
-            )
-
-            // RELEASED order in cancelledKeys is skipped - orphan detection in resolveOrdersFromPreferencesToBuckets handles it
-            const preserved = result.find(o => o.dinnerEventId === 102)
-            expect(preserved).toBeUndefined()
-        })
+        expect(result.map(o => o.dinnerEventId).sort()).toEqual(farFutureDinnerIds.filter(id => id !== 102))
     })
 
-    it('preserves guest orders (not managed by preferences)', () => {
-        const inhabitants = [createInhabitant(1, allNone)]  // NONE preferences
-        const existingGuestOrder = OrderFactory.defaultOrder(undefined, {
-            id: 99,
-            inhabitantId: 1,
-            dinnerEventId: 101,
-            isGuestTicket: true
-        })
+    // Ingen with no order is a wish only where the inhabitant holds a place of their own on the dinner's waiting list
+    it.each([
+        {desc: 'a place on the dinner\'s waiting list: a wish for Ingen', entries: [WaitlistFactory.defaultEntry({id: 21, inhabitantId: 1, dinnerEventId: 101})], wishes: [101]},
+        {desc: 'a guest\'s place: no wish', entries: [WaitlistFactory.defaultEntry({id: 21, inhabitantId: 1, dinnerEventId: 101, isGuestTicket: true})], wishes: []},
+        {desc: 'no place: no wish', entries: [], wishes: []}
+    ])('Ingen with no order, $desc', ({entries, wishes}) => {
+        const inhabitants = [createInhabitant(1, dinnerModeMap(DinnerMode.NONE))]
 
-        const result = generateDesiredOrdersFromPreferences(
-            inhabitants,
-            dinnerEvents,
-            [existingGuestOrder],
-            new Set(),  // confirmedKeys
-            new Set(),  // cancelledKeys
-            ticketPrices
-        )
+        const result = generateDesiredOrdersFromPreferences(inhabitants, farFutureDinners, [], entries, new Set(), ticketPrices)
 
-        // Should preserve guest order even with NONE preferences
-        const guestOrders = result.filter(o => o.isGuestTicket)
-        expect(guestOrders).toHaveLength(1)
-        expect(guestOrders[0]!.orderId).toBe(99)
-    })
-
-    it('preserves orphaned guest order with ticketPriceId 0 when no prices available', () => {
-        const inhabitants = [createInhabitant(1, allNone)]
-        const singleEvent = [dinnerEvents[0]!]  // Only event 101 (guest order's event)
-        const orphanedGuestOrder = {
-            ...OrderFactory.defaultOrder(undefined, {
-                id: 99,
-                inhabitantId: 1,
-                dinnerEventId: 101,
-                isGuestTicket: true,
-                priceAtBooking: 9999
-            }),
-            ticketPriceId: null
-        } as OrderDisplay
-
-        const result = generateDesiredOrdersFromPreferences(
-            inhabitants,
-            singleEvent,
-            [orphanedGuestOrder],
-            new Set(),  // confirmedKeys
-            new Set(),  // cancelledKeys
-            []  // Empty ticketPrices
-        )
-
-        const guestOrders = result.filter(o => o.isGuestTicket)
-        expect(guestOrders).toHaveLength(1)
-        expect(guestOrders[0]!.ticketPriceId).toBe(0)  // Fallback to 0 for idempotent
-        expect(guestOrders[0]!.orderId).toBe(99)
-    })
-
-    it('resolves orphaned guest order using priceAtBooking fallback', () => {
-        const inhabitants = [createInhabitant(1, allDineIn)]
-        const orphanedGuestOrder = {
-            ...OrderFactory.defaultOrder(undefined, {
-                id: 99,
-                inhabitantId: 1,
-                dinnerEventId: 101,
-                isGuestTicket: true,
-                priceAtBooking: 5000  // Matches ADULT price
-            }),
-            ticketPriceId: null
-        } as OrderDisplay
-
-        const result = generateDesiredOrdersFromPreferences(
-            inhabitants,
-            dinnerEvents,
-            [orphanedGuestOrder],
-            new Set(),  // confirmedKeys
-            new Set(),  // cancelledKeys
-            ticketPrices
-        )
-
-        const guestOrders = result.filter(o => o.isGuestTicket)
-        expect(guestOrders).toHaveLength(1)
-        expect(guestOrders[0]!.ticketPriceId).toBe(ticketPrices.find(tp => tp.price === 5000)!.id)
+        expect(result.map(o => [o.dinnerEventId, o.dinnerMode])).toEqual(wishes.map(dinnerEventId => [dinnerEventId, DinnerMode.NONE]))
     })
 
     it('enriches with orderId when existing order found', () => {
-        const inhabitants = [createInhabitant(1, allDineIn)]
+        const inhabitants = [createInhabitant(1, dineInOnDinnerDays)]
         const existingOrder = OrderFactory.defaultOrder(undefined, {
             id: 42,
             inhabitantId: 1,
@@ -1076,9 +1158,9 @@ describe('generateDesiredOrdersFromPreferences', () => {
 
         const result = generateDesiredOrdersFromPreferences(
             inhabitants,
-            dinnerEvents,
+            farFutureDinners,
             [existingOrder],
-            new Set(),  // confirmedKeys
+            [],  // queue entries
             new Set(),  // cancelledKeys
             ticketPrices
         )
@@ -1092,14 +1174,14 @@ describe('generateDesiredOrdersFromPreferences', () => {
 
         const result = generateDesiredOrdersFromPreferences(
             inhabitants,
-            dinnerEvents,
+            farFutureDinners,
             [],
-            new Set(),  // confirmedKeys
+            [],  // queue entries
             new Set(),  // cancelledKeys
             ticketPrices
         )
 
-        expect(result).toHaveLength(3)
+        expect(result).toHaveLength(farFutureDinners.length)
         result.forEach(o => expect(o.dinnerMode).toBe(DinnerMode.DINEIN))
     })
 
@@ -1113,8 +1195,8 @@ describe('generateDesiredOrdersFromPreferences', () => {
                 OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: 1, dinnerEventId: 101, state: OrderState.RELEASED})
             ], expectedState: OrderState.RELEASED}
         ])('$desc', ({existingOrders, expectedState}) => {
-            const inhabitants = [createInhabitant(1, allDineIn)]
-            const result = generateDesiredOrdersFromPreferences(inhabitants, dinnerEvents, existingOrders, new Set(), new Set(), ticketPrices)
+            const inhabitants = [createInhabitant(1, dineInOnDinnerDays)]
+            const result = generateDesiredOrdersFromPreferences(inhabitants, farFutureDinners, existingOrders, [], new Set(), ticketPrices)
 
             const order101 = result.find(o => o.dinnerEventId === 101)
             expect(order101?.state).toBe(expectedState)
@@ -1131,16 +1213,12 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
     const DinnerMode = DinnerModeSchema.enum
     const OrderState = OrderStateSchema.enum
 
-    // Helper to create preferences
-    const createPreferences = (values: DinnerMode[]): WeekDayMap<DinnerMode> =>
-        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]}), {} as WeekDayMap<DinnerMode>)
-
     // Helper to create inhabitant
-    const createInhabitant = (id: number, prefs: DinnerMode[] | null) => ({
+    const createInhabitant = (id: number, dinnerPreferences: WeekDayMap<DinnerMode> | null) => ({
         ...HouseholdFactory.defaultInhabitantData(),
         id,
         householdId: 1,
-        dinnerPreferences: prefs ? createPreferences(prefs) : null
+        dinnerPreferences
     })
 
     // Helper to create household
@@ -1169,21 +1247,14 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         dinnerEvents
     })
 
-    // Mon, Wed, Fri DINEIN preferences (WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'])
-    const allDineIn: DinnerMode[] = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
-    const allNone: DinnerMode[] = Array(7).fill(DinnerMode.NONE)
+    const allNone = dinnerModeMap(DinnerMode.NONE)
 
-    // Test season with far future dinner events on Mon(1), Wed(3), Fri(5) - matches allDineIn preference
-    const testSeason = seasonWith([
-        DinnerEventFactory.dinnerEventAt(101, daysToWeekday(1)),  // Monday
-        DinnerEventFactory.dinnerEventAt(102, daysToWeekday(3)),  // Wednesday
-        DinnerEventFactory.dinnerEventAt(103, daysToWeekday(5))   // Friday
-    ])
+    const testSeason = seasonWith(farFutureDinners)
 
     it.each([
         {
             desc: 'creates all orders for household with no existing',
-            inhabitants: [createInhabitant(1, allDineIn)],
+            inhabitants: [createInhabitant(1, dineInOnDinnerDays)],
             existing: [],
             confirmed: new Set<string>(),
             cancelled: new Set<string>(),
@@ -1191,7 +1262,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         },
         {
             desc: 'recognizes matching orders as idempotent',
-            inhabitants: [createInhabitant(1, allDineIn)],
+            inhabitants: [createInhabitant(1, dineInOnDinnerDays)],
             existing: [createOrder(1, 1, 101), createOrder(2, 1, 102), createOrder(3, 1, 103)],
             confirmed: new Set<string>(),
             cancelled: new Set<string>(),
@@ -1207,7 +1278,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         },
         {
             desc: 'cancelledKeys: dont recreate deleted order',
-            inhabitants: [createInhabitant(1, allDineIn)],
+            inhabitants: [createInhabitant(1, dineInOnDinnerDays)],
             existing: [],
             confirmed: new Set<string>(),
             cancelled: new Set(['1-102']),
@@ -1215,7 +1286,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         },
         {
             desc: 'cancelledKeys: RELEASED order preserved (not deleted as orphan)',
-            inhabitants: [createInhabitant(1, allDineIn)],
+            inhabitants: [createInhabitant(1, dineInOnDinnerDays)],
             existing: [createOrder(42, 1, 102, {state: OrderState.RELEASED})],
             confirmed: new Set<string>(),
             cancelled: new Set(['1-102']),
@@ -1231,7 +1302,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         },
         {
             desc: 'confirmedKeys: prefs=DINEIN + user booked TAKEAWAY → PRESERVE mode',
-            inhabitants: [createInhabitant(1, allDineIn)],
+            inhabitants: [createInhabitant(1, dineInOnDinnerDays)],
             existing: [createOrder(1, 1, 101, {dinnerMode: DinnerMode.TAKEAWAY}), createOrder(2, 1, 102), createOrder(3, 1, 103)],
             confirmed: new Set(['1-101']),
             cancelled: new Set<string>(),
@@ -1311,6 +1382,16 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         })
     })
 
+    it('keeps a guest ticket whose price row is gone as it is, never an update', () => {
+        const household = createHousehold(1, [createInhabitant(1, allNone)])
+        const guest = {...createOrder(99, 1, 101, {isGuestTicket: true, priceAtBooking: 5000}), ticketPriceId: null}
+
+        const result = resolveOrdersFromPreferencesToBuckets(testSeason, household, [guest], new Set(), new Set())
+
+        expect(result.idempotent.map(order => order.orderId)).toEqual([99])
+        expect(result.update).toEqual([])
+    })
+
     it('preserves guest orders (not managed by preferences)', () => {
         const household = createHousehold(1, [createInhabitant(1, allNone)])  // NONE preferences
         const guestOrder = createOrder(99, 1, 101, { isGuestTicket: true })
@@ -1328,46 +1409,74 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         expect(result.delete).toHaveLength(0)
     })
 
-    describe('claim bucket (preference change after deadline with released tickets)', () => {
+    describe('system mode after the deadline', () => {
         // Tomorrow = after deadline. Use DINEIN for ALL days so weekday doesn't matter
         const tomorrowDinner = DinnerEventFactory.dinnerEventAt(301, 1)
         const pastDeadlineSeason = seasonWith([tomorrowDinner])
-        const allDaysPrefs: DinnerMode[] = Array(7).fill(DinnerMode.DINEIN)
-        const noDaysPrefs: DinnerMode[] = Array(7).fill(DinnerMode.NONE)
+        const allDaysPrefs = dinnerModeMap(DinnerMode.DINEIN)
+        const noDaysPrefs = dinnerModeMap(DinnerMode.NONE)
+        // The inhabitant's place on the dinner's waiting list, held for a dine-in at the adult price
+        const queued = WaitlistFactory.defaultEntry({id: 21, inhabitantId: 1, dinnerEventId: tomorrowDinner.id, ticketPriceId: 4})
 
+        // A preference decides like a member's change: with no order it buys or queues, on a place it leaves or requeues
         it.each([
             {
-                desc: 'preference change to DINEIN + released tickets → claim',
+                desc: 'a preference to eat with no order claims',
                 prefs: allDaysPrefs,
-                releasedKeys: new Set(['301-4']),  // eventId-priceId (4 = ADULT)
-                expected: { create: 0, claim: 1 }
+                entries: [],
+                expected: {claim: [expect.objectContaining({inhabitantId: 1, dinnerEventId: tomorrowDinner.id, dinnerMode: DinnerMode.DINEIN, state: OrderState.BOOKED})], leave: [], requeue: []}
             },
             {
-                desc: 'preference change to DINEIN + no released tickets → skip (no capacity)',
-                prefs: allDaysPrefs,
-                releasedKeys: new Set<string>(),
-                expected: { create: 0, claim: 0 }
-            },
-            {
-                desc: 'preference stays NONE + released tickets → no action',
+                desc: 'Ingen on a dinner the inhabitant queues for leaves the waiting list',
                 prefs: noDaysPrefs,
-                releasedKeys: new Set(['301-4']),
-                expected: { create: 0, claim: 0 }
+                entries: [queued],
+                expected: {claim: [], leave: [expect.objectContaining({inhabitantId: 1, waitlistEntryId: queued.id})], requeue: []}
+            },
+            {
+                desc: 'another eating mode on a dinner the inhabitant queues for requeues the place',
+                prefs: dinnerModeMap(DinnerMode.TAKEAWAY),
+                entries: [queued],
+                expected: {claim: [], leave: [], requeue: [expect.objectContaining({waitlistEntryId: queued.id, dinnerMode: DinnerMode.TAKEAWAY})]}
+            },
+            {
+                desc: 'Ingen with no order and no place → nothing',
+                prefs: noDaysPrefs,
+                entries: [],
+                expected: {claim: [], leave: [], requeue: []}
             }
-        ])('$desc', ({ prefs, releasedKeys, expected }) => {
+        ])('$desc', ({prefs, entries, expected}) => {
             const household = createHousehold(1, [createInhabitant(1, prefs)])
 
-            const result = resolveOrdersFromPreferencesToBuckets(
-                pastDeadlineSeason,
-                household,
-                [],  // No existing orders
-                new Set(),  // confirmedKeys
-                new Set(),  // cancelledKeys
-                releasedKeys
-            )
+            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, household, [], new Set(), new Set(), entries)
 
-            expect(result.create).toHaveLength(expected.create)
-            expect(result.claim).toHaveLength(expected.claim)
+            expect({claim: result.claim, leave: result.leave, requeue: result.requeue}).toEqual(expected)
+            expect(result.create).toEqual([])
+        })
+
+        // A guest ticket booked on a person is not the person's own ticket, in either order of the list
+        it.each([
+            {desc: 'the guest ticket listed last', guestLast: true},
+            {desc: 'the guest ticket listed first', guestLast: false}
+        ])('GIVEN a person\'s own ticket and a guest ticket on them, $desc, WHEN the preference turns Ingen THEN the own ticket releases and the guest ticket stays', ({guestLast}) => {
+            const household = createHousehold(1, [createInhabitant(1, noDaysPrefs)])
+            const own = createOrder(10, 1, tomorrowDinner.id)
+            const guest = createOrder(11, 1, tomorrowDinner.id, {isGuestTicket: true})
+
+            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, household, guestLast ? [own, guest] : [guest, own], new Set(), new Set())
+
+            expect(result.update).toEqual([expect.objectContaining({orderId: own.id, state: OrderState.RELEASED})])
+            expect(result.idempotent).toEqual([expect.objectContaining({orderId: guest.id, isGuestTicket: true})])
+            expect(result.delete).toEqual([])
+        })
+
+        it('GIVEN two guest tickets on one person on a dinner THEN both stay as they are', () => {
+            const household = createHousehold(1, [createInhabitant(1, noDaysPrefs)])
+            const guests = [11, 12].map(id => createOrder(id, 1, tomorrowDinner.id, {isGuestTicket: true}))
+
+            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, household, guests, new Set(), new Set())
+
+            expect(result.idempotent.map(order => order.orderId)).toEqual([11, 12])
+            expect(result.delete).toEqual([])
         })
     })
 })
@@ -1377,9 +1486,6 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
 // =============================================================================
 
 describe('Lock Status Utilities', () => {
-    const {OrderStateSchema} = useBookingValidation()
-    const OrderState = OrderStateSchema.enum
-
     // Test helpers
     const makeEvent = (id: number, daysFromNow: number) => ({
         id,
@@ -1446,70 +1552,61 @@ describe('Lock Status Utilities', () => {
         })
     })
 
-    describe('countReleasedOrdersByDinner', () => {
-        describe.each([
-            {
-                name: 'counts released orders by dinner',
-                orders: [
-                    {dinnerEventId: 1, state: OrderState.RELEASED},
-                    {dinnerEventId: 1, state: OrderState.RELEASED},
-                    {dinnerEventId: 2, state: OrderState.RELEASED},
-                    {dinnerEventId: 1, state: OrderState.BOOKED}
-                ],
-                expected: new Map([[1, 2], [2, 1]])
-            },
-            {
-                name: 'returns empty map when no released orders',
-                orders: [
-                    {dinnerEventId: 1, state: OrderState.BOOKED},
-                    {dinnerEventId: 2, state: OrderState.CLOSED}
-                ],
-                expected: new Map()
-            },
-            {
-                name: 'handles empty array',
-                orders: [],
-                expected: new Map()
-            }
-        ])('$name', ({orders, expected}) => {
-            it('returns correct counts', () => {
-                const result = countReleasedOrdersByDinner(orders as OrderDisplay[])
-                expect(result).toEqual(expected)
-            })
-        })
-    })
-
     describe('computeLockStatus', () => {
-        // Helper to create ReleasedTicketCounts
-        const counts = (total: number, formatted: string) => ({ total, formatted })
-        const emptyCount = counts(0, '-')
+        // The released counts the store reads, and the ReleasedTicketCounts a locked dinner carries: its tickets for sale
+        // beside its waiting list
+        const released = (total: number, formatted: string, byType: Partial<Record<typeof TicketTypes[keyof typeof TicketTypes], number>>) => ({ total, formatted, byType })
+        const queue = (queued: number, queuedFormatted: string, queuedByType: Partial<Record<typeof TicketTypes[keyof typeof TicketTypes], number>> = {}) => ({ queued, queuedFormatted, queuedByType })
+        const counts = (supply = released(0, '-', {}), waitlist = queue(0, '-')) => ({ ...supply, ...waitlist })
+        const emptyCount = counts()
+        const adults = (count: number) => released(count, `${count}V`, {[TicketTypes.ADULT]: count})
+        const oneChild = released(1, '1B', {[TicketTypes.CHILD]: 1})
 
         describe.each([
             {
                 name: 'marks locked dinners with released count',
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5), makeEvent(3, 10)],
                 lockedDays: 7,
-                releasedCounts: new Map([[1, counts(3, '3V')], [2, counts(1, '1B')]]),
-                expected: new Map([[1, counts(3, '3V')], [2, counts(1, '1B')]])
+                releasedCounts: new Map([[1, adults(3)], [2, oneChild]]),
+                queues: undefined,
+                expected: new Map([[1, counts(adults(3))], [2, counts(oneChild)]])
             },
             {
                 name: 'defaults to empty count when no released count provided',
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5)],
                 lockedDays: 7,
                 releasedCounts: undefined,
+                queues: undefined,
                 expected: new Map([[1, emptyCount], [2, emptyCount]])
             },
             {
                 name: 'excludes non-locked dinners',
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 10)],
                 lockedDays: 5,
-                releasedCounts: new Map([[1, counts(2, '2V')], [2, counts(5, '5V')]]),
-                expected: new Map([[1, counts(2, '2V')]])
+                releasedCounts: new Map([[1, adults(2)], [2, adults(5)]]),
+                queues: undefined,
+                expected: new Map([[1, counts(adults(2))]])
+            },
+            {
+                name: 'carries the waiting list of a locked dinner, counted by ticket type',
+                dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5), makeEvent(3, 10)],
+                lockedDays: 7,
+                releasedCounts: undefined,
+                queues: new Map([[1, queue(3, '2V 1B', {[TicketTypes.ADULT]: 2, [TicketTypes.CHILD]: 1})], [3, queue(4, '4V', {[TicketTypes.ADULT]: 4})]]),
+                expected: new Map([[1, counts(undefined, queue(3, '2V 1B', {[TicketTypes.ADULT]: 2, [TicketTypes.CHILD]: 1}))], [2, emptyCount]])
+            },
+            {
+                name: 'carries the tickets for sale and the waiting list of a locked dinner side by side',
+                dinnerEvents: [makeEvent(1, 2)],
+                lockedDays: 7,
+                releasedCounts: new Map([[1, adults(4)]]),
+                queues: new Map([[1, queue(1, '1B', {[TicketTypes.CHILD]: 1})]]),
+                expected: new Map([[1, counts(adults(4), queue(1, '1B', {[TicketTypes.CHILD]: 1}))]])
             }
-        ])('$name', ({dinnerEvents, lockedDays, releasedCounts, expected}) => {
+        ])('$name', ({dinnerEvents, lockedDays, releasedCounts, queues, expected}) => {
             it('returns correct lock status map', () => {
                 const deadlines = makeDeadlines(lockedDays)
-                const result = computeLockStatus(dinnerEvents, deadlines, releasedCounts)
+                const result = computeLockStatus(dinnerEvents, deadlines, releasedCounts, queues)
                 expect(result).toEqual(expected)
             })
         })
@@ -1517,55 +1614,127 @@ describe('Lock Status Utilities', () => {
 })
 
 // =============================================================================
-// getBookingOptions - UI counterpart to decideOrderAction
+// getBookingOptions - the modes a row may pick: the ones the decision matrix lands as that mode
 // =============================================================================
 
-describe('getBookingOptions', () => {
-    const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema} = useBookingValidation()
-    const DM = DinnerModeSchema.enum
-    const OS = OrderStateSchema.enum
-    const DS = DinnerStateSchema.enum
+describe('getBookingOptions — the rules matrix', () => {
+    const EATING = ALL.filter(mode => mode !== NONE)
+    const windowDays = appConfig.theslope.prebookingWindowDays
+    type Dinner = ReturnType<typeof DinnerEventFactory.dinnerEventAt>
+    type RowKind = {label: string, of: (dinner: Dinner) => BookingRow}
+    type ColumnSpec = {daysAhead: number, canModifyOrders: boolean, canEditDiningMode: boolean}
 
-    const ALL = [DM.DINEIN, DM.DINEINLATE, DM.TAKEAWAY, DM.NONE]
-    const EATING = [DM.DINEIN, DM.DINEINLATE, DM.TAKEAWAY]  // All modes except NONE (for claims)
-    const DINEIN_NONE = [DM.DINEIN, DM.NONE]
-    const DINEIN_ONLY = [DM.DINEIN]
-    const NONE_ONLY = [DM.NONE]
-    const EMPTY: typeof ALL = []
+    const inhabitant = {...HouseholdFactory.defaultInhabitantData(), id: 1}
+    const adultPriceId = priceIdOf(TicketTypes.ADULT)
+    const resolver: TicketPriceResolver = (birthDate, priceAtBooking, referenceDate) =>
+        resolveTicketPrice(birthDate, priceAtBooking, SEASON_PRICES, referenceDate)
 
-    it.each([
-        // Cancelled/consumed dinner - no booking possible
-        {desc: 'CANCELLED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CANCELLED, hasReleased: false, inResidency: true, expectedModes: EMPTY, expectedAction: null},
-        {desc: 'CONSUMED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CONSUMED, hasReleased: false, inResidency: true, expectedModes: EMPTY, expectedAction: null},
+    // Each row's candidate is the save's builder bound to the row: a mode is open when the save of it lands as that mode
+    const ownOrder = (dinner: Dinner, state: OrderState, dinnerMode: DinnerMode): OrderDisplay =>
+        OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, ticketPriceId: adultPriceId, dinnerMode, state})
+    const inhabitantRow = (dinner: Dinner, order: OrderDisplay | null): BookingRow => ({
+        order,
+        waitlistEntry: null,
+        candidate: dinnerMode => buildDesiredOrder({inhabitantId: inhabitant.id, dinnerEventId: dinner.id, dinnerMode}, order ? [order] : [], [inhabitant], [dinner], resolver, BOOKED)
+    })
+    const entryRow = (dinner: Dinner, wish: DinnerMode): BookingRow => {
+        const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, dinnerMode: wish, ticketPriceId: adultPriceId})
+        return {order: null, waitlistEntry: entry, candidate: dinnerMode => buildEntryDesiredOrder({entry, dinnerMode}, BOOKED)}
+    }
+    const guestRow = (dinner: Dinner, held: DinnerMode): BookingRow => {
+        const guest = OrderFactory.defaultOrder(undefined, {id: 43, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, ticketPriceId: adultPriceId, dinnerMode: held, state: BOOKED, isGuestTicket: true})
+        return {order: guest, waitlistEntry: null, candidate: dinnerMode => buildGuestDesiredOrder({guestOrders: [guest], dinnerMode}, resolver, BOOKED)[0] ?? null}
+    }
+    const guestAddRow = (dinner: Dinner): BookingRow =>
+        ({order: null, waitlistEntry: null, candidate: dinnerMode => buildGuestOrder(inhabitant.id, dinner.id, adultPriceId, dinnerMode)})
+    const rowKind = (label: string, of: RowKind['of']): RowKind => ({label, of})
 
-        // BOOKED order
-        {desc: 'BOOKED + canEdit=true', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'BOOKED + canEdit=false', orderState: OS.BOOKED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: NONE_ONLY, expectedAction: 'process'},
+    // A column's dinner lies `daysAhead` days from today; its context answers the column's deadlines
+    const dinnerAt = (daysAhead: number, state?: DinnerState): Dinner => {
+        const dinner = DinnerEventFactory.dinnerEventAt(101, daysAhead)
+        return state === undefined ? dinner : {...dinner, state}
+    }
+    const contextOf = (dinner: Dinner, {canModifyOrders, canEditDiningMode}: ColumnSpec): BookingContext => ({
+        event: {date: dinner.date, state: dinner.state},
+        deadlines: {canModifyOrders: () => canModifyOrders, canEditDiningMode: () => canEditDiningMode},
+        isHouseholdInResidency: () => true
+    })
+    // `at` moves the column's dinner (a day, a state), `with` overrides its context; both carry the dinner they ask about
+    const column = (label: string, spec: ColumnSpec) => {
+        const dinner = dinnerAt(spec.daysAhead)
+        const context = contextOf(dinner, spec)
+        return {
+            label, dinner, context,
+            at: ({daysAhead = spec.daysAhead, state}: {daysAhead?: number, state?: DinnerState}) => {
+                const moved = dinnerAt(daysAhead, state)
+                return {...contextOf(moved, spec), dinner: moved}
+            },
+            with: (overrides: Partial<BookingContext>) => ({...context, ...overrides, dinner})
+        }
+    }
 
-        // RELEASED order (reclaim own)
-        {desc: 'RELEASED + canEdit=true', orderState: OS.RELEASED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'RELEASED + canEdit=false', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: DINEIN_NONE, expectedAction: 'process'},
+    // The rows: a row kind is the order or the place a row holds, and the save's builder bound to it
+    const ownBooked   = rowKind('own ticket BOOKED, Takeaway',  dinner => inhabitantRow(dinner, ownOrder(dinner, BOOKED, TAKEAWAY)))
+    const ownReleased = rowKind('own ticket RELEASED',           dinner => inhabitantRow(dinner, ownOrder(dinner, RELEASED, NONE)))
+    const expected    = rowKind('no order, the expected row',    dinner => inhabitantRow(dinner, null))
+    const queued      = rowKind('queued, wish Takeaway',         dinner => entryRow(dinner, TAKEAWAY))
+    const guestBooked = rowKind('guest ticket BOOKED, Takeaway', dinner => guestRow(dinner, TAKEAWAY))
+    const guestAdd    = rowKind('guest add, no order',           dinner => guestAddRow(dinner))
 
-        // No order - before deadline
-        {desc: 'null + canModify=true', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'null + canModify=false + !hasReleased', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: EMPTY, expectedAction: null},
+    // The columns: where the dinner stands against the deadlines
+    const future      = column('future, beyond the window', {daysAhead: windowDays + 10, canModifyOrders: true,  canEditDiningMode: true})
+    const before      = column('before the deadline',       {daysAhead: 10,              canModifyOrders: true,  canEditDiningMode: true})
+    const afterOpen   = column('after, mode open',          {daysAhead: 1,               canModifyOrders: false, canEditDiningMode: true})
+    const afterLocked = column('after, mode locked',        {daysAhead: 1,               canModifyOrders: false, canEditDiningMode: false})
 
-        // No order - claim (after booking deadline, released available)
-        {desc: 'claim + canEdit=true → all eating modes', orderState: null, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: true, expectedModes: EATING, expectedAction: 'claim'},
-        {desc: 'claim + canEdit=false → DINEIN only', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: true, expectedModes: DINEIN_ONLY, expectedAction: 'claim'},
+    it.each`
+        row             | column          | modes
+        ${ownBooked}    | ${future}       | ${ALL}
+        ${ownBooked}    | ${before}       | ${ALL}
+        ${ownBooked}    | ${afterOpen}    | ${ALL}
+        ${ownBooked}    | ${afterLocked}  | ${[TAKEAWAY, NONE]}
+        ${ownReleased}  | ${afterOpen}    | ${ALL}
+        ${ownReleased}  | ${afterLocked}  | ${[DINEIN, NONE]}
+        ${expected}     | ${future}       | ${ALL}
+        ${expected}     | ${before}       | ${ALL}
+        ${expected}     | ${afterOpen}    | ${ALL}
+        ${expected}     | ${afterLocked}  | ${[DINEIN, NONE]}
+        ${queued}       | ${afterOpen}    | ${ALL}
+        ${queued}       | ${afterLocked}  | ${[TAKEAWAY, NONE]}
+        ${guestBooked}  | ${future}       | ${ALL}
+        ${guestBooked}  | ${before}       | ${ALL}
+        ${guestBooked}  | ${afterOpen}    | ${ALL}
+        ${guestBooked}  | ${afterLocked}  | ${[TAKEAWAY, NONE]}
+        ${guestAdd}     | ${future}       | ${EATING}
+        ${guestAdd}     | ${before}       | ${EATING}
+        ${guestAdd}     | ${afterOpen}    | ${EATING}
+        ${guestAdd}     | ${afterLocked}  | ${[DINEIN]}
+    `('$row.label · $column.label → $modes', ({row, column, modes}) => {
+        expect(getBookingOptions(row.of(column.dinner), column.context)).toEqual(modes)
+    })
 
-        // Edge: existing order ignores hasReleased (uses process, not claim)
-        {desc: 'BOOKED ignores hasReleased', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'RELEASED ignores hasReleased', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: true, expectedModes: DINEIN_NONE, expectedAction: 'process'},
+    // The gates close every mode before the matrix is asked
+    it.each`
+        gate                   | context
+        ${'past dinner'}       | ${before.at({daysAhead: -1})}
+        ${'outside residency'} | ${before.with({isHouseholdInResidency: () => false})}
+        ${'dinner CANCELLED'}  | ${before.at({state: CANCELLED})}
+        ${'dinner CONSUMED'}   | ${before.at({state: CONSUMED})}
+    `('own ticket BOOKED · $gate → no mode', ({context}) => {
+        expect(getBookingOptions(ownBooked.of(context.dinner), context)).toEqual([])
+    })
+})
 
-        // Outside residency - no booking regardless of other params
-        {desc: 'outside residency + no order', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: false, expectedModes: EMPTY, expectedAction: null},
-        {desc: 'outside residency + BOOKED order', orderState: OS.BOOKED, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: false, expectedModes: EMPTY, expectedAction: null},
-        {desc: 'outside residency + released tickets', orderState: null, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: false, expectedModes: EMPTY, expectedAction: null},
-    ])('$desc → modes=$expectedModes.length, action=$expectedAction', ({orderState, canModify, canEdit, dinnerState, hasReleased, inResidency, expectedModes, expectedAction}) => {
-        const result = getBookingOptions(orderState, canModify, canEdit, dinnerState, hasReleased, inResidency)
-        expect(result.enabledModes).toEqual(expectedModes)
-        expect(result.action).toBe(expectedAction)
+describe('powerOptions — the household row offers what every row offers', () => {
+    it.each`
+        rows                                   | modes
+        ${[ALL, ALL]}                          | ${ALL}
+        ${[ALL, [TAKEAWAY, NONE]]}             | ${[TAKEAWAY, NONE]}
+        ${[[TAKEAWAY, NONE], [DINEIN, NONE]]}  | ${[NONE]}
+        ${[ALL, []]}                           | ${[]}
+        ${[]}                                  | ${[]}
+    `('$rows → $modes', ({rows, modes}) => {
+        expect(powerOptions(rows)).toEqual(modes)
     })
 })
 
@@ -1576,7 +1745,7 @@ describe('getBookingOptions', () => {
 describe('groupGuestOrders', () => {
 
     const order = (overrides: {id?: number, allergies?: string[] | null, provenance?: string | null} = {}) => ({
-        inhabitantId: 1, ticketType: 'ADULT', dinnerEventId: 101,
+        inhabitantId: 1, ticketType: TicketTypes.ADULT, dinnerEventId: 101, isGuestTicket: true,
         provenanceAllergies: overrides.allergies ?? null,
         provenanceHousehold: overrides.provenance ?? null
     })
@@ -1598,6 +1767,12 @@ describe('groupGuestOrders', () => {
     ])('$desc → $expected groups', ({orders, expected}) => {
         expect(Object.keys(groupGuestOrders(orders))).toHaveLength(expected)
     })
+
+    it('leaves the booker\'s own order out of the guest groups', () => {
+        const groups = groupGuestOrders([order(), {...order(), isGuestTicket: false}])
+
+        expect(Object.values(groups).map(group => group.length)).toEqual([1])
+    })
 })
 
 // =============================================================================
@@ -1617,8 +1792,8 @@ describe('getDayBillSummary', () => {
         {name: 'empty array', orders: [], expectedCounts: '-', expectedPrice: 0},
         {name: 'all CLOSED', orders: [o({state: OS.CLOSED})], expectedCounts: '-', expectedPrice: 0},
         {name: 'BOOKED counted', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.BOOKED, priceAtBooking: 37})], expectedCounts: '2V', expectedPrice: 74},
-        {name: 'RELEASED counted', orders: [o({state: OS.RELEASED, priceAtBooking: 37}), o({state: OS.RELEASED, priceAtBooking: 20, ticketType: 'CHILD'})], expectedCounts: '1V 1B', expectedPrice: 57},
-        {name: 'BOOKED + RELEASED', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.RELEASED, priceAtBooking: 37}), o({state: OS.BOOKED, priceAtBooking: 20, ticketType: 'CHILD'})], expectedCounts: '2V 1B', expectedPrice: 94},
+        {name: 'RELEASED counted', orders: [o({state: OS.RELEASED, priceAtBooking: 37}), o({state: OS.RELEASED, priceAtBooking: 20, ticketType: TicketTypes.CHILD})], expectedCounts: '1V 1B', expectedPrice: 57},
+        {name: 'BOOKED + RELEASED', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.RELEASED, priceAtBooking: 37}), o({state: OS.BOOKED, priceAtBooking: 20, ticketType: TicketTypes.CHILD})], expectedCounts: '2V 1B', expectedPrice: 94},
         {name: 'excludes CLOSED', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.CLOSED, priceAtBooking: 37})], expectedCounts: '1V', expectedPrice: 37},
         {name: 'excludes CANCELLED', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.CANCELLED, priceAtBooking: 37})], expectedCounts: '1V', expectedPrice: 37},
         {name: 'RELEASED with NONE mode counts', orders: [o({state: OS.RELEASED, dinnerMode: DM.NONE, priceAtBooking: 37})], expectedCounts: '1V', expectedPrice: 37},
@@ -1630,209 +1805,519 @@ describe('getDayBillSummary', () => {
     })
 })
 
-// =============================================================================
-// Action Preview - Show users what will happen before save
-// =============================================================================
-
-describe('Action Preview', () => {
-    const {orderStateConfig} = useOrder()
-    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
-    const DM = DinnerModeSchema.enum
-    const OS = OrderStateSchema.enum
-
-    // Action → OrderState mapping (mirrors useBookingUi.ts ACTION_TO_STATE)
-    const ACTION_TO_STATE = {
-        create:     OS.BOOKED,
-        delete:     OS.CANCELLED,
-        release:    OS.RELEASED,
-        reclaim:    OS.BOOKED,
-        claim:      'claimed' as const,
-        updateMode: OS.CLOSED
-    } as const
-
-    // Get expected color from orderStateConfig (DRY - same source as implementation)
-    const getExpectedColor = (action: keyof typeof ACTION_TO_STATE) =>
-        orderStateConfig[ACTION_TO_STATE[action]].color
-
-    // Helper to create DesiredOrder
-    const desired = (overrides: Partial<DesiredOrder> = {}): DesiredOrder => ({
-        inhabitantId: 1,
-        dinnerEventId: 101,
-        dinnerMode: DM.DINEIN,
-        ticketPriceId: 1,
-        isGuestTicket: false,
-        state: OS.BOOKED,
-        ...overrides
+describe('order predicates', () => {
+    // Released wins over bought; a person on the waiting list holds no order
+    it.each([
+        {desc: 'a released ticket for sale', order: {state: OrderStates.RELEASED, dinnerMode: DinnerModes.NONE}, queued: false, ticketState: TicketState.released},
+        {desc: 'a ticket the close kept with Ingen', order: {state: OrderStates.CLOSED, dinnerMode: DinnerModes.NONE}, queued: false, ticketState: TicketState.released},
+        {desc: 'a ticket the close kept with Spisesal', order: {state: OrderStates.CLOSED, dinnerMode: DinnerModes.DINEIN}, queued: false, ticketState: TicketState.normal},
+        {desc: 'a bought ticket the close kept', order: {state: OrderStates.CLOSED, dinnerMode: DinnerModes.DINEIN, provenanceHousehold: 'S_22'}, queued: false, ticketState: TicketState.claimed},
+        {desc: 'a booked ticket bought from another household', order: {state: OrderStates.BOOKED, dinnerMode: DinnerModes.DINEIN, provenanceHousehold: 'S_22'}, queued: false, ticketState: TicketState.claimed},
+        {desc: 'a bought ticket released again', order: {state: OrderStates.RELEASED, dinnerMode: DinnerModes.NONE, provenanceHousehold: 'S_22'}, queued: false, ticketState: TicketState.released},
+        {desc: 'a place on the waiting list', order: null, queued: true, ticketState: TicketState.queued},
+        {desc: 'a bought ticket of a person also on the waiting list', order: {state: OrderStates.BOOKED, dinnerMode: DinnerModes.DINEIN, provenanceHousehold: 'S_22'}, queued: true, ticketState: TicketState.claimed},
+        {desc: 'a booked ticket of its own household', order: {state: OrderStates.BOOKED, dinnerMode: DinnerModes.DINEIN}, queued: false, ticketState: TicketState.normal}
+    ])('GIVEN $desc THEN the ticket is $ticketState', ({order, queued, ticketState}) => {
+        expect(ticketStateOf(order && OrderFactory.defaultOrder(undefined, order), queued)).toBe(ticketState)
     })
 
-    // Helper to create existing order
-    const existing = (id: number, overrides: Partial<OrderDisplay> = {}): OrderDisplay =>
-        OrderFactory.defaultOrder(undefined, {
-            id,
-            inhabitantId: 1,
-            dinnerEventId: 101,
-            ticketPriceId: 1,
-            dinnerMode: DM.DINEIN,
-            state: OS.BOOKED,
-            ...overrides
+    it.each([
+        {state: OrderStates.BOOKED, pending: true},
+        {state: OrderStates.RELEASED, pending: true},
+        {state: OrderStates.CLOSED, pending: false},
+        {state: OrderStates.CANCELLED, pending: false}
+    ])('GIVEN an order $state THEN it waits for the close: $pending', ({state, pending}) => {
+        expect(isPendingOrder(OrderFactory.defaultOrder(undefined, {state}))).toBe(pending)
+    })
+})
+
+describe('supplyStateOf', () => {
+    it.each([
+        {desc: 'tickets for sale and a waiting list', counts: {...EMPTY_RELEASED_TICKET_COUNTS, total: 1, queued: 8}, supply: SupplyState.FOR_SALE_AND_WAITLIST},
+        {desc: 'tickets for sale', counts: {...EMPTY_RELEASED_TICKET_COUNTS, total: 1}, supply: SupplyState.FOR_SALE},
+        {desc: 'a waiting list', counts: {...EMPTY_RELEASED_TICKET_COUNTS, queued: 8}, supply: SupplyState.WAITLIST},
+        {desc: 'neither', counts: EMPTY_RELEASED_TICKET_COUNTS, supply: SupplyState.NONE}
+    ])('GIVEN a locked dinner with $desc THEN its supply is $supply', ({counts, supply}) => {
+        expect(supplyStateOf(counts)).toBe(supply)
+    })
+})
+
+// A place on the waiting list in the line of its ticket type; an entry whose ticket price is gone has its number alone
+describe('formatPlace', () => {
+    it.each([
+        {position: 2, ticketType: TicketTypes.ADULT, place: 'Voksen #2'},
+        {position: 3, ticketType: TicketTypes.CHILD, place: 'Barn #3'},
+        {position: 1, ticketType: TicketTypes.BABY, place: 'Baby #1'},
+        {position: 4, ticketType: null, place: '#4'}
+    ])('place $position in the line of $ticketType reads "$place"', ({position, ticketType, place}) => {
+        expect(formatPlace(position, ticketType)).toBe(place)
+    })
+})
+
+// A dinner's name: its menu title, else the dinner itself while the chef has written no menu
+describe('formatDinnerName', () => {
+    it.each([
+        {desc: 'a menu title', menuTitle: 'Lasagne', name: 'Lasagne'},
+        {desc: 'a menu title with spaces around it', menuTitle: '  Lasagne ', name: 'Lasagne'},
+        {desc: 'an empty menu title', menuTitle: '', name: 'Fællesspisning'},
+        {desc: 'a menu title of spaces', menuTitle: '   ', name: 'Fællesspisning'}
+    ])('GIVEN $desc THEN the dinner reads "$name"', ({menuTitle, name}) => {
+        expect(formatDinnerName({menuTitle})).toBe(name)
+    })
+})
+
+// ---- Ticket changes (Billetændringer) and the cooking round ----
+
+describe('replayTicketChanges', () => {
+    const {OrderAuditActionSchema, OrderAuditSourceSchema, OrderAuditChangeSchema, OrderStateSchema, TicketTypeSchema, DinnerModeSchema, TicketChangeKindSchema, createOrderAuditData} = useBookingValidation()
+    const Audit = OrderAuditActionSchema.enum
+    const Change = OrderAuditChangeSchema.enum
+    const Source = OrderAuditSourceSchema.enum
+    const State = OrderStateSchema.enum
+    const Mode = DinnerModeSchema.enum
+    const Kind = TicketChangeKindSchema.enum
+    const TicketType = TicketTypeSchema.enum
+    const counts = OrderFactory.ticketCounts
+    // Ticket price ids: 1 adult, 2 child, 3 baby; 9 is a price the season no longer names
+    const PRICES: Record<number, {ticketType: TicketType, portions: number, price: number}> = {
+        1: {ticketType: TicketType.ADULT, portions: 1, price: 5000},
+        2: {ticketType: TicketType.CHILD, portions: 0.5, price: 2500},
+        3: {ticketType: TicketType.BABY, portions: 0, price: 0}
+    }
+    const UNNAMED_PRICE = {id: 9, price: 4000}
+    const ticketPriceOf = (ticketPriceId: number) => PRICES[ticketPriceId] ?? null
+    const priceOf = (ticketPriceId: number) => PRICES[ticketPriceId]?.price ?? UNNAMED_PRICE.price
+    const SYSTEM = 99
+    const CORRECTION = Source['admin-correction']
+    // Household n is S_n and its user is user n, the person Navn n Efternavn n; the system account holds no inhabitant
+    const shortNameOf = (householdId: number) => `S_${householdId}`
+    const personOf = (actor: number) => ({name: `Navn${actor}`, lastName: `Efternavn${actor}`})
+    // The buyer of household n eats as inhabitant 200 + n
+    const buyerInhabitant = (householdId: number) => 200 + householdId
+    const householdOfInhabitant = (inhabitantId: number) => ({id: inhabitantId - 200, shortName: shortNameOf(inhabitantId - 200)})
+    const at =(minutes: number, seconds = 0) => new Date(2026, 3, 2, 20, minutes, seconds)
+
+    type Ticket = {id: number, inhabitantId: number, ticketPriceId: number, householdId: number, isGuestTicket?: boolean}
+    const ticket = (id: number, ticketPriceId: number, householdId: number): Ticket => ({id, inhabitantId: 100 + id, ticketPriceId, householdId})
+    const {legacyAuditData} = OrderFactory
+
+    let rowId = 0
+    const historyRow = (action: OrderAuditAction, actor: number | null, timestamp: Date, orderId: number | null, inhabitantId: number, auditData: string) =>
+        OrderFactory.defaultOrderHistoryDisplay(undefined, {
+            id: ++rowId, orderId, inhabitantId, dinnerEventId: 1, action, timestamp, auditData,
+            performedByUserId: actor,
+            performedByUser: actor === null ? null : {id: actor, email: `user${actor}@example.com`, Inhabitant: actor === SYSTEM ? null : personOf(actor)}
         })
+    const orderDataOf = (order: Ticket, actor: number | null) => OrderFactory.defaultOrderCreateWithPrice(order.householdId, {
+        dinnerEventId: 1, inhabitantId: order.inhabitantId, bookedByUserId: actor, ticketPriceId: order.ticketPriceId, priceAtBooking: priceOf(order.ticketPriceId),
+        dinnerMode: Mode.DINEIN, state: State.BOOKED, isGuestTicket: order.isGuestTicket ?? false
+    })
+    const snapshotOf = (order: Ticket, state: OrderState): OrderSnapshot => OrderFactory.defaultOrderSnapshot({
+        id: order.id, inhabitantId: order.inhabitantId, dinnerEventId: 1, ticketPriceId: order.ticketPriceId, priceAtBooking: priceOf(order.ticketPriceId),
+        dinnerMode: Mode.DINEIN, state, isGuestTicket: order.isGuestTicket ?? false, inhabitantNameWithInitials: 'A. B.',
+        householdShortname: shortNameOf(order.householdId), householdId: order.householdId
+    })
+    // A legacy booking wrote the order's data without its id; the row's order id turns null once the order is deleted
+    const booked = (order: Ticket, actor: number, timestamp: Date, {action = Audit.USER_BOOKED, deletedLater = false, source = Source['user-booking']}: {action?: OrderAuditAction, deletedLater?: boolean, source?: OrderAuditSource} = {}) =>
+        historyRow(action, actor, timestamp, deletedLater ? null : order.id, order.inhabitantId, legacyAuditData.creation(source, orderDataOf(order, actor)))
+    // A deletion and a claim write the order as it stood before them
+    const deleted = (order: Ticket, actor: number | null, timestamp: Date, action: OrderAuditAction = Audit.USER_CANCELLED, state: OrderState = State.BOOKED) =>
+        historyRow(action, actor, timestamp, null, order.inhabitantId, legacyAuditData.snapshot(snapshotOf(order, state)))
+    const claimed = (order: Ticket, buyer: number, timestamp: Date) =>
+        historyRow(Audit.USER_CLAIMED, buyer, timestamp, order.id, buyerInhabitant(buyer), legacyAuditData.snapshot(snapshotOf(order, State.RELEASED)))
+    // A legacy batch update wrote the new scalars, the price row only when it changed
+    const updated = (action: OrderAuditAction, order: Ticket, actor: number, timestamp: Date,
+                     {state = State.BOOKED, dinnerMode = Mode.DINEIN, ticketPriceId = null}: {state?: OrderState, dinnerMode?: DinnerMode, ticketPriceId?: number | null} = {}) =>
+        historyRow(action, actor, timestamp, order.id, order.inhabitantId, legacyAuditData.update({state, dinnerMode, ticketPriceId, priceAtBooking: ticketPriceId === null ? null : priceOf(ticketPriceId)}))
+    // A row in the audit format with the source of the run that wrote it; a cancellation's order is gone
+    const written = (action: OrderAuditAction, order: Ticket, actor: number, timestamp: Date, change: OrderAuditChange, source: OrderAuditSource) =>
+        historyRow(action, actor, timestamp, change === Change.CANCEL ? null : order.id, order.inhabitantId, createOrderAuditData(change, snapshotOf(order, State.BOOKED), source))
 
-    // Empty buckets helper
-    const emptyBuckets = (): Parameters<typeof formatActionPreview>[0] => ({
-        create: [],
-        update: [],
-        delete: [],
-        idempotent: [],
-        claim: []
+    const figures = ({counts, portions, revenue}: TicketChange) => ({counts, portions, revenue})
+    // The tickets, kuverter and revenue of the tickets the dinner is paid for
+    const paidForFigures = (paidFor: readonly Ticket[]) => ({
+        counts: Object.fromEntries(TicketTypeSchema.options.map(type => [type, paidFor.filter(order => PRICES[order.ticketPriceId]!.ticketType === type).length])),
+        portions: sumBy([...paidFor], order => PRICES[order.ticketPriceId]!.portions),
+        revenue: sumBy([...paidFor], order => priceOf(order.ticketPriceId))
     })
 
-    // Name lookup for tests
-    const getName = (id: number) => id === 1 ? 'Anna' : id === 2 ? 'Peter' : `User${id}`
+    it('GIVEN a dinner\'s history from the system\'s bookings to the close WHEN replaying THEN a line holds one actor\'s ticket events within one minute and the last line holds the tickets and kuverter paid for', () => {
+        const {replayTicketChanges} = useBooking()
+        const [o1, o2, o3, o4, o5, o6, o7, o8, o9] = [
+            ticket(1, 1, 31), ticket(2, 2, 31), ticket(3, 1, 22), ticket(4, 2, 22), ticket(5, 1, 14),
+            ticket(6, 3, 31), ticket(7, 1, 31), ticket(8, 2, 22), ticket(9, 2, 31)
+        ] as const
+        const o4AsAdult = {...o4, ticketPriceId: 1}
+        const paidFor = [o1, o3, o4AsAdult, o5, o6, o7, o8, o9]
+        const history = [
+            // One system run books across two households
+            ...[o1, o2, o3, o4].map(order => booked(order, SYSTEM, at(0), {action: Audit.SYSTEM_CREATED})),
+            booked(o5, 14, at(10)),
+            // One power mode save: an eating mode switch, a cancellation and a booking
+            updated(Audit.USER_BOOKED, o1, 31, at(20, 0), {dinnerMode: Mode.TAKEAWAY}),
+            deleted(o2, 31, at(20, 10)),
+            booked(o6, 31, at(20, 20)),
+            // Two users within one minute, interleaved
+            booked(o7, 31, at(30, 0)),
+            booked(o8, 22, at(30, 20)),
+            booked(o9, 31, at(30, 40)),
+            updated(Audit.USER_BOOKED, o4, 22, at(40), {ticketPriceId: o4AsAdult.ticketPriceId}),
+            updated(Audit.USER_BOOKED, o5, 14, at(45), {dinnerMode: Mode.TAKEAWAY}),
+            updated(Audit.SYSTEM_UPDATED, o3, SYSTEM, at(50), {state: State.RELEASED, dinnerMode: Mode.NONE}),
+            claimed(o3, 14, at(60)),
+            ...paidFor.map(order => updated(Audit.SYSTEM_UPDATED, order, SYSTEM, at(120), {state: State.CLOSED}))
+        ]
 
-    describe('ACTION_PREVIEW config', () => {
+        const lines = replayTicketChanges(history, ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant)
+
+        expect(lines.map(({performedByUserId, bySystem, households, events}) => ({performedByUserId, bySystem, households: [...households].sort(), events}))).toEqual([
+            {performedByUserId: SYSTEM, bySystem: true, households: ['S_22', 'S_31'], events: [{change: Kind.BOOK, tickets: counts(2, 2, 0)}]},
+            {performedByUserId: 14, bySystem: false, households: ['S_14'], events: [{change: Kind.BOOK, tickets: counts(1, 0, 0)}]},
+            {performedByUserId: 31, bySystem: false, households: ['S_31'], events: [{change: Kind.BOOK, tickets: counts(0, 0, 1)}, {change: Kind.CANCEL, tickets: counts(0, 1, 0)}]},
+            {performedByUserId: 22, bySystem: false, households: ['S_22'], events: [{change: Kind.BOOK, tickets: counts(0, 1, 0)}]},
+            {performedByUserId: 31, bySystem: false, households: ['S_31'], events: [{change: Kind.BOOK, tickets: counts(1, 1, 0)}]},
+            {performedByUserId: 22, bySystem: false, households: ['S_22'], events: [{change: Kind.CHANGE_PRICE, tickets: counts(1, 0, 0), from: counts(0, 1, 0)}]},
+            {performedByUserId: SYSTEM, bySystem: true, households: ['S_22'], events: [{change: Kind.RELEASE, tickets: counts(1, 0, 0)}]},
+            {performedByUserId: 14, bySystem: false, households: ['S_14'], events: [{change: Kind.BUY, tickets: counts(1, 0, 0), seller: shortNameOf(o3.householdId)}]},
+            {performedByUserId: SYSTEM, bySystem: true, households: ['S_14', 'S_22', 'S_31'], events: [{change: Kind.CLOSE, tickets: counts(5, 2, 1)}]}
+        ])
+
+        const [, , , , beforeTypeChange, typeChange, release, sale, close] = lines
+        // A release and a sale leave what the dinner is paid for; a ticket type change moves the kuverter and the revenue
+        expect(figures(release!)).toEqual(figures(typeChange!))
+        expect(figures(sale!)).toEqual(figures(typeChange!))
+        expect(typeChange!.portions - beforeTypeChange!.portions).toBe(PRICES[1]!.portions - PRICES[2]!.portions)
+        expect(typeChange!.revenue - beforeTypeChange!.revenue).toBe(PRICES[1]!.price - PRICES[2]!.price)
+        expect(figures(close!)).toEqual(paidForFigures(paidFor))
+    })
+
+    it('GIVEN a release and a reclaim written by the scaffold\'s batch update WHEN replaying THEN the lines name the ticket and its household, and the ticket stays paid', () => {
+        const {replayTicketChanges} = useBooking()
+        const child = ticket(2, 2, 22)
+        const lines = replayTicketChanges([
+            booked(child, 22, at(1)),
+            updated(Audit.USER_CANCELLED, child, 22, at(2), {state: State.RELEASED, dinnerMode: Mode.NONE}),
+            updated(Audit.USER_BOOKED, child, 22, at(3))
+        ], ticketPriceOf, SYSTEM, shortNameOf)
+        expect(lines.map(line => line.events)).toEqual([
+            [{change: Kind.BOOK, tickets: counts(0, 1, 0)}],
+            [{change: Kind.RELEASE, tickets: counts(0, 1, 0)}],
+            [{change: Kind.RECLAIM, tickets: counts(0, 1, 0)}]
+        ])
+        expect(lines.map(line => line.households)).toEqual([['S_22'], ['S_22'], ['S_22']])
+        expect(lines.map(figures)).toEqual(Array(3).fill({counts: counts(0, 1, 0), portions: PRICES[2]!.portions, revenue: PRICES[2]!.price}))
+    })
+
+    // A place on the waiting list and a cancellation of nothing booked write rows whose snapshot names no order
+    it('GIVEN a booked adult whose guest joins, changes and leaves the waiting list WHEN replaying THEN the guest\'s rows are no ticket events and the adult\'s ticket stays held', () => {
+        const {replayTicketChanges} = useBooking()
+        const adult = ticket(1, 1, 22)
+        const guestPlace = (action: OrderAuditAction, timestamp: Date) => historyRow(action, 22, timestamp, null, adult.inhabitantId,
+            legacyAuditData.snapshot({...snapshotOf({...adult, isGuestTicket: true}, State.BOOKED), id: null}))
+
+        const lines = replayTicketChanges([
+            booked(adult, 22, at(1)),
+            guestPlace(Audit.USER_BOOKED, at(2)),
+            guestPlace(Audit.USER_BOOKED, at(3)),
+            guestPlace(Audit.USER_CANCELLED, at(4))
+        ], ticketPriceOf, SYSTEM, shortNameOf)
+
+        expect(lines.map(line => [line.events, figures(line)])).toEqual([
+            [[{change: Kind.BOOK, tickets: counts(1, 0, 0)}], {counts: counts(1, 0, 0), portions: PRICES[1]!.portions, revenue: PRICES[1]!.price}]
+        ])
+    })
+
+    it('GIVEN a ticket released by one household and bought by another WHEN replaying THEN the sale and the close name the buyer\'s household', () => {
+        const {replayTicketChanges} = useBooking()
+        const child = ticket(2, 2, 22)
+        const lines = replayTicketChanges([
+            booked(child, 22, at(1)),
+            updated(Audit.USER_CANCELLED, child, 22, at(2), {state: State.RELEASED, dinnerMode: Mode.NONE}),
+            claimed(child, 14, at(3)),
+            updated(Audit.SYSTEM_UPDATED, child, SYSTEM, at(4), {state: State.CLOSED})
+        ], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant)
+        expect(lines.map(line => [line.events.map(event => event.change), line.households])).toEqual([
+            [[Kind.BOOK], ['S_22']],
+            [[Kind.RELEASE], ['S_22']],
+            [[Kind.BUY], ['S_14']],
+            [[Kind.CLOSE], ['S_14']]
+        ])
+    })
+
+    it('GIVEN one user buying, within one minute, tickets released by two households WHEN replaying THEN each sale names its seller, the two sellers stay two events and one seller\'s tickets add up', () => {
+        const {replayTicketChanges} = useBooking()
+        const [adultOf22, adultOf32, childOf22] = [ticket(1, 1, 22), ticket(2, 1, 32), ticket(3, 2, 22)]
+        const forSale = [adultOf22, adultOf32, childOf22]
+        const lines = replayTicketChanges([
+            ...forSale.map(order => booked(order, order.householdId, at(0))),
+            ...forSale.map(order => updated(Audit.USER_CANCELLED, order, order.householdId, at(10), {state: State.RELEASED, dinnerMode: Mode.NONE})),
+            ...forSale.map((order, index) => claimed(order, 14, at(20, index * 10)))
+        ], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant)
+
+        expect(lines.at(-1)).toMatchObject({performedByUserId: 14, households: ['S_14'], events: [
+            {change: Kind.BUY, tickets: counts(1, 1, 0), seller: shortNameOf(22)},
+            {change: Kind.BUY, tickets: counts(1, 0, 0), seller: shortNameOf(32)}
+        ]})
+    })
+
+    it.each([
+        {desc: 'a cancellation before the deadline', action: Audit.USER_CANCELLED, actor: 31, bySystem: false},
+        {desc: 'a system deletion before the deadline', action: Audit.SYSTEM_DELETED, actor: null, bySystem: true}
+    ])('GIVEN a booked ticket and $desc WHEN replaying THEN the ticket, its kuverter and its revenue leave', ({action, actor, bySystem}) => {
+        const {replayTicketChanges} = useBooking()
+        const adult = ticket(1, 1, 31)
+        const lines = replayTicketChanges([booked(adult, 31, at(0)), deleted(adult, actor, at(5), action)], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, at(30))
+        expect(lines.at(-1)).toMatchObject({
+            performedByUserId: actor ?? SYSTEM, bySystem, households: ['S_31'],
+            events: [{change: Kind.CANCEL, tickets: counts(1, 0, 0)}], counts: counts(0, 0, 0), portions: 0, revenue: 0
+        })
+    })
+
+    // After the booking deadline only the admin's correction deletes an order; a release keeps the ticket paid
+    describe('after the booking deadline', () => {
+        const DEADLINE = at(30)
+        const ADMIN = 1
+        const adult = ticket(1, 1, 22)
+        const child = ticket(2, 2, 22)
+        const release = updated(Audit.USER_CANCELLED, child, 22, at(32), {state: State.RELEASED, dinnerMode: Mode.NONE})
+
         it.each([
-            {action: 'create', expectedText: 'Anna tilmeldes'},
-            {action: 'delete', expectedText: 'Anna frameldes'},
-            {action: 'release', expectedText: 'Annas billet frigives'},
-            {action: 'reclaim', expectedText: 'Anna tilmeldes igen'},
-            {action: 'claim', expectedText: 'Anna køber fra andre'},
-            {action: 'updateMode', expectedText: 'Anna opdaterer spisning'}
-        ])('$action template produces "$expectedText"', ({action, expectedText}) => {
-            const config = ACTION_PREVIEW[action as keyof typeof ACTION_PREVIEW]
-            expect(config.template('Anna')).toBe(expectedText)
-            expect(config.icon).toBeDefined()
+            {desc: 'a release and the admin\'s deletion of the released ticket', rows: [release, deleted(child, ADMIN, at(35), Audit.USER_CANCELLED, State.RELEASED)],
+                events: [[{change: Kind.BOOK}], [{change: Kind.RELEASE}], [{change: Kind.CANCEL, reason: CORRECTION}]], paidFor: [adult]},
+            {desc: 'a cancellation before the deadline', rows: [deleted(child, 22, at(10))],
+                events: [[{change: Kind.BOOK}], [{change: Kind.CANCEL}]], paidFor: [adult]},
+            {desc: 'a release alone', rows: [release],
+                events: [[{change: Kind.BOOK}], [{change: Kind.RELEASE}]], paidFor: [adult, child]}
+        ])('GIVEN two booked tickets and $desc WHEN replaying THEN the lines read their events and the last holds what is paid for', ({rows, events, paidFor}) => {
+            const {replayTicketChanges} = useBooking()
+            const lines = replayTicketChanges([booked(adult, 22, at(0)), booked(child, 22, at(0)), ...rows], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, DEADLINE)
+
+            expect(lines.map(line => line.events.map(({change, reason}) => ({change, reason})))).toEqual(events)
+            expect(figures(lines.at(-1)!)).toEqual(paidForFigures(paidFor))
+        })
+
+        // A row written before rows named their source: after the deadline a member releases instead of deleting, so a
+        // user-mode deletion then is the admin's correction; a row naming its source reads by its source
+        it.each([
+            {desc: 'a system run\'s deletion after the deadline', row: deleted(child, null, at(35), Audit.SYSTEM_DELETED), reason: undefined},
+            {desc: 'a user-mode deletion after the deadline', row: deleted(child, ADMIN, at(35)), reason: CORRECTION},
+            {desc: 'a user-mode deletion before the deadline', row: deleted(child, 22, at(10)), reason: undefined},
+            {desc: 'a member\'s deletion after the deadline written with its source', row: written(Audit.USER_CANCELLED, child, 22, at(35), Change.CANCEL, Source['user-booking']), reason: undefined}
+        ])('GIVEN a booked ticket and $desc WHEN replaying THEN the deletion reads as a cancellation with the reason $reason', ({row, reason}) => {
+            const {replayTicketChanges} = useBooking()
+            const lines = replayTicketChanges([booked(child, 22, at(0)), row], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, DEADLINE)
+
+            expect(lines.at(-1)!.events).toEqual([{change: Kind.CANCEL, tickets: counts(0, 1, 0), reason}])
+        })
+
+        it('GIVEN the admin\'s deletion of a released ticket WHEN replaying THEN one event takes the ticket off the counts, the kuverter and the revenue', () => {
+            const {replayTicketChanges} = useBooking()
+            const lines = replayTicketChanges([booked(adult, 22, at(0)), booked(child, 22, at(0)), release, deleted(child, ADMIN, at(35), Audit.USER_CANCELLED, State.RELEASED)],
+                ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, DEADLINE)
+            const [, released, adminCancel] = lines
+
+            expect(adminCancel).toMatchObject({performedByUserId: ADMIN, households: ['S_22'], events: [{change: Kind.CANCEL, tickets: counts(0, 1, 0), reason: CORRECTION}]})
+            expect(released!.revenue - adminCancel!.revenue).toBe(PRICES[2]!.price)
+            expect(released!.portions - adminCancel!.portions).toBe(PRICES[2]!.portions)
         })
     })
 
-    describe('formatActionPreview', () => {
-        it('returns empty array for all idempotent buckets', () => {
-            const buckets = {...emptyBuckets(), idempotent: [desired()]}
-            const result = formatActionPreview(buckets, [], getName)
-            expect(result).toHaveLength(0)
-        })
+    // The source of the run that wrote a row gives its event's reason: an admin's correction reads on every kind of event
+    describe('the reason a row\'s source gives', () => {
+        const ADMIN = 1
+        const adult = ticket(1, 1, 22)
+        const child = ticket(2, 2, 22)
+        const childAsAdult = {...child, ticketPriceId: adult.ticketPriceId}
 
         it.each([
-            {bucket: 'create', action: 'create' as const, textContains: 'tilmeldes'},
-            {bucket: 'delete', action: 'delete' as const, textContains: 'frameldes'},
-            {bucket: 'claim', action: 'claim' as const, textContains: 'køber fra andre'}
-        ])('$bucket bucket → $action action', ({bucket, action, textContains}) => {
-            const buckets = {...emptyBuckets(), [bucket]: [desired({inhabitantId: 1})]}
-            const result = formatActionPreview(buckets, [], getName)
+            {desc: 'an admin\'s booking', rows: [written(Audit.USER_BOOKED, adult, ADMIN, at(35), Change.BOOK, CORRECTION)],
+                event: {change: Kind.BOOK, tickets: counts(1, 0, 0), reason: CORRECTION}},
+            {desc: 'an admin\'s ticket type change', rows: [booked(child, 22, at(0)), written(Audit.USER_BOOKED, childAsAdult, ADMIN, at(35), Change.CHANGE_PRICE, CORRECTION)],
+                event: {change: Kind.CHANGE_PRICE, tickets: counts(1, 0, 0), from: counts(0, 1, 0), reason: CORRECTION}},
+            {desc: 'an admin\'s deletion', rows: [booked(child, 22, at(0)), written(Audit.USER_CANCELLED, child, ADMIN, at(35), Change.CANCEL, CORRECTION)],
+                event: {change: Kind.CANCEL, tickets: counts(0, 1, 0), reason: CORRECTION}},
+            {desc: 'a member\'s booking', rows: [written(Audit.USER_BOOKED, adult, 22, at(10), Change.BOOK, Source['user-booking'])],
+                event: {change: Kind.BOOK, tickets: counts(1, 0, 0)}}
+        ])('GIVEN $desc WHEN replaying THEN its event reads its kind with the reason its source gives', ({rows, event}) => {
+            const {replayTicketChanges} = useBooking()
+            const lines = replayTicketChanges(rows, ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, at(30))
 
-            expect(result).toHaveLength(1)
-            expect(result[0]).toMatchObject({
-                name: 'Anna',
-                action,
-                color: getExpectedColor(action),
-                text: expect.stringContaining(textContains)
-            })
-            expect(result[0]!.icon).toBeDefined()
-        })
-
-        describe('update bucket → action depends on existing state', () => {
-            it.each([
-                {
-                    desc: 'desired RELEASED → release action',
-                    desiredOrder: desired({orderId: 42, state: OS.RELEASED}),
-                    existingOrder: existing(42, {state: OS.BOOKED}),
-                    expectedAction: 'release' as const,
-                    expectedText: 'frigives'
-                },
-                {
-                    desc: 'existing RELEASED + desired BOOKED → reclaim action',
-                    desiredOrder: desired({orderId: 42, state: OS.BOOKED}),
-                    existingOrder: existing(42, {state: OS.RELEASED}),
-                    expectedAction: 'reclaim' as const,
-                    expectedText: 'tilmeldes igen'
-                },
-                {
-                    desc: 'both BOOKED with different mode → updateMode action',
-                    desiredOrder: desired({orderId: 42, dinnerMode: DM.TAKEAWAY, state: OS.BOOKED}),
-                    existingOrder: existing(42, {dinnerMode: DM.DINEIN, state: OS.BOOKED}),
-                    expectedAction: 'updateMode' as const,
-                    expectedText: 'opdaterer spisning'
-                }
-            ])('$desc', ({desiredOrder, existingOrder, expectedAction, expectedText}) => {
-                const buckets = {...emptyBuckets(), update: [desiredOrder]}
-                const result = formatActionPreview(buckets, [existingOrder], getName)
-
-                expect(result).toHaveLength(1)
-                expect(result[0]).toMatchObject({
-                    action: expectedAction,
-                    color: getExpectedColor(expectedAction),
-                    text: expect.stringContaining(expectedText)
-                })
-            })
-        })
-
-        describe('guest ticket handling', () => {
-            it('uses "Gæst af {bookerName}" for guest tickets', () => {
-                const guestOrder = desired({inhabitantId: 1, isGuestTicket: true})
-                const buckets = {...emptyBuckets(), create: [guestOrder]}
-                const result = formatActionPreview(buckets, [], getName)
-
-                expect(result).toHaveLength(1)
-                expect(result[0]!.name).toBe('Gæst af Anna')
-                expect(result[0]!.text).toBe('Gæst af Anna tilmeldes')
-            })
-
-            it('uses inhabitant name for non-guest tickets', () => {
-                const regularOrder = desired({inhabitantId: 1, isGuestTicket: false})
-                const buckets = {...emptyBuckets(), create: [regularOrder]}
-                const result = formatActionPreview(buckets, [], getName)
-
-                expect(result).toHaveLength(1)
-                expect(result[0]!.name).toBe('Anna')
-                expect(result[0]!.text).toBe('Anna tilmeldes')
-            })
-        })
-
-        it('handles multiple orders across buckets', () => {
-            const buckets = {
-                ...emptyBuckets(),
-                create: [desired({inhabitantId: 1})],
-                delete: [desired({inhabitantId: 2, orderId: 43})],
-                update: [desired({inhabitantId: 1, orderId: 42, state: OS.RELEASED})],
-                claim: [desired({inhabitantId: 2})]
-            }
-            const existingOrders = [existing(42, {state: OS.BOOKED})]
-            const result = formatActionPreview(buckets, existingOrders, getName)
-
-            expect(result).toHaveLength(4)
-            const actions = result.map(r => r.action).sort()
-            expect(actions).toEqual(['claim', 'create', 'delete', 'release'])
+            expect(lines.at(-1)!.events).toEqual([event])
         })
     })
 
-    describe('hasChanges', () => {
-        it.each([
-            {desc: 'all empty → false', buckets: emptyBuckets(), expected: false},
-            {desc: 'only idempotent → false', buckets: {...emptyBuckets(), idempotent: [desired()]}, expected: false},
-            {desc: 'create → true', buckets: {...emptyBuckets(), create: [desired()]}, expected: true},
-            {desc: 'delete → true', buckets: {...emptyBuckets(), delete: [desired()]}, expected: true},
-            {desc: 'update → true', buckets: {...emptyBuckets(), update: [desired()]}, expected: true},
-            {desc: 'claim → true', buckets: {...emptyBuckets(), claim: [desired()]}, expected: true},
-        ])('$desc', ({buckets, expected}) => {
-            expect(hasChanges(buckets)).toBe(expected)
+    it('GIVEN rows by a member, by the system and by a user since deleted WHEN replaying THEN each line names its actor as the booking page names a person, the system\'s and the deleted user\'s lines as System', () => {
+        const {replayTicketChanges} = useBooking()
+        const {formatNameWithInitials} = useHousehold()
+        const [adult, child] = [ticket(1, 1, 31), ticket(2, 2, 31)]
+        const lines = replayTicketChanges([
+            booked(adult, 31, at(0)),
+            booked(child, SYSTEM, at(10), {action: Audit.SYSTEM_CREATED}),
+            deleted(child, null, at(20), Audit.SYSTEM_DELETED)
+        ], ticketPriceOf, SYSTEM, shortNameOf)
+
+        expect(lines.map(line => line.performedByName))
+            .toEqual([formatNameWithInitials(personOf(31)), BOOKING_WORDS.ticketChange.bySystem, BOOKING_WORDS.ticketChange.bySystem])
+    })
+
+    it('GIVEN the chef\'s extra portions for the first in line WHEN replaying THEN one line reads them as extra portions and the tickets, kuverter and revenue rise', () => {
+        const {replayTicketChanges} = useBooking()
+        const CHEF = 7
+        const adult = ticket(1, 1, 31)
+        const firstInLine = [ticket(5, 1, 14), ticket(6, 2, 22)]
+        const lines = replayTicketChanges([
+            booked(adult, 31, at(0)),
+            ...firstInLine.map(order => booked(order, CHEF, at(40), {action: Audit.SYSTEM_CREATED, source: Source['waitlist-assignment']}))
+        ], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant)
+        const [before, extra] = lines
+
+        expect(lines).toHaveLength(2)
+        expect(extra).toMatchObject({performedByUserId: CHEF, households: ['S_14', 'S_22'], events: [{change: Kind.EXTRA_PORTIONS, tickets: counts(1, 1, 0)}], counts: counts(2, 1, 0)})
+        expect(extra!.revenue - before!.revenue).toBe(sumBy(firstInLine, order => priceOf(order.ticketPriceId)))
+        expect(extra!.portions - before!.portions).toBe(sumBy(firstInLine, order => PRICES[order.ticketPriceId]!.portions))
+    })
+
+    it('GIVEN rows out of order and an eating mode switch WHEN replaying THEN time order rules and the switch is no line', () => {
+        const {replayTicketChanges} = useBooking()
+        const adult = ticket(1, 1, 31)
+        const lines = replayTicketChanges([updated(Audit.SYSTEM_UPDATED, adult, SYSTEM, at(2), {dinnerMode: Mode.TAKEAWAY}), booked(adult, 31, at(0))], ticketPriceOf, SYSTEM, shortNameOf)
+        expect(lines.map(line => line.events)).toEqual([[{change: Kind.BOOK, tickets: counts(1, 0, 0)}]])
+    })
+
+    it('GIVEN a ticket price the season no longer names WHEN replaying THEN the line carries revenue but no type or kuverter', () => {
+        const {replayTicketChanges} = useBooking()
+        const lines = replayTicketChanges([booked(ticket(1, UNNAMED_PRICE.id, 31), 31, at(0))], ticketPriceOf, SYSTEM, shortNameOf)
+        expect(lines[0]).toMatchObject({events: [{change: Kind.BOOK, tickets: counts(0, 0, 0)}], counts: counts(0, 0, 0), portions: 0, revenue: UNNAMED_PRICE.price})
+    })
+
+    it('GIVEN a booking row WHEN replaying THEN the household comes from its id and the ticket counts', () => {
+        const {replayTicketChanges} = useBooking()
+        const lines = replayTicketChanges([booked(ticket(10, 1, 7), 7, at(1))], ticketPriceOf, SYSTEM, shortNameOf)
+        expect(lines[0]).toMatchObject({households: ['S_7'], counts: counts(1, 0, 0), revenue: PRICES[1]!.price})
+    })
+
+    it('GIVEN an order deleted later, its booking row without an order id WHEN replaying THEN the deletion finds it by inhabitant', () => {
+        const {replayTicketChanges} = useBooking()
+        const adult = ticket(10, 1, 7)
+        const lines = replayTicketChanges([booked(adult, 7, at(1), {deletedLater: true}), deleted(adult, 7, at(2))], ticketPriceOf, SYSTEM, shortNameOf)
+        expect(lines.map(line => [line.events.map(event => event.change), line.counts.ADULT, line.revenue])).toEqual([[[Kind.BOOK], 1, PRICES[1]!.price], [[Kind.CANCEL], 0, 0]])
+    })
+
+    it('GIVEN the close\'s row with scalars only WHEN replaying THEN it is the close and keeps the tickets', () => {
+        const {replayTicketChanges} = useBooking()
+        const adult = ticket(10, 1, 7)
+        const lines = replayTicketChanges([booked(adult, 7, at(1)), updated(Audit.SYSTEM_UPDATED, adult, SYSTEM, at(2), {state: State.CLOSED})], ticketPriceOf, SYSTEM, shortNameOf)
+        expect(lines.at(-1)).toMatchObject({bySystem: true, events: [{change: Kind.CLOSE, tickets: counts(1, 0, 0)}], counts: counts(1, 0, 0), revenue: PRICES[1]!.price})
+    })
+
+    // One ticket's life as the writers leave it: in the audit format, and in the shapes written before it. A sale and a
+    // deletion keep the order as it stood before them
+    const WRITTEN = [
+        {
+            format: 'the audit format',
+            creation: (order: Ticket, source: OrderAuditSource) => createOrderAuditData(Change.BOOK, snapshotOf(order, State.BOOKED), source),
+            update: (change: OrderAuditChange, order: Ticket, state: OrderState) => createOrderAuditData(change, snapshotOf(order, state)),
+            asItStood: (change: OrderAuditChange, order: Ticket, state: OrderState) => createOrderAuditData(change, snapshotOf(order, state))
+        },
+        {
+            format: 'the legacy shapes',
+            creation: (order: Ticket, source: OrderAuditSource) => legacyAuditData.creation(source, orderDataOf(order, null)),
+            update: (change: OrderAuditChange, order: Ticket, state: OrderState) => legacyAuditData.update({
+                state, dinnerMode: state === State.RELEASED ? Mode.NONE : Mode.DINEIN,
+                ticketPriceId: change === Change.CHANGE_PRICE ? order.ticketPriceId : null,
+                priceAtBooking: change === Change.CHANGE_PRICE ? priceOf(order.ticketPriceId) : null
+            }),
+            asItStood: (_change: OrderAuditChange, order: Ticket, state: OrderState) => legacyAuditData.snapshot(snapshotOf(order, state))
+        }
+    ]
+
+    it.each(WRITTEN)('GIVEN a ticket released and bought, and a second ticket changed to another price row and cancelled, written in $format WHEN replaying THEN the lines read the same events and households', ({creation, update, asItStood}) => {
+        const {replayTicketChanges} = useBooking()
+        const [adult, child] = [ticket(1, 1, 22), ticket(2, 2, 22)]
+        const childAsAdult = {...child, ticketPriceId: adult.ticketPriceId}
+        const bought = {...adult, inhabitantId: buyerInhabitant(14), householdId: 14}
+        const lines = replayTicketChanges([
+            historyRow(Audit.USER_BOOKED, 22, at(0), adult.id, adult.inhabitantId, creation(adult, Source['user-booking'])),
+            // The child's order is deleted later: its rows have lost their order id
+            historyRow(Audit.USER_BOOKED, 22, at(0), null, child.inhabitantId, creation(child, Source['user-booking'])),
+            historyRow(Audit.USER_BOOKED, 22, at(10), null, child.inhabitantId, update(Change.CHANGE_PRICE, childAsAdult, State.BOOKED)),
+            historyRow(Audit.USER_CANCELLED, 22, at(20), adult.id, adult.inhabitantId, update(Change.RELEASE, adult, State.RELEASED)),
+            historyRow(Audit.USER_CLAIMED, 14, at(30), adult.id, bought.inhabitantId, asItStood(Change.BUY, adult, State.RELEASED)),
+            historyRow(Audit.USER_CANCELLED, 22, at(40), null, child.inhabitantId, asItStood(Change.CANCEL, childAsAdult, State.BOOKED)),
+            historyRow(Audit.SYSTEM_UPDATED, SYSTEM, at(120), adult.id, bought.inhabitantId, update(Change.CLOSE, bought, State.CLOSED))
+        ], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant)
+
+        expect(lines.map(({households, events}) => ({households, events}))).toEqual([
+            {households: ['S_22'], events: [{change: Kind.BOOK, tickets: counts(1, 1, 0)}]},
+            {households: ['S_22'], events: [{change: Kind.CHANGE_PRICE, tickets: counts(1, 0, 0), from: counts(0, 1, 0)}]},
+            {households: ['S_22'], events: [{change: Kind.RELEASE, tickets: counts(1, 0, 0)}]},
+            {households: ['S_14'], events: [{change: Kind.BUY, tickets: counts(1, 0, 0), seller: shortNameOf(adult.householdId)}]},
+            {households: ['S_22'], events: [{change: Kind.CANCEL, tickets: counts(1, 0, 0)}]},
+            {households: ['S_14'], events: [{change: Kind.CLOSE, tickets: counts(1, 0, 0)}]}
+        ])
+    })
+
+    // A guest ticket is booked on its booker, so one person holds their own ticket and their guests' tickets
+    describe('a person\'s own ticket and their guests\' tickets', () => {
+        const PERSON = 131
+        const own: Ticket = {...ticket(1, 1, 31), inhabitantId: PERSON}
+        const guestAdult: Ticket = {...ticket(2, 1, 31), inhabitantId: PERSON, isGuestTicket: true}
+        const guestChild: Ticket = {...ticket(3, 2, 31), inhabitantId: PERSON, isGuestTicket: true}
+        const eventsAndCounts = (lines: TicketChange[]) => lines.map(line => ({events: line.events, counts: line.counts}))
+
+        it('GIVEN the guest orders deleted later, written in the audit format WHEN replaying THEN each deletion takes its own ticket by order id', () => {
+            const {replayTicketChanges} = useBooking()
+            const bookingOf = (order: Ticket, orderId: number | null) =>
+                historyRow(Audit.USER_BOOKED, 31, at(0), orderId, PERSON, createOrderAuditData(Change.BOOK, snapshotOf(order, State.BOOKED), Source['user-booking']))
+            const cancellationOf = (order: Ticket, timestamp: Date) =>
+                historyRow(Audit.USER_CANCELLED, 31, timestamp, null, PERSON, createOrderAuditData(Change.CANCEL, snapshotOf(order, State.BOOKED)))
+            const lines = replayTicketChanges([
+                bookingOf(own, own.id), bookingOf(guestAdult, null), bookingOf(guestChild, null),
+                cancellationOf(guestChild, at(10)), cancellationOf(guestAdult, at(20))
+            ], ticketPriceOf, SYSTEM, shortNameOf)
+
+            expect(eventsAndCounts(lines)).toEqual([
+                {events: [{change: Kind.BOOK, tickets: counts(2, 1, 0)}], counts: counts(2, 1, 0)},
+                {events: [{change: Kind.CANCEL, tickets: counts(0, 1, 0)}], counts: counts(2, 0, 0)},
+                {events: [{change: Kind.CANCEL, tickets: counts(1, 0, 0)}], counts: counts(1, 0, 0)}
+            ])
+        })
+
+        it('GIVEN the person\'s own order and a guest order booked in the legacy shape and both deleted later WHEN replaying THEN each booking holds its ticket and each deletion takes the ticket of its dinner and household with its price row', () => {
+            const {replayTicketChanges} = useBooking()
+            const lines = replayTicketChanges([
+                ...[own, guestChild].map(order => booked(order, 31, at(0), {deletedLater: true})),
+                deleted(guestChild, 31, at(10)),
+                deleted(own, 31, at(20))
+            ], ticketPriceOf, SYSTEM, shortNameOf)
+
+            expect(eventsAndCounts(lines)).toEqual([
+                {events: [{change: Kind.BOOK, tickets: counts(1, 1, 0)}], counts: counts(1, 1, 0)},
+                {events: [{change: Kind.CANCEL, tickets: counts(0, 1, 0)}], counts: counts(1, 0, 0)},
+                {events: [{change: Kind.CANCEL, tickets: counts(1, 0, 0)}], counts: counts(0, 0, 0)}
+            ])
         })
     })
 
-    describe('countChanges', () => {
-        it.each([
-            {desc: 'all empty → 0', buckets: emptyBuckets(), expected: 0},
-            {desc: 'only idempotent → 0', buckets: {...emptyBuckets(), idempotent: [desired(), desired()]}, expected: 0},
-            {desc: '1 create → 1', buckets: {...emptyBuckets(), create: [desired()]}, expected: 1},
-            {desc: '2 delete → 2', buckets: {...emptyBuckets(), delete: [desired(), desired()]}, expected: 2},
-            {desc: 'mixed buckets', buckets: {
-                ...emptyBuckets(),
-                create: [desired()],
-                delete: [desired(), desired()],
-                update: [desired()],
-                claim: [desired()],
-                idempotent: [desired(), desired(), desired()]  // not counted
-            }, expected: 5},
-        ])('$desc', ({buckets, expected}) => {
-            expect(countChanges(buckets)).toBe(expected)
-        })
+    it('GIVEN a legacy update of an order whose booking the history does not hold WHEN replaying THEN its line names the household as unknown', () => {
+        const {replayTicketChanges} = useBooking()
+        const lines = replayTicketChanges([updated(Audit.USER_BOOKED, ticket(4, 1, 22), 22, at(5), {ticketPriceId: 1})], ticketPriceOf, SYSTEM, shortNameOf)
+        expect(lines.map(line => line.households)).toEqual([[BOOKING_WORDS.unknownHousehold]])
+    })
+})
+
+describe('consecutiveDinnerRun', () => {
+    const dinner = (id: number, day: number) => ({id, date: new Date(2026, 3, day, 18)})
+
+    it.each([
+        {desc: 'three days in a row around the middle one', dinners: [dinner(1, 12), dinner(2, 13), dinner(3, 14)], around: 2, expected: [1, 2, 3]},
+        {desc: 'a gap before the run', dinners: [dinner(1, 9), dinner(2, 13), dinner(3, 14)], around: 3, expected: [2, 3]},
+        {desc: 'a gap after the run', dinners: [dinner(1, 12), dinner(2, 13), dinner(3, 20)], around: 1, expected: [1, 2]},
+        {desc: 'a single dinner', dinners: [dinner(1, 12), dinner(2, 20)], around: 1, expected: [1]},
+        {desc: 'unsorted input', dinners: [dinner(3, 14), dinner(1, 12), dinner(2, 13)], around: 1, expected: [1, 2, 3]},
+        {desc: 'a dinner the team does not have', dinners: [dinner(1, 12)], around: 99, expected: []}
+    ])('GIVEN $desc WHEN taking the run THEN the consecutive days come in date order', ({dinners, around, expected}) => {
+        const {consecutiveDinnerRun} = useBooking()
+        expect(consecutiveDinnerRun(dinners, around).map(dinner => dinner.id)).toEqual(expected)
     })
 })

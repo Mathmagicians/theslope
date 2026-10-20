@@ -4,204 +4,216 @@
  *
  * Compact mode (in ChefMenuCard summary line):
  * ┌──────────────────────────────────────────────────────────────────────────┐
- * │ 💰 1.425 kr                                                              │
+ * │ (money) 1.425 kr                                                         │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
- * Full mode (title + 3-box with expandable details):
- * Budget                                                                  [▼]
- * ┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐
- * │ 💰 INDTÆGTER       │  │ 🛒 RÅDIGHEDSBELØB  │  │ 🏠 KØKKENBIDRAG    │
- * │     1.875 kr       │  │   1.425 kr ex moms │  │     75 kr ex moms  │
- * │   45 billetter     │  │   1.781 kr inkl.   │  │     94 kr inkl.    │
- * └────────────────────┘  └────────────────────┘  └────────────────────┘
+ * Full mode, folded (title + 3 boxes, one chevron):
+ * Budget                                                                    [>]
+ * ┌ (money) INDTÆGTER ─┐ ┌ (cart) RÅDIGHEDSBELØB ─────────────┐ ┌ (house) KØKKENBIDRAG ┐
+ * │ 1.875 kr           │ │ 1.425 / 1.781 kr                    │ │ 75 / 94 kr        │
+ * │ 45 kuverter        │ │ ex / inkl. moms                     │ │ ex / inkl. moms   │
+ * │                    │ │ Brugt          1.310 / 1.638 kr     │ │ 5% af indtægter   │
+ * │                    │ │ Tilbage    +115 / +143 kr (check) │ │                │
+ * └────────────────────┘ └─────────────────────────────────────┘ └───────────────────┘
  *
- * [When expanded - ticket breakdown table + summary lines]
+ * Unfolded, under the boxes: Billetter (the ticket table named by type, its sums as its bottom rows down to
+ * Rådighedsbeløb), this dinner as one spending row with its receipts under it, the team's round in the same shape
+ * (CookingRoundSpending; the card builds both fragments once and hands them in) and last
+ * Billetændringer (TicketChanges, folded behind its chevron, its window from the booking deadline), shown only while
+ * the dinner has tickets.
  *
- * Formula: Indtægter - Køkkenbidrag (5%) = Rådighedsbeløb
- *          Amount / 1.25 = ex moms (for grocery shopping)
+ * Ticket money is what the households pay and reads in plain kr; every other amount renders both units through
+ * VatAmount, the ex moms figure loud. Revenue counts every paid ticket, a released one included (useOrder.calculateBudget).
  * Config:  app.config.ts → theslope.kitchen.baseRatePercent=5, vatPercent=25
  *
  * Used in:
- * - ChefMenuCard (compact: summary, full: expanded details)
+ * - ChefMenuCard (compact: summary, full: the budget section of the chef's card)
  *
  * ADR Compliance:
  * - ADR-001: Types from validation composables, business logic in useOrder
- * - Mobile-first responsive design with design system
- * - Uses NuxtUI components, TYPOGRAPHY from design system
+ * - ADR-018: every class binds COMPONENTS.dinnerBudget
  */
 import type { OrderDetail } from '~/composables/useBookingValidation'
+import type { Expense } from '~/composables/useBillingValidation'
+import type { SpendingFragment } from '~/composables/useBookingUi'
+import type {TableColumn} from '@nuxt/ui'
 
 interface Props {
   orders: OrderDetail[]
   mode?: 'compact' | 'full'
+  expenses?: Expense[]
+  dinnerEventId?: number | null
+  bookingDeadline?: Date | null
+  dinnerFragment?: SpendingFragment | null
+  teamFragment?: SpendingFragment | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  mode: 'compact'
+  mode: 'compact',
+  expenses: () => [],
+  dinnerEventId: null,
+  bookingDeadline: null,
+  dinnerFragment: null,
+  teamFragment: null
 })
 
-// Design system - TYPOGRAPHY for consistent text styling
-const { TYPOGRAPHY, BG } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, COMPONENTS, ICONS, BUTTONS, COLOR, NOISE, SIZES, ALERTS, getRandomEmptyMessageText } = useTheSlopeDesignSystem()
+const noTicketsSold = getRandomEmptyMessageText('noTicketsSold')
 
 // Kitchen config from app.config.ts
 const appConfig = useAppConfig()
-const kitchenBaseRatePercent = appConfig.theslope?.kitchen?.baseRatePercent ?? 5
-const vatPercent = appConfig.theslope?.kitchen?.vatPercent ?? 25
+const {baseRatePercent: kitchenBaseRatePercent, vatPercent} = appConfig.theslope.kitchen
 
 // Business logic from useOrder and useTicket
-const { getActiveOrders, groupByTicketType, calculateBudget, calculateTotalPortionsFromPrices } = useOrder()
+const { getActiveOrders, groupByTicketType, calculateBudget, calculateTotalPortions, spendingLeft, spendingAwaitsTickets } = useOrder()
 const { formatPrice } = useTicket()
 
 // Expandable details state
 const showDetails = ref(false)
 
-// Active orders (excluding RELEASED)
+// Active orders (excluding RELEASED): the kitchen's eaters
 const activeOrders = computed(() => getActiveOrders(props.orders))
 
 // Budget calculations from composable (business logic)
 const budget = computed(() => calculateBudget(props.orders, kitchenBaseRatePercent, vatPercent))
 
-const totalPortions = computed(() => calculateTotalPortionsFromPrices(props.orders))
+const totalPortions = computed(() => calculateTotalPortions(props.orders))
 
 // Revenue by ticket type (for expanded details table)
 const revenueByType = computed(() => groupByTicketType(activeOrders.value))
+
+// The grocery lines against the allowance
+const spent = computed(() => sumAmounts(props.expenses))
+const figures = computed(() => ({budgetGross: budget.value.availableBudget, spentGross: spent.value}))
+const left = computed(() => spendingLeft(figures.value))
+
+type TicketRevenueRow = (typeof revenueByType.value)[number]
+const ticketColumns: TableColumn<TicketRevenueRow>[] = [
+  {accessorKey: 'ticketType', header: 'Billettype'},
+  {accessorKey: 'count', header: 'Antal', meta: COMPONENTS.table.amountColumn},
+  {accessorKey: 'unitPrice', header: 'Stk pris', meta: COMPONENTS.table.amountColumn},
+  {accessorKey: 'revenue', header: 'Total', meta: COMPONENTS.table.amountColumn}
+]
 </script>
 
 <template>
   <!-- Compact Mode -->
-  <div v-if="mode === 'compact'" :class="`inline-flex items-center gap-1 ${TYPOGRAPHY.bodyTextSmall}`">
-    <span>💰</span>
-    <span class="font-medium">{{ formatPrice(budget.availableBudget) }} kr</span>
+  <div v-if="mode === 'compact'" :class="COMPONENTS.dinnerBudget.compact">
+    <UIcon :name="ICONS.economy" :class="COMPONENTS.dinnerBudget.boxGlyph" />
+    <span :class="COMPONENTS.dinnerBudget.compactAmount">{{ formatPrice(budget.availableBudget) }} kr</span>
   </div>
 
   <!-- Full Mode: Title + 3-Box Layout -->
-  <div v-else class="space-y-3">
-    <!-- Section title with expand toggle -->
-    <button
-      type="button"
-      class="flex items-center gap-2 hover:opacity-80 transition-opacity"
-      name="toggle-budget-details"
-      @click="showDetails = !showDetails"
-    >
+  <div v-else :class="COMPONENTS.dinnerBudget.stack">
+    <!-- The pane's title with the chevron that opens the details below -->
+    <div :class="COMPONENTS.collapsible.headerRow">
       <h4 :class="TYPOGRAPHY.sectionSubheading">Budget</h4>
-      <UIcon
-        :name="showDetails ? 'i-heroicons-chevron-down' : 'i-heroicons-chevron-right'"
-        class="w-4 h-4 opacity-50"
+      <UButton
+        v-bind="BUTTONS.flipOpen(showDetails)"
+        :color="COLOR.neutral"
+        :variant="NOISE.quiet"
+        :size="SIZES.standard"
+        :aria-label="showDetails ? 'Skjul budgettet' : 'Vis budgettet'"
+        name="toggle-budget-details"
+        @click="showDetails = !showDetails"
       />
-    </button>
+    </div>
 
     <!-- 3 Summary Boxes -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+    <div :class="COMPONENTS.dinnerBudget.boxes">
       <!-- Box 1: Indtægter (Revenue) -->
-      <UCard :ui="{ body: 'p-3' }">
-        <div class="text-center">
-          <div :class="`flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} opacity-60 mb-1`">
-            <span>💰</span>
-            <span>INDTÆGTER</span>
+      <UCard :ui="COMPONENTS.dinnerBudget.boxUi" data-testid="budget-box-revenue">
+        <div :class="COMPONENTS.dinnerBudget.box">
+          <div :class="COMPONENTS.dinnerBudget.boxLabel">
+            <UIcon :name="ICONS.economy" :class="COMPONENTS.dinnerBudget.boxGlyph" />
+            <span :class="COMPONENTS.dinnerBudget.boxLabelText">INDTÆGTER</span>
           </div>
-          <div :class="`${TYPOGRAPHY.cardTitle} font-bold text-success`">
-            {{ formatPrice(budget.totalRevenue) }} kr
-          </div>
-          <div :class="`${TYPOGRAPHY.finePrint} opacity-60`">
-            {{ Math.round(totalPortions) }} kuverter
+          <!-- Ticket money is what the households pay: plain kr, no VAT split -->
+          <div :class="COMPONENTS.dinnerBudget.boxAmountLarge">{{ formatPrice(budget.totalRevenue) }} kr</div>
+          <div :class="COMPONENTS.dinnerBudget.boxFact">
+            {{ formatPortions(totalPortions) }} kuverter
           </div>
         </div>
       </UCard>
 
-      <!-- Box 2: Rådighedsbeløb (Available Budget) -->
-      <UCard :ui="{ body: 'p-3' }">
-        <div class="text-center">
-          <div :class="`flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} opacity-60 mb-1`">
-            <span>🛒</span>
-            <span>RÅDIGHEDSBELØB</span>
+      <!-- Box 2: Rådighedsbeløb (Available Budget): start, used, left -->
+      <UCard :ui="COMPONENTS.dinnerBudget.boxUi" data-testid="budget-box-available">
+        <div :class="COMPONENTS.dinnerBudget.box">
+          <div :class="COMPONENTS.dinnerBudget.boxLabel">
+            <UIcon :name="ICONS.shoppingCart" :class="COMPONENTS.dinnerBudget.boxGlyph" />
+            <span :class="COMPONENTS.dinnerBudget.boxLabelText">RÅDIGHEDSBELØB</span>
           </div>
-          <!-- Ex moms (largest, primary display) -->
-          <div>
-            <span :class="`${TYPOGRAPHY.cardTitle} font-bold text-xl text-success`">{{ formatPrice(budget.availableBudgetExVat) }} kr</span>
-            <span :class="`${TYPOGRAPHY.finePrint} opacity-60`"> ex moms</span>
+          <div :class="COMPONENTS.dinnerBudget.boxAmountLarge"><VatAmount :gross="budget.availableBudget" /></div>
+          <div :class="COMPONENTS.dinnerBudget.boxUnit">ex / inkl. moms</div>
+          <div :class="COMPONENTS.dinnerBudget.boxLine">
+            <span>Brugt</span>
+            <VatAmount :gross="spent" data-testid="budget-spent" />
           </div>
-          <!-- Inkl moms (secondary) -->
-          <div class="mt-1">
-            <span :class="`${TYPOGRAPHY.bodyTextSmall} text-success`">{{ formatPrice(budget.availableBudget) }} kr</span>
-            <span :class="`${TYPOGRAPHY.finePrint} opacity-60`"> inkl. moms</span>
+          <div :class="COMPONENTS.dinnerBudget.boxLine">
+            <span>Tilbage</span>
+            <VatAmount :gross="left" balance :pending="spendingAwaitsTickets(figures)" data-testid="budget-left" />
           </div>
         </div>
       </UCard>
 
       <!-- Box 3: Køkkenbidrag (Kitchen Contribution) -->
-      <UCard :ui="{ body: 'p-3' }">
-        <div class="text-center">
-          <div :class="`flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} opacity-60 mb-1`">
-            <span>🏠</span>
-            <span>KØKKENBIDRAG</span>
+      <UCard :ui="COMPONENTS.dinnerBudget.boxUi" data-testid="budget-box-contribution">
+        <div :class="COMPONENTS.dinnerBudget.box">
+          <div :class="COMPONENTS.dinnerBudget.boxLabel">
+            <UIcon :name="ICONS.household" :class="COMPONENTS.dinnerBudget.boxGlyph" />
+            <span :class="COMPONENTS.dinnerBudget.boxLabelText">KØKKENBIDRAG</span>
           </div>
-          <!-- Ex moms (largest, primary display) -->
-          <div>
-            <span :class="`${TYPOGRAPHY.cardTitle} font-bold text-xl text-success`">{{ formatPrice(budget.kitchenContributionExVat) }} kr</span>
-            <span :class="`${TYPOGRAPHY.finePrint} opacity-60`"> ex moms</span>
-          </div>
-          <!-- Inkl moms (secondary) -->
-          <div class="mt-1">
-            <span :class="`${TYPOGRAPHY.bodyTextSmall} text-success`">{{ formatPrice(budget.kitchenContribution) }} kr</span>
-            <span :class="`${TYPOGRAPHY.finePrint} opacity-60`"> inkl. moms</span>
-          </div>
+          <div :class="COMPONENTS.dinnerBudget.boxAmountLarge"><VatAmount :gross="budget.kitchenContribution" /></div>
+          <div :class="COMPONENTS.dinnerBudget.boxUnit">ex / inkl. moms</div>
+          <div :class="COMPONENTS.dinnerBudget.boxUnit">{{ budget.kitchenBaseRatePercent }}% af indtægter</div>
         </div>
       </UCard>
     </div>
 
-    <!-- Expandable Details -->
-    <div v-if="showDetails" class="border rounded-lg overflow-hidden">
-      <!-- Ticket breakdown table -->
-      <div class="overflow-x-auto">
-        <table class="w-full">
-          <thead>
-            <tr :class="['border-b', BG.budgetHead]">
-              <th :class="`px-4 py-2 text-left ${TYPOGRAPHY.caption} opacity-60`">Billettype</th>
-              <th :class="`px-4 py-2 text-right ${TYPOGRAPHY.caption} opacity-60`">Antal</th>
-              <th :class="`px-4 py-2 text-right ${TYPOGRAPHY.caption} opacity-60`">Stk pris</th>
-              <th :class="`px-4 py-2 text-right ${TYPOGRAPHY.caption} opacity-60`">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="group in revenueByType"
-              :key="group.ticketType"
-              class="border-b last:border-b-0"
-            >
-              <td :class="`px-4 py-2 ${TYPOGRAPHY.bodyTextSmall}`">{{ group.ticketType }}</td>
-              <td :class="`px-4 py-2 text-right ${TYPOGRAPHY.bodyTextSmall}`">{{ group.count }}</td>
-              <td :class="`px-4 py-2 text-right ${TYPOGRAPHY.bodyTextSmall}`">{{ formatPrice(group.unitPrice) }} kr</td>
-              <td :class="`px-4 py-2 text-right ${TYPOGRAPHY.bodyTextMedium}`">{{ formatPrice(group.revenue) }} kr</td>
-            </tr>
-            <!-- Empty state row when no tickets -->
-            <tr v-if="revenueByType.length === 0">
-              <td :class="`px-4 py-4 text-center italic ${TYPOGRAPHY.bodyTextMuted}`" colspan="4">
-                Ingen billetter solgt endnu
-              </td>
-            </tr>
-          </tbody>
-        </table>
+    <!-- The details, below the boxes -->
+    <UCollapsible v-model:open="showDetails" v-bind="COMPONENTS.collapsible.belowTrigger">
+      <template #content>
+    <div data-testid="budget-details">
+      <!-- Billetter: the ticket table named by type -->
+      <UTable :data="revenueByType" :columns="ticketColumns" :ui="COMPONENTS.table.ui" data-testid="budget-ticket-table">
+        <template #ticketType-cell="{ row }">{{ ticketTypeLabel(row.original.ticketType) }}</template>
+        <template #unitPrice-cell="{ row }">{{ formatPrice(row.original.unitPrice) }} kr</template>
+        <template #revenue-cell="{ row }">{{ formatPrice(row.original.revenue) }} kr</template>
+        <template #empty>
+          <UAlert v-bind="ALERTS.emptyStateCompact" :title="noTicketsSold" data-testid="budget-ticket-empty" />
+        </template>
+        <template #body-bottom>
+          <tr :class="COMPONENTS.table.totalRow" data-testid="budget-summary-revenue">
+            <td :class="COMPONENTS.table.sumCell" colspan="3">Indtægter</td>
+            <td :class="COMPONENTS.table.sumAmountCell">{{ formatPrice(budget.totalRevenue) }} kr</td>
+          </tr>
+          <tr>
+            <td :class="COMPONENTS.table.sumCell" colspan="3">Køkkenbidrag ({{ budget.kitchenBaseRatePercent }}%)</td>
+            <td :class="COMPONENTS.table.sumAmountCell"><span :class="COMPONENTS.dinnerBudget.summaryDeduction">-<VatAmount :gross="budget.kitchenContribution" /></span></td>
+          </tr>
+          <tr :class="COMPONENTS.table.totalRow" data-testid="budget-summary-available">
+            <td :class="COMPONENTS.table.sumCell" colspan="3">Rådighedsbeløb</td>
+            <td :class="COMPONENTS.table.sumAmountCell"><VatAmount :gross="budget.availableBudget" /></td>
+          </tr>
+        </template>
+      </UTable>
+
+      <!-- This dinner: its receipts under its heading, its figures in the total row -->
+      <div v-if="dinnerFragment" :class="COMPONENTS.dinnerBudget.section">
+        <CookingRoundSpending :fragment="dinnerFragment" />
       </div>
 
-      <!-- Summary lines -->
-      <div class="border-t p-4 space-y-2">
-        <div class="flex justify-between">
-          <span :class="TYPOGRAPHY.bodyTextMuted">Indtægter (inkl. moms)</span>
-          <span :class="TYPOGRAPHY.bodyTextMedium">{{ formatPrice(budget.totalRevenue) }} kr</span>
-        </div>
-        <div class="flex justify-between">
-          <span :class="TYPOGRAPHY.bodyTextMuted">Køkkenbidrag ({{ budget.kitchenBaseRatePercent }}%)</span>
-          <span :class="`${TYPOGRAPHY.bodyTextMedium} opacity-60`">-{{ formatPrice(budget.kitchenContribution) }} kr</span>
-        </div>
-        <div :class="`flex justify-between pt-2 border-t ${TYPOGRAPHY.bodyTextMedium} font-semibold`">
-          <span>Rådighedsbeløb (inkl. moms)</span>
-          <span class="text-success">{{ formatPrice(budget.availableBudget) }} kr</span>
-        </div>
-        <div class="flex justify-between">
-          <span :class="`${TYPOGRAPHY.finePrint} opacity-60`">Rådighedsbeløb (ex moms)</span>
-          <span :class="`${TYPOGRAPHY.finePrint} opacity-60`">{{ formatPrice(budget.availableBudgetExVat) }} kr</span>
-        </div>
+      <!-- The team's cooking round -->
+      <div v-if="teamFragment" :class="COMPONENTS.dinnerBudget.section">
+        <CookingRoundSpending :fragment="teamFragment" />
+      </div>
+
+      <!-- Billetændringer last, folded, only while there are tickets -->
+      <div v-if="dinnerEventId && orders.length" :class="COMPONENTS.dinnerBudget.section">
+        <TicketChanges :dinner-event-id="dinnerEventId" :since="bookingDeadline" />
       </div>
     </div>
+      </template>
+    </UCollapsible>
   </div>
 </template>

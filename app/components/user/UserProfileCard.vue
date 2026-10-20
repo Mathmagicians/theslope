@@ -69,7 +69,7 @@ const props = withDefaults(defineProps<Props>(), {
   preferencesOpen: false
 })
 
-const {TYPOGRAPHY, SIZES, ICONS, IMG, BUTTONS, ALERTS, COLOR} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, SIZES, ICONS, IMG, BUTTONS, ALERTS, COLOR, NOISE} = useTheSlopeDesignSystem()
 const {roleLabels} = useUserRolesUi()
 const {getUserUrl} = useHeynabo()
 const authStore = useAuthStore()
@@ -180,7 +180,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
                 v-for="role in visibleRoles"
                 :key="role"
                 :color="roleLabels[role]?.color || 'neutral'"
-                variant="subtle"
+                :variant="NOISE.subtle"
                 :size="SIZES.small"
               >
                 <UIcon :name="roleLabels[role]?.icon || 'i-heroicons-user'" class="mr-1" />
@@ -273,8 +273,8 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           v-if="isViewMode && canEditRoles"
           :icon="ICONS.edit"
           :color="COLOR.neutral"
-          variant="ghost"
-          size="sm"
+          :variant="NOISE.quiet"
+          :size="SIZES.sm"
           data-testid="edit-roles-btn"
           @click="startEditingRoles"
         >
@@ -286,8 +286,8 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           <UButton
             :icon="ICONS.check"
             :color="COLOR.primary"
-            variant="soft"
-            size="sm"
+            :variant="NOISE.soft"
+            :size="SIZES.sm"
             :loading="isSavingRoles"
             data-testid="save-roles-btn"
             @click="saveRoles"
@@ -297,8 +297,8 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           <UButton
             :icon="ICONS.xMark"
             :color="COLOR.neutral"
-            variant="ghost"
-            size="sm"
+            :variant="NOISE.quiet"
+            :size="SIZES.sm"
             :disabled="isSavingRoles"
             data-testid="cancel-roles-btn"
             @click="cancelEditingRoles"
@@ -314,8 +314,8 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           v-for="role in visibleRoles"
           :key="role"
           :color="roleLabels[role]?.color || 'neutral'"
-          variant="soft"
-          size="md"
+          :variant="NOISE.soft"
+          :size="SIZES.md"
         >
           <UIcon :name="roleLabels[role]?.icon || 'i-heroicons-user'" class="mr-1" />
           {{ roleLabels[role]?.label || role }}
