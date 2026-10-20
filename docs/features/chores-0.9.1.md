@@ -321,8 +321,8 @@ control sums (`useBilling` `controlInvoices` / `controlTransactions`) already as
 ### Problem
 
 One schedule is written in five places — `wrangler.toml` `[triggers] crons` in the three environment blocks,
-`nuxt.config.ts` `nitro.scheduledTasks`, `app.config.ts` `theslope.systemJobs` — and labelled in two:
-`useMaintenance` `jobScheduleLabels` and `systemJobs[].description`. The monthly job runs `0 3 18 * *`: the 18th at
+`nuxt.config.ts` `nitro.scheduledTasks`, `app.config.ts` `theslope.systemJobs` — and labelled in
+`systemJobs[].description`, which `AdminSystem.vue` shows. The monthly job runs `0 3 18 * *`: the 18th at
 03:00 UTC, 05:00 in summer time and 04:00 in winter time; the labels carry the winter clock only ("kl. 02:00",
 "kl. 03:00", "kl. 04:00").
 
@@ -330,7 +330,7 @@ One schedule is written in five places — `wrangler.toml` `[triggers] crons` in
 
 `app/config/systemJobs.ts`, a plain module (the `notificationTemplates.ts` pattern): per job its cron and its Danish
 label with the UTC time and the Copenhagen summer and winter times. `nuxt.config.ts` builds `scheduledTasks` from it,
-`app.config.ts` spreads it into `theslope.systemJobs`, `useMaintenance` labels read it. The three `wrangler.toml`
+`app.config.ts` spreads it into `theslope.systemJobs`, whose labels `AdminSystem.vue` shows. The three `wrangler.toml`
 `crons` lists stay per environment block (TOML).
 
 ### Mockup
@@ -344,12 +344,11 @@ Månedlig fakturering    D. 18. hver måned kl. 05:00 (sommertid) / 04:00 (vinte
 ### TDD
 
 Unit: every `systemJobs` cron is a key of `scheduledTasks` and appears in each `wrangler.toml` `crons` list (parsed with
-wrangler's own config reader); `useMaintenance` labels equal the module's labels.
+wrangler's own config reader); the `theslope.systemJobs` labels equal the module's labels.
 
 ### Affected
 
-`app/config/systemJobs.ts` (new), `nuxt.config.ts`, `app/app.config.ts`, `app/composables/useMaintenance.ts`,
-`docs/adr-compliance-frontend.md` (`useMaintenance` row).
+`app/config/systemJobs.ts` (new), `nuxt.config.ts`, `app/app.config.ts`.
 
 ## Delete responses
 
