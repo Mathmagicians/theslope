@@ -231,14 +231,16 @@ export const useBookingsStore = defineStore("Bookings", () => {
         refreshOrders(), refreshUpcomingOrders(), refreshReleasedCounts(), refreshWaitlistEntries(), refreshSelectedDinnerEventDetail()
     ])
 
-    /** A write that changes bookings: the request, then every dataset a booking touches re-reads once */
+    /**
+     * A write that changes bookings: the request, then every dataset a booking touches re-reads once, also after a
+     * failed write, since D1 may have landed part of a batch
+     */
     const writeBookings = async <T>(request: () => Promise<T>): Promise<T> => {
         isProcessingBookings.value = true
         try {
-            const result = await request()
-            await refreshBookings()
-            return result
+            return await request()
         } finally {
+            await refreshBookings()
             isProcessingBookings.value = false
         }
     }

@@ -816,6 +816,7 @@ Each fixture's season shrinks to the dinners its cases prove; each case is check
 | Re-login with Face ID (S5) | `feature-proposal-relogin-faceid.md` | parked proposal; the PRF spike is complete |
 | Chef allergen selector: the selector counts a population through a ticket allergies map | § Ticket allergies on the order | brief halted 2026-10-10; presented again with the ticket allergies design |
 | AdminTeams loading row: after a season switch the table shows the previous season's teams under the loading bar; with the loading row, a team save's re-read closes the team detail docked under its row on a phone | `app/components/admin/AdminTeams.vue:396`, ADR-018 § Table loading | open: loading row with the docked detail closing, or a docked detail that survives the re-read |
+| Avatar ring colours: `UserListItem` builds `md:ring-${color}` at runtime, which Tailwind leaves out of the CSS, so from md up the faces on Præferencer and in the allergy alert ring in the text colour; the token holds one class string per use (`household` warning, `inhabitant` primary, `allergyManager` ocean-500), the prop takes its key, the raw `"ocean-500"` in `AllergyManagersList.vue:48` goes, and the `UserListItem` spec checks each key's token | `useTheSlopeDesignSystem.ts` `userListItem.ring`, `UserListItem.vue:143`, `HouseholdCard.vue:308` | brief presented 2026-10-20; moved to 0.9.1 by the user |
 
 ### Decisions carried from release 0.9
 

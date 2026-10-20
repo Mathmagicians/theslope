@@ -2,7 +2,7 @@
 import {describe, it, expect, beforeAll, beforeEach, afterEach, vi} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {findByTestId, clickByTestId, resetStores, findLoadingRow, isTableLoading, registerScaffoldEndpoint, mountWithTooltipProvider, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {findByTestId, clickByTestId, resetStores, findLoadingRow, isTableLoading, registerScaffoldEndpoint, mountWithTooltipProvider, untilTrue, VIEWPORTS} from '~~/tests/component/testHelpers'
 import {BookingViewSchema} from '~/composables/useBookingView'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
@@ -859,7 +859,8 @@ describe('BookingGridView and the server\'s dry run', () => {
       await clickByTestId(wrapper, `cell-${lars.id}-${future.id}`)
       expect(wrapper.findComponent(ActionPreview).props('pending')).toBe(true)
 
-      await vi.waitFor(() => expect(wrapper.findComponent(ActionPreview).props('days')).toEqual(formatPreviewLines(reply.scaffoldResult, householdOrder)))
+      await untilTrue(() => wrapper.findComponent(ActionPreview).props('days').length > 0)
+      expect(wrapper.findComponent(ActionPreview).props('days')).toEqual(formatPreviewLines(reply.scaffoldResult, householdOrder))
       expect(previews()).toEqual([{
         query: {adminBypass: 'false', preview: 'true'},
         body: {householdId: mockHousehold.id, dinnerEventIds: [future.id], orders: [expect.objectContaining({inhabitantId: lars.id, dinnerEventId: future.id, dinnerMode: cell(wrapper, lars.id, future.id).props('modelValue')})]}
@@ -876,8 +877,8 @@ describe('BookingGridView and the server\'s dry run', () => {
       await nextTick()
       expect(cell(wrapper, anna.id, future.id).props()).toMatchObject({modelValue: DinnerMode.NONE, isModified: true, expected: false})
 
-      await vi.waitFor(() => expect(wrapper.findComponent(ActionPreview).props('days').flatMap(day => day.lines.map(line => line.text)))
-        .toEqual([`${anna.name} frameldes`]))
+      await untilTrue(() => wrapper.findComponent(ActionPreview).props('days').length > 0)
+      expect(wrapper.findComponent(ActionPreview).props('days').flatMap(day => day.lines.map(line => line.text))).toEqual([`${anna.name} frameldes`])
       const [bareIngen] = previews().at(-1)!.body.orders
       expect(bareIngen).toMatchObject({inhabitantId: anna.id, dinnerEventId: future.id, dinnerMode: DinnerMode.NONE})
       expect(bareIngen).not.toHaveProperty('orderId')

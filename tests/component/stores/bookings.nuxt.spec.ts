@@ -393,7 +393,12 @@ describe('Bookings store — one booking write', () => {
         ordersEndpoint.mockImplementation(() => [])
     })
 
-    it('a booking save re-reads the household\'s orders, the tickets for sale, the waiting list and the dinner on view, each once', async () => {
+    // A failed write may have landed part of its orders: the datasets re-read either way, and the caller gets the error
+    it.each([
+        {write: 'lands', gets: 'the result', answer: () => OrderFactory.defaultScaffoldOrdersResponse(), outcome: 'resolves' as const},
+        {write: 'fails', gets: 'the error', answer: failure, outcome: 'rejects' as const}
+    ])('WHEN a booking save $write THEN the caller gets $gets and the household\'s orders, the tickets for sale, the waiting list and the dinner on view re-read, each once', async ({answer, outcome}) => {
+        scaffoldEndpoint.mockImplementation(answer)
         const store = useBookingsStore()
         store.loadOrdersForDinners({dinnerEventIds: [dinner.id], householdId: MY_HOUSEHOLD_ID})
         store.selectDinnerDate(() => new Date(dinner.date))
@@ -404,8 +409,9 @@ describe('Bookings store — one booking write', () => {
         waitlistEntriesEndpoint.mockClear()
         dinnerEventDetailEndpoint.mockClear()
 
-        await store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [])
+        await expect(store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, []))[outcome].toBeTruthy()
 
+        expect(store.isProcessingBookings).toBe(false)
         expect(queries(ordersEndpoint)).toEqual(expect.arrayContaining([
             expect.objectContaining({householdId: String(MY_HOUSEHOLD_ID)}),
             expect.objectContaining({state: OrderStateSchema.enum.RELEASED, allHouseholds: 'true'})

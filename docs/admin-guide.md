@@ -385,8 +385,8 @@ Som admin kan du rette bookinger for alle husstande - også efter deadline er pa
 **Sådan gør du:**
 
 1. Gå til [Økonomi](https://www.skraaningen.dk/admin/economy)
-2. Find middagen under **Fremtidige bestillinger**
-3. Klik på **Ret** (blyant-ikon) ud for den middag du vil rette
+2. Find middagen under **Fremtidige bestillinger** og fold den ud
+3. Klik **Admin Korrektion** - og en gang til, når knappen spørger
 4. Vælg husstand i dropdown-menuen
 5. Redigér tilmeldinger:
    - Tilføj/fjern personer
@@ -399,7 +399,11 @@ Som admin kan du rette bookinger for alle husstande - også efter deadline er pa
 - Frameldingsfristen (sæsonens, som regel 8 dage)
 - Afmeldingsregler (slet i stedet for frigiv)
 
-> **Bemærk:** Admin-rettelser logges med dit bruger-ID i systemets audit trail.
+> **Bemærk:** Kun middage med bestillinger kan foldes ud. En middag uden bestillinger retter du fra husstandens side
+> (se Admin-adgang til husstandssider).
+
+> **Bemærk:** Admin-rettelser logges med dit bruger-ID og står som "ADMIN korrektion" i Billetændringer - også når du
+> retter fra husstandens side.
 
 ---
 
