@@ -418,21 +418,24 @@ curl https://www.skraaningen.dk/api/public/health | jq '.version'
 
 ## Developer companion
 
-`developer.skraaningen.dk` serves the `gh-pages` branch through GitHub Pages: the manifest and the results per environment under `environments/`, the docs under `docs/`. Design: `docs/features/feature-proposal-developer-companion.md`; source: `developer/`.
+GitHub Pages serves the `gh-pages` branch at `https://mathmagicians.github.io/theslope/` and, once the repository variable `DEVELOPER_DOMAIN` holds `developer.skraaningen.dk`, at that domain: the manifest and the results per environment under `environments/`, the docs under `docs/`. Design: `docs/features/feature-proposal-developer-companion.md`; source: `developer/`.
 
 | Item | Value |
 |------|-------|
-| Workflow | `.github/workflows/developer.yml` — runs when the CI/CD pipeline completes and publishes the run that uploaded the artifact `deployment` (a deploy to `dev` or `prod`), and on `workflow_dispatch` |
-| Make targets | `make developer-resolve run=`, `make developer-assemble env= run= version= sha= [url=]`, `make developer-build`, `make developer-publish` |
-| Site build | `make developer-build` runs `npx nuxi generate developer` and copies `.output/developer/public/` into the `gh-pages` checkout |
+| Workflow | `.github/workflows/developer.yml` — runs when the CI/CD pipeline completes and publishes the run that uploaded the artifact `deployment` (a deploy to `dev` or `prod`), and on `workflow_dispatch` from the chosen branch |
+| Make targets | `make developer-resolve run=`, `make developer-assemble env= run= version= sha= [url=]`, `make developer-build [base=] [domain=]`, `make developer-publish` |
+| Site build | `make developer-build` runs `npx nuxi generate developer` with `NUXT_APP_BASE_URL=<base>`, copies `.output/developer/public/` into the `gh-pages` checkout and writes `CNAME` from `domain` |
+| Base path | `DEVELOPER_DOMAIN` set: `base=/ domain=<DEVELOPER_DOMAIN>`; unset: `base=/<repository>/` |
 | Local preview | `npx nuxi dev developer` |
-| Pages setting | Source: branch `gh-pages`, folder `/ (root)`; custom domain `developer.skraaningen.dk` |
+| Pages setting | Source: branch `gh-pages`, folder `/ (root)`; custom domain `<DEVELOPER_DOMAIN>` once the variable is set |
 | DNS (zone `skraaningen.dk`) | `CNAME developer → mathmagicians.github.io`, DNS only |
+
+The first publish creates `gh-pages`; Pages is enabled on it afterwards. The custom domain goes live in this order: the DNS record, `gh variable set DEVELOPER_DOMAIN --body developer.skraaningen.dk`, a republish, the custom domain in the Pages setting.
 
 Republish an environment from a CI/CD run:
 
 ```bash
-gh workflow run developer.yml -f run_id=<id>   # <id>: the CI/CD run that deployed; the environment comes from its artifact
+gh workflow run developer.yml --ref <branch> -f run_id=<id>   # <id>: the CI/CD run that deployed; the environment comes from its artifact
 gh run watch
 ```
 

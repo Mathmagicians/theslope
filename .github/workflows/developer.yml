@@ -25,9 +25,9 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      # The workflow's own branch: main when the pipeline completes, the branch chosen on workflow_dispatch
       - uses: actions/checkout@v7
         with:
-          ref: main
           fetch-depth: 1
       - name: Read what the run published
         # The id reaches the script through env, and make writes it into its recipe, so only digits pass
@@ -58,7 +58,17 @@ jobs:
           done
       - run: make developer-assemble env="$ENV" run="$RUN_ID" version="$RELEASE_VERSION" sha="$COMMIT_SHA" url="$URL"
         if: env.PUBLISH == 'true'
-      - run: make developer-build
+      - name: Build the site
         if: env.PUBLISH == 'true'
+        # With the custom domain the site lives at the root, on the repository's github.io address under /<repository>/
+        env:
+          DEVELOPER_DOMAIN: ${{ vars.DEVELOPER_DOMAIN }}
+        run: |
+          if [ -n "$DEVELOPER_DOMAIN" ]; then
+            [[ "$DEVELOPER_DOMAIN" =~ ^[a-z0-9.-]+$ ]] || { echo "❌ Not a host name: $DEVELOPER_DOMAIN"; exit 1; }
+            make developer-build base=/ domain="$DEVELOPER_DOMAIN"
+          else
+            make developer-build base="/${GITHUB_REPOSITORY#*/}/"
+          fi
       - run: make developer-publish env="$ENV"
         if: env.PUBLISH == 'true'

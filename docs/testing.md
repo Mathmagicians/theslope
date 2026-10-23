@@ -43,6 +43,8 @@ A behaviour a unit or component spec proves gets no e2e case. A glyph, a colour,
 spec plus the browser check; the e2e case asserts the flow around it, in GIVEN/WHEN/THEN, as what the system does for
 the user.
 
+An outcome is asserted in one case; a case that reaches an outcome another case asserts extends that case.
+
 ### Rule 1: Tests MUST Be DRY
 
 **STOP** before writing ANY test code and ask:
@@ -122,6 +124,12 @@ spec's own household goes with the household.
 | AllergyType | `name LIKE 'Peanuts-%' OR name LIKE 'Test %' OR name LIKE 'Updated %'` | `AllergyFactory.defaultAllergyTypeData` |
 
 `testDataNaming.unit.spec.ts` (Architecture Tests) checks the factory defaults against the patterns.
+
+**Households and users:** a preference write re-scaffolds its household, so a case that writes preferences creates its
+own household (`HouseholdFactory.createHousehold`), which the admin writes with `?adminBypass=true`; under the override
+the preference write keeps the season's deadlines. The session households hold the access cases. The admin and the
+member are the two users who log in: a role change runs inside `UserFactory.withSystemRoles`, which restores the roles,
+and the roles an endpoint accepts are proven in the `requireHouseholdAccess` unit table.
 
 **ALWAYS verify:** `npx playwright test path/to/test.e2e.spec.ts --workers=4`
 
@@ -1034,6 +1042,8 @@ Before completing ANY test task:
 - [ ] **Salted:** E2E data uses `testSalt` for uniqueness
 - [ ] **Helpers:** Repeated patterns in testHelpers.ts
 - [ ] **Parallel:** E2E verified with `--workers=4`
+- [ ] **Once:** an outcome is asserted in one case, at the lowest level (Rule 0)
+- [ ] **Own household:** a case that writes preferences creates its own household (Rule 3)
 - [ ] **No console.log:** Only `expect()` assertions
 
 **If ANY fails → STOP and refactor.**

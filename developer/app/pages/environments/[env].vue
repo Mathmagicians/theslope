@@ -71,13 +71,13 @@ const reportText = (row: SuiteRow) => `Report${row.suite === 'smoke' ? ' (live)'
             </UBadge>
           </template>
           <template #report-cell="{ row }">
-            <ULink :to="row.original.report" external target="_blank">
+            <ULink :to="row.original.report" target="_blank">
               {{ reportText(row.original) }}
             </ULink>
           </template>
         </UTable>
         <p v-if="hasOpenApi">
-          <ULink :to="`/environments/${env}/openapi.json`" external target="_blank">
+          <ULink :to="`/environments/${env}/openapi.json`" target="_blank">
             API reference of this version
           </ULink>
         </p>

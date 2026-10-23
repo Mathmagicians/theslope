@@ -340,7 +340,7 @@ site ?= $(DEVELOPER_OUT)/site
 artifacts ?= $(DEVELOPER_OUT)/artifacts
 DEVELOPER_SUITES := api ui smoke
 DEVELOPER_ASSEMBLE_USAGE := usage: make developer-assemble env=<dev|prod> run=<pipeline run id> version=<version> sha=<commit> [url=<app url>] [site=] [artifacts=]
-# A pipeline run that deploys uploads the artifact `deployment`: its version-info lines plus ENV and URL
+# A pipeline run that deploys uploads the artifact `deployment`: RELEASE_VERSION, COMMIT_SHA, ENV and URL from its step outputs
 developer-resolve: ## What a pipeline run published, from its deployment artifact, as env lines - run=<pipeline run id> [artifacts=]
 	@test -n "$(run)" || { echo "usage: make developer-resolve run=<pipeline run id> [artifacts=artifacts]"; exit 1; }
 	@rm -rf "$(artifacts)/deployment"; \
@@ -371,11 +371,12 @@ developer-assemble: ## Lay a run's results and manifest under site/environments 
 	@[ ! -f "$(artifacts)/openapi/_openapi.json" ] || cp "$(artifacts)/openapi/_openapi.json" "$(site)/environments/$(env)/openapi.json"
 	@cat "$(site)/environments/$(env).json"
 
-# The hashed chunks live under _nuxt; the previous build's go before the copy so they do not pile up on gh-pages
-developer-build: ## Generate the site into the gh-pages checkout - nuxi generate, CNAME and .nojekyll [site=]
-	@npx nuxi generate developer
+# The hashed chunks live under _nuxt; the previous build's go before the copy so they do not pile up on gh-pages.
+# base is the path the site is served under (NUXT_APP_BASE_URL); domain, when set, is the custom domain in CNAME
+developer-build: ## Generate the site into the gh-pages checkout - nuxi generate, CNAME and .nojekyll [base=/] [domain=] [site=]
+	@NUXT_APP_BASE_URL="$(or $(base),/)" npx nuxi generate developer
 	@mkdir -p "$(site)" && rm -rf "$(site)/_nuxt" && cp -R "$(DEVELOPER_PUBLIC)/." "$(site)/" && \
-	echo developer.skraaningen.dk > "$(site)/CNAME" && touch "$(site)/.nojekyll"
+	{ if [ -n "$(domain)" ]; then echo "$(domain)" > "$(site)/CNAME"; else rm -f "$(site)/CNAME"; fi; } && touch "$(site)/.nojekyll"
 
 developer-publish: ## Force-push site/ as the single commit of gh-pages - [env=<env>] [site=]
 	@test -d "$(site)" || { echo "usage: make developer-publish [env=<env>] [site=site] (run developer-build first)"; exit 1; }

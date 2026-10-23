@@ -1,6 +1,7 @@
 /**
  * The manifests `make developer-assemble` writes under environments/: one per environment plus index.json with the
- * names. Every path is relative to the site root, so the same code reads the gh-pages site and a local build.
+ * names. Every path is relative to the site root; `$fetch` and NuxtLink add the base path, so the same code reads the
+ * site on either address and a local build.
  */
 export interface SuiteResult {
     passed: number
@@ -32,7 +33,7 @@ export const useManifests = () => {
         return settled.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
     }
 
-    const exists = (path: string) => fetch(path, {method: 'HEAD'}).then(response => response.ok).catch(() => false)
+    const exists = (path: string) => $fetch(path, {method: 'HEAD'}).then(() => true).catch(() => false)
 
     const scenarios = (suite: SuiteResult) => suite.passed + suite.failed + suite.flaky + suite.skipped
 

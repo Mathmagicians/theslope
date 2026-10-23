@@ -67,11 +67,11 @@ jobs:
           ROLLBACK_TO: ${{ inputs.rollback_to }}
           RELEASE_VERSION_INPUT: ${{ inputs.release_version }}
         run: |
-          # The version lines go to the step outputs and to deployment.env, the record a deploying run hands on.
+          # The version lines go to the step outputs.
           # make writes the version into its recipe lines, so only a version number reaches it
           version_info() {
             if [ -n "$1" ] && ! [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$ ]]; then echo "❌ Not a version number: $1"; exit 1; fi
-            mkdir -p "$E2E_RESULTS_DIR"; RELEASE_VERSION="$1" make version-info | tee -a "$GITHUB_OUTPUT" > "$E2E_RESULTS_DIR/deployment.env"
+            RELEASE_VERSION="$1" make version-info | tee -a "$GITHUB_OUTPUT"
           }
           if [ -n "$ROLLBACK_TO" ]; then
             echo "🔄 Rollback mode to commit: $ROLLBACK_TO"
@@ -211,11 +211,20 @@ jobs:
           echo "$OUTPUT"
           URL=$(echo "$OUTPUT" | grep 'DEPLOY_URL' | grep -oE 'https://[^")]+')
           echo "url=$URL" >> $GITHUB_OUTPUT
-          printf 'ENV=%s\nURL=%s\n' "$DEPLOY_ENV" "$URL" >> "$E2E_RESULTS_DIR/deployment.env"
+      - name: Record the deployment
+        # The artifact `deployment` hands the developer companion the run's version, target and URL, from the step outputs
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.RELEASE_VERSION }}
+          COMMIT_SHA: ${{ steps.version.outputs.COMMIT_SHA }}
+          DEPLOY_ENV: ${{ steps.target.outputs.env }}
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/deployment"
+          printf 'RELEASE_VERSION=%s\nCOMMIT_SHA=%s\nENV=%s\nURL=%s\n' "$RELEASE_VERSION" "$COMMIT_SHA" "$DEPLOY_ENV" "$URL" > "$RUNNER_TEMP/deployment/deployment.env"
       - uses: actions/upload-artifact@v7
         with:
           name: deployment
-          path: ${{ env.E2E_RESULTS_DIR }}/deployment.env
+          path: ${{ runner.temp }}/deployment/deployment.env
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       # The OpenAPI spec the build prerendered (nuxt.config.ts nitro.openAPI), for the developer companion's API reference
       - uses: actions/upload-artifact@v7
