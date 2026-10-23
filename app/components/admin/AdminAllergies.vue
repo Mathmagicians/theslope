@@ -4,8 +4,8 @@ Allergy catalog - master/detail with a responsive detail MOUNT POINT.
 Selection is the single state; AllergyDetailPanel is the single detail component.
 Only WHERE it mounts differs - guards keep exactly one instance live.
 
-DESKTOP (md+) - LAYOUTS.masterDetailPage 3/9 grid, sticky detail pane
-┌──────────────────────────┬─────────────────────────────────────┐
+DESKTOP (md+) - LAYOUTS.masterDetailPage, sticky detail pane
+┌─ a third, min 245px ─────┬─ the rest ──────────────────────────┐
 │ MASTER (CatalogTable)    │ DETAIL (AllergyDetailPanel)         │
 │ 🥛 Mælk        2  🆕     │ ┌─ sticky top-4 ─────────────────┐  │
 │ 🥜 Jordnødder  2  ◀ sel  │ │ Detaljer            [✏️]  [🗑] │  │
@@ -363,7 +363,7 @@ const catalogEmptyState = {
           :show-new-badge="true"
       />
 
-      <!-- MASTER-DETAIL - LAYOUTS.masterDetailPage: 3/9 grid from md, stacked below.
+      <!-- MASTER-DETAIL - LAYOUTS.masterDetailPage: the catalog beside the detail from md, stacked below.
            The detail panel docks in the expanded row on mobile, in the sticky pane on md+ -->
       <div v-else :class="LAYOUTS.masterDetailPage.root">
         <!-- CREATE (mobile) - docks under the toolbar, adjacent to the button that opened it -->
@@ -372,7 +372,7 @@ const catalogEmptyState = {
         </div>
 
         <!-- MASTER -->
-        <div :class="[LAYOUTS.masterDetailPage.left, COMPONENTS.allergyCatalogPage.column]">
+        <div :class="LAYOUTS.masterDetailPage.left">
           <AllergyCatalogTable
               v-model:expanded="expanded"
               mode="single"

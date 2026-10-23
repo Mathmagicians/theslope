@@ -3,32 +3,28 @@
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 ## ADR-018: Design System Owns Shared UI Patterns
 
-**Status:** Accepted | **Date:** 2026-09-16 | **Updated:** 2026-10-18
+**Status:** Accepted | **Date:** 2026-09-16 | **Updated:** 2026-10-23
 
 ### Context
 
-Shared UI values had drifted into per-component colour, variant and `:ui` patches; a token sweep that merged near-identical values changed the design.
+Shared UI values had drifted into per-component colour, variant and `:ui` patches; a token sweep that merged
+near-identical values changed the design.
 
 ### Decision
 
-**`useTheSlopeDesignSystem` owns every shared UI value. Components bind a token and pass domain props only.**
+**The design system owns every shared UI value and pattern. Components bind its tokens and pass domain props only.**
 
-| Pattern | Token | Bind |
-|---|---|---|
-| Colour | `COLOR`, `BG`, `TEXT`, `BORDER`, `RING`; surface palettes `CHEF_CALENDAR`, `DINNER_CALENDAR`, `PLANNING_CALENDAR`, `TICKET_TYPE_COLORS` (with the ticket type glyphs `TICKET_TYPE_ICONS`), `ORDER_STATE_COLORS`, `PANTONE_CHIPS` | `:class="TEXT.muted"`, `:color="COLOR.primary"` |
-| Alerts | `ALERTS.<kind>` — `info`, `neutral`, `success`, `warning`, `error`, `legend`, `emptyState`, `emptyStateCompact` — plus the `withActions` modifier | `v-bind="ALERTS.warning"`, `v-bind="{...ALERTS.info, ...ALERTS.withActions}"` |
-| Buttons | `BUTTONS.<kind>` with `ICONS` | `v-bind="BUTTONS.secondaryAction" :color="COLOR.primary" :icon="ICONS.edit"` |
-| Calendars | `COMPONENTS.calendarGrid`, `CALENDAR.picker`, `dayCircleClasses(variant)` | `v-bind="COMPONENTS.calendarGrid"`; every day circle renders through the helper |
-| Table empty states | the `UTable` `#empty` slot | one empty state per table, inside the slot |
-| Table loading | `COMPONENTS.table.loadingRow`, `COMPONENTS.table.loadingSpinner` with `ICONS.sync` | a table bound to a dataset that reloads, a new selection or a write's re-read, binds that dataset's `loading`: UTable's loading bar runs under the column headers while the rows stay, and the `#loading` slot, filled with the spinning glyph and its text, stands in a table that has no rows yet; without the slot UTable renders `#empty` while loading |
-| Separators | `COMPONENTS.separator.<kind>` on a labelled `USeparator` | `v-bind="COMPONENTS.separator.moment" :label="…"` |
-
-A token holds exactly one value. Two values are two tokens, named by where they are used. Merging values is a design
-decision the user takes from a visual proposal.
+- Colours, sizes, layouts, alerts, buttons, calendars, tables and separators are tokens in `useTheSlopeDesignSystem`;
+  `docs/ui.md` describes the families and the shared patterns
+- A token holds exactly one value. Two values are two tokens, named by where they are used. Merging values is a design
+  decision the user takes from a visual proposal
+- A responsive class carries its Tailwind breakpoint prefixes in the token; the layout's breakpoint drives only the
+  values Nuxt UI takes as properties
 
 ### Enforcement
 
-`tests/component/architecture/designSystemUsage.unit.spec.ts` reads every `.vue` under `app/` and fails on a rule breach; the rule inventory lives in `docs/testing.md` (Architecture Tests). Tests assert usage and behaviour, never a token's value.
+An architecture spec reads every `.vue` under `app/` and fails on a rule breach; the rule inventory lives in
+`docs/testing.md` (Architecture Tests). Tests assert usage and behaviour, never a token's value.
 
 ### Compliance
 
@@ -41,9 +37,9 @@ decision the user takes from a visual proposal.
 
 | File | Role |
 |------|------|
-| `app/composables/useTheSlopeDesignSystem.ts` | Tokens and the responsive factories `createResponsiveAlerts`, `createResponsiveButtons`, `createDayCircleClasses` |
-| `tests/component/architecture/designSystemUsage.unit.spec.ts` | The usage rules, one case each (14) |
-| `docs/ui.md` | Token reference, alert kinds, edit affordances, calendar presets |
+| `app/composables/useTheSlopeDesignSystem.ts` | The tokens |
+| `tests/component/architecture/designSystemUsage.unit.spec.ts` | The usage rules |
+| `docs/ui.md` | Token families and shared patterns |
 
 ### Related ADRs
 

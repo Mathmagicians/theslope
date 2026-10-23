@@ -438,13 +438,14 @@ const flatEvents = computed(() => eventsByWeek.value.flat())
 
 const householdOrder = computed(() => props.household.inhabitants.map(i => i.id))
 
-// The bookings the scaffold will make on the dinners on view: its dry run with no orders, read again once the orders change
-const expectedRequest = computed((): ScaffoldOrdersRequest | null => props.view !== 'day' && flatEvents.value.length > 0
-  ? {householdId: props.household.id, dinnerEventIds: flatEvents.value.map(e => e.id), orders: []}
+// The bookings the scaffold will make on the dinners on view: its dry run with no orders, read again once the orders change.
+// Every viewer reads them, on the season's deadlines
+const expectedRequest = computed(() => props.view !== 'day' && flatEvents.value.length > 0
+  ? {householdId: props.household.id, dinnerEventIds: flatEvents.value.map(e => e.id)}
   : null)
 const {result: expectedRun, pending: isExpectedPending} = useScaffoldPreview(
   () => expectedRequest.value,
-  request => bookingsStore.previewBookings(request),
+  ({householdId, dinnerEventIds}) => bookingsStore.fetchExpectedBookings(householdId, dinnerEventIds),
   {refreshOn: [() => props.orders]}
 )
 const expectedModes = computed(() => expectedBookings(expectedRun.value))

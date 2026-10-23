@@ -212,10 +212,14 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         await refreshAllergyTypes()
     }
 
-    const createAllergy = async (allergyData: AllergyCreate): Promise<AllergyDisplay> => {
+    // A change to another household's allergies carries the override; the household's own change carries none (ADR-004)
+    const overrideQuery = (adminBypass?: boolean) => adminBypass ? {adminBypass} : {}
+
+    const createAllergy = async (allergyData: AllergyCreate, adminBypass?: boolean): Promise<AllergyDisplay> => {
         const created = await apiRequest<AllergyDisplay>('/api/household/allergy', {
             method: 'PUT',
             body: allergyData,
+            query: overrideQuery(adminBypass),
             action: 'createAllergy'
         })
         await refreshAfterAllergyMutation()
@@ -224,10 +228,11 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     }
 
     // id travels in the path, not the body - the endpoint injects it (mirrors updateAllergyType)
-    const updateAllergy = async (id: number, allergyData: Omit<AllergyUpdate, 'id'>): Promise<AllergyDisplay> => {
+    const updateAllergy = async (id: number, allergyData: Omit<AllergyUpdate, 'id'>, adminBypass?: boolean): Promise<AllergyDisplay> => {
         const updated = await apiRequest<AllergyDisplay>(`/api/household/allergy/${id}`, {
             method: 'POST',
             body: allergyData,
+            query: overrideQuery(adminBypass),
             action: 'updateAllergy'
         })
         await refreshAfterAllergyMutation()
@@ -235,8 +240,8 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         return updated
     }
 
-    const deleteAllergy = async (id: number): Promise<void> => {
-        await apiRequest(`/api/household/allergy/${id}`, {method: 'DELETE', action: 'deleteAllergy'})
+    const deleteAllergy = async (id: number, adminBypass?: boolean): Promise<void> => {
+        await apiRequest(`/api/household/allergy/${id}`, {method: 'DELETE', query: overrideQuery(adminBypass), action: 'deleteAllergy'})
         await refreshAfterAllergyMutation()
         console.info(`🥜 > ALLERGY_STORE > Deleted allergy ID: ${id}`)
     }

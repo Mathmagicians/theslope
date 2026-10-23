@@ -13,8 +13,6 @@
  * - Settings tab: Settings
  */
 
-import {useQueryParam} from '~/composables/useQueryParam'
-
 // TAB CONFIGURATION
 const tabs = [
   {
@@ -112,14 +110,13 @@ const isMember = computed(() =>
   selectedHousehold.value ? authStore.isMemberOfHousehold(selectedHousehold.value.id) : false
 )
 
-// Admin override: admin can unlock editing on households they don't belong to
-const adminOverrideActive = ref(false)
-const showAdminOverride = computed(() =>
-  authStore.isAdmin && selectedHousehold.value ? !authStore.isMemberOfHousehold(selectedHousehold.value.id) : false
-)
-const canEdit = computed(() =>
-  isMember.value || (authStore.isAdmin && adminOverrideActive.value)
-)
+// The override unlocks editing on a household the viewer does not belong to: an admin's on every tab, the allergy
+// manager's on the allergies tab (ADR-004)
+const overrideApplies = computed(() => authStore.isAdmin || (authStore.isAllergyManager && activeTab.value === 'allergies'))
+const adminOverrideArmed = ref(false)
+const adminOverrideActive = computed(() => adminOverrideArmed.value && overrideApplies.value)
+const showAdminOverride = computed(() => overrideApplies.value && !!selectedHousehold.value && !isMember.value)
+const canEdit = computed(() => isMember.value || adminOverrideActive.value)
 
 // Household status ribbon
 const ribbon = computed(() => {
@@ -195,7 +192,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
                 :icon="ICONS.authorize"
                 :initial-color="COLOR.info"
                 initial-variant="subtle"
-                @confirm="adminOverrideActive = true"
+                @confirm="adminOverrideArmed = true"
               />
             </template>
           </UAlert>
@@ -214,7 +211,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
                 :color="COLOR.neutral"
                 :variant="NOISE.quiet"
                 :icon="ICONS.xMark"
-                @click="adminOverrideActive = false"
+                @click="adminOverrideArmed = false"
               >
                 Afslut
               </UButton>

@@ -122,9 +122,6 @@ describe('HouseholdCard previews a preference change', () => {
         const expected = formatPreviewLines(
             OrderFactory.defaultScaffoldResult({dinners: previewOf(inhabitant.id).dinners, results: inhabitantIds.flatMap(id => previewOf(id).results)}), householdOrder)
         await vi.waitFor(() => expect(previewTexts(wrapper)).toEqual(expected.map(day => day.lines.map(line => line.text))))
-        // The draft is the query's one parameter: a read carries no override
-        expect(sent.map(({inhabitantId, query}) => ({inhabitantId, parameters: Object.keys(query)})))
-            .toEqual(inhabitantIds.map(inhabitantId => ({inhabitantId, parameters: ['dinnerPreferences']})))
         sent.forEach(({query}) => expect(deserializeWeekDayMap(String(query.dinnerPreferences))).toMatchObject({[MONDAY]: DinnerMode.NONE}))
     })
 

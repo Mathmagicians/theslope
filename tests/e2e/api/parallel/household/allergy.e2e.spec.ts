@@ -244,19 +244,19 @@ test.describe('Allergy API - who changes a household\'s allergies', () => {
         inhabitantIn['another household'] = another.id
     })
 
+    // The admin's override lands in the CRUD cases above; the other refusals are requireHouseholdAccess's
+    // (tests/component/utils/authorizationHelper.unit.spec.ts)
     const actors = [
-        {who: 'a member of the household', session: memberValidatedBrowserContext, on: 'their own household', adminBypass: false, allowed: true},
-        {who: 'a member of another household', session: memberValidatedBrowserContext, on: 'another household', adminBypass: false, allowed: false},
-        {who: 'an admin with the override', session: validatedBrowserContext, on: 'another household', adminBypass: true, allowed: true},
-        {who: 'an admin without the override', session: validatedBrowserContext, on: 'another household', adminBypass: false, allowed: false}
+        {who: 'a member of the household', session: memberValidatedBrowserContext, on: 'their own household', allowed: true},
+        {who: 'an admin without the override', session: validatedBrowserContext, on: 'another household', allowed: false}
     ] as const
 
-    for (const {who, session, on, adminBypass, allowed} of actors) {
+    for (const {who, session, on, allowed} of actors) {
         for (const allergyChange of AllergyFactory.ALLERGY_CHANGES) {
             const {change, status, after} = allergyChange
             test(`GIVEN ${who} WHEN it ${change} an allergy on ${on} THEN it answers ${allowed ? status : 403}`, async ({browser}) => {
                 const comments = await AllergyFactory.changeAllergyAs(adminContext, await session(browser), allergyChange, {
-                    inhabitantId: inhabitantIn[on], testSalt, expectedStatus: allowed ? status : 403, adminBypass, createdAllergyTypeIds
+                    inhabitantId: inhabitantIn[on], testSalt, expectedStatus: allowed ? status : 403, createdAllergyTypeIds
                 })
 
                 expect(comments).toEqual(allowed ? after.allowed : after.refused)

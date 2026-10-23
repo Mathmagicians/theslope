@@ -120,6 +120,14 @@ with the cancelled strike (`CALENDAR.day`), a ticket and a grid cell's mode badg
 tokens, built from the same past-day colours and strike, the grid's column header carries the dinner state badge in the
 lock chip's place, and the booking form and the chef's card wear the cancel corner ribbon (`getRibbonClasses`).
 
+### Master-detail pages
+
+A page or tab that sets a calendar or a list beside the item it opens binds `LAYOUTS.masterDetailPage`: on `UPage :ui`, or
+on its own containers through the same `root`, `left` and `center` slots. A phone stacks the master over the detail; from
+md the master takes a third of the row, never narrower than a week of the calendar's day circles, and the detail takes the
+rest, never wider. The calendar's day circle steps up a size at lg. A master table whose detail docks under its row on a
+phone mounts the detail through `COMPONENTS.masterDetail`.
+
 ### Component layouts
 
 A layout one component owns is drawn in that component's header and bound through the `COMPONENTS` key that carries its

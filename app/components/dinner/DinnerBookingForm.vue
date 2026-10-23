@@ -347,12 +347,13 @@ const eventWaitlistEntries = computed(() => props.waitlistEntries.filter(entry =
 // The bookings the scaffold will make on this dinner: its dry run with no orders, read again once the orders change
 const bookingsStore = useBookingsStore()
 const householdOrder = computed(() => household.value?.inhabitants.map(({id}) => id) ?? [])
-const expectedRequest = computed((): ScaffoldOrdersRequest | null => household.value && !dinnerHasPassed.value
-  ? {householdId: household.value.id, dinnerEventIds: [props.dinnerEvent.id], orders: []}
+// Every viewer reads them, on the season's deadlines
+const expectedRequest = computed(() => household.value && !dinnerHasPassed.value
+  ? {householdId: household.value.id, dinnerEventIds: [props.dinnerEvent.id]}
   : null)
 const {result: expectedRun, pending: isExpectedPending} = useScaffoldPreview(
   () => expectedRequest.value,
-  request => bookingsStore.previewBookings(request),
+  ({householdId, dinnerEventIds}) => bookingsStore.fetchExpectedBookings(householdId, dinnerEventIds),
   {refreshOn: [() => props.orders]}
 )
 const expectedModes = computed(() => expectedBookings(expectedRun.value))

@@ -421,15 +421,15 @@ export class AllergyFactory {
 
     /**
      * One access case: a fresh allergy type (an inhabitant holds one allergy per type) and, for a change that needs it,
-     * the allergy, both through the admin's override; then the actor's change, its status asserted. Returns the comments
-     * of the inhabitant's allergies of the type after the change
+     * the allergy, both through the admin's override; then the actor's change without the override, its status asserted.
+     * Returns the comments of the inhabitant's allergies of the type after the change
      */
     static readonly changeAllergyAs = async (
         adminContext: BrowserContext,
         actorContext: BrowserContext,
         {change, given}: AllergyChange,
-        {inhabitantId, testSalt, expectedStatus, adminBypass, createdAllergyTypeIds}: {
-            inhabitantId: number, testSalt: string, expectedStatus: number, adminBypass: boolean, createdAllergyTypeIds: number[]
+        {inhabitantId, testSalt, expectedStatus, createdAllergyTypeIds}: {
+            inhabitantId: number, testSalt: string, expectedStatus: number, createdAllergyTypeIds: number[]
         }
     ): Promise<Array<string | null | undefined>> => {
         const allergyType = await AllergyFactory.createAllergyType(adminContext, AllergyFactory.defaultAllergyTypeData(testSalt))
@@ -441,13 +441,13 @@ export class AllergyFactory {
 
         switch (change) {
             case 'adds':
-                await AllergyFactory.createAllergy(actorContext, {inhabitantId, allergyTypeId, inhabitantComment: ACCESS_COMMENT}, expectedStatus, adminBypass)
+                await AllergyFactory.createAllergy(actorContext, {inhabitantId, allergyTypeId, inhabitantComment: ACCESS_COMMENT}, expectedStatus)
                 break
             case 'updates':
-                await AllergyFactory.updateAllergy(actorContext, allergyId, {inhabitantComment: ACCESS_UPDATED_COMMENT}, expectedStatus, adminBypass)
+                await AllergyFactory.updateAllergy(actorContext, allergyId, {inhabitantComment: ACCESS_UPDATED_COMMENT}, expectedStatus)
                 break
             case 'removes':
-                await AllergyFactory.deleteAllergy(actorContext, allergyId, expectedStatus, adminBypass)
+                await AllergyFactory.deleteAllergy(actorContext, allergyId, expectedStatus)
                 break
         }
 

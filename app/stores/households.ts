@@ -2,7 +2,8 @@ import type {
     HouseholdDisplay,
     HouseholdDetail
 } from '~/composables/useCoreValidation'
-import {useBookingValidation, type ScaffoldResult} from '~/composables/useBookingValidation'
+import {useBookingValidation, type ScaffoldResult, type DinnerMode} from '~/composables/useBookingValidation'
+import type {WeekDayMap} from '~/types/dateTypes'
 import {useBooking, countTotals} from '~/composables/useBooking'
 
 /**
@@ -15,7 +16,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
     // DEPENDENCIES
     const {storeAsyncData, loadOrThrow, apiRequest, toastSaved, notFoundToast} = useApiHandler()
     const {formatScaffoldResult, sumScaffoldResults} = useBooking()
-    const {HouseholdDisplaySchema, HouseholdDetailSchema} = useCoreValidation()
+    const {HouseholdDisplaySchema, HouseholdDetailSchema, serializeWeekDayMap} = useCoreValidation()
     const {InhabitantUpdateResponseSchema, HouseholdUpdateResponseSchema} = useBookingValidation()
 
     // Last preference update result (persists across component remounts)
@@ -223,16 +224,14 @@ export const useHouseholdsStore = defineStore("Households", () => {
     }
 
     /**
-     * What a save of the draft preferences would do, read without writing: the preview of each inhabitant the save
-     * writes, combined. One inhabitant, or every inhabitant of the household in power mode
+     * What a save of the draft preferences would do, read without writing: the dry run (GET) of each inhabitant the
+     * save writes, combined. One inhabitant, or every inhabitant of the household in power mode
      */
-    const previewPreferences = async (inhabitantIds: number[], preferences: Record<string, string>, adminBypass = false): Promise<ScaffoldResult> => {
-        console.info(`🏠 > HOUSEHOLDS_STORE > Previewing preferences for inhabitants ${inhabitantIds.join(', ')}${adminBypass ? ' (admin bypass)' : ''}`)
+    const previewPreferences = async (inhabitantIds: number[], preferences: WeekDayMap<DinnerMode>): Promise<ScaffoldResult> => {
+        console.info(`🏠 > HOUSEHOLDS_STORE > Previewing preferences for inhabitants ${inhabitantIds.join(', ')}`)
         // A preview writes nothing, so the previews run side by side where the saves run one after another
-        const responses = await Promise.all(inhabitantIds.map(inhabitantId => apiRequest(preferencesUrl(inhabitantId, adminBypass), {
-            method: 'POST',
-            body: {dinnerPreferences: preferences},
-            query: {preview: true},
+        const responses = await Promise.all(inhabitantIds.map(inhabitantId => apiRequest(`/api/household/inhabitants/${inhabitantId}/preferences`, {
+            query: {dinnerPreferences: serializeWeekDayMap(preferences)},
             schema: InhabitantUpdateResponseSchema,
             action: 'previewPreferences'
         })))

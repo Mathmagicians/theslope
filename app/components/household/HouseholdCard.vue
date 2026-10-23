@@ -181,7 +181,7 @@ const previewRequest = computed(() => {
 })
 const {result: preview, pending: isPreviewPending} = useScaffoldPreview(
   () => previewRequest.value,
-  ({inhabitantIds, preferences}) => householdsStore.previewPreferences(inhabitantIds, preferences, props.adminBypass)
+  ({inhabitantIds, preferences}) => householdsStore.previewPreferences(inhabitantIds, preferences)
 )
 const previewDays = computed(() => preview.value
   ? formatPreviewLines(preview.value, householdOrder.value)

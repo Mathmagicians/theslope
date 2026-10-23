@@ -6,7 +6,9 @@
  * - All team members see everything (team selector, calendar, details)
  * - Only chefs get edit controls in ChefMenuCard (formMode='EDIT')
  *
- * Master Panel (1/4 width):
+ * LAYOUTS.masterDetailPage on UPage: from md the master beside the detail, stacked on a phone.
+ *
+ * Master Panel (a third of the row, at least 245px):
  * ┌─────────────────────────────────────────┐
  * │ Mine Madhold                            │
  * │ [Madhold A] Madhold B                   │
@@ -17,7 +19,7 @@
  * │ Chefkok tildelt                         │
  * └─────────────────────────────────────────┘
  *
- * Detail Panel (3/4 width):
+ * Detail Panel (the rest of the row):
  * ┌─────────────────────────────────────────┐
  * │ MENU HERO                               │
  * │ (chef mode if isChefFor, else view)     │
@@ -34,8 +36,6 @@
  * - ?dinner=42 - Selected dinner ID
  */
 
-import {useQueryParam} from '~/composables/useQueryParam'
-import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
 import {FORM_MODES, type FormMode} from '~/types/form'
 import type {DinnerEventDisplay, ChefMenuForm} from '~/composables/useBookingValidation'
 import type {ExpenseCreate} from '~/composables/useBillingValidation'

@@ -47,6 +47,10 @@
  *
  * For list displays (tabs, tables), use CookingTeamBadges component instead.
  *
+ * Visual check: at 375px and desktop with a role of seven members, the /dinner monitor face's role row and the
+ * /admin/teams edit header's faces show three and the overflow count on a phone, five from md; the names and the
+ * badges wrap under the faces inside the card and the page does not scroll sideways.
+ *
  * ADR Compliance:
  * - ADR-001: Types from validation composables
  * - ADR-007/ADR-009: every mode reads the Detail the plan store holds for the selected team
@@ -335,8 +339,8 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
         </UFormField>
 
         <!-- Compact team members view in header -->
-        <div :class="COMPONENTS.teamCard.memberSummary">
-          <UAvatarGroup :size="COMPONENTS.avatar.compact.size" :ui="{base: COMPONENTS.avatar.compact.fit}" :max="COMPONENTS.avatar.max">
+        <div :class="COMPONENTS.teamCard.memberSummary" data-testid="team-member-summary">
+          <UAvatarGroup :size="COMPONENTS.avatar.compact.size" :ui="{base: COMPONENTS.avatar.compact.fit}" :max="SIZES.avatarMax">
             <UTooltip
               v-for="assignment in assignments"
               :key="assignment.id"

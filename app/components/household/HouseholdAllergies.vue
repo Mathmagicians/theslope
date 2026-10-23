@@ -49,10 +49,13 @@ const {activeSeason} = storeToRefs(usePlanStore())
 interface Props {
   household: HouseholdDetail
   canEdit?: boolean
+  // The override the page grants on another household; each write carries it (ADR-004)
+  adminBypass?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  canEdit: true
+  canEdit: true,
+  adminBypass: false
 })
 
 const allergyStore = useAllergiesStore()
@@ -101,7 +104,7 @@ const handleAddAllergy = async (allergyTypeId: number) => {
     inhabitantId: editingInhabitantId.value,
     allergyTypeId,
     inhabitantComment: null
-  })
+  }, props.adminBypass)
 
   showSuccessToast('Allergi', `${getAllergyTypeName(allergyTypeId)} tilføjet`)
 }
@@ -112,7 +115,7 @@ const handleRemoveAllergy = async (allergyTypeId: number) => {
   const allergy = currentAllergies.value.find(a => a.allergyTypeId === allergyTypeId)
   if (!allergy) return
 
-  await allergyStore.deleteAllergy(allergy.id)
+  await allergyStore.deleteAllergy(allergy.id, props.adminBypass)
 
   showSuccessToast('Allergi', `${getAllergyTypeName(allergyTypeId)} fjernet`)
 }
@@ -124,7 +127,7 @@ const handleCommentUpdate = async (allergyTypeId: number, comment: string) => {
 
   await allergyStore.updateAllergy(allergy.id, {
     inhabitantComment: comment || null
-  })
+  }, props.adminBypass)
 
   showSuccessToast('Allergi', 'Din kommentar er gemt')
 }

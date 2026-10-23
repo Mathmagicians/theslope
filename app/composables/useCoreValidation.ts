@@ -540,7 +540,8 @@ export const useCoreValidation = () => {
         // Functions - Household
         deserializeHouseholdDisplay,
         deserializeHouseholdDetail,
-        // Functions - WeekDayMap
+        // WeekDayMap of dinner modes
+        WeekDayMapSchemaOptional,
         serializeWeekDayMap,
         deserializeWeekDayMap,
         createDefaultWeekdayMap,

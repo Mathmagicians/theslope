@@ -1,3 +1,12 @@
+<!--
+HouseholdListItem - a household's inhabitants
+  compact: the faces (three before the overflow count) beside the name badges; the badges wrap, and from md they
+           drop under the faces when the cell is narrow
+  card:    the address, then one line per inhabitant
+
+Visual check: /admin/households at 375px and desktop, a household with many inhabitants: the faces, then the name
+badges wrapping inside the Beboere cell; the page does not scroll sideways.
+-->
 <script setup lang="ts">
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 
@@ -10,13 +19,13 @@ const props = withDefaults(defineProps<Props>(), {
     compact: false
 })
 
-const {COLOR, TEXT, BG, SIZES, NOISE, ICONS, COMPONENTS} = useTheSlopeDesignSystem()
+const {COLOR, TEXT, BG, SIZES, NOISE, ICONS, COMPONENTS, TYPOGRAPHY} = useTheSlopeDesignSystem()
 
 const hasInhabitants = computed(() => props.household.inhabitants?.length > 0)
 </script>
 
 <template>
-    <div v-if="compact" class="flex flex-col md:flex-row md:items-center gap-3">
+    <div v-if="compact" :class="COMPONENTS.householdListItem.compact">
         <UAvatarGroup :size="COMPONENTS.avatar.compact.size" :ui="{base: COMPONENTS.avatar.compact.fit}" :max="COMPONENTS.avatar.listItemMax">
             <UTooltip v-for="inhabitant in household.inhabitants" :key="inhabitant.id" :text="inhabitant.name">
                 <UAvatar
@@ -27,7 +36,7 @@ const hasInhabitants = computed(() => props.household.inhabitants?.length > 0)
             </UTooltip>
         </UAvatarGroup>
 
-        <div class="flex flex-wrap gap-1">
+        <div :class="COMPONENTS.householdListItem.names">
             <UBadge
                 v-for="inhabitant in household.inhabitants"
                 :key="inhabitant.id"
@@ -42,23 +51,23 @@ const hasInhabitants = computed(() => props.household.inhabitants?.length > 0)
 
     <UCard v-else>
         <template #header>
-            <h3 class="text-lg font-semibold">
+            <h3 :class="TYPOGRAPHY.cardTitle">
                 {{ household.address }}
             </h3>
         </template>
 
-        <div v-if="hasInhabitants" class="space-y-2">
+        <div v-if="hasInhabitants" :class="COMPONENTS.householdListItem.inhabitants">
             <div
                 v-for="inhabitant in household.inhabitants"
                 :key="inhabitant.id"
-                :class="['flex items-center gap-2 p-2 rounded', BG.panelHover]"
+                :class="[COMPONENTS.householdListItem.inhabitant, BG.panelHover]"
             >
-                <UIcon name="i-heroicons-user" :class="TEXT.gray[400]" />
+                <UIcon :name="ICONS.user" :class="TEXT.gray[400]" />
                 <span>{{ inhabitant.name }}</span>
             </div>
         </div>
 
-        <div v-else :class="[TEXT.muted, 'italic']">
+        <div v-else :class="[TEXT.muted, COMPONENTS.householdListItem.empty]">
             No inhabitants
         </div>
     </UCard>

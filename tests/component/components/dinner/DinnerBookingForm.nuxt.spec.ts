@@ -655,13 +655,10 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
 
   // Every member reads (ADR-004): whoever views the form reads the expected bookings through the GET without any
   // override, on the season's deadlines. The household's own member is mountExpected's read
-  it.each([
-    {viewer: 'a member of another household, or an admin before the override', canEditAdminOverride: undefined, adminBypass: false},
-    {viewer: 'an admin after the override', canEditAdminOverride: () => true, adminBypass: true}
-  ])('GIVEN $viewer THEN the form reads the expected bookings through the GET without any override, and Anna\'s ticket shows expected', async ({canEditAdminOverride, adminBypass}) => {
+  it('GIVEN a member of another household, or an admin before the override THEN the form reads the expected bookings through the GET without any override, and Anna\'s ticket shows expected', async () => {
     scaffold.answers.expected = () => OrderFactory.defaultScaffoldOrdersResponse({results: [annaExpected]})
     session.user.value = stranger
-    const wrapper = await mountForm({...baseProps, household: householdWithInhabitants, canEditAdminOverride, adminBypass})
+    const wrapper = await mountForm({...baseProps, household: householdWithInhabitants})
     // The table's loading bar runs until the read lands
     await untilTrue(() => expectedReads().length > 0 && !isTableLoading(wrapper))
 

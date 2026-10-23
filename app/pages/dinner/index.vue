@@ -2,9 +2,13 @@
 /**
  * Dinner Page - Master/Detail view of communal dinners
  *
- * UX: Master-detail pattern
- * - Master (Calendar): 1/4 width, shows calendar with dinner events
- * - Detail (Dinner info): 3/4 width, shows selected day details
+ * UX: Master-detail pattern (LAYOUTS.masterDetailPage on UPage)
+ * md and up                                                 phone
+ * +-- a third, at least 245px --+ +-- the rest ----------+  +----------------------------+
+ * | DinnerCalendarDisplay       | | the selected dinner  |  | DinnerCalendarDisplay      |
+ * | countdown, calendar, legend | | (detail view below)  |  +----------------------------+
+ * +-----------------------------+ +----------------------+  | the selected dinner        |
+ *                                                           +----------------------------+
  *
  * Detail view: DinnerDetailPanel lays out three slots; each component's header draws its own layout.
  * ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -21,10 +25,9 @@
 import {FORM_MODES} from '~/types/form'
 import type {DesiredOrder} from '~/composables/useBookingValidation'
 import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
-import {useDinnerDateParam, useBookingView, useCalendarOpenParam} from '~/composables/useBookingView'
 
 // Design system
-const { COLOR, COMPONENTS, ICONS, ALERTS, getRandomEmptyMessage, NOISE, SIZES } = useTheSlopeDesignSystem()
+const { COLOR, COMPONENTS, ICONS, ALERTS, LAYOUTS, getRandomEmptyMessage, NOISE, SIZES } = useTheSlopeDesignSystem()
 
 // Fun empty state for no team assigned
 const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
@@ -162,7 +165,7 @@ useHead({
       </UAlert>
     </div>
   </UPage>
-  <UPage v-else-if="isSelectedSeasonInitialized && selectedSeason">
+  <UPage v-else-if="isSelectedSeasonInitialized && selectedSeason" :ui="LAYOUTS.masterDetailPage">
     <!-- Master: Calendar (left slot) -->
     <template #left>
       <CalendarMasterPanel>

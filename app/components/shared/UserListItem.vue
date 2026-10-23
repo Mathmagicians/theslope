@@ -13,6 +13,9 @@
 │  [👤][👤][👤] Anna · Henne · Lars    ← showNames=true           │
 │  [👤][👤][👤] 3 bofæller             ← showNames=false + label  │
 │  [👤][👤][👤] 3                      ← showNames=false, compact │
+│  [👤][👤][👤][+4]                    ← seven on a phone          │
+│  [👤][👤][👤][👤][👤][+2]            ← seven from md             │
+│  A long names list wraps under the faces inside its cell        │
 │                                                                 │
 │ PROPS:                                                          │
 │  inhabitants    - Single or array of InhabitantDisplay          │
@@ -23,7 +26,7 @@
 │  useFullName    - Full name vs first name (default: false)      │
 │  label          - Group mode label, e.g., "bofæller"            │
 │  max            - Group faces before the overflow count         │
-│                   (default: COMPONENTS.avatar.max)              │
+│                   (default: SIZES.avatarMax: 3, 5 from md)      │
 │  linkToProfile  - Avatar links to Heynabo (default: true)       │
 │  icon           - Avatar fallback icon (default: ICONS.user)    │
 │                                                                 │
@@ -31,6 +34,11 @@
 │  #badge({ inhabitant }) - Custom badges per inhabitant          │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
+
+Visual check: at 375px and desktop, a group of seven or more: the /dinner team card's monitor face and the allergy
+managers box (/admin/allergies) show three faces and the overflow count on a phone, five from md; the
+/household/<S>/members power row shows three on both; a long names list wraps under the faces and the page does not
+scroll sideways.
 -->
 <script setup lang="ts">
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
@@ -155,7 +163,7 @@ const {getUserUrl} = useHeynabo()
     <!-- Avatars + Names row -->
     <div :class="userListItem.groupRow">
       <!-- Avatar group -->
-      <UAvatarGroup :max="max ?? COMPONENTS.avatar.max" :size="avatarSize.size" :ui="{base: avatarSize.fit}">
+      <UAvatarGroup :max="max ?? SIZES.avatarMax" :size="avatarSize.size" :ui="{base: avatarSize.fit}">
         <template v-for="inhabitant in inhabitantsList" :key="inhabitant.heynaboId">
           <ULink
             v-if="linkToProfile"

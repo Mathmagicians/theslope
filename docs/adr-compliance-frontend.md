@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-10-18
+**Last Updated:** 2026-10-23
 **History:** git and the feature plans under `docs/features/` (shipped plans in `docs/features/archived/`)
 
 One row per route, component, store and composable: which ADRs it answers to, its markers and its test coverage. The code
@@ -24,24 +24,24 @@ and the component headers hold the detail; a row names a gap in a few words.
 |---|---|---|---|---|---|---|---|
 | **Admin** | | | | | | | |
 | `/admin/planning` | `AdminPlanning.vue` | ✅ plan | ✅ full | ✅ `?mode=` `?season=` | ✅ | ✅ | ✅ |
-| `/admin/teams` | `AdminTeams.vue` | ✅ plan | ✅ partial | ✅ `?mode=` `?team=` | ✅ | ⚠️ | ⚠️ partial unit |
+| `/admin/teams` | `AdminTeams.vue` | ✅ plan | ✅ partial | ✅ `?mode=` `?team=` | ✅ | ⚠️ | ⚠️ partial unit; master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
 | `/admin/households` | `AdminHouseholds.vue` | ✅ households | ❓ | ✅ `?mode=` | ✅ | ⚠️ loading row only | ⚠️ audit needed |
-| `/admin/allergies` | `AdminAllergies.vue` | ✅ allergies | N/A | ✅ `?allergy=` | ✅ | ✅ | ✅ |
+| `/admin/allergies` | `AdminAllergies.vue` | ✅ allergies | N/A | ✅ `?allergy=` | ✅ | ✅ | ✅ master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
 | `/admin/users` | `AdminUsers.vue` | ✅ users | N/A | ✅ | ✅ | ⚠️ loading row only | ⚠️ partial unit |
 | `/admin/economy` | `AdminEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?period=` `?invoice=` | ✅ serial | ⚠️ | ⚠️ e2e only |
 | `/admin/system` | `AdminSystem.vue` | ⚠️ job history in a component `useFetch` | N/A | ✅ | ✅ | ⚠️ | ⚠️ ADR-007 read outside a store |
 | `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ allergies, plan | N/A | N/A | ✅ smoke | ✅ | ✅ |
 | **Household** | | | | | | | |
 | `/household/[shortname]` | `household/[shortname]/index.vue` | ✅ households | N/A | ✅ `?pbs=` | ✅ | ⚠️ | ⚠️ review `?pbs` on redirect |
-| `/household/[shortname]/bookings` | `HouseholdBookings.vue` | ✅ plan, households, bookings | N/A | ✅ `?pbs=` `?cal=` | ✅ | ✅ | ✅ |
+| `/household/[shortname]/bookings` | `HouseholdBookings.vue` | ✅ plan, households, bookings | N/A | ✅ `?pbs=` `?cal=` | ✅ | ✅ | ✅ master-detail on `LAYOUTS.masterDetailPage` while the calendar shows (ADR-018) |
 | `/household/[shortname]/allergies` | `HouseholdAllergies.vue` | ✅ allergies | ❓ | ✅ `?pbs=` | ✅ | ⚠️ loading only | ⚠️ partial unit |
 | `/household/[shortname]/settings` | `HouseholdSettings.vue` | ✅ households | N/A | ✅ `?pbs=` | ✅ | ⚠️ the undo's toast and alert | ⚠️ partial unit |
 | `/household/[shortname]/economy` | `HouseholdEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?pbs=` | ❌ | ⚠️ store specs | ⚠️ store specs only |
 | **Other** | | | | | | | |
 | `/` | `Hero.vue` | N/A | N/A | N/A | ✅ | ✅ | ✅ |
 | `/login` | `Login.vue` | ✅ auth | N/A | ✅ | ✅ | ⚠️ via the cards | ⚠️ e2e only |
-| `/dinner` | `dinner/index.vue` | ✅ plan, bookings, auth | N/A | ✅ `?date=` `?cal=` | ✅ | ❌ | ⚠️ e2e only |
-| `/chef` | `chef/index.vue` | ✅ plan, users, allergies, bookings | N/A | ✅ `?team=` `?view=` | ✅ | ❌ | ⚠️ e2e only |
+| `/dinner` | `dinner/index.vue` | ✅ plan, bookings, auth | N/A | ✅ `?date=` `?cal=` | ✅ | ❌ | ⚠️ e2e only; master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
+| `/chef` | `chef/index.vue` | ✅ plan, users, allergies, bookings | N/A | ✅ `?team=` `?view=` | ✅ | ❌ | ⚠️ e2e only; master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
 | **Public** | | | | | | | |
 | `/public/billing/[token]` | `public/billing/[token].vue` | N/A, `storeAsyncData` (ADR-007 component-local) | N/A | N/A | ✅ `PublicBilling` | ❌ | ⚠️ e2e only |
 | `/public/billing/[token].csv` | `public/billing/[token].csv.vue` | N/A | N/A | N/A | ❌ | ❌ | ❌ no tests; no link reaches it |
@@ -101,7 +101,7 @@ Status.
 | `AllergyTypeCard.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | plan | ✅ | ✅ parent | ✅ |
 | `AllergyTypeDisplay.vue` | `/dinner`, `/chef`, `/admin/allergies`, `/household/[shortname]/allergies` | none | ✅ | N/A | ✅ |
 | `AllergyNotes.vue` | `/admin/allergies`, `/admin/allergies/pdf` | none | ✅ | ✅ parent | ✅ |
-| `HouseholdAllergies.vue` | `/household/[shortname]/allergies` | allergies, households | ⚠️ loading only | ✅ | ⚠️ partial unit |
+| `HouseholdAllergies.vue` | `/household/[shortname]/allergies` | allergies, households | ⚠️ loading only | ✅ | ⚠️ component: loading, `adminBypass` on each change |
 | `AllergyEditor.vue` | `/household/[shortname]/allergies` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `AllergyManagersList.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | users | ❌ | ❌ | ❌ no tests |
 
@@ -205,7 +205,7 @@ Status.
 | `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `users.ts` | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ no ready flag, no `isEmpty`, `isInitialized` on my teams only; 0.9.1 |
 | `auth.ts` | N/A | ✅ | N/A | ✅ | ✅ |
-| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ✅ spec covers the queue entries, the household places, the dinner's queue, `addExtraPortions`, `isBookingsReloading` and `previewBookings` |
+| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ✅ spec covers the queue entries, the household places, the dinner's queue, `addExtraPortions`, `isBookingsReloading`, and the GET reads `fetchExpectedBookings` and `previewBookings` |
 
 ## Composables
 

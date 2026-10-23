@@ -461,12 +461,16 @@ export const LAYOUTS = {
     gridTwoCol: 'grid grid-cols-1 md:grid-cols-2 gap-4',
     gridThreeCol: 'grid grid-cols-1 md:grid-cols-3 gap-4',
 
-    // Master-detail page layout (for UPage :ui prop)
-    // 1/4 master (left), 3/4 detail (center) on desktop, stacked on mobile
+    /**
+     * Master-detail page, in UPage's slots (`root`, `left`, `center`): stacked on a phone, master on top. From md the
+     * master takes a third of the row, at least a week of 24px day circles, and the detail the rest, never wider than
+     * its column. The lg: classes repeat the md ones: tailwind-merge keeps an md: class beside UPage's own lg grid,
+     * which would win from lg.
+     */
     masterDetailPage: {
-        root: 'flex flex-col md:grid md:grid-cols-12 gap-2',
-        left: 'md:col-span-3',
-        center: 'md:col-span-9'
+        root: 'flex flex-col gap-2 md:grid md:gap-4 md:grid-cols-[minmax(245px,1fr)_minmax(0,2fr)] lg:grid-cols-[minmax(245px,1fr)_minmax(0,2fr)] lg:gap-4',
+        left: 'min-w-0 lg:col-span-1',
+        center: 'min-w-0 lg:col-span-1'
     },
 
     // Responsive card rounding: no rounding on mobile (full-bleed), rounded on desktop
@@ -862,8 +866,7 @@ export const COMPONENTS = {
         headerActions: 'flex items-center gap-2',
         toolbar: 'mb-4',
         createDock: 'mb-2',
-        column: 'min-w-0',
-        stickyDetail: 'min-w-0 flex justify-center items-start md:sticky md:top-4 self-start'
+        stickyDetail: 'flex justify-center items-start md:sticky md:top-4 self-start'
     },
 
     // The admin economy page (AdminEconomy): its sections, the admin's correction under a dinner, the invoice breakdown
@@ -977,13 +980,12 @@ export const COMPONENTS = {
     rowIconClass: 'size-4 md:size-6',
 
     /**
-     * Inhabitant avatars (`UserListItem`): the server renders before the breakpoint is known, so
-     * `size` is one value everywhere, `max` too but for the compact household list item (`listItemMax`) and the
-     * power rows (`powerRowMax`), and `fit` steps the avatar up a size from md.
+     * Inhabitant avatars (`UserListItem`): the server renders before the breakpoint is known, so `size` is one
+     * value everywhere and `fit` steps the avatar up a size from md. A group's default face count is the responsive
+     * `SIZES.avatarMax`; the compact household list item (`listItemMax`) and the power rows (`powerRowMax`) show three everywhere.
      * `fit` goes on each `UAvatar` and on the group's `ui.base`, which reaches the overflow count.
      */
     avatar: {
-        max: 5,
         // The compact household list item shows three faces before the overflow count
         listItemMax: 3,
         // A power row (the household preferences, the booking form) shows three faces before the overflow count, so its table fits a phone
@@ -995,11 +997,12 @@ export const COMPONENTS = {
     /**
      * UserListItem: the `group` stack and its `groupRow` of faces beside the names or the count, the `single` row and
      * its `nameStack`, a face's profile `link` (`singleLink` keeps the single face from shrinking), the regular `name`,
-     * and a face's `ring` from md in the caller's colour
+     * and a face's `ring` from md in the caller's colour. The group shrinks with the grid or flex cell that holds it and
+     * its row wraps the names under the faces, so a long list never widens the page.
      */
     userListItem: {
-        group: 'flex flex-col gap-1',
-        groupRow: 'flex items-center gap-2',
+        group: 'flex flex-col gap-1 min-w-0',
+        groupRow: 'flex flex-wrap items-center gap-2',
         link: 'hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block',
         singleLink: 'hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block flex-shrink-0',
         single: 'flex items-start gap-3',
@@ -1089,12 +1092,15 @@ export const COMPONENTS = {
         plainDay: 'text-sm'
     },
 
-    /** AdminTeams: the card, the header's season selector, the create face, and around `masterDetail` the dock's stack, the detail header row, the md pane and the overview calendar */
+    /**
+     * AdminTeams: the card, the header's season selector, the create face, and around `masterDetail` the dock's stack,
+     * the detail header row, and the md pane and the overview calendar in the detail slot of `LAYOUTS.masterDetailPage`
+     */
     adminTeams: {
         dockStack: 'space-y-2',
         detailHeaderRow: 'flex items-center justify-between gap-2',
-        pane: 'md:w-2/3 space-y-4 self-start',
-        overviewCalendar: 'w-full md:w-2/3 self-start',
+        pane: 'space-y-4 self-start',
+        overviewCalendar: 'w-full self-start',
         card: 'w-full px-0',
         seasonSelector: 'w-full md:w-auto',
         // The create face: the team count row over the preview grid (LAYOUTS.gridTwoCol), and its footer
@@ -1104,10 +1110,8 @@ export const COMPONENTS = {
         previewTeam: 'p-4 border rounded',
         previewName: 'font-semibold',
         createFooter: 'flex gap-2',
-        // The view and edit face: the master column beside the detail region
-        viewFace: 'px-4 pb-4 space-y-6',
-        masterDetailRow: 'flex flex-col md:flex-row gap-6 md:gap-3',
-        master: 'w-full md:w-1/3'
+        // The view and edit face around the master table and its detail
+        viewFace: 'px-4 pb-4 space-y-6'
     },
 
     /** PageFooter: the centre row, and the footer's icon buttons inked like its text */
@@ -1122,6 +1126,18 @@ export const COMPONENTS = {
     seasonStatus: {
         discUi: {base: 'size-3 rounded-full p-0 align-middle'},
         sproutUi: {base: 'p-0 align-middle', leadingIcon: 'size-4'}
+    },
+
+    /**
+     * HouseholdListItem: the `compact` row of faces beside the name badges (wrapping the badges under the faces from md),
+     * the wrapping `names`, and the card face's `inhabitants` stack, one `inhabitant` line each and the `empty` line
+     */
+    householdListItem: {
+        compact: 'flex flex-col md:flex-row md:flex-wrap md:items-center gap-3',
+        names: 'flex flex-wrap gap-1',
+        inhabitants: 'space-y-2',
+        inhabitant: 'flex items-center gap-2 p-2 rounded',
+        empty: 'italic'
     },
 
     /**
@@ -1172,11 +1188,8 @@ export const COMPONENTS = {
         noPlansIcon: 'text-warning-700 dark:text-warning-400'
     },
 
-    /** HouseholdBookings: the calendar column beside the booking panel from md, stacked on a phone */
+    /** HouseholdBookings: the booking panel's header row and title */
     householdBookings: {
-        layout: 'flex flex-col md:flex-row gap-6',
-        calendar: 'md:basis-1/3',
-        panel: 'flex-1',
         panelHeader: 'flex items-center justify-between mb-4',
         panelTitle: 'text-sm font-semibold'
     },
@@ -1820,7 +1833,8 @@ export const COMPONENTS = {
         nameField: 'flex-1 min-w-fit',
         // The end padding holds the trailing pencil (ICONS.edit, bound at the site)
         nameInput: {class: 'w-1/2', ui: {base: 'pe-11', trailing: 'me-3'}},
-        memberSummary: 'flex items-center gap-2',
+        // The edit header's faces beside the team badges, wrapping the badges under the faces in a narrow header
+        memberSummary: 'flex flex-wrap items-center gap-2 min-w-0',
         deleteButton: 'w-full md:w-auto',
         row: 'flex flex-col md:flex-row gap-2 md:gap-4',
         fullColumn: 'w-full space-y-4',
@@ -2286,10 +2300,8 @@ export const createResponsiveSizes = (isMd: Ref<boolean | null>) => ({
     get smallIconSize(): string {
         return isMd.value ? '16' : '12'
     },
-    // Badge icon class for small badges (inline icons in UBadge)
-    get smallBadgeIcon(): string {
-        return isMd.value ? 'size-4 mr-1' : 'size-3 mr-1'
-    },
+    // Badge icon class for small badges (inline icons in UBadge); the step at md lives in the classes
+    smallBadgeIcon: 'size-3 mr-1 md:size-4',
 
     // Large responsive: lg on mobile, xl on desktop
     get large(): NuxtUISize {
@@ -2309,13 +2321,13 @@ export const createResponsiveSizes = (isMd: Ref<boolean | null>) => ({
         return isMd.value ? 3 : 1
     },
 
-    // Calendar day circle: w-8 h-8 on desktop, w-6 h-6 on mobile
-    get calendarCircle(): string {
-        return isMd.value ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-xs'
-    },
-
     // Agenda page size: 3 on mobile, 5 on desktop
     get agendaPageSize(): number {
+        return isMd.value ? 5 : 3
+    },
+
+    // An avatar group's faces before the overflow count: 3 on mobile, 5 on desktop
+    get avatarMax(): number {
         return isMd.value ? 5 : 3
     },
 
@@ -2852,6 +2864,9 @@ export const PLANNING_CALENDAR = {
  */
 export const CALENDAR = {
     day: {
+        // 24px below lg, 32px from lg, where a master column holds a week of the larger circle. The step lives in the
+        // classes, so the server renders each screen's circle before the layout measures
+        size: 'w-6 h-6 text-xs lg:w-8 lg:h-8 lg:text-sm',
         shape: 'rounded-full flex items-center justify-center cursor-pointer hover:opacity-90',
         past: `font-medium ${PAST_DAY_COLORS}`,
         // A cancelled dinner: the past circle, struck through
@@ -2956,13 +2971,11 @@ export const createBreakpoint = (isMd: Ref<boolean | null>) => ({
 })
 
 /**
- * The shared calendar day circle: responsive size + shape + the variant the surface adds
+ * The shared calendar day circle: size + shape + the variant the surface adds
  * (CALENDAR.holiday, PLANNING_CALENDAR.day.generated, CHEF_CALENDAR.day.next, …).
- * Exposed from the composable because the size depends on `isMd`.
  */
-export const createDayCircleClasses = (isMd: Ref<boolean | null>) =>
-    (...variants: (string | false | null | undefined)[]): string[] =>
-        [createResponsiveSizes(isMd).calendarCircle, CALENDAR.day.shape, ...variants.filter((variant): variant is string => Boolean(variant))]
+export const dayCircleClasses = (...variants: (string | false | null | undefined)[]): string[] =>
+    [CALENDAR.day.size, CALENDAR.day.shape, ...variants.filter((variant): variant is string => Boolean(variant))]
 
 /**
  * Props for a date picker's UCalendar: the shared grid token with the cell-fill
@@ -3234,7 +3247,6 @@ export const SEASON_STATUS_GLYPHS: Record<SeasonStatusValue, BadgeProps & {class
 export const useTheSlopeDesignSystem = () => {
     // Inject responsive breakpoint from layout
     const isMd = inject<Ref<boolean | null>>('isMd', ref(null))
-    const dayCircleClasses = createDayCircleClasses(isMd)
     const columnVisibility = createColumnVisibility(isMd)
 
     return {

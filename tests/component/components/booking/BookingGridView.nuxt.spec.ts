@@ -574,13 +574,9 @@ describe('BookingGridView and the server\'s dry run', () => {
 
     // Every member reads (ADR-004): whoever views the grid reads the expected bookings through the GET without any
     // override, on the season's deadlines. The household's own member is the case above
-    it.each`
-      viewer                                                               | canEdit  | adminBypass
-      ${'a member of another household, or an admin before the override'} | ${false} | ${false}
-      ${'an admin after the override'}                                     | ${true}  | ${true}
-    `('GIVEN the grid of $viewer THEN it reads the expected bookings through the GET without any override, and Anna\'s cells show expected', async ({canEdit, adminBypass}) => {
+    it('GIVEN the grid of a member of another household, or an admin before the override THEN it reads the expected bookings through the GET without any override, and Anna\'s cells show expected', async () => {
       scaffold.answers.expected = annaExpected
-      const wrapper = await mountWeek(FORM_MODES.VIEW, {canEdit, adminBypass})
+      const wrapper = await mountWeek(FORM_MODES.VIEW, {canEdit: false})
       await landed(wrapper)
 
       expect(expectedReads().map(({query}) => query)).toEqual([{}])

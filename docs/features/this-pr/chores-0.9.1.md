@@ -7,6 +7,30 @@ source, then `rm migrations/NNNN_*.sql && make d1-flatten-migrations`. `make d1-
 the apply on local (a copy of dev), dev and prod; `tests/component/architecture/migrations.unit.spec.ts` keeps the
 file free of `DROP TABLE`.
 
+## Done
+
+- Workflow checks: the workflows' `run:` scripts read `${{ }}` values through `env` (code scanning alert #10);
+  `npm run lint:gh-actions` runs CodeQL's Actions queries in `pre:all`, locally through `gh codeql`, in CI on the
+  runner image's bundle (93834f4)
+
+## In flight
+
+Updated 2026-10-23. Release 0.9 shipped in f5b5205 (#168).
+
+| Chore | Priority | State |
+|---|---|---|
+| § Household data access and GET previews | high | decided 2026-10-23 (ADR-004 § Access) |
+| § Booking mail delivery | high (#170) | mails signed 2026-10-17, delivery 2026-10-18, recipient rule and the opt-out 2026-10-23 |
+| § Three faces on a phone | high (#171) | ordered 2026-10-23 |
+| § One master-detail layout | high (#169) | ordered 2026-10-23 |
+| § UI cases fail on an unexpected API error | high | ordered 2026-10-23 |
+| § UI suites fail the build | medium | open; runs once the suites stay stable |
+| § Drop `DinnerEvent.totalCost`, § Order snapshot (B6) | | decided 2026-10-08; one migration |
+| § Ticket allergies on the order | | rule signed 2026-10-11 |
+| § Slow client after a save, § Scaffold: a save naming an order bought by another household, § Minimal test seasons | low | open |
+| § Server payload of the shared stores, § Waitlist: no-seat notice at dinner start, § Map.groupBy in the Workers runtime, § Stored dinner dates, § Preferences at an inhabitant's creation, § Dinner page remounts on claim, § Catch-up amounts, § Job schedule module, § Delete responses, § DRY improvements, § Dependency clusters, § Test factory dates at call time | | open |
+| § Deferred from release 0.9 | | per row |
+
 ## Drop `DinnerEvent.totalCost`
 
 ### Problem
@@ -114,6 +138,8 @@ dinner again. The economy datasets are gated in release 0.9 (`loadBillingOvervie
 
 ### Note - provenance allergies was removed, and live allergies are shown, should be verified and discussed
 ### Problem
+
+to check: hmmm - not sure it is good to drop the allergyprovenance idea, we do use household provenance
 
 A guest's allergy type ids are chosen in `GuestBookingForm` and leave the client as `allergyTypeIds` on the desired
 order (ADR-016), and every creation path drops them before `createOrders`: the scaffold's create transform
@@ -683,24 +709,62 @@ UI case leaves the build green.
 Both steps gate the build: `continue-on-error` goes from each step, and the note goes from its summary line. The api
 step is the model.
 
+## UI cases fail on an unexpected API error
+
+Priority: high. Ordered by the user on 2026-10-23 ("definitely a test should fail if api gives an unexpected api
+error"), after the 403 toast of § Household data access and GET previews reached production.
+
+### Problem
+
+A UI case passes while the page it drives gets a 4xx or 5xx from `/api/`: the admin cases on another household's
+bookings ran green through the 403 of the expected-bookings read, and the toast it raised was asserted nowhere.
+
+### Solution
+
+Every page a UI case opens reports its `/api/` responses; the case fails at its end on a 4xx or 5xx it did not
+declare, naming the method, the url and the status. A case that drives an error on purpose (a member's 403 on another
+household's change) declares that status and url.
+
+### TDD
+
+The guard's own case: a page that gets an undeclared 403 fails the case, a declared one passes. Then the UI suites
+run one spec at a time in the e2e slot; each red names its response, and the cause is fixed in the app or declared in
+the case.
+
 ## Booking mail delivery
 
-Priority: medium. Moved from release 0.9 on 2026-10-19 (point 6b of One booking path, end to end; the user: "61, 62,
-63 - descope to 0.9.1"); the signed mails followed on 2026-10-19 ("nothing unimplæmented should be in archive").
+Priority: high since 2026-10-23, reported in production as issue #170. Moved from release 0.9 on 2026-10-19 (point 6b
+of One booking path, end to end; the user: "61, 62, 63 - descope to 0.9.1"); the signed mails followed on 2026-10-19
+("nothing unimplæmented should be in archive").
 In 0.9 the mails go out after the action (`notifyBookingOutcomes`, `notifyExtraPortions`) with the templates of
 `app/config/notificationTemplates.ts`; the signed mails and the delivery below are not built.
 
 ### Problem
 
 A mail goes to `bookedByUserId` or to the person's own login: a join from a nightly or preference run mails the system
-account, and a child's assigned ticket or extra portion mails nobody. A mail lost on the way is not resent, and no
-row records what was sent.
+account, a child's assigned ticket or extra portion mails nobody, and a sold ticket mails every member of the selling
+household (`waitlist.ts:206`). A mail lost on the way is not resent, and no
+row records what was sent. Issue #170: a person's place on the waiting list of 27/10, joined by a preference run,
+greeted the person in a mail to the API account (`server/utils/sender/events/waitlist.ts:196`).
+
+An opt-out does not hold. The mails read it (`wantsChannel`), but a user's channels and appearance are written by
+more than the user:
+
+| Write | Path | Effect |
+|---|---|---|
+| The user's own save | `POST /api/user/preferences` → `saveUser(delta, id)` | the columns the body carries |
+| Heynabo import, user update | `heynaboImportService.ts:233` spreads the mapper's defaults (`useHeynaboValidation.ts:117`) into the id-keyed `saveUser` | both reset when the user's email, phone or admin role changed in Heynabo |
+| Heynabo import, new users | `createUsers` (`prismaRepository.ts:253`, `serializeUserInput`) | writes the defaults the columns already hold |
+| The email-keyed upsert | `saveUser` without an id (`prismaRepository.ts:108`), behind `PUT /api/admin/users`, `/household/inhabitants` and `/household` with inhabitants | reached by the e2e factories only: Heynabo is the source of users, and the app's household create sends no inhabitants (`app/stores/households.ts:356`) |
+
+The login (`fetchUser`) and the admin's user edit (`POST /api/admin/users/[id]`, email, phone and roles) only read.
 
 ### Solution
 
-Delivery, signed 2026-10-18. The recipient is the member who acted (`bookedByUserId`, when it is a member), else the
-person's own login, else the first member of the household with a login; `TICKET_SOLD` goes to every member of the
-selling household with a login, `WAITLIST_BUILDUP` to the chef. A scaffolded order keeps the system user as
+Delivery, signed 2026-10-18; the recipient rule set by the user on 2026-10-23. A mail about a person goes to the
+person's own login, else to the first user of the person's household; `TICKET_SOLD` is about the person whose ticket
+was released (`TicketSale.sellerInhabitantId`, else the selling household's first user), `WAITLIST_BUILDUP` goes to
+the chef. A scaffolded order keeps the system user as
 `bookedByUserId`. The booking step returns outcomes; the notification step resolves, composes and queues a complete
 message; the worker sends what it gets (ADR-016 rule 9). `DeliverySubject` gains `TICKET_WAITLIST` (a join, by its
 entry), `ORDER` (assigned, extra portion, sold, by the order) and `DINNER_EVENT` (the buildup, by the dinner); the
@@ -713,13 +777,17 @@ the dinners still to come and resends the missing ones through the same rows, re
 per-join buildup check in `server/utils/sender/events/waitlist.ts` goes. The chef's deadline reminders belong to daily
 maintenance in `feature-proposal-notification-triggers.md`.
 
+A new user is created with the defaults, as today (`createUsers`, the upsert's create branch). After that a user's
+channels and appearance change only through the user's own save (`POST /api/user/preferences`): the Heynabo import's
+update (`serializeUserPartial`, the mapper's payload) and the upsert's update branch carry neither.
+
 ### Mockup — waiting-list mails ✅ signed off 2026-10-17
 
 The mails speak the booking words: they greet the one who hears and name the person they are about, carry the ticket
 line of the booking page and the badge's help text, and link to the dinner's booking page.
 
 ```
-WAITLIST_JOINED  → the user who booked
+WAITLIST_JOINED  → the person, else the first user of the household
 Emne: Skråningen: Emil står på ventelisten til 20/10/2026 · Lasagne
   Kære Lene,
 
@@ -733,7 +801,7 @@ Emne: Skråningen: Emil står på ventelisten til 20/10/2026 · Lasagne
 
   Se bookingen: https://skraaningen.dk/dinner?date=20/10/26
 
-WAITLIST_TICKET_ASSIGNED  → the user who booked
+WAITLIST_TICKET_ASSIGNED  → the person, else the first user of the household
 Emne: Skråningen: Emil har fået en billet til 20/10/2026 · Lasagne
   20/10/2026 · Lasagne
   Emil: 1 købt
@@ -741,14 +809,14 @@ Emne: Skråningen: Emil har fået en billet til 20/10/2026 · Lasagne
   Du betaler for billetten. Vi glæder os til at se jer.
   Se bookingen: …
 
-WAITLIST_EXTRA_PORTION  → the user who booked
+WAITLIST_EXTRA_PORTION  → the person, else the first user of the household
   20/10/2026 · Lasagne
   Emil: 1 tilmeldt
   Barn · 35 kr · Spisesal
   Køkkenholdet laver flere portioner, og en af dem er til Emil. Vi glæder os til at se jer.
   Se bookingen: …
 
-TICKET_SOLD  → each user in the selling household
+TICKET_SOLD  → the person whose ticket was released, else the first user of the household
 Emne: Skråningen: 1 billet til 20/10/2026 · Lasagne er solgt
   20/10/2026 · Lasagne
   1 billet solgt til ventelisten        (1 billet solgt til Jensen, when a user bought it)
@@ -772,6 +840,10 @@ guest flag.
 The Waitlist notifications serial e2e: it joins a queue, releases a ticket and portions, crosses the buildup
 threshold and asserts each kind writes its Delivery row, one per subject, version, kind and recipient.
 
+The recipient rule and the opt-out, at the lowest level: `waitlist.unit.spec.ts` (a person's own login, else the
+household's first user, each mail kind, an opted-out user mailed nothing); the Heynabo mapper and the import's update
+payload carry no channels or appearance (unit).
+
 ## Scaffold: a save naming an order bought by another household
 
 Priority: low. Moved from release 0.9 on 2026-10-19. `POST /api/household/order/scaffold` lists an order that another
@@ -790,11 +862,11 @@ These fixtures span more dinners than their cases prove:
 
 | Fixture | Season | The cases prove |
 |---|---|---|
-| `tests/e2e/ui/serial/DinnerBookingForm.e2e.spec.ts:295`, the past-window season | 14 days of weekdays | the second dinner (two dinners) |
+| `tests/e2e/ui/serial/DinnerBookingForm.e2e.spec.ts:280`, the past-window season | 14 days of weekdays | the second dinner (two dinners) |
 | `tests/e2e/ui/serial/AdminEconomy.e2e.spec.ts:53` | 14 days | a correction of an upcoming order |
-| `tests/e2e/ui/serial/DinnerBookingForm.e2e.spec.ts:62` | 14 days | up to the fifth future dinner |
+| `tests/e2e/ui/serial/DinnerBookingForm.e2e.spec.ts:61` | 14 days | up to the fifth future dinner |
 | `tests/e2e/ui/serial/HouseholdBookings.e2e.spec.ts:62` | 14 days of weekdays | the phone month grid's columns |
-| `tests/e2e/api/serial/admin/waitlistAssignment.e2e.spec.ts:72` | 10 days | the spec's own dinners; the generated ones go unused |
+| `tests/e2e/api/serial/admin/waitlistAssignment.e2e.spec.ts:68` | 10 days | the spec's own dinners; the generated ones go unused |
 | `tests/e2e/ui/serial/HouseholdScaffolding.e2e.spec.ts:82`, `HouseholdBookingsCrossHousehold.e2e.spec.ts:54`, `tests/e2e/api/serial/admin/seasonLiveEdit.e2e.spec.ts:46` | 10 days each | a dinner before and one after the deadline |
 | `tests/e2e/api/serial/admin/scaffold-prebookings.e2e.spec.ts:624`, the released ticket on a cancelled dinner | the default week | one dinner |
 
@@ -802,31 +874,128 @@ These fixtures span more dinners than their cases prove:
 
 Each fixture's season shrinks to the dinners its cases prove; each case is checked green when its season shrinks.
 
-## Expected read for visitors and admins
+## Three faces on a phone
 
-Priority: high. Found 2026-10-20 in the DinnerBookingForm spec audit; moved to 0.9.1 by the user.
+Priority: high. Reported in production as issue #171 (2026-10-23); ordered by the user the same day: "the userlist
+should be uniformly using the 3 faces on small screen - not just in one place!".
 
 ### Problem
 
-The grid (`BookingGridView.vue:441`) and the day view (`DinnerBookingForm.vue:349`) read the household's expected
-bookings for every viewer and without `adminBypass` (`:447`, `:355`). `requireHouseholdAccess` answers 403 to anyone
-outside the household, so a member visiting another household, an admin before "Admin røre alligevel", an admin after
-it and the admin correction in Økonomi each get an error toast. The saves send `adminBypass` and land.
+`COMPONENTS.avatar.max` shows five faces on every screen. On /dinner the team card's monitor face puts five faces, the
+overflow face and the names on one line (`userListItem.groupRow`), about 240px in a column of about 195px on a 360px
+phone, so the card runs past the screen.
 
 ### Solution
 
-Both views ask only when the viewer may edit the household, and an admin asks with the bypass, as the save preview
-does: the grid's `expectedRequest` reads `props.canEdit`, the day view's reads `formMode` (EDIT for a member or
-`canEditAdminOverride`), and both reads pass `props.adminBypass`.
+The default face count is a `SIZES` getter: three below md, five from md. `UserListItem` and the team card's own
+avatar group read it; `listItemMax` and `powerRowMax` stay three everywhere.
 
 ### TDD
 
-Component, at the lowest level that holds the rule: no expected read without edit rights; the expected read carries
-`adminBypass` (grid and day view specs).
+Component: a group of seven shows three faces and +4 below md, five and +2 from md (`UserListItem`, the team card's
+monitor face).
+
+## One master-detail layout
+
+Priority: high. Reported in production as issue #169 (2026-10-23): the /dinner calendar's circles overlap on a 15"
+laptop under display scaling and on an iPad. Ordered by the user the same day: one layout for every master-detail page,
+the calendar's circle step at lg.
+
+### Problem
+
+Five master-detail pages lay out five ways. /dinner binds no token: Nuxt UI's `UPage` grid sets the calendar beside the
+dinner from lg in 2 of 10 columns with 40px gaps, 160 to 211px wide, where a week of 32px circles needs about 300px.
+/chef and /admin/allergies bind `LAYOUTS.masterDetailPage` (3 of 12 columns from md, 8px gap), the household bookings
+tab `COMPONENTS.householdBookings` (a third, 24px gap), /admin/teams `COMPONENTS.adminTeams` (a third, 12px gap).
+
+### Solution
+
+- `LAYOUTS.masterDetailPage`: stacked below md with an 8px gap; from md the master takes a third of the width, at
+  least 245px (a week of 24px circles), the detail the rest, with a 16px gap. One gap on every page (decided
+  2026-10-23). Its slots are `UPage`'s (`root`, `left`, `center`): /dinner
+  and /chef bind it on `UPage :ui`, the bookings tab, /admin/teams and /admin/allergies on their containers.
+- The calendar circle (`CALENDAR.day.size`, drawn by `dayCircleClasses` in every calendar) is 24px below lg and 32px
+  from lg; the circle and the small badge icon size by Tailwind breakpoint classes, so the server renders each screen's
+  size.
+- Retired: `COMPONENTS.householdBookings.layout`, `.calendar`, `.panel`; `COMPONENTS.adminTeams.masterDetailRow`,
+  `.master`; the `md:w-2/3` in `COMPONENTS.adminTeams.pane` and `.overviewCalendar`.
+- The allergen picker's split (`COMPONENTS.allergenSelector`) stays: it sits inside the chef page's detail.
+
+```
+md and up                                          below md
++-- a third, at least 245px --+ +-- the rest --+   +--------------------------+
+| calendar or list            | | detail       |   | calendar or list         |
++-----------------------------+ +--------------+   +--------------------------+
+                                                   | detail                   |
+                                                   +--------------------------+
+```
+
+Widths as master + detail in px, iPad portrait (820px) / desktop (1280px); phones keep the stacked layout:
+
+| Page | Now | Proposed | View change |
+|---|---|---|---|
+| /dinner | stacked / 211 + 965, 40px gap | 252 + 504 / 400 + 800, 16px gap | iPad: the calendar beside the dinner, phone-size circles. Desktop: the calendar twice as wide, circles clear of each other, the dinner narrower |
+| /chef | 187 + 577, 8px gap / 211 + 965, 40px gap (`UPage`'s lg grid outranks the md token) | as /dinner | The calendar wider, phone-size circles on the iPad; the detail narrower |
+| /admin/allergies | 187 + 577 / 298 + 910, 8px gap | as /dinner | The list wider, the detail narrower |
+| Household bookings tab | 250 + 500 / 400 + 800, 24px gap | as /dinner | iPad: phone-size circles. Desktop: the gap |
+| /admin/teams | 253 + 507 / 400 + 800, 12px gap | as /dinner | iPad: phone-size circles in the team calendar. Desktop: the gap |
+
+### TDD
+
+Component: the circle size below and from lg; the specs that read the retired tokens read `LAYOUTS.masterDetailPage`.
+Visual check: the five pages at 375, 820, 1180 and 1280px.
 
 ### Affected
 
-`app/components/booking/BookingGridView.vue`, `app/components/dinner/DinnerBookingForm.vue`, their component specs.
+`app/composables/useTheSlopeDesignSystem.ts`, `app/pages/dinner/index.vue`, `app/pages/chef/index.vue`,
+`AdminAllergies.vue`, `AdminTeams.vue`, `HouseholdBookings.vue`, their specs and header mockups, `docs/ui.md`.
+
+## Household data access and GET previews
+
+Priority: high. Found 2026-10-20 in the DinnerBookingForm spec audit; moved to 0.9.1 by the user; reported in
+production on 2026-10-23 (an admin on another household's bookings page gets a 403 toast). Decided 2026-10-23:
+ADR-004 § Access, ADR-016's preview clause.
+
+### Problem
+
+The expected bookings (d894021, 2026-10-18) are read through the booking write: `POST /api/household/order/scaffold`
+with `?preview=true` and an empty draft, behind `requireHouseholdAccess`. Every viewer outside the household gets a 403
+toast on load, an admin before the override included. The draft previews of the bookings and the preferences ride on
+the writes' POSTs too. The household allergy writes (`server/routes/api/household/allergy/`) carry no check: any
+member changes any household's allergies, and nothing logs it.
+
+### Solution
+
+| Role | Reads | Changes household data |
+|---|---|---|
+| Member | everything | own household |
+| Admin | everything | any household, by override |
+| Allergy manager | everything | any household's allergies, by override |
+
+- A preview is a read: `GET` on the scaffold (the draft in `orders=`, one compact value per order, under Cloudflare's
+  16 KB URL) and on the preferences, open to every member; with no draft the scaffold's GET is the household's next
+  run on the season's deadlines; `bypassDeadlines=true` previews an admin's change. The POSTs only write.
+- The bookings store fetches (`fetchExpectedBookings`, `previewBookings`, `previewPreferences`); the views hold the
+  answers (`useScaffoldPreview`, browser only).
+- The allergy writes call `requireHouseholdAccess` with `canMutateAllergies` behind `?adminBypass=true`; the household
+  page offers the override to the allergy manager on the allergies tab.
+- An allergy stays with its person: `AllergyUpdateSchema` omits `inhabitantId`, so an update never moves an allergy
+  into another household (decided 2026-10-23).
+- The preference write rejects a body without `dinnerPreferences` with a 400 (decided 2026-10-23).
+- The admin bypass log line names the user who takes the override and their system roles (decided 2026-10-23).
+
+### TDD
+
+Unit: `requireHouseholdAccess` (the roles, the override's log line), the route table's household GET, the draft codec.
+Component: the bookings, households and allergies stores, the grid and the day view, the household page's override.
+API: `household/allergy.e2e`, `household/scaffold.e2e`, `household/preferences.e2e`.
+
+### Affected
+
+`server/routes/api/household/order/scaffold.{get,post}.ts`, `server/routes/api/household/inhabitants/[id]/preferences.{get,post}.ts`,
+`server/routes/api/household/allergy/*`, `app/composables/useBookingValidation.ts`, `app/stores/{bookings,households,allergies}.ts`,
+`BookingGridView.vue`, `DinnerBookingForm.vue`, `GuestBookingForm.vue`, `HouseholdCard.vue`, `HouseholdAllergies.vue`,
+`app/pages/household/[shortname]/[tab].vue`, their specs, `docs/adr-compliance-backend.md`.
 
 ## Deferred from release 0.9
 

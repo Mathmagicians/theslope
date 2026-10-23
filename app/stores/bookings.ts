@@ -9,7 +9,7 @@ import {isSameDay} from 'date-fns'
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {storeAsyncData, apiRequest, runJob} = useApiHandler()
-    const {OrderDisplaySchema, OrderDetailSchema, OrderStateSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema, TicketChangesResponseSchema, TicketTypeSchema} = useBookingValidation()
+    const {OrderDisplaySchema, OrderDetailSchema, OrderStateSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema, TicketChangesResponseSchema, TicketTypeSchema, encodeDesiredOrder} = useBookingValidation()
     const {formatScaffoldResult} = useBooking()
     const {formatDailyMaintenanceStats} = useMaintenance()
     const DinnerState = DinnerStateSchema.enum
@@ -288,18 +288,29 @@ export const useBookingsStore = defineStore("Bookings", () => {
         return result
     }
 
-    /** What the save of the request would do, read without writing: the scaffold's preview, outside the booking write */
-    const previewBookings = async (request: ScaffoldOrdersRequest, adminBypass = false): Promise<ScaffoldResult> => {
+    /**
+     * What the save of the request would do, read without writing: the scaffold's dry run (GET), outside the booking
+     * write. `bypassDeadlines` previews an admin's change with the deadlines lifted; the server ignores it for a member
+     */
+    const previewBookings = async (request: ScaffoldOrdersRequest, bypassDeadlines = false): Promise<ScaffoldResult> => {
         const {scaffoldResult} = await apiRequest('/api/household/order/scaffold', {
-            method: 'POST',
-            body: request,
-            query: {adminBypass, preview: true},
+            query: {
+                householdId: request.householdId,
+                seasonId: request.seasonId,
+                dinnerEventIds: request.dinnerEventIds,
+                orders: request.orders.map(encodeDesiredOrder),
+                ...(bypassDeadlines ? {bypassDeadlines} : {})
+            },
             schema: ScaffoldOrdersResponseSchema,
             action: 'previewBookings'
         })
         await refreshSeasonOnClosedDinners(request, scaffoldResult)
         return scaffoldResult
     }
+
+    /** The bookings the household's next run makes on the dinners: the dry run with no orders, on the season's deadlines */
+    const fetchExpectedBookings = (householdId: number, dinnerEventIds: number[]): Promise<ScaffoldResult> =>
+        previewBookings({householdId, dinnerEventIds, orders: []})
 
     /**
      * ADR-016: Process bookings for a single dinner event.
@@ -722,6 +733,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         isBookingsReloading,
         writeBookings,
         previewBookings,
+        fetchExpectedBookings,
         processSingleEventBookings,
         processMultipleEventsBookings,
         processAdminCorrection,

@@ -55,7 +55,8 @@ export const useAllergyValidation = () => {
     }).omit({
         createdAt: true,
         updatedAt: true,
-        allergyType: true // Omit for update - only send allergyTypeId
+        allergyType: true, // Omit for update - only send allergyTypeId
+        inhabitantId: true // An allergy stays with its person: an update never moves it into another household
     })
 
     // AllergyDisplay = BaseAllergySchema (already includes allergyType)

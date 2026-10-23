@@ -156,6 +156,9 @@ await page.getByRole('option', { name: seasonName }).first().click()
 await testHelpers.selectDropdownOption(page, 'season-selector', seasonName)
 ```
 
+**An extracted helper replaces every copy.** The change that extracts it greps every spec for the pattern its body
+wraps and moves each hit onto the helper in the same change; a local copy left beside the helper is a broken window.
+
 ### Rule 5: No console.log in Tests
 
 ```typescript
@@ -308,6 +311,18 @@ const context = await validatedBrowserContext(browser)
 const season = await SeasonFactory.createSeason(context)
 ```
 
+### UI cases and API errors: `openContext(browser, options?)`, `expectApiError(context, status, url)`
+
+A UI spec imports `test` from `tests/e2e/uiTest.ts`. Its auto fixture records the `/api/` responses of the case's pages:
+the built-in `context` and every context from `openContext`, through which `validatedBrowserContext`,
+`memberValidatedBrowserContext` and `freshMemberContext` open theirs. A 4xx or 5xx the case did not declare fails the
+case at its end, naming the method, the url and the status. A case that drives an error on purpose declares it before
+the action; requests through `context.request` (the factories) are not recorded.
+
+```typescript
+expectApiError(context, 401, '/api/')
+```
+
 ### `pollUntil(fetchFn, condition, maxAttempts?, initialDelay?)`
 
 Polling with exponential backoff. Preferred over `page.waitForTimeout()`.
@@ -344,7 +359,7 @@ await doScreenshot(page, 'admin/page', true)  // Docs: docs/screenshots/
 | `collectHydrationWarnings(page)` | Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation |
 | `expectHydratedWithoutMismatch(page, url)` | Navigates, waits for hydration and asserts Vue logged no hydration mismatch on the way |
 | `waitForApi(page, path, method, options?)` | The next response to a `method` request whose url contains `path`; attach it before the action that sends the request |
-| `isScaffoldSave`, `isExpectedRead` | Response predicates for `page.waitForResponse`: the save of the household's booking write, and a booking view's read of the expected bookings (the dry run without orders) |
+| `isScaffoldSave`, `isExpectedRead` | Response predicates for `page.waitForResponse`: the save of the household's booking write (the POST), and a booking view's read of the expected bookings (the dry run's GET without orders) |
 | `PAST_THE_SCAFFOLD_WINDOW_DAYS` | A day past the prebooking window, where only the preferences speak for a dinner |
 
 ### Component helpers: `/tests/component/testHelpers.ts`
@@ -360,7 +375,7 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 | `findByTestId(wrapper, id)` / `findAllByTestId(wrapper, id)` | `data-testid` lookups - never hand-build the selector string |
 | `findLoadingRow(wrapper)` / `findAllLoadingRows(wrapper)` | The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows |
 | `isTableLoading(wrapper)` | Whether the UTable under the wrapper binds `loading`: its loading bar runs under the column headers and carries no attribute to find |
-| `registerScaffoldEndpoint()` | The scaffold endpoint for a component that previews: `answers.preview` and `answers.expected` set the replies of the dry run and the empty-draft read (`OrderFactory.defaultScaffoldOrdersResponse()` until set), and `sent` records each request's query and body |
+| `registerScaffoldEndpoint()` | The scaffold's dry run (`GET`) for a component that previews: `answers.preview` answers a read with orders and `answers.expected` one without (`OrderFactory.defaultScaffoldOrdersResponse()` until set); `sent` records each read's request, its orders decoded by `DesiredOrderQuerySchema`, and its other query parameters (`bypassDeadlines`); `hold(kind)` keeps a read pending until released |
 | `holdEndpoint(url, body)` | An endpoint that answers `body` once the test calls `release()`: the window in which a dataset is pending; `unregister()` in `afterEach` hands the url back to the registration before it |
 | `untilTrue(condition)` | Resolves once a reactive condition holds (store state, a flag), watching it rather than polling; the test's own timeout bounds it |
 | `clickByTestId(wrapper, id)` | Click + `await nextTick()` |
@@ -368,6 +383,7 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 | `resetStores()` | Fresh stores over a fresh data layer per test: the stores of the app's pinia and of the active one are disposed, the app's pinia stays active so a spec and the components it mounts share one store instance, and the keyed `useAsyncData` entries earlier stores registered go with them |
 | `registerEmptyStoreEndpoints()` | The datasets the stores request on creation, answered empty; a spec's own route for one of them registers after this call, as the last registration of a url answers |
 | `VIEWPORTS` | The two layouts a responsive token answers for, the phone (`isMd: false`) and md and up (`isMd: true`), as the table of a `describe.each` |
+| `expectMasterDetail(master, detail)` | The master and the detail stand side by side in one `LAYOUTS.masterDetailPage` root, in its left and center slots |
 | `lockedDinnerSupply(byType?, queuedByType?)` | A locked dinner's supply (`ReleasedTicketCounts`) from its tickets for sale and its waiting list per ticket type, with the totals and the compact counts |
 | `kitchenConfig()` | The kitchen's rates the money components calculate with, read from the app config inside a hook or a test |
 | `useTestScope()` | A scope per test for the composables a test body creates: the watchers they start stop with the test, as they do when a component unmounts |

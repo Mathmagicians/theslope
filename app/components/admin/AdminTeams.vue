@@ -3,30 +3,29 @@
  * AdminTeams - one master table, one portable team detail
  *
  * Selection is the open state and rides in ?team=; the detail's face rides in
- * ?mode=view|edit|create (ADR-006). The master table is constant - one third
- * of the row from md, the same columns in every state - and only the region
- * beside it swaps: the all-teams calendar with no selection (the overview, at
- * a glance), the framed team detail when a row is open. Everything inside the
- * edit face saves immediately. The toggle chevron turns toward the open detail
- * (up folds the phone dock, right points into the md+ pane) and the row click
- * toggles the same way.
+ * ?mode=view|edit|create (ADR-006). The master table is constant - the master
+ * of LAYOUTS.masterDetailPage, the same columns in every state - and only the
+ * detail beside it swaps: the all-teams calendar with no selection (the
+ * overview, at a glance), the framed team detail when a row is open. Everything
+ * inside the edit face saves immediately. The toggle chevron turns toward the
+ * open detail (up folds the phone dock, right points into the md+ pane) and the
+ * row click toggles the same way.
  *
  * Overview (default; desktop shown, the phone stacks the calendar below)
  * +--Madhold-------------------------------------------------------------+
  * | [Saeson: 12/26-01/27 v]                       [(plus) Opret madhold] |
- * +---------------------------------+-------------------------------------+
- * | v | Madhold           | Dage    |                                     |
- * | v | [Madhold 1]...    | tir, ons|   ALL-TEAMS CALENDAR                |
- * | v | [Madhold 2]...    | man, tor|   (all teams at a glance)           |
- * +---------------------------------+-------------------------------------+
+ * +-- a third, at least 245px ------+ +-- the rest -----------------------+
+ * | v | Madhold           | Dage    | |                                   |
+ * | v | [Madhold 1]...    | tir, ons| |   ALL-TEAMS CALENDAR              |
+ * | v | [Madhold 2]...    | man, tor| |   (all teams at a glance)         |
+ * +---------------------------------+ +-----------------------------------+
  *
  * Desktop (md+), team open - the same master, the framed detail in its place
- * +---------------------------------+-------------------------------------+
- * | v | Madhold           | Dage    | +---------------------------------+ |
- * | > I [Madhold 2]...    | man, tor| | Madhold 2  [(pencil) Rediger]   | |
- * | v | [Madhold 3]...    | man     | | medlemmer, finder, dage +       | |
- * |   |                   |         | | holdets kalender                | |
- * +---------------------------------+-+---------------------------------+-+
+ * +-- a third, at least 245px ------+ +-- the rest, framed ---------------+
+ * | v | Madhold           | Dage    | | Madhold 2  [(pencil) Rediger]     |
+ * | > I [Madhold 2]...    | man, tor| | medlemmer, finder, dage +         |
+ * | v | [Madhold 3]...    | man     | | holdets kalender                  |
+ * +---------------------------------+ +-----------------------------------+
  *   I = left tab accent in the team's rainbow colour (getRainbowAccent)
  *   the edit face swaps the pencil for [(arrow) Tilbage]
  *
@@ -387,8 +386,8 @@ const columns = [
 
         <!-- VIEW + EDIT: one master table; the detail mounts in the md+ pane or docks under the selected row -->
         <div v-else :class="COMPONENTS.adminTeams.viewFace">
-          <div :class="COMPONENTS.adminTeams.masterDetailRow">
-          <div :class="COMPONENTS.adminTeams.master">
+          <div :class="LAYOUTS.masterDetailPage.root">
+          <div :class="LAYOUTS.masterDetailPage.left">
           <UTable
               v-model:expanded="expanded"
               :columns="columns"
@@ -495,7 +494,7 @@ const columns = [
 
           <!-- Detail pane (md+): the same card as the dock, framed so the team's own
                calendar reads apart from the all-teams calendar of the overview -->
-          <div v-if="COMPONENTS.masterDetail.detailAsPane && selectedTeam?.id" :class="[COMPONENTS.adminTeams.pane, COMPONENTS.masterDetail.pane]">
+          <div v-if="COMPONENTS.masterDetail.detailAsPane && selectedTeam?.id" :class="[LAYOUTS.masterDetailPage.center, COMPONENTS.adminTeams.pane, COMPONENTS.masterDetail.pane]">
             <div :class="COMPONENTS.adminTeams.detailHeaderRow">
               <CookingTeamBadges
                   :team-number="selectedTeamNumber"
@@ -527,7 +526,7 @@ const columns = [
           </div>
 
           <!-- No selection: the all-teams calendar fills the detail region, at a glance -->
-          <div v-else-if="selectedSeason && displayedTeams.length > 0" :class="COMPONENTS.adminTeams.overviewCalendar">
+          <div v-else-if="selectedSeason && displayedTeams.length > 0" :class="[LAYOUTS.masterDetailPage.center, COMPONENTS.adminTeams.overviewCalendar]">
             <TeamCalendarDisplay
                 :season-dates="selectedSeason.seasonDates"
                 :teams="displayedTeams"

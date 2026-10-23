@@ -780,9 +780,37 @@ export const useBookingValidation = () => {
         allergyTypeIds: IdSchema.array().optional()
     })
 
+    // A desired order as one query value, its fields dot-separated:
+    // inhabitantId.dinnerEventId.dinnerMode.ticketPriceId.guest(1|0).state.orderId.waitlistEntryId.allergyTypeIds(-joined),
+    // an absent id empty. The pattern names every mode and state, so a decoded segment is one of them
+    const DESIRED_ORDER_CODE = new RegExp(
+        `^\\d+\\.\\d+\\.(${DinnerModeSchema.options.join('|')})\\.\\d+\\.[01]\\.(${OrderStateSchema.options.join('|')})\\.\\d*\\.\\d*\\.(\\d+(-\\d+)*)?$`
+    )
+    const DesiredOrderQuerySchema = z.codec(z.string().regex(DESIRED_ORDER_CODE), DesiredOrderSchema, {
+        decode: (code) => {
+            const [inhabitantId, dinnerEventId, dinnerMode, ticketPriceId, guest, state, orderId, waitlistEntryId, allergyTypeIds] = code.split('.')
+            return {
+                inhabitantId: Number(inhabitantId),
+                dinnerEventId: Number(dinnerEventId),
+                dinnerMode: dinnerMode as z.infer<typeof DinnerModeSchema>,
+                ticketPriceId: Number(ticketPriceId),
+                isGuestTicket: guest === '1',
+                state: state as z.infer<typeof OrderStateSchema>,
+                ...(orderId ? {orderId: Number(orderId)} : {}),
+                ...(waitlistEntryId ? {waitlistEntryId: Number(waitlistEntryId)} : {}),
+                ...(allergyTypeIds ? {allergyTypeIds: allergyTypeIds.split('-').map(Number)} : {})
+            }
+        },
+        encode: (order) => [
+            order.inhabitantId, order.dinnerEventId, order.dinnerMode, order.ticketPriceId, order.isGuestTicket ? 1 : 0, order.state,
+            order.orderId ?? '', order.waitlistEntryId ?? '', order.allergyTypeIds?.join('-') ?? ''
+        ].join('.')
+    })
+    const encodeDesiredOrder = (order: z.output<typeof DesiredOrderSchema>): string => DesiredOrderQuerySchema.encode(order)
+
     /**
      * Scaffold orders request - unified booking endpoint
-     * POST /api/household/order/scaffold
+     * POST /api/household/order/scaffold; its dry run GET carries it in the query, each order a `DesiredOrderQuerySchema` value
      *
      * Use cases:
      * - UC1: Single inhabitant booking
@@ -991,6 +1019,8 @@ export const useBookingValidation = () => {
 
         // Unified Booking Scaffold (ADR-016)
         DesiredOrderSchema,
+        DesiredOrderQuerySchema,
+        encodeDesiredOrder,
         ScaffoldOrdersRequestSchema,
         ScaffoldOrdersResponseSchema,
         GuestBookingFormSchema,
