@@ -54,7 +54,7 @@ let getPastDinnerIds: UseBookingT['getPastDinnerIds']
 let prepareTransactionData: UseBookingT['prepareTransactionData']
 let getLockedFutureDinnerIds: UseBookingT['getLockedFutureDinnerIds']
 let computeLockStatus: UseBookingT['computeLockStatus']
-let buildGuestOrder: UseBookingT['buildGuestOrder']
+let newGuestRow: UseBookingT['newGuestRow']
 let groupGuestOrders: UseBookingT['groupGuestOrders']
 let getDayBillSummary: UseBookingT['getDayBillSummary']
 let getPowerChanges: UseBookingT['getPowerChanges']
@@ -73,7 +73,7 @@ beforeAll(() => {
         prepareTransactionData,
         getLockedFutureDinnerIds,
         computeLockStatus,
-        buildGuestOrder,
+        newGuestRow,
         groupGuestOrders,
         getDayBillSummary,
         getPowerChanges,
@@ -1645,8 +1645,8 @@ describe('getBookingOptions — the rules matrix', () => {
         const guest = OrderFactory.defaultOrder(undefined, {id: 43, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, ticketPriceId: adultPriceId, dinnerMode: held, state: BOOKED, isGuestTicket: true})
         return {order: guest, waitlistEntry: null, candidate: dinnerMode => buildGuestDesiredOrder({guestOrders: [guest], dinnerMode}, resolver, BOOKED)[0] ?? null}
     }
-    const guestAddRow = (dinner: Dinner): BookingRow =>
-        ({order: null, waitlistEntry: null, candidate: dinnerMode => buildGuestOrder(inhabitant.id, dinner.id, adultPriceId, dinnerMode)})
+    // A guest not yet added, as the guest form opens it for the booker
+    const guestAddRow = (dinner: Dinner, bookerId: number | undefined): BookingRow => newGuestRow(bookerId, dinner.id, SEASON_PRICES)
     const rowKind = (label: string, of: RowKind['of']): RowKind => ({label, of})
 
     // A column's dinner lies `daysAhead` days from today; its context answers the column's deadlines
@@ -1679,7 +1679,8 @@ describe('getBookingOptions — the rules matrix', () => {
     const expected    = rowKind('no order, the expected row',    dinner => inhabitantRow(dinner, null))
     const queued      = rowKind('queued, wish Takeaway',         dinner => entryRow(dinner, TAKEAWAY))
     const guestBooked = rowKind('guest ticket BOOKED, Takeaway', dinner => guestRow(dinner, TAKEAWAY))
-    const guestAdd    = rowKind('guest add, no order',           dinner => guestAddRow(dinner))
+    const guestAdd    = rowKind('guest add, no order',           dinner => guestAddRow(dinner, inhabitant.id))
+    const noBooker    = rowKind('guest add, no booker',          dinner => guestAddRow(dinner, undefined))
 
     // The columns: where the dinner stands against the deadlines
     const future      = column('future, beyond the window', {daysAhead: windowDays + 10, canModifyOrders: true,  canEditDiningMode: true})
@@ -1693,6 +1694,7 @@ describe('getBookingOptions — the rules matrix', () => {
         ${ownBooked}    | ${before}       | ${ALL}
         ${ownBooked}    | ${afterOpen}    | ${ALL}
         ${ownBooked}    | ${afterLocked}  | ${[TAKEAWAY, NONE]}
+        ${ownReleased}  | ${before}       | ${ALL}
         ${ownReleased}  | ${afterOpen}    | ${ALL}
         ${ownReleased}  | ${afterLocked}  | ${[DINEIN, NONE]}
         ${expected}     | ${future}       | ${ALL}
@@ -1709,8 +1711,14 @@ describe('getBookingOptions — the rules matrix', () => {
         ${guestAdd}     | ${before}       | ${EATING}
         ${guestAdd}     | ${afterOpen}    | ${EATING}
         ${guestAdd}     | ${afterLocked}  | ${[DINEIN]}
+        ${noBooker}     | ${before}       | ${[]}
     `('$row.label · $column.label → $modes', ({row, column, modes}) => {
         expect(getBookingOptions(row.of(column.dinner), column.context)).toEqual(modes)
+    })
+
+    it('guest add · the candidate is the booker\'s guest ticket at a guest\'s price', () => {
+        const {dinner} = before
+        expect(guestAddRow(dinner, inhabitant.id).candidate(TAKEAWAY)).toEqual({inhabitantId: inhabitant.id, dinnerEventId: dinner.id, dinnerMode: TAKEAWAY, ticketPriceId: adultPriceId, isGuestTicket: true, state: BOOKED})
     })
 
     // The gates close every mode before the matrix is asked

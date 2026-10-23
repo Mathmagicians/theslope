@@ -802,6 +802,32 @@ These fixtures span more dinners than their cases prove:
 
 Each fixture's season shrinks to the dinners its cases prove; each case is checked green when its season shrinks.
 
+## Expected read for visitors and admins
+
+Priority: high. Found 2026-10-20 in the DinnerBookingForm spec audit; moved to 0.9.1 by the user.
+
+### Problem
+
+The grid (`BookingGridView.vue:441`) and the day view (`DinnerBookingForm.vue:349`) read the household's expected
+bookings for every viewer and without `adminBypass` (`:447`, `:355`). `requireHouseholdAccess` answers 403 to anyone
+outside the household, so a member visiting another household, an admin before "Admin røre alligevel", an admin after
+it and the admin correction in Økonomi each get an error toast. The saves send `adminBypass` and land.
+
+### Solution
+
+Both views ask only when the viewer may edit the household, and an admin asks with the bypass, as the save preview
+does: the grid's `expectedRequest` reads `props.canEdit`, the day view's reads `formMode` (EDIT for a member or
+`canEditAdminOverride`), and both reads pass `props.adminBypass`.
+
+### TDD
+
+Component, at the lowest level that holds the rule: no expected read without edit rights; the expected read carries
+`adminBypass` (grid and day view specs).
+
+### Affected
+
+`app/components/booking/BookingGridView.vue`, `app/components/dinner/DinnerBookingForm.vue`, their component specs.
+
 ## Deferred from release 0.9
 
 | Work | Where it lives | State |

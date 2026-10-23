@@ -11,7 +11,7 @@ import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
 import {useBookingValidation, type DinnerMode} from '~/composables/useBookingValidation'
 import {DINNER_MODE_ORDER} from '~/composables/useBooking'
 import {MODE_WORDS} from '~/composables/useBookingUi'
-import {FORM_MODES} from '~/types/form'
+import {FORM_MODES, type FormMode} from '~/types/form'
 import {COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
 
 enableAutoUnmount(afterEach)
@@ -25,9 +25,9 @@ const labelsOf = (modes: DinnerMode[]) => modes.length > 0 ? modes.map(mode => M
 
 // The parent's v-model: an emitted mode comes back as the next modelValue, and a plan once touched is the person's own
 // draft, as the booking form's and the grid's drafts do
-const mountSelector = async (props: {interaction: 'toggle' | 'buttons', enabledModes: DinnerMode[], modelValue: DinnerMode, expected?: boolean, ghost?: boolean}) => {
+const mountSelector = async (props: {interaction: 'toggle' | 'buttons', enabledModes: DinnerMode[], modelValue: DinnerMode, expected?: boolean, ghost?: boolean, formMode?: FormMode}) => {
     const wrapper = await mountSuspended(DinnerModeSelector, {
-        props: {...props, formMode: FORM_MODES.EDIT, name: NAME},
+        props: {formMode: FORM_MODES.EDIT, ...props, name: NAME},
         attrs: {'onUpdate:modelValue': (value: DinnerMode) => wrapper.setProps({modelValue: value, expected: false})}
     })
     return wrapper
@@ -105,6 +105,15 @@ describe('DinnerModeSelector buttons', () => {
 describe('DinnerModeSelector on a plan', () => {
     const PLAN = TAKEAWAY
     const onPlan = (interaction: 'toggle' | 'buttons') => mountSelector({interaction, enabledModes: ALL, modelValue: PLAN, expected: true})
+
+    // A grid cell without an order shows the plan on its view face: outlined on the waiting list's neutral, in the muted ink
+    it('GIVEN a plan in view mode THEN its badge binds the expected token and its glyph the expected ink', async () => {
+        const wrapper = await mountSelector({formMode: FORM_MODES.VIEW, interaction: 'toggle', enabledModes: ALL, modelValue: PLAN, expected: true})
+
+        const {color, variant, ink} = COMPONENTS.bookingGrid.expectedBadge
+        expect(wrapper.findComponent({name: 'UBadge'}).props()).toMatchObject({color, variant})
+        expect(wrapper.findComponent({name: 'UIcon'}).classes()).toEqual(expect.arrayContaining(ink.split(' ')))
+    })
 
     it('GIVEN the toggle on a plan THEN it renders the plan\'s ghost face', async () => {
         const planned = toggleFaceOf(await onPlan('toggle'))

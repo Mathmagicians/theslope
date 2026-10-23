@@ -545,14 +545,8 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
   })
 
   it('WHILE the dry run works THEN the row shows the loader in place of the lines, and the reply\'s lines once it lands', async () => {
-    let land: () => void = () => {}
-    const landed = new Promise<void>(resolve => {
-      land = resolve
-    })
-    scaffold.answers.preview = async () => {
-      await landed
-      return answer(resultOf(Action.BOOK))
-    }
+    scaffold.answers.preview = () => answer(resultOf(Action.BOOK))
+    const land = scaffold.hold('preview')
     const wrapper = await mountMemberForm(true)
     await openRow(wrapper, anna!.id, DinnerMode.DINEIN)
 

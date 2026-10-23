@@ -1,4 +1,4 @@
-import {nextTick, h, defineComponent, ref, isRef, effectScope, watch, type Component, type Ref} from 'vue'
+import {nextTick, h, defineComponent, ref, isRef, effectScope, watch, shallowReactive, type Component, type Ref} from 'vue'
 import {expect, beforeEach, afterEach} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
@@ -105,12 +105,14 @@ export const holdEndpoint = (url: string, body: unknown) => {
 type ScaffoldAnswer = (body: ScaffoldOrdersRequest) => ScaffoldOrdersResponse | Promise<ScaffoldOrdersResponse>
 
 /**
- * The scaffold endpoint a booking surface reads its previews from: each request is kept with its query and body; a
- * request with orders answers `answers.preview`, one without answers `answers.expected` (the household's expected
- * bookings). Both answer an empty run until a test sets them; `reset` empties both and the requests kept
+ * The scaffold endpoint a booking surface reads its previews from: each request is kept with its query and body in
+ * `sent`, reactive so `untilTrue` can wait on it; a request with orders answers `answers.preview`, one without answers
+ * `answers.expected` (the household's expected bookings). Both answer an empty run until a test sets them. `hold(kind)`
+ * holds that kind's answer, as set so far, until the test calls the release it returns: the window in which the read is
+ * pending. `reset` empties both answers and the requests kept
  */
 export const registerScaffoldEndpoint = () => {
-    const sent: {query: Record<string, unknown>, body: ScaffoldOrdersRequest}[] = []
+    const sent = shallowReactive<{query: Record<string, unknown>, body: ScaffoldOrdersRequest}[]>([])
     const empty: ScaffoldAnswer = () => OrderFactory.defaultScaffoldOrdersResponse()
     const answers: {preview: ScaffoldAnswer, expected: ScaffoldAnswer} = {preview: empty, expected: empty}
     registerEndpoint('/api/household/order/scaffold', {
@@ -121,12 +123,24 @@ export const registerScaffoldEndpoint = () => {
             return body.orders.length > 0 ? answers.preview(body) : answers.expected(body)
         }
     })
+    const hold = (kind: keyof typeof answers): (() => void) => {
+        const answer = answers[kind]
+        let release: () => void = () => {}
+        const released = new Promise<void>(resolve => {
+            release = resolve
+        })
+        answers[kind] = async body => {
+            await released
+            return answer(body)
+        }
+        return () => release()
+    }
     const reset = () => {
         sent.length = 0
         answers.preview = empty
         answers.expected = empty
     }
-    return {sent, answers, reset}
+    return {sent, answers, hold, reset}
 }
 
 /** Resolves once `condition` holds, watching the reactive state it reads: no polling window, the test's timeout bounds it */

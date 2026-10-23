@@ -54,7 +54,7 @@ decision the user takes from a visual proposal.
 
 ## ADR-017: Isomorphic Composables, Pure UI Composables and Per-Context Type Checking
 
-**Status:** Accepted | **Date:** 2026-09-02 | **Updated:** 2026-10-18
+**Status:** Accepted | **Date:** 2026-09-02 | **Updated:** 2026-10-20
 
 ### Context
 
@@ -66,7 +66,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 
 | Kind | Location / naming | Rules |
 |------|-------------------|-------|
-| **Texts** | `app/config/<area>.ts` (`notificationTemplates.ts`, `help-texts.ts`, `bookingWords.ts`) | Plain modules holding the words and sentence templates users read, keyed by enum members where a type exists. The app and the server import them; composables and components read them and hold no user-facing literal |
+| **Texts** | `app/config/<area>.ts` (`notificationTemplates.ts`, `help-texts.ts`, `bookingWords.ts`) | Plain modules holding the words and sentence templates users read, keyed by enum members where a type exists. The app and the server import them; composables and components read them and hold no user-facing literal beyond a component's own one-line text (compliance 7) |
 | **Isomorphic composable** | `app/composables/use<Domain>.ts`, `use<Domain>Validation.ts` — anything imported from `server/` | Explicit imports only (no auto-imports). No Vue reactivity, Pinia stores, nuxt-auth-utils app composables (`useUserSession`), NuxtUI or design-system calls. Types shared with the repository live in validation composables (`TransactionCreateData`), never imported from `server/`. Formats a domain object into its text from the texts in `app/config/` (`formatTicketCounts` "2V 1B", `formatPlace` "Voksen #3", a toast line, `formatScaffoldResult` for the logs, `buildDinnerUrl`), so the app, the mails and the logs read the same |
 | **Pure UI composable** | `app/composables/use<Domain>Ui.ts` (`useBookingUi`, `useUserRolesUi`) | Client-only, never imported from `server/`. Owns badges, icons, colours, action previews, store-aware predicates; its labels come from `app/config/`. May use auto-imports |
 | **Design system** | `useTheSlopeDesignSystem.ts` | Owns every shared UI value (ADR-018); not booking- or user-aware; never server-reachable |
@@ -86,8 +86,9 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 3. `use<Domain>Ui` and the design system MUST NOT be imported from `server/`
 4. App code MUST NOT import from `~~/server/**`; shared types go through validation composables
 5. New type augmentations go in `shared/types/` or `server/types/`
-6. User-facing text MUST live in `app/config/`; the isomorphic composable formats a domain object's text from it, and `use<Domain>Ui` adds the icon and the colour
-7. New text starts in `app/config/`; an existing literal moves there when its file is touched
+6. User-facing text MUST live in `app/config/`, a component's own one-line text excepted (rule 7); the isomorphic composable formats a domain object's text from it, and `use<Domain>Ui` adds the icon and the colour
+7. New text starts in `app/config/`; an existing literal moves there when its file is touched. A component's own
+   one-line text (an empty state, a loading line) stays in its template
 
 ### Key Files
 
@@ -112,7 +113,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 
 ## ADR-016: Unified Booking Through Scaffold
 
-**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-19
+**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-23
 
 ### Context
 
@@ -206,9 +207,9 @@ Both go through `resolveDesiredOrdersToBuckets`: before the deadline they book a
 for sale or join its type's line, release, leave or requeue. A person's own earlier act outranks the preference:
 `fetchUserIntentKeys` reads the season's `USER_*` rows (bookings, cancellations, the waiting-list acts) and the
 generator skips those dinners. `POST /api/household/order/scaffold` is the member's booking write and
-`POST /api/household/inhabitants/[id]/preferences` the preference write; both answer `?preview=true` with the same
-run settled against the supply read and nothing written (`preview`); the scaffold's preview with no orders answers
-the household's next run on the dinners asked. The endpoint hands the scaffolder its deadlines: the season's
+`POST /api/household/inhabitants/[id]/preferences` the preference write; a preview runs the same scaffold on a draft
+against the supply it reads and writes nothing; it is a read (ADR-004). With no draft it is the household's next run on
+the season's deadlines. The endpoint hands the scaffolder its deadlines: the season's
 (`deadlinesForSeason`) for a member, `OPEN_DEADLINES` (`useSeason.ts`) for an admin's request with `?adminBypass=true`.
 
 ### Compliance
@@ -832,7 +833,7 @@ await prisma.season.delete({ where: { id: seasonId } })
 
 ## ADR-004: Logging and Security Standards
 
-**Status:** Accepted | **Date:** 2025-01-24
+**Status:** Accepted | **Date:** 2025-01-24 | **Updated:** 2026-10-23
 
 ### Decision
 
@@ -845,6 +846,23 @@ await prisma.season.delete({ where: { id: seasonId } })
 **NEVER log:** `password`, `passwordHash`, `token`, full user objects
 
 **Format:** `👨‍💻 > [MODULE] > [METHOD] message`
+
+### Access
+
+**Every member reads. A household changes its own data; an admin, or the allergy manager for allergies, changes it on the household's behalf through a logged override.**
+
+| Role | Reads | Changes household data |
+|---|---|---|
+| Member | everything | own household |
+| Admin | everything | any household, by override |
+| Allergy manager | everything | any household's allergies, by override |
+
+### Compliance
+
+1. A read changes nothing and is a `GET`; a preview is a read
+2. A change is a `POST`, `PUT` or `DELETE`, checked on the server against the household it changes
+3. An override is asked per change, never implied by the role, and logged with the actor and the household
+4. A read carries no override; a preview of an admin's change lifts its deadlines without one, since nothing changes
 
 ---
 

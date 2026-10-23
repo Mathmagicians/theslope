@@ -30,7 +30,12 @@ jobs:
           ref: main
           fetch-depth: 1
       - name: Read what the run published
-        run: make developer-resolve run="${{ inputs.run_id || github.event.workflow_run.id }}" | tee -a "$GITHUB_ENV"
+        # The id reaches the script through env, and make writes it into its recipe, so only digits pass
+        env:
+          RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+        run: |
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || { echo "❌ Not a run id: $RUN_ID"; exit 1; }
+          make developer-resolve run="$RUN_ID" | tee -a "$GITHUB_ENV"
       - uses: actions/setup-node@v7
         if: env.PUBLISH == 'true'
         with:
