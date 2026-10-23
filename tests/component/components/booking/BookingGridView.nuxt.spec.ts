@@ -559,28 +559,22 @@ describe('BookingGridView and the server\'s dry run', () => {
   const landed = (wrapper: Mounted) => untilTrue(() => expectedReads().length > 0 && !isTableLoading(wrapper))
 
   describe('the expected bookings', () => {
-    it('reads the dry run with no orders on the dinners on view and shows Anna\'s expected cells outlined, Lars\'s on Ingen, with the legend entry', async () => {
+    // Every member reads (ADR-004): whoever views the grid reads the expected bookings through the GET without any
+    // override, on the season's deadlines
+    it.each([
+      {viewer: 'the household\'s own member', props: {}},
+      {viewer: 'a member of another household, or an admin before the override', props: {canEdit: false}}
+    ])('GIVEN the grid of $viewer THEN it reads the dry run with no orders on the dinners on view through the GET without any override, and shows Anna\'s expected cells outlined, Lars\'s on Ingen, with the legend entry', async ({props}) => {
       scaffold.answers.expected = annaExpected
-      const wrapper = await mountWeek()
+      const wrapper = await mountWeek(FORM_MODES.VIEW, props)
       await landed(wrapper)
 
-      expect(expectedReads()[0]).toEqual({query: {}, body: {householdId: household.id, dinnerEventIds: [future.id, later.id], orders: []}})
+      expect(expectedReads()).toEqual([{query: {}, body: {householdId: household.id, dinnerEventIds: [future.id, later.id], orders: []}}])
       dinnerEvents.forEach(({id}) => {
         expect(cell(wrapper, anna.id, id).props()).toMatchObject({modelValue: DINEIN, expected: true})
         expect(cell(wrapper, lars.id, id).props()).toMatchObject({modelValue: NONE, expected: false})
       })
       expect(findByTestId(wrapper, 'dinner-mode-legend-expected').exists()).toBe(true)
-    })
-
-    // Every member reads (ADR-004): whoever views the grid reads the expected bookings through the GET without any
-    // override, on the season's deadlines. The household's own member is the case above
-    it('GIVEN the grid of a member of another household, or an admin before the override THEN it reads the expected bookings through the GET without any override, and Anna\'s cells show expected', async () => {
-      scaffold.answers.expected = annaExpected
-      const wrapper = await mountWeek(FORM_MODES.VIEW, {canEdit: false})
-      await landed(wrapper)
-
-      expect(expectedReads().map(({query}) => query)).toEqual([{}])
-      dinnerEvents.forEach(({id}) => expect(cell(wrapper, anna.id, id).props('expected')).toBe(true))
     })
 
     // The legend lists the expected booking as a standing entry, also while no cell is expected

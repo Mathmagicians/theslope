@@ -4,15 +4,11 @@ import testHelpers from '../testHelpers'
 import {AllergyFactory} from '../testDataFactories/allergyFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {SettingFactory} from '../testDataFactories/settingFactory'
-import {UserFactory} from '../testDataFactories/userFactory'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 
 const {adminUIFile} = authFiles
 const {
     validatedBrowserContext,
-    memberValidatedBrowserContext,
-    freshMemberContext,
-    getSessionUserInfo,
     pollUntil,
     gotoAllergyCatalog,
     waitForApi,
@@ -155,8 +151,8 @@ test.describe('AdminAllergies - poster notes', () => {
     const renderedNotes = (page: Page) => page.getByTestId('allergy-notes-item')
 
     // The writer here is the admin session. Who may write (ALLERGYMANAGER 200, a member 403) is the
-    // API spec's business; this case owns the round trip from the pencil to the rendered bullets, so it
-    // touches nobody's roles and runs beside the member case below.
+    // API spec's business, and who gets the pencil the component specs' (admin-tab.nuxt.spec.ts,
+    // AdminAllergies.nuxt.spec.ts); this case owns the round trip from the pencil to the rendered bullets.
     test.describe('as a writer', () => {
         test.use({storageState: adminUIFile})
 
@@ -183,23 +179,6 @@ test.describe('AdminAllergies - poster notes', () => {
             // The poster prints the same row
             await page.goto('/admin/allergies/pdf')
             await expect(renderedNotes(page).filter({hasText: newNote})).toHaveCount(1)
-        })
-    })
-
-    // The environment's member may hold ALLERGYMANAGER, so the test states the role it needs
-    test('GIVEN a member without the allergy role WHEN viewing the catalog THEN the notes have no pencil', async ({browser}) => {
-        const adminContext = await validatedBrowserContext(browser)
-        const memberSession = await memberValidatedBrowserContext(browser)
-        const {userId} = await getSessionUserInfo(memberSession)
-
-        await UserFactory.withSystemRoles(adminContext, userId, [], async () => {
-            const context = await freshMemberContext(browser)
-            const page = await context.newPage()
-
-            await gotoAllergyCatalog(page)
-
-            await expect(page.getByTestId('allergy-notes')).toContainText('Vigtige bemærkninger')
-            await expect(page.getByTestId('edit-allergy-notes')).toHaveCount(0)
         })
     })
 })

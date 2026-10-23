@@ -223,8 +223,8 @@ test.describe('Allergy API - CRUD Operations', () => {
 })
 
 // Every member reads; a household changes its own allergies, an admin or the allergy manager another household's through
-// the override, asked per change (ADR-004). The rows that set the member's roles run in
-// tests/e2e/api/serial/sessionUserRoles.e2e.spec.ts
+// the override, asked per change (ADR-004)
+// The roles each change accepts: the requireHouseholdAccess table, tests/component/utils/authorizationHelper.unit.spec.ts
 test.describe('Allergy API - who changes a household\'s allergies', () => {
     const testSalt = temporaryAndRandom()
     let adminContext: BrowserContext
@@ -244,8 +244,7 @@ test.describe('Allergy API - who changes a household\'s allergies', () => {
         inhabitantIn['another household'] = another.id
     })
 
-    // The admin's override lands in the CRUD cases above; the other refusals are requireHouseholdAccess's
-    // (tests/component/utils/authorizationHelper.unit.spec.ts)
+    // The admin's override lands in the CRUD cases above
     const actors = [
         {who: 'a member of the household', session: memberValidatedBrowserContext, on: 'their own household', allowed: true},
         {who: 'an admin without the override', session: validatedBrowserContext, on: 'another household', allowed: false}

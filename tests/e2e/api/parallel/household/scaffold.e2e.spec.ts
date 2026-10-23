@@ -648,33 +648,32 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
     // bypassDeadlines is a dry-run parameter, not an override: an admin's draft previews with the deadlines lifted; a
     // member's flag is ignored and the draft previews on the season's deadlines
-    const previewers = [
-      { who: 'an admin', session: validatedBrowserContext, bypassed: Action.BOOK },
-      { who: 'a member', session: memberValidatedBrowserContext, bypassed: Action.QUEUE }
-    ]
-    for (const { who, session, bypassed } of previewers) {
-      test(`GIVEN a closed dinner without a ticket for sale WHEN ${who} previews a booking without and with bypassDeadlines THEN they answer ${Action.QUEUE} and ${bypassed}, and nothing changes`, async ({ browser }) => {
-        const context = await validatedBrowserContext(browser)
-        const previewer = await session(browser)
-        const dinnerEventId = await closedDinner(context, 'Queue lifted')
-        const inhabitantId = await queuedInhabitant(context, 'Preview lifted')
-        const request: ScaffoldOrdersRequest = {
-          householdId: testHouseholdId, seasonId: testSeason.id!, dinnerEventIds: [dinnerEventId],
-          orders: [OrderFactory.createBookingOrder(inhabitantId, dinnerEventId, testAdultTicketPriceId)]
-        }
-        const supply = async () => ({
-          orders: await OrderFactory.getOrders(context, { dinnerEventIds: dinnerEventId, allHouseholds: true }),
-          entries: await WaitlistFactory.entries(context, [dinnerEventId])
-        })
-        const before = await supply()
-
-        const [onDeadlines, withFlag] = [await OrderFactory.previewScaffoldOrders(previewer, request), await OrderFactory.previewScaffoldOrders(previewer, request, true)]
-
-        expect(onDeadlines!.scaffoldResult.results.map(line => [line.inhabitantId, line.action])).toEqual([[inhabitantId, Action.QUEUE]])
-        expect(withFlag!.scaffoldResult.results.map(line => [line.inhabitantId, line.action])).toEqual([[inhabitantId, bypassed]])
-        expect(await supply()).toEqual(before)
+    test('GIVEN a closed dinner without a ticket for sale WHEN a booking is previewed without and with bypassDeadlines THEN the season\'s deadlines queue it, an admin\'s flag books it, a member\'s flag still queues it, and nothing changes', async ({ browser }) => {
+      const context = await validatedBrowserContext(browser)
+      const memberContext = await memberValidatedBrowserContext(browser)
+      const dinnerEventId = await closedDinner(context, 'Queue lifted')
+      const inhabitantId = await queuedInhabitant(context, 'Preview lifted')
+      const request: ScaffoldOrdersRequest = {
+        householdId: testHouseholdId, seasonId: testSeason.id!, dinnerEventIds: [dinnerEventId],
+        orders: [OrderFactory.createBookingOrder(inhabitantId, dinnerEventId, testAdultTicketPriceId)]
+      }
+      const supply = async () => ({
+        orders: await OrderFactory.getOrders(context, { dinnerEventIds: dinnerEventId, allHouseholds: true }),
+        entries: await WaitlistFactory.entries(context, [dinnerEventId])
       })
-    }
+      const before = await supply()
+
+      const [onDeadlines, lifted, memberFlagged] = [
+        await OrderFactory.previewScaffoldOrders(context, request),
+        await OrderFactory.previewScaffoldOrders(context, request, true),
+        await OrderFactory.previewScaffoldOrders(memberContext, request, true)
+      ]
+
+      expect(onDeadlines!.scaffoldResult.results.map(line => [line.inhabitantId, line.action])).toEqual([[inhabitantId, Action.QUEUE]])
+      expect(lifted!.scaffoldResult.results.map(line => [line.inhabitantId, line.action])).toEqual([[inhabitantId, Action.BOOK]])
+      expect(memberFlagged!.scaffoldResult.results.map(line => [line.inhabitantId, line.action])).toEqual([[inhabitantId, Action.QUEUE]])
+      expect(await supply()).toEqual(before)
+    })
   })
 
   // ============================================================================

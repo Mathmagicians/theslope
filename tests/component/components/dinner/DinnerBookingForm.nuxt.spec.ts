@@ -6,6 +6,7 @@ import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, regi
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
+import UserListItem from '~/components/shared/UserListItem.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
@@ -617,32 +618,48 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
   const annaExpected = OrderFactory.defaultBookingResult({inhabitantId: anna!.id, inhabitantName: anna!.name, dinnerEventId, dinnerMode: DinnerMode.DINEIN, action: Action.BOOK})
   const annaOrder = OrderFactory.defaultOrder('anna', {inhabitantId: anna!.id, dinnerEventId, dinnerMode: DinnerMode.TAKEAWAY, state: OrderStateSchema.enum.BOOKED})
   type Mounted = Awaited<ReturnType<typeof mountMemberForm>>
-  // The tickets of an inhabitant's row: on a phone under the name, from md in their own column
+  // The tickets of an inhabitant's row, found by the row's name: on a phone under the name, from md in their own column
   const ticketsOf = (wrapper: Mounted, inhabitantId: number) => {
-    const row = wrapper.findAll('tr').find(candidate => candidate.find(`[data-testid="inhabitant-${inhabitantId}-toggle"]`).exists())!
-    return wrapper.findAllComponents(DinnerTicket).filter(ticket => row.element.contains(ticket.element))
+    const name = wrapper.findAllComponents(UserListItem).find(item => {
+      const inhabitants = item.props('inhabitants')
+      return !Array.isArray(inhabitants) && inhabitants.id === inhabitantId
+    })!
+    const row = (name.element as Element).closest('tr')!
+    return wrapper.findAllComponents(DinnerTicket).filter(ticket => row.contains(ticket.element))
   }
 
   const expectedReads = () => scaffold.sent.filter(({body}) => body.orders.length === 0)
 
-  const mountExpected = async (results: BookingResult[], orders: OrderDisplay[] = []) => {
+  // Who views the form: the household's member, or a member of another household (an admin before the override)
+  const viewers = {
+    member: (orders: OrderDisplay[]) => mountMemberForm(true, {orders}),
+    stranger: (orders: OrderDisplay[]) => {
+      session.user.value = stranger
+      return mountForm({...baseProps, household: householdWithInhabitants, orders})
+    }
+  }
+
+  // Every member reads (ADR-004): whoever views the form reads the expected bookings through the GET without any
+  // override, on the season's deadlines
+  const mountExpected = async (results: BookingResult[], orders: OrderDisplay[] = [], viewer: keyof typeof viewers = 'member') => {
     scaffold.answers.expected = () => OrderFactory.defaultScaffoldOrdersResponse({results})
-    const wrapper = await mountMemberForm(true, {orders})
+    const wrapper = await viewers[viewer](orders)
     // The table's loading bar runs until the read lands
     await untilTrue(() => expectedReads().length > 0 && !isTableLoading(wrapper))
-    expect(expectedReads()[0]).toEqual({
+    expect(expectedReads()).toEqual([{
       query: {},
       body: {householdId: householdWithInhabitants.id, dinnerEventIds: [dinnerEventId], orders: []}
-    })
+    }])
     return wrapper
   }
 
   it.each([
-    {desc: 'a row without an order shows the expected mode ghosted', orders: [], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.DINEIN, expected: true}, annaFace: COMPONENTS.ticket.face.expected},
-    {desc: 'an order supersedes the expected booking', orders: [annaOrder], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.TAKEAWAY, expected: false}, annaFace: COMPONENTS.ticket.face.normal},
-    {desc: 'a run that expects nothing leaves the row on Ingen', orders: [], expected: [], annaTicket: {dinnerMode: DinnerMode.NONE, expected: false}, annaFace: COMPONENTS.ticket.face.normal}
-  ])('$desc', async ({orders, expected, annaTicket, annaFace}) => {
-    const wrapper = await mountExpected(expected, orders)
+    {desc: 'a row without an order shows the expected mode ghosted', viewer: 'member', orders: [], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.DINEIN, expected: true}, annaFace: COMPONENTS.ticket.face.expected},
+    {desc: 'a member of another household, or an admin before the override, sees a row without an order on the expected mode ghosted', viewer: 'stranger', orders: [], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.DINEIN, expected: true}, annaFace: COMPONENTS.ticket.face.expected},
+    {desc: 'an order supersedes the expected booking', viewer: 'member', orders: [annaOrder], expected: [annaExpected], annaTicket: {dinnerMode: DinnerMode.TAKEAWAY, expected: false}, annaFace: COMPONENTS.ticket.face.normal},
+    {desc: 'a run that expects nothing leaves the row on Ingen', viewer: 'member', orders: [], expected: [], annaTicket: {dinnerMode: DinnerMode.NONE, expected: false}, annaFace: COMPONENTS.ticket.face.normal}
+  ] as const)('$desc', async ({viewer, orders, expected, annaTicket, annaFace}) => {
+    const wrapper = await mountExpected([...expected], [...orders], viewer)
 
     const ticketProps = (inhabitantId: number) => ticketsOf(wrapper, inhabitantId).map(ticket => ticket.props())
     expect(ticketProps(anna!.id)).not.toHaveLength(0)
@@ -651,19 +668,6 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
     // Bo has no result: the run leaves him out, as it leaves out a person who cancelled the dinner
     expect(ticketProps(bo!.id)).not.toHaveLength(0)
     ticketProps(bo!.id).forEach(props => expect(props).toMatchObject({dinnerMode: DinnerMode.NONE, expected: false}))
-  })
-
-  // Every member reads (ADR-004): whoever views the form reads the expected bookings through the GET without any
-  // override, on the season's deadlines. The household's own member is mountExpected's read
-  it('GIVEN a member of another household, or an admin before the override THEN the form reads the expected bookings through the GET without any override, and Anna\'s ticket shows expected', async () => {
-    scaffold.answers.expected = () => OrderFactory.defaultScaffoldOrdersResponse({results: [annaExpected]})
-    session.user.value = stranger
-    const wrapper = await mountForm({...baseProps, household: householdWithInhabitants})
-    // The table's loading bar runs until the read lands
-    await untilTrue(() => expectedReads().length > 0 && !isTableLoading(wrapper))
-
-    expect(expectedReads().map(({query}) => query)).toEqual([{}])
-    expect(wrapper.findAllComponents(DinnerTicket).some(ticket => ticket.props('expected'))).toBe(true)
   })
 
   // The legend lists the expected booking as a standing entry, also while no row is expected
