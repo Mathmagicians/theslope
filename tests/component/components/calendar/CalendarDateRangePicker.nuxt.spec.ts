@@ -5,11 +5,10 @@ import { enableAutoUnmount } from '@vue/test-utils'
 import CalendarDateRangePicker from '~/components/calendar/CalendarDateRangePicker.vue'
 import { ref } from 'vue'
 import { openPopover, expectSharedCalendarGrid, findDateSegments, typeIntoSegment, calendarDay, resetStores } from '~~/tests/component/testHelpers'
-import { CALENDAR, createDayCircleClasses } from '~/composables/useTheSlopeDesignSystem'
+import { CALENDAR, dayCircleClasses } from '~/composables/useTheSlopeDesignSystem'
 import type { DateRange } from '~/types/dateTypes'
 
 const IS_MD = true
-const dayCircleClasses = createDayCircleClasses(ref(IS_MD))
 
 const JAN_1 = new Date(2025, 0, 1)
 const JAN_5 = new Date(2025, 0, 5)

@@ -1,8 +1,8 @@
-import {test, expect} from '@playwright/test'
+import {test, expect} from '~~/tests/e2e/uiTest'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 
-const {validatedBrowserContext} = testHelpers
+const {validatedBrowserContext, expectApiError} = testHelpers
 
 /**
  * Public Billing Page E2E Tests
@@ -90,7 +90,9 @@ test.describe('Public Billing Page', () => {
     })
 
     test('GIVEN invalid token WHEN navigating to public billing page THEN shows not found message', async ({page}) => {
-        await page.goto('/public/billing/00000000-0000-0000-0000-000000000000')
+        const invalidToken = '00000000-0000-0000-0000-000000000000'
+        expectApiError(page.context(), 404, `/api/public/billing/${invalidToken}`)
+        await page.goto(`/public/billing/${invalidToken}`)
 
         // Should show not found message
         await expect(page.getByText('Link ikke fundet')).toBeVisible()

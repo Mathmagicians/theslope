@@ -1,17 +1,18 @@
 // Helpers to work with bdd tests for Household aggregate root and strongly related entities (Inhabitants)
 
-import type { BrowserContext} from "@playwright/test"
+import type {APIResponse, BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
 import type {HouseholdDetail, HouseholdDisplay, InhabitantDetail, InhabitantCreate, UserDisplay} from "~/composables/useCoreValidation"
 import {useCoreValidation} from "~/composables/useCoreValidation"
-import {useBookingValidation, type InhabitantUpdateResponse, type HouseholdUpdateResponse} from "~/composables/useBookingValidation"
+import {useBookingValidation, type InhabitantUpdateResponse, type HouseholdUpdateResponse, type DinnerMode as DinnerModeType} from "~/composables/useBookingValidation"
+import type {WeekDayMap} from "~/types/dateTypes"
 import {useHeynaboValidation, type HeynaboImportResponse} from "~/composables/useHeynaboValidation"
 import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
 const Action = useActionValidation().BookingActionSchema.enum
 
 const {salt, saltedId, temporaryAndRandom, headers} = testHelpers
-const {createDefaultWeekdayMap, InhabitantDetailSchema, UserDisplaySchema, HouseholdDisplaySchema} = useCoreValidation()
+const {createDefaultWeekdayMap, serializeWeekDayMap, InhabitantDetailSchema, UserDisplaySchema, HouseholdDisplaySchema} = useCoreValidation()
 const {DinnerModeSchema, InhabitantUpdateResponseSchema, HouseholdUpdateResponseSchema} = useBookingValidation()
 const {HeynaboImportResponseSchema} = useHeynaboValidation()
 const DinnerMode = DinnerModeSchema.enum
@@ -448,7 +449,6 @@ export class HouseholdFactory {
      * @param seasonId - Optional seasonId query param for parallel-safe testing
      * @param assertResponse - Optional callback to assert response properties
      * @param adminBypass - An admin changing another household's preferences
-     * @param preview - The reply the save would give, with nothing written
      */
     static readonly updateInhabitantPreferences = async (
         context: BrowserContext,
@@ -457,41 +457,57 @@ export class HouseholdFactory {
         expectedStatus: number = 200,
         seasonId?: number,
         assertResponse?: (response: InhabitantUpdateResponse) => void,
-        adminBypass: boolean = false,
-        preview: boolean = false
+        adminBypass: boolean = false
     ): Promise<InhabitantUpdateResponse | null> => {
         const query = new URLSearchParams()
         if (seasonId !== undefined) query.append('seasonId', String(seasonId))
         if (adminBypass) query.append('adminBypass', 'true')
-        if (preview) query.append('preview', 'true')
-        const url = `/api/household/inhabitants/${inhabitantId}/preferences${query.size > 0 ? `?${query}` : ''}`
 
-        const response = await context.request.post(url, {
-            headers,
-            data: {dinnerPreferences}
-        })
-
-        const status = response.status()
-        const responseBody = await response.text()
-        expect(status, `updateInhabitantPreferences failed: ${responseBody}`).toBe(expectedStatus)
-
-        if (expectedStatus !== 200) return null
-
-        const parsed = InhabitantUpdateResponseSchema.parse(JSON.parse(responseBody))
-        if (assertResponse) {
-            assertResponse(parsed)
+        const response = await HouseholdFactory.postInhabitantPreferences(context, inhabitantId, {dinnerPreferences}, expectedStatus, query)
+        if (response && assertResponse) {
+            assertResponse(response)
         }
-        return parsed
+        return response
     }
 
-    /** Preview a preference change via the household endpoint: the reply the save would give, with nothing written */
-    static readonly previewInhabitantPreferences = (
+    /**
+     * The preference write (POST /api/household/inhabitants/[id]/preferences) with the body as given: the validation
+     * cases send the bodies the endpoint refuses
+     */
+    static readonly postInhabitantPreferences = async (
         context: BrowserContext,
         inhabitantId: number,
-        dinnerPreferences: Record<string, string>,
-        seasonId?: number
-    ): Promise<InhabitantUpdateResponse | null> =>
-        HouseholdFactory.updateInhabitantPreferences(context, inhabitantId, dinnerPreferences, 200, seasonId, undefined, false, true)
+        body: Record<string, unknown>,
+        expectedStatus: number = 200,
+        query: URLSearchParams = new URLSearchParams()
+    ): Promise<InhabitantUpdateResponse | null> => {
+        const url = `${HOUSEHOLD_ENDPOINT}/inhabitants/${inhabitantId}/preferences${query.size > 0 ? `?${query}` : ''}`
+        return HouseholdFactory.readInhabitantUpdate(await context.request.post(url, {headers, data: body}), expectedStatus)
+    }
+
+    /**
+     * Preview a preference change (GET /api/household/inhabitants/[id]/preferences): the reply the save would give, read
+     * with nothing written; any member reads any household's preview. The draft travels serialized in the query
+     */
+    static readonly previewInhabitantPreferences = async (
+        context: BrowserContext,
+        inhabitantId: number,
+        dinnerPreferences: WeekDayMap<DinnerModeType>,
+        seasonId?: number,
+        expectedStatus: number = 200
+    ): Promise<InhabitantUpdateResponse | null> => {
+        const query = new URLSearchParams({dinnerPreferences: serializeWeekDayMap(dinnerPreferences)})
+        if (seasonId !== undefined) query.append('seasonId', String(seasonId))
+        return HouseholdFactory.readInhabitantUpdate(await context.request.get(`${HOUSEHOLD_ENDPOINT}/inhabitants/${inhabitantId}/preferences?${query}`), expectedStatus)
+    }
+
+    /** The preference endpoint's reply, its status asserted; parsed when it answers 200 */
+    private static readonly readInhabitantUpdate = async (response: APIResponse, expectedStatus: number): Promise<InhabitantUpdateResponse | null> => {
+        const status = response.status()
+        const responseBody = await response.text()
+        expect(status, `The preference endpoint answered ${status}: ${responseBody}`).toBe(expectedStatus)
+        return expectedStatus === 200 ? InhabitantUpdateResponseSchema.parse(JSON.parse(responseBody)) : null
+    }
 
     /**
      * Release orders for an inhabitant by setting their preferences to NONE

@@ -1,4 +1,4 @@
-import {test, expect, type BrowserContext} from '@playwright/test'
+import {test, expect, type BrowserContext} from '~~/tests/e2e/uiTest'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -9,7 +9,7 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {getHouseholdUrl} from '~/utils/household'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated, temporaryAndRandom, salt} = testHelpers
+const {openContext, validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated, temporaryAndRandom, salt} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -92,7 +92,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
 
     test('GIVEN an upcoming order WHEN /admin/economy is server-rendered THEN the future orders table shows its loading state, and once hydrated the order row appears', async ({browser, page}) => {
         // The economy data loads in the browser only: a context without JavaScript sees the page as the server sent it
-        const serverContext = await browser.newContext({storageState: adminUIFile, javaScriptEnabled: false})
+        const serverContext = await openContext(browser, {storageState: adminUIFile, javaScriptEnabled: false})
         const serverPage = await serverContext.newPage()
         await serverPage.goto('/admin/economy')
         const serverTable = serverPage.getByTestId('future-orders-table')

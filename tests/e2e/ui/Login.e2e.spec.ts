@@ -1,9 +1,9 @@
 import type {Page} from '@playwright/test'
-import {test, expect} from '@playwright/test'
+import {test, expect} from '~~/tests/e2e/uiTest'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {testCredentials} from '~~/tests/e2e/config'
 
-const {waitForHydration} = testHelpers
+const {waitForHydration, expectApiError} = testHelpers
 const {adminUserName, password} = testCredentials
 
 const DEEP_LINK = '/admin/planning'
@@ -46,6 +46,7 @@ test.describe('Login flow', () => {
         await page.waitForURL(url => url.pathname === DEEP_LINK)
         await waitForHydration(page)
         await page.context().clearCookies()
+        expectApiError(page.context(), 401, '/api/')
 
         // A client-side navigation: the page's datasets answer 401 and the login page loads with the page as redirect
         await page.getByRole('banner').getByRole('link', {name: 'Fællesspisning', exact: true}).click()

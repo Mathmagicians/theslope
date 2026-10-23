@@ -20,7 +20,8 @@ description: Use before proposing or briefing a change to an endpoint, a reposit
   `Inhabitant.dinnerPreferences`, `server/routes/api/household/order/scaffold.post.ts` takes desired orders. Both call
   `scaffoldPrebookings` (`server/utils/scaffoldPrebookings.ts`); neither writes the other's column.
 - A server utility is called with an option before a second utility is written (`ScaffoldOptions.preview`, not a
-  `previewPrebookings`); an endpoint takes a query flag before a new route is added (`?preview=true`, `?adminBypass=true`).
+  `previewPrebookings`); an endpoint takes a query flag before a new route is added (`?adminBypass=true`, `?bypassDeadlines=true`).
+  A read is a `GET` and a preview is a read (ADR-004): the draft travels in the query (`orders=`, `dinnerPreferences=`).
 - The server decides, the browser renders: `app/components/**` send a draft (`DesiredOrder[]`, `WeekDayMap<DinnerMode>`)
   and format the `ScaffoldResult` that comes back; `app/composables/useBooking.ts` is the one generator, imported by
   `server/utils/scaffoldPrebookings.ts` (ADR-017).

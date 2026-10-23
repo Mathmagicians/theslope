@@ -1,4 +1,4 @@
-import {test, expect, type Browser} from '@playwright/test'
+import {test, expect, type Browser} from '~~/tests/e2e/uiTest'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'

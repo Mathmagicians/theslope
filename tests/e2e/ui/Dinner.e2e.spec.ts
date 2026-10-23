@@ -1,4 +1,4 @@
-import {test, expect, type Page} from '@playwright/test'
+import {test, expect, type Page} from '~~/tests/e2e/uiTest'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
@@ -201,7 +201,7 @@ test.describe('Dinner Page URL Navigation', () => {
 
             allergyType = await AllergyFactory.createAllergyType(adminContext, AllergyFactory.defaultAllergyTypeData(testSalt))
             createdAllergyTypeIds.push(allergyType.id)
-            await AllergyFactory.createAllergy(adminContext, {inhabitantId: allergicId, allergyTypeId: allergyType.id, inhabitantComment: null})
+            await AllergyFactory.createAllergy(adminContext, {inhabitantId: allergicId, allergyTypeId: allergyType.id, inhabitantComment: null}, 201, true)
 
             await OrderFactory.createOrder(adminContext, {
                 householdId,

@@ -60,7 +60,7 @@ export const requireHouseholdAccess = async (
     const user = await getRequiredUser(event)
 
     if (adminBypass(user)) {
-        console.info(`${PREFIX} Admin bypass for user ${user.email} on household ${targetHouseholdId}`)
+        console.info(`${PREFIX} Admin bypass for user ${user.email} roles=${JSON.stringify(user.systemRoles)} on household ${targetHouseholdId}`)
         return user
     }
 

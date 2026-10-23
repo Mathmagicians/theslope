@@ -2,7 +2,7 @@
 import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
-import {getQuery, readBody, type H3Event} from 'h3'
+import {getQuery, type H3Event} from 'h3'
 import {ref} from 'vue'
 import {mountWithTooltipProvider, clickByTestId, findByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
 import HouseholdCard from '~/components/household/HouseholdCard.vue'
@@ -14,10 +14,12 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {COMPONENTS, createResponsiveSizes, createTableColumns} from '~/composables/useTheSlopeDesignSystem'
 import {formatPreviewLines} from '~/composables/useBookingUi'
 import {useBookingValidation, type InhabitantUpdateResponse, type ScaffoldResult} from '~/composables/useBookingValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 import {WEEKDAYS} from '~/types/dateTypes'
 import {formatDate, DATE_SETTINGS} from '~/utils/date'
 
 const {BookingActionSchema, DinnerModeSchema} = useBookingValidation()
+const {deserializeWeekDayMap} = useCoreValidation()
 const Action = BookingActionSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 
@@ -32,21 +34,25 @@ registerEndpoint(`/api/admin/season/${season.id}`, () => season)
 registerEndpoint('/api/admin/season', () => [season])
 registerEndpoint('/api/admin/household', () => [])
 
-// Each member's preference endpoint answers its preview: the member's Ingen cancels their dinner
-const sent: {inhabitantId: number, query: Record<string, unknown>, body: unknown}[] = []
+// Each member's preference endpoint answers its preview, a read (GET) with the draft in its query, and its save (POST):
+// the member's Ingen cancels their dinner. The previews are kept in `sent`
+const sent: {inhabitantId: number, query: Record<string, unknown>}[] = []
 const previewOf = (inhabitantId: number): ScaffoldResult => OrderFactory.defaultScaffoldResult({dinners: [{id: dinner.id, date: dinner.date}], results: [OrderFactory.defaultBookingResult({
     inhabitantId, inhabitantName: household.inhabitants.find(({id}) => id === inhabitantId)!.name, dinnerEventId: dinner.id, dinnerMode: DinnerMode.NONE, action: Action.CANCEL
 })]})
 let answerPreview = (inhabitantId: number): InhabitantUpdateResponse | Promise<InhabitantUpdateResponse> =>
     ({inhabitant: {...household.inhabitants.find(({id}) => id === inhabitantId)!, userId: null}, scaffoldResult: previewOf(inhabitantId)})
 const answerOf = answerPreview
-household.inhabitants.forEach(({id}) => registerEndpoint(`/api/household/inhabitants/${id}/preferences`, {
-    method: 'POST',
-    handler: async (event: H3Event) => {
-        sent.push({inhabitantId: id, query: getQuery(event), body: await readBody(event)})
-        return answerPreview(id)
-    }
-}))
+household.inhabitants.forEach(({id}) => {
+    registerEndpoint(`/api/household/inhabitants/${id}/preferences`, {
+        method: 'GET',
+        handler: (event: H3Event) => {
+            sent.push({inhabitantId: id, query: getQuery(event)})
+            return answerPreview(id)
+        }
+    })
+    registerEndpoint(`/api/household/inhabitants/${id}/preferences`, {method: 'POST', handler: () => answerPreview(id)})
+})
 
 // The next test's resetStores drops the datasets a still-mounted card reads
 enableAutoUnmount(afterEach)
@@ -116,8 +122,10 @@ describe('HouseholdCard previews a preference change', () => {
         const expected = formatPreviewLines(
             OrderFactory.defaultScaffoldResult({dinners: previewOf(inhabitant.id).dinners, results: inhabitantIds.flatMap(id => previewOf(id).results)}), householdOrder)
         await vi.waitFor(() => expect(previewTexts(wrapper)).toEqual(expected.map(day => day.lines.map(line => line.text))))
-        expect(sent.map(({inhabitantId, query}) => ({inhabitantId, query}))).toEqual(inhabitantIds.map(inhabitantId => ({inhabitantId, query: {preview: 'true'}})))
-        sent.forEach(({body}) => expect(body).toMatchObject({dinnerPreferences: {[MONDAY]: DinnerMode.NONE}}))
+        // The draft is the query's one parameter: a read carries no override
+        expect(sent.map(({inhabitantId, query}) => ({inhabitantId, parameters: Object.keys(query)})))
+            .toEqual(inhabitantIds.map(inhabitantId => ({inhabitantId, parameters: ['dinnerPreferences']})))
+        sent.forEach(({query}) => expect(deserializeWeekDayMap(String(query.dinnerPreferences))).toMatchObject({[MONDAY]: DinnerMode.NONE}))
     })
 
     it('while the draft equals the saved preferences no preview is asked for', async () => {

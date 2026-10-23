@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect} from '~~/tests/e2e/uiTest'
 import testHelpers from '~~/tests/e2e/testHelpers'
 //import {adminFile} from './auth.setup'
 const adminFile = 'playwright/.auth/admin.json'

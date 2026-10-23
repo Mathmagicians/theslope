@@ -3,7 +3,7 @@ import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import type {Ref} from 'vue'
-import {mountWithTooltipProvider, resetStores, VIEWPORTS, holdEndpoint, isTableLoading} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, resetStores, VIEWPORTS, holdEndpoint, isTableLoading, expectMasterDetail} from '~~/tests/component/testHelpers'
 import HouseholdBookings from '~/components/household/HouseholdBookings.vue'
 import DinnerCalendarDisplay from '~/components/calendar/DinnerCalendarDisplay.vue'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
@@ -62,6 +62,44 @@ describe('HouseholdBookings calendar in ?cal=', () => {
 
         await vi.waitFor(() => expect(mockRoute.query.cal).toBe(isMd ? 'open' : 'closed'))
         expect(wrapper.findComponent(DinnerCalendarDisplay).exists()).toBe(isMd)
+    })
+})
+
+describe('HouseholdBookings master-detail layout', () => {
+    const panelOf = (wrapper: Awaited<ReturnType<typeof mountBookings>>) =>
+        wrapper.find('[data-testid="booking-grid-view"]').element.parentElement!
+
+    beforeEach(() => {
+        resetStores()
+        vi.clearAllMocks()
+        mockNavigateTo.mockImplementation(landNavigation)
+    })
+
+    afterEach(() => {
+        mockNavigateTo.mockReset()
+        mockRoute.query = {}
+    })
+
+    it('day view with the calendar open: the calendar is the master, the booking panel the detail', async () => {
+        mockRoute.query = {view: BookingViewSchema.enum.day, cal: 'open'}
+        const wrapper = await mountBookings(true)
+
+        await vi.waitFor(() => expect(wrapper.findComponent(DinnerCalendarDisplay).exists()).toBe(true))
+        expectMasterDetail(wrapper.findComponent(DinnerCalendarDisplay).element.parentElement!, panelOf(wrapper))
+    })
+
+    it.each([
+        {description: 'the month view', query: {view: BookingViewSchema.enum.month, cal: 'open'}},
+        {description: 'the calendar closed', query: {view: BookingViewSchema.enum.day, cal: 'closed'}}
+    ])('$description: the booking panel spans the row alone', async ({query}) => {
+        mockRoute.query = query
+        const wrapper = await mountBookings(true)
+
+        await vi.waitFor(() => expect(wrapper.find('[data-testid="booking-grid-view"]').exists()).toBe(true))
+        expect(wrapper.findComponent(DinnerCalendarDisplay).exists()).toBe(false)
+        const row = panelOf(wrapper).parentElement!
+        expect(row.children).toHaveLength(1)
+        expect(Array.from(row.classList)).toEqual([])
     })
 })
 

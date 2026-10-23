@@ -5,6 +5,7 @@ import type {PortionTicket} from '~/composables/useTicketPriceValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useBillingValidation} from '~/composables/useBillingValidation'
@@ -445,6 +446,54 @@ describe('useBookingValidation', () => {
       {name: 'ScaffoldOrdersResponseSchema', parse: () => ScaffoldOrdersResponseSchema.parse(OrderFactory.defaultScaffoldOrdersResponse({totals: {[BookingActionSchema.enum.BOOK]: 2}, unchanged: 5}))}
     ])('$name GIVEN valid data WHEN parsing THEN succeeds', ({parse}) => {
       expect(parse).not.toThrow()
+    })
+
+    // A preview is a read (ADR-004): the draft travels in the query, one dot-separated value per desired order, in the
+    // order inhabitantId.dinnerEventId.dinnerMode.ticketPriceId.isGuestTicket.state.orderId.waitlistEntryId.allergyTypeIds
+    describe('the desired order in a query', () => {
+      const {encodeDesiredOrder, DesiredOrderQuerySchema} = useBookingValidation()
+      const bare = OrderFactory.defaultDesiredOrder({inhabitantId: 3, dinnerEventId: 41, ticketPriceId: 5})
+      const {DINEIN} = DinnerMode
+      const {BOOKED} = OrderState
+
+      it.each([
+        {desc: 'a bare booking', order: bare, code: `3.41.${DINEIN}.5.0.${BOOKED}...`},
+        {desc: 'a change of an order', order: {...bare, orderId: 77}, code: `3.41.${DINEIN}.5.0.${BOOKED}.77..`},
+        {desc: 'a place on the waiting list', order: {...bare, waitlistEntryId: 12}, code: `3.41.${DINEIN}.5.0.${BOOKED}..12.`},
+        {desc: 'a guest with allergies', order: {...bare, isGuestTicket: true, allergyTypeIds: [2, 9]}, code: `3.41.${DINEIN}.5.1.${BOOKED}...2-9`},
+        ...DinnerModeSchema.options.filter(dinnerMode => dinnerMode !== DINEIN).map(dinnerMode =>
+          ({desc: `the mode ${dinnerMode}`, order: {...bare, dinnerMode}, code: `3.41.${dinnerMode}.5.0.${BOOKED}...`})),
+        ...OrderStateSchema.options.filter(state => state !== BOOKED).map(state =>
+          ({desc: `the state ${state}`, order: {...bare, state, orderId: 77}, code: `3.41.${DINEIN}.5.0.${state}.77..`}))
+      ])('GIVEN $desc WHEN encoded THEN it reads $code and decodes to the same order', ({order, code}) => {
+        expect(encodeDesiredOrder(order)).toBe(code)
+        expect(DesiredOrderQuerySchema.parse(encodeDesiredOrder(order))).toStrictEqual(order)
+      })
+
+      it.each([
+        {malformed: 'a missing segment (the ticket price)', from: (code: string) => code.split('.').filter((_, index) => index !== 3).join('.')},
+        {malformed: 'a non-numeric id', from: (code: string) => ['anna', ...code.split('.').slice(1)].join('.')},
+        {malformed: 'an unknown dinner mode', from: (code: string) => code.replace(DINEIN, 'BRUNCH')}
+      ])('GIVEN $malformed WHEN parsed THEN the schema fails', ({from}) => {
+        expect(DesiredOrderQuerySchema.safeParse(from(encodeDesiredOrder({...bare, orderId: 77}))).success).toBe(false)
+      })
+
+      // Cloudflare refuses a URL past 16 KB. The widest ids D1 hands out, the longest mode and state and an order id on
+      // every cell make the month's draft as long as it gets
+      it('GIVEN a month\'s draft of a family of five (5 × 22 dinners) WHEN encoded into the scaffold\'s query THEN the URL stays under 16 KB', () => {
+        const LARGEST_ID = 2_147_483_647
+        const family = Array.from({length: 5}, (_, person) => ({...HouseholdFactory.defaultInhabitantData(`family-${person}`), id: LARGEST_ID - person}))
+        const month = Array.from({length: 22}, (_, day) => DinnerEventFactory.dinnerEventAt(LARGEST_ID - day, day + 1))
+        const orders = family.flatMap(({id: inhabitantId}, person) => month.map(({id: dinnerEventId}, day) => OrderFactory.defaultDesiredOrder({
+          inhabitantId, dinnerEventId, ticketPriceId: LARGEST_ID, orderId: LARGEST_ID - person * month.length - day,
+          dinnerMode: DinnerMode.DINEINLATE, state: OrderState.RELEASED
+        })))
+
+        const url = OrderFactory.previewScaffoldUrl({householdId: LARGEST_ID, seasonId: LARGEST_ID, dinnerEventIds: month.map(({id}) => id), orders})
+
+        expect(orders).toHaveLength(110)
+        expect(new TextEncoder().encode(url).length).toBeLessThan(16 * 1024)
+      })
     })
   })
 })

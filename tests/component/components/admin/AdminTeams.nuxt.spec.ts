@@ -3,8 +3,9 @@ import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick, ref} from 'vue'
-import {mountWithTooltipProvider, clickByTestId, findAllByTestId, pollFor, resetStores, VIEWPORTS, holdEndpoint, findLoadingRow} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, clickByTestId, findAllByTestId, findByTestId, pollFor, resetStores, VIEWPORTS, holdEndpoint, findLoadingRow, expectMasterDetail} from '~~/tests/component/testHelpers'
 import AdminTeams from '~/components/admin/AdminTeams.vue'
+import TeamCalendarDisplay from '~/components/calendar/TeamCalendarDisplay.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
 import {useAuthStore} from '~/stores/auth'
@@ -49,7 +50,9 @@ const mountTeams = async (isMd = true) => {
     return wrapper
 }
 
-const clickCreateTeams = async (wrapper: Awaited<ReturnType<typeof mountTeams>>) => {
+type Wrapper = Awaited<ReturnType<typeof mountTeams>>
+
+const clickCreateTeams = async (wrapper: Wrapper) => {
     await clickByTestId(wrapper, 'submit-create-teams')
     await flushPromises()
     await nextTick()
@@ -161,6 +164,23 @@ describe('AdminTeams team selection', () => {
 
         await clickByTestId(wrapper, `team-row-${team.id}`)
         await vi.waitFor(() => expect(mockRoute.query.team).toBeUndefined())
+    })
+
+    // The master table stays in the master slot; the detail slot beside it swaps between the overview and the open team
+    it.each([
+        {state: 'no team open: the all-teams calendar', open: false, holds: (detail: Element, wrapper: Wrapper) => detail.contains(wrapper.findComponent(TeamCalendarDisplay).element)},
+        {state: 'a team open: the framed team detail', open: true, holds: (detail: Element, wrapper: Wrapper) => detail.contains(findByTestId(wrapper, 'edit-team').element)}
+    ])('md, $state stands in the detail slot beside the master table', async ({open, holds}) => {
+        const wrapper = await mountTeams(true)
+        if (open) {
+            await clickByTestId(wrapper, `team-row-${team.id}`)
+            await vi.waitFor(() => expect(findAllByTestId(wrapper, 'edit-team')).toHaveLength(1))
+        }
+
+        // UTable renders more than one root, so its wrapper's element is the one holding it: the master
+        const master = wrapper.findComponent({name: 'UTable'}).element
+        expectMasterDetail(master, master.nextElementSibling)
+        expect(holds(master.nextElementSibling!, wrapper)).toBe(true)
     })
 
     describe.each(VIEWPORTS)('$viewport: an open row', ({isMd}) => {

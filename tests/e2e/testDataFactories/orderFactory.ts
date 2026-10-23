@@ -3,7 +3,7 @@ import type { OrderDisplay, BookingResult, BookingTotals, OrderDetail, OrderHist
 import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
-import type { BrowserContext } from '@playwright/test';
+import type { APIResponse, BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'
 import testHelpers from '../testHelpers'
 
@@ -585,39 +585,54 @@ export class OrderFactory {
     context: BrowserContext,
     request: ScaffoldOrdersRequest,
     expectedStatus: number = 200,
-    adminBypass?: boolean,
-    preview: boolean = false
+    adminBypass?: boolean
   ): Promise<ScaffoldOrdersResponse | null> => {
-    const { ScaffoldOrdersResponseSchema } = useBookingValidation()
     const query = new URLSearchParams()
     if (adminBypass !== undefined) query.append('adminBypass', String(adminBypass))
-    if (preview) query.append('preview', 'true')
 
     const response = await context.request.post(`${HOUSEHOLD_SCAFFOLD_ENDPOINT}${query.size > 0 ? `?${query}` : ''}`, {
       headers,
       data: request
     })
+    return OrderFactory.readScaffoldResponse(response, expectedStatus)
+  }
 
+  /**
+   * The scaffold's dry run as a URL (GET /api/household/order/scaffold): the request in the query, each desired order
+   * encoded by `encodeDesiredOrder`; `bypassDeadlines` previews an admin's change with the deadlines lifted
+   */
+  static readonly previewScaffoldUrl = (request: ScaffoldOrdersRequest, bypassDeadlines: boolean = false): string => {
+    const { encodeDesiredOrder } = useBookingValidation()
+    const query = new URLSearchParams({ householdId: String(request.householdId) })
+    if (request.seasonId !== undefined) query.append('seasonId', String(request.seasonId))
+    request.dinnerEventIds.forEach(id => query.append('dinnerEventIds', String(id)))
+    request.orders.forEach(order => query.append('orders', encodeDesiredOrder(order)))
+    if (bypassDeadlines) query.append('bypassDeadlines', 'true')
+    return `${HOUSEHOLD_SCAFFOLD_ENDPOINT}?${query}`
+  }
+
+  /**
+   * Preview a scaffold save: the reply the save would give, read with nothing written; any member reads any household.
+   * No orders reads the household's next run on the season's deadlines (the expected bookings)
+   */
+  static readonly previewScaffoldOrders = async (
+    context: BrowserContext,
+    request: ScaffoldOrdersRequest,
+    bypassDeadlines: boolean = false,
+    expectedStatus: number = 200
+  ): Promise<ScaffoldOrdersResponse | null> =>
+    OrderFactory.readScaffoldResponse(await context.request.get(OrderFactory.previewScaffoldUrl(request, bypassDeadlines)), expectedStatus)
+
+  /** The scaffold's reply, its status asserted; parsed when it answers 200 */
+  private static readonly readScaffoldResponse = async (response: APIResponse, expectedStatus: number): Promise<ScaffoldOrdersResponse | null> => {
+    const { ScaffoldOrdersResponseSchema } = useBookingValidation()
     const status = response.status()
     const responseBody = await response.text()
 
     expect(status, `Expected ${expectedStatus} but got ${status}: ${responseBody}`).toBe(expectedStatus)
 
-    if (expectedStatus === 200) {
-      const parsed = JSON.parse(responseBody)
-      return ScaffoldOrdersResponseSchema.parse(parsed)
-    }
-
-    return null
+    return expectedStatus === 200 ? ScaffoldOrdersResponseSchema.parse(JSON.parse(responseBody)) : null
   }
-
-  /** Preview a scaffold save: the reply the save would give, with nothing written */
-  static readonly previewScaffoldOrders = (
-    context: BrowserContext,
-    request: ScaffoldOrdersRequest,
-    adminBypass?: boolean
-  ): Promise<ScaffoldOrdersResponse | null> =>
-    OrderFactory.scaffoldOrders(context, request, 200, adminBypass, true)
 
   /**
    * Create a DesiredOrder for booking (BOOKED state, specific mode)

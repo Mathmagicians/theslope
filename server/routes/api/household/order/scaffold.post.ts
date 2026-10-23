@@ -7,14 +7,12 @@ import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {useBooking} from "~/composables/useBooking"
 import {emailChannel} from "~~/server/utils/sender/config"
 import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
-import {AdminBypassQuerySchema, QueryFlagSchema} from '~/composables/useCoreValidation'
+import {AdminBypassQuerySchema} from '~/composables/useCoreValidation'
 import {OPEN_DEADLINES} from '~/composables/useSeason'
 
 const {throwH3Error} = eventHandlerHelper
 
 const LOG = '🎟️ > HOUSEHOLD > [SCAFFOLD]'
-
-const querySchema = AdminBypassQuerySchema.extend({preview: QueryFlagSchema})
 
 /**
  * POST /api/household/order/scaffold
@@ -27,9 +25,7 @@ const querySchema = AdminBypassQuerySchema.extend({preview: QueryFlagSchema})
  * - Leaves the queue on NONE for an entry, rewrites the entry's wish on another mode or price
  * - `?adminBypass=true` from an admin: any household, and the deadlines lift (the admin correction); the history rows
  *   name their source as the admin's correction
- * - `?preview=true`: the reply the save would give, settled against the tickets for sale and the waiting list as they
- *   stand; nothing is written and no mail goes out. Combines with `?adminBypass=true`. With no orders it answers the
- *   household's next run on the dinners asked: the bookings its preferences make there
+ * - Its dry run is the GET on the same path (`scaffold.get.ts`)
  *
  * Requires: authenticated user belongs to the household
  */
@@ -41,12 +37,9 @@ export default defineEventHandler<Promise<ScaffoldOrdersResponse>>(async (event)
     // Input validation (ADR-002)
     let requestData!: ScaffoldOrdersRequest
     let adminBypass!: boolean
-    let preview!: boolean
     try {
         requestData = await readValidatedBody(event, ScaffoldOrdersRequestSchema.parse)
-        const query = await getValidatedQuery(event, querySchema.parse)
-        adminBypass = query.adminBypass
-        preview = query.preview
+        adminBypass = (await getValidatedQuery(event, AdminBypassQuerySchema.parse)).adminBypass
     } catch (error) {
         return throwH3Error(`${LOG} Input validation error`, error)
     }
@@ -56,23 +49,20 @@ export default defineEventHandler<Promise<ScaffoldOrdersResponse>>(async (event)
 
     // Business logic (ADR-002)
     try {
-        console.info(`${LOG} User ${user.email} ${preview ? 'previewing' : 'scaffolding'} ${requestData.orders.length} orders for household ${requestData.householdId}`)
+        console.info(`${LOG} User ${user.email} scaffolding ${requestData.orders.length} orders for household ${requestData.householdId}`)
 
-        // User mode on the orders; an empty draft's preview runs system mode, as the household's next run would
-        const nextRun = preview && requestData.orders.length === 0
         // An admin's bypass lifts the deadlines and writes the run's rows as the admin's correction
         const adminCorrection = adminBypass && isAdmin(user)
         const result = await scaffoldPrebookings(d1Client, {
             seasonId: requestData.seasonId,
             householdId: requestData.householdId,
             dinnerEventIds: requestData.dinnerEventIds,
-            desiredOrders: nextRun ? undefined : requestData.orders,
-            userId: nextRun ? undefined : user.id,
+            desiredOrders: requestData.orders,
+            userId: user.id,
             deadlines: adminCorrection ? OPEN_DEADLINES : undefined,
-            adminCorrection,
-            preview
+            adminCorrection
         })
-        if (!preview) await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), result.outcomes)
+        await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), result.outcomes)
 
         console.info(`${LOG} Scaffold complete: ${useBooking().formatScaffoldResult(result)}`)
 

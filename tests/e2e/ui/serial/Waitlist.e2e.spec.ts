@@ -1,4 +1,4 @@
-import {test, expect, type BrowserContext} from '@playwright/test'
+import {test, expect, type Browser, type BrowserContext} from '~~/tests/e2e/uiTest'
 import {addDays, startOfDay} from 'date-fns'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
@@ -12,7 +12,7 @@ import {formatDate} from '~/utils/date'
 import {WAITLIST_TEST_IDS} from '~~/tests/component/components/dinner/waitlistTestIds'
 
 const {memberUIFile, adminUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, gotoHydrated, pollUntil, salt, temporaryAndRandom, waitForApi} = testHelpers
+const {openContext, validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, gotoHydrated, pollUntil, salt, temporaryAndRandom, waitForApi} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
 const DinnerMode = DinnerModeSchema.enum
@@ -34,6 +34,9 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
     let dinnerEventId: number
     let dinnerDate: Date
     let inhabitantId: number
+
+    // The member and the chef each on a page of their own session
+    const pageAs = async (browser: Browser, storageState: string) => (await openContext(browser, {storageState})).newPage()
 
     test.beforeAll(async ({browser}) => {
         adminContext = await validatedBrowserContext(browser)
@@ -66,7 +69,7 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
     })
 
     test('GIVEN a closed, sold-out dinner WHEN a member saves Spisesal THEN the row shows the ghosted wish at position 1 and the chef\'s card shows the queue', async ({browser}) => {
-        const memberPage = await (await browser.newContext({storageState: memberUIFile})).newPage()
+        const memberPage = await pageAs(browser, memberUIFile)
         await gotoHydrated(memberPage, `/dinner?date=${formatDate(dinnerDate)}`)
 
         await memberPage.getByTestId(`inhabitant-${inhabitantId}-toggle`).click()
@@ -77,7 +80,7 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
 
         await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.position(inhabitantId))).toContainText(`${ticketTypeLabel(TicketTypeSchema.enum.ADULT)} #1`)
 
-        const chefPage = await (await browser.newContext({storageState: adminUIFile})).newPage()
+        const chefPage = await pageAs(browser, adminUIFile)
         await gotoHydrated(chefPage, `/chef?team=${teamId}&date=${formatDate(dinnerDate)}`)
         await expect(chefPage.getByTestId('chef-waitlist-alert')).toBeVisible()
     })
@@ -88,7 +91,7 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
         const {ticketPrices} = await SeasonFactory.getSeason(adminContext, seasonId)
         const ticketType = ticketPrices.find(price => price.id === entries[0]!.order.ticketPriceId)!.ticketType
 
-        const memberPage = await (await browser.newContext({storageState: memberUIFile})).newPage()
+        const memberPage = await pageAs(browser, memberUIFile)
         await memberPage.goto(`/dinner?date=${formatDate(dinnerDate)}`)
 
         // UChip hands its test id to the day circle; the chip's indicator sits beside the circle and holds the hourglass
@@ -101,7 +104,7 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
     })
 
     test('GIVEN the member in the queue WHEN the chef releases a portion THEN the member holds a ticket and the queue is empty', async ({browser}) => {
-        const chefPage = await (await browser.newContext({storageState: adminUIFile})).newPage()
+        const chefPage = await pageAs(browser, adminUIFile)
         await gotoHydrated(chefPage, `/chef?team=${teamId}&date=${formatDate(dinnerDate)}`)
 
         await chefPage.getByTestId('chef-extra-portions-cta').click()
@@ -117,7 +120,7 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
         await released
         await expect(chefPage.getByTestId('chef-waitlist-alert')).toBeHidden()
 
-        const memberPage = await (await browser.newContext({storageState: memberUIFile})).newPage()
+        const memberPage = await pageAs(browser, memberUIFile)
         await gotoHydrated(memberPage, `/dinner?date=${formatDate(dinnerDate)}`)
         await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.position(inhabitantId))).toBeHidden()
     })

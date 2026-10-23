@@ -128,3 +128,35 @@ describe('DinnerCalendarDisplay cancelled dinners', () => {
         expect(findAllByTestId(wrapper, 'calendar-legend-entry').some(entry => entry.text().includes('Aflyst fællesspisning'))).toBe(true)
     })
 })
+
+// The server renders the circles before the layout measures the viewport, so the circle's size steps at lg in its own
+// classes: a circle reads alike whatever the md breakpoint says, and the browser picks the size per screen
+describe('DinnerCalendarDisplay day circles', () => {
+    const DINNER = {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 6, date: addDays(MONTH, 9)}
+
+    beforeEach(() => {
+        resetStores()
+    })
+
+    const circleClasses = async (isMd: boolean | null) => {
+        const wrapper = await mountWithTooltipProvider(DinnerCalendarDisplay, {
+            props: {
+                seasonDates: {start: MONTH, end: endOfMonth(MONTH)},
+                holidays: [],
+                dinnerEvents: [DINNER],
+                selectedDate: MONTH,
+                numberOfMonths: 1
+            },
+            isMd
+        })
+        return findByTestId(wrapper, `calendar-dinner-date-${DINNER.date.getDate()}`).classes()
+    }
+
+    it('a dinner circle binds the calendar circle size, alike on a phone, from md and before the layout measures', async () => {
+        const phone = await circleClasses(false)
+
+        expect(phone).toEqual(expect.arrayContaining(CALENDAR.day.size.split(' ')))
+        expect(await circleClasses(true)).toEqual(phone)
+        expect(await circleClasses(null)).toEqual(phone)
+    })
+})

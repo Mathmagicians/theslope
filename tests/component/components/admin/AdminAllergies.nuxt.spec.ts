@@ -4,10 +4,11 @@ import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick, toValue} from 'vue'
 import AdminAllergies from '~/components/admin/AdminAllergies.vue'
+import AllergyCatalogTable from '~/components/allergy/AllergyCatalogTable.vue'
 import {useAllergiesStore} from '~/stores/allergies'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from '../allergy/allergyTestIds'
-import {mountWithTooltipProvider, mountedStore, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS, expectMasterDetail} from '~~/tests/component/testHelpers'
 
 // The test environment has no router: navigateTo lands the written query on the route the component reads
 const {mockRoute, mockNavigateTo, landNavigation, useRoute} = await vi.hoisted(async () =>
@@ -116,6 +117,15 @@ describe('AdminAllergies', () => {
                 expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.form)).toHaveLength(1)
             })
         })
+    })
+
+    it('md: the catalog is the master and the open detail pane the detail', async () => {
+        const wrapper = await mountAdmin({}, true)
+
+        // The catalog renders UTable's several roots, so its wrapper's element is the one holding it: the master
+        const master = wrapper.findComponent(AllergyCatalogTable).element
+        expectMasterDetail(master, master.nextElementSibling)
+        expect(master.nextElementSibling?.contains(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).element)).toBe(true)
     })
 
     // The phone layout: the detail opens by tapping the first row

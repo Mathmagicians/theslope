@@ -85,7 +85,7 @@ const selectSeason = (dinnerEvents: DinnerEventDisplay[] = []) => {
     activeSeasonIdEndpoint.mockReturnValue(SEASON_ID)
     seasonByIdEndpoint.mockReturnValue({...SEASON, dinnerEvents})
 }
-const {TicketTypeSchema} = useBookingValidation()
+const {TicketTypeSchema, encodeDesiredOrder} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
 // Ids on the season's prices: a waiting-list entry names its price by id, the store reads the ticket type off it
 const ticketPrices = SEASON.ticketPrices.map((price, index) => ({...price, id: index + 1}))
@@ -102,6 +102,9 @@ registerEndpoint('/api/order', ordersEndpoint)
 registerEndpoint(`/api/team/cooking/${DINNER_ID}/assign-role`, {method: 'POST', handler: assignRoleEndpoint})
 registerEndpoint(`/api/chef/dinner/${DINNER_ID}`, {method: 'POST', handler: updateDinnerEndpoint})
 registerEndpoint('/api/household/order/scaffold', {method: 'POST', handler: scaffoldEndpoint})
+// The scaffold's dry run is a read (ADR-004): the expected bookings and the draft previews
+const scaffoldReadEndpoint = vi.fn()
+registerEndpoint('/api/household/order/scaffold', {method: 'GET', handler: scaffoldReadEndpoint})
 registerEndpoint('/api/admin/maintenance/daily', {method: 'POST', handler: dailyMaintenanceEndpoint})
 registerEndpoint('/api/billing', householdBillingEndpoint)
 registerEndpoint('/api/order/77', () => OrderFactory.defaultOrderDetail('order-history', {id: 77}))
@@ -142,6 +145,7 @@ beforeEach(() => {
     assignRoleEndpoint.mockImplementation(() => dinnerResponse())
     updateDinnerEndpoint.mockImplementation(() => dinnerResponse())
     scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.BOOK]: 2}}))
+    scaffoldReadEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse())
     dailyMaintenanceEndpoint.mockImplementation(() => OrderFactory.defaultDailyMaintenanceResult())
 })
 
@@ -346,28 +350,33 @@ describe('Bookings store — scaffold bookings', () => {
         expect(result.totals[Action.CANCEL]).toBe(1)
     })
 
-    // A preview reads what the save of the request would do: the save's request with ?preview=true, outside the booking write
+    // The scaffold's dry run is a read (ADR-004): the request travels in the query of a GET, each desired order encoded,
+    // outside the booking write. No orders is the household's expected bookings; an admin's draft previews with the
+    // deadlines lifted, a dry-run parameter and no override
+    const READ_DINNER_IDS = [DINNER_ID, DINNER_ID + 1]
+    const draft = READ_DINNER_IDS.map(dinnerEventId => OrderFactory.defaultDesiredOrder({dinnerEventId, inhabitantId: 2}))
+    type Store = ReturnType<typeof useBookingsStore>
     it.each([
-        {who: 'a member', adminBypass: false, query: {adminBypass: 'false', preview: 'true'}},
-        {who: 'an admin correcting', adminBypass: true, query: {adminBypass: 'true', preview: 'true'}}
-    ])('previews a save for $who: sends the request with ?preview=true outside the booking write and returns its result without a toast', async ({adminBypass, query}) => {
-        const sent: {query: Record<string, unknown>, body: unknown}[] = []
+        {what: 'the expected bookings', read: (store: Store) => store.fetchExpectedBookings(7, READ_DINNER_IDS), orders: () => ({})},
+        {what: 'a member\'s draft', read: (store: Store) => store.previewBookings({householdId: 7, dinnerEventIds: READ_DINNER_IDS, orders: draft}),
+            orders: () => ({orders: draft.map(order => encodeDesiredOrder(order))})},
+        {what: 'an admin\'s draft', read: (store: Store) => store.previewBookings({householdId: 7, dinnerEventIds: READ_DINNER_IDS, orders: draft}, true),
+            orders: () => ({orders: draft.map(order => encodeDesiredOrder(order)), bypassDeadlines: 'true'})}
+    ])('reads $what through the scaffold\'s GET outside the booking write and returns its result without a toast', async ({read, orders}) => {
         const previewed = OrderFactory.defaultScaffoldOrdersResponse({
             totals: {[Action.BUY]: 1, [Action.QUEUE]: 1},
             positions: [{inhabitantId: 2, dinnerEventId: DINNER_ID, isGuestTicket: false, position: 3, ticketType: TicketType.ADULT}]
         })
-        scaffoldEndpoint.mockImplementation(async (event: H3Event) => {
-            sent.push({query: getQuery(event), body: await readBody(event)})
-            return previewed
-        })
+        scaffoldReadEndpoint.mockImplementation(() => previewed)
         const store = useBookingsStore()
-        const request = {householdId: 7, dinnerEventIds: [DINNER_ID], orders: [OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID})]}
 
-        const preview = store.previewBookings(request, adminBypass)
+        const preview = read(store)
         expect(store.isProcessingBookings).toBe(false)
 
         expect(await preview).toEqual(previewed.scaffoldResult)
-        expect(sent).toEqual([{query, body: request}])
+        expect(scaffoldReadEndpoint.mock.calls.map(([event]) => getQuery(event as H3Event)))
+            .toEqual([{householdId: '7', dinnerEventIds: READ_DINNER_IDS.map(String), ...orders()}])
+        expect(scaffoldEndpoint).not.toHaveBeenCalled()
         expect(useToast().toasts.value).toHaveLength(0)
     })
 
@@ -496,7 +505,7 @@ describe('Bookings store — a cancelled dinner', () => {
     })
 
     const vias = [
-        {via: 'a preview', run: (store: Store) => store.previewBookings({householdId: MY_HOUSEHOLD_ID, dinnerEventIds: [dinner.id], orders: []})},
+        {via: 'a read of the expected bookings', run: (store: Store) => store.fetchExpectedBookings(MY_HOUSEHOLD_ID, [dinner.id])},
         {via: 'a save', run: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [])}
     ]
     const replies = [
@@ -505,7 +514,8 @@ describe('Bookings store — a cancelled dinner', () => {
     ]
 
     it.each(vias.flatMap(via => replies.map(reply => ({...via, ...reply}))))('WHEN $via\'s reply $reply THEN the selected season is read $reads more time(s), so a cancelled dinner shows at once', async ({run, dinners, reads}) => {
-        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({dinners}))
+        // The save writes through the POST, the read through the GET
+        ;[scaffoldEndpoint, scaffoldReadEndpoint].forEach(endpoint => endpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({dinners})))
         const store = await storeOnSeason()
 
         await run(store)

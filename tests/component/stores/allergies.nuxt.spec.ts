@@ -359,6 +359,46 @@ describe('Allergies Store - cache coherence between allergies and the catalog', 
     })
 })
 
+// A household changes its own allergies; an admin or the allergy manager changes another household's through the
+// override, asked per change and never implied by the role (ADR-004)
+describe('Allergies Store - the override on a change', () => {
+    type Store = ReturnType<typeof useAllergiesStore>
+
+    beforeEach(() => {
+        resetStores()
+        vi.clearAllMocks()
+        session.user.value = me
+        allergyTypesEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypesWithInhabitants())
+        allergiesEndpoint.mockReturnValue(AllergyFactory.createMockAllergies())
+        allergyByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergies()[0])
+    })
+    afterEach(() => {
+        session.user.value = null
+    })
+
+    const changes = [
+        {change: 'createAllergy', method: 'PUT', endpoint: allergiesEndpoint,
+            act: (store: Store, adminBypass?: boolean) => store.createAllergy({inhabitantId: 1, allergyTypeId: 2, inhabitantComment: 'Mild'}, adminBypass)},
+        {change: 'updateAllergy', method: 'POST', endpoint: allergyByIdEndpoint,
+            act: (store: Store, adminBypass?: boolean) => store.updateAllergy(1, {allergyTypeId: 2, inhabitantComment: 'Worse'}, adminBypass)},
+        {change: 'deleteAllergy', method: 'DELETE', endpoint: allergyByIdEndpoint,
+            act: (store: Store, adminBypass?: boolean) => store.deleteAllergy(1, adminBypass)}
+    ]
+    const askedAs = [
+        {as: 'the household\'s own change', adminBypass: undefined, query: {}},
+        {as: 'an override', adminBypass: true, query: {adminBypass: 'true'}}
+    ]
+
+    it.each(changes.flatMap(change => askedAs.map(asked => ({...change, ...asked}))))('$change as $as sends the query $query', async ({method, endpoint, act, adminBypass, query}) => {
+        const store = await setupStore()
+
+        await act(store, adminBypass)
+
+        const sent = endpoint.mock.calls.map(([event]) => event as H3Event).filter(event => event.method === method)
+        expect(sent.map(event => getQuery(event))).toEqual([query])
+    })
+})
+
 // The catalog footer and the poster read ONE Setting row. It loads on its own status
 // refs, so the poster renders its notes even when the catalog fetch is still pending.
 describe('Allergies Store - poster notes setting', () => {

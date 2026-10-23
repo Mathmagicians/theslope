@@ -184,7 +184,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         const inhabitant = inhabitants[0]!
         const allergyType = await AllergyFactory.createAllergyType(context)
         testAllergyTypeIds.push(allergyType.id)
-        await AllergyFactory.createAllergy(context, AllergyFactory.defaultAllergyData(inhabitant.id, allergyType.id))
+        await AllergyFactory.createAllergy(context, AllergyFactory.defaultAllergyData(inhabitant.id, allergyType.id), 201, true)
 
         const dinnerEvent = await DinnerEventFactory.createDinnerEvent(context, {
             ...DinnerEventFactory.defaultDinnerEvent(),

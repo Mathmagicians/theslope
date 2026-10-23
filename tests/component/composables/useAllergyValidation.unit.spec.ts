@@ -10,6 +10,7 @@ describe('useAllergyValidation', () => {
     const {
         AllergyTypeCreateSchema,
         AllergyCreateSchema,
+        AllergyUpdateSchema,
         AllergyDetailSchema,
         AllergyTypeDetailSchema,
         InhabitantWithAllergiesSchema,
@@ -44,6 +45,15 @@ describe('useAllergyValidation', () => {
                 expect(result.data.allergyTypeId).toBe(1)
                 expect(result.data.inhabitantComment).toBe('Meget alvorlig - har EpiPen')
             }
+        })
+    })
+
+    // An allergy stays with its person: an update never moves it to an inhabitant of another household
+    describe('AllergyUpdateSchema', () => {
+        it('GIVEN an update body that names an inhabitant WHEN parsing THEN the result carries no inhabitantId', () => {
+            const result = AllergyUpdateSchema.parse({...createValidAllergyData({inhabitantId: 2}), id: 1})
+
+            expect(result).not.toHaveProperty('inhabitantId')
         })
     })
 

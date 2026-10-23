@@ -2,7 +2,7 @@
 import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, registerScaffoldEndpoint, VIEWPORTS, lockedDinnerSupply, isTableLoading} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, registerScaffoldEndpoint, VIEWPORTS, lockedDinnerSupply, isTableLoading, untilTrue} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
@@ -495,7 +495,7 @@ describe('DinnerBookingForm power mode on a closed dinner where the household wa
   })
 })
 
-// Every preview is the server's dry run of the save: the save's request with ?preview=true, its reply under the dinner's day
+// Every preview is the server's dry run of the save: the save's request read through the GET, its reply under the dinner's day
 describe('DinnerBookingForm previews a save through the server\'s dry run', () => {
   const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
   const DinnerMode = DinnerModeSchema.enum
@@ -516,10 +516,12 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
     await clickByTestId(wrapper, `inhabitant-${inhabitantId}-mode-edit-${dinnerMode}`)
   }
 
+  // An admin's save lifts the deadlines (ADR-016): its preview reads the same run with bypassDeadlines, a dry-run
+  // parameter and no override (ADR-004)
   it.each([
-    {who: 'a member', adminBypass: false},
-    {who: 'an admin', adminBypass: true}
-  ])('WHEN $who picks a mode THEN the row\'s desired order goes to the dry run and its reply renders under the dinner\'s day', async ({adminBypass}) => {
+    {who: 'a member', adminBypass: false, query: {}},
+    {who: 'an admin', adminBypass: true, query: {bypassDeadlines: 'true'}}
+  ])('WHEN $who picks a mode THEN the row\'s desired order goes to the dry run with $query and its reply renders under the dinner\'s day', async ({adminBypass, query}) => {
     const reply = answer(resultOf(Action.BOOK, {dinnerMode: DinnerMode.TAKEAWAY}))
     scaffold.answers.preview = () => reply
     const wrapper = await mountMemberForm(true, {adminBypass})
@@ -527,7 +529,7 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
 
     await vi.waitFor(() => expect(rowPreview(wrapper).props('days')).toEqual(formatPreviewLines(reply.scaffoldResult, householdOrder)))
     expect(previews().at(-1)).toEqual({
-      query: {adminBypass: String(adminBypass), preview: 'true'},
+      query,
       body: {
         householdId: householdWithInhabitants.id,
         dinnerEventIds: [dinnerEvent.id],
@@ -621,15 +623,17 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
     return wrapper.findAllComponents(DinnerTicket).filter(ticket => row.element.contains(ticket.element))
   }
 
+  const expectedReads = () => scaffold.sent.filter(({body}) => body.orders.length === 0)
+
   const mountExpected = async (results: BookingResult[], orders: OrderDisplay[] = []) => {
     scaffold.answers.expected = () => OrderFactory.defaultScaffoldOrdersResponse({results})
     const wrapper = await mountMemberForm(true, {orders})
-    await vi.waitFor(() => expect(scaffold.sent.find(({body}) => body.orders.length === 0)).toEqual({
-      query: {adminBypass: 'false', preview: 'true'},
-      body: {householdId: householdWithInhabitants.id, dinnerEventIds: [dinnerEventId], orders: []}
-    }))
     // The table's loading bar runs until the read lands
-    await vi.waitFor(() => expect(isTableLoading(wrapper)).toBe(false))
+    await untilTrue(() => expectedReads().length > 0 && !isTableLoading(wrapper))
+    expect(expectedReads()[0]).toEqual({
+      query: {},
+      body: {householdId: householdWithInhabitants.id, dinnerEventIds: [dinnerEventId], orders: []}
+    })
     return wrapper
   }
 
@@ -647,6 +651,22 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
     // Bo has no result: the run leaves him out, as it leaves out a person who cancelled the dinner
     expect(ticketProps(bo!.id)).not.toHaveLength(0)
     ticketProps(bo!.id).forEach(props => expect(props).toMatchObject({dinnerMode: DinnerMode.NONE, expected: false}))
+  })
+
+  // Every member reads (ADR-004): whoever views the form reads the expected bookings through the GET without any
+  // override, on the season's deadlines. The household's own member is mountExpected's read
+  it.each([
+    {viewer: 'a member of another household, or an admin before the override', canEditAdminOverride: undefined, adminBypass: false},
+    {viewer: 'an admin after the override', canEditAdminOverride: () => true, adminBypass: true}
+  ])('GIVEN $viewer THEN the form reads the expected bookings through the GET without any override, and Anna\'s ticket shows expected', async ({canEditAdminOverride, adminBypass}) => {
+    scaffold.answers.expected = () => OrderFactory.defaultScaffoldOrdersResponse({results: [annaExpected]})
+    session.user.value = stranger
+    const wrapper = await mountForm({...baseProps, household: householdWithInhabitants, canEditAdminOverride, adminBypass})
+    // The table's loading bar runs until the read lands
+    await untilTrue(() => expectedReads().length > 0 && !isTableLoading(wrapper))
+
+    expect(expectedReads().map(({query}) => query)).toEqual([{}])
+    expect(wrapper.findAllComponents(DinnerTicket).some(ticket => ticket.props('expected'))).toBe(true)
   })
 
   // The legend lists the expected booking as a standing entry, also while no row is expected

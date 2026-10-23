@@ -8,10 +8,11 @@ import {flushPromises, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
 import {toCalendarDate} from '~/utils/date'
 import {sumBy} from '~/utils/ledger'
 import {TICKET_COUNTS} from '~/composables/useBilling'
+import {LAYOUTS} from '~/composables/useTheSlopeDesignSystem'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
-import type {ScaffoldOrdersRequest, ScaffoldOrdersResponse, TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, type ScaffoldOrdersRequest, type ScaffoldOrdersResponse, type TicketType} from '~/composables/useBookingValidation'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {getQuery, readBody, type H3Event} from 'h3'
+import {getQuery, type H3Event} from 'h3'
 
 /**
  * Generic polling function for component tests
@@ -104,22 +105,33 @@ export const holdEndpoint = (url: string, body: unknown) => {
 
 type ScaffoldAnswer = (body: ScaffoldOrdersRequest) => ScaffoldOrdersResponse | Promise<ScaffoldOrdersResponse>
 
+/** A query value read as a list: absent, one value or a repeated key */
+const queryList = (value: unknown): string[] => value === undefined ? [] : [value].flat().map(String)
+
 /**
- * The scaffold endpoint a booking surface reads its previews from: each request is kept with its query and body in
- * `sent`, reactive so `untilTrue` can wait on it; a request with orders answers `answers.preview`, one without answers
- * `answers.expected` (the household's expected bookings). Both answer an empty run until a test sets them. `hold(kind)`
- * holds that kind's answer, as set so far, until the test calls the release it returns: the window in which the read is
- * pending. `reset` empties both answers and the requests kept
+ * The scaffold's dry run a booking surface reads its previews from (GET /api/household/order/scaffold): each read is
+ * kept in `sent`, reactive so `untilTrue` can wait on it, as `body`, the request the query carries with its orders
+ * decoded by `DesiredOrderQuerySchema`, and `query`, the query's other parameters (`bypassDeadlines`). A read with orders
+ * answers `answers.preview`, one without answers `answers.expected` (the household's expected bookings). Both answer an
+ * empty run until a test sets them. `hold(kind)` holds that kind's answer, as set so far, until the test calls the
+ * release it returns: the window in which the read is pending. `reset` empties both answers and the reads kept
  */
 export const registerScaffoldEndpoint = () => {
     const sent = shallowReactive<{query: Record<string, unknown>, body: ScaffoldOrdersRequest}[]>([])
     const empty: ScaffoldAnswer = () => OrderFactory.defaultScaffoldOrdersResponse()
     const answers: {preview: ScaffoldAnswer, expected: ScaffoldAnswer} = {preview: empty, expected: empty}
     registerEndpoint('/api/household/order/scaffold', {
-        method: 'POST',
-        handler: async (event: H3Event) => {
-            const body = await readBody<ScaffoldOrdersRequest>(event)
-            sent.push({query: getQuery(event), body})
+        method: 'GET',
+        handler: (event: H3Event) => {
+            const {householdId, seasonId, dinnerEventIds, orders, ...query} = getQuery(event)
+            const {DesiredOrderQuerySchema} = useBookingValidation()
+            const body: ScaffoldOrdersRequest = {
+                householdId: Number(householdId),
+                ...(seasonId === undefined ? {} : {seasonId: Number(seasonId)}),
+                dinnerEventIds: queryList(dinnerEventIds).map(Number),
+                orders: queryList(orders).map(code => DesiredOrderQuerySchema.parse(code))
+            }
+            sent.push({query, body})
             return body.orders.length > 0 ? answers.preview(body) : answers.expected(body)
         }
     })
@@ -202,6 +214,17 @@ export const VIEWPORTS = [
     {viewport: 'phone', isMd: false},
     {viewport: 'md', isMd: true}
 ] as const
+
+const expectBinds = (element: Element | null, token: string) =>
+    expect(Array.from(element?.classList ?? [])).toEqual(expect.arrayContaining(token.split(' ')))
+
+/** The master and the detail stand side by side in one `LAYOUTS.masterDetailPage` root, in its left and center slots */
+export const expectMasterDetail = (master: Element, detail: Element | null) => {
+    expect(detail?.parentElement).toBe(master.parentElement)
+    expectBinds(master.parentElement, LAYOUTS.masterDetailPage.root)
+    expectBinds(master, LAYOUTS.masterDetailPage.left)
+    expectBinds(detail, LAYOUTS.masterDetailPage.center)
+}
 
 type TicketTypeCounts = Partial<Record<TicketType, number>>
 /** A locked dinner's supply from its tickets for sale and its waiting list per ticket type, with the totals and the compact counts */

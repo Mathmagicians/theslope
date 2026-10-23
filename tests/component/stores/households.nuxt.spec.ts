@@ -4,10 +4,11 @@ import { flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { registerEndpoint, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import { getQuery, readBody, type H3Event } from 'h3'
-import type {
-  HouseholdDisplay,
-  HouseholdDetail
+import { getQuery, type H3Event } from 'h3'
+import {
+  useCoreValidation,
+  type HouseholdDisplay,
+  type HouseholdDetail
 } from '~/composables/useCoreValidation'
 import { useBookingValidation, type BookingAction, type BookingResult } from '~/composables/useBookingValidation'
 import { countTotals } from '~/composables/useBooking'
@@ -29,6 +30,7 @@ session.loggedIn.value = true
 
 // Schema for validating mock responses
 const { InhabitantUpdateResponseSchema } = useBookingValidation()
+const { createDefaultWeekdayMap, serializeWeekDayMap } = useCoreValidation()
 
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
@@ -60,6 +62,11 @@ registerEndpoint('/api/admin/household', { handler: createHouseholdEndpoint, met
 registerEndpoint('/api/household/1/update', { handler: moveOutEndpoint, method: 'POST' })
 const calendarFeedEndpoint = vi.fn()
 registerEndpoint('/api/calendar/feed', calendarFeedEndpoint)
+// A preference preview is a read (ADR-004): the GET after the generic routes above (reverse-order lookup)
+const previewEndpoint1 = vi.fn()
+const previewEndpoint2 = vi.fn()
+registerEndpoint('/api/household/inhabitants/1/preferences', { handler: previewEndpoint1, method: 'GET' })
+registerEndpoint('/api/household/inhabitants/2/preferences', { handler: previewEndpoint2, method: 'GET' })
 
 // ========================================
 // Test Helpers - Use factory data + schema validation
@@ -332,11 +339,11 @@ describe('Households Store', () => {
     })
   })
 
-  // A preview reads what the save of the draft would do: the save's request per inhabitant with ?preview=true, outside
-  // the booking write. Dinner 13 has not been scaffolded: each preview books the other member on it by their stored
-  // preferences, while both drafts want no dinner on its weekday
+  // A preview is a read (ADR-004): the draft travels serialized in the query of each inhabitant's GET, outside the booking
+  // write, with no override; any member reads it. Dinner 13 has not been scaffolded: each preview books the other member
+  // on it by their stored preferences, while both drafts want no dinner on its weekday
   describe('previewPreferences', () => {
-    const draft = { MONDAY: DinnerMode.NONE, TUESDAY: DinnerMode.TAKEAWAY }
+    const draft = { ...createDefaultWeekdayMap(DinnerMode.DINEIN), mandag: DinnerMode.NONE, tirsdag: DinnerMode.TAKEAWAY }
     const line = (inhabitantId: 1 | 2, dinnerEventId: number, action: BookingAction) =>
       OrderFactory.defaultBookingResult({inhabitantId, inhabitantName: inhabitantId === 1 ? 'Anna' : 'Bo', dinnerEventId, action})
     const ownLines = {1: [line(1, 11, Action.CANCEL), line(1, 12, Action.RELEASE)], 2: [line(2, 14, Action.CHANGE_MODE)]}
@@ -346,28 +353,29 @@ describe('Households Store', () => {
     const eachOwnLineOnce = resultOf([...ownLines[1], ...ownLines[2]])
 
     it.each([
-      {mode: 'one inhabitant', returns: 'its whole preview', inhabitantIds: [1], adminBypass: false, query: {preview: 'true'}, expected: previewOf[1]},
-      {mode: 'power mode', returns: 'each line once, from its own inhabitant\'s preview', inhabitantIds: [1, 2], adminBypass: false, query: {preview: 'true'}, expected: eachOwnLineOnce},
-      {mode: 'an admin\'s power mode', returns: 'each line once, from its own inhabitant\'s preview', inhabitantIds: [1, 2], adminBypass: true, query: {adminBypass: 'true', preview: 'true'}, expected: eachOwnLineOnce}
-    ])('$mode: sends the draft to each inhabitant\'s preview, outside the booking write, and returns $returns', async ({inhabitantIds, adminBypass, query, expected}) => {
-      const sent: {inhabitantId: number, query: Record<string, unknown>, body: unknown}[] = []
-      const answer = (inhabitantId: 1 | 2) => async (event: H3Event) => {
-        sent.push({inhabitantId, query: getQuery(event), body: await readBody(event)})
+      {mode: 'one inhabitant', returns: 'its whole preview', inhabitantIds: [1], expected: previewOf[1]},
+      {mode: 'power mode', returns: 'each line once, from its own inhabitant\'s preview', inhabitantIds: [1, 2], expected: eachOwnLineOnce}
+    ])('$mode: reads the draft\'s preview of each inhabitant through the GET, outside the booking write, and returns $returns', async ({inhabitantIds, expected}) => {
+      const sent: {inhabitantId: number, query: Record<string, unknown>}[] = []
+      const answer = (inhabitantId: 1 | 2) => (event: H3Event) => {
+        sent.push({inhabitantId, query: getQuery(event)})
         return InhabitantUpdateResponseSchema.parse({
           inhabitant: createMockInhabitant(inhabitantId, 1),
           scaffoldResult: previewOf[inhabitantId]
         })
       }
-      preferencesEndpoint1.mockImplementation(answer(1))
-      preferencesEndpoint2.mockImplementation(answer(2))
+      previewEndpoint1.mockImplementation(answer(1))
+      previewEndpoint2.mockImplementation(answer(2))
       const store = await setupStore()
       const lastSaved = store.lastPreferenceResult
 
-      const preview = store.previewPreferences(inhabitantIds, draft, adminBypass)
+      const preview = store.previewPreferences(inhabitantIds, draft)
       expect(useBookingsStore().isProcessingBookings).toBe(false)
 
       expect(await preview).toEqual(expected)
-      expect(sent).toEqual(inhabitantIds.map(inhabitantId => ({inhabitantId, query, body: {dinnerPreferences: draft}})))
+      expect(sent).toEqual(inhabitantIds.map(inhabitantId => ({inhabitantId, query: {dinnerPreferences: serializeWeekDayMap(draft)}})))
+      expect(preferencesEndpoint1).not.toHaveBeenCalled()
+      expect(preferencesEndpoint2).not.toHaveBeenCalled()
       expect(store.lastPreferenceResult).toBe(lastSaved)
     })
   })

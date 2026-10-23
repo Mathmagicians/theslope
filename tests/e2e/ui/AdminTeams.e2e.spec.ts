@@ -1,4 +1,4 @@
-import {test, expect, type BrowserContext, type Page} from '@playwright/test'
+import {test, expect, type BrowserContext, type Page} from '~~/tests/e2e/uiTest'
 import {authFiles} from '~~/tests/e2e/config'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -8,7 +8,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot, gotoHydrated, waitForApi, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, pollUntil, doScreenshot, gotoHydrated, waitForApi, temporaryAndRandom, expectApiError} = testHelpers
 
 test.describe('AdminTeams Form UI', () => {
     const adminTeamsUrl = '/admin/teams'
@@ -105,8 +105,9 @@ test.describe('AdminTeams Form UI', () => {
                 await gotoHydrated(page, `${adminTeamsUrl}?mode=create&season=${season.shortName}`)
                 await expect(page.locator('input#team-count')).toBeVisible()
 
-                // WHEN: the session dies before the save
+                // WHEN: the session dies before the save, so the save and the reads after it answer 401
                 await page.context().clearCookies()
+                expectApiError(page.context(), 401, '/api/')
                 await page.locator('input#team-count').fill('2')
                 await page.getByTestId('submit-create-teams').click()
 

@@ -158,7 +158,7 @@ test.describe('AllergyType API - CRUD Operations', () => {
                     inhabitantId: inhabitant.id,
                     allergyTypeId: allergyType.id,
                     inhabitantComment: inhabitantsData[index]!.comment
-                })
+                }, 201, true)
             )
         )
 

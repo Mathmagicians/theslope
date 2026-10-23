@@ -212,7 +212,7 @@ test.describe('Waiting list assignment', () => {
         expect((await householdEntries(context, dinnerId)).map(entry => entry.inhabitantId)).toEqual([claimer.id])
     })
 
-    test('GIVEN a household holding a ticket past the deadline and a waiting entry at its price WHEN an admin sets the household\'s preferences to Ingen THEN the first in the waiting list holds the ticket and the household\'s open orders are cancelled', async ({browser}) => {
+    test('GIVEN a household holding a ticket and a guest ticket past the deadline and a waiting entry at its price WHEN an admin sets the household\'s preferences to Ingen THEN the first in the waiting list holds the ticket, the guest ticket stays booked and the household\'s open orders are cancelled', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
         const dinnerAt = async (days: number, title: string) => {
@@ -232,6 +232,9 @@ test.describe('Waiting list assignment', () => {
         await SeasonFactory.updateSeason(context, {...activeSeason, ticketIsCancellableDaysBefore: 0})
         await preferences(DinnerModeSchema.enum.NONE)
         await preferences(DinnerModeSchema.enum.DINEIN)
+        // A guest ticket booked on the seller is the household's guest's, not the seller's own
+        const guest = await WaitlistFactory.queue(context, seller.id, activeSeasonId, OrderFactory.createGuestOrder(sellerInhabitant!.id, closedDinner.id!, adultPrice.id!), true)
+        expect(guest.totals[Action.BOOK]).toBe(1)
         await SeasonFactory.updateSeason(context, activeSeason)
         const waiting = inhabitants[3]!
         expect((await queue(context, OrderFactory.createBookingOrder(waiting.id!, closedDinner.id!, adultPrice.id!))).totals[Action.QUEUE]).toBe(1)
@@ -252,6 +255,9 @@ test.describe('Waiting list assignment', () => {
         }])
         const bought = (await OrderFactory.getOrdersForDinnerEvent(context, closedDinner.id!)).filter(order => order.inhabitantId === waiting.id)
         expect(bought.map(order => order.state)).toEqual([OrderStateSchema.enum.BOOKED])
+        // The seller's own ticket is sold; the guest ticket on the seller stays as it is
+        const sellerOrders = (await OrderFactory.getOrders(context, {dinnerEventIds: closedDinner.id!, householdId: seller.id})).filter(order => order.inhabitantId === sellerInhabitant!.id)
+        expect(sellerOrders.map(order => [order.isGuestTicket, order.state])).toEqual([[true, OrderStateSchema.enum.BOOKED]])
         expect(await householdEntries(context, closedDinner.id!)).toEqual([])
         expect(await OrderFactory.getOrders(context, {dinnerEventIds: openDinner.id!, householdId: seller.id})).toEqual([])
 

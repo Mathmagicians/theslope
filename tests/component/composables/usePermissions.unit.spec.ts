@@ -188,8 +188,14 @@ describe('usePermissions - Route Permission Table', () => {
             expect(check!(regularUser)).toBe(true)
         })
 
-        it('order routes should allow any authenticated user', () => {
-            const check = getRoutePermission('/api/order/', 'PUT')
+        // Every member reads (ADR-004): a household read, its previews included, is open as the order routes are; the
+        // endpoint checks a change against the household it changes
+        it.each([
+            {route: '/api/order/', method: 'PUT'},
+            {route: '/api/household/order/scaffold', method: 'GET'},
+            {route: '/api/household/inhabitants/1/preferences', method: 'GET'}
+        ])('$method $route should allow any authenticated user', ({route, method}) => {
+            const check = getRoutePermission(route, method)
             expect(check!(regularUser)).toBe(true)
         })
 

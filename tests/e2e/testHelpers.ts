@@ -1,6 +1,7 @@
 import type {Browser, Page, BrowserContext, BrowserContextOptions, Locator, Response} from "@playwright/test"
 import {expect} from "@playwright/test"
 import {authFiles} from './config'
+import {expectApiError, guardContext} from './apiErrorGuard'
 import {randomUUID} from 'crypto'
 
 const headers = {'Content-Type': 'application/json'}
@@ -42,10 +43,14 @@ const saltedId = (base: number = 0, testSalt?: string): number => {
     // Combine into 32-bit result (SQLite INT is 64-bit, this is plenty)
     return Math.abs((h2 >>> 0) + (h1 >>> 0) * 0x100) % 2147483647
 }
+/** A browser context whose pages report their `/api/` responses to the case's API error guard (`uiTest.ts`) */
+const openContext = async (browser: Browser, options: BrowserContextOptions = {}): Promise<BrowserContext> =>
+    guardContext(await browser.newContext(options))
+
 const createAuthContext = async (browser: Browser, storageState: string, baseURL?: string) => {
     const options: BrowserContextOptions = {storageState}
     if (baseURL) options.baseURL = baseURL
-    return await browser.newContext(options)
+    return await openContext(browser, options)
 }
 
 /** Authenticated browser context for admin user */
@@ -62,7 +67,7 @@ const memberValidatedBrowserContext = (browser: Browser, baseURL?: string) =>
  * changes the member's roles - the session snapshot is written at login and never refreshed.
  */
 const freshMemberContext = async (browser: Browser): Promise<BrowserContext> => {
-    const context = await browser.newContext()
+    const context = await openContext(browser)
     const response = await context.request.post('/api/auth/login', {
         headers,
         data: {email: process.env.HEY_NABO_EJ_ADMIN_USERNAME, password: process.env.HEY_NABO_PASSWORD}
@@ -256,6 +261,17 @@ const gotoHydrated = async (page: Page, url: string): Promise<void> => {
     await waitForHydration(page)
 }
 
+/**
+ * Opens the admin allergy catalog. The catalog is master/detail with a client-only desktop detail pane. The container
+ * testid is in the SSR HTML before listeners exist, so the pane's content is the signal that the page is hydrated and
+ * interactive.
+ */
+const gotoAllergyCatalog = async (page: Page): Promise<void> => {
+    await gotoHydrated(page, '/admin/allergies')
+    await expect(page.locator('[data-testid="admin-allergies"]')).toBeVisible()
+    await expect(page.getByText('Detaljer').or(page.getByText('Vælg en allergi')).first()).toBeAttached()
+}
+
 /** Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation */
 const collectHydrationWarnings = (page: Page): string[] => {
     const warnings: string[] = []
@@ -276,14 +292,14 @@ const expectHydratedWithoutMismatch = async (page: Page, url: string): Promise<v
 const waitForApi = (page: Page, path: string, method: string, options?: {timeout?: number}): Promise<Response> =>
     page.waitForResponse(response => response.url().includes(path) && response.request().method() === method, options)
 
-/** A response of the household's booking write, its save or its dry run (`preview=true`) */
-const isScaffold = (response: Response): boolean =>
-    response.url().includes('/api/household/order/scaffold') && response.request().method() === 'POST'
+/** A response of the household's scaffold: the booking write (POST) or its dry run (GET) */
+const isScaffold = (method: string) => (response: Response): boolean =>
+    response.url().includes('/api/household/order/scaffold') && response.request().method() === method
 /** The save of the household's booking write */
-const isScaffoldSave = (response: Response): boolean => isScaffold(response) && !response.url().includes('preview=true')
+const isScaffoldSave = isScaffold('POST')
 /** A booking view's read of the expected bookings: the dry run without orders, answered with what the preferences book */
 const isExpectedRead = (response: Response): boolean =>
-    isScaffold(response) && response.url().includes('preview=true') && response.request().postDataJSON().orders.length === 0
+    isScaffold('GET')(response) && !new URL(response.url()).searchParams.has('orders')
 
 // Hardcoded beside app.config.ts prebookingWindowDays (60; Nuxt auto-imports not available in Playwright): a day past it
 const PAST_THE_SCAFFOLD_WINDOW_DAYS = 62
@@ -326,9 +342,11 @@ const testHelpers = {
     temporaryAndRandom,
     PHONE_VIEWPORT,
     headers,
+    openContext,
     validatedBrowserContext,
     memberValidatedBrowserContext,
     freshMemberContext,
+    expectApiError,
     pollUntil,
     doScreenshot,
     selectDropdownOption,
@@ -337,6 +355,7 @@ const testHelpers = {
     daysFromNow,
     waitForHydration,
     gotoHydrated,
+    gotoAllergyCatalog,
     collectHydrationWarnings,
     expectHydratedWithoutMismatch,
     waitForApi,

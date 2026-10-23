@@ -19,10 +19,14 @@ const Role = TeamRoleSchema.enum
 const ROLES = [Role.CHEF, Role.COOK, Role.JUNIORHELPER]
 
 type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
+// A face carries its icon; the overflow avatar of a group carries the count as its text
+type AvatarWrapper = VueWrapper<ComponentPublicInstance<{icon?: string, text?: string}>>
 const classesOf = (token: string) => token.split(' ')
 
 const TEST_IDS = {
+    roleGroup: (role: string) => `team-role-group-${role}`,
     roleHeading: (role: string) => `team-role-heading-${role}`,
+    memberSummary: 'team-member-summary',
     jokerHeading: 'team-role-heading-JOKER',
     jokerBox: 'team-joker-box',
     jokerSlot: 'team-joker-slot',
@@ -80,11 +84,11 @@ const TEAM_ID = 1
 
 // The mounting page selects the team in the store the mounted card reads; a store created before the mount
 // registers the dataset key first and would serve the card through its own selection
-const mountCard = async (mode: 'monitor' | 'regular' | 'edit', detail: Partial<CookingTeamDetail> = {}, teamId = TEAM_ID) => {
+const mountCard = async (mode: 'monitor' | 'regular' | 'edit', detail: Partial<CookingTeamDetail> = {}, teamId = TEAM_ID, isMd = true) => {
     team = SeasonFactory.defaultCookingTeamDetail({id: TEAM_ID, assignments, dinnerEvents, jokerSlots: slots.map(({slot}) => slot), ...detail})
     const wrapper = await mountWithTooltipProvider(CookingTeamCard, {
         props: {teamId, teamNumber: 1, mode, seasonDates: season.seasonDates, seasonCookingDays: season.cookingDays},
-        isMd: true
+        isMd
     })
     const store = usePlanStore()
     store.selectTeam(() => TEAM_ID)
@@ -96,6 +100,9 @@ const mountCard = async (mode: 'monitor' | 'regular' | 'edit', detail: Partial<C
 
 const iconsIn = (element: Pick<VueWrapper, 'findAllComponents'>): IconWrapper[] =>
     element.findAllComponents({name: 'UIcon'}) as IconWrapper[]
+
+const avatarsIn = (wrapper: VueWrapper, element: Element): AvatarWrapper[] =>
+    (wrapper.findAllComponents({name: 'UAvatar'}) as AvatarWrapper[]).filter(avatar => element.contains(avatar.element))
 
 const expectHeadingWithGlyph = (wrapper: VueWrapper, testId: string, glyph: string) => {
     const heading = findByTestId(wrapper, testId)
@@ -225,6 +232,25 @@ describe('CookingTeamCard', () => {
         })
     })
 
+    describe.each([
+        {viewport: 'phone', isMd: false, shown: 3},
+        {viewport: 'md', isMd: true, shown: 5}
+    ])('a team of seven cooks on $viewport shows $shown faces and counts the rest', ({isMd, shown}) => {
+        const cooks = Array.from({length: 7}, (_, index) =>
+            SeasonFactory.defaultCookingTeamAssignment({id: index + 1, role: Role.COOK, inhabitantId: index + 40}))
+
+        it.each([
+            {group: 'the monitor face\'s Kokke row', mode: 'monitor' as const, testId: TEST_IDS.roleGroup(Role.COOK)},
+            {group: 'the edit face\'s member summary', mode: 'edit' as const, testId: TEST_IDS.memberSummary}
+        ])('$group', async ({mode, testId}) => {
+            const wrapper = await mountCard(mode, {assignments: cooks}, TEAM_ID, isMd)
+            const avatars = avatarsIn(wrapper, findByTestId(wrapper, testId).element)
+
+            expect(avatars.filter(avatar => !avatar.props('text'))).toHaveLength(shown)
+            expect(avatars.map(avatar => avatar.props('text')).filter(Boolean)).toEqual([`+${cooks.length - shown}`])
+        })
+    })
+
     describe('edit face, Holdnavn', () => {
         const nameInput = (wrapper: VueWrapper) => wrapper.find('[data-testid="team-name-input"]')
 
@@ -253,8 +279,6 @@ describe('CookingTeamCard', () => {
 })
 
 describe('CookingTeamCard edit face, Tilføj jokere', () => {
-    type AvatarWrapper = VueWrapper<ComponentPublicInstance<{icon?: string}>>
-
     const headingNamed = (wrapper: VueWrapper, text: string) => wrapper.findAll('h4').find(heading => heading.text() === text)!
     const addButton = (wrapper: VueWrapper) => findByTestId(findByTestId(wrapper, TEST_IDS.jokerAddRow), JOKER_SLOT_IDS.add)
     const addButtonIcon = (wrapper: VueWrapper) => (wrapper.findAllComponents({name: 'UButton'}) as VueWrapper<ComponentPublicInstance<{icon?: string, trailingIcon?: string}>>[])
@@ -277,8 +301,7 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
         expect(follows(finderHeading.element, jokerHeading.element)).toBe(true)
         expect(follows(jokerHeading.element, row.element)).toBe(true)
 
-        const avatar = (wrapper.findAllComponents({name: 'UAvatar'}) as AvatarWrapper[]).find(component => row.element.contains(component.element))
-        expect(avatar!.props('icon')).toBe(ICONS.joker)
+        expect(avatarsIn(wrapper, row.element)[0]!.props('icon')).toBe(ICONS.joker)
         expect(row.text()).toContain('Joker · en plads uden navn')
         expect(addButton(wrapper).text()).toBe('Tilføj')
         expect(addButton(wrapper).attributes('aria-expanded')).toBe('false')

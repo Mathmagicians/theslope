@@ -564,12 +564,27 @@ describe('BookingGridView and the server\'s dry run', () => {
       const wrapper = await mountWeek()
       await landed(wrapper)
 
-      expect(expectedReads()[0]).toEqual({query: {adminBypass: 'false', preview: 'true'}, body: {householdId: household.id, dinnerEventIds: [future.id, later.id], orders: []}})
+      expect(expectedReads()[0]).toEqual({query: {}, body: {householdId: household.id, dinnerEventIds: [future.id, later.id], orders: []}})
       dinnerEvents.forEach(({id}) => {
         expect(cell(wrapper, anna.id, id).props()).toMatchObject({modelValue: DINEIN, expected: true})
         expect(cell(wrapper, lars.id, id).props()).toMatchObject({modelValue: NONE, expected: false})
       })
       expect(findByTestId(wrapper, 'dinner-mode-legend-expected').exists()).toBe(true)
+    })
+
+    // Every member reads (ADR-004): whoever views the grid reads the expected bookings through the GET without any
+    // override, on the season's deadlines. The household's own member is the case above
+    it.each`
+      viewer                                                               | canEdit  | adminBypass
+      ${'a member of another household, or an admin before the override'} | ${false} | ${false}
+      ${'an admin after the override'}                                     | ${true}  | ${true}
+    `('GIVEN the grid of $viewer THEN it reads the expected bookings through the GET without any override, and Anna\'s cells show expected', async ({canEdit, adminBypass}) => {
+      scaffold.answers.expected = annaExpected
+      const wrapper = await mountWeek(FORM_MODES.VIEW, {canEdit, adminBypass})
+      await landed(wrapper)
+
+      expect(expectedReads().map(({query}) => query)).toEqual([{}])
+      dinnerEvents.forEach(({id}) => expect(cell(wrapper, anna.id, id).props('expected')).toBe(true))
     })
 
     // The legend lists the expected booking as a standing entry, also while no cell is expected
@@ -644,12 +659,13 @@ describe('BookingGridView and the server\'s dry run', () => {
   })
 
   describe('the preview of the draft', () => {
-    // An admin's save lifts the deadlines (ADR-016): its preview reads the same run
+    // An admin's save lifts the deadlines (ADR-016): its preview reads the same run with bypassDeadlines, a dry-run
+    // parameter and no override (ADR-004)
     it.each`
-      who           | adminBypass
-      ${'a member'} | ${false}
-      ${'an admin'} | ${true}
-    `('GIVEN $who\'s grid with no draft THEN no preview is asked for; WHEN a cell changes THEN the draft goes to the dry run once the clicks rest, the loader shows meanwhile, and the reply renders a day per dinner', async ({adminBypass}) => {
+      who           | adminBypass | query
+      ${'a member'} | ${false}    | ${{}}
+      ${'an admin'} | ${true}     | ${{bypassDeadlines: 'true'}}
+    `('GIVEN $who\'s grid with no draft THEN no preview is asked for; WHEN a cell changes THEN the draft goes to the dry run with $query once the clicks rest, the loader shows meanwhile, and the reply renders a day per dinner', async ({adminBypass, query}) => {
       const reply = OrderFactory.defaultScaffoldOrdersResponse({dinners: [{id: future.id, date: future.date}], results: [resultOf(lars, future.id, Action.BOOK, DINEINLATE)]})
       scaffold.answers.preview = () => reply
       const wrapper = await mountWeek(FORM_MODES.EDIT, {adminBypass})
@@ -663,7 +679,7 @@ describe('BookingGridView and the server\'s dry run', () => {
       await untilTrue(() => wrapper.findComponent(ActionPreview).props('days').length > 0)
       expect(wrapper.findComponent(ActionPreview).props('days')).toEqual(formatPreviewLines(reply.scaffoldResult, householdOrder))
       expect(previews()).toEqual([{
-        query: {adminBypass: String(adminBypass), preview: 'true'},
+        query,
         body: {householdId: household.id, dinnerEventIds: [future.id], orders: [expect.objectContaining({inhabitantId: lars.id, dinnerEventId: future.id, dinnerMode: cell(wrapper, lars.id, future.id).props('modelValue')})]}
       }])
     })

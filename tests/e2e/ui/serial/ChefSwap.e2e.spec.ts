@@ -1,4 +1,4 @@
-import {test, expect, type Page, type BrowserContext} from '@playwright/test'
+import {test, expect, type Page, type BrowserContext} from '~~/tests/e2e/uiTest'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
