@@ -587,17 +587,14 @@ const tableData = computed((): GridRow[] => {
 // HELPERS
 // ============================================================================
 
-// The name cell's counts over the dinners in view: the person's own tickets, the released among them, their queued cells
-const getCountsForInhabitant = (inhabitantId: number): { total: number, released: number, queued: number } => {
-  const orders = flatEvents.value
-    .flatMap(e => getOrderForCell(inhabitantId, e.id) ?? [])
-    .filter(isPendingOrder)
-  return {
-    total: orders.length,
-    released: orders.filter(o => ticketStateOf(o) === TicketState.released).length,
-    queued: flatEvents.value.filter(e => getWaitlistEntryForCell(inhabitantId, e.id)).length
-  }
-}
+// The name cell's counts over the dinners in view, one entry per inhabitant
+const countsByInhabitant = computed(() => {
+  const eventIds = flatEvents.value.map(e => e.id)
+  return new Map(householdInhabitantIds.value.map(inhabitantId =>
+    [inhabitantId, personTicketCounts(inhabitantId, eventIds, props.orders, props.waitlistEntries)]))
+})
+const NO_COUNTS = {total: 0, released: 0, queued: 0}
+const countsOf = (inhabitantId: number) => countsByInhabitant.value.get(inhabitantId) ?? NO_COUNTS
 
 // The consensus of the modes the cells show: a draft, else an expected cell's expected mode; a place counts its wish
 const getEventConsensus = (eventId: number): { value: DinnerMode, consensus: boolean } =>
@@ -845,36 +842,36 @@ const getEventSummary = (eventId: number) => {
           </UserListItem>
           <!-- Ticket count badge (only if > 0) -->
           <UBadge
-            v-if="getCountsForInhabitant(row.original.inhabitant.id).total > 0"
+            v-if="countsOf(row.original.inhabitant.id).total > 0"
             :data-testid="`inhabitant-ticket-count-${row.original.inhabitant.id}`"
             :color="COLOR.neutral"
             :variant="NOISE.soft"
             :size="SIZES.xs"
           >
             <UIcon :name="ICONS.ticket" :class="COMPONENTS.bookingGrid.countIcon" />
-            {{ getCountsForInhabitant(row.original.inhabitant.id).total }}
+            {{ countsOf(row.original.inhabitant.id).total }}
           </UBadge>
           <!-- Released badge (only if > 0) -->
           <UBadge
-            v-if="getCountsForInhabitant(row.original.inhabitant.id).released > 0"
+            v-if="countsOf(row.original.inhabitant.id).released > 0"
             :data-testid="`inhabitant-released-count-${row.original.inhabitant.id}`"
             :color="ORDER_STATE_COLORS[TicketState.released]"
             :variant="NOISE.soft"
             :size="SIZES.xs"
           >
             <UIcon :name="ICONS.released" :class="COMPONENTS.bookingGrid.countIcon" />
-            {{ getCountsForInhabitant(row.original.inhabitant.id).released }}
+            {{ countsOf(row.original.inhabitant.id).released }}
           </UBadge>
           <!-- Waiting-list badge (only if > 0) -->
           <UBadge
-            v-if="getCountsForInhabitant(row.original.inhabitant.id).queued > 0"
+            v-if="countsOf(row.original.inhabitant.id).queued > 0"
             :data-testid="`inhabitant-waitlist-count-${row.original.inhabitant.id}`"
             :color="ORDER_STATE_COLORS[TicketState.queued]"
             :variant="NOISE.soft"
             :size="SIZES.xs"
           >
             <UIcon :name="ICONS.waitlist" :class="COMPONENTS.bookingGrid.countIcon" />
-            {{ getCountsForInhabitant(row.original.inhabitant.id).queued }}
+            {{ countsOf(row.original.inhabitant.id).queued }}
           </UBadge>
         </div>
         <!-- Guest order row - show who invited using UserListItem (same as DinnerBookingForm) -->

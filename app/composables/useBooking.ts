@@ -575,6 +575,28 @@ export const isPendingOrder = (order: Pick<OrderDisplay, 'state'>): boolean =>
     CLOSABLE_ORDER_STATES.some(state => state === order.state)
 
 /**
+ * A person's counts over the given dinners: their own tickets waiting for the close, the released among them, and their
+ * own places on the waiting list on a dinner where they hold no order of any state
+ */
+export const personTicketCounts = (
+    inhabitantId: number,
+    dinnerEventIds: readonly number[],
+    orders: OrderDisplay[],
+    entries: TicketWaitlistDisplay[]
+): {total: number, released: number, queued: number} => {
+    const own = dinnerEventIds.map(dinnerEventId => ({
+        order: findRegularOrder(orders, inhabitantId, dinnerEventId),
+        entry: findRegularOrder(entries, inhabitantId, dinnerEventId)
+    }))
+    const tickets = own.flatMap(({order}) => order && isPendingOrder(order) ? [order] : [])
+    return {
+        total: tickets.length,
+        released: tickets.filter(order => ticketStateOf(order) === TicketStateEnum.released).length,
+        queued: own.filter(({order, entry}) => !order && entry).length
+    }
+}
+
+/**
  * Dinner preparation step states (5-step workflow)
  */
 export enum DinnerStepState {

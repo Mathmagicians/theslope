@@ -221,8 +221,8 @@ const handleBatchCreateTeams = async () => {
     await createTeam(createDraft.value)
     await onModeChange(FORM_MODES.VIEW)
   } catch (error) {
+    // The store's apiRequest has toasted the failure; the form stays in create mode
     console.error('👥 > ADMIN_TEAMS > [CREATE] Error creating teams:', error)
-    throw error
   }
 }
 
