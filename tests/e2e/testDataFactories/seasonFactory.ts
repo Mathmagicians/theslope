@@ -371,7 +371,7 @@ export class SeasonFactory {
             } catch (error) {
                 lastError = error
                 this.activeSeason = null
-                console.warn(`🌞 > SEASON_FACTORY > Active-season resolve failed (attempt ${attempt + 1} of ${this.CREATE_ACTIVE_SEASON_RETRIES + 1})`)
+                console.warn(`🌞 > SEASON_FACTORY > Active-season resolve failed (attempt ${attempt + 1} of ${this.CREATE_ACTIVE_SEASON_RETRIES + 1}):`, error)
             }
         }
         throw lastError

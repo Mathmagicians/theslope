@@ -109,6 +109,9 @@ Wait for approval or fine-tuning. Launch one agent per package with the brief, t
 - A domain rule outside the brief — a decision-matrix row, a bucket's path, an ADR line, a test case asserting a new
   rule — stops the agent: it goes to the architect as a decision, and the closing report names it. No subagent writes
   `docs/adr.md`; an ADR line is the architect's text, written after the yes on it.
+- The brief's verify step ends at the unit specs, `pre:all` and the full unit run. It names the package's e2e specs by
+  path for the orchestrator's run request to test-engineer, states "never run Playwright, e2e or BDD", and carries no
+  `npx playwright` line (`/peer-sessions`).
 - The brief points the agent at `.claude/skills/code-comments/SKILL.md` and never dictates comment text. Source comments
   carry no dates, decisions, sign-offs or doc references — those live in the plan doc; the architect's diff review checks
   the comments too.
@@ -144,7 +147,8 @@ package's ask is one optional line.
 
 ## One e2e runner at a time
 
-The test-engineer session owns the e2e slot; the sessions, claims and holds follow `/peer-sessions`.
+The test-engineer session owns the e2e slot and is the only runner of Playwright; no subagent runs it. The sessions,
+claims and holds follow `/peer-sessions`.
 
 ## Visual check before a package is done
 

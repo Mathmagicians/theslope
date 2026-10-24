@@ -31,4 +31,6 @@ This document is the single source of truth for:
 case with the behaviour it should prove. A test change updates the test columns of `docs/adr-compliance-backend.md` and
 `docs/adr-compliance-frontend.md`.
 
-**Peer sessions:** `/peer-sessions` - every Playwright run happens inside the test-engineer session's e2e slot.
+**Peer sessions:** `/peer-sessions` - only the test-engineer session runs Playwright, e2e or BDD. Spawned by any other
+session, you write e2e specs and never run them: your report names them by path, and the orchestrator hands them to
+test-engineer.

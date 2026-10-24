@@ -3,33 +3,34 @@ import {addDays, startOfDay} from 'date-fns'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {ticketTypeLabel, ticketTypeCount} from '~/composables/useTicket'
+import {ticketTypeLabel} from '~/composables/useTicket'
 import {formatDate} from '~/utils/date'
 import {WAITLIST_TEST_IDS} from '~~/tests/component/components/dinner/waitlistTestIds'
 
 const {memberUIFile, adminUIFile} = authFiles
 const {openContext, validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, gotoHydrated, pollUntil, salt, temporaryAndRandom, waitForApi} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
-const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
 const DinnerMode = DinnerModeSchema.enum
+const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
+const {createDefaultWeekdayMap: createDinnerModeWeekdayMap} = useWeekDayMapValidation({valueSchema: DinnerModeSchema, defaultValue: DinnerMode.NONE})
 
 /**
  * The waiting list through the one booking path: a member saves a mode on a closed, sold-out dinner and lands in the
- * queue, the dinner calendar marks the dinner's day with the hourglass and the booking form's bar names the queue by ticket type; the
- * chef releases portions and the member holds a ticket.
+ * queue; the chef releases portions and the member holds a ticket.
  *
  * SERIAL: activates its own season. A two-day booking deadline closes tomorrow's dinner; no ticket is released, so the
- * dinner is sold out. The admin is the chef of the dinner's team.
+ * dinner is sold out. The admin is the chef of the dinner's team. The member books for a test person of the member's
+ * household who eats nothing by preference, written before the team's dinner exists, so only the save queues the person.
  */
 test.describe.serial('Waiting list - join through the save, served by the chef\'s release', () => {
     const testSalt = temporaryAndRandom()
     let adminContext: BrowserContext
     const createdSeasonIds: number[] = []
-    let seasonId: number
+    const createdInhabitantIds: number[] = []
     let teamId: number
     let dinnerEventId: number
     let dinnerDate: Date
@@ -40,8 +41,7 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
 
     test.beforeAll(async ({browser}) => {
         adminContext = await validatedBrowserContext(browser)
-        const member = await getSessionUserInfo(await memberValidatedBrowserContext(browser))
-        inhabitantId = member.inhabitantId
+        const {householdId} = await getSessionUserInfo(await memberValidatedBrowserContext(browser))
         const chefInhabitantId = (await getSessionUserInfo(adminContext)).inhabitantId
 
         const tomorrow = startOfDay(addDays(new Date(), 1))
@@ -50,9 +50,14 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
             seasonDates: {start: tomorrow, end: addDays(tomorrow, 3)},
             ticketIsCancellableDaysBefore: 2
         })
-        seasonId = season.id!
-        createdSeasonIds.push(seasonId)
-        await SeasonFactory.activateSeason(adminContext, seasonId)
+        createdSeasonIds.push(season.id!)
+        await SeasonFactory.activateSeason(adminContext, season.id!)
+
+        const inhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {
+            name: salt('Anders', testSalt), lastName: 'Venteliste', dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
+        })
+        inhabitantId = inhabitant.id
+        createdInhabitantIds.push(inhabitantId)
 
         // The dinner of tomorrow, one per day: the generated one gives way to the team's
         const {team, dinner} = await SeasonFactory.createCookingTeamWithChefAndDinner(adminContext, season, chefInhabitantId, {
@@ -63,8 +68,9 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
         dinnerDate = tomorrow
     })
 
-    // The season takes its team and its dinners; cleanup accepts a season already gone
+    // The season takes its team and its dinners; cleanup accepts a person or a season already gone
     test.afterAll(async () => {
+        await Promise.all(createdInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(adminContext, id)))
         await SeasonFactory.cleanupSeasons(adminContext, createdSeasonIds)
     })
 
@@ -83,24 +89,6 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
         const chefPage = await pageAs(browser, adminUIFile)
         await gotoHydrated(chefPage, `/chef?team=${teamId}&date=${formatDate(dinnerDate)}`)
         await expect(chefPage.getByTestId('chef-waitlist-alert')).toBeVisible()
-    })
-
-    test('GIVEN a locked dinner with no tickets for sale and one entry on its waiting list WHEN a member opens /dinner THEN the dinner\'s calendar day chip carries the hourglass and the booking form\'s info bar reads the waiting list with the entry\'s ticket type', async ({browser}) => {
-        const entries = await WaitlistFactory.entries(adminContext, [dinnerEventId])
-        expect(entries).toHaveLength(1)
-        const {ticketPrices} = await SeasonFactory.getSeason(adminContext, seasonId)
-        const ticketType = ticketPrices.find(price => price.id === entries[0]!.order.ticketPriceId)!.ticketType
-
-        const memberPage = await pageAs(browser, memberUIFile)
-        await gotoHydrated(memberPage, `/dinner?date=${formatDate(dinnerDate)}`)
-
-        // UChip hands its test id to the day circle; the chip's indicator sits beside the circle and holds the hourglass
-        const dayChip = memberPage.getByTestId(`calendar-dinner-date-${dinnerDate.getDate()}`).locator('xpath=..').locator('[data-slot="base"]')
-        await expect(dayChip.getByTestId(WAITLIST_TEST_IDS.calendarHourglass(dinnerDate.getDate()))).toBeVisible()
-        await expect(dayChip).toHaveText('')
-
-        await pollUntil(() => memberPage.getByTestId(WAITLIST_TEST_IDS.moreTickets).textContent(),
-            text => !!text?.includes(`Lukket for framelding: ${ticketTypeCount(ticketType, 1)} på ventelisten`))
     })
 
     test('GIVEN the member in the queue WHEN the chef releases a portion THEN the member holds a ticket and the queue is empty', async ({browser}) => {

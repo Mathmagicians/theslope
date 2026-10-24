@@ -42,3 +42,7 @@ session; the sessions talk to each other through `SendMessage`.
 - A subagent works under its session's claims and holds: the orchestrator relays a hold to its running subagents; a
   subagent never runs Playwright, edits no claimed e2e spec, leaves docs/features to documentar and writes no line of
   `docs/adr.md`: a domain rule outside its brief goes to the architect as a decision.
+- Only test-engineer runs Playwright, e2e or BDD. test-automation-engineer subagents hold the `npx playwright`
+  permission, so the brief is the only fence. Every brief says "never run Playwright, e2e or BDD", names its e2e specs
+  by path only, and neither carries nor asks back a `npx playwright` line. The run commands go only in the
+  orchestrator's run request to test-engineer.
