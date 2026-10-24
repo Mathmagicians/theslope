@@ -18,3 +18,23 @@ describe('DeliveredVersionsSchema', () => {
         expect(Object.keys(DeliveredVersionsSchema.shape)).toEqual(DeliveryKindSchema.options)
     })
 })
+
+// The delivery read's query (GET /api/admin/sender/delivery): one subject type and its subjects' ids, one or repeated
+describe('DeliveryQuerySchema', () => {
+    const {DeliveryQuerySchema, DeliverySubjectSchema} = useDeliveryValidation()
+    const {BILLING_PERIOD} = DeliverySubjectSchema.enum
+
+    it.each([
+        {query: 'one id', given: {subjectType: BILLING_PERIOD, subjectIds: '7'}, ids: [7]},
+        {query: 'repeated ids', given: {subjectType: BILLING_PERIOD, subjectIds: ['7', '8']}, ids: [7, 8]}
+    ])('GIVEN $query WHEN parsed THEN it reads the ids as numbers', ({given, ids}) => {
+        expect(DeliveryQuerySchema.parse(given)).toEqual({subjectType: BILLING_PERIOD, subjectIds: ids})
+    })
+
+    it.each([
+        {query: 'an unknown subject type', given: {subjectType: 'NOT_A_SUBJECT', subjectIds: '7'}},
+        {query: 'an id that is no number', given: {subjectType: BILLING_PERIOD, subjectIds: 'abc'}}
+    ])('GIVEN $query WHEN parsed THEN it is refused', ({given}) => {
+        expect(DeliveryQuerySchema.safeParse(given).success).toBe(false)
+    })
+})

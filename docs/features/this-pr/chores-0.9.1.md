@@ -2,98 +2,34 @@
 
 **Status:** Next release | **Date:** 2026-10-08 | **Builds on:** release 0.9 (`archived/release-0.9.0.md` § Prisma bundle)
 
-The two schema chores share one migration: `make d1-create-migration name=chores-0-9-1`, the rewrites below in the Prisma
-source, then `rm migrations/NNNN_*.sql && make d1-flatten-migrations`. `make d1-verify-<env>` runs before and after
-the apply on local (a copy of dev), dev and prod; `tests/component/architecture/migrations.unit.spec.ts` keeps the
-file free of `DROP TABLE`.
+The release carries no migration; the schema work is in `feature-0.9.2.md`.
 
 ## Done
 
 - Workflow checks: the workflows' `run:` scripts read `${{ }}` values through `env` (code scanning alert #10);
   `npm run lint:gh-actions` runs CodeQL's Actions queries in `pre:all`, locally through `gh codeql`, in CI on the
   runner image's bundle (93834f4)
+- Household data access and GET previews: every member reads, a household changes its own data, an admin or the
+  allergy manager (allergies) another household's through a logged override (ADR-004 § Access); previews are GETs
+  (52c5d68)
+- Three faces on a phone (#171): an avatar group shows three faces below md, five from md (0b6d7d0)
+- One master-detail layout (#169): `LAYOUTS.masterDetailPage` on /dinner, /chef, /admin/allergies, /admin/teams and the
+  household bookings tab; the calendar circle steps up at lg (0b6d7d0)
+- Tests at the lowest level: the access cases consolidated per `docs/testing.md` Rule 0 (ef54aa6)
 
 ## In flight
 
-Updated 2026-10-23. Release 0.9 shipped in f5b5205 (#168).
+Updated 2026-10-24. Release 0.9 shipped in f5b5205 (#168).
 
 | Chore | Priority | State |
 |---|---|---|
-| § Household data access and GET previews | high | decided 2026-10-23 (ADR-004 § Access) |
 | § Booking mail delivery | high (#170) | mails signed 2026-10-17, delivery 2026-10-18, recipient rule and the opt-out 2026-10-23 |
-| § Three faces on a phone | high (#171) | ordered 2026-10-23 |
-| § One master-detail layout | high (#169) | ordered 2026-10-23 |
-| § UI cases fail on an unexpected API error | high | ordered 2026-10-23 |
+| § UI cases fail on an unexpected API error | high | guard in 52c5d68; the 28 UI specs' local run owed |
+| § Dev-server flakes in CI | high | decided 2026-10-24 |
 | § UI suites fail the build | medium | open; runs once the suites stay stable |
-| § Drop `DinnerEvent.totalCost`, § Order snapshot (B6) | | decided 2026-10-08; one migration |
-| § Ticket allergies on the order | | rule signed 2026-10-11 |
 | § Slow client after a save, § Scaffold: a save naming an order bought by another household, § Minimal test seasons | low | open |
 | § Server payload of the shared stores, § Waitlist: no-seat notice at dinner start, § Map.groupBy in the Workers runtime, § Stored dinner dates, § Preferences at an inhabitant's creation, § Dinner page remounts on claim, § Catch-up amounts, § Job schedule module, § Delete responses, § DRY improvements, § Dependency clusters, § Test factory dates at call time | | open |
 | § Deferred from release 0.9 | | per row |
-
-## Drop `DinnerEvent.totalCost`
-
-### Problem
-
-Release 0.9 moves a dinner's grocery cost into `Expense` rows and computes `totalCost` from them. The column stays
-in the schema, marked `/// @deprecated`, so the 0.9 migration is additive and the code running during the migration
-keeps working.
-
-### Solution
-
-Prisma emits a table rebuild for the drop and `DinnerEvent` has children (`Order`, `DinnerDuty`, `TicketWaitlist`,
-`DinnerEventAllergen`, `Expense`) whose cascades a rebuild's `DROP TABLE` fires on D1; the block is rewritten in the
-Prisma source to `ALTER TABLE "DinnerEvent" DROP COLUMN "totalCost"` (SQLite ≥ 3.35; plain, unindexed column). The
-field and its `@deprecated` tag leave the schema; the generated client no longer carries it.
-
-### Preconditions
-
-- Every environment runs the release in which `totalCost` is computed from `Expense` rows and no code writes the
-  column (`npm run ts` fails on any remaining writer once the field is gone).
-- The 0.9 migration's mapping of existing `totalCost` values to `Expense` rows has run on local, dev and prod.
-
-### TDD
-
-- `make d1-verify-<env>`: child-without-parent counts unchanged after the apply.
-- Existing suites green with the field removed from the dinner schemas and fixtures.
-
-### Affected
-
-`prisma/schema.prisma`, `prisma/generated/*`, `migrations/`, the dinner schemas and fixtures that still name
-`totalCost`, `docs/adr-compliance-backend.md` (dinner-event rows).
-
-## Order snapshot (B6)
-
-### Problem
-
-Kitchen statistics count 0 portions for an order whose `ticketPriceId` is null: `ticketType` is read through the
-`ticketPrice` relation, and the relation is gone once a ticket price row is deleted (`onDelete: SetNull`). Every
-affected order sits CLOSED on a past dinner and matches exactly one ticket price by season and `priceAtBooking`
-(checked 2026-10-08).
-
-### Solution
-
-1. `ticketType` and `allergyTypeIds` (§ Ticket allergies on the order) join `OrderSnapshotSchema`; the first round of the package settles the backfill shape — the schema
-   has ten required fields, two of them formatted in TypeScript (`inhabitantNameWithInitials`, `householdShortname`),
-   so the backfill is either a slimmer snapshot with optional provenance fields or a TypeScript job.
-2. `Order.orderSnapshot String?` — `ALTER TABLE "Order" ADD COLUMN "orderSnapshot" TEXT`, taken as Prisma emits it.
-3. Order creation (`financesRepository.ts`, `scaffoldPrebookings.ts`) captures the snapshot with `ticketType` from
-   the ticket price, as `Transaction.orderSnapshot` does.
-4. Portion calculation (`useOrder.ts`) reads `ticketType` from the relation, then from the snapshot.
-5. Backfill, convergent: orders with `ticketPriceId` null and no snapshot get the `ticketType` of the season's ticket
-   price whose `price` equals `priceAtBooking`.
-
-### TDD
-
-- Unit: portion calculation with the relation null and a snapshot present; the snapshot captured on create carries
-  `ticketType`.
-- E2E: kitchen statistics on a dinner whose ticket price row is deleted after booking.
-
-### Affected
-
-`KitchenPreparation.vue`, `useOrder.ts`, `useBookingValidation.ts`, `financesRepository.ts`,
-`scaffoldPrebookings.ts`, `prisma/schema.prisma`, `prisma/generated/*`, `migrations/`,
-`docs/adr-compliance-backend.md` (order rows).
 
 ## Server payload of the shared stores
 
@@ -133,60 +69,6 @@ dinner again. The economy datasets are gated in release 0.9 (`loadBillingOvervie
 `app/composables/useBookingValidation.ts` (`DinnerEventDetailSchema.tickets`), `app/composables/useHouseholdValidation.ts`
 (`HouseholdDisplaySchema`), `server/data/prismaRepository.ts` (the dinner Detail and household index includes),
 `tests/component/stores/*.nuxt.spec.ts`, `docs/adr-compliance-frontend.md` (store rows).
-
-## Ticket allergies on the order
-
-### Note - provenance allergies was removed, and live allergies are shown, should be verified and discussed
-### Problem
-
-to check: hmmm - not sure it is good to drop the allergyprovenance idea, we do use household provenance
-
-A guest's allergy type ids are chosen in `GuestBookingForm` and leave the client as `allergyTypeIds` on the desired
-order (ADR-016), and every creation path drops them before `createOrders`: the scaffold's create transform
-(`scaffoldPrebookings.ts`), the waitlist assignment (`waitlistAssignment.ts`) and the billing
-import. The orders list reads `provenanceAllergies` from the latest `USER_CLAIMED` audit row (`fetchOrders`), and the
-claim snapshot carries no allergies, so the field is empty on every order. The dinner detail resolves a ticket's
-allergies from its current inhabitant's profile, so a swapped ticket counts the claimer's allergies; the groceries
-were bought for the releasing owner's.
-
-### Solution
-
-Rule signed 2026-10-11. A ticket carries a stored list or follows its holder's live profile:
-
-| Ticket | Allergies | Frozen when |
-|---|---|---|
-| Own | holder's live profile | never |
-| Guest | ids chosen in the form | at booking |
-| Swapped | releasing owner's profile ids | at the claim, after the booking deadline; a second swap keeps the first list |
-
-1. The stored list is `allergyTypeIds` in `OrderSnapshotSchema`, kept in the `Order.orderSnapshot` column of § Order
-   snapshot (B6): one column, one migration for both (signed 2026-10-11). The names field goes.
-2. Creation (`createOrders`) stores a guest ticket's ids; the create schemas and the four callers carry
-   `allergyTypeIds` through. The claim (`claimOrder`) selects the releasing inhabitant's allergy rows and stores their
-   type ids when the ticket holds none; the claim snapshot records the same ids.
-3. The ticket mapper shared by the orders list and the dinner detail emits `allergyTypeIds` on every ticket: the stored
-   list when present, the holder's `Allergy` rows otherwise (a subselect in the orders list's raw SQL, the included
-   relation on the dinner detail). `provenanceAllergies` goes.
-4. `getTicketAllergens` (`useAllergy.ts`) resolves ids in the catalogue; `DinnerTicket` and `DinnerBookingForm` read
-   `allergyTypeIds` from the ticket in place of the household profile (release 0.9 § Ticket allergies).
-
-### TDD
-
-- API: `household/scaffold` — a guest order with ids comes back with them, an own ticket with the holder's live ids, a
-  profile edit shows on the next read; `admin/order` — a claimed ticket carries the releasing owner's ids, a second
-  claim keeps them, the claim snapshot holds them; the scaffold's queue path — an assigned entry keeps its ids;
-  `chef/dinner` — the dinner detail's tickets carry `allergyTypeIds`.
-- Unit: `getTicketAllergens` by id; `computeAffectedDiners` counts a guest and a swapped ticket; the stored list's
-  round trip.
-- E2E ui: a guest booked with an allergy on the menu shows the glyph and the type on reopening the form; the chef
-  page's allergen line and kitchen stats count one more kuvert.
-
-### Affected
-
-`useBookingValidation.ts`, `useBooking.ts` (snapshot builder, guest grouping), `useAllergy.ts`,
-`financesRepository.ts` (create, claim, orders list, dinner detail), `scaffoldPrebookings.ts`,
-`waitlistAssignment.ts`, `scaffold.post.ts`, `DinnerTicket.vue`, `DinnerBookingForm.vue`,
-`prisma/schema.prisma`, `migrations/`, `docs/adr-compliance-backend.md` (order rows).
 
 ## Waitlist: no-seat notice at dinner start
 
@@ -582,8 +464,7 @@ The sixty-one components, `app/composables/useTheSlopeDesignSystem.ts`,
 
 Six routes still spell a coerced id in a query schema (`order/index.get.ts`, `admin/dinner-event/index.get.ts`,
 `admin/team/index.get.ts`, `household/allergy/index.get.ts`, `billing/index.get.ts`, `admin/household/inhabitants/[id].post.ts`
-`seasonId`) beside `RouteIdSchema`. `useQueryParam.ts` repeats the normalize-or-default block three times. The
-order-history route reads the households its creation rows name because the creation audit row carries no `householdShortname`.
+`seasonId`) beside `RouteIdSchema`. `useQueryParam.ts` repeats the normalize-or-default block three times. 
 `app/stores/users.ts` exposes no `isEmpty` and `isStoreReady` (ADR-007 r2); `usePermissions.ts` and
 `useUserRoles.ts` import `SystemRoleSchema` from the generated layer where ADR-001 routes it through `useCoreValidation`.
 `chef/dinner/[id]/order-history.get.ts`, `expenses/index.get.ts` and `expenses/[expenseId].delete.ts` log no success line
@@ -591,16 +472,14 @@ order-history route reads the households its creation rows name because the crea
 
 #### Solution
 
-`RouteIdSchema` / `RouteIdSchema.optional()` in the six query schemas; one `fallback(invalid)` in `useQueryParam`;
-`createOrders` writes `householdShortname` into the creation audit row, `readOrderAudit` reads it from the new format and the legacy shapes, and a convergent backfill fills the existing rows, after which the
-households read in `chef/dinner/[id]/order-history.get.ts` goes. The users store gains the two flags with a case each; the two composables import the enum from `useCoreValidation`;
+`RouteIdSchema` / `RouteIdSchema.optional()` in the six query schemas; one `fallback(invalid)` in `useQueryParam`.
+The users store gains the two flags with a case each; the two composables import the enum from `useCoreValidation`;
 the three chef routes log one `console.info` on success.
 
 #### Affected
 
-The six query routes, the three chef routes, `app/composables/useQueryParam.ts`, `server/data/financesRepository.ts`,
-`app/composables/useBookingValidation.ts`, `usePermissions.ts`, `useUserRoles.ts`,
-`app/stores/users.ts` and its spec, a D1 migration for the backfill, `docs/adr-compliance-backend.md` rows.
+The six query routes, the three chef routes, `app/composables/useQueryParam.ts`, `usePermissions.ts`, `useUserRoles.ts`,
+`app/stores/users.ts` and its spec, `docs/adr-compliance-backend.md` rows.
 
 ### Waitlist chip
 
@@ -711,8 +590,7 @@ step is the model.
 
 ## UI cases fail on an unexpected API error
 
-Priority: high. Ordered by the user on 2026-10-23 ("definitely a test should fail if api gives an unexpected api
-error"), after the 403 toast of § Household data access and GET previews reached production.
+Priority: high.
 
 ### Problem
 
@@ -731,11 +609,36 @@ The guard's own case: a page that gets an undeclared 403 fails the case, a decla
 run one spec at a time in the e2e slot; each red names its response, and the cause is fixed in the app or declared in
 the case.
 
+## Dev-server flakes in CI
+
+Priority: high.
+
+### Problem
+
+The CI suites run against `npm run dev`. Three cases fail on a first attempt and pass on the retry:
+
+| Case | Cause |
+|---|---|
+| `ui/AllergyPoster.e2e` | `handleBatchCreateTeams` (`AdminTeams.vue`) rethrows a failed create the store has toasted; the dev overlay holds the unhandled error of AdminTeams' declared 401 and mounts it on every page loaded after, so the poster renders two `h1` |
+| `ui/MobileViewport.e2e`, reveal screens | the overflow sampler runs through the full-page screenshot's resize and reads `innerWidth` in that frame; the culprit list names the first five elements, the header |
+| `api/serial/scaffold-prebookings.e2e` | a dropped connection to the local D1 (`fetch failed`) answers 500 "Prisma Client Validation Error" (`eventHandlerHelper.ts`) |
+
+### Solution
+
+- `handleBatchCreateTeams` logs a failed create and keeps the form in create mode.
+- The sampler stops before the screenshot, measures `document.documentElement.clientWidth` and names the outermost
+  element that overflows.
+- `nuxtErrorFromPrismaError` answers a dropped database connection with 503 "Service Unavailable".
+
+### TDD
+
+Unit: the error mapper's connection row. Component: a failed team create stays in create mode and raises no unhandled
+error. E2E: `ui/MobileViewport`, `ui/AllergyPoster`, `ui/AdminTeams`, `api/serial/scaffold-prebookings`.
+
 ## Booking mail delivery
 
-Priority: high since 2026-10-23, reported in production as issue #170. Moved from release 0.9 on 2026-10-19 (point 6b
-of One booking path, end to end; the user: "61, 62, 63 - descope to 0.9.1"); the signed mails followed on 2026-10-19
-("nothing unimplæmented should be in archive").
+Priority: high, reported in production as issue #170. From release 0.9 (point 6b of One booking path, end to end),
+with its signed mails.
 In 0.9 the mails go out after the action (`notifyBookingOutcomes`, `notifyExtraPortions`) with the templates of
 `app/config/notificationTemplates.ts`; the signed mails and the delivery below are not built.
 
@@ -761,17 +664,19 @@ The login (`fetchUser`) and the admin's user edit (`POST /api/admin/users/[id]`,
 
 ### Solution
 
-Delivery, signed 2026-10-18; the recipient rule set by the user on 2026-10-23. A mail about a person goes to the
-person's own login, else to the first user of the person's household; `TICKET_SOLD` is about the person whose ticket
-was released (`TicketSale.sellerInhabitantId`, else the selling household's first user), `WAITLIST_BUILDUP` goes to
-the chef. A scaffolded order keeps the system user as
+A mail about a person goes to the person's closest user (`findClosestUser`): the person's own login, else the first user
+of the person's household. Every sale of a released ticket mails both sides: `TICKET_SOLD` the person whose ticket was
+released (`TicketSale.sellerInhabitantId`), the buyer `WAITLIST_TICKET_ASSIGNED` for a sale to the waiting list and
+`TICKET_BOUGHT` for a direct buy. `WAITLIST_BUILDUP` goes to the chef. A scaffolded order keeps the system user as
 `bookedByUserId`. The booking step returns outcomes; the notification step resolves, composes and queues a complete
 message; the worker sends what it gets (ADR-016 rule 9). `DeliverySubject` gains `TICKET_WAITLIST` (a join, by its
-entry), `ORDER` (assigned, extra portion, sold, by the order) and `DINNER_EVENT` (the buildup, by the dinner); the
+entry), `ORDER` (assigned, bought, extra portion, sold, by the order) and `DINNER_EVENT` (the buildup, by the dinner); the
 column is TEXT on D1 (`migrations/0015_notifications.sql`), so the change regenerates the client (`make d1-prisma`)
 with no migration file. `sendOnce` reads the Delivery rows, emits and records, one mail per subject, version, kind and
-recipient (the billing pattern, `monthlyBillingService.ts`); the version comes from the history: `TICKET_WAITLIST` 1,
-`ORDER` the number of BUY rows, `DINNER_EVENT` 1 plus the number of EXTRA_PORTIONS rows. Every booking mail, the
+recipient (the billing pattern, `monthlyBillingService.ts`); a subject's version is monotonic from 1, one step per
+history row that owes it a mail: `TICKET_WAITLIST` its join, `ORDER` the extra portion that created it and each BUY,
+`DINNER_EVENT` its buildup and each EXTRA_PORTIONS row after it. `GET /api/admin/sender/delivery?subjectType=&subjectIds=`
+reads the Delivery rows of the subjects it names; the rows have no other endpoint. Every booking mail, the
 buildup included, goes right after the action; daily maintenance gains a step that checks the owed notifications over
 the dinners still to come and resends the missing ones through the same rows, reported like `clearWaitlist`; the
 per-join buildup check in `server/utils/sender/events/waitlist.ts` goes. The chef's deadline reminders belong to daily
@@ -824,6 +729,14 @@ Emne: Skråningen: 1 billet til 20/10/2026 · Lasagne er solgt
   I betaler ikke længere for den.
   Se bookingen: …
 
+TICKET_BOUGHT  → the buyer, else the first user of the household (signed 2026-10-24)
+Emne: Skråningen: Emil har fået en billet til 20/10/2026 · Lasagne
+  20/10/2026 · Lasagne
+  Emil: 1 købt
+  Barn · 35 kr · Spisesal · fra Hansen
+  Du betaler for billetten. Vi glæder os til at se jer.
+  Se bookingen: https://skraaningen.dk/dinner?date=20/10/26
+
 WAITLIST_BUILDUP  → the chef, in the words of the chef's alert
 Emne: Skråningen: 3V 1B på venteliste til 20/10/2026 · Lasagne
   3V 1B på venteliste · 5 portioner
@@ -838,7 +751,8 @@ guest flag.
 ### Tests
 
 The Waitlist notifications serial e2e: it joins a queue, releases a ticket and portions, crosses the buildup
-threshold and asserts each kind writes its Delivery row, one per subject, version, kind and recipient.
+threshold and asserts each kind writes its Delivery row, one per subject, version, kind and recipient, read through
+`GET /api/admin/sender/delivery`. The endpoint's own API cases: the rows of the named subjects, a 400 on a bad query.
 
 The recipient rule and the opt-out, at the lowest level: `waitlist.unit.spec.ts` (a person's own login, else the
 household's first user, each mail kind, an opted-out user mailed nothing); the Heynabo mapper and the import's update
@@ -874,129 +788,6 @@ These fixtures span more dinners than their cases prove:
 
 Each fixture's season shrinks to the dinners its cases prove; each case is checked green when its season shrinks.
 
-## Three faces on a phone
-
-Priority: high. Reported in production as issue #171 (2026-10-23); ordered by the user the same day: "the userlist
-should be uniformly using the 3 faces on small screen - not just in one place!".
-
-### Problem
-
-`COMPONENTS.avatar.max` shows five faces on every screen. On /dinner the team card's monitor face puts five faces, the
-overflow face and the names on one line (`userListItem.groupRow`), about 240px in a column of about 195px on a 360px
-phone, so the card runs past the screen.
-
-### Solution
-
-The default face count is a `SIZES` getter: three below md, five from md. `UserListItem` and the team card's own
-avatar group read it; `listItemMax` and `powerRowMax` stay three everywhere.
-
-### TDD
-
-Component: a group of seven shows three faces and +4 below md, five and +2 from md (`UserListItem`, the team card's
-monitor face).
-
-## One master-detail layout
-
-Priority: high. Reported in production as issue #169 (2026-10-23): the /dinner calendar's circles overlap on a 15"
-laptop under display scaling and on an iPad. Ordered by the user the same day: one layout for every master-detail page,
-the calendar's circle step at lg.
-
-### Problem
-
-Five master-detail pages lay out five ways. /dinner binds no token: Nuxt UI's `UPage` grid sets the calendar beside the
-dinner from lg in 2 of 10 columns with 40px gaps, 160 to 211px wide, where a week of 32px circles needs about 300px.
-/chef and /admin/allergies bind `LAYOUTS.masterDetailPage` (3 of 12 columns from md, 8px gap), the household bookings
-tab `COMPONENTS.householdBookings` (a third, 24px gap), /admin/teams `COMPONENTS.adminTeams` (a third, 12px gap).
-
-### Solution
-
-- `LAYOUTS.masterDetailPage`: stacked below md with an 8px gap; from md the master takes a third of the width, at
-  least 245px (a week of 24px circles), the detail the rest, with a 16px gap. One gap on every page (decided
-  2026-10-23). Its slots are `UPage`'s (`root`, `left`, `center`): /dinner
-  and /chef bind it on `UPage :ui`, the bookings tab, /admin/teams and /admin/allergies on their containers.
-- The calendar circle (`CALENDAR.day.size`, drawn by `dayCircleClasses` in every calendar) is 24px below lg and 32px
-  from lg; the circle and the small badge icon size by Tailwind breakpoint classes, so the server renders each screen's
-  size.
-- Retired: `COMPONENTS.householdBookings.layout`, `.calendar`, `.panel`; `COMPONENTS.adminTeams.masterDetailRow`,
-  `.master`; the `md:w-2/3` in `COMPONENTS.adminTeams.pane` and `.overviewCalendar`.
-- The allergen picker's split (`COMPONENTS.allergenSelector`) stays: it sits inside the chef page's detail.
-
-```
-md and up                                          below md
-+-- a third, at least 245px --+ +-- the rest --+   +--------------------------+
-| calendar or list            | | detail       |   | calendar or list         |
-+-----------------------------+ +--------------+   +--------------------------+
-                                                   | detail                   |
-                                                   +--------------------------+
-```
-
-Widths as master + detail in px, iPad portrait (820px) / desktop (1280px); phones keep the stacked layout:
-
-| Page | Now | Proposed | View change |
-|---|---|---|---|
-| /dinner | stacked / 211 + 965, 40px gap | 252 + 504 / 400 + 800, 16px gap | iPad: the calendar beside the dinner, phone-size circles. Desktop: the calendar twice as wide, circles clear of each other, the dinner narrower |
-| /chef | 187 + 577, 8px gap / 211 + 965, 40px gap (`UPage`'s lg grid outranks the md token) | as /dinner | The calendar wider, phone-size circles on the iPad; the detail narrower |
-| /admin/allergies | 187 + 577 / 298 + 910, 8px gap | as /dinner | The list wider, the detail narrower |
-| Household bookings tab | 250 + 500 / 400 + 800, 24px gap | as /dinner | iPad: phone-size circles. Desktop: the gap |
-| /admin/teams | 253 + 507 / 400 + 800, 12px gap | as /dinner | iPad: phone-size circles in the team calendar. Desktop: the gap |
-
-### TDD
-
-Component: the circle size below and from lg; the specs that read the retired tokens read `LAYOUTS.masterDetailPage`.
-Visual check: the five pages at 375, 820, 1180 and 1280px.
-
-### Affected
-
-`app/composables/useTheSlopeDesignSystem.ts`, `app/pages/dinner/index.vue`, `app/pages/chef/index.vue`,
-`AdminAllergies.vue`, `AdminTeams.vue`, `HouseholdBookings.vue`, their specs and header mockups, `docs/ui.md`.
-
-## Household data access and GET previews
-
-Priority: high. Found 2026-10-20 in the DinnerBookingForm spec audit; moved to 0.9.1 by the user; reported in
-production on 2026-10-23 (an admin on another household's bookings page gets a 403 toast). Decided 2026-10-23:
-ADR-004 § Access, ADR-016's preview clause.
-
-### Problem
-
-The expected bookings (d894021, 2026-10-18) are read through the booking write: `POST /api/household/order/scaffold`
-with `?preview=true` and an empty draft, behind `requireHouseholdAccess`. Every viewer outside the household gets a 403
-toast on load, an admin before the override included. The draft previews of the bookings and the preferences ride on
-the writes' POSTs too. The household allergy writes (`server/routes/api/household/allergy/`) carry no check: any
-member changes any household's allergies, and nothing logs it.
-
-### Solution
-
-| Role | Reads | Changes household data |
-|---|---|---|
-| Member | everything | own household |
-| Admin | everything | any household, by override |
-| Allergy manager | everything | any household's allergies, by override |
-
-- A preview is a read: `GET` on the scaffold (the draft in `orders=`, one compact value per order, under Cloudflare's
-  16 KB URL) and on the preferences, open to every member; with no draft the scaffold's GET is the household's next
-  run on the season's deadlines; `bypassDeadlines=true` previews an admin's change. The POSTs only write.
-- The bookings store fetches (`fetchExpectedBookings`, `previewBookings`, `previewPreferences`); the views hold the
-  answers (`useScaffoldPreview`, browser only).
-- The allergy writes call `requireHouseholdAccess` with `canMutateAllergies` behind `?adminBypass=true`; the household
-  page offers the override to the allergy manager on the allergies tab.
-- An allergy stays with its person: `AllergyUpdateSchema` omits `inhabitantId`, so an update never moves an allergy
-  into another household (decided 2026-10-23).
-- The preference write rejects a body without `dinnerPreferences` with a 400 (decided 2026-10-23).
-- The admin bypass log line names the user who takes the override and their system roles (decided 2026-10-23).
-
-### TDD
-
-Unit: `requireHouseholdAccess` (the roles, the override's log line), the route table's household GET, the draft codec.
-Component: the bookings, households and allergies stores, the grid and the day view, the household page's override.
-API: `household/allergy.e2e`, `household/scaffold.e2e`, `household/preferences.e2e`.
-
-### Affected
-
-`server/routes/api/household/order/scaffold.{get,post}.ts`, `server/routes/api/household/inhabitants/[id]/preferences.{get,post}.ts`,
-`server/routes/api/household/allergy/*`, `app/composables/useBookingValidation.ts`, `app/stores/{bookings,households,allergies}.ts`,
-`BookingGridView.vue`, `DinnerBookingForm.vue`, `GuestBookingForm.vue`, `HouseholdCard.vue`, `HouseholdAllergies.vue`,
-`app/pages/household/[shortname]/[tab].vue`, their specs, `docs/adr-compliance-backend.md`.
-
 ## Deferred from release 0.9
 
 | Work | Where it lives | State |
@@ -1008,10 +799,8 @@ API: `household/allergy.e2e`, `household/scaffold.e2e`, `household/preferences.e
 | Ad-hoc charges and the spending views; the ADR-011 supplement on transaction variants | `feature-proposal-adhoc-admin-billing.md` phases 2 to 5 | signed off; the ledger, the expense table and the chef endpoints shipped |
 | Notification kinds beyond the waitlist: chef deadlines, roster, reminders, job failed, dinner cancelled, duty swapped | `feature-proposal-notification-triggers.md` | proposal, two open questions |
 | Billing delivery report and interrupted runs | `bug-fix-billing-delivery-report.md` | three open decisions |
-| Re-login with Face ID (S5) | `feature-proposal-relogin-faceid.md` | parked proposal; the PRF spike is complete |
-| Chef allergen selector: the selector counts a population through a ticket allergies map | § Ticket allergies on the order | brief halted 2026-10-10; presented again with the ticket allergies design |
 | AdminTeams loading row: after a season switch the table shows the previous season's teams under the loading bar; with the loading row, a team save's re-read closes the team detail docked under its row on a phone | `app/components/admin/AdminTeams.vue:396`, ADR-018 § Table loading | open: loading row with the docked detail closing, or a docked detail that survives the re-read |
-| Avatar ring colours: `UserListItem` builds `md:ring-${color}` at runtime, which Tailwind leaves out of the CSS, so from md up the faces on Præferencer and in the allergy alert ring in the text colour; the token holds one class string per use (`household` warning, `inhabitant` primary, `allergyManager` ocean-500), the prop takes its key, the raw `"ocean-500"` in `AllergyManagersList.vue:48` goes, and the `UserListItem` spec checks each key's token | `useTheSlopeDesignSystem.ts` `userListItem.ring`, `UserListItem.vue:143`, `HouseholdCard.vue:308` | brief presented 2026-10-20; moved to 0.9.1 by the user |
+| Avatar ring colours: `UserListItem` builds `md:ring-${color}` at runtime, which Tailwind leaves out of the CSS, so from md up the faces on Præferencer and in the allergy alert ring in the text colour; the token holds one class string per use (`household` warning, `inhabitant` primary, `allergyManager` ocean-500), the prop takes its key, the raw `"ocean-500"` in `AllergyManagersList.vue:48` goes, and the `UserListItem` spec checks each key's token | `useTheSlopeDesignSystem.ts` `userListItem.ring`, `UserListItem.vue:143`, `HouseholdCard.vue:308` | brief presented 2026-10-20 |
 
 ### Decisions carried from release 0.9
 
@@ -1042,15 +831,8 @@ API: `household/allergy.e2e`, `household/scaffold.e2e`, `household/preferences.e
   `feature-proposal-relogin-faceid.md`.
 
 **2026-10-08**
-- `Order.orderSnapshot` (B6) and the drop of `DinnerEvent.totalCost` ride this release's migration (§ Order snapshot,
-  § Drop `DinnerEvent.totalCost`).
 - The framelding billing import books every ticket on the first inhabitant and answers 409; its e2e test is skipped
   until `feature-0.9.2.md` § Billing import in the export format.
-
-**2026-10-11**
-- A ticket carries a stored allergy list or follows its holder's live profile: own tickets live, guest tickets the ids
-  chosen at booking, swapped tickets the releasing owner's profile ids frozen at the claim (after the deadline; a
-  second swap keeps the first list). The list holds ids. § Ticket allergies on the order.
 
 **2026-10-13**
 - The duty roster, the season spending views, the ad-hoc charges, the remaining notification kinds and the billing

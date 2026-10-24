@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears} from 'date-fns'
-import {useBooking, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
+import {useBooking, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, personTicketCounts, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {dateToWeekDay} from '~/utils/season'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -1055,11 +1055,12 @@ describe('buildDesiredOrder', () => {
         })
 
         it.each([
-            {desc: 'saved modes, guest differs', drafts: {}, expected: {value: DinnerMode.DINEIN, consensus: false}},
-            {desc: 'a guest draft matching the inhabitant', drafts: {guestGroup: () => DinnerMode.DINEIN}, expected: {value: DinnerMode.DINEIN, consensus: true}},
-            {desc: 'an inhabitant draft matching the guest', drafts: {inhabitant: () => DinnerMode.DINEINLATE}, expected: {value: DinnerMode.DINEINLATE, consensus: true}}
-        ])('consensus over $desc', ({drafts, expected}) => {
-            expect(getPowerConsensus([inhabitant.id], orders, [], dinnerEvent.id, drafts)).toEqual(expected)
+            {desc: 'saved modes, guest differs', held: orders, drafts: {}, expected: {value: DinnerMode.DINEIN, consensus: false}},
+            {desc: 'saved modes, guest matching', held: [regular, {...guest, dinnerMode: DinnerMode.DINEIN}], drafts: {}, expected: {value: DinnerMode.DINEIN, consensus: true}},
+            {desc: 'a guest draft matching the inhabitant', held: orders, drafts: {guestGroup: () => DinnerMode.DINEIN}, expected: {value: DinnerMode.DINEIN, consensus: true}},
+            {desc: 'an inhabitant draft matching the guest', held: orders, drafts: {inhabitant: () => DinnerMode.DINEINLATE}, expected: {value: DinnerMode.DINEINLATE, consensus: true}}
+        ])('consensus over $desc', ({held, drafts, expected}) => {
+            expect(getPowerConsensus([inhabitant.id], held, [], dinnerEvent.id, drafts)).toEqual(expected)
         })
 
         describe('the household\'s places on the waiting list', () => {
@@ -1836,6 +1837,32 @@ describe('order predicates', () => {
         {state: OrderStates.CANCELLED, pending: false}
     ])('GIVEN an order $state THEN it waits for the close: $pending', ({state, pending}) => {
         expect(isPendingOrder(OrderFactory.defaultOrder(undefined, {state}))).toBe(pending)
+    })
+})
+
+// The booking grid's name cell over the dinners in view: the person's own tickets waiting for the close, the released
+// among them, and their own places on the waiting list on a dinner where they hold no ticket
+describe('personTicketCounts', () => {
+    const [ANNA, LARS] = [1, 2]
+    const [first, second, outside] = [201, 202, 203]
+    const ticket = (id: number, dinnerEventId: number, overrides: Partial<OrderDisplay> = {}): OrderDisplay =>
+        OrderFactory.defaultOrder(undefined, {id, inhabitantId: ANNA, dinnerEventId, ...overrides})
+    const place = (id: number, dinnerEventId: number, overrides: Parameters<typeof WaitlistFactory.defaultEntry>[0] = {}) =>
+        WaitlistFactory.defaultEntry({id, inhabitantId: ANNA, dinnerEventId, ...overrides})
+
+    it.each([
+        {desc: 'guest tickets only', orders: [ticket(7, first, {isGuestTicket: true}), ticket(8, first, {isGuestTicket: true, state: OrderStates.RELEASED})], entries: [], counts: {total: 0, released: 0, queued: 0}},
+        {desc: 'a released ticket and guest tickets', orders: [ticket(7, first, {isGuestTicket: true}), ticket(8, first, {isGuestTicket: true, state: OrderStates.RELEASED}), ticket(42, first, {state: OrderStates.RELEASED})], entries: [], counts: {total: 1, released: 1, queued: 0}},
+        {desc: 'tickets the close or a cancellation ended', orders: [ticket(42, first, {state: OrderStates.CLOSED, dinnerMode: DinnerModes.NONE}), ticket(43, second, {state: OrderStates.CANCELLED})], entries: [], counts: {total: 0, released: 0, queued: 0}},
+        {desc: 'places on the waiting list only', orders: [], entries: [place(9, first), place(10, second)], counts: {total: 0, released: 0, queued: 2}},
+        {desc: 'a guest\'s place on the waiting list', orders: [], entries: [place(11, second, {isGuestTicket: true})], counts: {total: 0, released: 0, queued: 0}},
+        {desc: 'a ticket on one dinner and a place on the other', orders: [ticket(42, first)], entries: [place(9, second)], counts: {total: 1, released: 0, queued: 1}},
+        {desc: 'a ticket and a place on the same dinner', orders: [ticket(42, first)], entries: [place(9, first)], counts: {total: 1, released: 0, queued: 0}},
+        {desc: 'an ended ticket and a place on the same dinner, cancelled on one and closed on the other', orders: [ticket(42, first, {state: OrderStates.CANCELLED}), ticket(43, second, {state: OrderStates.CLOSED})], entries: [place(9, first), place(10, second)], counts: {total: 0, released: 0, queued: 0}},
+        {desc: 'a ticket and a place on a dinner outside the view', orders: [ticket(42, outside)], entries: [place(9, outside)], counts: {total: 0, released: 0, queued: 0}},
+        {desc: 'nothing, while Lars holds a ticket and a place', orders: [ticket(42, first, {inhabitantId: LARS})], entries: [place(9, second, {inhabitantId: LARS})], counts: {total: 0, released: 0, queued: 0}}
+    ])('GIVEN Anna holds $desc THEN she counts $counts.total tickets, $counts.released released and $counts.queued places', ({orders, entries, counts}) => {
+        expect(personTicketCounts(ANNA, [first, second], orders, entries)).toEqual(counts)
     })
 })
 

@@ -16,7 +16,6 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {COMPONENTS, DINNER_STATE_BADGES, ICONS, ORDER_STATE_COLORS} from '~/composables/useTheSlopeDesignSystem'
-import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import {formatPreviewLines} from '~/composables/useBookingUi'
@@ -194,11 +193,6 @@ describe('BookingGridView', () => {
     const guestCellName = (wrapper: Mounted): string =>
       wrapper.findAllComponents(DinnerModeSelector).map(c => c.props('name') as string).find(name => name.startsWith('guest-'))!
 
-    const countOf = (wrapper: Mounted, testId: string): number => {
-      const badge = findByTestId(wrapper, testId)
-      return badge.exists() ? Number(badge.text()) : 0
-    }
-
     it('GIVEN Anna\'s guest ticket listed before her regular order THEN her cell shows her own order, and the power row reads no consensus over the guest\'s other mode', async () => {
       const wrapper = await mountWeek([order(7, anna.id, true, TAKEAWAY), order(42, anna.id, false, DINEINLATE), order(43, lars.id, false, DINEINLATE)])
 
@@ -206,36 +200,23 @@ describe('BookingGridView', () => {
       expect(selectorNamed(wrapper, powerOf(event.id)).props()).toMatchObject({modelValue: DINEIN, consensus: false})
     })
 
-    // The name cell counts over the dinners in view
-    const later = DinnerEventFactory.dinnerEventAt(5, 2)
-    const place = (id: number, dinnerEventId: number, isGuestTicket = false): TicketWaitlistDetail =>
-      WaitlistFactory.defaultEntry({id, inhabitantId: anna.id, dinnerEventId, isGuestTicket})
-    const mountCounts = (orders: OrderDisplay[], waitlistEntries: TicketWaitlistDetail[]) => mountGrid([event, later], {orders, waitlistEntries})
-    const countsOf = (wrapper: Mounted) => ({
-      total: countOf(wrapper, `inhabitant-ticket-count-${anna.id}`),
-      released: countOf(wrapper, `inhabitant-released-count-${anna.id}`),
-      queued: countOf(wrapper, `inhabitant-waitlist-count-${anna.id}`)
-    })
-    const countCases: {desc: string, orders: OrderDisplay[], places: TicketWaitlistDetail[], counts: {total: number, released: number, queued: number}}[] = [
-      {desc: 'guest tickets only', orders: [order(7, anna.id, true, DINEIN), order(8, anna.id, true, DINEIN, RELEASED)], places: [], counts: {total: 0, released: 0, queued: 0}},
-      {desc: 'a released regular order and guest tickets', orders: [order(7, anna.id, true, DINEIN), order(8, anna.id, true, DINEIN, RELEASED), order(42, anna.id, false, DINEIN, RELEASED)], places: [], counts: {total: 1, released: 1, queued: 0}},
-      {desc: 'places on the waiting list only', orders: [], places: [place(9, event.id), place(10, later.id)], counts: {total: 0, released: 0, queued: 2}},
-      {desc: 'a guest\'s place on the waiting list', orders: [], places: [place(11, later.id, true)], counts: {total: 0, released: 0, queued: 0}}
-    ]
-
-    it.each(countCases)('counts Anna\'s own tickets, the released among them and her own places on the waiting list when she holds $desc', async ({orders, places, counts}) => {
-      const wrapper = await mountCounts(orders, places)
-      expect(countsOf(wrapper)).toEqual(counts)
-    })
-
-    it('GIVEN a ticket and a place on the waiting list THEN Anna counts one of each, and the waiting-list count wears the waiting list\'s glyph and colour, in the name cell beside the ticket count', async () => {
-      const wrapper = await mountCounts([order(42, anna.id, false, DINEIN)], [place(9, later.id)])
+    // The name cell renders the person's counts over the dinners in view (personTicketCounts), each while it is above nought
+    it('GIVEN Anna\'s released ticket and her place on the waiting list THEN her name cell shows one ticket, one released and one place, the waiting-list count in the waiting list\'s glyph and colour beside the ticket count, and Lars, who holds nothing, shows no count', async () => {
+      const later = DinnerEventFactory.dinnerEventAt(5, 2)
+      const wrapper = await mountGrid([event, later], {
+        orders: [order(42, anna.id, false, DINEIN, RELEASED)],
+        waitlistEntries: [WaitlistFactory.defaultEntry({id: 9, inhabitantId: anna.id, dinnerEventId: later.id})]
+      })
+      // The name cell's badges: the tickets, the released among them, the places on the waiting list
+      const kinds = ['ticket', 'released', 'waitlist']
+      const countBadge = (kind: string, inhabitantId: number) => findByTestId(wrapper, `inhabitant-${kind}-count-${inhabitantId}`)
       const waitlistBadge = wrapper.findAllComponents({name: 'UBadge'}).find(badge => badge.attributes('data-testid') === `inhabitant-waitlist-count-${anna.id}`)!
 
-      expect(countsOf(wrapper)).toEqual({total: 1, released: 0, queued: 1})
+      expect(kinds.map(kind => countBadge(kind, anna.id).text())).toEqual(['1', '1', '1'])
+      expect(kinds.filter(kind => countBadge(kind, lars.id).exists())).toEqual([])
       expect(waitlistBadge.props('color')).toBe(ORDER_STATE_COLORS[TicketState.queued])
       expect(waitlistBadge.findComponent({name: 'UIcon'}).props('name')).toBe(ICONS.waitlist)
-      expect(findByTestId(wrapper, `inhabitant-ticket-count-${anna.id}`).element.parentElement).toBe(waitlistBadge.element.parentElement)
+      expect(countBadge('ticket', anna.id).element.parentElement).toBe(waitlistBadge.element.parentElement)
     })
 
     describe('guest cells in edit mode', () => {

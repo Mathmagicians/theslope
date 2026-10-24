@@ -5,11 +5,12 @@ import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {formatDate} from '~/utils/date'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, getSessionUserInfo, temporaryAndRandom, doScreenshot, gotoHydrated} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom, doScreenshot, gotoHydrated, waitForApi} = testHelpers
 const {TeamRoleSchema} = useCookingTeamValidation()
 const TeamRole = TeamRoleSchema.enum
 
 test.describe('Chef Swap — volunteer flow', () => {
+    const testSalt = temporaryAndRandom()
     let teamId: number
     let memberInhabitantId: number
     const createdTeamIds: number[] = []
@@ -27,19 +28,19 @@ test.describe('Chef Swap — volunteer flow', () => {
         await expect(page.locator(ROLE_CANCEL).first(), 'the role form opens').toBeVisible()
     }
 
-    const expectDinnerChef = (ctx: BrowserContext, dinnerId: number, expected: number | null) =>
-        pollUntil(
-            async () => (await DinnerEventFactory.getDinnerEvent(ctx, dinnerId))?.chefId,
-            chefId => chefId === expected,
-            5
-        )
+    // The member is the chef when the role form offers Meld afbud; the dinner's chefId is the role API specs'
+    const expectMemberIsChef = async (page: Page) => {
+        await openForm(page)
+        await expect(page.locator(ROLE_RESIGN).first(), 'the member is the dinner\'s chef').toBeVisible()
+    }
 
-    // A team with the member as chef and a vacant dinner, alone on a free day of the season; afterEach empties the calendar again
-    const createVacantDinner = async (ctx: BrowserContext) => {
+    // A team with the member as chef and its dinner, vacant (chefId null) or with the member as chef, alone on a free day
+    // of the season; afterEach empties the calendar again
+    const createDinner = async (ctx: BrowserContext, chefId: number | null) => {
         const season = await SeasonFactory.createActiveSeason(ctx)
         const {team, dinner} = await SeasonFactory.createCookingTeamWithChefAndDinner(ctx, season, memberInhabitantId, {
-            teamName: `SwapTeam-${temporaryAndRandom()}`,
-            dinner: {menuTitle: `VacantDinner-${temporaryAndRandom()}`, chefId: null},
+            teamName: salt('SwapTeam', testSalt),
+            dinner: {menuTitle: salt('SwapDinner', testSalt), chefId},
             day: 'free'
         })
         teamId = team.id!
@@ -47,6 +48,7 @@ test.describe('Chef Swap — volunteer flow', () => {
         createdDinnerIds.push(dinner.id!)
         return {id: dinner.id!, date: new Date(dinner.date)}
     }
+    const createVacantDinner = (ctx: BrowserContext) => createDinner(ctx, null)
 
     test.beforeAll(async ({browser}) => {
         const memberCtx = await memberValidatedBrowserContext(browser)

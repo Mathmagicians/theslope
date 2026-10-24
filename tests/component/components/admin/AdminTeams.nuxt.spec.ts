@@ -1,5 +1,5 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach, onTestFinished} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick, ref} from 'vue'
@@ -52,6 +52,11 @@ const mountTeams = async (isMd = true) => {
 
 type Wrapper = Awaited<ReturnType<typeof mountTeams>>
 
+const openCreateMode = async (wrapper: Wrapper) => {
+    await clickByTestId(wrapper, 'create-team')
+    await flushPromises()
+}
+
 const clickCreateTeams = async (wrapper: Wrapper) => {
     await clickByTestId(wrapper, 'submit-create-teams')
     await flushPromises()
@@ -77,10 +82,9 @@ describe('AdminTeams', () => {
         useToast().clear()
     })
 
-    it('reports created teams and assigned dinners in the toast', async () => {
+    it('reports created teams and assigned dinners in the toast and leaves create mode', async () => {
         const wrapper = await mountTeams()
-        await clickByTestId(wrapper, 'create-team')
-        await flushPromises()
+        await openCreateMode(wrapper)
 
         expect(wrapper.find('#team-count').exists()).toBe(true)
         await wrapper.find('#team-count').setValue(2)
@@ -91,6 +95,26 @@ describe('AdminTeams', () => {
         const toast = await lastToast()
         expect(toast?.title).toBe('Madhold oprettet')
         expect(toast?.description).toBe('2 madhold oprettet · 6 madlavninger tildelt')
+        await vi.waitFor(() => expect(wrapper.find('#team-count').exists()).toBe(false))
+    })
+
+    // The store's apiRequest toasts the failure; an error the save leaves unhandled reaches Nuxt's root as vue:error
+    it('GIVEN the create endpoint fails WHEN the admin saves the new teams THEN the form stays in create mode and the save raises no unhandled error', async () => {
+        createTeamsEndpoint.mockImplementation(() => {
+            throw createError({statusCode: 500})
+        })
+        const vueError = vi.fn()
+        onTestFinished(useNuxtApp().hook('vue:error', vueError))
+        const wrapper = await mountTeams()
+        await openCreateMode(wrapper)
+
+        await clickCreateTeams(wrapper)
+        await lastToast()
+        // The rethrow travels from the store's catch to the click handler after the toast
+        await flushPromises()
+
+        expect(wrapper.find('#team-count').exists()).toBe(true)
+        expect(vueError).not.toHaveBeenCalled()
     })
 })
 

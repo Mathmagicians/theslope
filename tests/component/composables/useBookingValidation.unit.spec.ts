@@ -373,6 +373,8 @@ describe('useBookingValidation', () => {
         close: {closed: 10},
         transact: {created: 8},
         clearWaitlist: {cleared: 3, dinners: [{dinnerEventId: 644, date: new Date('2026-10-12'), cleared: 3}]},
+        // The owed booking mails of the dinners still to come that the step sent again, per dinner like clearWaitlist
+        resendNotifications: {resent: 2, dinners: [{dinnerEventId: 645, date: new Date('2026-10-13'), resent: 2}]},
         scaffold: OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 20}, unchanged: 100, households: 10})
       }
 
@@ -384,12 +386,17 @@ describe('useBookingValidation', () => {
         expect(result.transact.created).toBe(8)
         expect(result.clearWaitlist.cleared).toBe(3)
         expect(result.clearWaitlist.dinners).toEqual([{dinnerEventId: 644, date: new Date('2026-10-12'), cleared: 3}])
+        expect(result.resendNotifications).toEqual(validResult.resendNotifications)
         expect(result.scaffold?.seasonId).toBe(1)
       })
 
-      it('GIVEN a result without clearWaitlist WHEN parsing THEN clearWaitlist defaults to zero', () => {
-        const {clearWaitlist: _cleared, ...withoutClearWaitlist} = validResult
-        expect(DailyMaintenanceResultSchema.parse(withoutClearWaitlist).clearWaitlist.cleared).toBe(0)
+      // A job run recorded before a step existed reads that step as zero
+      it.each([
+        {step: 'clearWaitlist', zero: {cleared: 0, dinners: []}},
+        {step: 'resendNotifications', zero: {resent: 0, dinners: []}}
+      ] as const)('GIVEN a result without $step WHEN parsing THEN $step defaults to zero', ({step, zero}) => {
+        const {[step]: _omitted, ...withoutStep} = validResult
+        expect(DailyMaintenanceResultSchema.parse(withoutStep)[step]).toEqual(zero)
       })
     })
   })

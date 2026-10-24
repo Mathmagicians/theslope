@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS} from '~/composables/useBooking'
@@ -12,6 +12,7 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {ticketTypeLabel} from '~/composables/useTicket'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 import {formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
 import appConfig from '~/app.config'
 
@@ -112,10 +113,16 @@ describe('useBookingUi', () => {
         })
     })
 
+    // The booking form's alert on a closed dinner reads the sentence: buy a ticket for sale, else join the waiting list;
+    // no alert with neither
     describe('a closed dinner\'s supply', () => {
-        it.each(SUPPLY_TABLE)('$desc: the value line reads "$value" and the sentence "$sentence"', ({counts, value, sentence}) => {
+        const ALERT_ICONS = {forSale: ICONS.claim, waitlist: ICONS.waitlist, closed: null}
+
+        it.each(SUPPLY_TABLE)('$desc: the value line reads "$value", the sentence "$sentence", and the booking form\'s alert follows the supply ($look)', ({counts, look, value, sentence}) => {
             expect(lockedSupply(counts)).toBe(value)
             expect(closedForCancellation(counts)).toBe(sentence)
+            const icon = ALERT_ICONS[look]
+            expect(moreTicketsAlert(counts)).toEqual(icon === null ? null : {icon, title: BOOKING_WORDS.supply.moreTickets, description: sentence})
         })
     })
 

@@ -7,6 +7,18 @@
 | Ticket price portions | A season's ticket price carries the portions its tickets weigh | proposed |
 | Billing import in the export format | The billing import reads the CSV the billing export writes | proposed |
 | Write-failure dashboard | The admin sees the partial batches a failed write left behind | proposed 2026-10-18, design open |
+| Drop `DinnerEvent.totalCost`, Order snapshot (B6) | The deprecated column leaves the schema; an order keeps its ticket type when its price row goes | decided 2026-10-08; one migration |
+| Ticket allergies on the order | A guest or swapped ticket keeps the allergy ids it was booked with | rule signed 2026-10-11 |
+| Creation audit rows name the household | The creation audit row carries `householdShortname`; a backfill fills the existing rows | open |
+| Chef allergen selector | The selector counts a population through a ticket allergies map | brief halted 2026-10-10; presented again with the ticket allergies design |
+| Re-login with Face ID (S5) | `feature-proposal-relogin-faceid.md` | parked proposal; the PRF spike is complete |
+| Deliveries in the System tab | The admin sees the mails the system sent, per kind, recipient and version | proposed 2026-10-24, design open |
+
+§ Drop `DinnerEvent.totalCost`, § Order snapshot (B6) and § Ticket allergies on the order share one migration:
+`make d1-create-migration name=release-0-9-2`, the rewrites below in the Prisma source, then
+`rm migrations/NNNN_*.sql && make d1-flatten-migrations`. `make d1-verify-<env>` runs before and after the apply on
+local (a copy of dev), dev and prod; `tests/component/architecture/migrations.unit.spec.ts` keeps the file free of
+`DROP TABLE`.
 
 ## Ticket price portions
 
@@ -81,3 +93,163 @@ Writes carry no retries (decided 2026-10-18, `archived/release-0.9.0.md` § One 
 
 A view for the admin that surfaces the partial batches: entries without their history row, orders without their audit
 row, deliveries without their row. **OPEN:** the design.
+
+## Drop `DinnerEvent.totalCost`
+
+### Problem
+
+Release 0.9 moves a dinner's grocery cost into `Expense` rows and computes `totalCost` from them. The column stays
+in the schema, marked `/// @deprecated`, so the 0.9 migration is additive and the code running during the migration
+keeps working.
+
+### Solution
+
+Prisma emits a table rebuild for the drop and `DinnerEvent` has children (`Order`, `DinnerDuty`, `TicketWaitlist`,
+`DinnerEventAllergen`, `Expense`) whose cascades a rebuild's `DROP TABLE` fires on D1; the block is rewritten in the
+Prisma source to `ALTER TABLE "DinnerEvent" DROP COLUMN "totalCost"` (SQLite ≥ 3.35; plain, unindexed column). The
+field and its `@deprecated` tag leave the schema; the generated client no longer carries it.
+
+### Preconditions
+
+- Every environment runs the release in which `totalCost` is computed from `Expense` rows and no code writes the
+  column (`npm run ts` fails on any remaining writer once the field is gone).
+- The 0.9 migration's mapping of existing `totalCost` values to `Expense` rows has run on local, dev and prod.
+
+### TDD
+
+- `make d1-verify-<env>`: child-without-parent counts unchanged after the apply.
+- Existing suites green with the field removed from the dinner schemas and fixtures.
+
+### Affected
+
+`prisma/schema.prisma`, `prisma/generated/*`, `migrations/`, the dinner schemas and fixtures that still name
+`totalCost`, `docs/adr-compliance-backend.md` (dinner-event rows).
+
+## Order snapshot (B6)
+
+### Problem
+
+Kitchen statistics count 0 portions for an order whose `ticketPriceId` is null: `ticketType` is read through the
+`ticketPrice` relation, and the relation is gone once a ticket price row is deleted (`onDelete: SetNull`). Every
+affected order sits CLOSED on a past dinner and matches exactly one ticket price by season and `priceAtBooking`
+(checked 2026-10-08).
+
+### Solution
+
+1. `ticketType` and `allergyTypeIds` (§ Ticket allergies on the order) join `OrderSnapshotSchema`; the first round of the package settles the backfill shape — the schema
+   has ten required fields, two of them formatted in TypeScript (`inhabitantNameWithInitials`, `householdShortname`),
+   so the backfill is either a slimmer snapshot with optional provenance fields or a TypeScript job.
+2. `Order.orderSnapshot String?` — `ALTER TABLE "Order" ADD COLUMN "orderSnapshot" TEXT`, taken as Prisma emits it.
+3. Order creation (`financesRepository.ts`, `scaffoldPrebookings.ts`) captures the snapshot with `ticketType` from
+   the ticket price, as `Transaction.orderSnapshot` does.
+4. Portion calculation (`useOrder.ts`) reads `ticketType` from the relation, then from the snapshot.
+5. Backfill, convergent: orders with `ticketPriceId` null and no snapshot get the `ticketType` of the season's ticket
+   price whose `price` equals `priceAtBooking`.
+
+### TDD
+
+- Unit: portion calculation with the relation null and a snapshot present; the snapshot captured on create carries
+  `ticketType`.
+- E2E: kitchen statistics on a dinner whose ticket price row is deleted after booking.
+
+### Affected
+
+`KitchenPreparation.vue`, `useOrder.ts`, `useBookingValidation.ts`, `financesRepository.ts`,
+`scaffoldPrebookings.ts`, `prisma/schema.prisma`, `prisma/generated/*`, `migrations/`,
+`docs/adr-compliance-backend.md` (order rows).
+
+## Ticket allergies on the order
+
+### Note - provenance allergies was removed, and live allergies are shown, should be verified and discussed
+### Problem
+
+to check: hmmm - not sure it is good to drop the allergyprovenance idea, we do use household provenance
+
+A guest's allergy type ids are chosen in `GuestBookingForm` and leave the client as `allergyTypeIds` on the desired
+order (ADR-016), and every creation path drops them before `createOrders`: the scaffold's create transform
+(`scaffoldPrebookings.ts`), the waitlist assignment (`waitlistAssignment.ts`) and the billing
+import. The orders list reads `provenanceAllergies` from the latest `USER_CLAIMED` audit row (`fetchOrders`), and the
+claim snapshot carries no allergies, so the field is empty on every order. The dinner detail resolves a ticket's
+allergies from its current inhabitant's profile, so a swapped ticket counts the claimer's allergies; the groceries
+were bought for the releasing owner's.
+
+### Solution
+
+Rule signed 2026-10-11. A ticket carries a stored list or follows its holder's live profile:
+
+| Ticket | Allergies | Frozen when |
+|---|---|---|
+| Own | holder's live profile | never |
+| Guest | ids chosen in the form | at booking |
+| Swapped | releasing owner's profile ids | at the claim, after the booking deadline; a second swap keeps the first list |
+
+1. The stored list is `allergyTypeIds` in `OrderSnapshotSchema`, kept in the `Order.orderSnapshot` column of § Order
+   snapshot (B6): one column, one migration for both (signed 2026-10-11). The names field goes.
+2. Creation (`createOrders`) stores a guest ticket's ids; the create schemas and the four callers carry
+   `allergyTypeIds` through. The claim (`claimOrder`) selects the releasing inhabitant's allergy rows and stores their
+   type ids when the ticket holds none; the claim snapshot records the same ids.
+3. The ticket mapper shared by the orders list and the dinner detail emits `allergyTypeIds` on every ticket: the stored
+   list when present, the holder's `Allergy` rows otherwise (a subselect in the orders list's raw SQL, the included
+   relation on the dinner detail). `provenanceAllergies` goes.
+4. `getTicketAllergens` (`useAllergy.ts`) resolves ids in the catalogue; `DinnerTicket` and `DinnerBookingForm` read
+   `allergyTypeIds` from the ticket in place of the household profile (release 0.9 § Ticket allergies).
+
+### TDD
+
+- API: `household/scaffold` — a guest order with ids comes back with them, an own ticket with the holder's live ids, a
+  profile edit shows on the next read; `admin/order` — a claimed ticket carries the releasing owner's ids, a second
+  claim keeps them, the claim snapshot holds them; the scaffold's queue path — an assigned entry keeps its ids;
+  `chef/dinner` — the dinner detail's tickets carry `allergyTypeIds`.
+- Unit: `getTicketAllergens` by id; `computeAffectedDiners` counts a guest and a swapped ticket; the stored list's
+  round trip.
+- E2E ui: a guest booked with an allergy on the menu shows the glyph and the type on reopening the form; the chef
+  page's allergen line and kitchen stats count one more kuvert.
+
+### Affected
+
+`useBookingValidation.ts`, `useBooking.ts` (snapshot builder, guest grouping), `useAllergy.ts`,
+`financesRepository.ts` (create, claim, orders list, dinner detail), `scaffoldPrebookings.ts`,
+`waitlistAssignment.ts`, `scaffold.post.ts`, `DinnerTicket.vue`, `DinnerBookingForm.vue`,
+`prisma/schema.prisma`, `migrations/`, `docs/adr-compliance-backend.md` (order rows).
+
+## Creation audit rows name the household
+
+### Problem
+
+The order-history route reads the households its creation rows name because the creation audit row carries no
+`householdShortname`.
+
+### Solution
+
+`createOrders` writes `householdShortname` into the creation audit row, `readOrderAudit` reads it from the new format
+and the legacy shapes, and a convergent backfill fills the existing rows, after which the households read in
+`chef/dinner/[id]/order-history.get.ts` goes.
+
+### Affected areas
+
+`server/data/financesRepository.ts`, `app/composables/useBookingValidation.ts`,
+`server/routes/api/chef/dinner/[id]/order-history.get.ts`, a D1 migration for the backfill,
+`docs/adr-compliance-backend.md` rows.
+
+## Deliveries in the System tab
+
+### Problem
+
+The Delivery rows record every mail the system sends (the billing mails, the booking mails of release 0.9.1), and
+`GET /api/admin/sender/delivery` reads them by subject. The admin has no view of them: a mail a member asks about is
+traced in the logs.
+
+### Solution
+
+`/admin/system` (`AdminSystem.vue`) shows the deliveries beside the job runs: one row per mail with its time, kind,
+subject, version and recipient, newest first. The read takes a period alongside the subjects. **OPEN:** the design.
+
+### TDD
+
+API: the period read. Component: the table on its dataset, its loading and empty states (ADR-018).
+
+### Affected areas
+
+`server/routes/api/admin/sender/delivery.get.ts`, `server/data/financesRepository.ts` (`fetchDeliveries`),
+`app/components/admin/AdminSystem.vue`, a store dataset, `docs/adr-compliance-frontend.md` and
+`docs/adr-compliance-backend.md` rows.

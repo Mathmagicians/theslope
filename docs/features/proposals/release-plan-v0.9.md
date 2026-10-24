@@ -108,7 +108,7 @@ Rationale for the ordering: bugs and the consistency sweep de-risk everything af
 | `../feature-proposal-adhoc-admin-billing.md` | Proposal | Review + sign-off (Phase 0) |
 | `../feature-proposal-duty-roster.md` | Signed off | Implement |
 | `bug-fix-plan-v0.9.md` | Shipped, archived 2026-10-06 | B6 continues as the Order snapshot package; billing delivery report + interrupted runs in `../bug-fix-billing-delivery-report.md` |
-| `chores-0.9.1.md` § Order snapshot | Done | Implement (B6) in 0.9.1 |
+| `feature-0.9.2.md` § Order snapshot | Done | Implement (B6) in 0.9.2 |
 | `bare-fetch-fix.md` | Folded into release-0.9.0's factory + gating packages, deleted 2026-10-07 | — |
 | `archived/feature-notifications.md` | ✅ Implemented (PR #166) | — |
 | `../feature-proposal-notification-triggers.md` | Proposal | Review + sign-off (triggers, alarms, SMS) |
