@@ -7,6 +7,12 @@ import type {BookingMails} from '~~/server/utils/sender/events/waitlist'
  * Notification config for unit tests: the real templates and signature, dev-like addresses (ADR-003 factory).
  */
 export class NotificationFactory {
+    /** The mail kinds, one per template of the config: `Kind.WAITLIST_JOINED` */
+    static readonly Kind = Object.fromEntries(Object.keys(NOTIFICATION_TEMPLATES).map(kind => [kind, kind])) as {[K in keyof typeof NOTIFICATION_TEMPLATES]: K}
+
+    /** The mail kind a dedupe key leads with (`{kind}:{channel}:{maskedRecipient}:{messageId}`), as a result and a Delivery row's reference carry it */
+    static readonly mailKindOf = (dedupeKey: string): string => dedupeKey.split(':')[0]!
+
     static readonly config = (overrides: Partial<NotificationConfig> = {}): NotificationConfig => ({
         environment: 'dev',
         site: 'dev.skraaningen.dk',

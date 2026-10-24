@@ -362,6 +362,17 @@ Børn (2-12 år),,${childCounts}
         return null
     }
 
+    /**
+     * A billing period whose accountant mail a serial spec re-sends: monthly billing creates one from the unbilled
+     * transactions (ADR-015 idempotent), else an earlier run's period serves
+     */
+    static readonly billingPeriodToResend = async (context: BrowserContext): Promise<number> => {
+        const billing = await BillingFactory.generateBilling(context)
+        const periods = billing?.results.length ? billing.results.map(r => r.billingPeriodSummaryId) : (await BillingFactory.getBillingPeriods(context)).map(p => p.id)
+        expect(periods.length, 'a billing period to re-send').toBeGreaterThan(0)
+        return periods[0]!
+    }
+
     // ============================================================================
     // Household Billing API Functions
     // ============================================================================

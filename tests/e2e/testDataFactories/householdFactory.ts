@@ -245,7 +245,8 @@ export class HouseholdFactory {
 
     /**
      * Create inhabitant with config object pattern (ADR-003)
-     * Preferred method - allows setting any inhabitant field including dinnerPreferences
+     * Preferred method - allows setting any inhabitant field. The create stores no dinnerPreferences, so preferences the
+     * caller passes are written by the update after it, which re-scaffolds the household on the active season
      */
     static readonly createInhabitantWithConfig = async (
         context: BrowserContext,
@@ -275,7 +276,9 @@ export class HouseholdFactory {
             expect(responseBody.id, 'Response should contain the new inhabitant ID').toBeDefined()
         }
 
-        return responseBody
+        if (expectedStatus !== 201 || !partialInhabitant.dinnerPreferences) return responseBody
+        const updated = await this.updateInhabitant(context, responseBody.id, {dinnerPreferences: partialInhabitant.dinnerPreferences})
+        return updated!.inhabitant
     }
 
     /**

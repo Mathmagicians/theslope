@@ -3,7 +3,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 //import {adminFile} from './auth.setup'
 const adminFile = 'playwright/.auth/admin.json'
 
-const {doScreenshot, pollUntil} = testHelpers
+const {doScreenshot, gotoHydrated} = testHelpers
 
 const publicPages = ['', 'login']
 const protectedPages = ['admin', 'household', 'chef']
@@ -36,10 +36,10 @@ test.describe('Pages with logged in user can load', () => {
     test.use({ storageState: adminFile })
 
     test('Dashboard is shown after login with action cards', async ({page}) => {
-        await page.goto('/login')
+        await gotoHydrated(page, '/login')
 
         // Wait for dashboard to load (shown when logged in)
-        await pollUntil(() => page.getByText('Hvad vil du lave i dag?').isVisible(), visible => visible)
+        await expect(page.getByText('Hvad vil du lave i dag?')).toBeVisible()
 
         // Verify action cards are visible (use .first() to avoid strict mode violations)
         await expect(page.getByRole('heading', {name: 'Fællesspisning'})).toBeVisible()

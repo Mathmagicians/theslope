@@ -34,11 +34,11 @@ test.describe('AdminTeams Form UI', () => {
             createdSeasonIds.push(season.id!)
 
             // WHEN: Viewing the teams tab for that season
-            await page.goto(`${adminTeamsUrl}?season=${season.shortName}`)
+            await gotoHydrated(page, `${adminTeamsUrl}?season=${season.shortName}`)
 
             // THEN: The empty state is the table's own #empty slot, not an alert rendered instead of the table
             const table = page.locator('table')
-            await pollUntil(() => table.isVisible(), visible => visible)
+            await expect(table).toBeVisible()
             await expect(table.getByTestId('teams-empty-state')).toBeVisible()
             await expect(table.getByTestId('create-new-team')).toBeVisible()
         })
@@ -52,11 +52,11 @@ test.describe('AdminTeams Form UI', () => {
             createdSeasonIds.push(season.id!)
 
             // WHEN: Opening the teams tab in edit mode - the state reached by deleting the last team
-            await page.goto(`${adminTeamsUrl}?season=${season.shortName}&mode=edit`)
+            await gotoHydrated(page, `${adminTeamsUrl}?season=${season.shortName}&mode=edit`)
 
             // THEN: ONE empty state, the table's own - not the "Vælg et madhold" master-detail placeholder
             const table = page.locator('table')
-            await pollUntil(() => table.isVisible(), visible => visible)
+            await expect(table).toBeVisible()
             await expect(table.getByTestId('teams-empty-state')).toBeVisible()
             await expect(table.getByTestId('create-new-team')).toBeVisible()
             await expect(page.getByText('Vælg et madhold for at redigere')).toBeHidden()
@@ -137,8 +137,8 @@ test.describe('AdminTeams Form UI', () => {
             createdSeasonIds.push(season.id!)
 
             // Navigate to edit mode with season in URL
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
-            await pollUntil(() => page.getByTestId('admin-teams').isVisible(), visible => visible)
+            await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            await expect(page.getByTestId('admin-teams')).toBeVisible()
         })
 
         test('GIVEN user in edit mode WHEN renaming team THEN team name is updated immediately', async () => {

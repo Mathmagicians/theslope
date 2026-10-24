@@ -92,11 +92,11 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
         const ticketType = ticketPrices.find(price => price.id === entries[0]!.order.ticketPriceId)!.ticketType
 
         const memberPage = await pageAs(browser, memberUIFile)
-        await memberPage.goto(`/dinner?date=${formatDate(dinnerDate)}`)
+        await gotoHydrated(memberPage, `/dinner?date=${formatDate(dinnerDate)}`)
 
         // UChip hands its test id to the day circle; the chip's indicator sits beside the circle and holds the hourglass
         const dayChip = memberPage.getByTestId(`calendar-dinner-date-${dinnerDate.getDate()}`).locator('xpath=..').locator('[data-slot="base"]')
-        await pollUntil(() => dayChip.getByTestId(WAITLIST_TEST_IDS.calendarHourglass(dinnerDate.getDate())).isVisible(), visible => visible)
+        await expect(dayChip.getByTestId(WAITLIST_TEST_IDS.calendarHourglass(dinnerDate.getDate()))).toBeVisible()
         await expect(dayChip).toHaveText('')
 
         await pollUntil(() => memberPage.getByTestId(WAITLIST_TEST_IDS.moreTickets).textContent(),

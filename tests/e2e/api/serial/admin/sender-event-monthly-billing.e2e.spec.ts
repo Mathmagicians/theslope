@@ -13,10 +13,7 @@ test.describe('POST /api/admin/sender/event/monthly-billing', () => {
 
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const billing = await BillingFactory.generateBilling(context)
-        const periods = billing?.results.length ? billing.results.map(r => r.billingPeriodSummaryId) : (await BillingFactory.getBillingPeriods(context)).map(p => p.id)
-        expect(periods.length, 'a billing period to re-send').toBeGreaterThan(0)
-        billingPeriodSummaryId = periods[0]!
+        billingPeriodSummaryId = await BillingFactory.billingPeriodToResend(context)
     })
 
     test('GIVEN admin WHEN re-sending a period THEN the accountant mail is queued', async ({browser}) => {
