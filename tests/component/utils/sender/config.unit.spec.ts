@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, it, vi} from 'vitest'
-import {emailChannel} from '~~/server/utils/sender/config'
+import {emailChannel, shouldSendBookingEmails} from '~~/server/utils/sender/config'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 
 const queue = {send: vi.fn()} as unknown as Queue
@@ -28,5 +28,20 @@ describe('emailChannel', () => {
         const channel = emailChannel({SENDER: queue})
 
         expect(channel).toMatchObject({on: true, queue, config: {environment: 'dev', site: 'dev.skraaningen.dk'}})
+    })
+})
+
+// The booking emails flag, the Cloudflare variable SHOULD_SEND_BOOKING_EMAILS_FLAG: on only when set to true
+describe('shouldSendBookingEmails', () => {
+    afterEach(() => vi.unstubAllEnvs())
+
+    it.each([
+        {flag: 'true', on: true},
+        {flag: 'false', on: false},
+        {flag: '', on: false}
+    ])('GIVEN the flag "$flag" THEN the booking emails are on: $on', ({flag, on}) => {
+        vi.stubEnv('SHOULD_SEND_BOOKING_EMAILS_FLAG', flag)
+
+        expect(shouldSendBookingEmails()).toBe(on)
     })
 })

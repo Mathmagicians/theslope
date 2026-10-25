@@ -1,7 +1,7 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {createError} from 'h3'
 import {
-    countReleasedTicketsByType, createOrders, deleteOrder, fetchDinnerEventsByIds, fetchFirstDeliveredAt, fetchOrders, recordDeliveries, updateOrdersBatch
+    countReleasedTicketsByType, createOrders, deleteOrder, fetchDinnerEventsByIds, fetchOrders, recordDeliveries, updateOrdersBatch
 } from '~~/server/data/financesRepository'
 import {useDeliveryValidation, type DeliveryCreate} from '~/composables/useDeliveryValidation'
 import {useBookingValidation, OrderAuditAction} from '~/composables/useBookingValidation'
@@ -21,7 +21,7 @@ const {fakePrisma, rawQuery} = await vi.hoisted(async () => ({
         orderHistory: ['createMany'],
         dinnerEvent: ['findMany'],
         ticketPrice: ['findMany'],
-        delivery: ['createManyAndReturn', 'findFirst']
+        delivery: ['createManyAndReturn']
     }),
     rawQuery: vi.fn()
 }))
@@ -189,21 +189,5 @@ describe('recordDeliveries', () => {
     it('GIVEN no rows WHEN recorded THEN nothing is written', async () => {
         expect(await recordDeliveries(d1Client, [])).toEqual([])
         expect(statementsInCallOrder(fakePrisma)).toEqual([])
-    })
-})
-
-describe('fetchFirstDeliveredAt', () => {
-    const {TICKET_WAITLIST, ORDER} = useDeliveryValidation().DeliverySubjectSchema.enum
-
-    it.each([
-        {rows: 'a row of the types', first: {deliveredAt: new Date(2026, 9, 18, 12)}, deliveredAt: new Date(2026, 9, 18, 12)},
-        {rows: 'no row of the types', first: null, deliveredAt: null}
-    ])('GIVEN $rows WHEN the first delivery of the types is read THEN one statement asks for the earliest of them', async ({first, deliveredAt}) => {
-        fakePrisma.delivery.findFirst.mockResolvedValue(first)
-
-        expect(await fetchFirstDeliveredAt(d1Client, [TICKET_WAITLIST, ORDER])).toEqual(deliveredAt)
-        expect(fakePrisma.delivery.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-            where: {subjectType: {in: [TICKET_WAITLIST, ORDER]}}, orderBy: {deliveredAt: 'asc'}
-        }))
     })
 })

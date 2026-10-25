@@ -1,6 +1,6 @@
-import {describe, it, expect, beforeAll} from 'vitest'
-import {addDays, addYears} from 'date-fns'
-import {useBooking, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, personTicketCounts, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
+import {describe, it, expect, beforeAll, beforeEach, afterEach, vi} from 'vitest'
+import {addDays, addHours, addYears} from 'date-fns'
+import {useBooking, type AlarmLevel, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, personTicketCounts, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {dateToWeekDay} from '~/utils/season'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -59,7 +59,9 @@ let groupGuestOrders: UseBookingT['groupGuestOrders']
 let getDayBillSummary: UseBookingT['getDayBillSummary']
 let getPowerChanges: UseBookingT['getPowerChanges']
 let getPowerConsensus: UseBookingT['getPowerConsensus']
+let getChefDeadlineAlarm: UseBookingT['getChefDeadlineAlarm']
 let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
+let cookingThresholds: ReturnType<ReturnType<typeof useSeason>['getCookingDeadlineThresholds']>
 let resolveTicketPrice: ReturnType<typeof useTicket>['resolveTicketPrice']
 beforeAll(() => {
     ({
@@ -77,12 +79,14 @@ beforeAll(() => {
         groupGuestOrders,
         getDayBillSummary,
         getPowerChanges,
-        getPowerConsensus
+        getPowerConsensus,
+        getChefDeadlineAlarm
     } = useBooking());
     resolveTicketPrice = useTicket().resolveTicketPrice
 
-    const {deadlinesForSeason} = useSeason()
+    const {deadlinesForSeason, getCookingDeadlineThresholds} = useSeason()
     defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+    cookingThresholds = getCookingDeadlineThresholds()
 })
 
 describe('useBooking', () => {
@@ -339,6 +343,54 @@ describe('useBooking', () => {
 
             const dinnerEvent = {state: DinnerStates.SCHEDULED, date: futureDate, totalCost: 0}
             expect(getStepConfig(dinnerEvent, defaultDeadlines).step).toBe(0)
+        })
+    })
+
+    // The chef's two deadlines: the menu, published by the menu deadline, and the groceries, ordered by the dinner. An
+    // open deadline's alarm turns yellow inside the warning hours, red inside the critical hours and overdue once the
+    // deadline has passed, and the calendar shows it overdue after the dinner; a met deadline raises none, and the
+    // higher alarm sets the level
+    describe('getChefDeadlineAlarm', () => {
+        type Deadlines = {menu: Date, dinner: Date}
+        type Clock = (deadlines: Deadlines, thresholds: typeof cookingThresholds) => Date
+        const ALARM = {met: -1, green: 0, yellow: 1, red: 2, overdue: 3} as const satisfies Record<string, AlarmLevel>
+        const dinnerDate = new Date(2026, 10, 20)
+        const GROCERIES_COST = 10000
+        // The clock against one deadline: an hour outside the warning hours, an hour inside them, an hour inside the
+        // critical hours, an hour past the deadline
+        const clocksOf = (deadline: keyof Deadlines): Record<'green' | 'yellow' | 'red' | 'overdue', Clock> => ({
+            green: (deadlines, {warning}) => addHours(deadlines[deadline], -(warning + 1)),
+            yellow: (deadlines, {warning}) => addHours(deadlines[deadline], -(warning - 1)),
+            red: (deadlines, {critical}) => addHours(deadlines[deadline], -(critical - 1)),
+            overdue: deadlines => addHours(deadlines[deadline], 1)
+        })
+        const [menu, groceries] = [clocksOf('menu'), clocksOf('dinner')]
+        const dayAfterTheDinner: Clock = ({dinner}) => addDays(dinner, 1)
+        // The menu open with the groceries ordered, and the groceries open with the menu published
+        const menuOpen = {state: DinnerStates.SCHEDULED, heynaboEventId: null, totalCost: GROCERIES_COST}
+        const groceriesOpen = {state: DinnerStates.ANNOUNCED, heynaboEventId: 1, totalCost: 0}
+        beforeEach(() => vi.useFakeTimers({toFake: ['Date']}))
+        afterEach(() => vi.useRealTimers())
+
+        it.each([
+            {deadlines: 'the menu open', clock: 'outside the warning hours', now: menu.green, dinner: menuOpen, alarm: 'green'},
+            {deadlines: 'the menu open', clock: 'inside the warning hours', now: menu.yellow, dinner: menuOpen, alarm: 'yellow'},
+            {deadlines: 'the menu open', clock: 'inside the critical hours', now: menu.red, dinner: menuOpen, alarm: 'red'},
+            {deadlines: 'the menu open', clock: 'past its deadline', now: menu.overdue, dinner: menuOpen, alarm: 'overdue'},
+            {deadlines: 'the menu open', clock: 'the day after the dinner', now: dayAfterTheDinner, dinner: {...menuOpen, state: CONSUMED}, alarm: 'overdue'},
+            {deadlines: 'the menu published, the groceries ordered', clock: 'past the menu deadline', now: menu.overdue, dinner: {...menuOpen, state: DinnerStates.ANNOUNCED}, alarm: 'met'},
+            {deadlines: 'the groceries open', clock: 'outside the warning hours', now: groceries.green, dinner: groceriesOpen, alarm: 'green'},
+            {deadlines: 'the groceries open', clock: 'inside the warning hours', now: groceries.yellow, dinner: groceriesOpen, alarm: 'yellow'},
+            {deadlines: 'the groceries open', clock: 'inside the critical hours', now: groceries.red, dinner: groceriesOpen, alarm: 'red'},
+            {deadlines: 'the groceries open', clock: 'past its deadline', now: groceries.overdue, dinner: groceriesOpen, alarm: 'overdue'},
+            {deadlines: 'the groceries open', clock: 'the day after the dinner', now: dayAfterTheDinner, dinner: {...groceriesOpen, state: CONSUMED}, alarm: 'overdue'},
+            {deadlines: 'the menu published, the groceries ordered', clock: 'past the dinner', now: groceries.overdue, dinner: {...groceriesOpen, totalCost: GROCERIES_COST}, alarm: 'met'},
+            {deadlines: 'the menu and the groceries open', clock: 'inside the critical hours of the dinner', now: groceries.red, dinner: {...menuOpen, totalCost: 0}, alarm: 'overdue'}
+        ] as const)('GIVEN $deadlines WHEN the clock is $clock THEN the alarm is $alarm', ({now, dinner, alarm}) => {
+            const deadlines = {menu: defaultDeadlines.getMenuDeadlineTime(dinnerDate), dinner: defaultDeadlines.getDinnerStartTime(dinnerDate)}
+            vi.setSystemTime(now(deadlines, cookingThresholds))
+
+            expect(getChefDeadlineAlarm({...DinnerEventFactory.defaultDinnerEventDisplay(), date: dinnerDate, ...dinner}, defaultDeadlines)).toBe(ALARM[alarm])
         })
     })
 

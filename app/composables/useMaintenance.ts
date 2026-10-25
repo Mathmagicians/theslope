@@ -2,7 +2,9 @@ import {useMaintenanceValidation, type JobType, type JobStatus} from '~/composab
 import {useBookingValidation, type DailyMaintenanceResult} from '~/composables/useBookingValidation'
 import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 import {useBillingValidation, type MonthlyBillingJobResult} from '~/composables/useBillingValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {useBooking} from '~/composables/useBooking'
+import {NOTIFICATION_COUNT_WORDS} from '~/config/notificationTemplates'
 import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {COLOR, ICONS} from '~/composables/useTheSlopeDesignSystem'
 
@@ -17,6 +19,7 @@ export const useMaintenance = () => {
     const {formatScaffoldResult} = useBooking()
     const {HeynaboImportResponseSchema} = useHeynaboValidation()
     const {MonthlyBillingJobResultSchema} = useBillingValidation()
+    const {SenderEventSchema} = useDeliveryValidation()
 
     /**
      * Human-readable labels for job types (Danish)
@@ -140,6 +143,16 @@ export const useMaintenance = () => {
     const formatClearedWaitlists = ({dinners}: DailyMaintenanceResult['clearWaitlist']): string =>
         dinners.length > 0 ? dinners.map(d => `${formatDate(d.date, DATE_SETTINGS.DAY_MONTH_MASK)} -${d.cleared}`).join(', ') : '0'
 
+    /** Per sender event its symbol and the notifications sent; an event that sent none is left out */
+    const formatNotificationCounts = (notifications: DailyMaintenanceResult['notifications']): string => {
+        const {symbols, none} = NOTIFICATION_COUNT_WORDS
+        const parts = SenderEventSchema.options.flatMap(senderEvent => {
+            const sent = notifications[senderEvent]?.sent ?? 0
+            return sent > 0 ? [`${symbols[senderEvent]} ${sent}`] : []
+        })
+        return parts.length > 0 ? parts.join(', ') : none
+    }
+
     const formatDailyMaintenanceStats = (result: DailyMaintenanceResult): { label: string; value: string }[] => {
         const stats = [
             { label: 'Middage afholdt', value: `${result.consume.consumed}` },
@@ -151,6 +164,7 @@ export const useMaintenance = () => {
         if (result.scaffold) {
             stats.push({ label: 'Bookinger', value: formatScaffoldResult(result.scaffold) })
         }
+        stats.push({ label: NOTIFICATION_COUNT_WORDS.label, value: formatNotificationCounts(result.notifications) })
         return stats
     }
 

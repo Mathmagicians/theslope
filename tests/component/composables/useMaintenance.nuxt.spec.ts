@@ -1,15 +1,19 @@
 import {beforeAll, describe, expect, it} from 'vitest'
 import {useMaintenance} from '~/composables/useMaintenance'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
+import {NOTIFICATION_COUNT_WORDS} from '~/config/notificationTemplates'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not at module level
 type Maintenance = ReturnType<typeof useMaintenance>
 let formatMonthlyBillingStats: Maintenance['formatMonthlyBillingStats']
+let formatDailyMaintenanceStats: Maintenance['formatDailyMaintenanceStats']
 let parseResultSummary: Maintenance['parseResultSummary']
 let formatResultSummary: Maintenance['formatResultSummary']
 beforeAll(() => {
-    ({formatMonthlyBillingStats, parseResultSummary, formatResultSummary} = useMaintenance())
+    ({formatMonthlyBillingStats, formatDailyMaintenanceStats, parseResultSummary, formatResultSummary} = useMaintenance())
 })
 const {JobType} = useMaintenanceValidation()
 
@@ -41,6 +45,25 @@ describe('formatMonthlyBillingStats', () => {
         ]})
 
         expect(stat(stats, 'Afventer')).toBe('2')
+    })
+})
+
+// The job runs page's notifications line is compact like the bookings line and always shows: per sender event its
+// symbol and the notifications sent; an event that sent none is left out, and a line with no event left reads none
+describe('formatDailyMaintenanceStats', () => {
+    const {BOOKING_STATUS, MONTHLY_BILLING, CHEF_DEADLINES} = useDeliveryValidation().SenderEventSchema.enum
+    const {symbols: symbol, none} = NOTIFICATION_COUNT_WORDS
+
+    it.each([
+        {run: 'sent booking status notifications', notifications: {[BOOKING_STATUS]: {sent: 8}}, line: `${symbol[BOOKING_STATUS]} 8`},
+        {run: 'sent no booking status notification and monthly billing ones', notifications: {[BOOKING_STATUS]: {sent: 0}, [MONTHLY_BILLING]: {sent: 3}}, line: `${symbol[MONTHLY_BILLING]} 3`},
+        {run: 'sent booking status and chef deadlines notifications', notifications: {[BOOKING_STATUS]: {sent: 8}, [CHEF_DEADLINES]: {sent: 2}}, line: `${symbol[BOOKING_STATUS]} 8, ${symbol[CHEF_DEADLINES]} 2`},
+        {run: 'sent no notification', notifications: {[BOOKING_STATUS]: {sent: 0}}, line: none},
+        {run: 'counted no sender event, as a run before the counts', notifications: {}, line: none}
+    ])('GIVEN a run that $run WHEN its stats format THEN the notifications line reads $line', ({notifications, line}) => {
+        const stats = formatDailyMaintenanceStats(OrderFactory.defaultDailyMaintenanceResult({notifications}))
+
+        expect(stat(stats, NOTIFICATION_COUNT_WORDS.label)).toBe(line)
     })
 })
 

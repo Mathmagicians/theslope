@@ -26,13 +26,8 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 
-// The scaffolder reads the app config, and its error log builds errors, from the Nitro auto-import scope; the config
-// module calls Nuxt's defineAppConfig, which the unit runtime lacks
-const appConfig = await vi.hoisted(async () => {
-    vi.stubGlobal('defineAppConfig', <T>(config: T) => config)
-    return (await import('~/app.config')).default
-})
-vi.stubGlobal('useAppConfig', () => appConfig)
+// The scaffolder reads the app config, and its error log builds errors, from the Nitro auto-import scope
+await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).stubAppConfig())
 vi.stubGlobal('createError', createError)
 
 // The repositories stand for the database the unit runtime lacks; the snapshot builder runs as written, and with it the

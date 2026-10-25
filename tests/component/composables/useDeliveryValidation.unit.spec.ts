@@ -1,8 +1,10 @@
 import {describe, expect, it} from 'vitest'
-import {deliveredVersions, useDeliveryValidation} from '~/composables/useDeliveryValidation'
+import {deliveredVersions, useDeliveryValidation, type Delivery, type DesiredDelivery} from '~/composables/useDeliveryValidation'
+import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 
-const {DeliveryKindSchema, DeliveredVersionsSchema} = useDeliveryValidation()
+const {DeliveryKindSchema, DeliveredVersionsSchema, deliveryReferencePrefix, coveringDeliveries, shouldSend} = useDeliveryValidation()
 const {ARCHIVE, EMAIL, SMS} = DeliveryKindSchema.enum
+const {Kind} = NotificationFactory
 
 describe('deliveredVersions', () => {
     it.each([
@@ -19,22 +21,68 @@ describe('DeliveredVersionsSchema', () => {
     })
 })
 
-// The delivery read's query (GET /api/admin/sender/delivery): one subject type and its subjects' ids, one or repeated
-describe('DeliveryQuerySchema', () => {
-    const {DeliveryQuerySchema, DeliverySubjectSchema} = useDeliveryValidation()
-    const {BILLING_PERIOD} = DeliverySubjectSchema.enum
-
+// A Delivery row's reference leads with the notification, the channel and the user, whatever the user's address
+describe('deliveryReferencePrefix', () => {
     it.each([
-        {query: 'one id', given: {subjectType: BILLING_PERIOD, subjectIds: '7'}, ids: [7]},
-        {query: 'repeated ids', given: {subjectType: BILLING_PERIOD, subjectIds: ['7', '8']}, ids: [7, 8]}
-    ])('GIVEN $query WHEN parsed THEN it reads the ids as numbers', ({given, ids}) => {
-        expect(DeliveryQuerySchema.parse(given)).toEqual({subjectType: BILLING_PERIOD, subjectIds: ids})
+        {notification: Kind.WAITLIST_JOINED, channel: EMAIL, userId: 7},
+        {notification: Kind.TICKET_SOLD, channel: SMS, userId: 12}
+    ])('GIVEN $notification on $channel to user $userId THEN the prefix names the three, the user by its id', ({notification, channel, userId}) => {
+        expect(deliveryReferencePrefix(notification, channel, userId)).toBe(`${notification}:${channel}:user-${userId}/`)
     })
+})
 
+// A recorded row covers a desired delivery of the same subject, version, notification, channel and user, a mailbox's
+// row a delivery to a mailbox; a delivery is sent when nothing covers it, and an admin's re-send sends it whatever covers it
+describe('coveringDeliveries and shouldSend', () => {
+    const {TICKET_WAITLIST, ORDER} = useDeliveryValidation().DeliverySubjectSchema.enum
+    const desired = NotificationFactory.defaultDesiredDelivery({subjectType: TICKET_WAITLIST, userId: 6})
+    // What a recorded row has of its own, beside the desired delivery's key
+    type RowKey = Partial<DesiredDelivery> & {kind?: Delivery['kind']}
+
+    it.each<{recorded: string, rows: RowKey[], delivery?: Partial<DesiredDelivery>, adminOverride: boolean, covered: number, send: boolean}>([
+        {recorded: 'no row', rows: [], adminOverride: false, covered: 0, send: true},
+        {recorded: 'a row of the same key', rows: [{}], adminOverride: false, covered: 1, send: false},
+        {recorded: 'two rows of the same key', rows: [{}, {}], adminOverride: false, covered: 2, send: false},
+        {recorded: 'a row of another user whose address masks alike', rows: [{userId: 7}], adminOverride: false, covered: 0, send: true},
+        {recorded: 'a row of another version', rows: [{version: desired.version + 1}], adminOverride: false, covered: 0, send: true},
+        {recorded: 'a row of another notification', rows: [{notification: Kind.TICKET_SOLD}], adminOverride: false, covered: 0, send: true},
+        {recorded: 'a row of another channel', rows: [{kind: SMS}], adminOverride: false, covered: 0, send: true},
+        {recorded: 'a row of another subject', rows: [{subjectType: ORDER}], adminOverride: false, covered: 0, send: true},
+        {recorded: 'a row of the same key, re-sent by an admin', rows: [{}], adminOverride: true, covered: 1, send: true},
+        {recorded: 'a user\'s row of the same subject, version and notification, the delivery to a mailbox', rows: [{}], delivery: {userId: null}, adminOverride: false, covered: 0, send: true},
+        {recorded: 'a mailbox\'s row of the same subject, version and notification, the delivery to the mailbox', rows: [{userId: null}], delivery: {userId: null}, adminOverride: false, covered: 1, send: false}
+    ])('GIVEN $recorded WHEN asked THEN $covered rows cover the delivery and it is sent: $send', ({rows, delivery, adminOverride, covered, send}) => {
+        const recorded = rows.map(({kind, ...key}) => NotificationFactory.recordedDelivery({...desired, ...key}, kind))
+        const asked = {...desired, ...delivery}
+
+        expect(coveringDeliveries(recorded, asked, EMAIL)).toEqual(recorded.slice(0, covered))
+        expect(shouldSend(recorded, asked, EMAIL, adminOverride)).toBe(send)
+    })
+})
+
+// The delivery read's query (GET /api/admin/sender/delivery): the recorded deliveries of one subject type and its
+// subjects' ids, one or repeated; or the dry run of the booking status sender event's desired deliveries. Each names
+// its read
+describe('DeliveryQuerySchema', () => {
+    const {DeliveryQuerySchema, DeliverySubjectSchema, SenderEventSchema, DeliveryReadSchema} = useDeliveryValidation()
+    const {BILLING_PERIOD} = DeliverySubjectSchema.enum
+    const SenderEvent = SenderEventSchema.enum
+    const Read = DeliveryReadSchema.enum
+
+    // A refused query parses to null
     it.each([
-        {query: 'an unknown subject type', given: {subjectType: 'NOT_A_SUBJECT', subjectIds: '7'}},
-        {query: 'an id that is no number', given: {subjectType: BILLING_PERIOD, subjectIds: 'abc'}}
-    ])('GIVEN $query WHEN parsed THEN it is refused', ({given}) => {
-        expect(DeliveryQuerySchema.safeParse(given).success).toBe(false)
+        {query: 'one id', given: {subjectType: BILLING_PERIOD, subjectIds: '7'}, parsed: {read: Read.RECORDED, subjectType: BILLING_PERIOD, subjectIds: [7]}},
+        {query: 'repeated ids', given: {subjectType: BILLING_PERIOD, subjectIds: ['7', '8']}, parsed: {read: Read.RECORDED, subjectType: BILLING_PERIOD, subjectIds: [7, 8]}},
+        {query: 'the booking status sender event', given: {dryRun: SenderEvent.BOOKING_STATUS}, parsed: {read: Read.DRY_RUN, senderEvent: SenderEvent.BOOKING_STATUS}},
+        {query: 'the monthly billing sender event', given: {dryRun: SenderEvent.MONTHLY_BILLING}, parsed: null},
+        {query: 'the chef deadlines sender event', given: {dryRun: SenderEvent.CHEF_DEADLINES}, parsed: null},
+        {query: 'an unknown sender event', given: {dryRun: 'NOT_A_SENDER_EVENT'}, parsed: null},
+        {query: 'an unknown subject type', given: {subjectType: 'NOT_A_SUBJECT', subjectIds: '7'}, parsed: null},
+        {query: 'an id that is no number', given: {subjectType: BILLING_PERIOD, subjectIds: 'abc'}, parsed: null},
+        {query: 'nothing', given: {}, parsed: null}
+    ])('GIVEN a query of $query WHEN parsed THEN it names its read, or is refused', ({given, parsed}) => {
+        const result = DeliveryQuerySchema.safeParse(given)
+
+        expect(result.success ? result.data : null).toEqual(parsed)
     })
 })

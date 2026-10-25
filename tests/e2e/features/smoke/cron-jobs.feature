@@ -11,6 +11,6 @@ Feature: Cron jobs
 
     Examples:
       | job               |
-      | Heynabo import    |
-      | daily maintenance |
-      | monthly billing   |
+      | HEYNABO_IMPORT    |
+      | DAILY_MAINTENANCE |
+      | MONTHLY_BILLING   |

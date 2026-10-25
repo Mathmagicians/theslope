@@ -46,7 +46,7 @@ const {BOOKING_STATUS} = SenderEventSchema.enum
 
 const LOG = `📮 > SENDER > [EVENT ${BOOKING_STATUS}]`
 
-const nothingSent = (): DeliveryResult => ({counts: {sent: 0, unaddressed: 0}})
+const nothingSent = (): DeliveryResult => ({counts: {sent: 0}})
 
 // The booking is saved before its notifications go: the delivery step logs a failure, and the caller gets nothing sent
 const neverThrows = <A extends unknown[]>(notify: (...args: A) => Promise<DeliveryResult>) =>
@@ -69,8 +69,8 @@ export interface WaitlistDinnerContext {
 const dinnerLabel = ({date, menuTitle}: WaitlistDinnerContext): string => `${formatDate(date)} · ${menuTitle}`
 
 /**
- * A booking notification resolved for its user: the address (null with no user to go to), the user it goes to, the
- * name it greets, the dinner
+ * A booking notification resolved for its user: the address and the user it goes to (null where the records name
+ * none), the name it greets, the dinner
  */
 interface ResolvedNotification {
     to: string | null
@@ -356,11 +356,15 @@ const desiredOf = async (d1Client: D1Database, owed: OwedNotifications, history?
     const versioned = idsOf([...owed.buildups, ...owed.ticketsSold, ...owed.waitlistTicketsSold, ...owed.waitlistPortionsAssigned].map(outcome => outcome.dinnerEventId))
     const rows = history ?? (versioned.length === 0 ? [] : await fetchOrderHistoryForDinners(d1Client, versioned))
     const versionOf = versionsOf(rows, await buildupDeliveries(d1Client, notifications))
-    return notifications.map(notification => ({
-        ...notification.subject, version: versionOf(notification.subject), notification: notification.kind, userId: notification.userId,
-        to: notification.to, notificationChannels: notification.notificationChannels, values: notification.values,
-        correlationId: `dinner ${notification.dinner.dinnerEventId}`
-    }))
+    return notifications.flatMap(notification => {
+        const {to, userId} = notification
+        if (to === null || userId === null) return []
+        return [{
+            ...notification.subject, version: versionOf(notification.subject), notification: notification.kind, userId, to,
+            notificationChannels: notification.notificationChannels, values: notification.values,
+            correlationId: `dinner ${notification.dinner.dinnerEventId}`
+        }]
+    })
 }
 
 // A dinner's line asks its chef for portions once its queue reaches the threshold: the join that left the longest
@@ -458,8 +462,7 @@ const desiredOnSeason = async (d1Client: D1Database, seasonId: number | null): P
  *
  * The delivery dry run shows the admin what the nightly run would send before SHOULD_SEND_BOOKING_EMAILS_FLAG goes on
  * in an environment. It ignores the flag, reads the same dinners and their delivery records, and sends and records
- * nothing: per user how many of each notification would go and how many are already recorded, per notification how
- * many have no user to go to.
+ * nothing: per user how many of each notification would go and how many are already recorded.
  */
 export const sendNotifications = neverThrows(
     async (

@@ -24,6 +24,9 @@ This document is the single source of truth for:
   response (`waitForApi`) for a changing state ("Test Helper Utilities", "Waiting Patterns"); never a fixed sleep and
   never a hand-picked timeout number
 - Factories for data, salted and tracked at creation, cleaned up in `afterAll` without swallowing errors (Rules 2, 3)
+- Gherkin speaks the domain as the code names it ("BDD", "Scenarios are DRY"): look each noun, value and event up in
+  `prisma/schema.prisma`, the validation composables and `app/config/` before writing it; a cell holds the enum value
+  as it is; invent no word, term or constant
 
 **If test code violates ANY rule in testing.md → STOP and refactor.**
 

@@ -1,6 +1,7 @@
 import {describe, it, expect} from 'vitest'
 import {useBookingValidation, type OrderAuditAction, type OrderHistoryDisplay} from '~/composables/useBookingValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import type {PortionTicket} from '~/composables/useTicketPriceValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
@@ -367,35 +368,36 @@ describe('useBookingValidation', () => {
     })
 
     describe('DailyMaintenanceResultSchema', () => {
-      const validResult = {
+      const validResult = () => ({
         jobRunId: 42,
         consume: {consumed: 5},
         close: {closed: 10},
         transact: {created: 8},
         clearWaitlist: {cleared: 3, dinners: [{dinnerEventId: 644, date: new Date('2026-10-12'), cleared: 3}]},
-        // The owed booking mails of the dinners still to come that the step sent again, per dinner like clearWaitlist
-        resendNotifications: {resent: 2, dinners: [{dinnerEventId: 645, date: new Date('2026-10-13'), resent: 2}]},
+        // The emails the run sent per sender event
+        notifications: {[useDeliveryValidation().SenderEventSchema.enum.BOOKING_STATUS]: {sent: 2}},
         scaffold: OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 20}, unchanged: 100, households: 10})
-      }
+      })
 
       it('GIVEN valid maintenance result WHEN parsing THEN succeeds', () => {
-        const result = DailyMaintenanceResultSchema.parse(validResult)
+        const given = validResult()
+        const result = DailyMaintenanceResultSchema.parse(given)
         expect(result.jobRunId).toBe(42)
         expect(result.consume.consumed).toBe(5)
         expect(result.close.closed).toBe(10)
         expect(result.transact.created).toBe(8)
         expect(result.clearWaitlist.cleared).toBe(3)
         expect(result.clearWaitlist.dinners).toEqual([{dinnerEventId: 644, date: new Date('2026-10-12'), cleared: 3}])
-        expect(result.resendNotifications).toEqual(validResult.resendNotifications)
+        expect(result.notifications).toEqual(given.notifications)
         expect(result.scaffold?.seasonId).toBe(1)
       })
 
       // A job run recorded before a step existed reads that step as zero
       it.each([
         {step: 'clearWaitlist', zero: {cleared: 0, dinners: []}},
-        {step: 'resendNotifications', zero: {resent: 0, dinners: []}}
+        {step: 'notifications', zero: {}}
       ] as const)('GIVEN a result without $step WHEN parsing THEN $step defaults to zero', ({step, zero}) => {
-        const {[step]: _omitted, ...withoutStep} = validResult
+        const {[step]: _omitted, ...withoutStep} = validResult()
         expect(DailyMaintenanceResultSchema.parse(withoutStep)[step]).toEqual(zero)
       })
     })

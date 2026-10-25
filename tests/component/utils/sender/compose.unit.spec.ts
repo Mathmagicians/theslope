@@ -1,11 +1,13 @@
 import {describe, expect, it} from 'vitest'
 import {composeEmail, missingAddress} from '~~/server/utils/sender/compose'
 import {deploymentFromUrl, useNotificationValidation} from '~/composables/useNotificationValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 import {NOTIFICATION_SENDER_NAME, NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES, senderAddress, senderDisplayName} from '~/config/notificationTemplates'
 import {maskEmail} from '~~/workers/common/mask'
 
 const {NotificationMessageSchema} = useNotificationValidation()
+const {deliveryReferencePrefix, DeliveryKindSchema} = useDeliveryValidation()
 const config = NotificationFactory.config()
 const toAnna = {kind: 'TEST', to: 'anna@example.com', values: {}} as const
 
@@ -82,10 +84,10 @@ describe('composeEmail', () => {
     })
 
     // Two logins whose addresses mask alike are two recipients; the masked address stays in the key for grep
-    it('keys a mail to a login on the login\'s id ahead of the masked recipient', () => {
+    it('keys a mail to a login on the login\'s delivery reference prefix ahead of the masked recipient', () => {
         const message = composeEmail(config, {...toAnna, userId: 7})
 
-        const prefix = `TEST:EMAIL:user-7/${maskEmail(toAnna.to)}:`
+        const prefix = `${deliveryReferencePrefix(NotificationFactory.Kind.TEST, DeliveryKindSchema.enum.EMAIL, 7)}${maskEmail(toAnna.to)}:`
         expect(message.meta.dedupeKey.startsWith(prefix)).toBe(true)
         expect(message.meta.dedupeKey.slice(prefix.length)).toMatch(/^[0-9a-f-]{36}$/)
     })

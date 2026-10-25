@@ -70,7 +70,7 @@ jobs:
       - name: Download the BDD results and the API spec
         if: env.PUBLISH == 'true'
         run: |
-          for name in bdd-api bdd-ui bdd-smoke openapi; do
+          for name in bdd-api bdd-ui bdd-ui-serial bdd-smoke openapi; do
             gh run download "$RUN_ID" -n "$name" -D ".output/developer/artifacts/$name" || echo "no $name artifact on run $RUN_ID"
           done
       - run: make developer-assemble env="$ENV" run="$RUN_ID" version="$RELEASE_VERSION" sha="$COMMIT_SHA" url="$URL"

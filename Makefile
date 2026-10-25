@@ -320,7 +320,7 @@ test-report: ## Markdown summary of a Playwright suite - report=<json> title=<te
 suite ?= api
 bdd_report = .output/bdd/reports/e2e-$(suite)-bdd.json
 
-bdd-report: ## BDD summary of a suite - [suite=api|ui|smoke] [report=<cucumber json>] [title=<text>] [note=<text>]
+bdd-report: ## BDD summary of a suite - [suite=api|ui|ui-serial|smoke] [report=<cucumber json>] [title=<text>] [note=<text>]
 	@report="$(or $(report),$(bdd_report))"; title="$(or $(title),BDD $(suite) tests)"; \
 	if [ -f "$$report" ]; then \
 		jq -r -f scripts/bdd-report.jq --arg title "$$title" --arg note "$(note)" "$$report" \
@@ -338,7 +338,7 @@ DEVELOPER_OUT := .output/developer
 DEVELOPER_PUBLIC := $(DEVELOPER_OUT)/public
 site ?= $(DEVELOPER_OUT)/site
 artifacts ?= $(DEVELOPER_OUT)/artifacts
-DEVELOPER_SUITES := api ui smoke
+DEVELOPER_SUITES := api ui ui-serial smoke
 DEVELOPER_ASSEMBLE_USAGE := usage: make developer-assemble env=<dev|prod> run=<pipeline run id> version=<version> sha=<commit> [url=<app url>] [site=] [artifacts=]
 # A pipeline run that deploys uploads the artifact `deployment`: RELEASE_VERSION, COMMIT_SHA, ENV and URL from its step outputs
 developer-resolve: ## What a pipeline run published, from its deployment artifact, as env lines - run=<pipeline run id> [artifacts=]
@@ -544,7 +544,8 @@ typegen: ## Regenerate wrangler binding typings for every worker from wrangler.t
 # SENDER EVENTS — trigger a notification event on an environment (the cron twins' pattern, via theslope_call)
 # ============================================================================
 .PHONY: theslope-sender-event-test-local theslope-sender-event-test-dev theslope-sender-event-test-prod \
-        theslope-sender-event-monthly-billing-local theslope-sender-event-monthly-billing-dev theslope-sender-event-monthly-billing-prod queues-info-dev queues-info-prod
+        theslope-sender-event-monthly-billing-local theslope-sender-event-monthly-billing-dev theslope-sender-event-monthly-billing-prod queues-info-dev queues-info-prod \
+        theslope-sender-dry-run-booking-status-local theslope-sender-dry-run-booking-status-dev theslope-sender-dry-run-booking-status-prod
 
 # $(1)=env file. The mail goes to the environment's admin mailbox
 define theslope_sender_event_test
@@ -574,6 +575,20 @@ theslope-sender-event-monthly-billing-dev: ## Re-send the accountant mail for a 
 
 theslope-sender-event-monthly-billing-prod: ## Re-send the accountant mail for a period on prod — bpid=<billingPeriodSummaryId>
 	$(call theslope_sender_event_monthly_billing,$(ENV_prod))
+
+# $(1)=env file. The delivery dry run: per user, the booking notifications the next run sends and those already recorded
+define theslope_sender_dry_run_booking_status
+	$(call theslope_call,$(1),"$$BASE_URL/api/admin/sender/delivery?dryRun=BOOKING_STATUS")
+endef
+
+theslope-sender-dry-run-booking-status-local: ## Delivery dry run of the active season's booking notifications on localhost
+	$(call theslope_sender_dry_run_booking_status,$(ENV_local))
+
+theslope-sender-dry-run-booking-status-dev: ## Delivery dry run of the active season's booking notifications on dev
+	$(call theslope_sender_dry_run_booking_status,$(ENV_dev))
+
+theslope-sender-dry-run-booking-status-prod: ## Delivery dry run of the active season's booking notifications on prod
+	$(call theslope_sender_dry_run_booking_status,$(ENV_prod))
 
 queues-info-dev: ## Backlog of the dev sender queue
 	@npx wrangler queues info theslope-sender-dev

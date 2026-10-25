@@ -126,9 +126,19 @@ jobs:
           name: playwright-results-api
           path: ${{ env.E2E_RESULTS_DIR }}/e2e-api-results.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: bdd-api
+          path: |
+            ${{ env.BDD_RESULTS_DIR }}/e2e-api-bdd.json
+            ${{ env.BDD_RESULTS_DIR }}/e2e-api-bdd/
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: E2E api test summary
         if: ${{ !cancelled() && steps.e2e_api_tests.outcome != 'skipped' }}
-        run: make test-report report=$E2E_RESULTS_DIR/e2e-api-results.json title="E2E api tests" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          make test-report report=$E2E_RESULTS_DIR/e2e-api-results.json title="E2E api tests" >> "$GITHUB_STEP_SUMMARY"
+          make bdd-report suite=api >> "$GITHUB_STEP_SUMMARY"
       - name: Run e2e ui tests
         id: e2e_ui_tests
         run: npm run test:e2e:ui
@@ -145,9 +155,19 @@ jobs:
           name: playwright-results-ui
           path: ${{ env.E2E_RESULTS_DIR }}/e2e-ui-results.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: bdd-ui
+          path: |
+            ${{ env.BDD_RESULTS_DIR }}/e2e-ui-bdd.json
+            ${{ env.BDD_RESULTS_DIR }}/e2e-ui-bdd/
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: E2E ui test summary
         if: ${{ !cancelled() && steps.e2e_ui_tests.outcome != 'skipped' }}
-        run: make test-report report=$E2E_RESULTS_DIR/e2e-ui-results.json title="E2E ui tests" note="UI test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          make test-report report=$E2E_RESULTS_DIR/e2e-ui-results.json title="E2E ui tests" note="UI test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
+          make bdd-report suite=ui >> "$GITHUB_STEP_SUMMARY"
       - name: Run e2e ui serial tests
         id: e2e_ui_serial_tests
         run: npm run test:e2e:ui:serial
@@ -164,9 +184,19 @@ jobs:
           name: playwright-results-ui-serial
           path: ${{ env.E2E_RESULTS_DIR }}/e2e-ui-serial-results.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: bdd-ui-serial
+          path: |
+            ${{ env.BDD_RESULTS_DIR }}/e2e-ui-serial-bdd.json
+            ${{ env.BDD_RESULTS_DIR }}/e2e-ui-serial-bdd/
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: E2E ui serial test summary
         if: ${{ !cancelled() && steps.e2e_ui_serial_tests.outcome != 'skipped' }}
-        run: make test-report report=$E2E_RESULTS_DIR/e2e-ui-serial-results.json title="E2E ui serial tests" note="UI serial test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          make test-report report=$E2E_RESULTS_DIR/e2e-ui-serial-results.json title="E2E ui serial tests" note="UI serial test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
+          make bdd-report suite=ui-serial >> "$GITHUB_STEP_SUMMARY"
       # Every build renders docs/releases/*.md to one-page PDFs here, where Playwright is installed; create-release attaches them
       - name: Release notes PDF
         env:

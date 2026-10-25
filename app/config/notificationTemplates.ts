@@ -5,6 +5,8 @@
  * `senderName`, `site`, `environment` and `dedupeKey` are filled by composeEmail for every kind. The signature is appended
  * to every text. Plain module (not app.config itself) so unit tests can import the real templates.
  */
+import type {SenderEvent} from '~/composables/useDeliveryValidation'
+
 export const NOTIFICATION_SENDER_NAME = 'Skråningen'
 export const NOTIFICATION_SENDER_DOMAIN = 'skraaningen.dk'
 
@@ -57,6 +59,13 @@ export const NOTIFICATION_TEMPLATES = {
         subject: '{{senderName}}: {{tickets}} til {{dinner}} er solgt',
         text: 'Kære {{name}},\n\n{{dinner}}\n{{tickets}} solgt til {{buyer}}\n{{ticket}}\nI betaler ikke længere for den.\n\nSe bookingen: {{bookingUrl}}'
     }
+}
+
+/** The job runs page's line of the notifications a run sent: a symbol per sender event */
+export const NOTIFICATION_COUNT_WORDS = {
+    label: 'Notifikationer',
+    symbols: {BOOKING_STATUS: 'booking', MONTHLY_BILLING: 'bill', CHEF_DEADLINES: 'chef'} satisfies Record<SenderEvent, string>,
+    none: '0'
 }
 
 /** The mail kinds, one per template: `NotificationKind.WAITLIST_JOINED` */

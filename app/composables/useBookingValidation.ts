@@ -11,6 +11,7 @@ import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {useCoreValidation, IdSchema} from '~/composables/useCoreValidation'
 import {useTicketPriceValidation, type PortionTicket} from '~/composables/useTicketPriceValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {chunkArray, ReconciliationBucketSchema} from '~/utils/batchUtils'
 import {sumAmounts} from '~/utils/ledger'
 import {ExpenseFragmentSchema, deserializeExpense} from '~/composables/fragments/domainFragments'
@@ -924,11 +925,7 @@ export const useBookingValidation = () => {
         dinners: z.array(z.object({dinnerEventId: IdSchema, date: z.coerce.date(), cleared: z.number().int().positive()})).default([])
     })
 
-    // Result of sending the booking mails the dinners still to come owe: the mails queued, and each dinner's share by date
-    const ResendNotificationsResultSchema = z.object({
-        resent: z.number().int().nonnegative(),
-        dinners: z.array(z.object({dinnerEventId: IdSchema, date: z.coerce.date(), resent: z.number().int().positive()})).default([])
-    })
+    const {SenderEventSchema, DeliveryCountsSchema} = useDeliveryValidation()
 
     /**
      * Combined result of daily maintenance endpoint
@@ -942,7 +939,8 @@ export const useBookingValidation = () => {
         clearWaitlist: ClearWaitlistResultSchema.default({cleared: 0, dinners: []}),
         initPrefs: InitPreferencesResultSchema.default({initialized: 0}),
         scaffold: ScaffoldResultSchema.nullable(),
-        resendNotifications: ResendNotificationsResultSchema.default({resent: 0, dinners: []})
+        // The notifications the run sent per sender event; a stored result without the field reads none
+        notifications: z.partialRecord(SenderEventSchema, DeliveryCountsSchema).default({})
     })
 
     /**
@@ -1047,7 +1045,6 @@ export const useBookingValidation = () => {
         CreateTransactionsResultSchema,
         InitPreferencesResultSchema,
         ClearWaitlistResultSchema,
-        ResendNotificationsResultSchema,
         DailyMaintenanceResultSchema,
 
         // Booking plan and results
@@ -1134,7 +1131,6 @@ export type CreateTransactionsResult = z.infer<ReturnType<typeof useBookingValid
 export type InitPreferencesResult = z.infer<ReturnType<typeof useBookingValidation>['InitPreferencesResultSchema']>
 export type DailyMaintenanceResult = z.infer<ReturnType<typeof useBookingValidation>['DailyMaintenanceResultSchema']>
 export type ClearWaitlistResult = z.infer<ReturnType<typeof useBookingValidation>['ClearWaitlistResultSchema']>
-export type ResendNotificationsResult = z.infer<ReturnType<typeof useBookingValidation>['ResendNotificationsResultSchema']>
 
 // Booking plan and results
 export type OrderBucket = z.infer<ReturnType<typeof useBookingValidation>['OrderBucketSchema']>

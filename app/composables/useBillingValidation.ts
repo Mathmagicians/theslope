@@ -1,6 +1,6 @@
 import {z} from 'zod'
 import {TicketTypeSchema, DinnerModeSchema, OrderStateSchema, LedgerEntryTypeSchema} from '~~/prisma/generated/zod'
-import {parse as parseDate} from 'date-fns'
+import {parse as parseDate, endOfMonth} from 'date-fns'
 import {
     ExpenseFragmentSchema,
     SerializedExpenseFragmentSchema,
@@ -10,6 +10,7 @@ import {
 } from '~/composables/fragments/domainFragments'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {sumAmounts} from '~/utils/ledger'
+import {formatDate} from '~/utils/date'
 import type {DinnerEventInfo, DinnerMode} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
@@ -451,22 +452,6 @@ export const useBillingValidation = () => {
     const CSV_HEADER = '"Kunde nr",Adresse,"Total DKK/måned","Opkrævning periode start","Opkrævning periode slut",Opgørelsesdato,Note'
 
     /**
-     * Format date for CSV export (DD/MM/YYYY)
-     */
-    const formatCsvDate = (date: Date): string => {
-        const day = date.getDate().toString().padStart(2, '0')
-        const month = (date.getMonth() + 1).toString().padStart(2, '0')
-        const year = date.getFullYear()
-        return `${day}/${month}/${year}`
-    }
-
-    /**
-     * Get last day of month for a given date
-     */
-    const getLastDayOfMonth = (date: Date): Date =>
-        new Date(date.getFullYear(), date.getMonth() + 1, 0)
-
-    /**
      * Generate CSV row for a single invoice
      * Uses denormalized pbsId/address (frozen at billing time)
      */
@@ -475,9 +460,9 @@ export const useBillingValidation = () => {
         summary: z.infer<typeof BillingPeriodSummaryDetailSchema>
     ): string => {
         const totalDKK = convertPriceToDecimalFormat(invoice.amount)
-        const paymentStart = formatCsvDate(summary.paymentDate)
-        const paymentEnd = formatCsvDate(getLastDayOfMonth(summary.paymentDate))
-        const cutoff = formatCsvDate(summary.cutoffDate)
+        const paymentStart = formatDate(summary.paymentDate)
+        const paymentEnd = formatDate(endOfMonth(summary.paymentDate))
+        const cutoff = formatDate(summary.cutoffDate)
 
         return `${invoice.pbsId},"${invoice.address}",${totalDKK},${paymentStart},${paymentEnd},${cutoff},`
     }
@@ -758,8 +743,6 @@ export const useBillingValidation = () => {
 
         // CSV Export Functions
         CSV_HEADER,
-        formatCsvDate,
-        getLastDayOfMonth,
         generateCsvRow,
         generateBillingCsv,
         generateCsvFilename,

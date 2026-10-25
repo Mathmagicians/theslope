@@ -69,7 +69,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             // The dinners as they stand after the scaffold owe the notifications of its outcomes too
             const {counts} = await sendNotifications(d1Client, email, activeSeasonId, {jobRunId: jobRun.id})
             notifications = {[BOOKING_STATUS]: counts}
-            console.info(`${LOG} notifications: ${BOOKING_STATUS} sent ${counts.sent}, unaddressed ${counts.unaddressed}`)
+            console.info(`${LOG} notifications: ${BOOKING_STATUS} sent ${counts.sent}`)
         } else {
             console.info(`${LOG} initPrefs/scaffold/notifications skipped: no active season`)
         }

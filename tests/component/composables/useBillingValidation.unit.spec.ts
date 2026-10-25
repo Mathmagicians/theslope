@@ -2,6 +2,7 @@ import {describe, it, expect} from 'vitest'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useTicket} from '~/composables/useTicket'
 import {DinnerMode} from '~/composables/useBookingValidation'
+import {formatDate} from '~/utils/date'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 
@@ -30,6 +31,15 @@ describe('useBillingValidation', () => {
             expect(row).toContain(String(invoice.pbsId))
             expect(row).toContain(invoice.address)
             expect(row).toContain(String(convertPriceToDecimalFormat(invoice.amount)))
+        })
+
+        it('GIVEN a period WHEN generating a row THEN the payment period runs from the payment date to the last day of its month, then the cutoff date and an empty note', () => {
+            const paymentDate = new Date(2026, 1, 1)
+            const cutoffDate = new Date(2026, 0, 17)
+            const summary = {...BillingFactory.defaultSummaryData('test'), paymentDate, cutoffDate}
+            const invoice = BillingFactory.defaultInvoiceData('test')
+
+            expect(generateCsvRow(invoice, summary)).toMatch(new RegExp(`,${formatDate(paymentDate)},${formatDate(new Date(2026, 1, 28))},${formatDate(cutoffDate)},$`))
         })
     })
 

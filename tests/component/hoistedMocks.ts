@@ -54,3 +54,17 @@ export const mockRouteAndNavigation = ({path = '/', params = {}, query = {}}: {p
     const useRoute = () => mockRoute
     return {mockRoute, mockNavigateTo, landNavigation, useRoute}
 }
+
+/**
+ * The app config a server module reads through Nitro's `useAppConfig`, from `app.config.ts` as the app has it; the
+ * config module calls Nuxt's `defineAppConfig`, which the unit runtime lacks. Stubbed before the imports, so a module
+ * that reads the config as it loads finds it:
+ *
+ *   await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).stubAppConfig())
+ */
+export const stubAppConfig = async () => {
+    vi.stubGlobal('defineAppConfig', <T>(config: T) => config)
+    const appConfig = (await import('~/app.config')).default
+    vi.stubGlobal('useAppConfig', () => appConfig)
+    return appConfig
+}
