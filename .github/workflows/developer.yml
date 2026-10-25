@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: 'The CI/CD run to publish again'
-        required: true
+        description: 'The CI/CD run to publish again; empty publishes the latest successful deploying run on the branch'
+        required: false
         type: string
 
 concurrency:
@@ -30,12 +30,27 @@ jobs:
         with:
           fetch-depth: 1
       - name: Read what the run published
-        # The id reaches the script through env, and make writes it into its recipe, so only digits pass
+        # The id reaches the script through env, and make writes it into its recipe, so only digits pass. Without an id
+        # the branch's recent successful pipeline runs are the candidates, and the first with a deployment artifact wins
         env:
           RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+          BRANCH: ${{ github.ref_name }}
         run: |
-          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || { echo "❌ Not a run id: $RUN_ID"; exit 1; }
-          make developer-resolve run="$RUN_ID" | tee -a "$GITHUB_ENV"
+          if [ -n "$RUN_ID" ]; then
+            candidates="$RUN_ID"
+          else
+            candidates=$(gh run list --workflow "The CI/CD Pipeline" --branch "$BRANCH" --status success --limit 10 --json databaseId --jq '.[].databaseId')
+          fi
+          for id in $candidates; do
+            [[ "$id" =~ ^[0-9]+$ ]] || { echo "❌ Not a run id: $id"; exit 1; }
+            resolved=$(make developer-resolve run="$id")
+            if grep -qx 'PUBLISH=true' <<< "$resolved"; then
+              echo "$resolved" | tee -a "$GITHUB_ENV"
+              exit 0
+            fi
+            echo "Run $id has no deployment artifact"
+          done
+          echo "PUBLISH=false" | tee -a "$GITHUB_ENV"
       - uses: actions/setup-node@v7
         if: env.PUBLISH == 'true'
         with:

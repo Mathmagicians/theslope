@@ -11,6 +11,9 @@ at a time behind an explicit approval. The plan document is the deliverable; the
 ## Where the plan lives
 
 - `docs/features/<kind>-<name>.md` (`bug-fix-…`, `feature-proposal-…`); rename when the scope outgrows the name (plain `mv`, the user stages).
+- An upcoming release is a folder `docs/features/release-x.y.z/` holding its release doc (`chores-x.y.z.md` or
+  `feature-x.y.z.md`) and the specs it develops; `this-pr/` is the current pull request's. The release doc links its
+  specs; a spec names no release.
 - A shipped doc moves to `docs/features/archived/`, trimmed to pointers, and a proposal becomes a feature there:
   `feature-proposal-<name>.md` → `archived/feature-<name>.md`. What did not ship moves to its own proposal or the branch's follow-up doc first.
 - Header: **Status** | **Date** | **Updated** | **Branch**. A **Fix inventory** table at the top; one section per fix below in this order:
@@ -20,6 +23,20 @@ at a time behind an explicit approval. The plan document is the deliverable; the
 - References to an accepted ADR are `ADR-NNN [Title]`. A new ADR is proposed in the doc's ADR Notes by its semantic name only; it gets its number
   when it is written into `docs/adr.md`.
 - Prose in the doc follows the `documentation` skill (compact, factual, only what we do); decisions and OPEN items are the one place alternatives are written down.
+
+## Writing the spec
+
+- The spec speaks the domain: a person books, releases a ticket, joins the waiting list; the chef adds portions; the
+  admin re-sends; the nightly run sends what a background run left. The Solution says what the system does, never how
+  the code does it: no code blocks, config snippets or before/after code. The mockup and the Gherkin are its only
+  code blocks.
+- Names the user gave stay verbatim (`findClosestUserInHousehold`, `SHOULD_SEND_BOOKING_EMAILS_FLAG`); the Affected
+  table names files. The `file:line` trace, function names, shapes and diffs go in the chat round and the brief.
+- A decision is written as it was discussed, one plain sentence under its date: "Monthly billing sends through the same
+  code as the booking notifications (DRY)."
+- Gherkin keeps one Feature per topic. Cases that differ only in data are one Scenario Outline with Examples. A Then
+  states its outcome in numbers a reader checks: "a db admin sees `<records>` delivery records for the dinner", "the
+  email is sent to `<recipient>` `<emails>`" with `1 time`, `2 times`.
 
 ## Naming
 
@@ -196,6 +213,9 @@ file follow the sign-off.
 
 - **One item per round.** One package, entity group or decision per message; a decision the answer raises goes into the
   next round. Several decisions in one message are rejected unread.
+- **Domain question first, code context after.** A round opens with the decision in domain terms: who sees or does
+  what, and why it is asked now. Then comes the code it lands in, precisely: `file:line`, the shape, the callers. A term
+  the spec has not defined is never the subject of the question.
 - **Re-present the full change every round**, as the user will read it in the file: a schema change as a diff against the
   live block (`+` on the added lines, untouched columns kept for context — a full model without markers hides the change);
   a UX change as the mockup; a decision as `a) … b) … c) …` with one line of pro and con each, the drafted choice marked
