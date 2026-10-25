@@ -170,12 +170,13 @@ export const useCoreValidation = () => {
         updatedAt: z.coerce.date()
     })
 
-    // User schema for creation (API input validation)
+    // User schema for creation (API input validation); a user's channels and appearance are the user's own save, so an
+    // import or an upsert may leave them out and a new user gets the defaults
     const UserCreateSchema = BaseUserSchema.omit({
         id: true,
         createdAt: true,
         updatedAt: true
-    })
+    }).partial({notificationChannels: true, appearance: true})
 
     // User schema for updates
     const UserUpdateSchema = BaseUserSchema.partial().extend({
@@ -196,9 +197,10 @@ export const useCoreValidation = () => {
         dinnerPreferences: WeekDayMapSchemaOptional.optional().nullable()
     })
 
-    // Inhabitant schemas
+    // Inhabitant schemas. The create takes no preferences: the season initialises them, the preference write changes them
     const InhabitantCreateSchema = BaseInhabitantSchema.omit({
-        id: true
+        id: true,
+        dinnerPreferences: true
     }).extend({
         user: UserCreateSchema.optional()
     })

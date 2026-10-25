@@ -4,11 +4,13 @@ import { useCookingTeamValidation, type CookingTeamDisplay, type CookingTeamAssi
 import { useDutyValidation } from '~/composables/useDutyValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
+import { useBookingValidation } from '~/composables/useBookingValidation'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
-const { serializeWeekDayMap: serializeDinnerPreferences } = useCoreValidation()
+const { serializeWeekDayMap: serializeDinnerPreferences, createDefaultWeekdayMap: createDinnerPreferences } = useCoreValidation()
+const DinnerMode = useBookingValidation().DinnerModeSchema.enum
 
 describe('useCookingTeamValidation', () => {
   // Get validation utilities
@@ -74,15 +76,15 @@ describe('useCookingTeamValidation', () => {
       })
 
       it('should deserialize assignment with nested inhabitant (dinnerPreferences as JSON string)', () => {
-        // Use factory for inhabitant data (has dinnerPreferences as object)
-        const inhabitant = { ...HouseholdFactory.defaultInhabitantData(), id: 42 }
+        // Factory inhabitant with its dinnerPreferences as an object
+        const inhabitant = { ...HouseholdFactory.defaultInhabitantData(), id: 42, dinnerPreferences: createDinnerPreferences(DinnerMode.DINEIN) }
 
         // Simulate database response: assignment with serialized inhabitant
         const serialized = {
           ...SeasonFactory.defaultCookingTeamAssignment({ role: CHEF }),
           inhabitant: {
             ...inhabitant,
-            dinnerPreferences: serializeDinnerPreferences(inhabitant.dinnerPreferences!)
+            dinnerPreferences: serializeDinnerPreferences(inhabitant.dinnerPreferences)
           }
         }
 

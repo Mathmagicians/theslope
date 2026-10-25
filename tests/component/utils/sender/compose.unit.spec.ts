@@ -81,6 +81,15 @@ describe('composeEmail', () => {
         expect(message.meta.dedupeKey).not.toContain(toAnna.to)
     })
 
+    // Two logins whose addresses mask alike are two recipients; the masked address stays in the key for grep
+    it('keys a mail to a login on the login\'s id ahead of the masked recipient', () => {
+        const message = composeEmail(config, {...toAnna, userId: 7})
+
+        const prefix = `TEST:EMAIL:user-7/${maskEmail(toAnna.to)}:`
+        expect(message.meta.dedupeKey.startsWith(prefix)).toBe(true)
+        expect(message.meta.dedupeKey.slice(prefix.length)).toMatch(/^[0-9a-f-]{36}$/)
+    })
+
     it('carries cc and a correlation id when given', () => {
         const message = composeEmail(config, {...toAnna, cc: ['admin@example.com'], correlationId: 'jobRun:1'})
 

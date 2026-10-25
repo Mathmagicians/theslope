@@ -493,14 +493,19 @@ export const useBookingValidation = () => {
         ticketType: TicketTypeSchema.nullable()
     })
 
-    // A wish joined a dinner's waiting list
+    // A wish joined a dinner's waiting list: its place, the ticket it waits for, and the queue at its join
     const WaitlistJoinedSchema = z.object({
         dinnerEventId: IdSchema,
         inhabitantId: IdSchema,
         bookedByUserId: IdSchema,
+        entryId: z.number().int(),                                   // A preview's entries are unsaved and carry negative ids
         position: z.number().int().positive(),
         ticketType: TicketTypeSchema.nullable(),
+        isGuestTicket: z.boolean(),
+        ticketPriceId: IdSchema,
+        dinnerMode: DinnerModeSchema,
         queueSize: z.number().int().positive(),
+        queuedByType: z.partialRecord(TicketTypeSchema, z.number().int().positive()),
         portionNeed: z.number().nonnegative()
     })
 
@@ -508,20 +513,24 @@ export const useBookingValidation = () => {
     const TicketSaleSchema = z.object({
         dinnerEventId: IdSchema,
         ticketPriceId: IdSchema,
+        orderId: IdSchema,                                           // The released order, the buyer's now
+        dinnerMode: DinnerModeSchema,
+        isGuestTicket: z.boolean(),
         buyerInhabitantId: IdSchema,
         buyerHouseholdId: IdSchema,
         sellerHouseholdId: IdSchema,
         sellerInhabitantId: IdSchema.nullable()                      // The released order's inhabitant; null when a recovered sale's history row names none
     })
 
-    // The chef's extra portion went to a waiting entry: a regular order at the price written at join
+    // The chef's extra portion went to a waiting entry: a regular order at the price and eating mode written at join
     const WaitlistAssignedSchema = z.object({
         entryId: IdSchema,
         inhabitantId: IdSchema,
         isGuestTicket: z.boolean(),
         portions: z.number().nonnegative(),
         orderId: IdSchema,
-        ticketPriceId: IdSchema
+        ticketPriceId: IdSchema,
+        dinnerMode: DinnerModeSchema
     })
 
     // What one scaffold run did that its caller notifies about, one list per event; a run that finishes another run's
@@ -915,6 +924,12 @@ export const useBookingValidation = () => {
         dinners: z.array(z.object({dinnerEventId: IdSchema, date: z.coerce.date(), cleared: z.number().int().positive()})).default([])
     })
 
+    // Result of sending the booking mails the dinners still to come owe: the mails queued, and each dinner's share by date
+    const ResendNotificationsResultSchema = z.object({
+        resent: z.number().int().nonnegative(),
+        dinners: z.array(z.object({dinnerEventId: IdSchema, date: z.coerce.date(), resent: z.number().int().positive()})).default([])
+    })
+
     /**
      * Combined result of daily maintenance endpoint
      * Includes jobRunId for observability and parallel-safe test assertions
@@ -926,7 +941,8 @@ export const useBookingValidation = () => {
         transact: CreateTransactionsResultSchema,
         clearWaitlist: ClearWaitlistResultSchema.default({cleared: 0, dinners: []}),
         initPrefs: InitPreferencesResultSchema.default({initialized: 0}),
-        scaffold: ScaffoldResultSchema.nullable()
+        scaffold: ScaffoldResultSchema.nullable(),
+        resendNotifications: ResendNotificationsResultSchema.default({resent: 0, dinners: []})
     })
 
     /**
@@ -1031,6 +1047,7 @@ export const useBookingValidation = () => {
         CreateTransactionsResultSchema,
         InitPreferencesResultSchema,
         ClearWaitlistResultSchema,
+        ResendNotificationsResultSchema,
         DailyMaintenanceResultSchema,
 
         // Booking plan and results
@@ -1117,6 +1134,7 @@ export type CreateTransactionsResult = z.infer<ReturnType<typeof useBookingValid
 export type InitPreferencesResult = z.infer<ReturnType<typeof useBookingValidation>['InitPreferencesResultSchema']>
 export type DailyMaintenanceResult = z.infer<ReturnType<typeof useBookingValidation>['DailyMaintenanceResultSchema']>
 export type ClearWaitlistResult = z.infer<ReturnType<typeof useBookingValidation>['ClearWaitlistResultSchema']>
+export type ResendNotificationsResult = z.infer<ReturnType<typeof useBookingValidation>['ResendNotificationsResultSchema']>
 
 // Booking plan and results
 export type OrderBucket = z.infer<ReturnType<typeof useBookingValidation>['OrderBucketSchema']>

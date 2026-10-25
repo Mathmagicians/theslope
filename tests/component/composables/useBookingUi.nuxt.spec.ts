@@ -385,7 +385,10 @@ const resultsAt = (person: Person, action: BookingAction, ...dinnerEventIds: num
 const placeOf = (person: Person, position: number, dinnerEventId = 1): QueuePosition =>
     ({inhabitantId: person.inhabitantId, dinnerEventId, isGuestTicket: !!person.isGuestTicket, position, ticketType: person.ticketType})
 const soldToWaitlist = (count: number, dinnerEventId = 1) =>
-    Array.from({length: count}, () => ({dinnerEventId, ticketPriceId: 1, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1, sellerInhabitantId: 8}))
+    Array.from({length: count}, (_, index) => ({
+        dinnerEventId, ticketPriceId: 1, orderId: 80 + index, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false, buyerInhabitantId: 9, buyerHouseholdId: 2,
+        sellerHouseholdId: 1, sellerInhabitantId: 8
+    }))
 const run = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => OrderFactory.defaultScaffoldResult(overrides)
 // A run's outcomes with the tickets it sold to the waiting list
 const withSold = (waitlistTicketsSold: ReturnType<typeof soldToWaitlist>) => ({...run({}).outcomes, waitlistTicketsSold})
@@ -396,7 +399,10 @@ const dayOf = (dinnerEventId: number) => formatDate(RESULT_DINNERS.find(({id}) =
 const inResultDays = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => run({dinners: RESULT_DINNERS, ...overrides})
 // A ticket the person released, sold on the dinner: to the waiting list or to a claim
 const saleOf = (seller: Person, dinnerEventId: number) =>
-    ({dinnerEventId, ticketPriceId: 1, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1, sellerInhabitantId: seller.inhabitantId})
+    ({
+        dinnerEventId, ticketPriceId: 1, orderId: 80, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1,
+        sellerInhabitantId: seller.inhabitantId
+    })
 
 // The toast and the "Sidste ændring" alerts: the preview compacted, a line per day
 describe('formatResultLines', () => {

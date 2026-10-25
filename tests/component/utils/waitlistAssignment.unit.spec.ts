@@ -49,7 +49,7 @@ vi.mock('~~/server/data/waitlistRepository', async importOriginal => ({
     fetchOrdersServingEntry: vi.fn()
 }))
 
-const {DinnerStateSchema, TicketTypeSchema, OrderAuditChangeSchema, createOrderAuditData} = useBookingValidation()
+const {DinnerStateSchema, TicketTypeSchema, OrderAuditChangeSchema, OrderAuditSourceSchema, createOrderAuditData} = useBookingValidation()
 const {TicketWaitlistCreateSchema, serializeTicketWaitlist} = useWaitlistValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -137,12 +137,15 @@ describe('sellTicketsToWaitlist', () => {
         const {waitlistTicketsSold: sales} = await sell()
 
         expect(sales).toEqual([{
-            dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID,
+            dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID, orderId: RELEASED_ORDER_ID, dinnerMode: first!.order.dinnerMode, isGuestTicket: first!.isGuestTicket,
             buyerInhabitantId: first!.inhabitantId, buyerHouseholdId: first!.order.householdId, sellerHouseholdId: 3, sellerInhabitantId: 30
         }])
         expect(protocolSteps()).toEqual(['grab', 'claim', 'remove'])
         expect(grabWaitlistEntry).toHaveBeenCalledWith(d1Client, first!.id, expect.any(Date), RELEASED_ORDER_ID)
-        expect(claimReleasedOrder).toHaveBeenCalledWith(d1Client, RELEASED_ORDER_ID, first!.inhabitantId, first!.order.bookedByUserId, first!.order.dinnerMode, first!.isGuestTicket)
+        expect(claimReleasedOrder).toHaveBeenCalledWith(
+            d1Client, RELEASED_ORDER_ID, first!.inhabitantId, first!.order.bookedByUserId, first!.order.dinnerMode, first!.isGuestTicket,
+            OrderAuditSourceSchema.enum['waitlist-assignment']
+        )
         expect(removedIds()).toEqual([first!.id])
     })
 
@@ -219,7 +222,7 @@ describe('an entry whose regular order is already placed', () => {
         const {waitlistTicketsSold: sales} = await sell()
 
         expect(sales).toEqual([{
-            dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID,
+            dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID, orderId: RELEASED_ORDER_ID, dinnerMode: second!.order.dinnerMode, isGuestTicket: second!.isGuestTicket,
             buyerInhabitantId: second!.inhabitantId, buyerHouseholdId: second!.order.householdId, sellerHouseholdId: 3, sellerInhabitantId: 30
         }])
         expect(removedIds()).toEqual([first!.id, second!.id])

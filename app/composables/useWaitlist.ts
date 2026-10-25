@@ -87,8 +87,9 @@ export const useWaitlist = () => {
             [...waitingLines(dinnerQueue, ticketTypeOfEntry(ticketPrices))].flatMap(([ticketType, line]) => {
                 const forSale = oldestFirst.filter(ticket => ticket.dinnerEventId === dinnerEventId && typeOfPrice(ticket.ticketPriceId) === ticketType)
                 return line.slice(0, forSale.length).map((buyer, index): TicketSale => ({
-                    dinnerEventId, ticketPriceId: forSale[index]!.ticketPriceId!, buyerInhabitantId: buyer.inhabitantId,
-                    buyerHouseholdId: buyer.order.householdId, sellerHouseholdId: forSale[index]!.householdId, sellerInhabitantId: forSale[index]!.inhabitantId
+                    dinnerEventId, ticketPriceId: forSale[index]!.ticketPriceId!, orderId: forSale[index]!.id, dinnerMode: buyer.order.dinnerMode,
+                    isGuestTicket: buyer.isGuestTicket, buyerInhabitantId: buyer.inhabitantId, buyerHouseholdId: buyer.order.householdId,
+                    sellerHouseholdId: forSale[index]!.householdId, sellerInhabitantId: forSale[index]!.inhabitantId
                 }))
             }))
         return {waitlistTicketsSold}
@@ -134,8 +135,9 @@ export const useWaitlist = () => {
             return {
                 position,
                 joined: {
-                    dinnerEventId: entry.dinnerEventId, inhabitantId: entry.inhabitantId, bookedByUserId,
-                    position, ticketType: ticketType ?? null, queueSize, portionNeed: need
+                    dinnerEventId: entry.dinnerEventId, inhabitantId: entry.inhabitantId, bookedByUserId, entryId: entry.id, position,
+                    ticketType: ticketType ?? null, isGuestTicket: entry.isGuestTicket, ticketPriceId: entry.order.ticketPriceId,
+                    dinnerMode: entry.order.dinnerMode, queueSize, queuedByType: Object.fromEntries(lineLengths), portionNeed: need
                 }
             }
         })
@@ -195,13 +197,13 @@ export const useWaitlist = () => {
                 waitlistTicketsSold: [],
                 waitlistPortionsAssigned: [{
                     dinnerEventId, entryId: entry.id, inhabitantId, isGuestTicket, portions: portionsOf(entry), orderId: order.id,
-                    ticketPriceId: entry.order.ticketPriceId
+                    ticketPriceId: entry.order.ticketPriceId, dinnerMode: entry.order.dinnerMode
                 }]
             }
             case order.ticketPriceId !== null && order.sellerHouseholdId !== null: return {
                 waitlistTicketsSold: [{
-                    dinnerEventId, ticketPriceId: order.ticketPriceId, buyerInhabitantId: inhabitantId,
-                    buyerHouseholdId: entry.order.householdId, sellerHouseholdId: order.sellerHouseholdId, sellerInhabitantId: order.sellerInhabitantId
+                    dinnerEventId, ticketPriceId: order.ticketPriceId, orderId: order.id, dinnerMode: entry.order.dinnerMode, isGuestTicket,
+                    buyerInhabitantId: inhabitantId, buyerHouseholdId: entry.order.householdId, sellerHouseholdId: order.sellerHouseholdId, sellerInhabitantId: order.sellerInhabitantId
                 }],
                 waitlistPortionsAssigned: []
             }

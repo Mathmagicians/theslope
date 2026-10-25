@@ -1,8 +1,9 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {createError} from 'h3'
 import {
-    countReleasedTicketsByType, createOrders, deleteOrder, fetchDinnerEventsByIds, fetchOrders, updateOrdersBatch
+    countReleasedTicketsByType, createOrders, deleteOrder, fetchDinnerEventsByIds, fetchFirstDeliveredAt, fetchOrders, recordDeliveries, updateOrdersBatch
 } from '~~/server/data/financesRepository'
+import {useDeliveryValidation, type DeliveryCreate} from '~/composables/useDeliveryValidation'
 import {useBookingValidation, OrderAuditAction} from '~/composables/useBookingValidation'
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import {callsInFlight, statementsInCallOrder} from '~~/tests/component/data/fakePrismaClient'
@@ -19,7 +20,8 @@ const {fakePrisma, rawQuery} = await vi.hoisted(async () => ({
         order: ['createManyAndReturn', 'findMany', 'updateMany', 'deleteMany'],
         orderHistory: ['createMany'],
         dinnerEvent: ['findMany'],
-        ticketPrice: ['findMany']
+        ticketPrice: ['findMany'],
+        delivery: ['createManyAndReturn', 'findFirst']
     }),
     rawQuery: vi.fn()
 }))
@@ -163,6 +165,45 @@ describe('countReleasedTicketsByType', () => {
         expect(statementsInCallOrder(fakePrisma)).toEqual(['ticketPrice.findMany'])
         expect(fakePrisma.ticketPrice.findMany).toHaveBeenCalledWith(expect.objectContaining({
             select: expect.objectContaining({_count: {select: {orders: {where: {dinnerEventId: 5, state: OrderStateSchema.enum.RELEASED}}}}})
+        }))
+    })
+})
+
+describe('recordDeliveries', () => {
+    const {DeliverySubjectSchema, DeliveryKindSchema} = useDeliveryValidation()
+    // A Delivery row of a mail about an order; the run's id when the mail went in a job run
+    const rowOf = (orderId: number, jobRunId?: number): DeliveryCreate => ({
+        subjectType: DeliverySubjectSchema.enum.ORDER, subjectId: orderId, version: 1, kind: DeliveryKindSchema.enum.EMAIL, reference: `TICKET_SOLD:EMAIL:user-${orderId}/a***@e***.com:id`, jobRunId
+    })
+
+    it('GIVEN the rows of a run\'s mails WHEN recorded THEN one statement writes them all, a row sent outside a job run with its job run null', async () => {
+        fakePrisma.delivery.createManyAndReturn.mockImplementation(async ({data}: {data: object[]}) => data.map((row, index) => ({...row, id: index + 1, deliveredAt: new Date()})))
+
+        const recorded = await recordDeliveries(d1Client, [rowOf(77), rowOf(78, 5)])
+
+        expect(statementsInCallOrder(fakePrisma)).toEqual(['delivery.createManyAndReturn'])
+        expect(fakePrisma.delivery.createManyAndReturn.mock.calls[0]![0].data.map((row: DeliveryCreate) => row.jobRunId)).toEqual([null, 5])
+        expect(recorded.map(row => row.subjectId)).toEqual([77, 78])
+    })
+
+    it('GIVEN no rows WHEN recorded THEN nothing is written', async () => {
+        expect(await recordDeliveries(d1Client, [])).toEqual([])
+        expect(statementsInCallOrder(fakePrisma)).toEqual([])
+    })
+})
+
+describe('fetchFirstDeliveredAt', () => {
+    const {TICKET_WAITLIST, ORDER} = useDeliveryValidation().DeliverySubjectSchema.enum
+
+    it.each([
+        {rows: 'a row of the types', first: {deliveredAt: new Date(2026, 9, 18, 12)}, deliveredAt: new Date(2026, 9, 18, 12)},
+        {rows: 'no row of the types', first: null, deliveredAt: null}
+    ])('GIVEN $rows WHEN the first delivery of the types is read THEN one statement asks for the earliest of them', async ({first, deliveredAt}) => {
+        fakePrisma.delivery.findFirst.mockResolvedValue(first)
+
+        expect(await fetchFirstDeliveredAt(d1Client, [TICKET_WAITLIST, ORDER])).toEqual(deliveredAt)
+        expect(fakePrisma.delivery.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+            where: {subjectType: {in: [TICKET_WAITLIST, ORDER]}}, orderBy: {deliveredAt: 'asc'}
         }))
     })
 })

@@ -17,6 +17,15 @@ export const senderDisplayName = (environment: string): string => `${NOTIFICATIO
 
 export const NOTIFICATION_SIGNATURE = 'De bedste hilsner fra — {{senderName}} · {{site}}'
 
+/** A ticket that became the person's, bought from the waiting list or directly: one mail reads both */
+const TICKET_RECEIVED = {
+    subject: '{{senderName}}: {{person}} har fået en billet til {{dinner}}',
+    text: 'Kære {{name}},\n\n{{dinner}}\n{{person}}: 1 {{action}}\n{{ticket}}\nDu betaler for billetten. Vi glæder os til at se jer.\n\nSe bookingen: {{bookingUrl}}'
+}
+
+/** The buyer a sale to the waiting list names in the seller's mail */
+export const WAITLIST_BUYER = 'ventelisten'
+
 export const NOTIFICATION_TEMPLATES = {
     TEST: {
         subject: '{{senderName}}: testbesked fra theslope-sender ({{environment}})',
@@ -31,23 +40,25 @@ export const NOTIFICATION_TEMPLATES = {
         text: 'Hejsa,\n\nPBS-opgørelsen for perioden {{billingPeriod}} er opdateret (version {{version}}) og erstatter den tidligere fremsendte: {{householdCount}} husstande, i alt {{totalAmount}} kr.\n\nOversigt: {{summaryUrl}}'
     },
     WAITLIST_JOINED: {
-        subject: '{{senderName}}: Du står nu på ventelisten til fællesspisningen d. {{dinner}}',
-        text: 'Kære {{name}},\n\nDu står nu på ventelisten til fællesspisningen {{dinner}}: #{{position}} i kø.\nBillettype: {{ticketType}}\n\nDu får besked, når der er en billet til dig.'
+        subject: '{{senderName}}: {{person}} står på ventelisten til {{dinner}}',
+        text: 'Kære {{name}},\n\n{{dinner}}\n{{person}}: 1 {{action}} ({{place}})\n{{ticket}}\n\n{{helpText}}\n{{payment}}\nDu kan altid afmelde din ventelisteplads, hvis du ikke har brug for den alligevel.\n\nSe bookingen: {{bookingUrl}}'
     },
-    WAITLIST_TICKET_ASSIGNED: {
-        subject: '{{senderName}}: Du har fået billet til {{dinner}}',
-        text: 'Kære {{name}},\n\n{{seller}} frigav en billet til {{dinner}}, og den er solgt til din husstand {{buyer}}: {{ticket}}. Vi glæder os til at se dig.'
-    },
+    WAITLIST_TICKET_ASSIGNED: TICKET_RECEIVED,
+    TICKET_BOUGHT: TICKET_RECEIVED,
     WAITLIST_EXTRA_PORTION: {
-        subject: '{{senderName}}: Du har fået billet til {{dinner}}',
-        text: 'Kære {{name}},\n\nKøkkenholdet laver flere portioner til {{dinner}}, og en af dem er booket til din husstand {{buyer}}: {{ticket}}. Vi glæder os til at se dig.'
+        subject: '{{senderName}}: {{person}} har fået en billet til {{dinner}}',
+        text: 'Kære {{name}},\n\n{{dinner}}\n{{person}}: 1 {{action}}\n{{ticket}}\nKøkkenholdet laver flere portioner, og en af dem er til {{person}}. Vi glæder os til at se jer.\n\nSe bookingen: {{bookingUrl}}'
     },
     WAITLIST_BUILDUP: {
-        subject: '{{senderName}}: {{entries}} skrånere står på ventelisten til {{dinner}}',
-        text: 'Kære {{name}},\n\n{{entries}} skrånere mangler en billet til din middag {{dinner}}, i alt {{portions}} portioner. Kan du frigive flere portioner? Det gør du under Flere på middagen: {{dinnerUrl}}'
+        subject: '{{senderName}}: {{queued}} til {{dinner}}',
+        text: 'Kære {{name}},\n\n{{queued}} · {{portions}} portioner\n{{ask}}\nDet gør du under Flere på middagen: {{dinnerUrl}}'
     },
     TICKET_SOLD: {
-        subject: '{{senderName}}: Din billet til {{dinner}} er solgt',
-        text: 'Kære {{name}},\n\nBilletten, som {{seller}} frigav til {{dinner}}, er nu solgt til {{buyer}}. I betaler ikke længere for den.'
+        subject: '{{senderName}}: {{tickets}} til {{dinner}} er solgt',
+        text: 'Kære {{name}},\n\n{{dinner}}\n{{tickets}} solgt til {{buyer}}\n{{ticket}}\nI betaler ikke længere for den.\n\nSe bookingen: {{bookingUrl}}'
     }
 }
+
+/** The mail kinds, one per template: `NotificationKind.WAITLIST_JOINED` */
+export const NotificationKind = Object.fromEntries(Object.keys(NOTIFICATION_TEMPLATES).map(kind => [kind, kind])) as {[K in keyof typeof NOTIFICATION_TEMPLATES]: K}
+export type NotificationKind = keyof typeof NOTIFICATION_TEMPLATES

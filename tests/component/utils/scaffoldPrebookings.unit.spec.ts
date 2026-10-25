@@ -11,7 +11,7 @@ import {
 import {
     createWaitlistEntries, deleteWaitlistEntries, fetchWaitlistForDinners, grabWaitlistEntry, removePlacedWaitlistEntry, updateWaitlistEntryOrders
 } from '~~/server/data/waitlistRepository'
-import {useBookingValidation, OrderAuditAction as AuditActions, type DesiredOrder, type DinnerMode, type OrderAuditAction, type OrderDisplay, type TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, OrderAuditAction as AuditActions, type DesiredOrder, type DinnerMode, type OrderAuditAction, type OrderDisplay, type ScaffoldResult, type TicketType} from '~/composables/useBookingValidation'
 import type {TicketWaitlistCreate, TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {getHouseholdShortName, useCoreValidation} from '~/composables/useCoreValidation'
@@ -69,6 +69,9 @@ const {ADULT, CHILD} = TicketTypeSchema.enum
 const writeUpdates = vi.fn(async (_d1: D1Database, updates: OrderBatchUpdate[]) => updates.length)
 const writers = {createOrders, writeUpdates, deleteOrder, claimOrder, joinWaitlist, deleteWaitlistEntries, updateWaitlistEntryOrders, sellTicketsToWaitlist}
 const writersCalled = () => Object.entries(writers).filter(([, writer]) => vi.mocked(writer).mock.calls.length > 0).map(([name]) => name)
+
+// A preview's queue entries are unsaved and carry their own ids; in everything else it settles as the save
+const asPreviewOf = (saved: ScaffoldResult) => ({...saved, outcomes: {...saved.outcomes, joined: saved.outcomes.joined.map(join => ({...join, entryId: expect.any(Number)}))}})
 
 // A household of two on a dinner where Bo holds an order; the household waits for nothing until a test says so
 const givenSave = () => {
@@ -358,7 +361,7 @@ describe('scaffoldPrebookings', () => {
 
             const saved = await save()
             expect(writersCalled()).toEqual(['createOrders', 'writeUpdates', 'deleteOrder', 'sellTicketsToWaitlist'])
-            expect(previewed).toEqual(saved)
+            expect(previewed).toEqual(asPreviewOf(saved))
         })
 
         // Anna and Bo wish for the adult tickets of a dinner past its deadline; the save on the same input writes what the
@@ -401,7 +404,7 @@ describe('scaffoldPrebookings', () => {
                 const saved = await intents[key].save(modes)
 
                 expect(writersCalled()).toEqual(writes)
-                expect(previewed).toEqual(saved)
+                expect(previewed).toEqual(asPreviewOf(saved))
             })
         })
 
@@ -682,7 +685,7 @@ describe('scaffoldPrebookings', () => {
                 joinBatches: vi.mocked(createWaitlistEntries).mock.calls.map(([, joins]) => joins.map(({entry}) => indexOf(entry.inhabitantId)))
             }).toEqual(calls)
             expect(saved.positions.map(place => [indexOf(place.inhabitantId), place.position])).toEqual(places)
-            expect(previewed).toEqual(saved)
+            expect(previewed).toEqual(asPreviewOf(saved))
         })
 
         it('GIVEN a later household whose preferences release its ticket on a closed dinner WHEN a season-wide run settles THEN the earlier household\'s claim buys that ticket, the waiting list has nothing to sell, and its preview settles alike', async () => {
@@ -699,7 +702,7 @@ describe('scaffoldPrebookings', () => {
             expect(saved.outcomes.ticketsSold.map(sale => [sale.buyerInhabitantId, sale.buyerHouseholdId, sale.sellerHouseholdId, sale.sellerInhabitantId]))
                 .toEqual([[claimers[0]!.id, householdId, sellerHouseholdId, sellerPeople[0]!.id]])
             expect(saved.outcomes.waitlistTicketsSold).toEqual([])
-            expect(previewed).toEqual(saved)
+            expect(previewed).toEqual(asPreviewOf(saved))
         })
 
         // A dinner's joins are written in one attempt: a refused write lists each join failed and is not retried

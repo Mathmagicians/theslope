@@ -21,6 +21,12 @@ const DeliveryCreateSchema = DeliverySchema.omit({id: true, deliveredAt: true, j
     jobRunId: z.number().int().optional()
 })
 
+// The delivery read's query: one subject type and its subjects' ids, one id or the parameter repeated
+const DeliveryQuerySchema = z.object({
+    subjectType: DeliverySubjectSchema,
+    subjectIds: z.preprocess(ids => [ids].flat(), z.array(z.coerce.number().int().positive()).min(1))
+})
+
 /** The highest delivered version per kind for one subject; 0 before the first delivery of that kind (one key per DeliveryKind) */
 const DeliveredVersionsSchema = z.object({
     ARCHIVE: z.number().int().min(0),
@@ -41,6 +47,7 @@ export type DeliveredVersions = z.infer<typeof DeliveredVersionsSchema>
 export const useDeliveryValidation = () => ({
     DeliverySchema,
     DeliveryCreateSchema,
+    DeliveryQuerySchema,
     DeliveredVersionsSchema,
     DeliveryKindSchema,
     DeliverySubjectSchema

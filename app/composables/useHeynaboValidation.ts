@@ -1,7 +1,6 @@
 import {z} from "zod";
 import type { HouseholdCreate, InhabitantCreate, UserCreate, UserDisplay } from './useCoreValidation'
 import { useCoreValidation } from './useCoreValidation'
-import { DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS } from './useUserPreferenceValidation'
 
 // HN serves S3 presigned avatar URLs (1h expiry, rotating signature per call).
 // Bucket is publicly readable — strip the query so we store stable base URLs.
@@ -111,11 +110,7 @@ export const useHeynaboValidation = () => {
                 email: member.email,
                 phone: member.phone,
                 passwordHash: 'removeme',
-                systemRoles: mapHeynaboRoleToSystemRole(member.role),
-                // A new user starts on the column defaults; an existing user's own settings are
-                // never touched by the import (the update bucket is id-keyed, ADR-013)
-                notificationChannels: [...DEFAULT_NOTIFICATION_CHANNELS],
-                appearance: {...DEFAULT_APPEARANCE}
+                systemRoles: mapHeynaboRoleToSystemRole(member.role)
             }
             inhabitant.user = userDomain
         }

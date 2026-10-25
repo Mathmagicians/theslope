@@ -85,7 +85,7 @@ const selectSeason = (dinnerEvents: DinnerEventDisplay[] = []) => {
     activeSeasonIdEndpoint.mockReturnValue(SEASON_ID)
     seasonByIdEndpoint.mockReturnValue({...SEASON, dinnerEvents})
 }
-const {TicketTypeSchema, encodeDesiredOrder} = useBookingValidation()
+const {TicketTypeSchema, DinnerModeSchema, encodeDesiredOrder} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
 // Ids on the season's prices: a waiting-list entry names its price by id, the store reads the ticket type off it
 const ticketPrices = SEASON.ticketPrices.map((price, index) => ({...price, id: index + 1}))
@@ -944,7 +944,9 @@ describe('Bookings store — waiting list', () => {
             releasedBodies.push(await readBody(event))
             return WaitlistFactory.defaultAssignmentResult({
                 dinnerEventId: WAITLIST_DINNER_ID,
-                assigned: [1, 2].map(entryId => ({entryId, inhabitantId: entryId, isGuestTicket: false, portions: 1, orderId: 100 + entryId, ticketPriceId: 1})),
+                assigned: [1, 2].map(entryId => ({
+                    entryId, inhabitantId: entryId, isGuestTicket: false, portions: 1, orderId: 100 + entryId, ticketPriceId: 1, dinnerMode: DinnerModeSchema.enum.DINEIN
+                })),
                 portionsUsed: 2,
                 waiting: 1
             })

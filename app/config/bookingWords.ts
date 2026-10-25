@@ -8,6 +8,7 @@ const Action = BookingActionSchema.enum
 const TicketChangeKind = TicketChangeKindSchema.enum
 
 const ticketCount = (count: number) => `${count} billet${count === 1 ? '' : 'ter'}`
+const waitlistPayment = 'Du betaler, når du får en billet fra ventelisten.'
 
 export const BOOKING_WORDS = {
     /** A dinner's name while the chef has written no menu */
@@ -34,7 +35,9 @@ export const BOOKING_WORDS = {
         householdReleased: (count: number) =>
             ({title: `Husstanden har frigivet ${ticketCount(count)}`, description: 'Du betaler, medmindre andre køber'}),
         householdQueued: (count: number) =>
-            ({title: `Husstanden står på ventelisten med ${ticketCount(count)}`, description: 'Du betaler, når du får en billet fra ventelisten.'}),
+            ({title: `Husstanden står på ventelisten med ${ticketCount(count)}`, description: waitlistPayment}),
+        /** What a place on the waiting list costs: the household's note and the join mail */
+        waitlistPayment,
         moreTickets: 'Har du brug for flere billetter?'
     },
     /** A deadline badge's value line */
@@ -117,7 +120,7 @@ export const BOOKING_WORDS = {
     /** Billetændringer's household of a ticket the history cannot attribute */
     unknownHousehold: '?',
     /** A place on the waiting list as a badge beside the name */
-    waitlistBadge: {label: 'Venteliste', helpText: 'Du får en billet, når en kommer til salg, eller kokken frigiver portioner'},
+    waitlistBadge: {label: 'Venteliste', helpText: 'Du får automatisk tildelt en billet, hvis en kommer til salg, eller chefkokken frigiver portioner.'},
     /** A booking result's lines in the toast and the "Sidste ændring" alerts: the word of a day's failed orders */
     result: {
         failed: 'FEJLET',

@@ -76,23 +76,32 @@ describe('useWaitlist', () => {
     it('reports the entries that joined behind the line in join order, each at its place in its ticket type\'s line, with the size and the portion need of the queue that holds it at its join', () => {
         const {joinedOf} = useWaitlist()
         const [adult1, child2, adult3, child4] = queue
-        const joined = (entry: TicketWaitlistDisplay, ticketType: keyof typeof PRICE_ID, position: number, queueSize: number, portionNeed: number) => ({
-            position, joined: {dinnerEventId: 100, inhabitantId: entry.inhabitantId, bookedByUserId: 7, position, ticketType, queueSize, portionNeed}
+        const joined = (
+            entry: TicketWaitlistDisplay, ticketType: keyof typeof PRICE_ID, position: number, queueSize: number, queuedByType: Partial<Record<keyof typeof PRICE_ID, number>>,
+            portionNeed: number
+        ) => ({
+            position, joined: {
+                dinnerEventId: 100, inhabitantId: entry.inhabitantId, bookedByUserId: 7, entryId: entry.id, position, ticketType, isGuestTicket: entry.isGuestTicket,
+                ticketPriceId: entry.order.ticketPriceId, dinnerMode: entry.order.dinnerMode, queueSize, queuedByType, portionNeed
+            }
         })
 
         expect(joinedOf([adult1!, child2!], [adult3!, child4!], TICKET_PRICES, 7)).toEqual([
-            joined(adult3!, TicketType.ADULT, 2, 3, 2.5),
-            joined(child4!, TicketType.CHILD, 2, 4, 3)
+            joined(adult3!, TicketType.ADULT, 2, 3, {[TicketType.ADULT]: 2, [TicketType.CHILD]: 1}, 2.5),
+            joined(child4!, TicketType.CHILD, 2, 4, {[TicketType.ADULT]: 2, [TicketType.CHILD]: 2}, 3)
         ])
     })
 
     // What the sale to the waiting list would sell, read without writing; sellers are households 5, 6 and 7, each by its inhabitant 50, 60 and 70
+    // and each with its released ticket 70, 71 and 72
     describe('previewSale', () => {
         const {previewSale} = useWaitlist()
         const ticket = (id: number, ticketType: keyof typeof PRICE_ID, minute: number, householdId: number, dinnerEventId = 100): TicketForSale =>
             ({id, dinnerEventId, ticketPriceId: PRICE_ID[ticketType], releasedAt: new Date(2026, 9, 1, 14, minute), inhabitantId: 10 * householdId, householdId})
+        const ticketOfSeller = (sellerHouseholdId: number): number => 65 + sellerHouseholdId
         const sale = (buyer: TicketWaitlistDisplay, ticketType: keyof typeof PRICE_ID, sellerHouseholdId: number) => ({
-            dinnerEventId: buyer.dinnerEventId, ticketPriceId: PRICE_ID[ticketType], buyerInhabitantId: buyer.inhabitantId,
+            dinnerEventId: buyer.dinnerEventId, ticketPriceId: PRICE_ID[ticketType], orderId: ticketOfSeller(sellerHouseholdId), dinnerMode: buyer.order.dinnerMode,
+            isGuestTicket: buyer.isGuestTicket, buyerInhabitantId: buyer.inhabitantId,
             buyerHouseholdId: buyer.order.householdId, sellerHouseholdId, sellerInhabitantId: 10 * sellerHouseholdId
         })
         const [adult1, child2, adult3] = queue
@@ -219,18 +228,24 @@ describe('useWaitlist', () => {
 
         describe('finishedPlacementOutcomes', () => {
             const portionsOfAdult = PORTIONS[TicketType.ADULT]
-            const {dinnerEventId, id: entryId, inhabitantId, isGuestTicket, order: {householdId, ticketPriceId}} = grabbed(null)
+            const {dinnerEventId, id: entryId, inhabitantId, isGuestTicket, order: {householdId, ticketPriceId, dinnerMode}} = grabbed(null)
 
             it.each([
                 {
                     description: 'the order written after the grab is the extra portion assigned to the entry',
                     found: order(writtenAfterGrab),
-                    outcomes: {waitlistTicketsSold: [], waitlistPortionsAssigned: [{dinnerEventId, entryId, inhabitantId, isGuestTicket, portions: portionsOfAdult, orderId: ORDER_ID, ticketPriceId}]}
+                    outcomes: {waitlistTicketsSold: [], waitlistPortionsAssigned: [{dinnerEventId, entryId, inhabitantId, isGuestTicket, portions: portionsOfAdult, orderId: ORDER_ID, ticketPriceId, dinnerMode}]}
                 },
                 {
                     description: 'the released ticket older than the grab is sold to the entry by the household its claim names',
                     found: order(releasedBeforeGrab, {ticketPriceId: PRICE_ID[TicketType.CHILD], sellerHouseholdId: 3, sellerInhabitantId: 30}),
-                    outcomes: {waitlistTicketsSold: [{dinnerEventId, ticketPriceId: PRICE_ID[TicketType.CHILD], buyerInhabitantId: inhabitantId, buyerHouseholdId: householdId, sellerHouseholdId: 3, sellerInhabitantId: 30}], waitlistPortionsAssigned: []}
+                    outcomes: {
+                        waitlistTicketsSold: [{
+                            dinnerEventId, ticketPriceId: PRICE_ID[TicketType.CHILD], orderId: ORDER_ID, dinnerMode, isGuestTicket, buyerInhabitantId: inhabitantId,
+                            buyerHouseholdId: householdId, sellerHouseholdId: 3, sellerInhabitantId: 30
+                        }],
+                        waitlistPortionsAssigned: []
+                    }
                 },
                 {
                     description: 'a sold ticket whose claim names no household reports nothing',

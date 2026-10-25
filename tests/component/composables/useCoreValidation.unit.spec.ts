@@ -79,7 +79,7 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
         ['BaseInhabitantSchema', () => BaseInhabitantSchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}],
         ['InhabitantCreateSchema', () => InhabitantCreateSchema, HouseholdFactory.defaultInhabitantData()],
         ['InhabitantDisplaySchema', () => InhabitantDisplaySchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}],
-        ['InhabitantDetailSchema', () => InhabitantDetailSchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}]
+        ['InhabitantDetailSchema', () => InhabitantDetailSchema, {...HouseholdFactory.defaultInhabitantData(), id: 1, dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)}]
     ])('%s should parse factory data', (_name, getSchema, input) => {
         expect(() => getSchema().parse(input)).not.toThrow()
     })
@@ -649,49 +649,15 @@ describe('useCoreValidation - InhabitantCreateSchema Additional Tests', () => {
         }
     })
 
-    it('should accept inhabitant with valid dinnerPreferences WeekDayMap', () => {
-        const inhabitant = {
+    // The season initialises a person's preferences and the preference write changes them; the create takes none
+    it('should parse a create carrying a dinnerPreferences map without dinnerPreferences', () => {
+        const result = InhabitantCreateSchema.safeParse({
             ...HouseholdFactory.defaultInhabitantData(),
-            householdId: 1,
             dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
-        }
+        })
 
-        const result = InhabitantCreateSchema.safeParse(inhabitant)
         expect(result.success).toBe(true)
-        if (result.success) {
-            expect(result.data.dinnerPreferences?.mandag).toBe(DinnerMode.DINEIN)
-            expect(result.data.dinnerPreferences?.tirsdag).toBe(DinnerMode.DINEIN)
-        }
-    })
-
-    it.each([
-        {
-            getData: () => {
-                const map = createDefaultWeekdayMap(DinnerMode.DINEIN)
-                // Cast to test invalid enum value at runtime
-                map.mandag = 'INVALID_MODE' as DinnerModeType
-                return map
-            },
-            description: 'invalid DinnerMode value'
-        },
-        {
-            getData: () => {
-                const map = createDefaultWeekdayMap(DinnerMode.DINEIN) as Record<string, unknown>
-                Reflect.deleteProperty(map, 'onsdag')
-                Reflect.deleteProperty(map, 'torsdag')
-                return map
-            },
-            description: 'incomplete WeekDayMap (missing days)'
-        }
-    ])('should reject inhabitant with $description in dinnerPreferences', ({getData}) => {
-        const invalidInhabitant = {
-            ...HouseholdFactory.defaultInhabitantData(),
-            householdId: 1,
-            dinnerPreferences: getData()
-        }
-
-        const result = InhabitantCreateSchema.safeParse(invalidInhabitant)
-        expect(result.success).toBe(false)
+        expect(result.data).not.toHaveProperty('dinnerPreferences')
     })
 })
 
@@ -753,7 +719,8 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                     {
                         ...HouseholdFactory.defaultInhabitantData(),
                         id: 10,
-                        birthDate: new Date('1990-01-15')
+                        birthDate: new Date('1990-01-15'),
+                        dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
                     }
                 ]
             }),
