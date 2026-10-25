@@ -1,4 +1,4 @@
-import {NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES, senderAddress, senderDisplayName} from '~/config/notificationTemplates'
+import {NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES, NotificationKind, senderAddress, senderDisplayName} from '~/config/notificationTemplates'
 import type {NotificationConfig} from '~/composables/useNotificationValidation'
 import type {EmailChannel} from '~~/server/utils/sender/config'
 import type {BookingMails} from '~~/server/utils/sender/events/waitlist'
@@ -8,7 +8,7 @@ import type {BookingMails} from '~~/server/utils/sender/events/waitlist'
  */
 export class NotificationFactory {
     /** The mail kinds, one per template of the config: `Kind.WAITLIST_JOINED` */
-    static readonly Kind = Object.fromEntries(Object.keys(NOTIFICATION_TEMPLATES).map(kind => [kind, kind])) as {[K in keyof typeof NOTIFICATION_TEMPLATES]: K}
+    static readonly Kind = NotificationKind
 
     /** The mail kind a dedupe key leads with (`{kind}:{channel}:{maskedRecipient}:{messageId}`), as a result and a Delivery row's reference carry it */
     static readonly mailKindOf = (dedupeKey: string): string => dedupeKey.split(':')[0]!
@@ -31,5 +31,5 @@ export class NotificationFactory {
 
     /** The booking mails of one operation: none of any kind unless given */
     static readonly defaultBookingMails = (overrides: Partial<BookingMails> = {}): BookingMails =>
-        ({joined: [], buildups: [], sold: [], assigned: [], extraPortions: [], ...overrides})
+        ({joined: [], buildups: [], sold: [], assigned: [], bought: [], extraPortions: [], ...overrides})
 }

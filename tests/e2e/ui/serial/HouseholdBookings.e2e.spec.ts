@@ -182,7 +182,8 @@ test('GIVEN a member holding a regular order and a guest ticket on a dinner WHEN
 
 // A person of the member's household eating in the dining hall every weekday, and the member's page on a week past
 // the scaffold window, open once the grid's read of it has answered; the week has a fraction of the month's cells to
-// re-render on each change
+// re-render on each change. The second dinner: the scaffold the preference write runs always books the next dinner,
+// past the window or not
 const openExpectedWeek = async (browser: Browser, lastName: string) => {
     const adminContext = await validatedBrowserContext(browser)
     const memberContext = await memberValidatedBrowserContext(browser)
@@ -193,7 +194,7 @@ const openExpectedWeek = async (browser: Browser, lastName: string) => {
         dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.DINEIN)
     })
     createdInhabitantIds.push(inhabitant.id)
-    const dinnerEvent = dinnersByDate()[0]!
+    const dinnerEvent = dinnersByDate()[1]!
     const page = await memberContext.newPage()
     const expectedRead = page.waitForResponse(isExpectedRead)
     await gotoHydrated(page, buildBookingsUrl(BookingViewSchema.enum.week, dinnerEvent.date, {shortName: householdShortname, pbsId: householdPbsId}))

@@ -11,6 +11,7 @@ const TeamRole = TeamRoleSchema.enum
 
 test.describe('Chef Swap — volunteer flow', () => {
     const testSalt = temporaryAndRandom()
+    let season: Awaited<ReturnType<typeof SeasonFactory.createActiveSeason>>
     let teamId: number
     let memberInhabitantId: number
     const createdTeamIds: number[] = []
@@ -37,7 +38,6 @@ test.describe('Chef Swap — volunteer flow', () => {
     // A team with the member as chef and its dinner, vacant (chefId null) or with the member as chef, alone on a free day
     // of the season; afterEach empties the calendar again
     const createDinner = async (ctx: BrowserContext, chefId: number | null) => {
-        const season = await SeasonFactory.createActiveSeason(ctx)
         const {team, dinner} = await SeasonFactory.createCookingTeamWithChefAndDinner(ctx, season, memberInhabitantId, {
             teamName: salt('SwapTeam', testSalt),
             dinner: {menuTitle: salt('SwapDinner', testSalt), chefId},
@@ -50,9 +50,11 @@ test.describe('Chef Swap — volunteer flow', () => {
     }
     const createVacantDinner = (ctx: BrowserContext) => createDinner(ctx, null)
 
+    // The active season resolves here: creating it activates it, which scaffolds every household
     test.beforeAll(async ({browser}) => {
         const memberCtx = await memberValidatedBrowserContext(browser)
         memberInhabitantId = (await getSessionUserInfo(memberCtx)).inhabitantId
+        season = await SeasonFactory.createActiveSeason(await validatedBrowserContext(browser))
     })
 
     // Runs on failure too — the shared date must be free before the next test; cleanup accepts a dinner already gone

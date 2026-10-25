@@ -171,7 +171,7 @@ test.describe('Waiting list assignment', () => {
 
         expect(released.totals[Action.RELEASE]).toBe(1)
         expect(released.outcomes.waitlistTicketsSold).toEqual([{
-            dinnerEventId: childSaleDinnerId, ticketPriceId: childPrice.id,
+            dinnerEventId: childSaleDinnerId, ticketPriceId: childPrice.id, orderId: held.id, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false,
             buyerInhabitantId: child.id, buyerHouseholdId: householdId, sellerHouseholdId: householdId, sellerInhabitantId: holder.id
         }])
         const bought = (await OrderFactory.getOrdersForDinnerEvent(context, childSaleDinnerId)).filter(order => order.inhabitantId === child.id)
@@ -249,11 +249,11 @@ test.describe('Waiting list assignment', () => {
         ]))
         // The seller holds a ticket on every dinner of the season, so its release also serves the lines the earlier cases leave
         const salesOnDinner = response!.scaffoldResult.outcomes.waitlistTicketsSold.filter(sale => sale.dinnerEventId === closedDinner.id)
+        const bought = (await OrderFactory.getOrdersForDinnerEvent(context, closedDinner.id!)).filter(order => order.inhabitantId === waiting.id)
         expect(salesOnDinner).toEqual([{
-            dinnerEventId: closedDinner.id, ticketPriceId: adultPrice.id,
+            dinnerEventId: closedDinner.id, ticketPriceId: adultPrice.id, orderId: bought[0]?.id, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false,
             buyerInhabitantId: waiting.id, buyerHouseholdId: householdId, sellerHouseholdId: seller.id, sellerInhabitantId: sellerInhabitant!.id
         }])
-        const bought = (await OrderFactory.getOrdersForDinnerEvent(context, closedDinner.id!)).filter(order => order.inhabitantId === waiting.id)
         expect(bought.map(order => order.state)).toEqual([OrderStateSchema.enum.BOOKED])
         // The seller's own ticket is sold; the guest ticket on the seller stays as it is
         const sellerOrders = (await OrderFactory.getOrders(context, {dinnerEventIds: closedDinner.id!, householdId: seller.id})).filter(order => order.inhabitantId === sellerInhabitant!.id)

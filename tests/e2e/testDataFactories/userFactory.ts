@@ -48,8 +48,8 @@ export class UserFactory {
             email: overrides?.email ?? userData.email,
             phone: overrides?.phone !== undefined ? overrides.phone : userData.phone,
             systemRoles: overrides?.systemRoles ?? userData.systemRoles,
-            notificationChannels: overrides?.notificationChannels ?? userData.notificationChannels,
-            appearance: overrides?.appearance ?? userData.appearance,
+            notificationChannels: overrides?.notificationChannels ?? [...DEFAULT_NOTIFICATION_CHANNELS],
+            appearance: overrides?.appearance ?? {...DEFAULT_APPEARANCE},
             createdAt: overrides?.createdAt ?? new Date(),
             updatedAt: overrides?.updatedAt ?? new Date(),
             Inhabitant: overrides?.Inhabitant ?? {

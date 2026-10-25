@@ -238,26 +238,26 @@ export class HouseholdFactory {
             name: this.defaultInhabitantName(testSalt),
             lastName: salt('And', testSalt),
             pictureUrl: null,
-            birthDate: new Date('1990-01-15'),
-            dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
+            birthDate: new Date('1990-01-15')
         }
     }
 
     /**
      * Create inhabitant with config object pattern (ADR-003)
-     * Preferred method - allows setting any inhabitant field. The create stores no dinnerPreferences, so preferences the
+     * Preferred method - allows setting any inhabitant field. The create carries no dinnerPreferences, so preferences the
      * caller passes are written by the update after it, which re-scaffolds the household on the active season
      */
     static readonly createInhabitantWithConfig = async (
         context: BrowserContext,
         householdId: number,
-        partialInhabitant: Partial<Omit<InhabitantCreate, 'householdId'>> = {},
+        partialInhabitant: Partial<Omit<InhabitantCreate, 'householdId'> & Pick<InhabitantDetail, 'dinnerPreferences'>> = {},
         expectedStatus: number = 201
     ): Promise<InhabitantDetail> => {
+        const {dinnerPreferences, ...fields} = partialInhabitant
         // Merge partial with defaults, householdId always from parameter
         const inhabitantData: InhabitantCreate = {
             ...this.defaultInhabitantData(temporaryAndRandom()),
-            ...partialInhabitant,
+            ...fields,
             householdId: householdId
         }
 
@@ -276,8 +276,8 @@ export class HouseholdFactory {
             expect(responseBody.id, 'Response should contain the new inhabitant ID').toBeDefined()
         }
 
-        if (expectedStatus !== 201 || !partialInhabitant.dinnerPreferences) return responseBody
-        const updated = await this.updateInhabitant(context, responseBody.id, {dinnerPreferences: partialInhabitant.dinnerPreferences})
+        if (expectedStatus !== 201 || !dinnerPreferences) return responseBody
+        const updated = await this.updateInhabitant(context, responseBody.id, {dinnerPreferences})
         return updated!.inhabitant
     }
 

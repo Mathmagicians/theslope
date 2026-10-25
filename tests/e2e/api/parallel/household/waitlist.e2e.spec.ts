@@ -132,7 +132,7 @@ test.describe('Power mode Ingen on a dinner where the household waits for a gues
 
         expect(result.totals).toMatchObject({[Action.RELEASE]: 1, [Action.LEAVE]: 1})
         expect(result.outcomes.waitlistTicketsSold).toEqual([{
-            dinnerEventId, ticketPriceId: adultPriceId,
+            dinnerEventId, ticketPriceId: adultPriceId, orderId: ticketId, dinnerMode: memberEntry!.order.dinnerMode, isGuestTicket: false,
             buyerInhabitantId: member.inhabitantId, buyerHouseholdId: member.householdId, sellerHouseholdId: householdId, sellerInhabitantId: holder.id
         }])
         expect((await OrderFactory.getOrder(context, ticketId))?.inhabitantId).toBe(member.inhabitantId)
