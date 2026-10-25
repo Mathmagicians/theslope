@@ -21,6 +21,7 @@
 | Chef allergen selector | The selector counts a population through the ticket allergies map of § Ticket allergies on the order. | – | discovery |
 | Re-login with Face ID (S5) | `../feature-proposal-relogin-faceid.md` | – | discovery |
 | Deliveries in the System tab | § Deliveries in the System tab | – | discovery |
+| Breakdown alerts | `feature-proposal-breakdown-alerts.md` | – | discovery |
 | Duty roster (F5a) | `feature-proposal-duty-roster.md` Phases 1–4 | – | specified |
 | Joker and vacancy overviews | `feature-proposal-duty-roster.md` § Joker, § Roster UX | – | specified |
 | Roster sign-off and cross-team swap (F5b) | `feature-proposal-duty-roster.md` Phases 4–5 | – | specified |

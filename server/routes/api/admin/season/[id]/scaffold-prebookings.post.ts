@@ -4,6 +4,7 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {emailChannel} from "~~/server/utils/sender/config"
 import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
+import {deliverInBackground} from "~~/server/utils/sender/deliveries"
 import type {ScaffoldResult} from "~/composables/useBookingValidation"
 
 const {throwH3Error} = eventHandlerHelper
@@ -36,7 +37,7 @@ export default defineEventHandler(async (event): Promise<ScaffoldResult> => {
         if (result.seasonId === null) {
             return throwH3Error(`${LOG} Season ${seasonId} not found`, new Error('Not found'), 404)
         }
-        await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), result.outcomes)
+        deliverInBackground(event, () => notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), result.outcomes))
         setResponseStatus(event, 200)
         return result
     } catch (error) {

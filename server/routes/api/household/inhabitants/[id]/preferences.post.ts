@@ -9,6 +9,7 @@ import {fetchInhabitant, updateInhabitant} from "~~/server/data/prismaRepository
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {emailChannel} from "~~/server/utils/sender/config"
 import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
+import {deliverInBackground} from "~~/server/utils/sender/deliveries"
 import {changedWeekdays, type WeekDayMap} from "~/types/dateTypes"
 
 const {throwH3Error} = eventHandlerHelper
@@ -69,7 +70,7 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
             householdId: updatedInhabitant.householdId,
             weekdays
         })
-        await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffoldResult.outcomes)
+        deliverInBackground(event, () => notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffoldResult.outcomes))
 
         const {InhabitantUpdateResponseSchema} = useBookingValidation()
         setResponseStatus(event, 200)

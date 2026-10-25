@@ -22,6 +22,9 @@ const notificationConfig = (deployUrl: string): NotificationConfig => {
     return NotificationConfigSchema.parse({...notifications, environment, site, from: senderAddress(environment), fromName: senderDisplayName(environment), signature, templates})
 }
 
+/** The booking emails go while the SHOULD_SEND_BOOKING_EMAILS_FLAG var (wrangler.toml [vars] per environment) is true */
+export const shouldSendBookingEmails = (): boolean => process.env.SHOULD_SEND_BOOKING_EMAILS_FLAG === 'true'
+
 export const emailChannel = (env: {SENDER?: Queue}): EmailChannel => {
     const deployUrl = process.env.DEPLOY_URL
     if (!deployUrl) return {on: false, missing: 'DEPLOY_URL'}

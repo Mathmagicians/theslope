@@ -99,6 +99,25 @@ One e-mail template per notification kind in `app/config/notificationTemplates.t
 | `TEST` | `make theslope-sender-event-test-<env>` | `NUXT_NOTIFICATIONS_ADMIN_EMAIL` |
 | `BILLING_PERIOD_CLOSED` | monthly billing (cron / `POST /api/admin/maintenance/monthly`) closes a period (v1); re-send `make theslope-sender-event-monthly-billing-<env> bpid=<billingPeriodSummaryId>` | `NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL`, cc `NUXT_NOTIFICATIONS_ADMIN_EMAIL`; the period CSV attached (`…-v1.csv`) |
 | `BILLING_PERIOD_UPDATED` | a later version of a period (catch-up billing changed it) — subject `opdatering v<n>`, replaces the earlier mail | same, CSV `…-v<n>.csv` |
+| `WAITLIST_JOINED`, `TICKET_SOLD`, `TICKET_BOUGHT`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_EXTRA_PORTION`, `WAITLIST_BUILDUP` | the booking status sender event: a booking, a season change or the chef's extra portions, sent in the background after the response; the nightly run sends what the dinners past their booking deadline still owe | the closest user of the inhabitant (`findClosestUserInHousehold`); the buildup, the closest user of the dinner's chef |
+
+### Booking emails flag
+
+`SHOULD_SEND_BOOKING_EMAILS_FLAG` gates the booking status sender event. Off, it sends and records nothing; the other
+sender events send.
+
+| Where | Value |
+|---|---|
+| root `wrangler.toml` `[vars]` (a `wrangler dev` of the build) | `"true"` |
+| root `wrangler.toml` `[env.dev.vars]`, `[env.prod.vars]` | `"false"` |
+| `npm run dev` (local, e2e, CI) | `true`, set in the `dev` script beside `DEPLOY_URL` |
+
+Turning it on in an environment:
+
+```bash
+make theslope-sender-dry-run-booking-status-prod   # the delivery dry run: per user, the booking notifications the nightly run sends, and those already recorded; sends and records nothing
+# set SHOULD_SEND_BOOKING_EMAILS_FLAG = "true" in [env.prod.vars], then deploy (§ Deployment Routing Table)
+```
 
 ### Secrets (admin, wrangler)
 
@@ -137,6 +156,7 @@ make deploy-dev                 # both workers: sender first, then the app (the 
 make theslope-sender-event-test-dev      # admin login on dev.skraaningen.dk → POST /api/admin/sender/event/test
                                 # → prints {queued, dedupeKey}; the mail arrives in the admin mailbox (NUXT_NOTIFICATIONS_ADMIN_EMAIL) with that id in its text
 make theslope-sender-event-monthly-billing-dev bpid=<id>   # re-send the accountant mail for a billing period (GET /api/admin/billing/periods lists ids)
+make theslope-sender-dry-run-booking-status-dev  # GET /api/admin/sender/delivery?dryRun=BOOKING_STATUS → the delivery dry run: per user, the booking notifications the nightly run sends
 make logs-sender-dev            # tail the sender: 📮 > SENDER > [EMAIL] delivered {dedupeKey, …}
 make queues-info-dev            # backlog of the queue
 make run-sender-local           # run the sender on this machine (miniflare, port 3100) → http://localhost:3100/sender/health
@@ -149,6 +169,33 @@ Same for prod with `-prod`. A mail from dev is recognisable twice over: sender `
 ### Failures
 
 `E_RECIPIENT_NOT_ALLOWED`: a `to` or `cc` outside the binding's `allowed_destination_addresses` (on dev the test mailbox only, `workers/sender/wrangler.toml`) — the app reports the mail as sent (its act ends at the queue), the sender logs the code with the masked recipient and acknowledges; fix the mailbox secret (`NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL` / `_ADMIN_EMAIL`) or the allow-list and re-send with `make theslope-sender-event-monthly-billing-<env> bpid=<id>`. A retryable failure (`E_RATE_LIMIT_EXCEEDED`, `E_DAILY_LIMIT_EXCEEDED`, `E_INTERNAL_SERVER_ERROR`, network) is retried 3× at 30/60/120 s; the last attempt logs `[EMAIL] failed after 4 attempts` with the masked recipient and acknowledges the message. Every other failure is logged and acknowledged on the first attempt. `make logs-sender-<env>` shows them. The log line carries the message's `dedupeKey` (`<kind>:<channel>:<masked recipient>:<message id>`), which connects the app's producer log and the sender's log.
+
+### Dashboards
+
+The breakdowns of notification delivery (`features/this-pr/feature-notification-delivery.md` § Diagnostics) show in
+saved queries of Workers Observability, one set per environment. Saved queries live at account level and reopen from
+the **Queries** tab of the Observability page. Workers Logs keeps 7 days.
+
+One saved query per row and environment (`<env>` is `dev` or `prod`):
+
+1. Cloudflare dashboard → Workers & Pages → the Worker → Observability → Overview.
+2. Filter: key `$metadata.message`, operator and value from the table.
+3. Time range: 7 days. **Run**.
+4. **Save Query**, named as in the table.
+
+| Saved query | Worker | Filter on `$metadata.message` |
+|---|---|---|
+| `<env> sender: failed sends` | `theslope-sender-<env>` | Regex `> \[\w+\] (failed after\|terminal failure\|rejected)` |
+| `<env> delivery: failed` | `theslope-<env>` | Includes `📬 > DELIVERY >`, and Includes `] failed:` |
+| `<env> delivery: sent twice` | `theslope-<env>` | Includes `[SENT TWICE]` |
+| `<env> app: background cancelled` | `theslope-<env>` | Includes `waitUntil() tasks did not complete` |
+| `<env> app: not queued` | `theslope-<env>` | Regex `\[EMIT\] (e-mail is off\|message rejected\|SENDER binding missing\|queue batch failed)\|not set — mail not sent` |
+
+The dev sender delivers to the dev test mailbox alone: `dev sender: failed sends` adds the filter `reason` Does not
+equal `E_RECIPIENT_NOT_ALLOWED`.
+
+The queue's backlog: `make queues-info-<env>`, and the **Backlog messages** metric of the queue `theslope-sender-<env>`
+on the dashboard's Queues page.
 
 ---
 

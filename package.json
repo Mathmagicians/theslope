@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "nuxt build",
-    "dev": "DEPLOY_URL=http://localhost:3000 nuxt dev",
+    "dev": "DEPLOY_URL=http://localhost:3000 SHOULD_SEND_BOOKING_EMAILS_FLAG=true nuxt dev",
     "dev-https": "NODE_TLS_REJECT_UNAUTHORIZED=0 npm run dev -- --https",
     "generate": "nuxt generate",
     "postinstall": "nuxt prepare",

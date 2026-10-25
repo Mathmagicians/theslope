@@ -210,9 +210,10 @@ const wrapper = await mountWithTooltipProvider(AdminAllergies, {props: {canEdit:
 
 `bddgen` (`npm run test:bdd:generate`) generates a Playwright spec per feature into `.output/bdd/<suite>/`; the Playwright
 projects, the setup projects and the factories run the scenarios. A project picks its scenarios by tag through
-`defineBddProject` in `playwright.config.ts` (`chromium-smoke`: `@smoke`). The smoke suite runs as features, the api
-and ui suites as `*.e2e.spec.ts`; a spec's cases become scenarios one to one when it migrates. Rules 0 to 5 hold for
-the steps.
+`defineBddProject` in `playwright.config.ts` (`chromium-smoke`: `@smoke`). A feature carries one suite tag: `@smoke`,
+`@api-parallel`, `@api-serial`, `@e2e-parallel` or `@e2e-serial`. A `*.e2e.spec.ts` migrates to features when a change
+touches it; its cases become the scenarios and example rows that check the same behaviours. Rules 0 to 5 hold for the
+steps.
 
 | Path | Holds |
 |---|---|
@@ -239,25 +240,60 @@ Feature: Cron jobs
 
     Examples:
       | job               |
-      | Heynabo import    |
-      | daily maintenance |
-      | monthly billing   |
+      | HEYNABO_IMPORT    |
+      | DAILY_MAINTENANCE |
+      | MONTHLY_BILLING   |
 ```
 
-**Step rules.**
+**Scenarios are DRY.** A feature states each behaviour once, and Gherkin carries the variation
+(`tests/e2e/features/notifications/booking-notifications.feature` is the model).
 
-- A step names a domain fact: `Then the active season has dinner events`, `When the daily maintenance job runs`. The
+- A Scenario Outline carries the values a behaviour is checked with: one row per case, one column per kind of value
+  (`| palette | text scale |`, `| channel | emails sent |`). Each group of related values has its own Outline: the
+  channels in one, the appearance in another.
+- A cell holds the bare value (`seller`, `colorblind`, `1`). The words every row shares live in the template:
+  `sent to the closest user of the <inhabitant>`.
+- A situation is composed from small numeric steps: `<waiting> inhabitants are on the waiting list` and
+  `<for sale> tickets are for sale` build every waiting-list state of the booking notifications.
+- An outcome is a count in an integer column, read by `{int}` with `(s)` and `is/are`:
+  `<emails sent> <notification> emails are sent to …` reads 0, 1 and 2.
+- A Background carries the GIVENs every scenario of the feature shares; a `Rule:` with its own Background groups the
+  scenarios that share more.
+- An Outline's name carries its columns, so each row names its scenario.
+- A THEN reads what is observable: the delivery records in the database, the CSV archives uploaded, the emails sent,
+  what the user sees on the page.
+- The words are the domain's, as the code names them: the models and enums of `prisma/schema.prisma` and the
+  validation composables, the words users read in `app/config/` (`bookingWords.ts`), the actors below. A noun, a value
+  or an event in a feature is one those sources hold, looked up before it is written: a ticket has a ticket type
+  (`ADULT`, `CHILD`, `BABY`) and a guest ticket is booked on an inhabitant; a dinner mode is `DINEIN`, `DINEINLATE`,
+  `TAKEAWAY` or `NONE`; the accountant link opens a billing period. A WHEN names the event (`the dinner is booked`,
+  `the ticket is released`).
+
+**Step definitions are reused.** One definition states one fact for every actor, value and suite.
+
+- A step names a domain fact: `Then the active season has dinner events`, `When the DAILY_MAINTENANCE job runs`. The
   page, the request and the locator live in the step body.
 - One phrasing per fact. `npx bddgen export` lists the steps; read it before writing a step, and reuse the one that
   states the fact. `npx bddgen export --unused-steps` lists the steps no scenario uses.
+- The actor is a parameter type bound to the domain: the user (`User`), the admin (`SystemRoleSchema.enum.ADMIN`), the
+  chef, an inhabitant and its roles on a dinner (the seller, the first in line), the user's inhabitant
+  (`Inhabitant.userId`), a visitor without a session. `{actor} saves the setting {setting}` serves each, and the step
+  reads the actor's context from `scene`.
+- A domain word is a parameter type (`defineParameterType`) built from its enum schema. A cell and a step text hold the
+  enum value as it is: `{job}` reads `DAILY_MAINTENANCE`, `{notification}` reads `WAITLIST_JOINED`, `{mode}` reads
+  `DINEIN`; `{setting}` reads the name and the value together (`palette colorblind`, `channel EMAIL`). The type's
+  regexp lists the enum values, so a value outside the enum fails at generation.
+- One text serves GIVEN and THEN: the GIVEN sets the fact, the THEN reads it (`the user has the setting channel
+  EMAIL`). The BDD projects set `matchKeywords: true`, so the keyword picks the body.
+- A UI body of a step carries the UI suites' tag (`{tags: '@e2e-parallel or @e2e-serial'}`) and serves the UI
+  features; the untagged body serves the api features.
+- An optional parameter is a second pattern on the same body: `the dinner is booked` and
+  `the dinner is booked for {actor}`.
 - Steps live in the file of their domain.
-- A domain word is a parameter type (`defineParameterType`) bound to its enum schema member: `{job}` reads "daily
-  maintenance" as `JobType.DAILY_MAINTENANCE`. A word outside the type fails at generation.
 - Scenario state and its cleanup live in fixtures (`scene`); data comes from the factories, salted (Rules 2 and 3).
-- A Background carries the GIVENs the scenarios of a feature share.
-- A Scenario Outline carries examples, one scenario per row; a `<column>` in the outline's name names each scenario.
 - GIVEN sets the scene, WHEN acts, THEN reads the outcome. A THEN that reads standing state needs no WHEN
   (`Then the users list is non-empty`).
+- A block of Gherkin comes for review with its reuse table: each step text, its definition, and the lines that use it.
 
 **Commands.**
 

@@ -1441,13 +1441,6 @@ export async function fetchDeliveries(d1Client: D1Database, subjectType: Deliver
     return rows.map(row => DeliverySchema.parse(row)).sort((a, b) => a.id - b.id)
 }
 
-/** When the first Delivery row of the subject types landed; null before any */
-export async function fetchFirstDeliveredAt(d1Client: D1Database, subjectTypes: Delivery['subjectType'][]): Promise<Date | null> {
-    const prisma = await getPrismaClientConnection(d1Client)
-    const first = await prisma.delivery.findFirst({where: {subjectType: {in: subjectTypes}}, orderBy: {deliveredAt: 'asc'}, select: {deliveredAt: true}})
-    return first?.deliveredAt ?? null
-}
-
 /** The rows in one write (ADR-014); jobRunId null = sent outside a job run (ADR-012: written as null, never as undefined) */
 export async function recordDeliveries(d1Client: D1Database, rows: DeliveryCreate[]): Promise<Delivery[]> {
     if (rows.length === 0) return []

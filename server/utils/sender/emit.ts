@@ -7,9 +7,11 @@
  */
 import {z} from 'zod'
 import {useNotificationValidation, type NotificationMessage, type SenderEmitResult} from '~/composables/useNotificationValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {chunkArray} from '~/utils/batchUtils'
 
 const {NotificationMessageSchema} = useNotificationValidation()
+const {EMAIL} = useDeliveryValidation().DeliveryKindSchema.enum
 const LOG = '📮 > SENDER > [EMIT]'
 
 const dedupeKeyOf = (message: unknown): string =>
@@ -18,14 +20,14 @@ const dedupeKeyOf = (message: unknown): string =>
 // The queue takes at most a hundred messages per sendBatch
 const chunkQueueBatch = chunkArray<{index: number, message: NotificationMessage}>(100)
 
-// The result for a mail that is never composed (no recipient address, or a mailbox missing from the config); the operation goes on
-export const notSent = (kind: string, reason: 'unaddressed' | 'unconfigured', subject?: string): Promise<SenderEmitResult> =>
-    Promise.resolve({queued: false, dedupeKey: [kind, 'EMAIL', reason, subject].filter(part => part !== undefined).join(':'), degraded: true})
+// The result for a mail never composed because the config lacks a setting it needs; the operation goes on
+export const notSent = (kind: string, subject?: string): Promise<SenderEmitResult> =>
+    Promise.resolve({queued: false, dedupeKey: [kind, EMAIL, 'unconfigured', subject].filter(part => part !== undefined).join(':'), degraded: true})
 
 // E-mail is off in this environment: the kind is logged with the missing setting and reported not sent
 export const channelOff = (kind: string, missing: string, subject?: string): Promise<SenderEmitResult> => {
     console.warn(`${LOG} e-mail is off (${missing} not set): ${kind} not sent`)
-    return notSent(kind, 'unconfigured', subject)
+    return notSent(kind, subject)
 }
 
 export const emit = async (queue: Queue | undefined, messages: NotificationMessage | NotificationMessage[]): Promise<SenderEmitResult[]> => {

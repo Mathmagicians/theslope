@@ -7,6 +7,10 @@ import {fillTemplate, templatePlaceholders} from '~/utils/template'
 import {maskEmail} from '~~/workers/common/mask'
 import {NOTIFICATION_ADDRESS_VARS, type EmailMessage, type NotificationConfig} from '~/composables/useNotificationValidation'
 import {NOTIFICATION_SENDER_NAME} from '~/config/notificationTemplates'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
+
+const {DeliveryKindSchema, deliveryReferencePrefix} = useDeliveryValidation()
+const {EMAIL} = DeliveryKindSchema.enum
 
 export type TextAttachment = {
     filename: string
@@ -34,10 +38,7 @@ const toBase64 = (utf8: string): string => Buffer.from(utf8, 'utf8').toString('b
 export const siteUrl = (config: NotificationConfig, path: string): string => `https://${config.site}${path}`
 
 // A dedupe key up to its recipient: the kind and the channel
-const keyPrefix = (kind: string): string => `${kind}:EMAIL:`
-
-/** The dedupe keys of a kind's mails to a login start alike, whatever the login's address */
-export const userDedupePrefix = (kind: string, userId: number): string => `${keyPrefix(kind)}user-${userId}/`
+const keyPrefix = (kind: string): string => `${kind}:${EMAIL}:`
 
 /** The variable an event is missing before it can send (its recipient's mailbox), or null */
 export const missingAddress = (config: NotificationConfig, recipient: 'adminEmail' | 'accountantEmail'): string | null =>
@@ -54,7 +55,7 @@ export const composeEmail = (config: NotificationConfig, input: ComposeInput): E
 
     // {kind}:{channel}:{maskedRecipient}:{messageId}, the recipient led by user-{id}/ for a mail to a login — one grep on
     // the masked address finds every send to that mailbox
-    const dedupeKey = `${userId === undefined ? keyPrefix(kind) : userDedupePrefix(kind, userId)}${maskEmail(to)}:${crypto.randomUUID()}`
+    const dedupeKey = `${userId === undefined ? keyPrefix(kind) : deliveryReferencePrefix(kind, EMAIL, userId)}${maskEmail(to)}:${crypto.randomUUID()}`
     const allValues = {...values, senderName: NOTIFICATION_SENDER_NAME, site: config.site, environment: config.environment, dedupeKey}
 
     return {

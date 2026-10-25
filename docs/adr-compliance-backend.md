@@ -1,7 +1,7 @@
 # ADR Compliance - Backend
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-10-24
+**Last Updated:** 2026-10-25
 **History:** git and the feature plans under `docs/features/` (shipped plans in `docs/features/archived/`)
 
 One row per endpoint and per server module an ADR names, with its markers and its API spec. The handler, its repository
@@ -27,7 +27,8 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/order/waitlist.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `server/utils/waitlistAssignment.ts` | ✅ | N/A | ✅ | ✅ serial; recovery unit | ✅ `joinWaitlist` joins a household's claims on a dinner as one batch, idempotent on a later run; a placement grabs, writes, records and removes; the recovery settles a grab past `waitlistPlacingLeaseMinutes` and reports the sale or extra portion it finishes |
-| `server/utils/sender/events/waitlist.ts` | ✅ | N/A | ✅ | ✅ serial; unit | ✅ a mail about a person goes to the closest user (`findClosestUser`), the buildup to the chef; `sendOnce` sends each mail once per subject, version, kind and login and records the run's Delivery rows in one write; the resend counts from the first booking Delivery row; the dinners, people, households and logins read once per kind |
+| `server/utils/sender/events/waitlist.ts` | ✅ | N/A | ✅ | ✅ serial; unit | ✅ the booking status sender event: a notification about an inhabitant goes to the closest user (`findClosestUserInHousehold`), the buildup to the closest user of the dinner's chef; `sendNotifications` sends what the dinners past their booking deadline owe as they stand, through `deliverDesired`; the dinners, people, households and logins read once per kind |
+| `server/utils/sender/deliveries.ts` | ✅ | N/A | ✅ | unit | ✅ `deliverDesired`, the delivery step every sender event shares: the recorded rows read once per subject type (ADR-014), one emit, one write of the Delivery rows; `deliverInBackground` runs a sender event after the response |
 | `server/data/waitlistRepository.ts` | ✅ | N/A | ✅ | ✅ | ✅ a leave or a change of an entry a run holds or has placed answers 409; `createWaitlistEntries` writes the entries and their QUEUE rows in two bulk writes |
 | **Admin - dinner events** | | | | | |
 | `/api/admin/dinner-event/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -95,7 +96,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/billing/periods/[id].get.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed |
 | `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec skipped, import replaced |
 | **Admin - maintenance and jobs** | | | | | |
-| `/api/admin/maintenance/daily.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial | ⚠️ raw body read; the scaffold step drops cancelled and consumed dinners; the run's booking mails go after the scaffold, then the owed ones (`resendNotifications`) |
+| `/api/admin/maintenance/daily.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial | ⚠️ raw body read; the scaffold step drops cancelled and consumed dinners; the run sends the notifications the dinners owe (`sendNotifications`), counted per sender event in `notifications` |
 | `/api/admin/maintenance/monthly.post.ts` | ✅ | ⚠️ | ✅ | ✅ serial | ⚠️ raw body read |
 | `/api/admin/maintenance/job-run/index.get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/maintenance/job-run/[id].get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
@@ -103,7 +104,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | **Admin - sender events** | | | | | |
 | `/api/admin/sender/event/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ batched, 100 per call |
 | `/api/admin/sender/event/monthly-billing.post.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ batched, 100 per call |
-| `/api/admin/sender/delivery.get.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ the Delivery rows of the subjects in `subjectType=` and `subjectIds=`; every member reads (ADR-004) |
+| `/api/admin/sender/delivery.get.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ the Delivery rows of the subjects in `subjectType=` and `subjectIds=`; `dryRun=BOOKING_STATUS` is the delivery dry run: per user what the nightly run sends, empty with no active season; every member reads (ADR-004) |
 | **Household** | | | | | |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/inhabitants/[id]/preferences.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the save's dry run on the draft in `dinnerPreferences=` (`serializeWeekDayMap`); any member reads any household's (ADR-004) |

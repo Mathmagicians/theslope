@@ -16,12 +16,14 @@ import {fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {deleteWaitlistForConsumedDinners} from '~~/server/data/waitlistRepository'
-import type {DailyMaintenanceResult, ResendNotificationsResult} from '~/composables/useBookingValidation'
+import type {DailyMaintenanceResult} from '~/composables/useBookingValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {useBooking} from '~/composables/useBooking'
 import type {EmailChannel} from '~~/server/utils/sender/config'
-import {notifyBookingOutcomes, resendBookingMails} from '~~/server/utils/sender/events/waitlist'
+import {sendNotifications} from '~~/server/utils/sender/events/waitlist'
 
 const LOG = '🔧 > DAILY > [MAINTENANCE]'
+const {BOOKING_STATUS} = useDeliveryValidation().SenderEventSchema.enum
 
 export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: string, email: EmailChannel): Promise<DailyMaintenanceResult> {
     const {JobType, JobStatus} = useMaintenanceValidation()
@@ -55,7 +57,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
         const activeSeasonId = await fetchActiveSeasonId(d1Client)
         let initPrefsResult = {initialized: 0}
         let scaffoldResult = null
-        let resendNotifications: ResendNotificationsResult = {resent: 0, dinners: []}
+        let notifications: DailyMaintenanceResult['notifications'] = {}
 
         if (activeSeasonId) {
             initPrefsResult = await clipPreferences(d1Client, activeSeasonId)
@@ -64,12 +66,12 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             scaffoldResult = await scaffoldPrebookings(d1Client, {seasonId: activeSeasonId})
             console.info(`${LOG} scaffold: ${useBooking().formatScaffoldResult(scaffoldResult)}`)
 
-            // The run's booking mails, then the mails the dinners still to come owe that no Delivery row records
-            await notifyBookingOutcomes(d1Client, email, scaffoldResult.outcomes, jobRun.id)
-            resendNotifications = await resendBookingMails(d1Client, email, activeSeasonId, jobRun.id)
-            console.info(`${LOG} resendNotifications: resent ${resendNotifications.resent} owed booking mails`)
+            // The dinners as they stand after the scaffold owe the notifications of its outcomes too
+            const {counts} = await sendNotifications(d1Client, email, activeSeasonId, {jobRunId: jobRun.id})
+            notifications = {[BOOKING_STATUS]: counts}
+            console.info(`${LOG} notifications: ${BOOKING_STATUS} sent ${counts.sent}, unaddressed ${counts.unaddressed}`)
         } else {
-            console.info(`${LOG} initPrefs/scaffold/resendNotifications skipped: no active season`)
+            console.info(`${LOG} initPrefs/scaffold/notifications skipped: no active season`)
         }
 
         const result: DailyMaintenanceResult = {
@@ -80,7 +82,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             clearWaitlist,
             initPrefs: initPrefsResult,
             scaffold: scaffoldResult,
-            resendNotifications
+            notifications
         }
 
         // Complete job run with success

@@ -8,6 +8,7 @@ import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {useBooking} from "~/composables/useBooking"
 import {emailChannel} from "~~/server/utils/sender/config"
 import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
+import {deliverInBackground} from "~~/server/utils/sender/deliveries"
 import {idParams} from '~/composables/useCoreValidation'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
@@ -92,7 +93,8 @@ export default defineEventHandler(async (event): Promise<SeasonUpdateResponse> =
             console.info(`🌞 > SEASON > [POST] Clipped ${clipResult.initialized} inhabitants`)
 
             scaffold = await scaffoldPrebookings(d1Client, {seasonId: id})
-            await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffold.outcomes)
+            const {outcomes} = scaffold
+            deliverInBackground(event, () => notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), outcomes))
             console.info(`🌞 > SEASON > [POST] Scaffolded: ${useBooking().formatScaffoldResult(scaffold)}`)
         }
 

@@ -1,7 +1,7 @@
 # Feature Proposal: Notification triggers — team assignments, alarms, SMS
 
 **Status:** Proposal | **Date:** 2026-08-31 | **Updated:** 2026-10-25
-**Builds on:** the notification delivery (`../this-pr/feature-notification-delivery.md`: the topics, the channel matrix,
+**Builds on:** the notification delivery (`../this-pr/feature-notification-delivery.md`: the sender events, the channel matrix,
 the Delivery rows) and the duty roster (`feature-proposal-duty-roster.md`)
 
 ## Decisions (2026-09-16)
@@ -19,7 +19,7 @@ the Delivery rows) and the duty roster (`feature-proposal-duty-roster.md`)
 
 ## Team assignments
 
-`TEAM_ASSIGNMENTS` is a topic of the delivery executor (`deliverDesired`, `../this-pr/feature-notification-delivery.md`
+`TEAM_ASSIGNMENTS` is a sender event of the delivery step (`deliverDesired`, `../this-pr/feature-notification-delivery.md`
 § Desired deliveries), with one template per kind in `app/config/notificationTemplates.ts`.
 
 | Kind | Recipients | When |
