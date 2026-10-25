@@ -1,9 +1,9 @@
 # Feature Proposal: Duty Roster (with Audit Trail + Cross-Team Swap)
 
-**Status:** Signed off (schema 2026-10-07, roster UX 2026-10-05 to 08); deferred to the next release 2026-10-13; the joker slot shipped in 0.9 (`archived/feature-joker-slot.md`) | **Umbrella of the signoffs:** `archived/release-0.9.0.md`
+**Status:** Signed off (schema 2026-10-07, roster UX 2026-10-05 to 08); the joker slot shipped in 0.9 (`../archived/feature-joker-slot.md`)
 **Date:** 2026-04-29
-**Updated:** 2026-10-05 — refreshed for the work-roster push (`archived/release-0.9.0.md`): chef-swap shipped (`assign-role`, `remove-role` live; `assignment/swap` did not ship — cross-team duty swap in Phase 5 covers the swap need); instrumentation of shipped endpoints is retroactive; Joker section added; schema lands via the PR's bundled Prisma package
-**Builds on:** `archived/feature-chef-swap.md` (shipped; its unshipped Phase 4 move-out cascade is carried here under Phase 5)
+**Updated:** 2026-10-05 — refreshed for the work-roster push (`../archived/release-0.9.0.md`): chef-swap shipped (`assign-role`, `remove-role` live; `assignment/swap` did not ship — cross-team duty swap in Phase 5 covers the swap need); instrumentation of shipped endpoints is retroactive; Joker section added; schema lands via the PR's bundled Prisma package
+**Builds on:** `../archived/feature-chef-swap.md` (shipped; its unshipped Phase 4 move-out cascade is carried here under Phase 5)
 
 ## Problem
 
@@ -290,7 +290,7 @@ The team administrator sees vacancies and load in `/admin/teams`:
 
 The team card's joker slots and shift counts are part of the signed CTC season face — § Roster UX.
 
-**Joker slot CRUD** ✅ shipped in 0.9: the form, the team card's Jokertjanser list and the admin endpoints are pointers in `archived/feature-joker-slot.md`; the form restricts the weekday picker to the team's affinity and the period defaults to the season's dates. The scaffolder (Phase 3) expands a slot to one vacant duty per matching cooking day in the period.
+**Joker slot CRUD** ✅ shipped in 0.9: the form, the team card's Jokertjanser list and the admin endpoints are pointers in `../archived/feature-joker-slot.md`; the form restricts the weekday picker to the team's affinity and the period defaults to the season's dates. The scaffolder (Phase 3) expands a slot to one vacant duty per matching cooking day in the period.
 
 **Mockup — vacancy big overview (admin teams)** ✅ signed 2026-10-06 · rows refined ✅ 2026-10-08
 
@@ -412,7 +412,7 @@ Phone (375 px), chef present
 | Role | Powers |
 |---|---|
 | Team member | Meld til (vacant seat, Chefkok seat, Ekstra vagt), Meld fra (own seats), Byt (take a seat here, optional return seat) |
-| Chef | the same pane through [Opdater holdplan] with the Hvem picker and every seat in Meld fra; [Godkend holdplan]; release extra portions (`archived/feature-waitlist.md`) |
+| Chef | the same pane through [Opdater holdplan] with the Hvem picker and every seat in Meld fra; [Godkend holdplan]; release extra portions (`../archived/feature-waitlist.md`) |
 | Admin | membership moves; game-plan drill-down is view-only |
 | System | auto-sign, reopening on a vacancy, the Holdplan step's countdown |
 

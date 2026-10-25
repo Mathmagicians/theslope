@@ -1,21 +1,37 @@
-# 0.9.2 features
+# 0.9.3 features
 
-**Status:** Proposed | **Date:** 2026-10-16 | **Builds on:** release 0.9 (`archived/release-0.9.0.md` § One booking path, end to end)
+**Status:** Proposed | **Date:** 2026-10-16 | **Updated:** 2026-10-25 | **Builds on:** release 0.9 (`../archived/release-0.9.0.md` § One booking path, end to end), release 0.9.2 (`../release-0.9.2/chores-0.9.2.md`)
 
-| Feature | What | Status |
-|---|---|---|
-| Ticket price portions | A season's ticket price carries the portions its tickets weigh | proposed |
-| Billing import in the export format | The billing import reads the CSV the billing export writes | proposed |
-| Write-failure dashboard | The admin sees the partial batches a failed write left behind | proposed 2026-10-18, design open |
-| Drop `DinnerEvent.totalCost`, Order snapshot (B6) | The deprecated column leaves the schema; an order keeps its ticket type when its price row goes | decided 2026-10-08; one migration |
-| Ticket allergies on the order | A guest or swapped ticket keeps the allergy ids it was booked with | rule signed 2026-10-11 |
-| Creation audit rows name the household | The creation audit row carries `householdShortname`; a backfill fills the existing rows | open |
-| Chef allergen selector | The selector counts a population through a ticket allergies map | brief halted 2026-10-10; presented again with the ticket allergies design |
-| Re-login with Face ID (S5) | `feature-proposal-relogin-faceid.md` | parked proposal; the PRF spike is complete |
-| Deliveries in the System tab | The admin sees the mails the system sent, per kind, recipient and version | proposed 2026-10-24, design open |
+## Delivered
+
+| Delivery | Description or spec | Gherkin | Status |
+|---|---|---|---|
+
+## In flight
+
+| Delivery | Description or spec | Gherkin | Status |
+|---|---|---|---|
+| Ticket price portions | § Ticket price portions | – | specified |
+| Billing import in the export format | § Billing import in the export format | – | specified |
+| Write-failure dashboard | § Write-failure dashboard | – | discovery |
+| Drop `DinnerEvent.totalCost` | § Drop `DinnerEvent.totalCost` | – | specified |
+| Order snapshot (B6) | § Order snapshot (B6) | – | specified |
+| Ticket allergies on the order | § Ticket allergies on the order | – | discovery |
+| Creation audit rows name the household | § Creation audit rows name the household | – | discovery |
+| Chef allergen selector | The selector counts a population through the ticket allergies map of § Ticket allergies on the order. | – | discovery |
+| Re-login with Face ID (S5) | `../feature-proposal-relogin-faceid.md` | – | discovery |
+| Deliveries in the System tab | § Deliveries in the System tab | – | discovery |
+| Duty roster (F5a) | `feature-proposal-duty-roster.md` Phases 1–4 | – | specified |
+| Joker and vacancy overviews | `feature-proposal-duty-roster.md` § Joker, § Roster UX | – | specified |
+| Roster sign-off and cross-team swap (F5b) | `feature-proposal-duty-roster.md` Phases 4–5 | – | specified |
+| Season spending | `feature-proposal-season-spending.md` | – | specified |
+| Ad-hoc charges and the spending views | `feature-proposal-adhoc-admin-billing.md` phases 2 to 5 | – | specified |
+| Team assignment notifications | `feature-proposal-notification-triggers.md` § Team assignments | – | discovery |
+| SMS channel | `feature-proposal-notification-triggers.md` § SMS delivery | – | specified |
+| Booking emails flag removed | `SHOULD_SEND_BOOKING_EMAILS_FLAG` leaves `wrangler.toml`, and its reader `shouldSendBookingEmails` and the gate `notifyBooking` leave the code. | – | specified |
 
 § Drop `DinnerEvent.totalCost`, § Order snapshot (B6) and § Ticket allergies on the order share one migration:
-`make d1-create-migration name=release-0-9-2`, the rewrites below in the Prisma source, then
+`make d1-create-migration name=release-0-9-3`, the rewrites below in the Prisma source, then
 `rm migrations/NNNN_*.sql && make d1-flatten-migrations`. `make d1-verify-<env>` runs before and after the apply on
 local (a copy of dev), dev and prod; `tests/component/architecture/migrations.unit.spec.ts` keeps the file free of
 `DROP TABLE`.
@@ -87,7 +103,7 @@ endpoint stays until this feature lands.
 D1 runs the chunks of a batch without a transaction (ADR-005). A later chunk that fails leaves the earlier rows without
 their companion row: waiting-list entries without their QUEUE history row, orders without their audit row, deliveries
 without their Delivery row. The retry one by one counts them unchanged, and the admin learns of them from the logs only.
-Writes carry no retries (decided 2026-10-18, `archived/release-0.9.0.md` § One intent path).
+Writes carry no retries (decided 2026-10-18, `../archived/release-0.9.0.md` § One intent path).
 
 ### Solution
 
@@ -253,3 +269,35 @@ API: the period read. Component: the table on its dataset, its loading and empty
 `server/routes/api/admin/sender/delivery.get.ts`, `server/data/financesRepository.ts` (`fetchDeliveries`),
 `app/components/admin/AdminSystem.vue`, a store dataset, `docs/adr-compliance-frontend.md` and
 `docs/adr-compliance-backend.md` rows.
+
+## Decisions carried from release 0.9
+
+**2026-10-05** (joker, roster, spending)
+- Joker: per-dinner volunteering by any inhabitant; a vacancy surfaces as a "missing" on the dinner; a team-card and a
+  big overview (split on teams and on people) for the admin; per-member shift counts (chefkok, fast tjans, joker) in
+  the team card; `/chef` is the member planning surface.
+- Volunteering writes season membership (`CookingTeamAssignment`) today. The roster replaces it, and the shipped rows
+  get a one-time data separation the user reviews and applies before ship.
+- CTC drives the roster: the dinner face leads with who comes today (vacancies, swaps, joker status); the season face
+  (admin teams) leads with the regular team, jokertjanser, shift counts and a view-only game-plan drill-down; which
+  face leads follows the dinner context. The Flytter badge leaves `/chef`.
+- A template row is one seat: capacity is modelled with rows and the counts in the UI are derived. Slot times and
+  tasks are templates, edited in the team's template editor.
+- Sign-off is derived: all seats filled → auto-signed (system actor); short → "MANGLER n" and the chef's
+  [Godkend alligevel] (chef actor). Members self-serve their own rows; the duty-level admin bypass is parked.
+- Basisvarer expenses are dinner-less and track against the køkkenbidrag pool. The Budget pane's [Se sæsontrend]
+  button unfolds the season view.
+
+**2026-10-06**
+- Admin economy Forbrug: month rows with dinner drill-down and a scope switcher (alle chefkokke, én chefkok,
+  Madbudget); the basisvarer entry is admin-only, in that section. `SeasonBudgetOverview` takes
+  `grouping: day | month`.
+- Vacancy big overview: per team, chronological, the origin on each hole (the joker note or who released). Calendar
+  gap markers are DS tokens, ink-coloured: a chef hat for a missing chef, a joker hat for an unfilled joker seat, a dot
+  for an unfilled regular seat.
+- S5 re-login is parked: the comparison by platform, the hypotheses and the spike findings live in
+  `../feature-proposal-relogin-faceid.md`.
+
+**2026-10-08**
+- The framelding billing import books every ticket on the first inhabitant and answers 409; its e2e test is skipped
+  until § Billing import in the export format.

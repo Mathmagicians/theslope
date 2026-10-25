@@ -2,34 +2,46 @@
 
 **Status:** Next release | **Date:** 2026-10-08 | **Builds on:** release 0.9 (`archived/release-0.9.0.md` § Prisma bundle)
 
-The release carries no migration; the schema work is in `feature-0.9.2.md`.
+The release carries no migration; the schema work is in `../release-0.9.3/feature-0.9.3.md`.
 
-## Done
+## Delivered
 
-- Workflow checks: the workflows' `run:` scripts read `${{ }}` values through `env` (code scanning alert #10);
-  `npm run lint:gh-actions` runs CodeQL's Actions queries in `pre:all`, locally through `gh codeql`, in CI on the
-  runner image's bundle (93834f4)
-- Household data access and GET previews: every member reads, a household changes its own data, an admin or the
-  allergy manager (allergies) another household's through a logged override (ADR-004 § Access); previews are GETs
-  (52c5d68)
-- Three faces on a phone (#171): an avatar group shows three faces below md, five from md (0b6d7d0)
-- One master-detail layout (#169): `LAYOUTS.masterDetailPage` on /dinner, /chef, /admin/allergies, /admin/teams and the
-  household bookings tab; the calendar circle steps up at lg (0b6d7d0)
-- Tests at the lowest level: the access cases consolidated per `docs/testing.md` Rule 0 (ef54aa6)
+| Delivery | Description or spec | Gherkin | Status |
+|---|---|---|---|
+| Workflow checks | The workflows' `run:` scripts read `${{ }}` values through `env` (code scanning alert #10), and `npm run lint:gh-actions` runs CodeQL's Actions queries in `pre:all`, locally through `gh codeql`, in CI on the runner image's bundle. | – | done 93834f4 |
+| Household data access and GET previews | Every member reads, a household changes its own data, an admin or the allergy manager (allergies) another household's through a logged override (ADR-004 § Access), and previews are GETs. | – | done 52c5d68 |
+| Three faces on a phone (#171) | An avatar group shows three faces below md, five from md. | – | done 0b6d7d0 |
+| One master-detail layout (#169) | `LAYOUTS.masterDetailPage` on /dinner, /chef, /admin/allergies, /admin/teams and the household bookings tab, with the calendar circle a step up at lg. | – | done 0b6d7d0 |
+| Tests at the lowest level | The access cases consolidated per `docs/testing.md` Rule 0. | – | done ef54aa6 |
+| Ticket counts per person | `personTicketCounts` in `useBooking` counts a person's tickets, the released among them and the places on the waiting list for the booking grid's name cell, with the day-view component spec at the lowest level. | – | done 4349c92, 8401b44 |
 
 ## In flight
 
-Updated 2026-10-24. Release 0.9 shipped in f5b5205 (#168).
+Updated 2026-10-25. Release 0.9 shipped in f5b5205 (#168).
 
-| Chore | Priority | State |
-|---|---|---|
-| § Booking mail delivery | high (#170) | mails signed 2026-10-17, delivery 2026-10-18, recipient rule and the opt-out 2026-10-23 |
-| § UI cases fail on an unexpected API error | high | guard in 52c5d68; the 28 UI specs' local run owed |
-| § Dev-server flakes in CI | high | decided 2026-10-24 |
-| § UI suites fail the build | medium | open; runs once the suites stay stable |
-| § Slow client after a save, § Scaffold: a save naming an order bought by another household, § Minimal test seasons | low | open |
-| § Server payload of the shared stores, § Waitlist: no-seat notice at dinner start, § Map.groupBy in the Workers runtime, § Stored dinner dates, § Preferences at an inhabitant's creation, § Dinner page remounts on claim, § Catch-up amounts, § Job schedule module, § Delete responses, § DRY improvements, § Dependency clusters, § Test factory dates at call time | | open |
-| § Deferred from release 0.9 | | per row |
+| Delivery | Description or spec | Gherkin | Status |
+|---|---|---|---|
+| Notification delivery | [feature-notification-delivery.md](feature-notification-delivery.md) | drafted in the spec § TDD: `booking-notifications.feature`, `billing-notifications.feature` | specified |
+| UI cases fail on an unexpected API error | § UI cases fail on an unexpected API error | – | implemented |
+| Dev-server flakes in CI | § Dev-server flakes in CI | – | implemented |
+| UI suites fail the build | § UI suites fail the build | – | specified |
+| Slow client after a save | § Slow client after a save | – | discovery |
+| Scaffold: a save naming an order bought by another household | § Scaffold: a save naming an order bought by another household | – | specified |
+| Minimal test seasons | § Minimal test seasons | – | specified |
+| Preferences at an inhabitant's creation | § Preferences at an inhabitant's creation | – | specified |
+| Server payload of the shared stores | § Server payload of the shared stores | – | specified |
+| Waitlist: no-seat notice at dinner start | § Waitlist: no-seat notice at dinner start | – | specified |
+| Map.groupBy in the Workers runtime | § Map.groupBy in the Workers runtime | – | specified |
+| Stored dinner dates | § Stored dinner dates | – | specified |
+| Dinner page remounts on claim | § Dinner page remounts on claim | – | specified |
+| Catch-up amounts | § Catch-up amounts | – | specified |
+| Job schedule module | § Job schedule module | – | specified |
+| Delete responses | § Delete responses | – | specified |
+| DRY improvements | § DRY improvements | – | specified |
+| Dependency clusters | § Dependency clusters | – | specified |
+| Test factory dates at call time | § Test factory dates at call time | – | specified |
+| AdminTeams loading row | § AdminTeams loading row | – | discovery |
+| Avatar ring colours | § Avatar ring colours | – | specified |
 
 ## Server payload of the shared stores
 
@@ -92,7 +104,7 @@ service skips an entry whose reference exists). Deletion stays in daily maintena
 ### Affected
 
 `server/utils/sender/events/waitlist.ts`, `server/tasks/waitlist-close.ts`, `nuxt.config.ts` (scheduled tasks),
-`feature-proposal-notification-triggers.md` (catalog row), `docs/adr-compliance-backend.md`.
+`feature-notification-delivery.md` (topics row), `docs/adr-compliance-backend.md`.
 
 ## Map.groupBy in the Workers runtime
 
@@ -137,6 +149,11 @@ ships; no migration.
 `useSeason.nuxt`: assignment and reconciliation with events in the stored shape. `season.e2e`: a generated dinner reads
 back at UTC midnight.
 
+### Affected
+
+`server/data/prismaRepository.ts`, `server/utils/reconcileDinnerEvents.ts`, `app/utils/date.ts`,
+`tests/e2e/testDataFactories/dinnerEventFactory.ts`, `docs/testing.md`.
+
 ## Preferences at an inhabitant's creation
 
 ### Problem
@@ -149,24 +166,16 @@ map, and sets a stored map's non-cooking days to Ingen. A map sent with a create
 creates a person with Ingen and then activates a season finds the person booked (`AdminEconomy.e2e.spec.ts`, 2026-10-19).
 The specs set preferences through the preference write after the create.
 
-### Decision — OPEN
+### Decision (2026-10-24)
 
-- a) the create persists a map when the body carries one; the import sends none, so the clip initialises as today.
-  An API case: a create with Ingen reads back Ingen after an activation.
-- b) the create takes no map: `InhabitantCreateSchema` omits `dinnerPreferences`, a body carrying it is a 400, the
-  factory default `dinnerPreferences` in `defaultInhabitantData` goes. Preferences are the season's to initialise and
-  the person's to change. An API case: a create with a map answers 400.
+The create schema takes no map: `InhabitantCreateSchema` omits `dinnerPreferences`. Preferences are the season's to
+initialise and the person's to change through the preference write.
 
 ### Affected
 
 `app/composables/useCoreValidation.ts`, `server/data/prismaRepository.ts`, `tests/e2e/testDataFactories/householdFactory.ts`,
 `tests/e2e/api/parallel/admin/household.e2e.spec.ts`, the specs that pass a map at creation
 (`HouseholdBookings.e2e.spec.ts`).
-
-### Affected
-
-`server/data/prismaRepository.ts`, `server/utils/reconcileDinnerEvents.ts`, `app/utils/date.ts`,
-`tests/e2e/testDataFactories/dinnerEventFactory.ts`, `docs/testing.md`.
 
 ## Dinner page remounts on claim
 
@@ -635,128 +644,10 @@ The CI suites run against `npm run dev`. Three cases fail on a first attempt and
 Unit: the error mapper's connection row. Component: a failed team create stays in create mode and raises no unhandled
 error. E2E: `ui/MobileViewport`, `ui/AllergyPoster`, `ui/AdminTeams`, `api/serial/scaffold-prebookings`.
 
-## Booking mail delivery
+## Notification delivery
 
-Priority: high, reported in production as issue #170. From release 0.9 (point 6b of One booking path, end to end),
-with its signed mails.
-In 0.9 the mails go out after the action (`notifyBookingOutcomes`, `notifyExtraPortions`) with the templates of
-`app/config/notificationTemplates.ts`; the signed mails and the delivery below are not built.
-
-### Problem
-
-A mail goes to `bookedByUserId` or to the person's own login: a join from a nightly or preference run mails the system
-account, a child's assigned ticket or extra portion mails nobody, and a sold ticket mails every member of the selling
-household (`waitlist.ts:206`). A mail lost on the way is not resent, and no
-row records what was sent. Issue #170: a person's place on the waiting list of 27/10, joined by a preference run,
-greeted the person in a mail to the API account (`server/utils/sender/events/waitlist.ts:196`).
-
-An opt-out does not hold. The mails read it (`wantsChannel`), but a user's channels and appearance are written by
-more than the user:
-
-| Write | Path | Effect |
-|---|---|---|
-| The user's own save | `POST /api/user/preferences` → `saveUser(delta, id)` | the columns the body carries |
-| Heynabo import, user update | `heynaboImportService.ts:233` spreads the mapper's defaults (`useHeynaboValidation.ts:117`) into the id-keyed `saveUser` | both reset when the user's email, phone or admin role changed in Heynabo |
-| Heynabo import, new users | `createUsers` (`prismaRepository.ts:253`, `serializeUserInput`) | writes the defaults the columns already hold |
-| The email-keyed upsert | `saveUser` without an id (`prismaRepository.ts:108`), behind `PUT /api/admin/users`, `/household/inhabitants` and `/household` with inhabitants | reached by the e2e factories only: Heynabo is the source of users, and the app's household create sends no inhabitants (`app/stores/households.ts:356`) |
-
-The login (`fetchUser`) and the admin's user edit (`POST /api/admin/users/[id]`, email, phone and roles) only read.
-
-### Solution
-
-A mail about a person goes to the person's closest user (`findClosestUser`): the person's own login, else the first user
-of the person's household. Every sale of a released ticket mails both sides: `TICKET_SOLD` the person whose ticket was
-released (`TicketSale.sellerInhabitantId`), the buyer `WAITLIST_TICKET_ASSIGNED` for a sale to the waiting list and
-`TICKET_BOUGHT` for a direct buy. `WAITLIST_BUILDUP` goes to the chef. A scaffolded order keeps the system user as
-`bookedByUserId`. The booking step returns outcomes; the notification step resolves, composes and queues a complete
-message; the worker sends what it gets (ADR-016 rule 9). `DeliverySubject` gains `TICKET_WAITLIST` (a join, by its
-entry), `ORDER` (assigned, bought, extra portion, sold, by the order) and `DINNER_EVENT` (the buildup, by the dinner); the
-column is TEXT on D1 (`migrations/0015_notifications.sql`), so the change regenerates the client (`make d1-prisma`)
-with no migration file. `sendOnce` reads the Delivery rows, emits and records, one mail per subject, version, kind and
-recipient (the billing pattern, `monthlyBillingService.ts`); a subject's version is monotonic from 1, one step per
-history row that owes it a mail: `TICKET_WAITLIST` its join, `ORDER` the extra portion that created it and each BUY,
-`DINNER_EVENT` its buildup and each EXTRA_PORTIONS row after it. `GET /api/admin/sender/delivery?subjectType=&subjectIds=`
-reads the Delivery rows of the subjects it names; the rows have no other endpoint. Every booking mail, the
-buildup included, goes right after the action; daily maintenance gains a step that checks the owed notifications over
-the dinners still to come and resends the missing ones through the same rows, reported like `clearWaitlist`; the
-per-join buildup check in `server/utils/sender/events/waitlist.ts` goes. The chef's deadline reminders belong to daily
-maintenance in `feature-proposal-notification-triggers.md`.
-
-A new user is created with the defaults, as today (`createUsers`, the upsert's create branch). After that a user's
-channels and appearance change only through the user's own save (`POST /api/user/preferences`): the Heynabo import's
-update (`serializeUserPartial`, the mapper's payload) and the upsert's update branch carry neither.
-
-### Mockup — waiting-list mails ✅ signed off 2026-10-17
-
-The mails speak the booking words: they greet the one who hears and name the person they are about, carry the ticket
-line of the booking page and the badge's help text, and link to the dinner's booking page.
-
-```
-WAITLIST_JOINED  → the person, else the first user of the household
-Emne: Skråningen: Emil står på ventelisten til 20/10/2026 · Lasagne
-  Kære Lene,
-
-  20/10/2026 · Lasagne
-  Emil: 1 på ventelisten (Barn #1)
-  Barn · 35 kr · Spisesal
-
-  Du får automatisk tildelt en billet, hvis en kommer til salg, eller chefkokken frigiver portioner.
-  Du betaler, når du får en billet fra ventelisten.
-  Du kan altid afmelde din ventelisteplads, hvis du ikke har brug for den alligevel.
-
-  Se bookingen: https://skraaningen.dk/dinner?date=20/10/26
-
-WAITLIST_TICKET_ASSIGNED  → the person, else the first user of the household
-Emne: Skråningen: Emil har fået en billet til 20/10/2026 · Lasagne
-  20/10/2026 · Lasagne
-  Emil: 1 købt
-  Barn · 35 kr · Spisesal · fra Hansen
-  Du betaler for billetten. Vi glæder os til at se jer.
-  Se bookingen: …
-
-WAITLIST_EXTRA_PORTION  → the person, else the first user of the household
-  20/10/2026 · Lasagne
-  Emil: 1 tilmeldt
-  Barn · 35 kr · Spisesal
-  Køkkenholdet laver flere portioner, og en af dem er til Emil. Vi glæder os til at se jer.
-  Se bookingen: …
-
-TICKET_SOLD  → the person whose ticket was released, else the first user of the household
-Emne: Skråningen: 1 billet til 20/10/2026 · Lasagne er solgt
-  20/10/2026 · Lasagne
-  1 billet solgt til ventelisten        (1 billet solgt til Jensen, when a user bought it)
-  Voksen · 55 kr
-  I betaler ikke længere for den.
-  Se bookingen: …
-
-TICKET_BOUGHT  → the buyer, else the first user of the household (signed 2026-10-24)
-Emne: Skråningen: Emil har fået en billet til 20/10/2026 · Lasagne
-  20/10/2026 · Lasagne
-  Emil: 1 købt
-  Barn · 35 kr · Spisesal · fra Hansen
-  Du betaler for billetten. Vi glæder os til at se jer.
-  Se bookingen: https://skraaningen.dk/dinner?date=20/10/26
-
-WAITLIST_BUILDUP  → the chef, in the words of the chef's alert
-Emne: Skråningen: 3V 1B på venteliste til 20/10/2026 · Lasagne
-  3V 1B på venteliste · 5 portioner
-  Skrånere mangler billetter til din middag — har du mulighed for at mætte flere munde?
-  Det gør du under Flere på middagen: https://skraaningen.dk/chef
-```
-
-A guest reads "Gæst af Anna". The booking page's waiting-list badge carries the same help text. The join outcome
-carries the guest flag, the ticket price and the eating mode; a sale carries the buyer's booking user, eating mode and
-guest flag.
-
-### Tests
-
-The Waitlist notifications serial e2e: it joins a queue, releases a ticket and portions, crosses the buildup
-threshold and asserts each kind writes its Delivery row, one per subject, version, kind and recipient, read through
-`GET /api/admin/sender/delivery`. The endpoint's own API cases: the rows of the named subjects, a 400 on a bad query.
-
-The recipient rule and the opt-out, at the lowest level: `waitlist.unit.spec.ts` (a person's own login, else the
-household's first user, each mail kind, an opted-out user mailed nothing); the Heynabo mapper and the import's update
-payload carry no channels or appearance (unit).
+Priority: high, issue #170. Status: design awaiting approval (2026-10-25). Spec:
+[feature-notification-delivery.md](feature-notification-delivery.md).
 
 ## Scaffold: a save naming an order bought by another household
 
@@ -788,55 +679,26 @@ These fixtures span more dinners than their cases prove:
 
 Each fixture's season shrinks to the dinners its cases prove; each case is checked green when its season shrinks.
 
-## Deferred from release 0.9
+## AdminTeams loading row
 
-| Work | Where it lives | State |
-|---|---|---|
-| Duty roster (F5a): audit instrumentation, read endpoints and timeline, template CRUD and duty scaffolding, the single-dinner roster | `feature-proposal-duty-roster.md` Phases 1–4 | signed off (schema 2026-10-07, roster UX 2026-10-05); the tables shipped in migration `0017_roster`, the joker slot in `archived/feature-joker-slot.md` |
-| Joker and vacancy overviews: the dinner "missing" face, the team-card faces, shift counts, volunteering at duty level, the data separation list the user reviews and applies | `feature-proposal-duty-roster.md` § Joker, § Roster UX | signed off |
-| Roster sign-off and cross-team swap (F5b): derived auto-sign, Godkend alligevel, the duty swap | `feature-proposal-duty-roster.md` Phases 4–5 | signed off |
-| Season spending: Sæsontrend behind [Se sæsontrend], the admin economy Forbrug, the basisvarer entry; the totals are checked against a real season | `feature-proposal-season-spending.md` | mockups signed 2026-10-05 and 06 |
-| Ad-hoc charges and the spending views; the ADR-011 supplement on transaction variants | `feature-proposal-adhoc-admin-billing.md` phases 2 to 5 | signed off; the ledger, the expense table and the chef endpoints shipped |
-| Notification kinds beyond the waitlist: chef deadlines, roster, reminders, job failed, dinner cancelled, duty swapped | `feature-proposal-notification-triggers.md` | proposal, two open questions |
-| Billing delivery report and interrupted runs | `bug-fix-billing-delivery-report.md` | three open decisions |
-| AdminTeams loading row: after a season switch the table shows the previous season's teams under the loading bar; with the loading row, a team save's re-read closes the team detail docked under its row on a phone | `app/components/admin/AdminTeams.vue:396`, ADR-018 § Table loading | open: loading row with the docked detail closing, or a docked detail that survives the re-read |
-| Avatar ring colours: `UserListItem` builds `md:ring-${color}` at runtime, which Tailwind leaves out of the CSS, so from md up the faces on Præferencer and in the allergy alert ring in the text colour; the token holds one class string per use (`household` warning, `inhabitant` primary, `allergyManager` ocean-500), the prop takes its key, the raw `"ocean-500"` in `AllergyManagersList.vue:48` goes, and the `UserListItem` spec checks each key's token | `useTheSlopeDesignSystem.ts` `userListItem.ring`, `UserListItem.vue:143`, `HouseholdCard.vue:308` | brief presented 2026-10-20 |
+Moved from release 0.9 on 2026-10-18. After a season switch the table shows the previous season's teams under the
+loading bar; with the loading row, a team save's re-read closes the team detail docked under its row on a phone.
+Where: `app/components/admin/AdminTeams.vue:396`, ADR-018 § Table loading. **OPEN:** the loading row with the docked
+detail closing, or a docked detail that survives the re-read.
 
-### Decisions carried from release 0.9
+## Avatar ring colours
 
-**2026-10-05** (joker, roster, spending)
-- Joker: per-dinner volunteering by any inhabitant; a vacancy surfaces as a "missing" on the dinner; a team-card and a
-  big overview (split on teams and on people) for the admin; per-member shift counts (chefkok, fast tjans, joker) in
-  the team card; `/chef` is the member planning surface.
-- Volunteering writes season membership (`CookingTeamAssignment`) today. The roster replaces it, and the shipped rows
-  get a one-time data separation the user reviews and applies before ship.
-- CTC drives the roster: the dinner face leads with who comes today (vacancies, swaps, joker status); the season face
-  (admin teams) leads with the regular team, jokertjanser, shift counts and a view-only game-plan drill-down; which
-  face leads follows the dinner context. The Flytter badge leaves `/chef`.
-- A template row is one seat: capacity is modelled with rows and the counts in the UI are derived. Slot times and
-  tasks are templates, edited in the team's template editor.
-- Sign-off is derived: all seats filled → auto-signed (system actor); short → "MANGLER n" and the chef's
-  [Godkend alligevel] (chef actor). Members self-serve their own rows; the duty-level admin bypass is parked.
-- Basisvarer expenses are dinner-less and track against the køkkenbidrag pool. The Budget pane's [Se sæsontrend]
-  button unfolds the season view.
+Moved from release 0.9; brief presented 2026-10-20. `UserListItem` builds `md:ring-${color}` at runtime, which Tailwind
+leaves out of the CSS, so from md up the faces on Præferencer and in the allergy alert ring in the text colour. The
+token holds one class string per use (`household` warning, `inhabitant` primary, `allergyManager` ocean-500), the prop
+takes its key, the raw `"ocean-500"` in `AllergyManagersList.vue:48` goes, and the `UserListItem` spec checks each
+key's token. Where: `useTheSlopeDesignSystem.ts` `userListItem.ring`, `UserListItem.vue:143`, `HouseholdCard.vue:308`.
 
-**2026-10-06**
-- Admin economy Forbrug: month rows with dinner drill-down and a scope switcher (alle chefkokke, én chefkok,
-  Madbudget); the basisvarer entry is admin-only, in that section. `SeasonBudgetOverview` takes
-  `grouping: day | month`.
-- Vacancy big overview: per team, chronological, the origin on each hole (the joker note or who released). Calendar
-  gap markers are DS tokens, ink-coloured: a chef hat for a missing chef, a joker hat for an unfilled joker seat, a dot
-  for an unfilled regular seat.
-- S5 re-login is parked: the comparison by platform, the hypotheses and the spike findings live in
-  `feature-proposal-relogin-faceid.md`.
-
-**2026-10-08**
-- The framelding billing import books every ticket on the first inhabitant and answers 409; its e2e test is skipped
-  until `feature-0.9.2.md` § Billing import in the export format.
+## Decisions carried from release 0.9
 
 **2026-10-13**
-- The duty roster, the season spending views, the ad-hoc charges, the remaining notification kinds and the billing
-  delivery report move from release 0.9 to this release.
+- The billing delivery report moves from release 0.9 to this release; the duty roster, the season spending views and
+  the ad-hoc charges are in `../release-0.9.3/feature-0.9.3.md`, the remaining notification kinds in § Notification delivery.
 - The users store, the dinner Detail's tickets and `HouseholdDisplay`: § Server payload of the shared stores.
 
 **2026-10-17**

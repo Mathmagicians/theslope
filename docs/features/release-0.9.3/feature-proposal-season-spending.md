@@ -1,6 +1,6 @@
 # Feature Proposal: Season spending — Sæsontrend, admin Forbrug, basisvarer
 
-**Status:** Mockups signed (season view 2026-10-05, admin Forbrug 2026-10-06); next release (deferred 2026-10-13) | **Builds on:** the chef budget pane of release 0.9 (`archived/release-0.9.0.md` § Chef spending) and the expense ledger (`feature-proposal-adhoc-admin-billing.md` § Expenses)
+**Status:** Mockups signed (season view 2026-10-05, admin Forbrug 2026-10-06) | **Builds on:** the chef budget pane of release 0.9 (`../archived/release-0.9.0.md` § Chef spending) and the expense ledger (`feature-proposal-adhoc-admin-billing.md` § Expenses)
 
 ## Problem
 

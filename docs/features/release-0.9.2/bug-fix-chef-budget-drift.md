@@ -1,6 +1,6 @@
 # Bug report: the chef's available budget changes after the ticket deadline
 
-**Status:** Next release, investigation | **Date:** 2026-10-08 | **Environment:** prod | **Dinner:** 9 October 2026
+**Status:** Investigation | **Date:** 2026-10-08 | **Environment:** prod | **Dinner:** 9 October 2026
 
 ## Observation
 

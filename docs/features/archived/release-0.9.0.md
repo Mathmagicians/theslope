@@ -3,7 +3,7 @@
 **Status:** ✅ shipped, archived 2026-10-19 | **Date:** 2026-10-05 | **Branch:** `feature/work-roster` (PR #168)
 
 The packages of release 0.9, where each one lives and the decisions behind them. Next: `../chores-0.9.1.md`,
-`../feature-0.9.2.md`. The release poster: `../../releases/release-0.9.0.md`.
+`../release-0.9.3/feature-0.9.3.md`. The release poster: `../../releases/release-0.9.0.md`.
 
 ## Package inventory
 
@@ -66,10 +66,10 @@ One migration, `0017_roster`, applied on local, dev and prod 2026-10-08; `0018_p
 
 | Model / change | Design |
 |---|---|
-| `DinnerDutyTemplate`, `DinnerDuty`, `DutyHistory`, `DutyState`, `DutyAuditAction` | `../feature-proposal-duty-roster.md` § Schema additions |
+| `DinnerDutyTemplate`, `DinnerDuty`, `DutyHistory`, `DutyState`, `DutyAuditAction` | `../release-0.9.3/feature-proposal-duty-roster.md` § Schema additions |
 | `JokerSlot` | `feature-joker-slot.md` |
 | `TicketWaitlist` | `feature-waitlist.md` |
-| `LedgerEntryType`, `Transaction.type` and `description`, `Expense`, `DinnerEvent.totalCost` deprecated | `../feature-proposal-adhoc-admin-billing.md` § Data model |
+| `LedgerEntryType`, `Transaction.type` and `description`, `Expense`, `DinnerEvent.totalCost` deprecated | `../release-0.9.3/feature-proposal-adhoc-admin-billing.md` § Data model |
 
 ## Chef spending
 
@@ -101,7 +101,7 @@ run, writing and sending nothing (`useScaffoldPreview`); an empty draft answers 
 ghosted with "Forventet bestilling ifølge præferencer" (`BookingGridView.vue`, `ActionPreview.vue` headers). An Ingen
 is a cancellation on record (`recordCancellation`). A run's claims settle once per dinner after the household loop and
 join as one batch (`createWaitlistEntries`); writes carry no retries beyond ADR-016 rule 10 (decided 2026-10-18), and
-the write-failure dashboard is `../feature-0.9.2.md`. Specs: `household/preferences.e2e.spec.ts`,
+the write-failure dashboard is `../release-0.9.3/feature-0.9.3.md`. Specs: `household/preferences.e2e.spec.ts`,
 `scaffoldPrebookings.unit`, `useWaitlist.unit`, `ActionPreview.nuxt.spec`, `BookingGridView.nuxt.spec`.
 
 ## Release notes PDF

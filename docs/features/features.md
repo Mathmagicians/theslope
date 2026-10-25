@@ -89,10 +89,10 @@ User (Bruger)
 | Feature | Description |
 |---------|-------------|
 | **PBS Export** | Direct PBS file generation |
-| **Duty Roster** | Templates, duties, audit trail, derived sign-off and cross-team swap (`feature-proposal-duty-roster.md`) |
-| **Season Spending** | Sæsontrend per chef, admin Forbrug with scopes, basisvarer entry (`feature-proposal-season-spending.md`) |
-| **Ad-hoc Charges** | Admin charges on a household, reversal, the spending views (`feature-proposal-adhoc-admin-billing.md`) |
-| **Notification Triggers** | Chef deadlines, roster and shift reminders, job failed, dinner cancelled, duty swapped (`feature-proposal-notification-triggers.md`) |
+| **Duty Roster** | Templates, duties, audit trail, derived sign-off and cross-team swap (`release-0.9.3/feature-proposal-duty-roster.md`) |
+| **Season Spending** | Sæsontrend per chef, admin Forbrug with scopes, basisvarer entry (`release-0.9.3/feature-proposal-season-spending.md`) |
+| **Ad-hoc Charges** | Admin charges on a household, reversal, the spending views (`release-0.9.3/feature-proposal-adhoc-admin-billing.md`) |
+| **Notification Triggers** | Roster and shift reminders, chefless-dinner alerts, duty swapped, the SMS channel (`release-0.9.3/feature-proposal-notification-triggers.md`) |
 | **Developer Companion** | E2E as Gherkin features with playwright-bdd, `make bdd-report` in the summaries, `developer.skraaningen.dk` with the living documentation and the API reference per environment (`feature-proposal-developer-companion.md`) |
 
 ---
