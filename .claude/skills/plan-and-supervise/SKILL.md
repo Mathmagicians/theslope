@@ -28,15 +28,16 @@ at a time behind an explicit approval. The plan document is the deliverable; the
 
 - The spec speaks the domain: a person books, releases a ticket, joins the waiting list; the chef adds portions; the
   admin re-sends; the nightly run sends what a background run left. The Solution says what the system does, never how
-  the code does it: no code blocks, config snippets or before/after code. The mockup and the Gherkin are its only
-  code blocks.
+  the code does it: no code blocks, config snippets or before/after code. The mockup is its only code block.
 - Names the user gave stay verbatim (`findClosestUserInHousehold`, `SHOULD_SEND_BOOKING_EMAILS_FLAG`); the Affected
   table names files. The `file:line` trace, function names, shapes and diffs go in the chat round and the brief.
 - A decision is written as it was discussed, one plain sentence under its date: "Monthly billing sends through the same
   code as the booking notifications (DRY)."
-- Gherkin keeps one Feature per topic. Cases that differ only in data are one Scenario Outline with Examples. A Then
-  states its outcome in numbers a reader checks: "a db admin sees `<records>` delivery records for the dinner", "the
-  email is sent to `<recipient>` `<emails>`" with `1 time`, `2 times`.
+- The TDD section links the `.feature` files and carries no Gherkin; the feature file is the one source. Gherkin keeps
+  one Feature per topic, cases that differ only in data are one Scenario Outline with Examples, and a Then states its
+  outcome in numbers a reader checks.
+- The unit rules a spec lists are the new code's own; a rule an existing spec already proves is named with that spec,
+  never listed again.
 
 ## Naming
 

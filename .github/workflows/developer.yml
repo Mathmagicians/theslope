@@ -51,6 +51,8 @@ jobs:
             echo "Run $id has no deployment artifact"
           done
           echo "PUBLISH=false" | tee -a "$GITHUB_ENV"
+          checked=$(echo $candidates)
+          echo "Nothing published: no successful pipeline run with a deployment artifact on $BRANCH (checked: ${checked:-none})" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-node@v7
         if: env.PUBLISH == 'true'
         with:
@@ -87,3 +89,14 @@ jobs:
           fi
       - run: make developer-publish env="$ENV"
         if: env.PUBLISH == 'true'
+      - name: Summary
+        if: env.PUBLISH == 'true'
+        env:
+          DEVELOPER_DOMAIN: ${{ vars.DEVELOPER_DOMAIN }}
+        run: |
+          if [ -n "$DEVELOPER_DOMAIN" ]; then
+            site="https://$DEVELOPER_DOMAIN"
+          else
+            site="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+          fi
+          echo "Published run $RUN_ID ($ENV $RELEASE_VERSION): $site/environments/$ENV" | tee -a "$GITHUB_STEP_SUMMARY"
