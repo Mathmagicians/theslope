@@ -319,7 +319,7 @@ model Delivery {
   kind        DeliveryKind
   reference   String // the R2 key, or the message's dedupeKey
   jobRunId    Int?
-  jobRun      JobRun?         @relation(fields: [jobRunId], references: [id], onDelete: SetNull) // null: re-sent by an admin
+  jobRun      JobRun?         @relation(fields: [jobRunId], references: [id], onDelete: SetNull) // null: sent outside a job run
   deliveredAt DateTime        @default(now())
 
   @@index([subjectType, subjectId, kind])
@@ -327,6 +327,9 @@ model Delivery {
 
 enum DeliverySubject {
   BILLING_PERIOD
+  TICKET_WAITLIST
+  ORDER
+  DINNER_EVENT
 }
 
 enum DeliveryKind {

@@ -106,7 +106,7 @@ export const JobStatusSchema = z.enum(['RUNNING','SUCCESS','PARTIAL','FAILED']);
 
 export type JobStatusType = `${z.infer<typeof JobStatusSchema>}`
 
-export const DeliverySubjectSchema = z.enum(['BILLING_PERIOD']);
+export const DeliverySubjectSchema = z.enum(['BILLING_PERIOD','TICKET_WAITLIST','ORDER','DINNER_EVENT']);
 
 export type DeliverySubjectType = `${z.infer<typeof DeliverySubjectSchema>}`
 
