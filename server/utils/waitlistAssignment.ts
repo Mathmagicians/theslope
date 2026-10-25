@@ -166,7 +166,10 @@ const placeEntry = async (
     await removePlacedWaitlistEntry(d1Client, entry.id)
     return {
         stop: false,
-        placed: {entryId: entry.id, inhabitantId: entry.inhabitantId, isGuestTicket: entry.isGuestTicket, portions, orderId, ticketPriceId: entry.order.ticketPriceId}
+        placed: {
+            entryId: entry.id, inhabitantId: entry.inhabitantId, isGuestTicket: entry.isGuestTicket, portions, orderId, ticketPriceId: entry.order.ticketPriceId,
+            dinnerMode: entry.order.dinnerMode
+        }
     }
 }
 
@@ -216,11 +219,15 @@ export async function assignWaitlistPortions(
 // Sells the oldest released ticket of the entry's type to the entry: grab the entry with the ticket, claim the ticket,
 // remove the entry. A ticket another buyer took first hands the entry back to its place, and the next ticket for sale is tried
 const sellToEntry = async (d1Client: D1Database, entry: TicketWaitlistDisplay, ticketType: TicketType): Promise<PlacementStep<TicketSale>> => {
+    const {OrderAuditSourceSchema} = useBookingValidation()
     const releasedOrderId = await findReleasedOrderId(d1Client, entry.dinnerEventId, ticketType)
     if (releasedOrderId === null || !await grabWaitlistEntry(d1Client, entry.id, new Date(), releasedOrderId)) return STOP
     let claimed: ClaimedOrder | null
     try {
-        claimed = await claimReleasedOrder(d1Client, releasedOrderId, entry.inhabitantId, entry.order.bookedByUserId ?? null, entry.order.dinnerMode, entry.isGuestTicket)
+        claimed = await claimReleasedOrder(
+            d1Client, releasedOrderId, entry.inhabitantId, entry.order.bookedByUserId ?? null, entry.order.dinnerMode, entry.isGuestTicket,
+            OrderAuditSourceSchema.enum['waitlist-assignment']
+        )
     } catch (error) {
         await leaveWhenAlreadyPlaced(d1Client, entry, error)
         return MOVE_ON
@@ -234,8 +241,8 @@ const sellToEntry = async (d1Client: D1Database, entry: TicketWaitlistDisplay, t
     return {
         stop: false,
         placed: {
-            dinnerEventId: entry.dinnerEventId, ticketPriceId: claimed.ticketPriceId,
-            buyerInhabitantId: entry.inhabitantId, buyerHouseholdId: entry.order.householdId, sellerHouseholdId: claimed.sellerHouseholdId,
+            dinnerEventId: entry.dinnerEventId, ticketPriceId: claimed.ticketPriceId, orderId: releasedOrderId, dinnerMode: entry.order.dinnerMode,
+            isGuestTicket: entry.isGuestTicket, buyerInhabitantId: entry.inhabitantId, buyerHouseholdId: entry.order.householdId, sellerHouseholdId: claimed.sellerHouseholdId,
             sellerInhabitantId: claimed.sellerInhabitantId
         }
     }

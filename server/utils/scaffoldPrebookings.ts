@@ -64,8 +64,8 @@ export type ScaffoldOptions = {
     adminCorrection?: boolean
 }
 
-/** A ticket a claim bought: the price row it keeps and the household and the inhabitant that sold it */
-type BoughtTicket = {ticketPriceId: number, sellerHouseholdId: number, sellerInhabitantId: number}
+/** A ticket a claim bought: the order, the price row it keeps and the household and the inhabitant that sold it */
+type BoughtTicket = {orderId: number, ticketPriceId: number, sellerHouseholdId: number, sellerInhabitantId: number}
 
 // The key a written queue entry pairs with its join by: its person, its dinner and its guest flag
 const entryKeyOf = ({inhabitantId, dinnerEventId, isGuestTicket}: Pick<TicketWaitlistDisplay, 'inhabitantId' | 'dinnerEventId' | 'isGuestTicket'>): string =>
@@ -92,7 +92,10 @@ type Supply = {
 const databaseSupply = (d1Client: D1Database, payerUserId: number, ticketPrices: TicketPrice[]): Supply => ({
     queueOf: dinnerEventIds => fetchWaitlistForDinners(d1Client, dinnerEventIds),
     forSale: dinnerEventId => countReleasedTicketsByType(d1Client, dinnerEventId),
-    buy: (claim, ticketType) => claimOrder(d1Client, claim.dinnerEventId, ticketType, claim.inhabitantId, payerUserId, claim.dinnerMode, claim.isGuestTicket),
+    buy: async (claim, ticketType) => {
+        const claimed = await claimOrder(d1Client, claim.dinnerEventId, ticketType, claim.inhabitantId, payerUserId, claim.dinnerMode, claim.isGuestTicket)
+        return claimed && {orderId: claimed.order.id, ticketPriceId: claimed.ticketPriceId, sellerHouseholdId: claimed.sellerHouseholdId, sellerInhabitantId: claimed.sellerInhabitantId}
+    },
     join: (joins, dinner, audit) => joinWaitlist(d1Client, joins, dinner, audit),
     orderWritten: () => undefined,
     entryLeft: () => undefined,
@@ -129,7 +132,7 @@ const previewSupply = (d1Client: D1Database, ticketPrices: TicketPrice[], ticket
             const [oldest] = ofType(claim.dinnerEventId, ticketType)
             if (!oldest?.ticketPriceId) return null
             tickets.delete(oldest.id)
-            return {ticketPriceId: oldest.ticketPriceId, sellerHouseholdId: oldest.householdId, sellerInhabitantId: oldest.inhabitantId}
+            return {orderId: oldest.id, ticketPriceId: oldest.ticketPriceId, sellerHouseholdId: oldest.householdId, sellerInhabitantId: oldest.inhabitantId}
         },
         // The entries the preview joins line up after the stored ones, in the order they join
         join: async (joins, dinner) => {
@@ -602,7 +605,7 @@ export async function scaffoldPrebookings(
                 const bought = outcome === Action.BUY && !lineTypes.has(ticketType) ? await supply.buy(claim, ticketType) : null
                 if (bought) {
                     outcomes.ticketsSold.push({
-                        dinnerEventId, ticketPriceId: bought.ticketPriceId,
+                        dinnerEventId, ticketPriceId: bought.ticketPriceId, orderId: bought.orderId, dinnerMode: claim.dinnerMode, isGuestTicket: claim.isGuestTicket,
                         buyerInhabitantId: claim.inhabitantId, buyerHouseholdId: run.household.id, sellerHouseholdId: bought.sellerHouseholdId,
                         sellerInhabitantId: bought.sellerInhabitantId
                     })

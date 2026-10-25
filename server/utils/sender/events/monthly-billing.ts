@@ -9,6 +9,7 @@ import type {EmailChannel} from '~~/server/utils/sender/config'
 import {composeEmail, missingAddress, siteUrl} from '~~/server/utils/sender/compose'
 import {useBillingValidation, type BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 import type {EmailMessage, NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
+import {NotificationKind} from '~/config/notificationTemplates'
 
 const {generateBillingCsv, generateCsvFilename} = useBillingValidation()
 const LOG = '📮 > SENDER > [EVENT monthly-billing]'
@@ -16,8 +17,8 @@ const LOG = '📮 > SENDER > [EVENT monthly-billing]'
 const formatKroner = (oere: number): string =>
     (oere / 100).toLocaleString('da-DK', {minimumFractionDigits: 2, maximumFractionDigits: 2})
 
-export const billingMailKind = (version: number): 'BILLING_PERIOD_CLOSED' | 'BILLING_PERIOD_UPDATED' =>
-    version > 1 ? 'BILLING_PERIOD_UPDATED' : 'BILLING_PERIOD_CLOSED'
+export const billingMailKind = (version: number): NotificationKind =>
+    version > 1 ? NotificationKind.BILLING_PERIOD_UPDATED : NotificationKind.BILLING_PERIOD_CLOSED
 
 export const buildBillingPeriodClosedEmail = (config: NotificationConfig, summary: BillingPeriodSummaryDetail, now?: Date): EmailMessage => {
     const kind = billingMailKind(summary.version)
@@ -30,7 +31,7 @@ export const buildBillingPeriodClosedEmail = (config: NotificationConfig, summar
             householdCount: String(summary.householdCount),
             totalAmount: formatKroner(summary.totalAmount),
             summaryUrl: siteUrl(config, `/public/billing/${summary.shareToken}`),
-            ...(kind === 'BILLING_PERIOD_UPDATED' ? {version: String(summary.version)} : {})
+            ...(kind === NotificationKind.BILLING_PERIOD_UPDATED ? {version: String(summary.version)} : {})
         },
         attachments: [{filename: generateCsvFilename(summary), contentType: 'text/csv; charset=utf-8', content: generateBillingCsv(summary)}],
         correlationId: `${summary.billingPeriod} v${summary.version}`,

@@ -103,12 +103,14 @@ export async function saveUser(
     const subject = id != null ? `id=${id}` : user.email!
 
     try {
+        // A new user starts on the default channels and appearance; an existing user's settings are the user's own save
+        const {notificationChannels: _channels, appearance: _appearance, ...existingUserUpdate} = serializeUserInput(user as UserCreate)
         const row = id != null
             ? await prisma.user.update({where: {id}, data: serializeUserPartial(user)})
             : await prisma.user.upsert({
                   where: {email: user.email!},
                   create: serializeUserInput(user as UserCreate),
-                  update: serializeUserInput(user as UserCreate)
+                  update: existingUserUpdate
               })
         console.info(`${LOG_USER} Saved user ${row.email} (id=${row.id}, target=${subject})`)
         return toUserDetail(row)

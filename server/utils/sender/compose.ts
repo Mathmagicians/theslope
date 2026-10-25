@@ -18,6 +18,8 @@ export type TextAttachment = {
 export type ComposeInput = {
     kind: string
     to: string
+    /** The login the mail goes to: its id leads the key's recipient, so two logins whose addresses mask alike stay two */
+    userId?: number
     cc?: string[]
     values?: Record<string, string>
     attachments?: TextAttachment[]
@@ -31,12 +33,18 @@ const toBase64 = (utf8: string): string => Buffer.from(utf8, 'utf8').toString('b
 // A link into the deployment the mail comes from; `path` starts with a slash
 export const siteUrl = (config: NotificationConfig, path: string): string => `https://${config.site}${path}`
 
+// A dedupe key up to its recipient: the kind and the channel
+const keyPrefix = (kind: string): string => `${kind}:EMAIL:`
+
+/** The dedupe keys of a kind's mails to a login start alike, whatever the login's address */
+export const userDedupePrefix = (kind: string, userId: number): string => `${keyPrefix(kind)}user-${userId}/`
+
 /** The variable an event is missing before it can send (its recipient's mailbox), or null */
 export const missingAddress = (config: NotificationConfig, recipient: 'adminEmail' | 'accountantEmail'): string | null =>
     config[recipient] ? null : NOTIFICATION_ADDRESS_VARS[recipient]
 
 export const composeEmail = (config: NotificationConfig, input: ComposeInput): EmailMessage => {
-    const {kind, to, cc = [], values = {}, attachments = [], correlationId, now = new Date()} = input
+    const {kind, to, userId, cc = [], values = {}, attachments = [], correlationId, now = new Date()} = input
     const template = config.templates[kind]
     if (!template) throw new Error(`No notification template for kind ${kind}`)
 
@@ -44,8 +52,9 @@ export const composeEmail = (config: NotificationConfig, input: ComposeInput): E
     const unused = Object.keys(values).filter(name => !placeholders.has(name))
     if (unused.length > 0) throw new Error(`Template ${kind} has no placeholder for: ${unused.join(', ')}`)
 
-    // {kind}:{channel}:{maskedRecipient}:{messageId} — one grep on the masked address finds every send to that mailbox
-    const dedupeKey = `${kind}:EMAIL:${maskEmail(to)}:${crypto.randomUUID()}`
+    // {kind}:{channel}:{maskedRecipient}:{messageId}, the recipient led by user-{id}/ for a mail to a login — one grep on
+    // the masked address finds every send to that mailbox
+    const dedupeKey = `${userId === undefined ? keyPrefix(kind) : userDedupePrefix(kind, userId)}${maskEmail(to)}:${crypto.randomUUID()}`
     const allValues = {...values, senderName: NOTIFICATION_SENDER_NAME, site: config.site, environment: config.environment, dedupeKey}
 
     return {

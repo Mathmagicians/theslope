@@ -402,7 +402,8 @@ export async function findReleasedOrderId(d1Client: D1Database, dinnerEventId: n
  *
  * @returns Claimed order with the household and the inhabitant that sold it, or null when the order is no longer for sale
  *
- * ADR-011: Creates USER_CLAIMED audit entry with original household provenance
+ * ADR-011: Creates USER_CLAIMED audit entry with original household provenance; a sale to the waiting list names its
+ * source, so the history tells it from a direct buy
  */
 export async function claimReleasedOrder(
     d1Client: D1Database,
@@ -410,7 +411,8 @@ export async function claimReleasedOrder(
     newInhabitantId: number,
     claimedByUserId: number | null,
     dinnerMode: DinnerMode,
-    isGuestTicket: boolean = false
+    isGuestTicket: boolean = false,
+    source?: OrderAuditSource
 ): Promise<ClaimedOrder | null> {
     const LOG = '🎟️ > ORDER > [CLAIM]'
     const {OrderStateSchema, OrderAuditActionSchema, OrderAuditChangeSchema, createOrderAuditData} = useBookingValidation()
@@ -452,7 +454,7 @@ export async function claimReleasedOrder(
                 inhabitantId: newInhabitantId,
                 dinnerEventId: existingOrder.dinnerEventId,
                 seasonId: existingOrder.dinnerEvent?.seasonId ?? null,
-                auditData: createOrderAuditData(OrderAuditChangeSchema.enum.BUY, orderSnapshotOf(existingOrder, existingOrder.inhabitant))
+                auditData: createOrderAuditData(OrderAuditChangeSchema.enum.BUY, orderSnapshotOf(existingOrder, existingOrder.inhabitant), source)
             }
         })
 
@@ -1430,23 +1432,31 @@ export async function bumpBillingPeriodVersion(d1Client: D1Database, id: number)
 
 /*** DELIVERIES (ADR-015 convergence): one row per version of a subject that reached a channel ***/
 
-/** All deliveries of one subject — a handful of rows (one per version and channel, plus re-sends) */
-export async function fetchDeliveries(d1Client: D1Database, subjectType: Delivery['subjectType'], subjectId: number): Promise<Delivery[]> {
+/** The deliveries of the subjects of one type, in the order they were recorded; the ids read in chunks (ADR-014) */
+export async function fetchDeliveries(d1Client: D1Database, subjectType: Delivery['subjectType'], subjectIds: number[]): Promise<Delivery[]> {
     const {DeliverySchema} = useDeliveryValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
-    const rows = await prisma.delivery.findMany({where: {subjectType, subjectId}, orderBy: {id: 'asc'}})
-    return rows.map(row => DeliverySchema.parse(row))
+    const rows = await readByIds(subjectIds, batch => prisma.delivery.findMany({where: {subjectType, subjectId: {in: batch}}}))
+    return rows.map(row => DeliverySchema.parse(row)).sort((a, b) => a.id - b.id)
 }
 
-/** jobRunId null = re-sent by an admin (ADR-012: written as null, never as undefined) */
-export async function recordDelivery(d1Client: D1Database, data: DeliveryCreate): Promise<Delivery> {
+/** When the first Delivery row of the subject types landed; null before any */
+export async function fetchFirstDeliveredAt(d1Client: D1Database, subjectTypes: Delivery['subjectType'][]): Promise<Date | null> {
+    const prisma = await getPrismaClientConnection(d1Client)
+    const first = await prisma.delivery.findFirst({where: {subjectType: {in: subjectTypes}}, orderBy: {deliveredAt: 'asc'}, select: {deliveredAt: true}})
+    return first?.deliveredAt ?? null
+}
+
+/** The rows in one write (ADR-014); jobRunId null = sent outside a job run (ADR-012: written as null, never as undefined) */
+export async function recordDeliveries(d1Client: D1Database, rows: DeliveryCreate[]): Promise<Delivery[]> {
+    if (rows.length === 0) return []
     const {DeliverySchema} = useDeliveryValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
-    const row = await prisma.delivery.create({data: {...data, jobRunId: data.jobRunId ?? null}})
-    console.info(`📬 > DELIVERY > [RECORD] ${data.subjectType} ${data.subjectId} v${data.version} ${data.kind}`)
-    return DeliverySchema.parse(row)
+    const created = await prisma.delivery.createManyAndReturn({data: rows.map(row => ({...row, jobRunId: row.jobRunId ?? null}))})
+    console.info(`📬 > DELIVERY > [RECORD] ${created.length} rows: ${rows.map(row => `${row.subjectType} ${row.subjectId} v${row.version} ${row.kind}`).join(', ')}`)
+    return created.map(row => DeliverySchema.parse(row))
 }
 
 export async function createInvoices(
@@ -1681,20 +1691,20 @@ export async function deleteExpense(d1Client: D1Database, dinnerEventId: number,
     }
 }
 
-/*** ORDER HISTORY OF A DINNER: the rows the chef's Billetændringer replay ***/
+/*** ORDER HISTORY OF DINNERS: the rows the chef's Billetændringer replay and the booking mails count their versions by ***/
 
-// Every history row of the dinner in time order; a deleted order's rows stay through the denormalized dinnerEventId
-export async function fetchOrderHistoryForDinner(d1Client: D1Database, dinnerEventId: number): Promise<OrderHistoryDisplay[]> {
+// Every history row of the dinners in time order; a deleted order's rows stay through the denormalized dinnerEventId.
+// The ids read in chunks (ADR-014)
+export async function fetchOrderHistoryForDinners(d1Client: D1Database, dinnerEventIds: number[]): Promise<OrderHistoryDisplay[]> {
     const {OrderHistoryDisplaySchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
     try {
-        const rows = await prisma.orderHistory.findMany({
-            where: {dinnerEventId},
-            include: {performedByUser: performedByUserSelect},
-            orderBy: [{timestamp: 'asc'}, {id: 'asc'}]
-        })
-        return rows.map(row => OrderHistoryDisplaySchema.parse(row))
+        const rows = await readByIds(dinnerEventIds, batch => prisma.orderHistory.findMany({
+            where: {dinnerEventId: {in: batch}},
+            include: {performedByUser: performedByUserSelect}
+        }))
+        return rows.map(row => OrderHistoryDisplaySchema.parse(row)).sort(byTimeThenId(row => row.timestamp.getTime()))
     } catch (error) {
-        return throwH3Error(`🎟️ > ORDER_HISTORY > [GET] Error fetching the order history of dinner ${dinnerEventId}`, error)
+        return throwH3Error(`🎟️ > ORDER_HISTORY > [GET] Error fetching the order history of ${dinnerEventIds.length} dinner(s)`, error)
     }
 }
