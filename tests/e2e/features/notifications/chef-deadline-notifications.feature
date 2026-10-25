@@ -8,7 +8,7 @@ Feature: Chef deadline notifications
     And a season is active
 
   Scenario: The nightly run emails the chef's missed deadlines once a night
-    Given a dinner past its Menu deadline
+    Given a dinner past its ANNOUNCED deadline
     And the dinner is in the state SCHEDULED
     And the dinner has 0 expenses
     And the DAILY_MAINTENANCE job has run 1 time

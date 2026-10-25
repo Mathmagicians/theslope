@@ -19,7 +19,7 @@ Feature: User preferences
 
   Scenario Outline: The user with the setting channel <channel> is sent <emails sent> booking emails
     Given the user is signed in
-    And a dinner past its Booking deadline
+    And a dinner past its BOOKING_CLOSED deadline
     When the user saves the setting channel <channel>
     And the dinner is booked for the user's inhabitant
     Then <emails sent> WAITLIST_JOINED emails are sent to the closest user of the user's inhabitant

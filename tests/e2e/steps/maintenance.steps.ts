@@ -8,18 +8,11 @@ import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 
 const {JobType} = useMaintenanceValidation()
 
-/** The idempotent jobs (ADR-015) by the words a feature names them with */
-const JOBS_BY_WORDS = {
-    'Heynabo import': JobType.HEYNABO_IMPORT,
-    'daily maintenance': JobType.DAILY_MAINTENANCE,
-    'monthly billing': JobType.MONTHLY_BILLING
-} as const
-type JobWords = keyof typeof JOBS_BY_WORDS
-
+/** The idempotent jobs (ADR-015) by their JobType value */
 defineParameterType({
     name: 'job',
-    regexp: Object.keys(JOBS_BY_WORDS),
-    transformer: (words: string) => JOBS_BY_WORDS[words as JobWords]
+    regexp: Object.values(JobType),
+    transformer: (job: string) => JobType[job as keyof typeof JobType]
 })
 
 When('the {job} job runs', async ({scene}, job: JobRun['job']) => {

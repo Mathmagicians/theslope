@@ -18,6 +18,7 @@ const {validatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo, da
 const {createDefaultWeekdayMap} = useCoreValidation()
 const Mode = useBookingValidation().DinnerModeSchema.enum
 const {TICKET_WAITLIST, ORDER, DINNER_EVENT} = useDeliveryValidation().DeliverySubjectSchema.enum
+const {BOOKING_STATUS} = useDeliveryValidation().SenderEventSchema.enum
 const {Kind, mailKindOf} = NotificationFactory
 
 /**
@@ -179,7 +180,7 @@ test.describe.serial('Waitlist notifications', () => {
 
         const maintenance = await SeasonFactory.runDailyMaintenance(context)
 
-        expect(maintenance.resendNotifications.dinners.map(dinner => dinner.dinnerEventId)).toContain(dinnerId)
+        expect(maintenance.notifications[BOOKING_STATUS]?.sent, 'the owed join mail goes in the run').toBeGreaterThanOrEqual(1)
         expect(await deliveriesOf(context, TICKET_WAITLIST, place!.id, 1)).toEqual([{kind: Kind.WAITLIST_JOINED, version: 1}])
         expect(await deliveriesOf(context, TICKET_WAITLIST, emilsPlaceId, 1)).toEqual([{kind: Kind.WAITLIST_JOINED, version: 1}])
         expect(await deliveriesOf(context, ORDER, karlsOrderId, 2)).toEqual([{kind: Kind.TICKET_SOLD, version: 1}, {kind: Kind.WAITLIST_TICKET_ASSIGNED, version: 1}])

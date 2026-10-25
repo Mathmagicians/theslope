@@ -1,17 +1,17 @@
 # Notification delivery
 
-**Status:** Design awaiting approval | **Date:** 2026-10-25 | **Updated:** 2026-10-25 | **Branch:** chore/work-roster-leftovers
+**Status:** Implementing | **Date:** 2026-10-25 | **Updated:** 2026-10-25 | **Branch:** chore/work-roster-leftovers
 
 Priority high, issue #170.
 
 | Package | State |
 |---|---|
-| Desired deliveries | approved 2026-10-25 |
-| Diagnostics | approved 2026-10-25 |
+| Desired deliveries | in your test 39e14a6, 16586f1 |
+| Diagnostics | in your test 39e14a6 |
 | Booking status | awaiting approval |
 | Monthly billing | decided 2026-10-25 |
 | Chef deadlines | approved 2026-10-25 |
-| Booking emails flag | agreed 2026-10-25 |
+| Booking emails flag | in your test 39e14a6, 16586f1 |
 
 ## Desired deliveries
 
@@ -78,7 +78,6 @@ reported:
 | Two runs on one dinner send the same notification | the delivery step's sent-twice line, naming the notification, the subject, the version and the user, at the next run on that dinner |
 | The app cannot hand a notification to the queue (no sender binding, no mailbox) | the app's error line on the dashboard |
 | The sender stops taking messages off the queue | the queue's backlog on the dashboard |
-| A notification has no user to go to | the nightly run's result, per sender event beside the notifications sent; the job runs page shows the counts |
 | The nightly run fails | the job runs page |
 
 Each environment has its dashboard over the app's and the sender's Workers Logs. The dev sender delivers to the test
@@ -96,8 +95,8 @@ ships off in dev and prod, and on locally, in e2e and in CI. A configuration rel
 release after that removes the flag.
 
 **Delivery dry run.** Before the flag goes on, the admin runs the delivery dry run of the booking notifications for the environment from
-the terminal, a make target beside the sender targets: per user, how many of each notification the first run sends, how
-many are already sent, and how many have no user to go to. The dry run sends and records nothing; it has no page.
+the terminal, a make target beside the sender targets: per user, how many of each notification the first run sends and how
+many are already sent. The dry run sends and records nothing; it has no page.
 
 ### Mockup — notifications ✅ signed off 2026-10-17
 
@@ -176,7 +175,7 @@ The rules below the features, each in its unit spec:
 | The flag off: no booking email is sent or recorded | `waitlist.unit.spec.ts` |
 | The channels: the recipient's crossed with the environment's | `tests/component/utils/sender/deliveries.unit.spec.ts` |
 | Should send, with the admin's override | `tests/component/composables/useDeliveryValidation.unit.spec.ts` |
-| One send and one record per run; a notification without a user stays owed; the dry run sends and records nothing | `deliveries.unit.spec.ts` |
+| One send and one record per run; the dry run sends and records nothing | `deliveries.unit.spec.ts` |
 | The Heynabo import leaves a user's channels and appearance as they are | the Heynabo mapper and import specs |
 
 ### Affected

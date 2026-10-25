@@ -567,7 +567,7 @@ export class OrderFactory {
     transact: {created: 0},
     clearWaitlist: {cleared: 0, dinners: []},
     initPrefs: {initialized: 0},
-    resendNotifications: {resent: 0, dinners: []},
+    notifications: {},
     scaffold: null,
     ...overrides
   })

@@ -21,7 +21,7 @@ Updated 2026-10-25. Release 0.9 shipped in f5b5205 (#168).
 
 | Delivery | Description or spec | Gherkin | Status |
 |---|---|---|---|
-| Notification delivery | [feature-notification-delivery.md](feature-notification-delivery.md) | drafted in the spec § TDD: `booking-notifications.feature`, `billing-notifications.feature` | specified |
+| Notification delivery | [feature-notification-delivery.md](feature-notification-delivery.md) | `booking-notifications.feature`, `billing-notifications.feature`, `chef-deadline-notifications.feature`, `delivery-records.feature`, `test-message.feature` (16586f1) | in your test: desired deliveries, diagnostics, booking emails flag (39e14a6, 16586f1) |
 | UI cases fail on an unexpected API error | § UI cases fail on an unexpected API error | – | implemented |
 | Dev-server flakes in CI | § Dev-server flakes in CI | – | implemented |
 | UI suites fail the build | § UI suites fail the build | – | specified |

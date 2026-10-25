@@ -10,7 +10,7 @@ Feature: Booking notifications
     And a season is active
 
   Scenario Outline: The <event> <deadline> the deadline: <notification> email to the closest user of the <inhabitant>
-    Given a dinner <deadline> its Booking deadline
+    Given a dinner <deadline> its BOOKING_CLOSED deadline
     And the seller has a ticket
     And an inhabitant without a ticket
     And <waiting> inhabitants are on the waiting list
@@ -34,7 +34,7 @@ Feature: Booking notifications
   Rule: The nightly run sends what the dinners still owe
 
     Background:
-      Given a dinner past its Booking deadline
+      Given a dinner past its BOOKING_CLOSED deadline
       And an inhabitant of a household without a user is on the waiting list
       And the inhabitant's household gets a user
 
