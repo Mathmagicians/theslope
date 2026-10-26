@@ -9,7 +9,7 @@ import {NOTIFICATION_ADDRESS_VARS, type EmailMessage, type NotificationConfig} f
 import {NOTIFICATION_SENDER_NAME} from '~/config/notificationTemplates'
 import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 
-const {DeliveryKindSchema, deliveryReferencePrefix} = useDeliveryValidation()
+const {DeliveryKindSchema, NotificationKindSchema, deliveryReferencePrefix} = useDeliveryValidation()
 const {EMAIL} = DeliveryKindSchema.enum
 
 export type TextAttachment = {
@@ -23,7 +23,7 @@ export type ComposeInput = {
     kind: string
     to: string
     /** The login the mail goes to: its id leads the key's recipient, so two logins whose addresses mask alike stay two */
-    userId?: number
+    userId?: number | null
     cc?: string[]
     values?: Record<string, string>
     attachments?: TextAttachment[]
@@ -37,17 +37,15 @@ const toBase64 = (utf8: string): string => Buffer.from(utf8, 'utf8').toString('b
 // A link into the deployment the mail comes from; `path` starts with a slash
 export const siteUrl = (config: NotificationConfig, path: string): string => `https://${config.site}${path}`
 
-// A dedupe key up to its recipient: the kind and the channel
-const keyPrefix = (kind: string): string => `${kind}:${EMAIL}:`
-
 /** The variable an event is missing before it can send (its recipient's mailbox), or null */
 export const missingAddress = (config: NotificationConfig, recipient: 'adminEmail' | 'accountantEmail'): string | null =>
     config[recipient] ? null : NOTIFICATION_ADDRESS_VARS[recipient]
 
 export const composeEmail = (config: NotificationConfig, input: ComposeInput): EmailMessage => {
     const {kind, to, userId, cc = [], values = {}, attachments = [], correlationId, now = new Date()} = input
+    const notification = NotificationKindSchema.safeParse(kind)
     const template = config.templates[kind]
-    if (!template) throw new Error(`No notification template for kind ${kind}`)
+    if (!notification.success || !template) throw new Error(`No notification template for kind ${kind}`)
 
     const placeholders = new Set([template.subject, template.text, config.signature].flatMap(templatePlaceholders))
     const unused = Object.keys(values).filter(name => !placeholders.has(name))
@@ -55,7 +53,7 @@ export const composeEmail = (config: NotificationConfig, input: ComposeInput): E
 
     // {kind}:{channel}:{maskedRecipient}:{messageId}, the recipient led by user-{id}/ for a mail to a login — one grep on
     // the masked address finds every send to that mailbox
-    const dedupeKey = `${userId === undefined ? keyPrefix(kind) : deliveryReferencePrefix(kind, EMAIL, userId)}${maskEmail(to)}:${crypto.randomUUID()}`
+    const dedupeKey = `${deliveryReferencePrefix(notification.data, EMAIL, userId ?? null)}${maskEmail(to)}:${crypto.randomUUID()}`
     const allValues = {...values, senderName: NOTIFICATION_SENDER_NAME, site: config.site, environment: config.environment, dedupeKey}
 
     return {

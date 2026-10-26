@@ -20,7 +20,9 @@ import {fetchBillingPeriodSummaries, fetchBillingPeriodSummary} from '~~/server/
 import {fetchDeliveries, recordDeliveries} from '~~/server/data/financesRepository'
 import {archiveBillingCsv} from '~~/server/utils/billingArchive'
 import {useBilling} from '~/composables/useBilling'
-import {emitBillingPeriodClosed} from '~~/server/utils/sender/events/monthly-billing'
+import {billingMailKind, notificationsForAccountant} from '~~/server/utils/sender/events/monthly-billing'
+import {deliverDesired, type DeliveryOptions} from '~~/server/utils/sender/deliveries'
+import {channelOff, notSent} from '~~/server/utils/sender/emit'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import type {BillingPeriodSideEffects, BillingPeriodSummaryDetail, MonthlyBillingResponse} from '~/composables/useBillingValidation'
 import type {SenderEmitResult} from '~/composables/useNotificationValidation'
@@ -28,9 +30,10 @@ import type {EmailChannel} from '~~/server/utils/sender/config'
 import {deliveredVersions, useDeliveryValidation} from '~/composables/useDeliveryValidation'
 
 const {decideBillingSideEffects} = useBilling()
-const {DeliverySubjectSchema, DeliveryKindSchema} = useDeliveryValidation()
+const {DeliverySubjectSchema, DeliveryKindSchema, SenderEventSchema} = useDeliveryValidation()
 const {BILLING_PERIOD} = DeliverySubjectSchema.enum
-const {ARCHIVE, EMAIL} = DeliveryKindSchema.enum
+const {ARCHIVE} = DeliveryKindSchema.enum
+const {MONTHLY_BILLING} = SenderEventSchema.enum
 const LOG = '💰 > MONTHLY > [BILLING]'
 
 /** The bindings the side effects need — the archive from cloudflare.env and the e-mail channel from emailChannel(env) at the call site */
@@ -39,11 +42,17 @@ export type MonthlyBillingSideEffects = {
     email: EmailChannel
 }
 
-/** Queue the accountant mail for a period's current version and record the delivery — the monthly run and the re-send endpoint share this */
-export const notifyBillingPeriod = async (d1Client: D1Database, email: EmailChannel, summary: BillingPeriodSummaryDetail, jobRunId?: number): Promise<SenderEmitResult> => {
-    const notification = await emitBillingPeriodClosed(email, summary)
-    if (notification.queued) await recordDeliveries(d1Client, [{subjectType: BILLING_PERIOD, subjectId: summary.id, version: summary.version, kind: EMAIL, reference: notification.dedupeKey, jobRunId}])
-    return notification
+/**
+ * The accountant notification of a period's current version, sent and recorded by the delivery step; the monthly run
+ * and the admin's re-send share it. Its result is the queue's answer, or not sent when nothing went
+ */
+export const notifyBillingPeriod = async (
+    d1Client: D1Database, email: EmailChannel, summary: BillingPeriodSummaryDetail, options: Pick<DeliveryOptions, 'jobRunId' | 'adminOverride'> = {}
+): Promise<SenderEmitResult> => {
+    const kind = billingMailKind(summary.version)
+    if (!email.on) return channelOff(kind, email.missing, summary.billingPeriod)
+    const {emitted} = await deliverDesired(d1Client, email, MONTHLY_BILLING, notificationsForAccountant(email.config, summary), options)
+    return emitted?.[0] ?? notSent(kind, summary.billingPeriod)
 }
 
 /** Bring one closed period to its end state: CSV in R2 and accountant mail, at the period's current version */
@@ -60,7 +69,7 @@ const syncBillingPeriod = async (d1Client: D1Database, summary: BillingPeriodSum
         }
     }
     if (plan.notify) {
-        state.notification = await notifyBillingPeriod(d1Client, sideEffects.email, summary, jobRunId)
+        state.notification = await notifyBillingPeriod(d1Client, sideEffects.email, summary, {jobRunId})
         state.emailSent = state.notification.queued
     }
     if (plan.archive || plan.notify) console.info(`${LOG} Period ${summary.billingPeriod} v${summary.version}: csvUploaded=${state.csvUploaded} emailSent=${state.emailSent}`)

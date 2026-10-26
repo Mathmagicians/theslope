@@ -33,8 +33,8 @@ user's email, phone or admin role changes in Heynabo.
 The subjects are a place on the waiting list, an order, a dinner and a billing period. A delivery is one notification
 sent on one channel; email is the channel. The system records every delivery it sends.
 
-**Sender events.** The notifications come from sender events. A sender event knows which data it reads, which
-notifications that data owes, whom each notification goes to and what it says. One shared delivery step serves every
+**Sender events.** The notifications come from sender events. A sender event reads its data and derives its
+notifications: the subject, the version, the recipient and the text of each. One shared delivery step serves every
 sender event: it works out the desired deliveries, compares them with the recorded deliveries, sends the missing ones
 together and records them together.
 
@@ -54,7 +54,7 @@ admin.
 first user of the inhabitant's household. The waitlist buildup and the chef deadlines go to findClosestUserInHousehold(the
 dinner's chef); the billing notifications go to the accountant's mailbox. A channel the user has opted out of receives nothing.
 
-**Versions.** A subject's version counts from 1 and steps once per event that owes it a notification: a place on the
+**Versions.** A subject's version counts from 1 and steps once per booking event a notification tells: a place on the
 waiting list at its join; an order at the extra portion that created it and at each sale; a dinner at its first buildup
 and at each extra portion after it. A new version is a new notification.
 
@@ -64,8 +64,8 @@ effects. A sent mail writes a delivery record.
 
 **Background notifications.** The user does not wait for notifications. A booking, a season change or the chef's extra
 portions write their data, respond to the user, and send the notifications in the background. Cloudflare gives
-background work 30 seconds after the response; what a background run does not finish stays owed, and the nightly run
-sends it.
+background work 30 seconds after the response; a notification a background run did not send has no delivery record,
+and the nightly run sends it.
 
 **Diagnostics.** A notification the nightly run sends again heals by itself and needs no report. What stays broken is
 reported:
@@ -95,8 +95,9 @@ ships off in dev and prod, and on locally, in e2e and in CI. A configuration rel
 release after that removes the flag.
 
 **Delivery dry run.** Before the flag goes on, the admin runs the delivery dry run of the booking notifications for the environment from
-the terminal, a make target beside the sender targets: per user, how many of each notification the first run sends and how
-many are already sent. The dry run sends and records nothing; it has no page.
+the terminal, a make target beside the sender targets: per user, how many of each notification the first run sends. The
+dry run is the run stopped before it sends, and it sends and records nothing. With email off in the environment, the run
+stops before it reads and the dry run answers an error. It has no page.
 
 ### Mockup — notifications ✅ signed off 2026-10-17
 
@@ -171,7 +172,7 @@ The rules below the features, each in its unit spec:
 | Rule | Spec |
 |---|---|
 | findClosestUserInHousehold; an opted-out channel receives nothing | `tests/component/utils/sender/events/waitlist.unit.spec.ts` |
-| The versions; the notifications the dinners owe as they stand | `waitlist.unit.spec.ts` |
+| The versions; the notifications read off the dinners as they stand | `waitlist.unit.spec.ts` |
 | The flag off: no booking email is sent or recorded | `waitlist.unit.spec.ts` |
 | The channels: the recipient's crossed with the environment's | `tests/component/utils/sender/deliveries.unit.spec.ts` |
 | Should send, with the admin's override | `tests/component/composables/useDeliveryValidation.unit.spec.ts` |
@@ -202,25 +203,39 @@ Rolling Window] § Rolling Window Pattern, ADR-014 [Batch Operations and Utility
 
 ## Booking status
 
-The sender event reads the active season's dinners past their booking deadline, consumed and cancelled dinners aside. They
-owe each place on the waiting list its join, each line at the buildup threshold its buildup to the chef, and each order
-its holder still holds the latest sale or extra portion. The notifications and their recipients: § Mockup.
+The sender event reads the active season's dinners past their booking deadline, consumed and cancelled dinners aside.
+Each place on the waiting list gets its waitlist joined notification; the chef of a dinner whose waiting list reaches
+the buildup threshold gets the waitlist buildup; each order its holder still holds gets the notifications of its latest
+sale or extra portion. The notifications and their recipients: § Mockup.
 
 ## Monthly billing
 
-Monthly billing sends through the same delivery step as the booking notifications. The sender event reads the closed billing
-periods; each owes the accountant its current version: billing period closed for the first version, billing period
-updated after it. The monthly run and the admin's re-send both go through the delivery step; the re-send is the
-admin's override. The CSV archive stays its own step and records its own delivery.
+Monthly billing sends through the same delivery step as the booking notifications. The sender event reads the closed
+billing periods and sends the notification of each period's current version to the accountant's mailbox, cc the admin
+mailbox, with the period's CSV attached: billing period closed for the first version, billing period updated after it.
+A missing accountant mailbox is an error: nothing is sent or recorded, and the app's error line names the setting. The
+monthly run and the admin's re-send both go through the delivery step; the re-send is the admin's override. The CSV
+archive stays its own step and records its own delivery.
+
+### TDD
+
+The feature: [billing-notifications.feature](../../../tests/e2e/features/notifications/billing-notifications.feature)
+
+| Rule | Spec |
+|---|---|
+| The accountant's notification: the mailbox, cc the admin mailbox, the CSV, closed at the first version and updated after; one delivery record of the period's version | `tests/component/utils/sender/events/monthly-billing.unit.spec.ts` |
+| A missing accountant mailbox: an error line, nothing sent or recorded | `monthly-billing.unit.spec.ts` |
+| The admin's re-send sends again and logs the admin | `monthly-billing.unit.spec.ts` |
+| A mailbox delivery is covered by the mailbox's delivery records only | `tests/component/composables/useDeliveryValidation.unit.spec.ts`, `deliveries.unit.spec.ts` |
 
 ## Chef deadlines
 
-A chef's dinner has two deadlines, each an alarm on the chef page: the menu, published by the menu deadline, and the
+A chef's dinner has deadlines, each an alarm on the chef page: the menu, published by the menu deadline, and the
 groceries, ordered by the dinner. An alarm turns yellow 72 hours before its deadline, red 24 hours before, and overdue
 once its deadline has passed. The sender event reads the active season's dinners with a chef, eaten and cancelled dinners
-aside. A dinner owes its chef one notice a night at most, listing both deadlines: the night an alarm turns yellow or
-red, and every night an alarm is overdue, until the dinner date has passed. The highest alarm sets the tone. A dinner
-with both deadlines met owes nothing. The waiting list has no deadline; its buildup notice is in § Booking status.
+aside. The chef gets one notice per dinner a night at most, listing all the dinner's deadlines: the night an alarm turns
+yellow or red, and every night an alarm is overdue, until the dinner date has passed. The highest alarm sets the tone.
+A dinner with all its deadlines met sends nothing. The waiting list has no deadline; its buildup notice is in § Booking status.
 
 ### Mockup — chef deadlines notice ✅ signed off 2026-10-25
 
@@ -264,7 +279,7 @@ The deadlines and the alarms come from the chef page's deadline rules, proven in
 | Rule | Spec |
 |---|---|
 | The alarm levels of the chef's deadlines, menu and groceries: yellow, red, overdue, overdue still after the dinner as the calendar shows it, and none once met; one parametrized table holds every expected level | `tests/component/composables/useBooking.nuxt.spec.ts` |
-| A dinner owes one notice a night: the night an alarm turns yellow or red, every night an alarm is overdue, none after the dinner date | `tests/component/utils/sender/events/chef-deadlines.unit.spec.ts` |
+| The chef gets one notice per dinner a night: the night an alarm turns yellow or red, every night an alarm is overdue, none after the dinner date | `tests/component/utils/sender/events/chef-deadlines.unit.spec.ts` |
 | The notice lists each deadline with its state and the line of its alarm level | `chef-deadlines.unit.spec.ts` |
 
 ## Decisions
@@ -279,7 +294,7 @@ The deadlines and the alarms come from the chef page's deadline rules, proven in
 - A notification has no channel of its own; email is the first channel.
 - The notifications come from sender events: booking status, monthly billing, chef deadlines. The team assignment
   notifications ship with the duty roster.
-- With no active season, the dinners owe nothing: the nightly run and the delivery dry run count zero.
+- With no active season, no dinner sends a notification: the nightly run and the delivery dry run count zero.
 - The recipient rule is findClosestUserInHousehold.
 - Should send: a delivery is sent when no recorded delivery covers it; the re-send is an admin's override.
 - The booking emails are behind the Cloudflare variable `SHOULD_SEND_BOOKING_EMAILS_FLAG`, read from the environment

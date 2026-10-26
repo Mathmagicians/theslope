@@ -7,15 +7,12 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {isBeforeDeadline, getDinnerTimeRange, dateToWeekDay} from '~/utils/season'
+import {dateToWeekDay} from '~/utils/season'
 import {formatDate} from '~/utils/date'
 import {WEEKDAYS} from '~/types/dateTypes'
 
-// Hardcoded from app.config.ts (Nuxt auto-imports not available in Playwright)
-const DEFAULT_DINNER_START_HOUR = 18
-
 const {memberUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated, waitForApi} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated, waitForApi, isBeforeDinnerDeadline} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -113,10 +110,7 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         expect(dinnerEvents.length, 'Should have dinner events').toBeGreaterThan(0)
 
         // Use same deadline logic as application (ADR-016) - pure utilities, no Nuxt auto-imports
-        const canModifyOrders = (dinnerEventDate: Date): boolean => {
-            const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, DEFAULT_DINNER_START_HOUR, 0).start
-            return isBeforeDeadline(testSeason.season.ticketIsCancellableDaysBefore, 0)(dinnerStartTime)
-        }
+        const canModifyOrders = isBeforeDinnerDeadline(testSeason.season.ticketIsCancellableDaysBefore)
         const beforeDeadlineEvents = dinnerEvents.filter(de => canModifyOrders(de.date))
 
         // Verify no orders initially
@@ -190,7 +184,7 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         })
         createdInhabitantIds.push(inhabitant.id)
         // The create stores no preferences, so the household's first scaffold here runs while every dinner is open and books
-        // its people, as the nightly run does; a run on the closed day would put them on its waiting list, first in line for
+        // its people, as the DAILY_MAINTENANCE job does; a run on the closed day would put them on its waiting list, first in line for
         // the released ticket. The season's own deadline then closes the first day
         await SeasonFactory.updateSeason(adminContext, {...testSeason.season, ticketIsCancellableDaysBefore: 0})
         await HouseholdFactory.updateInhabitantPreferences(adminContext, inhabitant.id, createDinnerModeWeekdayMap(DinnerMode.DINEIN), 200, testSeason.season.id!, undefined, true)

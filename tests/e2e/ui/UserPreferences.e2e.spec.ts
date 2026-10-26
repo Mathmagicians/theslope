@@ -6,7 +6,7 @@ import {PREF_TEST_IDS} from '~~/tests/component/components/user/userPreferencesT
 import {useUserPreferenceValidation, type Appearance, type NotificationChannel, type Palette, type TextScale} from '~/composables/useUserPreferenceValidation'
 
 const {memberUIFile} = authFiles
-const {waitForHydration, gotoHydrated, memberValidatedBrowserContext, waitForApi} = testHelpers
+const {waitForHydration, gotoHydrated, memberValidatedBrowserContext, openPreferences, savePreferences} = testHelpers
 const {PaletteSchema, TextScaleSchema, DEFAULT_APPEARANCE} = useUserPreferenceValidation()
 const PaletteKind = PaletteSchema.enum
 const TextScaleKind = TextScaleSchema.enum
@@ -23,19 +23,9 @@ test.describe('My preferences', () => {
 
     const html = (page: import('@playwright/test').Page) => page.locator('html')
 
-    /** The card is behind the ⚙ in the profile card header (open state is component-local) */
-    const openPreferences = async (page: import('@playwright/test').Page) => {
-        await page.getByTestId(PREF_TEST_IDS.toggle).click()
-        await expect(page.getByTestId(PREF_TEST_IDS.card)).toBeVisible()
-    }
-
     const saveAppearance = async (page: import('@playwright/test').Page, palette: Palette, textScale: TextScale) => {
-        await page.getByTestId(PREF_TEST_IDS.edit).click()
-        await page.getByTestId(PREF_TEST_IDS.palette(palette)).click()
-        await page.getByTestId(PREF_TEST_IDS.textScale(textScale)).click()
-        const saved = waitForApi(page, '/api/user/preferences', 'POST')
-        await page.getByTestId(PREF_TEST_IDS.save).click()
-        expect((await saved).status()).toBe(200)
+        const saved = await savePreferences(page, [PREF_TEST_IDS.palette(palette), PREF_TEST_IDS.textScale(textScale)])
+        expect(saved.status()).toBe(200)
     }
 
     test.beforeAll(async ({browser}) => {

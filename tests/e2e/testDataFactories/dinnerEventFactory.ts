@@ -186,6 +186,20 @@ export class DinnerEventFactory {
         return await response.json()
     }
 
+    /** A dinner of the season `daysFromToday` days from today (negative in the past), at midnight, in `state` */
+    static readonly createDinnerEventInState = (
+        context: BrowserContext,
+        seasonId: number,
+        state: DinnerEventCreate['state'],
+        daysFromToday: number,
+        testSalt: string = temporaryAndRandom()
+    ): Promise<DinnerEventDisplay> => this.createDinnerEvent(context, {
+        seasonId,
+        date: startOfDay(addDays(new Date(), daysFromToday)),
+        menuTitle: salt(state, testSalt),
+        state
+    })
+
     /**
      * A browser spec's dinner stands alone on its day: the dinner and chef pages select a dinner by date, so a second
      * dinner on a day hides one of them. Picks a free day of the season at random, after the season's last dinner where

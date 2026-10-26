@@ -136,7 +136,7 @@ const removeOwnRows = async (browser: Browser, {seasonIds, householdIds}: OwnRow
 
 /**
  * A preview answers the reply the save of the draft preferences would give and writes nothing; any member reads any
- * household's (ADR-004). A save runs on the weekdays its draft changes; the nightly run keeps the other weekdays in step
+ * household's (ADR-004). A save runs on the weekdays its draft changes; the DAILY_MAINTENANCE job keeps the other weekdays in step
  * (ADR-015). The season is open until each dinner, so a weekday turned Ingen cancels the person's dinners on it
  */
 test.describe('Preference preview', () => {

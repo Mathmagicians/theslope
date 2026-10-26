@@ -1,6 +1,6 @@
-import {expect} from '@playwright/test'
+import {expect, type BrowserContext} from '@playwright/test'
 import {defineParameterType} from 'playwright-bdd'
-import {When, Then, fromScene, type JobRun} from '~~/tests/e2e/fixtures'
+import {Given, When, Then, fromScene, type JobRun, type Scene} from '~~/tests/e2e/fixtures'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -15,19 +15,29 @@ defineParameterType({
     transformer: (job: string) => JobType[job as keyof typeof JobType]
 })
 
-When('the {job} job runs', async ({scene}, job: JobRun['job']) => {
-    const context = fromScene(scene, 'context')
+const runOf = async (context: BrowserContext, job: JobRun['job']): Promise<JobRun> => {
     switch (job) {
         case JobType.HEYNABO_IMPORT:
-            scene.jobRun = {job, result: await HouseholdFactory.runHeynaboImport(context)}
-            break
+            return {job, result: await HouseholdFactory.runHeynaboImport(context)}
         case JobType.DAILY_MAINTENANCE:
-            scene.jobRun = {job, result: await SeasonFactory.runDailyMaintenance(context)}
-            break
+            return {job, result: await SeasonFactory.runDailyMaintenance(context)}
         case JobType.MONTHLY_BILLING:
-            scene.jobRun = {job, result: await BillingFactory.generateBilling(context)}
-            break
+            return {job, result: await BillingFactory.generateBilling(context)}
     }
+}
+
+/** Runs the job through the signed-in actor's context; the scene keeps every run, a later step reads what a run billed */
+const runJob = async (scene: Scene, job: JobRun['job']): Promise<void> => {
+    scene.jobRun = await runOf(fromScene(scene, 'context'), job)
+    scene.jobRuns.push(scene.jobRun)
+}
+
+When('the {job} job runs', async ({scene}, job: JobRun['job']) => {
+    await runJob(scene, job)
+})
+
+Given('the {job} job has run {int} time(s)', async ({scene}, job: JobRun['job'], runs: number) => {
+    for (let run = 0; run < runs; run++) await runJob(scene, job)
 })
 
 Then('the job reports success', async ({scene}) => {

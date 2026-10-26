@@ -1,7 +1,7 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {notifyBillingPeriod} from '~~/server/utils/monthlyBillingService'
 import type {EmailChannel} from '~~/server/utils/sender/config'
-import {useNotificationValidation, type EmailMessage} from '~/composables/useNotificationValidation'
+import {NOTIFICATION_ADDRESS_VARS, useNotificationValidation, type EmailMessage} from '~/composables/useNotificationValidation'
 import {useBillingValidation, type BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 import {useDeliveryValidation, type Delivery} from '~/composables/useDeliveryValidation'
 import {maskEmail} from '~~/workers/common/mask'
@@ -23,7 +23,7 @@ const {EMAIL} = DeliveryKindSchema.enum
 const config = NotificationFactory.config()
 const summary = BillingFactory.defaultSummaryData('billing')
 
-const logs = {warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
+const logs = {error: vi.spyOn(console, 'error'), warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
 let recorded: {rows: Delivery[]}
 beforeEach(() => {
     Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
@@ -103,7 +103,8 @@ describe('notifyBillingPeriod', () => {
         expect(recorded.rows[0]!.reference.startsWith(`${Kind.BILLING_PERIOD_CLOSED}:${EMAIL}:${maskEmail(config.accountantEmail)}:`)).toBe(true)
     })
 
-    it('reports degraded without touching the binding when no accountant mailbox is configured', async () => {
+    // A missing accountant mailbox is a deployment fault: the period's email cannot go anywhere
+    it('reports degraded, queues and records nothing, and logs the missing accountant mailbox as an error when none is configured', async () => {
         const queue = fakeSenderQueue()
 
         const result = await notify(NotificationFactory.channel(queue, {accountantEmail: ''}))
@@ -111,7 +112,9 @@ describe('notifyBillingPeriod', () => {
         expect(result).toMatchObject({queued: false, degraded: true})
         expect(sentMessages(queue)).toEqual([])
         expect(recorded.rows).toEqual([])
-        expect(logs.warn).toHaveBeenCalledOnce()
+        expect(logs.error).toHaveBeenCalledOnce()
+        expect(logs.error.mock.calls[0]![0]).toContain(NOTIFICATION_ADDRESS_VARS.accountantEmail)
+        expect(logs.warn).not.toHaveBeenCalled()
     })
 
     it('reports not sent and logs the missing setting when e-mail is off', async () => {

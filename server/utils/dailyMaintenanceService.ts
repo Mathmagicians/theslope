@@ -66,7 +66,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             scaffoldResult = await scaffoldPrebookings(d1Client, {seasonId: activeSeasonId})
             console.info(`${LOG} scaffold: ${useBooking().formatScaffoldResult(scaffoldResult)}`)
 
-            // The dinners as they stand after the scaffold owe the notifications of its outcomes too
+            // The dinners as they stand after the scaffold send the notifications of its outcomes too
             const {counts} = await sendNotifications(d1Client, email, activeSeasonId, {jobRunId: jobRun.id})
             notifications = {[BOOKING_STATUS]: counts}
             console.info(`${LOG} notifications: ${BOOKING_STATUS} sent ${counts.sent}`)

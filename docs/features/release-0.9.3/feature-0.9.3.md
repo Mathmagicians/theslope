@@ -29,6 +29,8 @@
 | Ad-hoc charges and the spending views | `feature-proposal-adhoc-admin-billing.md` phases 2 to 5 | – | specified |
 | Team assignment notifications | `feature-proposal-notification-triggers.md` § Team assignments | – | discovery |
 | SMS channel | `feature-proposal-notification-triggers.md` § SMS delivery | – | specified |
+| Household and member notifications | `feature-proposal-notification-triggers.md` § Household and member events | – | discovery |
+| Zero-portion tickets get a place | § Zero-portion tickets get a place | – | discovery |
 | Booking emails flag removed | `SHOULD_SEND_BOOKING_EMAILS_FLAG` leaves `wrangler.toml`, and its reader `shouldSendBookingEmails` and the gate `notifyBooking` leave the code. | – | specified |
 
 § Drop `DinnerEvent.totalCost`, § Order snapshot (B6) and § Ticket allergies on the order share one migration:
@@ -65,6 +67,26 @@ migration fills the existing rows from the same defaults, and the reads return t
 `useTicket.portionsOf` and `withPortions`, the reads that fill a price row (`prismaRepository` season reads,
 `financesRepository` order detail and dinner tickets), the season form's price rows, one migration through
 `.claude/skills/prisma/SKILL.md` with the model signed off first.
+
+## Zero-portion tickets get a place
+
+### Problem
+
+After the booking deadline a booking buys a released ticket of its ticket type, else joins that type's line on the
+waiting list (ADR-016). A ticket of 0 portions, the baby who eats tastes from the parents (`app.config.ts` default
+ticket prices), joins the line too, though it takes no portion from the kitchen.
+
+### Solution
+
+A waiting entry of 0 portions gets its place without waiting: the run that ends with the sale of the tickets for sale
+to the waiting list also runs the extra-portion assignment (`assignWaitlistPortions`) for the entries of 0 portions, as
+when the chef cooks more portions. Each gets a regular order and the waitlist extra portion notification. The portions
+are the price row's, stored by § Ticket price portions.
+
+ADR-016 [Unified Booking Through Scaffold], the waiting-list paragraph, gains on implementation:
+
+> A waiting entry of 0 portions takes no portion from the kitchen: every run places it through the extra-portion
+> assignment, as when the chef cooks more portions.
 
 ## Billing import in the export format
 
@@ -271,7 +293,7 @@ API: the period read. Component: the table on its dataset, its loading and empty
 `app/components/admin/AdminSystem.vue`, a store dataset, `docs/adr-compliance-frontend.md` and
 `docs/adr-compliance-backend.md` rows.
 
-## Decisions carried from release 0.9
+## Decisions
 
 **2026-10-05** (joker, roster, spending)
 - Joker: per-dinner volunteering by any inhabitant; a vacancy surfaces as a "missing" on the dinner; a team-card and a
@@ -302,3 +324,7 @@ API: the period read. Component: the table on its dataset, its loading and empty
 **2026-10-08**
 - The framelding billing import books every ticket on the first inhabitant and answers 409; its e2e test is skipped
   until § Billing import in the export format.
+
+**2026-10-26**
+- A waiting entry of 0 portions gets its place through the extra-portion assignment that ends every run (§ Zero-portion
+  tickets get a place); the ADR-016 line lands with the implementation.

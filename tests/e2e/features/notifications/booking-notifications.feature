@@ -2,8 +2,8 @@
 Feature: Booking notifications
   Past a dinner's booking deadline, the waiting list and the sales email the inhabitants they concern, once per version
   of the subject. An email about an inhabitant goes to the inhabitant's closest user: the inhabitant's own user, else
-  the first user of the inhabitant's household. A delivery record is written per email sent; the nightly run sends
-  what the dinners still owe.
+  the first user of the inhabitant's household. A delivery record is written per email sent; the DAILY_MAINTENANCE job
+  sends the unsent notifications of the dinners.
 
   Background:
     Given the admin is signed in
@@ -31,19 +31,19 @@ Feature: Booking notifications
       | past     | 3       | 0        | portion is added           | 5       | WAITLIST_EXTRA_PORTION   | first in line | 1           |
       | past     | 1       | 1        | DAILY_MAINTENANCE job runs | 3       | TICKET_SOLD              | seller        | 1           |
 
-  Rule: The nightly run sends what the dinners still owe
+  Rule: The DAILY_MAINTENANCE job sends the unsent notifications of the dinners
 
     Background:
       Given a dinner past its BOOKING_CLOSED deadline
       And an inhabitant of a household without a user is on the waiting list
       And the inhabitant's household gets a user
 
-    Scenario: The DAILY_MAINTENANCE job sends the owed email
+    Scenario: The DAILY_MAINTENANCE job sends the WAITLIST_JOINED email once the household has a user
       When the DAILY_MAINTENANCE job runs
       Then 1 delivery record is in the database for the dinner
       And 1 WAITLIST_JOINED email is sent to the closest user of the inhabitant
 
-    Scenario: The delivery dry run counts what the nightly run sends
+    Scenario: The delivery dry run counts what the DAILY_MAINTENANCE job sends
       When the admin runs the delivery dry run of the booking notifications
       Then the delivery dry run counts 1 WAITLIST_JOINED email to send to the closest user of the inhabitant
       And 0 delivery records are in the database for the dinner

@@ -86,6 +86,10 @@ export class WaitlistFactory {
         return expectedStatus === 200 ? TicketWaitlistDisplaySchema.array().parse(await response.json()) : []
     }
 
+    // The inhabitant's own place on the dinner's waiting list, not a guest's
+    static readonly entryOf = async (context: BrowserContext, dinnerEventId: number, inhabitantId: number): Promise<TicketWaitlistDisplay | undefined> =>
+        (await WaitlistFactory.entries(context, [dinnerEventId])).find(entry => entry.inhabitantId === inhabitantId && !entry.isGuestTicket)
+
     static readonly addExtraPortions = async (context: BrowserContext, dinnerEventId: number, portions: number, expectedStatus = 200): Promise<WaitlistAssignmentResult | null> => {
         const {WaitlistAssignmentResultSchema} = useWaitlistValidation()
         const response = await context.request.post(extraPortionsEndpoint(dinnerEventId), {headers, data: {portions}})

@@ -99,7 +99,7 @@ One e-mail template per notification kind in `app/config/notificationTemplates.t
 | `TEST` | `make theslope-sender-event-test-<env>` | `NUXT_NOTIFICATIONS_ADMIN_EMAIL` |
 | `BILLING_PERIOD_CLOSED` | monthly billing (cron / `POST /api/admin/maintenance/monthly`) closes a period (v1); re-send `make theslope-sender-event-monthly-billing-<env> bpid=<billingPeriodSummaryId>` | `NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL`, cc `NUXT_NOTIFICATIONS_ADMIN_EMAIL`; the period CSV attached (`…-v1.csv`) |
 | `BILLING_PERIOD_UPDATED` | a later version of a period (catch-up billing changed it) — subject `opdatering v<n>`, replaces the earlier mail | same, CSV `…-v<n>.csv` |
-| `WAITLIST_JOINED`, `TICKET_SOLD`, `TICKET_BOUGHT`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_EXTRA_PORTION`, `WAITLIST_BUILDUP` | the booking status sender event: a booking, a season change or the chef's extra portions, sent in the background after the response; the nightly run sends what the dinners past their booking deadline still owe | the closest user of the inhabitant (`findClosestUserInHousehold`); the buildup, the closest user of the dinner's chef |
+| `WAITLIST_JOINED`, `TICKET_SOLD`, `TICKET_BOUGHT`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_EXTRA_PORTION`, `WAITLIST_BUILDUP` | the booking status sender event: a booking, a season change or the chef's extra portions, sent in the background after the response; the nightly run sends the notifications of the dinners past their booking deadline that have no delivery record | the closest user of the inhabitant (`findClosestUserInHousehold`); the buildup, the closest user of the dinner's chef |
 
 ### Booking emails flag
 
@@ -115,7 +115,7 @@ sender events send.
 Turning it on in an environment:
 
 ```bash
-make theslope-sender-dry-run-booking-status-prod   # the delivery dry run: per user, the booking notifications the nightly run sends, and those already recorded; sends and records nothing
+make theslope-sender-dry-run-booking-status-prod   # the delivery dry run: per user, the booking notifications the nightly run sends; sends and records nothing
 # set SHOULD_SEND_BOOKING_EMAILS_FLAG = "true" in [env.prod.vars], then deploy (§ Deployment Routing Table)
 ```
 

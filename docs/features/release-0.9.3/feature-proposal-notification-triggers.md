@@ -12,6 +12,9 @@ the Delivery rows) and the duty roster (`feature-proposal-duty-roster.md`)
 - `fetchUsersByRole` matches roles by JSON substring (`contains`); `PLANNINGMANAGER` keeps role names non-overlapping, or the
   lookup switches to exact-array matching.
 
+**2026-10-26**
+- The move-out notifications, set and cancelled, go to all the users of the household.
+
 ## Open
 
 - **Where chefless-dinner alerts show:** `/admin/teams` or the chef page.
@@ -28,6 +31,20 @@ the Delivery rows) and the duty roster (`feature-proposal-duty-roster.md`)
 | `DINNER_NO_CHEF` | `PLANNINGMANAGER` | a dinner without a chef |
 | `DUTY_SHIFT_REMINDER` | the team's members | 24 h and 1 h before the shift, from an hourly Nitro task in `app/config/systemJobs.ts`; team → assignment → inhabitant → user is a new repository query (ADR-009 Display type) |
 | `DUTY_SWAPPED` | both swap parties | a duty swap commits (`feature-proposal-duty-roster.md` Phase 5); the chef-swap flow joins the same kind |
+
+## Household and member events
+
+A sender event of the delivery step, one template per notification in `app/config/notificationTemplates.ts`. A
+notification about an inhabitant goes to the closest user (findClosestUserInHousehold).
+
+| Notification | Recipient | When |
+|---|---|---|
+| A user joins | the new user | the Heynabo import creates the user |
+| Move-out date set | all the users of the household | the household saves a move-out date |
+| Move-out cancelled | all the users of the household | the household removes its move-out date |
+| Ticket category by age | the closest user of the member | a birthday moves the member into the next ticket type, by the age limits of the season's ticket prices |
+
+**OPEN:** the notification names and texts (mockup).
 
 ## SMS delivery
 

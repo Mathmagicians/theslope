@@ -42,6 +42,7 @@ Updated 2026-10-25. Release 0.9 shipped in f5b5205 (#168).
 | Test factory dates at call time | § Test factory dates at call time | – | specified |
 | AdminTeams loading row | § AdminTeams loading row | – | discovery |
 | Avatar ring colours | § Avatar ring colours | – | specified |
+| User saves and deserializers | § User saves and deserializers | – | approved 2026-10-26 |
 
 ## Server payload of the shared stores
 
@@ -693,6 +694,33 @@ leaves out of the CSS, so from md up the faces on Præferencer and in the allerg
 token holds one class string per use (`household` warning, `inhabitant` primary, `allergyManager` ocean-500), the prop
 takes its key, the raw `"ocean-500"` in `AllergyManagersList.vue:48` goes, and the `UserListItem` spec checks each
 key's token. Where: `useTheSlopeDesignSystem.ts` `userListItem.ring`, `UserListItem.vue:143`, `HouseholdCard.vue:308`.
+
+## User saves and deserializers
+
+### Problem
+
+`saveUser` (`server/data/prismaRepository.ts`) runs `serializeUserInput` before it branches on the id, and its schema
+requires an email. A save by id carries only the fields it changes, so a member's save of channels and appearance and
+an admin's edit of a user answer 400. The user has four deserializers for its two types (ADR-009), two of them in the
+repository (ADR-010 rule 3), and the `saveUser` and `deleteUser` results carry `passwordHash`.
+
+### Solution
+
+- `saveUser`: the update by id writes through `serializeUserPartial`, the fields the caller set. The email-keyed upsert
+  writes `serializeUserInput`, without channels and appearance for an existing user.
+- One deserializer per type in `useCoreValidation`: `deserializeUserDisplay` and `deserializeUserDetail`. `saveUser`
+  and `deleteUser` return a `UserDetail`, which has no `passwordHash`.
+
+### TDD
+
+- Unit `prismaRepository.unit.spec.ts`: a partial save by id writes the fields it carries; `saveUser` and `deleteUser`
+  return a detail without `passwordHash`.
+- Unit `useCoreValidation.unit.spec.ts`: the Display and the Detail of a row, neither with `passwordHash`.
+- API: `users.e2e.spec.ts`, `preferences.e2e.spec.ts`.
+
+### Affected
+
+`server/data/prismaRepository.ts`, `app/composables/useCoreValidation.ts`, `docs/adr-compliance-backend.md`.
 
 ## Decisions carried from release 0.9
 

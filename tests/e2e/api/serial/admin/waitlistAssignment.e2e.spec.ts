@@ -55,8 +55,7 @@ test.describe('Waiting list assignment', () => {
     const holdTicket = async (context: Parameters<typeof WaitlistFactory.queue>[0], inhabitantId: number, dinnerId: number, price: TicketPrice) => {
         const booked = await WaitlistFactory.queue(context, householdId, activeSeasonId, OrderFactory.createBookingOrder(inhabitantId, dinnerId, price.id!), true)
         expect(booked.totals[Action.BOOK]).toBe(1)
-        const orders = await OrderFactory.getOrders(context, {dinnerEventIds: dinnerId, householdId})
-        return orders.find(order => order.inhabitantId === inhabitantId)!
+        return (await OrderFactory.getOrderOf(context, dinnerId, {id: inhabitantId, householdId}))!
     }
     let childSaleDinnerId: number
 
@@ -186,7 +185,7 @@ test.describe('Waiting list assignment', () => {
         const maintenance = await SeasonFactory.runDailyMaintenance(context)
 
         expect(maintenance.scaffold?.outcomes.waitlistTicketsSold.filter(sale => sale.dinnerEventId === childSaleDinnerId)).toEqual([])
-        // The nightly run queues the household's other members on the closed dinner; the adult still waits, the child holds its ticket
+        // The DAILY_MAINTENANCE job queues the household's other members on the closed dinner; the adult still waits, the child holds its ticket
         const waiting = (await householdEntries(context, childSaleDinnerId)).map(entry => entry.inhabitantId)
         expect(waiting).toContain(adult.id)
         expect(waiting).not.toContain(child.id)
@@ -228,7 +227,7 @@ test.describe('Waiting list assignment', () => {
         const preferences = (mode: DinnerMode) => HouseholdFactory.updateInhabitantPreferences(
             context, sellerInhabitant!.id, createDefaultWeekdayMap(mode), 200, activeSeasonId, undefined, true
         )
-        // The scaffold books the seller while both dinners are open, as the nightly run does; the season's own deadline then closes the near one
+        // The scaffold books the seller while both dinners are open, as the DAILY_MAINTENANCE job does; the season's own deadline then closes the near one
         await SeasonFactory.updateSeason(context, {...activeSeason, ticketIsCancellableDaysBefore: 0})
         await preferences(DinnerModeSchema.enum.NONE)
         await preferences(DinnerModeSchema.enum.DINEIN)
@@ -272,7 +271,7 @@ test.describe('Waiting list assignment', () => {
 /**
  * A preference decides a place on the waiting list as a member's change does, and a member's own act on a place outranks
  * it: a leave on the booking page records a cancellation, a join a booking. The household's preference run on every
- * weekday stands in for the nightly one: both decide by the same rules, and a save runs on the weekdays it changes. Each
+ * weekday stands in for the DAILY_MAINTENANCE job: both decide by the same rules, and a save runs on the weekdays it changes. Each
  * case runs on its own season, every dinner past its deadline.
  */
 test.describe('Preferences and the waiting list', () => {

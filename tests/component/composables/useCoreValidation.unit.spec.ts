@@ -32,9 +32,7 @@ const serializedUserColumns = (user: UserCreate) => ({
 describe('useCoreValidation - User Schemas', () => {
     const {
         BaseUserSchema,
-        UserCreateSchema,
-        serializeUserInput,
-        deserializeUser
+        UserCreateSchema
     } = useCoreValidation()
 
     it.each([
@@ -42,20 +40,6 @@ describe('useCoreValidation - User Schemas', () => {
         ['UserCreateSchema', () => UserCreateSchema, UserFactory.defaultUser()]
     ])('%s should parse factory data', (_name, getSchema, input) => {
         expect(() => getSchema().parse(input)).not.toThrow()
-    })
-
-    it('should serialize and deserialize user systemRoles', () => {
-        const user = {...UserFactory.defaultUser(), id: 1, createdAt: new Date(), updatedAt: new Date()}
-        const serialized = serializeUserInput(user)
-
-        expect(typeof serialized.systemRoles).toBe('string')
-        expect(serialized.systemRoles).toBe(JSON.stringify(user.systemRoles))
-
-        const serializedUser = {...serialized, id: 1, createdAt: new Date(), updatedAt: new Date()}
-        const deserialized = deserializeUser(serializedUser)
-
-        expect(Array.isArray(deserialized.systemRoles)).toBe(true)
-        expect(deserialized.systemRoles).toEqual(user.systemRoles)
     })
 })
 
@@ -805,7 +789,7 @@ describe('useCoreValidation - User preference columns', () => {
         UserDetailSchema,
         UserSessionSchema,
         serializeUserInput,
-        deserializeUser,
+        deserializeUserDisplay,
         deserializeUserDetail
     } = useCoreValidation()
 
@@ -822,38 +806,34 @@ describe('useCoreValidation - User preference columns', () => {
         expect(parsed.appearance).toEqual(DEFAULT_APPEARANCE)
     })
 
-    it('GIVEN domain preferences THEN serializeUserInput writes both columns as JSON strings', () => {
-        const serialized = serializeUserInput({...UserFactory.defaultUser(), ...preferences})
+    // A user with roles and preferences of its own, so each JSON column differs from its default
+    const user = {...UserFactory.defaultUser(), systemRoles: [SystemRole.ADMIN], ...preferences}
 
-        expect(serialized.notificationChannels).toBe(JSON.stringify(preferences.notificationChannels))
-        expect(serialized.appearance).toBe(JSON.stringify(preferences.appearance))
+    it('GIVEN domain roles and preferences THEN serializeUserInput writes the three JSON columns as strings', () => {
+        expect(serializeUserInput(user)).toMatchObject(serializedUserColumns(user))
     })
 
-    it('GIVEN a database row THEN deserializeUser parses both columns back to domain values', () => {
-        const user = {...UserFactory.defaultUser(), ...preferences}
-        const row = {...user, ...serializedUserColumns(user), id: 1, createdAt: new Date(), updatedAt: new Date()}
+    // A User row as the database returns it: the JSON columns as strings, the Heynabo token in passwordHash (ADR-010)
+    describe('a User row', () => {
+        const row = {...serializeUserInput(user), id: 1, createdAt: new Date(), updatedAt: new Date(), Inhabitant: null}
+        // The display read selects no appearance column
+        const {appearance: _appearance, ...displayRow} = row
+        const deserialized = [
+            {as: 'a Display', deserialize: () => deserializeUserDisplay(displayRow),
+                parsed: {systemRoles: user.systemRoles, notificationChannels: user.notificationChannels}},
+            {as: 'a Detail', deserialize: () => deserializeUserDetail(row),
+                parsed: {systemRoles: user.systemRoles, notificationChannels: user.notificationChannels, appearance: user.appearance}}
+        ]
 
-        const deserialized = deserializeUser(row)
+        it.each(deserialized)('GIVEN a row WHEN deserialized as $as THEN its JSON columns parse back to domain values', ({deserialize, parsed}) => {
+            expect(deserialize()).toMatchObject(parsed)
+        })
 
-        expect(deserialized.notificationChannels).toEqual(preferences.notificationChannels)
-        expect(deserialized.appearance).toEqual(preferences.appearance)
-    })
+        it.each(deserialized)('GIVEN a row with a passwordHash WHEN deserialized as $as THEN it carries no passwordHash', ({deserialize}) => {
+            expect(row.passwordHash, 'the row carries the token').toBeTruthy()
 
-    it('GIVEN a database row THEN deserializeUserDetail parses both columns back to domain values', () => {
-        const user = {...UserFactory.defaultUser(), ...preferences}
-        const row = {
-            ...user,
-            ...serializedUserColumns(user),
-            id: 1,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            Inhabitant: null
-        }
-
-        const detail = deserializeUserDetail(row)
-
-        expect(detail.notificationChannels).toEqual(preferences.notificationChannels)
-        expect(detail.appearance).toEqual(preferences.appearance)
+            expect(deserialize()).not.toHaveProperty('passwordHash')
+        })
     })
 
     it('GIVEN a session user THEN the session carries both columns', () => {

@@ -17,8 +17,8 @@ const LOG = '📬 > DELIVERY > [GET]'
  * SHOULD_SEND_BOOKING_EMAILS_FLAG goes on in an environment, the admin sees what the nightly run would send
  * (`make theslope-sender-dry-run-booking-status-<env>`). It reads the active season's dinners still to come and past
  * their booking deadline, as they stand, and their delivery records; with no active season it counts nothing. It
- * answers per user how many of each notification would go and how many are already recorded. It ignores the flag, and
- * counts on the environment's email channel: without a deploy URL or a sender binding its user list is empty.
+ * answers per user how many of each notification the run sends. It ignores the flag; without a deploy URL or a sender
+ * binding the dry run answers an error.
  *
  * Each read sends and records nothing; every member reads (ADR-004).
  */

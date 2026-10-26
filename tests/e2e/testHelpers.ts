@@ -3,6 +3,8 @@ import {expect} from "@playwright/test"
 import {authFiles} from './config'
 import {expectApiError, guardContext} from './apiErrorGuard'
 import {randomUUID} from 'crypto'
+import {getDinnerTimeRange, isBeforeDeadline} from '~/utils/season'
+import {PREF_TEST_IDS} from '~~/tests/component/components/user/userPreferencesTestIds'
 
 const headers = {'Content-Type': 'application/json'}
 
@@ -301,8 +303,35 @@ const isScaffoldSave = isScaffold('POST')
 const isExpectedRead = (response: Response): boolean =>
     isScaffold('GET')(response) && !new URL(response.url()).searchParams.has('orders')
 
-// Hardcoded beside app.config.ts prebookingWindowDays (60; Nuxt auto-imports not available in Playwright): a day past it
-const PAST_THE_SCAFFOLD_WINDOW_DAYS = 62
+// Hardcoded beside app.config.ts (Nuxt auto-imports not available in Playwright): prebookingWindowDays,
+// defaultDinnerStartTime and defaultSeason.menuIsAnnouncedDaysBefore
+const PREBOOKING_WINDOW_DAYS = 60
+const DINNER_START_HOUR = 18
+const MENU_DEADLINE_DAYS = 10
+// A day past the prebooking window
+const PAST_THE_SCAFFOLD_WINDOW_DAYS = PREBOOKING_WINDOW_DAYS + 2
+
+/** The start of the dinner on `date`, as the server reads it: DINNER_START_HOUR in Copenhagen */
+const dinnerStartOf = (date: Date): Date => getDinnerTimeRange(date, DINNER_START_HOUR, 0).start
+
+/** Whether now lies before the deadline `offsetDays` before the dinner on `date` starts: the application's predicate */
+const isBeforeDinnerDeadline = (offsetDays: number) => (date: Date): boolean =>
+    isBeforeDeadline(offsetDays, 0)(dinnerStartOf(date))
+
+/** Opens "Mine indstillinger": the card is behind the settings button in the profile card header, its open state component-local */
+const openPreferences = async (page: Page): Promise<void> => {
+    await page.getByTestId(PREF_TEST_IDS.toggle).click()
+    await expect(page.getByTestId(PREF_TEST_IDS.card)).toBeVisible()
+}
+
+/** Saves "Mine indstillinger" with the controls of `testIds` clicked in edit mode; the save's response */
+const savePreferences = async (page: Page, testIds: string[]): Promise<Response> => {
+    await page.getByTestId(PREF_TEST_IDS.edit).click()
+    for (const testId of testIds) await page.getByTestId(testId).click()
+    const saved = waitForApi(page, '/api/user/preferences', 'POST')
+    await page.getByTestId(PREF_TEST_IDS.save).click()
+    return saved
+}
 
 /**
  * Types a dd/MM/yyyy date into a UInputDate field: clicks the field's day segment and
@@ -361,7 +390,14 @@ const testHelpers = {
     waitForApi,
     isScaffoldSave,
     isExpectedRead,
+    PREBOOKING_WINDOW_DAYS,
     PAST_THE_SCAFFOLD_WINDOW_DAYS,
+    DINNER_START_HOUR,
+    MENU_DEADLINE_DAYS,
+    dinnerStartOf,
+    isBeforeDinnerDeadline,
+    openPreferences,
+    savePreferences,
     fillDateField,
     readDateField
 }

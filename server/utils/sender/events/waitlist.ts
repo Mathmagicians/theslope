@@ -1,7 +1,7 @@
 /**
  * The booking status sender event: the waiting-list notifications, ticket sold and ticket bought. The booking steps
  * return their outcomes and the caller hands them here after the action; the nightly run reads what the dinners past
- * their booking deadline owe as they stand. A notification about an inhabitant goes to the inhabitant's closest user
+ * their booking deadline send as they stand. A notification about an inhabitant goes to the inhabitant's closest user
  * (findClosestUserInHousehold), the waitlist buildup to the chef's. The dinners and people the notifications name are
  * read once per kind (ADR-014); the delivery step (deliveries.ts) sends each once per subject, version, notification,
  * channel and user. The booking emails flag (SHOULD_SEND_BOOKING_EMAILS_FLAG) off, a run sends and records nothing.
@@ -138,8 +138,8 @@ interface NotificationSubject {
 type Tracked = {subject: NotificationSubject, notificationChannels: NotificationChannel[]}
 
 const isExtraPortionRow = (audit: OrderAudit): boolean => audit.change === Change.BOOK && audit.source === Source['waitlist-assignment']
-// The rows that owe an order a notification: the chef's extra portion that created it, and each sale of it
-const owesOrderNotification = (audit: OrderAudit): boolean => audit.change === Change.BUY || isExtraPortionRow(audit)
+// The rows that send an order a notification: the chef's extra portion that created it, and each sale of it
+const notifiesOrder = (audit: OrderAudit): boolean => audit.change === Change.BUY || isExtraPortionRow(audit)
 
 const auditedRows = (history: OrderHistoryDisplay[]): {row: OrderHistoryDisplay, audit: OrderAudit}[] =>
     history.flatMap(row => {
@@ -148,7 +148,7 @@ const auditedRows = (history: OrderHistoryDisplay[]): {row: OrderHistoryDisplay,
     })
 
 /**
- * A subject's version counts up from 1, one step per history row that owes it a notification: a place its join, an
+ * A subject's version counts up from 1, one step per history row that sends it a notification: a place its join, an
  * order the extra portion that created it and each sale, a dinner its first buildup and each extra portion after that
  * buildup
  */
@@ -157,7 +157,7 @@ const versionsOf = (history: OrderHistoryDisplay[], deliveries: Delivery[]) => {
     const orderSteps = new Map<number, number>()
     for (const {row, audit} of audited) {
         const orderId = row.orderId ?? audit.orderId
-        if (orderId !== null && owesOrderNotification(audit)) orderSteps.set(orderId, (orderSteps.get(orderId) ?? 0) + 1)
+        if (orderId !== null && notifiesOrder(audit)) orderSteps.set(orderId, (orderSteps.get(orderId) ?? 0) + 1)
     }
     const firstBuildup = new Map<number, number>()
     for (const row of deliveries.filter(delivery => delivery.subjectType === Subject.DINNER_EVENT)) {
@@ -183,10 +183,10 @@ const versionsOf = (history: OrderHistoryDisplay[], deliveries: Delivery[]) => {
 const idsOf = (ids: (number | null | undefined)[]): number[] => [...new Set(ids.filter((id): id is number => !!id))]
 
 /** A place on a dinner's waiting list, as its join notification reads it */
-type JoinOwed = Omit<WaitlistJoined, 'bookedByUserId' | 'queueSize' | 'portionNeed' | 'queuedByType'>
+type NotifiedJoin = Omit<WaitlistJoined, 'bookedByUserId' | 'queueSize' | 'portionNeed' | 'queuedByType'>
 
 /** A dinner's line at the buildup threshold: its size by ticket type and the portions it needs */
-interface BuildupOwed {
+interface NotifiedBuildup {
     dinnerEventId: number
     entries: number
     portions: number
@@ -194,17 +194,17 @@ interface BuildupOwed {
 }
 
 /** A sale's notifications name the buyer by inhabitant; the buyer's household comes with the inhabitant */
-type SaleOwed = Omit<TicketSale, 'buyerHouseholdId'>
+type NotifiedSale = Omit<TicketSale, 'buyerHouseholdId'>
 
-type PortionOwed = Omit<BookingOutcomes['waitlistPortionsAssigned'][number], 'entryId' | 'portions'>
+type NotifiedPortion = Omit<BookingOutcomes['waitlistPortionsAssigned'][number], 'entryId' | 'portions'>
 
-/** The notifications one operation owes, by the outcome each comes from */
-interface OwedNotifications {
-    joined: JoinOwed[]
-    buildups: BuildupOwed[]
-    ticketsSold: SaleOwed[]
-    waitlistTicketsSold: SaleOwed[]
-    waitlistPortionsAssigned: PortionOwed[]
+/** The outcomes of one operation the notifications tell, by the outcome each comes from */
+interface NotifiedOutcomes {
+    joined: NotifiedJoin[]
+    buildups: NotifiedBuildup[]
+    ticketsSold: NotifiedSale[]
+    waitlistTicketsSold: NotifiedSale[]
+    waitlistPortionsAssigned: NotifiedPortion[]
 }
 
 /** Every dinner, household, inhabitant and user the notifications of one operation name, by id */
@@ -237,14 +237,14 @@ const loadDinners = async (d1Client: D1Database, dinnerEventIds: number[]): Prom
 
 // Every dinner, inhabitant, household and user the notifications name, read before they compose: the chefs come with
 // their dinners, the households of the inhabitants with their members
-const load = async (d1Client: D1Database, owed: OwedNotifications): Promise<NotificationRecords> => {
-    const sales = [...owed.ticketsSold, ...owed.waitlistTicketsSold]
-    const dinners = await loadDinners(d1Client, [...owed.joined, ...owed.buildups, ...sales, ...owed.waitlistPortionsAssigned].map(outcome => outcome.dinnerEventId))
+const load = async (d1Client: D1Database, notified: NotifiedOutcomes): Promise<NotificationRecords> => {
+    const sales = [...notified.ticketsSold, ...notified.waitlistTicketsSold]
+    const dinners = await loadDinners(d1Client, [...notified.joined, ...notified.buildups, ...sales, ...notified.waitlistPortionsAssigned].map(outcome => outcome.dinnerEventId))
     const inhabitants = await readNamed(d1Client, [
-        ...owed.joined.map(event => event.inhabitantId),
+        ...notified.joined.map(event => event.inhabitantId),
         ...sales.flatMap(sale => [sale.buyerInhabitantId, sale.sellerInhabitantId]),
-        ...owed.waitlistPortionsAssigned.map(portion => portion.inhabitantId),
-        ...owed.buildups.map(buildup => dinners.get(buildup.dinnerEventId)?.chefId)
+        ...notified.waitlistPortionsAssigned.map(portion => portion.inhabitantId),
+        ...notified.buildups.map(buildup => dinners.get(buildup.dinnerEventId)?.chefId)
     ], fetchInhabitantsByIds)
     const households = await readNamed(d1Client, [
         ...[...inhabitants.values()].map(inhabitant => inhabitant.householdId),
@@ -293,7 +293,7 @@ const composer = ({dinners, households, inhabitants, users}: NotificationRecords
     }
     const orderSubject = (orderId: number): NotificationSubject => ({subjectType: Subject.ORDER, subjectId: orderId})
 
-    const joinedNotification = (event: JoinOwed): BookingNotifications<Tracked>['joined'][number] => {
+    const joinedNotification = (event: NotifiedJoin): BookingNotifications<Tracked>['joined'][number] => {
         const {context, ticketPrices} = dinnerOf(event.dinnerEventId)
         return {
             ...findClosestUserInHousehold(event.inhabitantId), dinner: context, person: personOf(event.inhabitantId, event.isGuestTicket),
@@ -301,7 +301,7 @@ const composer = ({dinners, households, inhabitants, users}: NotificationRecords
             subject: {subjectType: Subject.TICKET_WAITLIST, subjectId: event.entryId}
         }
     }
-    const buildupNotifications = (buildup: BuildupOwed): BookingNotifications<Tracked>['buildups'] => {
+    const buildupNotifications = (buildup: NotifiedBuildup): BookingNotifications<Tracked>['buildups'] => {
         const {chefId, context} = dinnerOf(buildup.dinnerEventId)
         if (!chefId) return []
         return [{
@@ -310,36 +310,36 @@ const composer = ({dinners, households, inhabitants, users}: NotificationRecords
         }]
     }
     // The seller's closest user hears, the selling household's first user when the history names no seller
-    const soldNotification = (buyer: (sale: SaleOwed) => string) => (sale: SaleOwed): BookingNotifications<Tracked>['sold'][number] => {
+    const soldNotification = (buyer: (sale: NotifiedSale) => string) => (sale: NotifiedSale): BookingNotifications<Tracked>['sold'][number] => {
         const {context, ticketPrices} = dinnerOf(sale.dinnerEventId)
         return {
             ...findClosestUserInHousehold(sale.sellerInhabitantId, sale.sellerHouseholdId), dinner: context, buyer: buyer(sale),
             ticket: ticketLine(ticketPrices, sale.ticketPriceId), subject: orderSubject(sale.orderId)
         }
     }
-    const ticketNotification = (sale: SaleOwed): BookingNotifications<Tracked>['assigned'][number] => {
+    const ticketNotification = (sale: NotifiedSale): BookingNotifications<Tracked>['assigned'][number] => {
         const {context, ticketPrices} = dinnerOf(sale.dinnerEventId)
         return {
             ...findClosestUserInHousehold(sale.buyerInhabitantId), dinner: context, person: personOf(sale.buyerInhabitantId, sale.isGuestTicket),
             ticket: ticketLine(ticketPrices, sale.ticketPriceId, sale.dinnerMode, shortnameOf(sale.sellerHouseholdId)), subject: orderSubject(sale.orderId)
         }
     }
-    const extraPortionNotification = (portion: PortionOwed): BookingNotifications<Tracked>['extraPortions'][number] => {
+    const extraPortionNotification = (portion: NotifiedPortion): BookingNotifications<Tracked>['extraPortions'][number] => {
         const {context, ticketPrices} = dinnerOf(portion.dinnerEventId)
         return {
             ...findClosestUserInHousehold(portion.inhabitantId), dinner: context, person: personOf(portion.inhabitantId, portion.isGuestTicket),
             ticket: ticketLine(ticketPrices, portion.ticketPriceId, portion.dinnerMode), subject: orderSubject(portion.orderId)
         }
     }
-    const buyerHousehold = (sale: SaleOwed): string => shortnameOf(inhabitants.get(sale.buyerInhabitantId)?.householdId)
+    const buyerHousehold = (sale: NotifiedSale): string => shortnameOf(inhabitants.get(sale.buyerInhabitantId)?.householdId)
 
-    return (owed: OwedNotifications): BookingNotifications<Tracked> => ({
-        joined: owed.joined.map(joinedNotification),
-        buildups: owed.buildups.flatMap(buildupNotifications),
-        sold: [...owed.ticketsSold.map(soldNotification(buyerHousehold)), ...owed.waitlistTicketsSold.map(soldNotification(() => WAITLIST_BUYER))],
-        assigned: owed.waitlistTicketsSold.map(ticketNotification),
-        bought: owed.ticketsSold.map(ticketNotification),
-        extraPortions: owed.waitlistPortionsAssigned.map(extraPortionNotification)
+    return (notified: NotifiedOutcomes): BookingNotifications<Tracked> => ({
+        joined: notified.joined.map(joinedNotification),
+        buildups: notified.buildups.flatMap(buildupNotifications),
+        sold: [...notified.ticketsSold.map(soldNotification(buyerHousehold)), ...notified.waitlistTicketsSold.map(soldNotification(() => WAITLIST_BUYER))],
+        assigned: notified.waitlistTicketsSold.map(ticketNotification),
+        bought: notified.ticketsSold.map(ticketNotification),
+        extraPortions: notified.waitlistPortionsAssigned.map(extraPortionNotification)
     })
 }
 
@@ -349,11 +349,11 @@ const buildupDeliveries = async (d1Client: D1Database, notifications: Pending<Re
     return dinnerEventIds.length === 0 ? [] : fetchDeliveries(d1Client, Subject.DINNER_EVENT, dinnerEventIds)
 }
 
-// The notifications an operation owes, resolved and versioned for the delivery step; an order's and a dinner's versions
+// The notifications an operation sends, resolved and versioned for the delivery step; an order's and a dinner's versions
 // read their history
-const desiredOf = async (d1Client: D1Database, owed: OwedNotifications, history?: OrderHistoryDisplay[]): Promise<DesiredOutgoing[]> => {
-    const notifications = pendingOf(composer(await load(d1Client, owed))(owed))
-    const versioned = idsOf([...owed.buildups, ...owed.ticketsSold, ...owed.waitlistTicketsSold, ...owed.waitlistPortionsAssigned].map(outcome => outcome.dinnerEventId))
+const desiredOf = async (d1Client: D1Database, notified: NotifiedOutcomes, history?: OrderHistoryDisplay[]): Promise<DesiredOutgoing[]> => {
+    const notifications = pendingOf(composer(await load(d1Client, notified))(notified))
+    const versioned = idsOf([...notified.buildups, ...notified.ticketsSold, ...notified.waitlistTicketsSold, ...notified.waitlistPortionsAssigned].map(outcome => outcome.dinnerEventId))
     const rows = history ?? (versioned.length === 0 ? [] : await fetchOrderHistoryForDinners(d1Client, versioned))
     const versionOf = versionsOf(rows, await buildupDeliveries(d1Client, notifications))
     return notifications.flatMap(notification => {
@@ -369,7 +369,7 @@ const desiredOf = async (d1Client: D1Database, owed: OwedNotifications, history?
 
 // A dinner's line asks its chef for portions once its queue reaches the threshold: the join that left the longest
 // queue speaks for the dinner
-const owedOf = (outcomes: BookingOutcomes): OwedNotifications => {
+const notifiedOf = (outcomes: BookingOutcomes): NotifiedOutcomes => {
     const threshold = useAppConfig().theslope.waitlistBuildupThreshold
     const longest = new Map<number, WaitlistJoined>()
     for (const event of outcomes.joined) {
@@ -387,7 +387,7 @@ const owedOf = (outcomes: BookingOutcomes): OwedNotifications => {
  */
 export const notifyBookingOutcomes = neverThrows(
     async (d1Client: D1Database, channel: EmailChannel, outcomes: BookingOutcomes, jobRunId?: number): Promise<DeliveryResult> =>
-        bookingEmailsOff() ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, owedOf(outcomes)), {jobRunId}))
+        bookingEmailsOff() ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, notifiedOf(outcomes)), {jobRunId}))
 
 /**
  * The notifications for the chef's extra portions: each waiting entry that fit got a regular order; a stopped run's
@@ -395,33 +395,33 @@ export const notifyBookingOutcomes = neverThrows(
  */
 export const notifyExtraPortions = neverThrows(
     async (d1Client: D1Database, channel: EmailChannel, result: WaitlistAssignmentResult): Promise<DeliveryResult> =>
-        bookingEmailsOff() ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, owedOf({
+        bookingEmailsOff() ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, notifiedOf({
             joined: [], ticketsSold: [], waitlistTicketsSold: result.waitlistTicketsSold,
             waitlistPortionsAssigned: result.assigned.map(entry => ({...entry, dinnerEventId: result.dinnerEventId}))
         }))))
 
-// What the dinners owe as they stand: each place on a waiting list its join, each line at the buildup threshold its
+// What the dinners as they stand tell: each place on a waiting list its join, each line at the buildup threshold its
 // buildup, and the latest sale or extra portion of each order its holder still holds. The history reads in time order
-const owedOnDinners = (queue: TicketWaitlistDisplay[], history: OrderHistoryDisplay[], booked: OrderDisplay[], ticketPrices: TicketPrice[]): OwedNotifications => {
+const notificationsOnDinners = (queue: TicketWaitlistDisplay[], history: OrderHistoryDisplay[], booked: OrderDisplay[], ticketPrices: TicketPrice[]): NotifiedOutcomes => {
     const {waitingLines, ticketTypeOfEntry, portionNeed, portionsOfEntryFor} = useWaitlist()
     const threshold = useAppConfig().theslope.waitlistBuildupThreshold
-    const owed: OwedNotifications = {joined: [], buildups: [], ticketsSold: [], waitlistTicketsSold: [], waitlistPortionsAssigned: []}
+    const notified: NotifiedOutcomes = {joined: [], buildups: [], ticketsSold: [], waitlistTicketsSold: [], waitlistPortionsAssigned: []}
     for (const [dinnerEventId, dinnerQueue] of groupBy<TicketWaitlistDisplay, number>(entry => entry.dinnerEventId)(queue)) {
         const lines = waitingLines(dinnerQueue, ticketTypeOfEntry(ticketPrices))
         for (const [ticketType, line] of lines) {
-            owed.joined.push(...line.map((entry, index) => ({
+            notified.joined.push(...line.map((entry, index) => ({
                 dinnerEventId, inhabitantId: entry.inhabitantId, entryId: entry.id, position: index + 1, ticketType,
                 isGuestTicket: entry.isGuestTicket, ticketPriceId: entry.order.ticketPriceId, dinnerMode: entry.order.dinnerMode
             })))
         }
-        if (dinnerQueue.length >= threshold) owed.buildups.push({
+        if (dinnerQueue.length >= threshold) notified.buildups.push({
             dinnerEventId, entries: dinnerQueue.length, portions: portionNeed(dinnerQueue, portionsOfEntryFor(ticketPrices)),
             queuedByType: Object.fromEntries([...lines].map(([ticketType, line]) => [ticketType, line.length]))
         })
     }
     const latest = new Map<number, {row: OrderHistoryDisplay, audit: OrderAudit}>()
     for (const audited of auditedRows(history)) {
-        if (audited.row.orderId !== null && owesOrderNotification(audited.audit)) latest.set(audited.row.orderId, audited)
+        if (audited.row.orderId !== null && notifiesOrder(audited.audit)) latest.set(audited.row.orderId, audited)
     }
     const held = new Map(booked.map(order => [order.id, order]))
     for (const [orderId, {row, audit}] of latest) {
@@ -431,16 +431,16 @@ const owedOnDinners = (queue: TicketWaitlistDisplay[], history: OrderHistoryDisp
         // A sale's row names its buyer, its snapshot the seller's order as it stood before the sale
         if (audit.change === Change.BUY && order.inhabitantId === row.inhabitantId && audit.householdId !== null) {
             const sale = {...ticket, buyerInhabitantId: order.inhabitantId, sellerHouseholdId: audit.householdId, sellerInhabitantId: audit.inhabitantId}
-            if (audit.source === Source['waitlist-assignment']) owed.waitlistTicketsSold.push(sale)
-            else owed.ticketsSold.push(sale)
+            if (audit.source === Source['waitlist-assignment']) notified.waitlistTicketsSold.push(sale)
+            else notified.ticketsSold.push(sale)
         }
-        if (isExtraPortionRow(audit) && order.inhabitantId === audit.inhabitantId) owed.waitlistPortionsAssigned.push({...ticket, inhabitantId: order.inhabitantId})
+        if (isExtraPortionRow(audit) && order.inhabitantId === audit.inhabitantId) notified.waitlistPortionsAssigned.push({...ticket, inhabitantId: order.inhabitantId})
     }
-    return owed
+    return notified
 }
 
 // The season's dinners still to come and past their booking deadline, where the waiting list and the sales live
-const desiredOnSeason = async (d1Client: D1Database, seasonId: number | null): Promise<DesiredOutgoing[]> => {
+const notificationsOnSeason = async (d1Client: D1Database, seasonId: number | null): Promise<DesiredOutgoing[]> => {
     if (seasonId === null) return []
     const season = await fetchSeason(d1Client, seasonId)
     if (!season) return []
@@ -452,20 +452,20 @@ const desiredOnSeason = async (d1Client: D1Database, seasonId: number | null): P
     const queue = await fetchWaitlistForDinners(d1Client, dinnerEventIds)
     const history = await fetchOrderHistoryForDinners(d1Client, dinnerEventIds)
     const booked = await fetchOrders(d1Client, dinnerEventIds, undefined, OrderState.BOOKED)
-    return desiredOf(d1Client, owedOnDinners(queue, history, booked, season.ticketPrices), history)
+    return desiredOf(d1Client, notificationsOnDinners(queue, history, booked, season.ticketPrices), history)
 }
 
 /**
- * The booking notifications the season's dinners past their booking deadline owe as they stand: each place's join,
+ * The booking notifications the season's dinners past their booking deadline send as they stand: each place's join,
  * each line at the buildup threshold, the latest sale or extra portion of each order its holder still holds. The
- * delivery records keep each from going twice; no season owes nothing.
+ * delivery records keep each from going twice; without a season it sends nothing.
  *
  * The delivery dry run shows the admin what the nightly run would send before SHOULD_SEND_BOOKING_EMAILS_FLAG goes on
  * in an environment. It ignores the flag, reads the same dinners and their delivery records, and sends and records
- * nothing: per user how many of each notification would go and how many are already recorded.
+ * nothing: per user how many of each notification the run sends.
  */
 export const sendNotifications = neverThrows(
     async (
         d1Client: D1Database, channel: EmailChannel, seasonId: number | null, options: Pick<DeliveryOptions, 'jobRunId' | 'dryRun'> = {}
     ): Promise<DeliveryResult> =>
-        bookingEmailsOff(options.dryRun) ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOnSeason(d1Client, seasonId), options))
+        bookingEmailsOff(options.dryRun) ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => notificationsOnSeason(d1Client, seasonId), options))

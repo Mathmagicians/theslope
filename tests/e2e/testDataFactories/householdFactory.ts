@@ -3,10 +3,11 @@
 import type {APIResponse, BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
-import type {HouseholdDetail, HouseholdDisplay, InhabitantDetail, InhabitantCreate, UserDisplay} from "~/composables/useCoreValidation"
+import type {HouseholdDetail, HouseholdDisplay, InhabitantDetail, InhabitantCreate, UserCreate, UserDisplay} from "~/composables/useCoreValidation"
 import {useCoreValidation} from "~/composables/useCoreValidation"
 import {useBookingValidation, type InhabitantUpdateResponse, type HouseholdUpdateResponse, type DinnerMode as DinnerModeType} from "~/composables/useBookingValidation"
 import type {WeekDayMap} from "~/types/dateTypes"
+import {dateToWeekDay} from "~/utils/season"
 import {useHeynaboValidation, type HeynaboImportResponse} from "~/composables/useHeynaboValidation"
 import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
 const Action = useActionValidation().BookingActionSchema.enum
@@ -279,6 +280,47 @@ export class HouseholdFactory {
         if (expectedStatus !== 201 || !dinnerPreferences) return responseBody
         const updated = await this.updateInhabitant(context, responseBody.id, {dinnerPreferences})
         return updated!.inhabitant
+    }
+
+    /**
+     * A person of a spec's household who eats on no day, named by its role in `lastName`, with a login when given a
+     * user: the household's first user hears the notifications about the people without one
+     */
+    static readonly createPersonInHousehold = (
+        context: BrowserContext,
+        householdId: number,
+        lastName: string,
+        user?: UserCreate
+    ): Promise<InhabitantDetail> =>
+        this.createInhabitantWithConfig(context, householdId, {lastName, dinnerPreferences: createDefaultWeekdayMap(DinnerMode.NONE), user})
+
+    /**
+     * The person's preference on the dinner's weekday, NONE on the others, written by the admin's override on the
+     * season's deadlines: the household's run books the person while the dinner is open, queues the person past its
+     * deadline, and with NONE releases the person's ticket or leaves its place
+     */
+    static readonly updatePreferenceOnDinnerDay = (
+        context: BrowserContext,
+        inhabitantId: number,
+        seasonId: number,
+        dinnerDate: Date,
+        mode: DinnerModeType
+    ): Promise<InhabitantUpdateResponse | null> => this.updateInhabitantPreferences(
+        context, inhabitantId, {...createDefaultWeekdayMap(DinnerMode.NONE), [dateToWeekDay(new Date(dinnerDate))]: mode}, 200, seasonId, undefined, true
+    )
+
+    /**
+     * The user who hears about the inhabitant: its own user, else its household's member of the lowest id with a user
+     * (the sender's closest user); null when the household has none
+     */
+    static readonly closestUserIdOf = async (
+        context: BrowserContext,
+        inhabitant: Pick<InhabitantDetail, 'userId' | 'householdId'>
+    ): Promise<number | null> => {
+        if (inhabitant.userId) return inhabitant.userId
+        const household = await this.getHouseholdById(context, inhabitant.householdId)
+        const firstUser = (household?.inhabitants ?? []).filter(member => member.userId).sort((a, b) => a.id - b.id)[0]
+        return firstUser?.userId ?? null
     }
 
     /**

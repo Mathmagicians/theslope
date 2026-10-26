@@ -300,6 +300,46 @@ export class OrderFactory {
     return {householdId: data.householdId, createdIds}
   }
 
+  /**
+   * An inhabitant's ticket and its guest tickets on a dinner, booked by the admin's correction with the deadlines lifted
+   * (a past dinner included); the new orders' ids, the inhabitant's own first
+   */
+  static readonly bookTickets = async (
+    context: BrowserContext,
+    {householdId, dinnerEventId, inhabitantId, ticketPriceId, dinnerMode = DinnerModeSchema.enum.DINEIN, guestTickets = 0}:
+      {householdId: number, dinnerEventId: number, inhabitantId: number, ticketPriceId: number, dinnerMode?: DinnerMode, guestTickets?: number}
+  ): Promise<[number, ...number[]]> => {
+    // One request per ticket: the household's new orders on the dinner name each ticket's order
+    const book = async (isGuestTicket: boolean): Promise<number> => {
+      const result = await this.createOrder(context, {householdId, dinnerEventId, orders: [{inhabitantId, ticketPriceId, dinnerMode, isGuestTicket}]})
+      const [orderId, ...more] = result?.createdIds ?? []
+      if (orderId === undefined || more.length > 0) {
+        throw new Error(`The correction books one ${isGuestTicket ? 'guest ' : ''}ticket of inhabitant ${inhabitantId}, got ${JSON.stringify(result?.createdIds)}`)
+      }
+      return orderId
+    }
+    const own = await book(false)
+    const guests: number[] = []
+    for (let guest = 0; guest < guestTickets; guest++) guests.push(await book(true))
+    return [own, ...guests]
+  }
+
+  /** Every order of the inhabitant on the dinner, its guest tickets included */
+  static readonly getOrdersOf = async (
+    context: BrowserContext,
+    dinnerEventId: number,
+    inhabitant: {id: number, householdId: number}
+  ): Promise<OrderDisplay[]> =>
+    (await this.getOrders(context, {dinnerEventIds: dinnerEventId, householdId: inhabitant.householdId})).filter(order => order.inhabitantId === inhabitant.id)
+
+  /** The inhabitant's own order on the dinner, not a guest ticket booked on the inhabitant */
+  static readonly getOrderOf = async (
+    context: BrowserContext,
+    dinnerEventId: number,
+    inhabitant: {id: number, householdId: number}
+  ): Promise<OrderDisplay | undefined> =>
+    (await this.getOrdersOf(context, dinnerEventId, inhabitant)).find(order => !order.isGuestTicket)
+
   static readonly getOrder = async (
     context: BrowserContext,
     orderId: number,

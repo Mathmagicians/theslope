@@ -1,10 +1,16 @@
-import {expect, type BrowserContext} from '@playwright/test'
+import {expect, type APIResponse, type BrowserContext} from '@playwright/test'
 import testHelpers from '../testHelpers'
+import {NotificationFactory} from './notificationFactory'
 import {useNotificationValidation, type SenderEmitResult, type SenderEventMonthlyBillingBody} from '~/composables/useNotificationValidation'
-import {useDeliveryValidation, type Delivery} from '~/composables/useDeliveryValidation'
+import {useDeliveryValidation, type Delivery, type DeliveryDryRun, type SenderEvent} from '~/composables/useDeliveryValidation'
 
-const {headers} = testHelpers
+const {headers, pollUntil} = testHelpers
 const {SenderEmitResultSchema} = useNotificationValidation()
+
+/** An answer a refused request is read by: its status and its body */
+type RawAnswer = {status: number, body: unknown}
+const rawAnswerOf = async (response: APIResponse): Promise<RawAnswer> =>
+    ({status: response.status(), body: await response.json().catch(() => null)})
 
 const TEST_EVENT_ENDPOINT = '/api/admin/sender/event/test'
 const MONTHLY_BILLING_EVENT_ENDPOINT = '/api/admin/sender/event/monthly-billing'
@@ -36,16 +42,65 @@ export class SenderFactory {
     /** The delivery read with the query as given: the validation case sends a query the endpoint refuses */
     static readonly getDeliveriesByQuery = async (
         context: BrowserContext,
-        {subjectType, subjectIds}: {subjectType: string, subjectIds: string[]},
+        query: {subjectType: string, subjectIds: string[]},
         expectedStatus: number = 200
     ): Promise<Delivery[]> => {
         const {DeliverySchema} = useDeliveryValidation()
-        const query = new URLSearchParams([['subjectType', subjectType], ...subjectIds.map(id => ['subjectIds', id])])
-        const response = await context.request.get(`${DELIVERY_ENDPOINT}?${query}`, {headers})
+        const response = await SenderFactory.readDeliveries(context, query)
         const body = response.status() === expectedStatus ? null : await response.text()
         expect(response.status(), `Unexpected status reading the deliveries: ${body}`).toBe(expectedStatus)
         return expectedStatus === 200 ? DeliverySchema.array().parse(await response.json()) : []
     }
+
+    /** The delivery read with the query as given, its answer unasserted: a scenario reads the refusal in its THEN */
+    static readonly getDeliveriesByQueryRaw = async (
+        context: BrowserContext,
+        query: {subjectType: string, subjectIds: string[]}
+    ): Promise<RawAnswer> => rawAnswerOf(await SenderFactory.readDeliveries(context, query))
+
+    /** The Delivery rows of several subject types at once; a type without ids is not read */
+    static readonly getDeliveriesOfSubjects = async (
+        context: BrowserContext,
+        subjects: Partial<Record<Delivery['subjectType'], number[]>>
+    ): Promise<Delivery[]> => {
+        const named = Object.entries(subjects).filter(([, ids]) => ids.length > 0) as Array<[Delivery['subjectType'], number[]]>
+        return (await Promise.all(named.map(([subjectType, ids]) => SenderFactory.getDeliveries(context, subjectType, ids)))).flat()
+    }
+
+    /** A subject's Delivery rows once its notifications have gone, each by the notification its reference leads with */
+    static readonly deliveriesOf = async (
+        context: BrowserContext,
+        subjectType: Delivery['subjectType'],
+        subjectId: number,
+        count: number
+    ): Promise<Array<{kind: string, version: number}>> =>
+        (await pollUntil(() => SenderFactory.getDeliveries(context, subjectType, [subjectId]), rows => rows.length >= count))
+            .map(row => ({kind: NotificationFactory.mailKindOf(row.reference), version: row.version}))
+            .sort((a, b) => a.kind.localeCompare(b.kind))
+
+    /** GET /api/admin/sender/delivery?dryRun= — what the sender event's next run sends per user, with nothing sent */
+    static readonly getDeliveryDryRun = async (
+        context: BrowserContext,
+        senderEvent: SenderEvent,
+        expectedStatus: number = 200
+    ): Promise<DeliveryDryRun | null> => {
+        const {DeliveryDryRunSchema} = useDeliveryValidation()
+        const response = await context.request.get(`${DELIVERY_ENDPOINT}?${new URLSearchParams({dryRun: senderEvent})}`, {headers})
+        const body = response.status() === expectedStatus ? null : await response.text()
+        expect(response.status(), `Unexpected status reading the delivery dry run: ${body}`).toBe(expectedStatus)
+        return expectedStatus === 200 ? DeliveryDryRunSchema.parse(await response.json()) : null
+    }
+
+    /** POST /api/admin/sender/event/test, its answer unasserted: a scenario reads the refusal in its THEN */
+    static readonly triggerTestEventRaw = async (context: BrowserContext): Promise<RawAnswer> =>
+        rawAnswerOf(await context.request.post(TEST_EVENT_ENDPOINT, {headers}))
+
+    /** POST /api/admin/sender/event/monthly-billing, its answer unasserted: a scenario reads the re-send or its refusal */
+    static readonly triggerMonthlyBillingEventRaw = async (context: BrowserContext, body: unknown): Promise<RawAnswer> =>
+        rawAnswerOf(await context.request.post(MONTHLY_BILLING_EVENT_ENDPOINT, {headers, data: body}))
+
+    private static readonly readDeliveries = (context: BrowserContext, {subjectType, subjectIds}: {subjectType: string, subjectIds: string[]}) =>
+        context.request.get(`${DELIVERY_ENDPOINT}?${new URLSearchParams([['subjectType', subjectType], ...subjectIds.map(id => ['subjectIds', id])])}`, {headers})
 
     private static readonly triggerEvent = async (
         context: BrowserContext,

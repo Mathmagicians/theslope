@@ -197,7 +197,7 @@ DesiredOrderSchema = {
 | Source of the desired orders | Trigger | Audit |
 |---|---|---|
 | A draft (`desiredOrders`) | the booking page, the admin's correction | `USER_*` |
-| The preferences, stored or the drafts in `preferences` | a preference change, the nightly run, a season activation or update, a residency change | `SYSTEM_*` |
+| The preferences, stored or the drafts in `preferences` | a preference change, the DAILY_MAINTENANCE job, a season activation or update, a residency change | `SYSTEM_*` |
 
 Both go through `resolveDesiredOrdersToBuckets`: before the deadline they book and cancel; after it they buy a ticket
 for sale or join its type's line, release, leave or requeue. A person's own earlier act outranks the preference:

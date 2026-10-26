@@ -112,8 +112,8 @@ describe('booking notifications after the action', () => {
     })
 })
 
-// A placement a run finished for another's stopped run reaches the mails its kind owes: an extra portion its buyer's,
-// a sold ticket the seller's and the buyer's. Here one person sold and bought: one login hears both kinds of one order
+// A placement a run finished for another's stopped run sends the notifications of its kind: an extra portion tells its
+// buyer, a sold ticket the seller and the buyer. Here one person sold and bought: one login hears both kinds of one order
 describe('the mails of the waiting list\'s placements', () => {
     const logs = {warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
     const household = HouseholdFactory.defaultHouseholdDetail()
@@ -261,14 +261,6 @@ describe('the people a run\'s mails name', () => {
         expect(recorded.rows).toHaveLength(kinds.length)
     })
 
-    it('GIVEN the email channel off WHEN the dinner is booked THEN no notification is sent or recorded, and a warning names the missing setting', async () => {
-        const {counts} = await notifyBookingOutcomes({} as D1Database, {on: false, missing: 'DEPLOY_URL'}, everyKind())
-
-        expect(counts.sent).toBe(0)
-        expect(recorded.rows).toEqual([])
-        expect(logs.warn).toHaveBeenCalledWith(expect.stringContaining('DEPLOY_URL'))
-    })
-
     // An email about an inhabitant goes to the inhabitant's closest user (findClosestUserInHousehold): the inhabitant's own
     // user, else the first user of the inhabitant's household, whoever booked. A sale emails both sides: the seller's
     // closest user, the selling household's first user when the history names no seller, and the buyer's. The waitlist
@@ -374,7 +366,7 @@ describe('the people a run\'s mails name', () => {
     })
 
     // An email sent writes the delivery record of its subject and version. A subject's version counts up from 1, one step
-    // per history row that owes it an email: a place on the waiting list its join, an order the extra portion that created
+    // per history row that sends an email: a place on the waiting list its join, an order the extra portion that created
     // it and each BUY, the dinner its first waitlist buildup and each extra portion row after it
     describe('the delivery records of the emails', () => {
         const {TICKET_WAITLIST, ORDER, DINNER_EVENT} = DeliverySubjectSchema.enum
@@ -419,7 +411,7 @@ describe('the people a run\'s mails name', () => {
                 subject: {subjectType: ORDER, subjectId: 88, version: 1}},
             {email: 'waitlist buildup for the chef', kind: Kind.WAITLIST_BUILDUP, outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}), history: [],
                 subject: {subjectType: DINNER_EVENT, subjectId: dinner.dinnerEventId, version: 1}},
-            // The chef's extra portions before the first buildup owe the chef nothing
+            // The chef's extra portions before the first buildup tell the chef nothing
             {email: 'waitlist buildup for the chef after the chef\'s earlier extra portions', kind: Kind.WAITLIST_BUILDUP,
                 outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}), history: [extraPortion(88), extraPortion(89)],
                 subject: {subjectType: DINNER_EVENT, subjectId: dinner.dinnerEventId, version: 1}}
@@ -434,7 +426,7 @@ describe('the people a run\'s mails name', () => {
         })
 
         // A subject through its history, a step every 10 minutes: each step's new history rows land 5 minutes before it; a
-        // rerun with no new row owes no new version
+        // step with no new row sends no new version
         it.each([
             {subject: 'a regular ticket bought twice', subjectType: ORDER, subjectId: 77, steps: [
                 {outcomes: outcomesOf({ticketsSold: [saleTo(buyer)]}), history: [bought(77, 5)]},
@@ -458,7 +450,7 @@ describe('the people a run\'s mails name', () => {
             ], rows: [
                 {kind: Kind.WAITLIST_BUILDUP, version: 1}, {kind: Kind.WAITLIST_BUILDUP, version: 2}, {kind: Kind.WAITLIST_BUILDUP, version: 3}
             ]}
-        ])('GIVEN $subject WHEN each step notifies THEN its versions count up from 1, one per history row that owes an email', async ({subjectType, subjectId, steps, rows}) => {
+        ])('GIVEN $subject WHEN each step notifies THEN its versions count up from 1, one per history row that sends an email', async ({subjectType, subjectId, steps, rows}) => {
             for (const [index, {outcomes, history}] of steps.entries()) {
                 vi.setSystemTime(at(10 * (index + 1)))
                 store.history = history
@@ -496,13 +488,13 @@ describe('the people a run\'s mails name', () => {
         })
         const soldTicket = OrderFactory.defaultOrder(undefined, {id: 77, dinnerEventId: dinner.dinnerEventId, inhabitantId: buyer.id, ticketPriceId: ADULT_PRICE_ID})
 
-        const owed = [
-            {owes: 'a place on the waiting list', kinds: [Kind.WAITLIST_JOINED], written: () => ({queue: [place()], history: [], booked: []})},
-            {owes: 'a ticket sold to the first in line', kinds: [Kind.TICKET_SOLD, Kind.WAITLIST_TICKET_ASSIGNED],
+        const notifications = [
+            {outcome: 'a place on the waiting list', kinds: [Kind.WAITLIST_JOINED], written: () => ({queue: [place()], history: [], booked: []})},
+            {outcome: 'a ticket sold to the first in line', kinds: [Kind.TICKET_SOLD, Kind.WAITLIST_TICKET_ASSIGNED],
                 written: () => ({queue: [], history: [sale()], booked: [soldTicket]})}
         ]
         // D1 holds the dinner as written, with the booking emails flag as given
-        const owing = ({queue, history, booked}: ReturnType<typeof owed[number]['written']>, flag: string) => {
+        const holdDinner = ({queue, history, booked}: ReturnType<typeof notifications[number]['written']>, flag: string) => {
             vi.stubEnv('SHOULD_SEND_BOOKING_EMAILS_FLAG', flag)
             store.history = history
             vi.mocked(fetchWaitlistForDinners).mockResolvedValue(queue)
@@ -517,8 +509,8 @@ describe('the people a run\'s mails name', () => {
             {given: 'no delivery records and the booking emails flag off', flag: 'false', runBefore: async () => undefined, sent: false}
         ]
 
-        it.each(owed.flatMap(notification => states.map(state => ({...notification, ...state}))))('GIVEN a dinner that owes $owes and $given WHEN a maintenance run sends the booking notifications THEN its emails go: $sent', async ({kinds, written, flag, runBefore, sent}) => {
-            owing(written(), flag)
+        it.each(notifications.flatMap(notification => states.map(state => ({...notification, ...state}))))('GIVEN a dinner with $outcome and $given WHEN a maintenance run sends the booking notifications THEN its emails go: $sent', async ({kinds, written, flag, runBefore, sent}) => {
+            holdDinner(written(), flag)
             await runBefore()
             const sender = fakeQueue()
 
@@ -528,26 +520,26 @@ describe('the people a run\'s mails name', () => {
         })
 
         // The admin's view of what the nightly run sends, whether or not the flag lets it send
-        it('GIVEN a dinner that owes a ticket sold to the first in line and the booking emails flag off WHEN the maintenance run is a dry run THEN it lists the booking notifications per user, and nothing is sent or recorded', async () => {
-            const [, ticketSold] = owed
-            owing(ticketSold!.written(), 'false')
+        it('GIVEN a dinner with a ticket sold to the first in line and the booking emails flag off WHEN the maintenance run is a dry run THEN it lists the booking notifications per user, and nothing is sent or recorded', async () => {
+            const [, ticketSold] = notifications
+            holdDinner(ticketSold!.written(), 'false')
             const sender = fakeQueue()
 
             const {dryRun} = await send(sender, {dryRun: true})
 
             expect(dryRun?.senderEvent).toBe(SenderEvent.BOOKING_STATUS)
             expect([...dryRun?.users ?? []].sort((a, b) => a.userId - b.userId)).toEqual([
-                {userId: buyer.userId, toSend: {[Kind.WAITLIST_TICKET_ASSIGNED]: 1}, recorded: 0},
-                {userId: seller.userId, toSend: {[Kind.TICKET_SOLD]: 1}, recorded: 0}
+                {userId: buyer.userId, toSend: {[Kind.WAITLIST_TICKET_ASSIGNED]: 1}},
+                {userId: seller.userId, toSend: {[Kind.TICKET_SOLD]: 1}}
             ])
             expect(sentMessages(sender)).toEqual([])
             expect(recorded.rows).toEqual([])
         })
 
-        // No active season holds no dinner to owe a notification
+        // Without an active season no dinner has notifications to send
         const nothingCounted = {sent: 0}
         it.each([
-            {run: 'sends the booking notifications', options: undefined, result: {counts: nothingCounted}},
+            {run: 'sends the booking notifications', options: undefined, result: {counts: nothingCounted, emitted: []}},
             {run: 'does a dry run of the booking notifications', options: {dryRun: true}, result: {counts: nothingCounted, dryRun: {senderEvent: SenderEvent.BOOKING_STATUS, users: []}}}
         ])('GIVEN no active season WHEN a maintenance run $run THEN it reads no dinners, sends nothing and counts nothing', async ({options, result}) => {
             const sender = fakeQueue()

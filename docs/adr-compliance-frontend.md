@@ -224,7 +224,7 @@ Status.
 | `useBillingValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `useHeynaboValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ |
 | `useMaintenanceValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ |
-| `useDeliveryValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `useDeliveryValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ operation result types (ADR-009): `DeliveryCountsSchema`, a sender event's notifications sent; `DeliveryDryRunSchema`, the delivery dry run per user |
 | `useNotificationValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ parent | ✅ |
 | `useSettingValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ |
 | `useUserPreferenceValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |

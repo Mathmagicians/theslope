@@ -55,7 +55,7 @@ export const readByIds = async <T>(ids: number[], read: (batch: number[]) => Pro
 /*** USERS ***/
 
 // Get serialization utilities
-const {serializeUserInput, deserializeUser} = useCoreValidation()
+const {serializeUserInput, deserializeUserDisplay, deserializeUserDetail} = useCoreValidation()
 
 const LOG_USER = '🪪 > USER > [SAVE]'
 
@@ -70,11 +70,6 @@ const serializeUserPartial = (user: Partial<UserCreate>) => ({
     systemRoles:  user.systemRoles  !== undefined ? JSON.stringify(user.systemRoles) : Prisma.skip,
     notificationChannels: user.notificationChannels !== undefined ? JSON.stringify(user.notificationChannels) : Prisma.skip,
     appearance:           user.appearance           !== undefined ? JSON.stringify(user.appearance)           : Prisma.skip
-})
-
-const toUserDetail = (row: Parameters<typeof deserializeUser>[0]): UserDetail => ({
-    ...deserializeUser(row),
-    Inhabitant: null
 })
 
 /**
@@ -103,17 +98,17 @@ export async function saveUser(
     const subject = id != null ? `id=${id}` : user.email!
 
     try {
+        if (id != null) {
+            const row = await prisma.user.update({where: {id}, data: serializeUserPartial(user)})
+            console.info(`${LOG_USER} Saved user ${row.email} (id=${row.id}, target=${subject})`)
+            return deserializeUserDetail(row)
+        }
         // A new user starts on the default channels and appearance; an existing user's settings are the user's own save
-        const {notificationChannels: _channels, appearance: _appearance, ...existingUserUpdate} = serializeUserInput(user as UserCreate)
-        const row = id != null
-            ? await prisma.user.update({where: {id}, data: serializeUserPartial(user)})
-            : await prisma.user.upsert({
-                  where: {email: user.email!},
-                  create: serializeUserInput(user as UserCreate),
-                  update: existingUserUpdate
-              })
+        const serialized = serializeUserInput(user as UserCreate)
+        const {notificationChannels: _channels, appearance: _appearance, ...existingUserUpdate} = serialized
+        const row = await prisma.user.upsert({where: {email: user.email!}, create: serialized, update: existingUserUpdate})
         console.info(`${LOG_USER} Saved user ${row.email} (id=${row.id}, target=${subject})`)
-        return toUserDetail(row)
+        return deserializeUserDetail(row)
     } catch (error) {
         return throwH3Error(`${LOG_USER}: Error saving user ${subject}`, error)
     }
@@ -142,25 +137,6 @@ const USER_DISPLAY_SELECT = {
     }
 } as const
 
-type UserWithInhabitantPayload = Prisma.UserGetPayload<{
-    select: typeof USER_DISPLAY_SELECT
-}>
-
-// Shared deserialization logic for UserDisplay
-function deserializeToUserDisplay(user: UserWithInhabitantPayload): UserDisplay {
-    const {UserDisplaySchema} = useCoreValidation()
-
-    // Let the schema do ALL the work - parse the JSON columns, validate fields, transform dates
-    const userDisplay = {
-        ...user,
-        systemRoles: JSON.parse(user.systemRoles),
-        notificationChannels: JSON.parse(user.notificationChannels)
-    }
-
-    // Schema validation with z.coerce.date() handles date conversion and all other transformations
-    return UserDisplaySchema.parse(userDisplay)
-}
-
 export async function fetchUsers(d1Client: D1Database): Promise<UserDisplay[]> {
     console.info(`🪪 > USER > [GET] Fetching users from database`)
     const prisma = await getPrismaClientConnection(d1Client)
@@ -178,7 +154,7 @@ export async function fetchUsers(d1Client: D1Database): Promise<UserDisplay[]> {
         })
 
         // Deserialize systemRoles from JSON string to array (ADR-010 pattern)
-        const deserializedUsers = users.map(deserializeToUserDisplay)
+        const deserializedUsers = users.map(deserializeUserDisplay)
 
         console.info(`🪪 > USER > [GET] Successfully fetched ${deserializedUsers.length} users`)
         return deserializedUsers
@@ -209,7 +185,7 @@ export async function fetchUsersByRole(d1Client: D1Database, systemRole: SystemR
         })
 
         // Deserialize systemRoles from JSON string to array (ADR-010 pattern)
-        const deserializedUsers = users.map(deserializeToUserDisplay)
+        const deserializedUsers = users.map(deserializeUserDisplay)
 
         console.info(`🪪 > USER > [GET] Successfully fetched ${deserializedUsers.length} users with role ${systemRole}`)
         return deserializedUsers
@@ -229,12 +205,7 @@ export async function deleteUser(d1Client: D1Database, userId: number): Promise<
 
         console.info(`🪪 > USER > [DELETE] Successfully deleted user ${deletedUser.email}`)
 
-        // ADR-009: Return UserDetail with Inhabitant: null (no relation fetched for mutation)
-        const deserialized = deserializeUser(deletedUser)
-        return {
-            ...deserialized,
-            Inhabitant: null
-        }
+        return deserializeUserDetail(deletedUser)
     } catch (error) {
         return throwH3Error('🪪 > USER > [DELETE]: Error deleting user', error)
     }
@@ -295,7 +266,6 @@ export async function fetchUser(d1Client: D1Database, filter: { email?: string; 
     const filterDesc = filter.email ? `email ${maskPassword(filter.email)}` : `ID ${filter.id}`
     console.info(`🪪 > USER > [GET] Fetching user by ${filterDesc}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeUserDetail} = useCoreValidation()
 
     const where = filter.email ? { email: filter.email } : { id: filter.id }
 
@@ -326,7 +296,7 @@ export async function fetchUsersByIds(d1Client: D1Database, ids: number[]): Prom
     try {
         const prisma = await getPrismaClientConnection(d1Client)
         const users = await readByIds(ids, batch => prisma.user.findMany({where: {id: {in: batch}}, select: USER_DISPLAY_SELECT}))
-        return users.map(deserializeToUserDisplay)
+        return users.map(deserializeUserDisplay)
     } catch (error) {
         return throwH3Error(`🪪 > USERS > [GET]: Error fetching ${ids.length} users by id`, error)
     }

@@ -576,7 +576,7 @@ theslope-sender-event-monthly-billing-dev: ## Re-send the accountant mail for a 
 theslope-sender-event-monthly-billing-prod: ## Re-send the accountant mail for a period on prod — bpid=<billingPeriodSummaryId>
 	$(call theslope_sender_event_monthly_billing,$(ENV_prod))
 
-# $(1)=env file. The delivery dry run: per user, the booking notifications the next run sends and those already recorded
+# $(1)=env file. The delivery dry run: per user, the booking notifications the next run sends
 define theslope_sender_dry_run_booking_status
 	$(call theslope_call,$(1),"$$BASE_URL/api/admin/sender/delivery?dryRun=BOOKING_STATUS")
 endef

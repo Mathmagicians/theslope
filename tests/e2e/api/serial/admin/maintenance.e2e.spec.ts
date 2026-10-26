@@ -10,7 +10,6 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 import {WEEKDAYS} from '~~/app/types/dateTypes'
-import type {BrowserContext} from '@playwright/test'
 
 const {DinnerStateSchema, DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const {JobType, JobStatus} = useMaintenanceValidation()
@@ -19,57 +18,6 @@ const DinnerState = DinnerStateSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
 const {validatedBrowserContext, temporaryAndRandom, getSessionUserInfo, salt, daysFromNow} = testHelpers
-
-// === HELPERS ===
-
-/** Create a date N days from today at midnight */
-const daysFromToday = (days: number): Date => {
-    const date = new Date()
-    date.setDate(date.getDate() + days)
-    date.setHours(0, 0, 0, 0)
-    return date
-}
-
-/** Create a dinner event in the active season */
-const createTestDinner = async (
-    context: BrowserContext,
-    seasonId: number,
-    testSalt: string,
-    state: typeof DinnerState[keyof typeof DinnerState],
-    daysOffset: number
-) => {
-    return await DinnerEventFactory.createDinnerEvent(context, {
-        seasonId,
-        date: daysFromToday(daysOffset),
-        menuTitle: `${state} ${testSalt}`,
-        state
-    })
-}
-
-/** Create a BOOKED order for a dinner using session user's household */
-const createTestOrder = async (
-    context: BrowserContext,
-    season: Season,
-    dinnerId: number,
-    householdId: number,
-    inhabitantId: number
-) => {
-    const ticketPrice = season.ticketPrices[0]!
-
-    const orderResult = await OrderFactory.createOrder(context, {
-        householdId,
-        dinnerEventId: dinnerId,
-        orders: [{
-            inhabitantId,
-            ticketPriceId: ticketPrice.id!,
-            dinnerMode: DinnerMode.DINEIN,
-            isGuestTicket: false
-        }]
-    })
-
-    expect(orderResult, 'Order creation should succeed').not.toBeNull()
-    return {orderId: orderResult!.createdIds[0]!}
-}
 
 // === TESTS ===
 // These tests verify FINAL expected state after maintenance runs.
@@ -147,13 +95,13 @@ test.describe('Daily Maintenance API', () => {
         const { householdId, inhabitantId } = await getSessionUserInfo(context)
 
         // Setup: Create CONSUMED dinner with order in PREVIOUS billing period (must be closed for billing)
-        const dinner = await createTestDinner(context, activeSeason.id!, testSalt, DinnerState.CONSUMED, -35)
+        const dinner = await DinnerEventFactory.createDinnerEventInState(context, activeSeason.id!, DinnerState.CONSUMED, -35, testSalt)
         createdDinnerEventIds.push(dinner.id)
-        const {orderId} = await createTestOrder(context, fullSeason, dinner.id, householdId, inhabitantId)
+        const ticketPrice = fullSeason.ticketPrices[0]!
+        const [orderId] = await OrderFactory.bookTickets(context, {householdId, dinnerEventId: dinner.id, inhabitantId, ticketPriceId: ticketPrice.id!})
 
         // Setup: Create GUEST order through the scaffold with the deadlines lifted
         // Note: Scaffold endpoint can't create orders for past dinners - deadline restriction
-        const ticketPrice = fullSeason.ticketPrices[0]!
         const guestOrderResult = await OrderFactory.createOrder(context, {
             householdId,
             dinnerEventId: dinner.id,

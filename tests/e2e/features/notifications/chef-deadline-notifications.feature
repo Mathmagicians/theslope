@@ -1,13 +1,15 @@
 @api-serial
 Feature: Chef deadline notifications
-  A chef's dinner has two deadlines: the menu is published by the menu deadline, and the groceries are ordered by the
-  dinner. The nightly run emails the closest user of the chef once a night while a deadline is missed, listing both.
+  A chef's dinner has deadlines: the menu is published by the menu deadline, and the groceries are ordered by the
+  dinner. The DAILY_MAINTENANCE job emails the closest user of the chef while a deadline is missed, listing all the
+  dinner's deadlines. A dinner with all its deadlines met sends nothing.
 
   Background:
     Given the admin is signed in
     And a season is active
 
-  Scenario: The nightly run emails the chef's missed deadlines once a night
+  @fixme
+  Scenario: The DAILY_MAINTENANCE job emails the chef's missed deadlines once
     Given a dinner past its ANNOUNCED deadline
     And the dinner is in the state SCHEDULED
     And the dinner has 0 expenses

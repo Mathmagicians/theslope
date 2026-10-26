@@ -133,6 +133,15 @@ export class UserFactory {
         return UserDetailSchema.parse(await response.json())
     }
 
+    /** POST /api/user/preferences, its answer unasserted: a scenario reads the save or its refusal in its THEN */
+    static readonly updateMyPreferencesRaw = async (
+        context: BrowserContext,
+        preferences: UserPreferencesUpdate
+    ): Promise<{status: number, body: unknown}> => {
+        const response = await context.request.post('/api/user/preferences', {headers, data: preferences})
+        return {status: response.status(), body: await response.json().catch(() => null)}
+    }
+
     /** POST /api/user/notifications/test - one test message to the session user */
     static readonly sendTestNotification = async (
         context: BrowserContext,

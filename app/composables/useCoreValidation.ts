@@ -377,9 +377,7 @@ export const useCoreValidation = () => {
     type _HouseholdUpdate = z.infer<typeof HouseholdUpdateSchema>
 
     // Internal types (not exported)
-    type User = z.infer<typeof BaseUserSchema>
     type SerializedUserInput = z.infer<typeof SerializedUserInputSchema>
-    type SerializedUser = z.infer<typeof SerializedUserSchema>
     type _Inhabitant = z.infer<typeof BaseInhabitantSchema>
     type _Household = z.infer<typeof BaseHouseholdSchema>
 
@@ -401,19 +399,6 @@ export const useCoreValidation = () => {
             notificationChannels: JSON.stringify(user.notificationChannels ?? DEFAULT_NOTIFICATION_CHANNELS),
             appearance: JSON.stringify(user.appearance ?? DEFAULT_APPEARANCE)
         })
-    }
-
-    /**
-     * Deserialize user from database output (read)
-     * Converts database format to domain User (parsed systemRoles array)
-     */
-    const deserializeUser = (serialized: SerializedUser): User => {
-        return {
-            ...serialized,
-            systemRoles: JSON.parse(serialized.systemRoles),
-            notificationChannels: JSON.parse(serialized.notificationChannels),
-            appearance: JSON.parse(serialized.appearance)
-        }
     }
 
     /**
@@ -446,6 +431,12 @@ export const useCoreValidation = () => {
         }
         return InhabitantDetailSchema.parse(deserialized)
     }
+
+    const deserializeUserDisplay = (serializedUser: Record<string, unknown>): z.infer<typeof UserDisplaySchema> => UserDisplaySchema.parse({
+        ...serializedUser,
+        systemRoles: JSON.parse(serializedUser.systemRoles as string),
+        notificationChannels: JSON.parse(serializedUser.notificationChannels as string)
+    })
 
     /**
      * Deserialize UserDetail from database output with Date objects
@@ -534,7 +525,7 @@ export const useCoreValidation = () => {
         HouseholdDetailSchema,
         // Functions - User
         serializeUserInput,
-        deserializeUser,
+        deserializeUserDisplay,
         deserializeUserDetail,
         // Functions - Inhabitant
         deserializeInhabitantDisplay,

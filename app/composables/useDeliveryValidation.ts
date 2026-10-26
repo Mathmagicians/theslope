@@ -1,8 +1,8 @@
 /**
  * Delivery validation — the delivery facts a run leaves behind (ADR-001 validation layer).
  * A delivery is one version of a subject reaching one channel: the CSV archived to R2, a mail queued.
- * A desired delivery is one notification a sender event owes one user about one subject at one version; the recorded
- * rows tell which of them went.
+ * A desired delivery is one notification a sender event sends one user, or a configured mailbox, about one subject at
+ * one version; the recorded rows tell which of them went.
  * Isomorphic (ADR-017): explicit imports only.
  */
 import {z} from 'zod'
@@ -24,13 +24,13 @@ const DeliveryCreateSchema = DeliverySchema.omit({id: true, deliveredAt: true, j
     jobRunId: z.number().int().optional()
 })
 
-/** The sender events the notifications come in: each reads its own data and owes its own notifications */
+/** The sender events the notifications come in: each reads its own data and sends its own notifications */
 const SenderEventSchema = z.enum(['BOOKING_STATUS', 'MONTHLY_BILLING', 'CHEF_DEADLINES'])
 
 /** The notifications, one per template of the config */
 const NotificationKindSchema = z.enum(NotificationKind)
 
-/** One notification to one recipient about one subject at one version; userId null for a recipient with no user */
+/** One notification to one recipient about one subject at one version; userId null for a delivery to a configured mailbox */
 const DesiredDeliverySchema = z.object({
     subjectType: DeliverySubjectSchema,
     subjectId: z.number().int(),
@@ -46,16 +46,12 @@ const DeliveryCountsSchema = z.object({
 
 const NotificationCountsSchema = z.partialRecord(NotificationKindSchema, z.number().int().positive())
 
-/**
- * The delivery dry run of a sender event: per user how many of each notification its next run sends and how many of
- * the user's are already recorded
- */
+/** The delivery dry run of a sender event: per user how many of each notification its next run sends */
 const DeliveryDryRunSchema = z.object({
     senderEvent: SenderEventSchema,
     users: z.array(z.object({
         userId: z.number().int(),
-        toSend: NotificationCountsSchema,
-        recorded: z.number().int().nonnegative()
+        toSend: NotificationCountsSchema
     }))
 })
 
@@ -86,17 +82,22 @@ const NO_DELIVERIES: DeliveredVersions = {ARCHIVE: 0, EMAIL: 0, SMS: 0}
 export const deliveredVersions = (rows: Array<Pick<Delivery, 'kind' | 'version'>>): DeliveredVersions =>
     rows.reduce((max, row) => ({...max, [row.kind]: Math.max(max[row.kind], row.version)}), {...NO_DELIVERIES})
 
-/** A recorded row's reference leads with the notification, the channel and the user: two users whose addresses mask alike stay two */
-const deliveryReferencePrefix = (notification: string, channel: Delivery['kind'], userId: number): string =>
-    `${notification}:${channel}:user-${userId}/`
+const USER_MARK = 'user-'
 
-/** The recorded rows of the desired delivery's subject, version, notification, channel and user; none for a delivery to no user */
+/**
+ * A recorded row's reference leads with the notification, the channel and the user, so two users whose addresses mask
+ * alike stay two; a mailbox's reference goes on with the masked address
+ */
+const deliveryReferencePrefix = (notification: NotificationKind, channel: Delivery['kind'], userId: number | null): string =>
+    `${notification}:${channel}:${userId === null ? '' : `${USER_MARK}${userId}/`}`
+
+/** The recorded rows of the desired delivery's subject, version, notification, channel and user; a mailbox's rows for a mailbox */
 const coveringDeliveries = (recorded: Delivery[], desired: DesiredDelivery, channel: Delivery['kind']): Delivery[] => {
-    const {userId} = desired
-    if (userId === null) return []
-    const prefix = deliveryReferencePrefix(desired.notification, channel, userId)
+    const prefix = deliveryReferencePrefix(desired.notification, channel, desired.userId)
+    const ofRecipient = (reference: string): boolean =>
+        reference.startsWith(prefix) && (desired.userId !== null || !reference.startsWith(`${prefix}${USER_MARK}`))
     return recorded.filter(row => row.subjectType === desired.subjectType && row.subjectId === desired.subjectId
-        && row.version === desired.version && row.kind === channel && row.reference.startsWith(prefix))
+        && row.version === desired.version && row.kind === channel && ofRecipient(row.reference))
 }
 
 /** A delivery is sent when no recorded row covers it; an admin's override sends it again */

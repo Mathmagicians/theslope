@@ -15,7 +15,8 @@ import {useMaintenanceValidation, type JobRunDisplay} from "~/composables/useMai
 import {useDutyValidation, type JokerSlot, type JokerSlotCreate} from "~/composables/useDutyValidation"
 import {getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
 import type {DateRange} from '~/types/dateTypes'
-import {addDays, nextMonday} from 'date-fns'
+import {dateToWeekDay} from '~/utils/season'
+import {addDays, nextMonday, startOfDay} from 'date-fns'
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 import {HouseholdFactory} from "./householdFactory"
@@ -58,6 +59,8 @@ export class SeasonFactory {
     static readonly DEFAULT_BOOKING_DEADLINE_DAYS = 8
     // createActiveSeason retries once: the list→activate window races with workers recreating or cleaning the singleton
     static readonly CREATE_ACTIVE_SEASON_RETRIES = 1
+    // The two sides of a deadline a spec's dinner lies on
+    static readonly DEADLINE_SIDES = ['before', 'past'] as const
 
     // Singleton cache for active season (only one can exist at a time)
     private static activeSeason: Season | null = null
@@ -837,6 +840,22 @@ export class SeasonFactory {
         })
         await this.activateSeason(context, created.season.id!)
         return created
+    }
+
+    /**
+     * The day of a serial spec's dinner on one side of a deadline `deadlineDays` before the dinner starts: past it, the
+     * last such day; before it, the first day a day clear of it, so a run across the deadline's hour keeps its side.
+     * From tomorrow inside the pre-booking window, on a weekday the e2e singleton does not cook: the singleton clips the
+     * residents' preferences to its cooking days, so the scaffolds book and queue no resident on the dinner
+     */
+    static readonly dinnerDayBy = (deadlineDays: number, side: typeof SeasonFactory.DEADLINE_SIDES[number]): Date => {
+        const days = Array.from({length: testHelpers.PREBOOKING_WINDOW_DAYS}, (_, index) => startOfDay(addDays(new Date(), index + 1)))
+            .filter(day => !this.defaultSeasonData.cookingDays[dateToWeekDay(day)])
+        const day = side === 'past'
+            ? days.filter(candidate => !testHelpers.isBeforeDinnerDeadline(deadlineDays)(candidate)).at(-1)
+            : days.find(testHelpers.isBeforeDinnerDeadline(deadlineDays + 1))
+        if (!day) throw new Error(`No day from tomorrow lies ${side} a deadline ${deadlineDays} days before the dinner`)
+        return day
     }
 
     /**

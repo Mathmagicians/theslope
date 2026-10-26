@@ -41,9 +41,13 @@ beforeEach(() => {
 })
 afterEach(() => vi.clearAllMocks())
 
+// A sender event's run on a channel: the run loads its desired deliveries through the closure
+const deliverOn = (channel: EmailChannel, senderEvent: Parameters<typeof deliverDesired>[2], desired: DesiredOutgoing[], options?: Parameters<typeof deliverDesired>[4]) =>
+    deliverDesired({} as D1Database, channel, senderEvent, async () => desired, options)
+
 // A booking status run on email through the queue
 const deliver = (queue: FakeSenderQueue, desired: DesiredOutgoing[], options?: Parameters<typeof deliverDesired>[4]) =>
-    deliverDesired({} as D1Database, NotificationFactory.channel(queue), SenderEvent.BOOKING_STATUS, desired, options)
+    deliverOn(NotificationFactory.channel(queue), SenderEvent.BOOKING_STATUS, desired, options)
 
 const messageTo = (queue: FakeSenderQueue, address: string): EmailMessage | undefined =>
     sentMessages<EmailMessage>(queue).find(message => message.to === address)
@@ -120,15 +124,14 @@ describe('deliverDesired', () => {
         expect(recorded.rows).toHaveLength(1)
     })
 
-    // The recipient's channels crossed with the environment's: a mail goes where both hold email
+    // A mail goes where the recipient's channels hold email
     it.each([
-        {recipient: 'email among its channels', channels: [EMAIL, SMS], channel: (queue: FakeSenderQueue): EmailChannel => NotificationFactory.channel(queue), sent: 1},
-        {recipient: 'no email among its channels', channels: [SMS], channel: (queue: FakeSenderQueue): EmailChannel => NotificationFactory.channel(queue), sent: 0},
-        {recipient: 'email among its channels and email off in the environment', channels: [EMAIL], channel: (): EmailChannel => ({on: false, missing: 'DEPLOY_URL'}), sent: 0}
-    ])('GIVEN a recipient with $recipient WHEN a run delivers THEN $sent mails go, recorded and counted alike', async ({channels, channel, sent}) => {
+        {recipient: 'email among its channels', channels: [EMAIL, SMS], sent: 1},
+        {recipient: 'no email among its channels', channels: [SMS], sent: 0}
+    ])('GIVEN a recipient with $recipient WHEN a run delivers THEN $sent mails go, recorded and counted alike', async ({channels, sent}) => {
         const queue = fakeQueue()
 
-        const {counts} = await deliverDesired({} as D1Database, channel(queue), SenderEvent.BOOKING_STATUS, [outgoing({...anna, notificationChannels: channels})])
+        const {counts} = await deliver(queue, [outgoing({...anna, notificationChannels: channels})])
 
         expect(sentMessages(queue)).toHaveLength(sent)
         expect(recorded.rows).toHaveLength(sent)
@@ -140,7 +143,7 @@ describe('deliverDesired', () => {
         const mailbox = NotificationFactory.config().accountantEmail
         const queue = fakeQueue()
 
-        const {counts} = await deliverDesired({} as D1Database, NotificationFactory.channel(queue), SenderEvent.MONTHLY_BILLING, [NotificationFactory.mailboxDesiredOutgoing(mailbox)])
+        const {counts} = await deliverOn(NotificationFactory.channel(queue), SenderEvent.MONTHLY_BILLING, [NotificationFactory.mailboxDesiredOutgoing(mailbox)])
 
         expect(sentMessages<EmailMessage>(queue).map(message => message.to)).toEqual([mailbox])
         expect(counts).toEqual({sent: 1})
@@ -153,31 +156,52 @@ describe('deliverDesired', () => {
         recorded.rows = [NotificationFactory.recordedDelivery(delivery), NotificationFactory.recordedDelivery(delivery)]
         const queue = fakeQueue()
 
-        const {counts} = await deliverDesired({} as D1Database, NotificationFactory.channel(queue), SenderEvent.MONTHLY_BILLING, [delivery])
+        const {counts} = await deliverOn(NotificationFactory.channel(queue), SenderEvent.MONTHLY_BILLING, [delivery])
 
         expect(sentMessages(queue)).toEqual([])
         expect(counts).toEqual({sent: 0})
         expect(linesOf(logs.warn).some(line => line.includes('[SENT TWICE]'))).toBe(false)
     })
 
-    it('GIVEN deliveries to two users, one of them recorded WHEN delivered as a dry run THEN it counts per user what a run sends and what is recorded, and neither queues nor records', async () => {
+    it('GIVEN deliveries to two users, one of them recorded WHEN delivered as a dry run THEN it counts per user what a run sends, and neither queues nor records', async () => {
         const sentBefore = outgoing(anna, {subjectId: 601})
         await deliver(fakeQueue(), [sentBefore])
         const queue = fakeQueue()
 
-        const {dryRun} = await deliver(queue, [
+        const {counts, dryRun} = await deliver(queue, [
             sentBefore,
             outgoing(anna, {subjectId: 602}),
             outgoing(knud, {subjectType: ORDER, subjectId: 77, notification: Kind.TICKET_SOLD})
         ], {dryRun: true})
 
+        expect(counts).toEqual({sent: 2})
         expect(dryRun).toEqual({senderEvent: SenderEvent.BOOKING_STATUS, users: expect.any(Array)})
         expect([...dryRun?.users ?? []].sort((a, b) => a.userId - b.userId)).toEqual([
-            {userId: anna.id, toSend: {[Kind.WAITLIST_JOINED]: 1}, recorded: 1},
-            {userId: knud.id, toSend: {[Kind.TICKET_SOLD]: 1}, recorded: 0}
+            {userId: anna.id, toSend: {[Kind.WAITLIST_JOINED]: 1}},
+            {userId: knud.id, toSend: {[Kind.TICKET_SOLD]: 1}}
         ])
         expect(sentMessages(queue)).toEqual([])
         expect(recorded.rows).toHaveLength(1)
+    })
+
+    // E-mail off is the deployment's state, known before any read: the run loads nothing and has nothing to list
+    it.each([
+        {run: 'a run delivers', options: {}},
+        {run: 'a dry run delivers', options: {dryRun: true}}
+    ])('GIVEN email off in the environment WHEN $run THEN it loads no deliveries, records nothing, counts nothing sent, and one line logs the sender event, the missing setting and nothing sent', async ({options}) => {
+        const off = {on: false, missing: 'DEPLOY_URL'} as const
+        const load = vi.fn(async () => [outgoing(anna)])
+
+        const result = await deliverDesired({} as D1Database, off, SenderEvent.BOOKING_STATUS, load, options)
+
+        expect(load).not.toHaveBeenCalled()
+        expect(recorded.rows).toEqual([])
+        expect(result).toStrictEqual({counts: {sent: 0}})
+        const [line, ...more] = linesOf(logs.warn)
+        expect(more).toEqual([])
+        for (const named of [`[EVENT ${SenderEvent.BOOKING_STATUS}]`, off.missing, 'nothing sent']) {
+            expect(line).toContain(named)
+        }
     })
 
     // Two runs on one dinner raced: the next run names the delivery that went twice
@@ -199,7 +223,7 @@ describe('deliverDesired', () => {
     ])('GIVEN $step fails WHEN a $senderEvent run delivers THEN it logs the sender event failed with the reason and rethrows', async ({senderEvent, fails}) => {
         fails()
 
-        await expect(deliverDesired({} as D1Database, NotificationFactory.channel(fakeQueue()), senderEvent, [outgoing(anna)])).rejects.toThrow('D1 down')
+        await expect(deliverOn(NotificationFactory.channel(fakeQueue()), senderEvent, [outgoing(anna)])).rejects.toThrow('D1 down')
         expect(errorLines().some(line => line.includes(`[EVENT ${senderEvent}] failed:`))).toBe(true)
         expect(errorLines().join('\n')).toContain('D1 down')
     })

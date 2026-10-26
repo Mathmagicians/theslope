@@ -1,18 +1,22 @@
 /**
  * Sender event `monthly-billing`: the period's PBS CSV to the accountant, cc the admin mailbox —
  * BILLING_PERIOD_CLOSED for a period's first version, BILLING_PERIOD_UPDATED (subject "opdatering v<n>",
- * replaces the earlier mail) for every later one. Raised by runMonthlyBilling and re-sent by its HTTP twin
- * (POST /api/admin/sender/event/monthly-billing).
+ * replaces the earlier mail) for every later one. The delivery step sends and records it; runMonthlyBilling raises
+ * it and its HTTP twin (POST /api/admin/sender/event/monthly-billing) re-sends it.
  */
-import {channelOff, emit, notSent} from '~~/server/utils/sender/emit'
-import type {EmailChannel} from '~~/server/utils/sender/config'
-import {composeEmail, missingAddress, siteUrl} from '~~/server/utils/sender/compose'
+import {missingAddress, siteUrl} from '~~/server/utils/sender/compose'
+import type {DesiredOutgoing} from '~~/server/utils/sender/deliveries'
 import {useBillingValidation, type BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
-import type {EmailMessage, NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
+import type {NotificationConfig} from '~/composables/useNotificationValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
+import {useUserPreferenceValidation} from '~/composables/useUserPreferenceValidation'
 import {NotificationKind} from '~/config/notificationTemplates'
 
 const {generateBillingCsv, generateCsvFilename} = useBillingValidation()
-const LOG = '📮 > SENDER > [EVENT monthly-billing]'
+const {DeliverySubjectSchema, SenderEventSchema} = useDeliveryValidation()
+const {BILLING_PERIOD} = DeliverySubjectSchema.enum
+const {NotificationChannelSchema} = useUserPreferenceValidation()
+const LOG = `📮 > SENDER > [EVENT ${SenderEventSchema.enum.MONTHLY_BILLING}]`
 
 const formatKroner = (oere: number): string =>
     (oere / 100).toLocaleString('da-DK', {minimumFractionDigits: 2, maximumFractionDigits: 2})
@@ -20,32 +24,26 @@ const formatKroner = (oere: number): string =>
 export const billingMailKind = (version: number): NotificationKind =>
     version > 1 ? NotificationKind.BILLING_PERIOD_UPDATED : NotificationKind.BILLING_PERIOD_CLOSED
 
-export const buildBillingPeriodClosedEmail = (config: NotificationConfig, summary: BillingPeriodSummaryDetail, now?: Date): EmailMessage => {
-    const kind = billingMailKind(summary.version)
-    return composeEmail(config, {
-        kind,
-        to: config.accountantEmail,
+/** The notifications a period's current version sends the accountant, cc the admin mailbox, with the CSV attached */
+export const notificationsForAccountant = (config: NotificationConfig, summary: BillingPeriodSummaryDetail) => async (): Promise<DesiredOutgoing[]> => {
+    const missing = missingAddress(config, 'accountantEmail')
+    if (missing) {
+        console.error(`${LOG} ${missing} not set — mail not sent`, {billingPeriod: summary.billingPeriod, version: summary.version})
+        return []
+    }
+    const notification = billingMailKind(summary.version)
+    return [{
+        subjectType: BILLING_PERIOD, subjectId: summary.id, version: summary.version, notification, userId: null,
+        to: config.accountantEmail, notificationChannels: [NotificationChannelSchema.enum.EMAIL],
         cc: config.adminEmail ? [config.adminEmail] : [],
-        values: {
+        values: channelConfig => ({
             billingPeriod: summary.billingPeriod,
             householdCount: String(summary.householdCount),
             totalAmount: formatKroner(summary.totalAmount),
-            summaryUrl: siteUrl(config, `/public/billing/${summary.shareToken}`),
-            ...(kind === NotificationKind.BILLING_PERIOD_UPDATED ? {version: String(summary.version)} : {})
-        },
+            summaryUrl: siteUrl(channelConfig, `/public/billing/${summary.shareToken}`),
+            ...(notification === NotificationKind.BILLING_PERIOD_UPDATED ? {version: String(summary.version)} : {})
+        }),
         attachments: [{filename: generateCsvFilename(summary), contentType: 'text/csv; charset=utf-8', content: generateBillingCsv(summary)}],
-        correlationId: `${summary.billingPeriod} v${summary.version}`,
-        now
-    })
-}
-
-export const emitBillingPeriodClosed = (channel: EmailChannel, summary: BillingPeriodSummaryDetail): Promise<SenderEmitResult> => {
-    if (!channel.on) return channelOff(billingMailKind(summary.version), channel.missing, summary.billingPeriod)
-    const {queue, config} = channel
-    const missing = missingAddress(config, 'accountantEmail')
-    if (missing) {
-        console.warn(`${LOG} ${missing} not set — mail not sent`, {billingPeriod: summary.billingPeriod, version: summary.version})
-        return notSent(billingMailKind(summary.version), summary.billingPeriod)
-    }
-    return emit(queue, buildBillingPeriodClosedEmail(config, summary)).then(([result]) => result!)
+        correlationId: `${summary.billingPeriod} v${summary.version}`
+    }]
 }

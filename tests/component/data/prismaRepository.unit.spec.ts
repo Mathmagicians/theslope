@@ -1,6 +1,6 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {createError} from 'h3'
-import {createUsers, saveUser} from '~~/server/data/prismaRepository'
+import {createUsers, deleteUser, saveUser} from '~~/server/data/prismaRepository'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS, TextScaleSchema} from '~/composables/useUserPreferenceValidation'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
@@ -11,7 +11,7 @@ vi.stubGlobal('createError', createError)
 // The unit runtime has no D1: a client standing for the binding answers each statement from the test
 const {fakePrisma} = await vi.hoisted(async () => ({
     fakePrisma: (await import('~~/tests/component/data/fakePrismaClient')).fakePrismaClient({
-        user: ['update', 'upsert', 'createManyAndReturn']
+        user: ['update', 'upsert', 'delete', 'createManyAndReturn']
     })
 }))
 vi.mock('~~/server/utils/database', () => ({getPrismaClientConnection: async () => fakePrisma}))
@@ -36,6 +36,7 @@ beforeEach(() => {
     const row = {...serializeUserInput(UserFactory.defaultUser('anna')), id: 7, createdAt: new Date(), updatedAt: new Date()}
     fakePrisma.user.update.mockResolvedValue(row)
     fakePrisma.user.upsert.mockResolvedValue(row)
+    fakePrisma.user.delete.mockResolvedValue(row)
     fakePrisma.user.createManyAndReturn.mockResolvedValue([{id: row.id, email: row.email}])
 })
 
@@ -58,5 +59,31 @@ describe('the user\'s own settings', () => {
         await save()
 
         expect(settingsOf(data())).toEqual(defaults)
+    })
+
+    // The partial saves by id: only the columns the caller set are written
+    it.each([
+        {write: 'the user\'s own save of channels and appearance', delta: ownSettings,
+            written: {notificationChannels: JSON.stringify(ownSettings.notificationChannels), appearance: JSON.stringify(ownSettings.appearance)}},
+        {write: 'an admin\'s edit of the phone', delta: {phone: importedUser.phone}, written: {}}
+    ])('GIVEN $write WHEN saved by id THEN the update writes the settings it carries and no others', async ({delta, written}) => {
+        await saveUser(d1Client, delta, 7)
+
+        expect(settingsOf(fakePrisma.user.update.mock.calls[0]![0].data)).toEqual(written)
+    })
+})
+
+// A mutation returns the user's Detail (ADR-009): the Heynabo token in the row's passwordHash stays in the repository,
+// and the write fetches no inhabitant
+describe('the user a mutation returns', () => {
+    it.each([
+        {write: 'a save by id', save: () => saveUser(d1Client, importedUser, 7)},
+        {write: 'a save by email', save: () => saveUser(d1Client, importedUser)},
+        {write: 'a delete', save: () => deleteUser(d1Client, 7)}
+    ])('GIVEN $write WHEN it returns THEN the detail carries no passwordHash and its Inhabitant is null', async ({save}) => {
+        const detail = await save()
+
+        expect(detail).not.toHaveProperty('passwordHash')
+        expect(detail.Inhabitant).toBeNull()
     })
 })
