@@ -9,9 +9,11 @@ import {formatDate} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
 import {addDays} from 'date-fns/addDays'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 
 const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, expectHydratedWithoutMismatch, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom, waitForApi} = testHelpers
 const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
+const {findTicketPriceByType} = useTicket()
 
 /**
  * E2E UI Tests for Dinner Page URL-Based Navigation
@@ -183,7 +185,7 @@ test.describe('Dinner Page URL Navigation', () => {
             const memberContext = await memberValidatedBrowserContext(browser)
             const {householdId} = await getSessionUserInfo(memberContext)
             const season = await SeasonFactory.createActiveSeason(adminContext)
-            const adultPrice = season.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+            const adultPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, season.ticketPrices)!
             // The second future dinner: the first may be today and already past its serving time
             const dinnerEvent = testData.events[1]!
             dinnerDate = testData.dates.second

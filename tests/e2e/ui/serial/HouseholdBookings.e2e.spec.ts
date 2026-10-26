@@ -9,6 +9,7 @@ import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {addDays, startOfDay} from 'date-fns'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation, type DinnerEventDisplay, type ScaffoldOrdersResponse} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import {formatDate} from '~/utils/date'
 import {groupBy} from '~/utils/batchUtils'
 import {BookingViewSchema, type BookingView} from '~/composables/useBookingView'
@@ -36,6 +37,7 @@ import {BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 const {adminUIFile} = authFiles
 const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch, waitForApi, isScaffoldSave, isExpectedRead, PAST_THE_SCAFFOLD_WINDOW_DAYS, PHONE_VIEWPORT} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema, BookingActionSchema} = useBookingValidation()
+const {findTicketPriceByType} = useTicket()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
 const {createDefaultWeekdayMap: createDinnerModeWeekdayMap} = useWeekDayMapValidation({
@@ -102,7 +104,7 @@ test('GIVEN an inhabitant holding only a guest ticket on a dinner WHEN the week 
     })
     // The season's last dinner lies past the prebooking window, before its cancellation deadline
     const dinnerEvent = dinnersByDate().at(-1)!
-    const adultPrice = testSeason.season.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+    const adultPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, testSeason.season.ticketPrices)!
     const guest = await OrderFactory.createOrder(context, {
         householdId,
         dinnerEventId: dinnerEvent.id,
@@ -145,7 +147,7 @@ test('GIVEN a member holding a regular order and a guest ticket on a dinner WHEN
     })
     // The season's second-to-last dinner: before its cancellation deadline, apart from the power-mode test's dinner
     const dinnerEvent = dinnersByDate().at(-2)!
-    const adultPrice = testSeason.season.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+    const adultPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, testSeason.season.ticketPrices)!
     const created = await OrderFactory.createOrder(context, {
         householdId,
         dinnerEventId: dinnerEvent.id,

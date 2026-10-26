@@ -16,7 +16,7 @@ const Recovery = PlacementRecoverySchema.enum
 
 // The season's default prices carry each price's portions; a ticket type stands for its first price row
 const TICKET_PRICES = TicketFactory.defaultTicketPrices()
-const priceOf = (ticketType: keyof typeof TicketType) => TICKET_PRICES.find(price => price.ticketType === ticketType)!
+const priceOf = TicketFactory.defaultPriceOf
 const portionsOf = useWaitlist().portionsOfEntryFor(TICKET_PRICES)
 const ticketTypeOf = useWaitlist().ticketTypeOfEntry(TICKET_PRICES)
 

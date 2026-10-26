@@ -6,12 +6,14 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import type {Season} from '~/composables/useSeasonValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 const Action = useBookingValidation().BookingActionSchema.enum
 
 const {validatedBrowserContext, getSessionUserInfo} = testHelpers
 const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
+const {findTicketPriceByType} = useTicket()
 
 // Variables to store for cleanup and test data
 let testSeasonId: number
@@ -58,7 +60,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
         expect(testSeason.ticketPrices.length).toBe(4) // BABY (free), BABY (hungry), CHILD, ADULT
 
-        const adultPrice = testSeason.ticketPrices.find(tp => tp.ticketType === TicketType.ADULT)
+        const adultPrice = findTicketPriceByType(TicketType.ADULT, testSeason.ticketPrices)
         expect(adultPrice).toBeDefined()
         expect(adultPrice!.price).toBe(5000)
         expect(adultPrice!.id).toBeDefined()
@@ -190,7 +192,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
             ...DinnerEventFactory.defaultDinnerEvent(),
             seasonId: testSeasonId
         })
-        const adultPrice = testSeason.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+        const adultPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, testSeason.ticketPrices)!
         // Admin session doesn't belong to the test household → adminBypass
         await OrderFactory.createOrder(context, {
             householdId: household.id,

@@ -10,6 +10,7 @@ import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {HouseholdDetail, InhabitantDetail, UserDetail} from '~/composables/useCoreValidation'
 import {useBookingValidation, type DailyMaintenanceResult, type DinnerEventDisplay} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import type {HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 import type {BillingPeriodSummaryDetail, MonthlyBillingResponse} from '~/composables/useBillingValidation'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
@@ -21,6 +22,7 @@ import type {HealthReport} from '~~/workers/common/health'
 const {validatedBrowserContext, memberValidatedBrowserContext, openContext} = testHelpers
 const {JobType} = useMaintenanceValidation()
 const {DinnerStateSchema, TicketTypeSchema} = useBookingValidation()
+const {findTicketPriceByType} = useTicket()
 
 type JobTypes = typeof JobType
 
@@ -155,7 +157,7 @@ export const activeSeasonOf = async (admin: BrowserContext, scene: Scene): Promi
 /** The id of the season's ADULT ticket price: the factory persons are adults */
 export const adultPriceIdOf = async (admin: BrowserContext, seasonId: number): Promise<number> => {
     const {ticketPrices} = await SeasonFactory.getSeason(admin, seasonId)
-    const priceId = ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)?.id
+    const priceId = findTicketPriceByType(TicketTypeSchema.enum.ADULT, ticketPrices)?.id
     if (priceId === undefined) throw new Error(`Season ${seasonId} has no ${TicketTypeSchema.enum.ADULT} ticket price`)
     return priceId
 }

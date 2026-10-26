@@ -23,7 +23,6 @@ jobs:
       actions: read
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       # The workflow's own branch: main when the pipeline completes, the branch chosen on workflow_dispatch
       - uses: actions/checkout@v7

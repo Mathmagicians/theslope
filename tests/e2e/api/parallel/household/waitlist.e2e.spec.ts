@@ -7,11 +7,13 @@ import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 
 const {validatedBrowserContext, memberValidatedBrowserContext, salt, temporaryAndRandom, daysFromNow, getSessionUserInfo} = testHelpers
 const {TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
 const {BookingActionSchema, DinnerModeSchema} = useBookingValidation()
+const {findTicketPriceByType} = useTicket()
 const Action = BookingActionSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 
@@ -32,8 +34,8 @@ test.describe('Waiting list entries API', () => {
         const season = await SeasonFactory.createSeason(context)
         createdSeasonIds.push(season.id!)
         seasonId = season.id!
-        const adultPrice = season.ticketPrices.find(price => price.ticketType === TicketType.ADULT)!
-        const childPrice = season.ticketPrices.find(price => price.ticketType === TicketType.CHILD)!
+        const adultPrice = findTicketPriceByType(TicketType.ADULT, season.ticketPrices)!
+        const childPrice = findTicketPriceByType(TicketType.CHILD, season.ticketPrices)!
         // Two days ahead: past the booking deadline, so a wish without a ticket for sale queues
         const dinner = await DinnerEventFactory.createDinnerEvent(context, {
             date: daysFromNow(2), menuTitle: salt('Ventelistemiddag', testSalt), seasonId
@@ -101,7 +103,7 @@ test.describe('Power mode Ingen on a dinner where the household waits for a gues
         const testSalt = temporaryAndRandom()
         const season = await SeasonFactory.createSeason(context)
         createdSeasonIds.push(season.id!)
-        const adultPriceId = season.ticketPrices.find(price => price.ticketType === TicketType.ADULT)!.id!
+        const adultPriceId = findTicketPriceByType(TicketType.ADULT, season.ticketPrices)!.id!
         // Two days ahead: past the booking deadline, so the wishes queue and Ingen releases
         const dinnerEventId = (await DinnerEventFactory.createDinnerEvent(context, {
             date: daysFromNow(2), menuTitle: salt('Hele familien Ingen', testSalt), seasonId: season.id!

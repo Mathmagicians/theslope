@@ -470,7 +470,7 @@ describe('useBooking', () => {
 // The season's default prices: an order at a ticket type holds that type's price
 const SEASON_PRICES = TicketFactory.defaultTicketPrices()
 // The first price row of a ticket type: the baby who tastes for BABY
-const priceRowOf = (ticketType: typeof TicketTypes[keyof typeof TicketTypes]) => SEASON_PRICES.find(price => price.ticketType === ticketType)!
+const priceRowOf = TicketFactory.defaultPriceOf
 const priceIdOf = (ticketType: typeof TicketTypes[keyof typeof TicketTypes]) => priceRowOf(ticketType).id!
 // The factory lists the baby who tastes first, the hungry baby second; the season's prices weigh the first 0 portions
 const BABY_PRICES = SEASON_PRICES.filter(price => price.ticketType === TicketTypes.BABY)
@@ -1033,8 +1033,6 @@ describe('buildDesiredOrder', () => {
     const TicketType = TicketTypeSchema.enum
 
     const ticketPrices = TicketFactory.defaultTicketPrices()
-    const priceIdOf = (ticketType: typeof TicketType[keyof typeof TicketType]) =>
-        ticketPrices.find(tp => tp.ticketType === ticketType)!.id!
     const resolver: TicketPriceResolver = (birthDate, priceAtBooking, referenceDate) =>
         resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
 
@@ -1110,7 +1108,7 @@ describe('buildDesiredOrder', () => {
         })
 
         it('prices a group whose ticket price is gone by its price at booking', () => {
-            const adultPrice = ticketPrices.find(tp => tp.ticketType === TicketType.ADULT)!.price
+            const adultPrice = priceRowOf(TicketType.ADULT).price
             const orphaned = guestOrders.map(o => ({...o, ticketPriceId: null, priceAtBooking: adultPrice}))
             expect(buildGuest(orphaned).map(o => o.ticketPriceId)).toEqual(guestOrders.map(() => priceIdOf(TicketType.ADULT)))
         })

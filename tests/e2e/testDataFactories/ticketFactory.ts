@@ -1,8 +1,10 @@
 import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
+import {useTicket} from '~/composables/useTicket'
 import {DEFAULT_TICKET_PRICES} from '~/config/ticketPrices'
 
 const {createTicketPrice, TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
+const {findTicketPriceByType} = useTicket()
 
 /**
  * Factory for creating test ticket price data
@@ -60,6 +62,10 @@ export class TicketFactory {
     static readonly defaultTicketPricesWithoutIds = (overrides?: Parameters<typeof TicketFactory.defaultTicketPrices>[0]) => {
         return TicketFactory.defaultTicketPrices(overrides).map(({ id: _, ...rest }) => rest)
     }
+
+    /** A ticket type's default price row: the first of its type, as the season lists its prices */
+    static readonly defaultPriceOf = (ticketType: keyof typeof TicketType): TicketPrice =>
+        findTicketPriceByType(ticketType, TicketFactory.defaultTicketPrices())!
 
     /**
      * Calculate a birthDate that results in a specific ticket type at a reference date.

@@ -20,6 +20,7 @@ import {COLOR, COMPONENTS, EMPTY_STATE_MESSAGES} from '~/composables/useTheSlope
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {addDays} from 'date-fns'
@@ -86,10 +87,11 @@ const selectSeason = (dinnerEvents: DinnerEventDisplay[] = []) => {
     seasonByIdEndpoint.mockReturnValue({...SEASON, dinnerEvents})
 }
 const {TicketTypeSchema, DinnerModeSchema, encodeDesiredOrder} = useBookingValidation()
+const {findTicketPriceByType} = useTicket()
 const TicketType = TicketTypeSchema.enum
 // Ids on the season's prices: a waiting-list entry names its price by id, the store reads the ticket type off it
 const ticketPrices = SEASON.ticketPrices.map((price, index) => ({...price, id: index + 1}))
-const priceOf = (ticketType: typeof TicketType[keyof typeof TicketType]) => ticketPrices.find(price => price.ticketType === ticketType)!
+const priceOf = (ticketType: typeof TicketType[keyof typeof TicketType]) => findTicketPriceByType(ticketType, ticketPrices)!
 // The session user's household is the households store's default selection
 const MY_HOUSEHOLD_ID = UserFactory.defaultUserWithInhabitant('bookings-store').Inhabitant!.household!.id
 registerEndpoint(`/api/admin/household/${MY_HOUSEHOLD_ID}`, () => ({...HouseholdFactory.defaultHouseholdDetail('bookings-store'), id: MY_HOUSEHOLD_ID}))
@@ -323,8 +325,8 @@ describe('Bookings store — scaffold bookings', () => {
             OrderFactory.defaultBookingResult({...anna, dinnerEventId: 2, action: Action.LEAVE})
         ]
         const positions = [
-            {inhabitantId: anna.inhabitantId, dinnerEventId: 1, isGuestTicket: false, position: 3, ticketType: TicketType.ADULT},
-            {inhabitantId: bo.inhabitantId, dinnerEventId: 1, isGuestTicket: false, position: 1, ticketType: TicketType.CHILD}
+            OrderFactory.defaultQueuePosition({inhabitantId: anna.inhabitantId, position: 3}),
+            OrderFactory.defaultQueuePosition({inhabitantId: bo.inhabitantId, ticketType: TicketType.CHILD, priceAtBooking: priceOf(TicketType.CHILD).price})
         ]
         scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({dinners: runDinners, totals: {[Action.QUEUE]: 2, [Action.LEAVE]: 1}, results, positions}))
         const store = useBookingsStore()
@@ -365,7 +367,7 @@ describe('Bookings store — scaffold bookings', () => {
     ])('reads $what through the scaffold\'s GET outside the booking write and returns its result without a toast', async ({read, orders}) => {
         const previewed = OrderFactory.defaultScaffoldOrdersResponse({
             totals: {[Action.BUY]: 1, [Action.QUEUE]: 1},
-            positions: [{inhabitantId: 2, dinnerEventId: DINNER_ID, isGuestTicket: false, position: 3, ticketType: TicketType.ADULT}]
+            positions: [OrderFactory.defaultQueuePosition({inhabitantId: 2, dinnerEventId: DINNER_ID, position: 3})]
         })
         scaffoldReadEndpoint.mockImplementation(() => previewed)
         const store = useBookingsStore()

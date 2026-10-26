@@ -170,7 +170,7 @@ describe('useTicket', () => {
     describe('portionsOf', () => {
         // The config's default prices hold the weight of their tickets; a price matches on its type and amount
         const defaults = appConfig.theslope.defaultSeason.ticketPrices
-        const firstOfType = (ticketType: typeof TicketType[keyof typeof TicketType]) => defaults.find(price => price.ticketType === ticketType)!
+        const firstOfType = (ticketType: typeof TicketType[keyof typeof TicketType]) => useTicket().findTicketPriceByType(ticketType, defaults)!
 
         it('a ticket priced as a default weighs the portions of that default', () => {
             const misses = defaults.filter(({ticketType, price, portions}) => useTicket().portionsOf({ticketType, price}) !== portions)

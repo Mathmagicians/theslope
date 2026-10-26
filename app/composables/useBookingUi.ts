@@ -495,6 +495,13 @@ export const createWaitlistBadge = (position: number, ticketType?: TicketType | 
     helpText: BOOKING_WORDS.waitlistBadge.helpText
 })
 
+/** A released ticket, rendered compact beside the name as a place on the waiting list is */
+export const createReleasedBadge = (): DeadlineBadgeData => ({
+    ...ORDER_STATE_LABELS[OrderStateEnum.RELEASED],
+    value: ORDER_STATE_LABELS[OrderStateEnum.RELEASED].label,
+    helpText: BOOKING_WORDS.releasedBadge.helpText
+})
+
 // ============================================================================
 // Action Preview - Show users what will happen before they save
 // ============================================================================
@@ -859,6 +866,7 @@ export const useBookingUi = () => {
         createDiningModeBadge,
         createBookingBadges,
         createWaitlistBadge,
+        createReleasedBadge,
         lockChip,
         bookingSaveLabel,
         guestSaveLabel,

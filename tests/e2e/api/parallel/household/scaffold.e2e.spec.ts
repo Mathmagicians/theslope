@@ -6,14 +6,15 @@ import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFa
 import { WaitlistFactory } from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
 import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useTicket } from '~/composables/useTicket'
 import testHelpers from '~~/tests/e2e/testHelpers'
-import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import type { ScaffoldOrdersRequest, DinnerMode as DinnerModeType } from '~/composables/useBookingValidation'
 const Action = useBookingValidation().BookingActionSchema.enum
 
 const { validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, salt, getSessionUserInfo, daysFromNow } = testHelpers
 const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema } = useBookingValidation()
+const { findTicketPriceByType } = useTicket()
 const DinnerMode = DinnerModeSchema.enum
 
 /**
@@ -59,8 +60,8 @@ test.describe('Household Scaffold API (ADR-016)', () => {
     createdSeasonIds.push(testSeason.id!)
 
     // Extract ticket prices
-    const adultPrice = testSeason.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.ADULT)
-    const childPrice = testSeason.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.CHILD)
+    const adultPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, testSeason.ticketPrices)
+    const childPrice = findTicketPriceByType(TicketTypeSchema.enum.CHILD, testSeason.ticketPrices)
     expect(adultPrice?.id, 'Season must have ADULT ticket price').toBeDefined()
     expect(childPrice?.id, 'Season must have CHILD ticket price').toBeDefined()
     testAdultTicketPriceId = adultPrice!.id!
@@ -635,7 +636,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       const preview = await OrderFactory.previewScaffoldOrders(context, request)
 
       expect(preview!.scaffoldResult.results.map(line => [line.inhabitantId, line.action])).toEqual([[buyerId, Action.BUY], [queuerId, Action.QUEUE]])
-      expect(preview!.scaffoldResult.positions).toEqual([{ inhabitantId: queuerId, dinnerEventId, isGuestTicket: false, position: 1, ticketType: TicketTypeSchema.enum.ADULT }])
+      expect(preview!.scaffoldResult.positions).toEqual([{ inhabitantId: queuerId, dinnerEventId, isGuestTicket: false, position: 1, ticketType: TicketTypeSchema.enum.ADULT, priceAtBooking: findTicketPriceByType(TicketTypeSchema.enum.ADULT, testSeason.ticketPrices)!.price }])
       expect(await supply()).toEqual(before)
 
       const saved = await OrderFactory.scaffoldOrders(context, request)

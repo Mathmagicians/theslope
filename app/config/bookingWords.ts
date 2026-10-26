@@ -9,6 +9,7 @@ const TicketChangeKind = TicketChangeKindSchema.enum
 
 const ticketCount = (count: number) => `${count} billet${count === 1 ? '' : 'ter'}`
 const waitlistPayment = 'Du betaler, når du får en billet fra ventelisten.'
+const releasedPayment = 'Du betaler, medmindre andre køber'
 
 export const BOOKING_WORDS = {
     /** A dinner's name while the chef has written no menu */
@@ -33,7 +34,7 @@ export const BOOKING_WORDS = {
         chefAsk: (entries: number) =>
             `${entries === 1 ? 'En skråner mangler billet' : 'Skrånere mangler billetter'} til din middag — har du mulighed for at mætte flere munde?`,
         householdReleased: (count: number) =>
-            ({title: `Husstanden har frigivet ${ticketCount(count)}`, description: 'Du betaler, medmindre andre køber'}),
+            ({title: `Husstanden har frigivet ${ticketCount(count)}`, description: releasedPayment}),
         householdQueued: (count: number) =>
             ({title: `Husstanden står på ventelisten med ${ticketCount(count)}`, description: waitlistPayment}),
         /** What a place on the waiting list costs: the household's note and the join mail */
@@ -122,6 +123,8 @@ export const BOOKING_WORDS = {
     unknownHousehold: '?',
     /** A place on the waiting list as a badge beside the name */
     waitlistBadge: {label: 'Venteliste', helpText: 'Du får automatisk tildelt en billet, hvis en kommer til salg, eller chefkokken frigiver portioner.'},
+    /** A released ticket as a badge beside the name */
+    releasedBadge: {helpText: releasedPayment},
     /** A booking result's lines in the toast and the "Sidste ændring" alerts: the word of a day's failed orders */
     result: {
         failed: 'FEJLET',

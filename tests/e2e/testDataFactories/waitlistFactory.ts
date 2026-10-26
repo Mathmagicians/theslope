@@ -10,7 +10,7 @@ import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 
 const {headers} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
-const ADULT_PRICE = TicketFactory.defaultTicketPrices().find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!
+const ADULT_PRICE = TicketFactory.defaultPriceOf(TicketTypeSchema.enum.ADULT)
 
 const entriesEndpoint = (dinnerEventIds: number[]) =>
     `/api/order/waitlist?${dinnerEventIds.map(id => `dinnerEventIds=${id}`).join('&')}`

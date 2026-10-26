@@ -5,12 +5,14 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {getHouseholdUrl} from '~/utils/household'
 
 const {adminUIFile} = authFiles
 const {openContext, validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated, temporaryAndRandom, salt} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
+const {findTicketPriceByType} = useTicket()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
 const {createDefaultWeekdayMap: createDinnerModeWeekdayMap} = useWeekDayMapValidation({
@@ -64,7 +66,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
 
         expect(futureDinners.length).toBeGreaterThan(0)
         testDinnerEventId = futureDinners[0]!.id
-        const testTicketPriceId = testSeason.season.ticketPrices!.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!.id!
+        const testTicketPriceId = findTicketPriceByType(TicketTypeSchema.enum.ADULT, testSeason.season.ticketPrices)!.id!
 
         const household = (await HouseholdFactory.getAllHouseholds(adminContext)).find(h => h.id === testHouseholdId)!
         householdAddress = household.address

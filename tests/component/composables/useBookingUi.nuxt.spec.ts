@@ -350,7 +350,7 @@ describe('ticket type presentation', () => {
     })
 
     it('a price as a select item carries its type presentation, its label with the price, and its age limit with its description', () => {
-        const child = prices.find(price => price.ticketType === TicketTypeSchema.enum.CHILD)!
+        const child = TicketFactory.defaultPriceOf(TicketTypeSchema.enum.CHILD)
         const item = ticketPriceSelectItems([child])[0]!
         expect(item.presentation).toEqual(ticketTypePresentation(TicketTypeSchema.enum.CHILD))
         expect(item.label).toBe(`${ticketTypeLabel(TicketTypeSchema.enum.CHILD)} · ${useTicket().formatPrice(child.price)} kr`)

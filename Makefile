@@ -398,7 +398,7 @@ developer-publish: ## Force-push site/ as the single commit of gh-pages - [env=<
 	@cd "$(site)" && \
 	{ [ -d .git ] || git init -q; } && \
 	{ git remote get-url origin > /dev/null 2>&1 || git remote add origin "https://github.com/$${GITHUB_REPOSITORY:?GITHUB_REPOSITORY missing and $(site) has no origin}.git"; } && \
-	{ [ -z "$$GITHUB_TOKEN" ] || git config http.https://github.com/.extraheader "AUTHORIZATION: basic $$(printf 'x-access-token:%s' "$$GITHUB_TOKEN" | base64 | tr -d '\n')"; } && \
+	git config credential.https://github.com.helper '!gh auth git-credential' && \
 	git add -A && \
 	commit=$$(git -c user.name="$$(git config user.name || echo 'github-actions[bot]')" -c user.email="$$(git config user.email || echo 'github-actions[bot]@users.noreply.github.com')" \
 		commit-tree "$$(git write-tree)" -m "Developer companion $$(date -u +%Y-%m-%dT%H:%MZ) $(env)") && \

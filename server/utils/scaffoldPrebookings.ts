@@ -311,9 +311,17 @@ export async function scaffoldPrebookings(
         ? previewSupply(d1Client, season.ticketPrices, await ticketsForSaleOf(d1Client, existingOrders, households))
         : databaseSupply(d1Client, effectiveUserId, season.ticketPrices)
     const entryById = new Map(existingEntries.map(entry => [entry.id, entry]))
+    const existingOrderById = new Map(existingOrders.map(order => [order.id, order]))
     // The season's prices: the frozen price of a booking, the ticket type of a claim and of a waiting entry
     const ticketPriceById = new Map(season.ticketPrices.map(tp => [tp.id, tp]))
     const ticketTypeOf = ticketTypeOfEntry(season.ticketPrices)
+    // The price a result names: a held order or place keeps its frozen price unless the run moves it to another of the
+    // season's price rows; a new ticket takes its price row's
+    const priceOf = ({orderId, waitlistEntryId, ticketPriceId}: DesiredOrder): number | null => {
+        const held = orderId !== undefined ? existingOrderById.get(orderId) : waitlistEntryId !== undefined ? entryById.get(waitlistEntryId)?.order : undefined
+        const priceRow = ticketPriceById.get(ticketPriceId)
+        return held && (held.ticketPriceId === ticketPriceId || !priceRow) ? held.priceAtBooking : priceRow?.price ?? null
+    }
 
     const takesNoPortion = useTicket().takesNoPortionOf(season.ticketPrices)
 
@@ -370,7 +378,7 @@ export async function scaffoldPrebookings(
         const nameOf = (inhabitantId: number): string => household.inhabitants.find(inhabitant => inhabitant.id === inhabitantId)?.name ?? ''
         const resultOf = (desired: DesiredOrder, action: BookingAction): BookingResult => ({
             inhabitantId: desired.inhabitantId, inhabitantName: nameOf(desired.inhabitantId), isGuestTicket: desired.isGuestTicket,
-            ticketType: ticketPriceById.get(desired.ticketPriceId)?.ticketType ?? null,
+            ticketType: ticketPriceById.get(desired.ticketPriceId)?.ticketType ?? null, priceAtBooking: priceOf(desired),
             dinnerEventId: desired.dinnerEventId, dinnerMode: desired.dinnerMode, action
         })
         const landedAs = (action: BookingAction) => (orders: {desired: DesiredOrder}[]) => landed.push(...orders.map(({desired}) => resultOf(desired, action)))
@@ -653,11 +661,11 @@ export async function scaffoldPrebookings(
 
         // The places count the line as read, then the joins in join order
         const places = joinedOf(read.line, joined.map(({entry}) => entry), season.ticketPrices, effectiveUserId)
-        for (const [index, {pending: {claim, run}}] of joined.entries()) {
+        for (const [index, {pending: {claim, run}, entry}] of joined.entries()) {
             const {position, joined: event} = places[index]!
             outcomes.joined.push(event)
             landed.push(run.resultOf(claim, Action.QUEUE))
-            positions.push({inhabitantId: claim.inhabitantId, dinnerEventId, isGuestTicket: claim.isGuestTicket, position, ticketType: event.ticketType})
+            positions.push({inhabitantId: claim.inhabitantId, dinnerEventId, isGuestTicket: claim.isGuestTicket, position, ticketType: event.ticketType, priceAtBooking: entry.order.priceAtBooking})
         }
     }
 

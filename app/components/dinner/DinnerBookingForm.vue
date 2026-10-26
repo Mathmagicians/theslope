@@ -297,7 +297,8 @@ const dinnerHasPassed = computed(() => isDinnerPast(props.dinnerEvent.date))
 const isCancelled = computed(() => props.dinnerEvent.state === DinnerStateSchema.enum.CANCELLED)
 const showRibbon = computed(() => props.ribbon && isCancelled.value)
 // Edit allowed if: permission-based formMode is EDIT AND the dinner has neither passed nor been cancelled
-const isEditModeAllowed = computed(() => formMode.value === FORM_MODES.EDIT && !dinnerHasPassed.value && !isCancelled.value)
+// A row opens while the member may change the household and the booking rules give the row a mode (ADR-016)
+const canOpenRow = (row: TableRow): boolean => formMode.value === FORM_MODES.EDIT && row.enabledModes.length > 0
 
 // Without a household every day counts
 const isInResidencyOn = computed((): (date: Date) => boolean => household.value
@@ -501,7 +502,7 @@ const tableData = computed((): TableRow[] => {
   }
 
   // VIEW mode: power + inhabitants + guest orders
-  if (!isEditModeAllowed.value) return [powerRow, ...inhabitantRows, ...guestOrderRows]
+  if (formMode.value !== FORM_MODES.EDIT || newGuestModes.value.length === 0) return [powerRow, ...inhabitantRows, ...guestOrderRows]
 
   // EDIT mode: power + inhabitants + guest orders + add guest
   // Synthetic inhabitant for UserListItem consistency
@@ -636,8 +637,7 @@ const handleGuestSave = (orders: DesiredOrder[]) => completeBooking(orders)
 // ============================================================================
 
 const {groupGuestOrders, getBookingOptions, powerOptions, newGuestRow, getDayBillSummary, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
-const {createBookingBadges, createWaitlistBadge, bookingSaveLabel} = useBookingUi()
-const releasedState = ORDER_STATE_LABELS[OrderStateEnum.RELEASED]
+const {createBookingBadges, createWaitlistBadge, createReleasedBadge, bookingSaveLabel} = useBookingUi()
 
 // A queue entry's place names the line of the ticket type its price holds
 const ticketTypeOfEntry = computed(() => useWaitlist().ticketTypeOfEntry(props.ticketPrices))
@@ -746,7 +746,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
       <!-- Expand button column - uses BUTTONS.edit for standardized sizing -->
       <template #expand-cell="{row}">
         <UButton
-          v-if="isEditModeAllowed"
+          v-if="canOpenRow(row.original)"
           v-bind="BUTTONS.edit"
           :icon="row.getIsExpanded() ? ICONS.chevronDown : (row.original.rowType === 'power' ? COMPONENTS.powerMode.buttonIcon : (row.original.rowType === 'guest' ? ICONS.plusCircle : BUTTONS.edit.icon))"
           :aria-label="row.getIsExpanded() ? 'Luk' : 'Rediger'"
@@ -806,16 +806,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
               compact
             >
               <template #badge>
-                <!-- Released badge -->
-                <UBadge
-                  v-if="row.original.ticketState === TicketState.released"
-                  :color="releasedState.color"
-                  :variant="NOISE.soft"
-                  :size="SIZES.small"
-                  :icon="releasedState.icon"
-                >
-                  {{ releasedState.label }}
-                </UBadge>
+                <DeadlineBadge v-if="row.original.ticketState === TicketState.released" :badge="createReleasedBadge()" compact />
                 <!-- Provenance badges -->
                 <div v-else-if="row.original.provenanceHousehold" :class="COMPONENTS.bookingForm.provenance">
                   <UBadge :color="COLOR.info" :variant="NOISE.soft" :size="SIZES.sm" :icon="ICONS.claim">
@@ -840,9 +831,10 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
               />
               <span v-else :class="TYPOGRAPHY.bodyTextSmall">ukendt</span>
             </div>
-            <!-- Provenance badges -->
-            <div v-if="row.original.provenanceHousehold" :class="COMPONENTS.bookingForm.guestProvenance">
-              <UBadge :color="COLOR.info" :variant="NOISE.soft" :size="SIZES.sm" :icon="ICONS.claim">
+            <!-- Released badge, else provenance badge, as on an inhabitant's row -->
+            <div v-if="row.original.ticketState === TicketState.released || row.original.provenanceHousehold" :class="COMPONENTS.bookingForm.guestProvenance">
+              <DeadlineBadge v-if="row.original.ticketState === TicketState.released" :badge="createReleasedBadge()" compact />
+              <UBadge v-else :color="COLOR.info" :variant="NOISE.soft" :size="SIZES.sm" :icon="ICONS.claim">
                 fra {{ row.original.provenanceHousehold }}
               </UBadge>
             </div>
@@ -1029,6 +1021,6 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
     </UTable>
 
     <!-- Legend: shared with the week/month grid -->
-    <DinnerModeLegend v-if="isEditModeAllowed" :class="COMPONENTS.bookingForm.legend"/>
+    <DinnerModeLegend v-if="tableData.some(canOpenRow)" :class="COMPONENTS.bookingForm.legend"/>
   </div>
 </template>

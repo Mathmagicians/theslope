@@ -3,6 +3,7 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useBookingValidation, type TicketChangeKind} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useHousehold} from '~/composables/useHousehold'
 import testHelpers from '~~/tests/e2e/testHelpers'
@@ -17,6 +18,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 const {validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, getSessionUserInfo, daysFromNow} = testHelpers
 const {TicketChangeKindSchema, OrderStateSchema, DinnerModeSchema, OrderAuditSourceSchema} = useBookingValidation()
 const {TicketTypeSchema} = useTicketPriceValidation()
+const {findTicketPriceByType} = useTicket()
 const {formatNameWithInitials} = useHousehold()
 const Kind = TicketChangeKindSchema.enum
 const CORRECTION = OrderAuditSourceSchema.enum['admin-correction']
@@ -42,8 +44,8 @@ test.describe('Chef dinner order history', () => {
         const season = await SeasonFactory.createSeason(adminContext)
         seasonId = season.id!
         seasonIds.push(seasonId)
-        adultPrice = saved(season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT))
-        childPrice = saved(season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.CHILD))
+        adultPrice = saved(findTicketPriceByType(TicketTypeSchema.enum.ADULT, season.ticketPrices))
+        childPrice = saved(findTicketPriceByType(TicketTypeSchema.enum.CHILD, season.ticketPrices))
 
         const member = await getSessionUserInfo(memberContext)
         // Tomorrow: inside the cancellation deadline, so a release keeps the ticket paid instead of deleting it

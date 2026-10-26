@@ -341,12 +341,12 @@ describe('useBookingValidation', () => {
 
       // A queue place names the line of its ticket type; an entry whose ticket price is gone names none
       it.each([TicketTypeSchema.enum.ADULT, null])('GIVEN a queue place in the line of %s WHEN parsing THEN it keeps its ticket type', (ticketType) => {
-        const position = {inhabitantId: 1, dinnerEventId: 1, isGuestTicket: false, position: 2, ticketType}
+        const position = OrderFactory.defaultQueuePosition({position: 2, ticketType})
         expect(ScaffoldResultSchema.parse({...validScaffoldResult, positions: [position]}).positions).toEqual([position])
       })
 
       it('GIVEN a queue place without its ticket type WHEN parsing THEN throws', () => {
-        const {ticketType: _t, ...untyped} = {inhabitantId: 1, dinnerEventId: 1, isGuestTicket: false, position: 2, ticketType: null}
+        const {ticketType: _t, ...untyped} = OrderFactory.defaultQueuePosition({position: 2})
         expect(() => ScaffoldResultSchema.parse({...validScaffoldResult, positions: [untyped]})).toThrow()
       })
 

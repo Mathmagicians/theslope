@@ -181,7 +181,7 @@ describe('the people a run\'s mails name', () => {
     })
     afterEach(() => vi.clearAllMocks())
 
-    const ADULT_PRICE = TicketFactory.defaultTicketPrices().find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!
+    const ADULT_PRICE = TicketFactory.defaultPriceOf(TicketTypeSchema.enum.ADULT)
     const ADULT_PRICE_ID = ADULT_PRICE.id!
     // The queue entry of a person's place
     const entryOf = (member: Member): number => 600 + member.id

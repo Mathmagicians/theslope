@@ -12,6 +12,7 @@ import {
     createWaitlistEntries, deleteWaitlistEntries, fetchWaitlistForDinners, grabWaitlistEntry, removePlacedWaitlistEntry, updateWaitlistEntryOrders
 } from '~~/server/data/waitlistRepository'
 import {useBookingValidation, OrderAuditAction as AuditActions, type DesiredOrder, type DinnerMode, type OrderAuditAction, type OrderDisplay, type ScaffoldResult, type TicketType} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import type {TicketWaitlistCreate, TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {getHouseholdShortName, useCoreValidation} from '~/composables/useCoreValidation'
@@ -55,6 +56,7 @@ vi.mock('~~/server/utils/waitlistAssignment', async importOriginal => {
 const d1Client = {} as D1Database
 const {DinnerModeSchema, DinnerStateSchema, BookingActionSchema, BookingFailureSchema, TicketTypeSchema, OrderStateSchema, OrderAuditSourceSchema} = useBookingValidation()
 const {createDefaultWeekdayMap} = useCoreValidation()
+const {findTicketPriceByType} = useTicket()
 const Mode = DinnerModeSchema.enum
 const Action = BookingActionSchema.enum
 const Source = OrderAuditSourceSchema.enum
@@ -70,8 +72,8 @@ const asPreviewOf = (saved: ScaffoldResult) => ({...saved, outcomes: {...saved.o
 
 // A household of two on a dinner where Bo holds an order; the household waits for nothing until a test says so
 const givenSave = () => {
-    const ticketPrices = TicketFactory.defaultTicketPrices().map((price, index) => ({...price, id: index + 1}))
-    const adultPrice = ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!
+    const ticketPrices = TicketFactory.defaultTicketPrices()
+    const adultPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, ticketPrices)!
     const dinner = {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 5}
     const season = {...SeasonFactory.defaultSeason(), id: 1, ticketPrices, dinnerEvents: [dinner]}
     const household = HouseholdFactory.defaultHouseholdDetail()
@@ -254,7 +256,7 @@ const givenClaims = ({households: people, dinners, forSale = 0, waiting = 0, que
 }) => {
     const {season, household} = givenSave()
     const closedDinners = Array.from({length: dinners}, (_, index) => DinnerEventFactory.dinnerEventAt(51 + index, 1 + index))
-    const priceOf = (ticketType: TicketType) => season.ticketPrices.find(price => price.ticketType === ticketType)!
+    const priceOf = (ticketType: TicketType) => findTicketPriceByType(ticketType, season.ticketPrices)!
     const adultPrice = priceOf(ADULT)
     const personOf = (id: number, householdId: number, ticketType: TicketType, dinnerMode: DinnerMode) => ({
         ...HouseholdFactory.defaultInhabitantData(`person${id}`), id, householdId,

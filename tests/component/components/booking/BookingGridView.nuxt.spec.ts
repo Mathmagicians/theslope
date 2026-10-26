@@ -7,6 +7,7 @@ import {BookingViewSchema} from '~/composables/useBookingView'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
 import {useBookingValidation, TicketState, type BookingAction, type DinnerEventDisplay, type DinnerMode, type OrderDisplay, type OrderState} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
@@ -24,6 +25,7 @@ import {addDays, subYears} from 'date-fns'
 
 const {day, week, month} = BookingViewSchema.enum
 const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema, BookingActionSchema, TicketTypeSchema} = useBookingValidation()
+const {findTicketPriceByType} = useTicket()
 const {DINEIN, DINEINLATE, TAKEAWAY, NONE} = DinnerModeSchema.enum
 const {BOOKED, RELEASED} = OrderStateSchema.enum
 const {CANCELLED} = DinnerStateSchema.enum
@@ -44,7 +46,7 @@ beforeEach(() => {
 
 const ticketPrices = TicketFactory.defaultTicketPrices()
 type TicketPrice = (typeof ticketPrices)[number]
-const adultPrice = ticketPrices.find(price => price.ticketType === ADULT)!
+const adultPrice = TicketFactory.defaultPriceOf(ADULT)
 // An order's price fields from a season's price row: a person's row is the price their order holds
 const priceFieldsOf = (price: TicketPrice) => ({ticketPriceId: price.id, ticketType: price.ticketType, priceAtBooking: price.price})
 // Use real deadlinesForSeason() to stay in sync with SeasonDeadlines interface
@@ -560,7 +562,7 @@ describe('BookingGridView ticket badges in the name cells', () => {
 describe('BookingGridView a person\'s rows by price', () => {
   const PRICE_BEFORE_THE_RISE = 5000
   const pricesToday = TicketFactory.defaultTicketPrices({adultPrice: 5500})
-  const adultToday = pricesToday.find(price => price.ticketType === ADULT)!
+  const adultToday = findTicketPriceByType(ADULT, pricesToday)!
   // Five dinners ahead of every deadline, one a day: the columns in their order
   const dinners = [1, 2, 3, 4, 5].map(day => DinnerEventFactory.dinnerEventAt(day, 60 + day))
   const [first, second, third, fourth, fifth] = dinners as [DinnerEventDisplay, DinnerEventDisplay, DinnerEventDisplay, DinnerEventDisplay, DinnerEventDisplay]
@@ -628,7 +630,7 @@ describe('BookingGridView a person\'s rows by price', () => {
   // A dinner without a booking takes the price for the person's age on its date, as the save prices it; a booked dinner
   // keeps its booked price and its own ticket type, whatever the person's age
   describe('a person\'s price on the dinner\'s date', () => {
-    const childPrice = ticketPrices.find(price => price.ticketType === CHILD)!
+    const childPrice = TicketFactory.defaultPriceOf(CHILD)
     // Anna turns the CHILD price's age limit on the dinner: the ADULT price from that dinner on
     const annaGrowingUpOn = (dinner: DinnerEventDisplay): Inhabitant => ({...anna, birthDate: subYears(dinner.date, childPrice.maximumAgeLimit!)})
     // A row as annasRows reads it: the day view's ticket badge of the price row, the dinners the row holds

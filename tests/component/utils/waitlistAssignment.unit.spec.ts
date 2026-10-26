@@ -8,6 +8,7 @@ import {
 } from '~~/server/data/waitlistRepository'
 import {assignWaitlistPortions, joinWaitlist, sellTicketsToWaitlist} from '~~/server/utils/waitlistAssignment'
 import {useBookingValidation, OrderAuditAction} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import {useWaitlistValidation, type PlacementOrder} from '~/composables/useWaitlistValidation'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
@@ -51,6 +52,7 @@ vi.mock('~~/server/data/waitlistRepository', async importOriginal => ({
 
 const {DinnerStateSchema, TicketTypeSchema, OrderAuditChangeSchema, OrderAuditSourceSchema, createOrderAuditData} = useBookingValidation()
 const {TicketWaitlistCreateSchema, serializeTicketWaitlist} = useWaitlistValidation()
+const {findTicketPriceByType} = useTicket()
 const DinnerState = DinnerStateSchema.enum
 
 const d1Client = {} as D1Database
@@ -59,7 +61,7 @@ const SEASON_ID = 9
 const RELEASED_ORDER_ID = 501
 const CREATED_ORDER_ID = 77
 const ticketPrices = TicketFactory.defaultTicketPrices({seasonId: SEASON_ID})
-const priceOf = (ticketType: keyof typeof TicketTypeSchema.enum) => ticketPrices.find(price => price.ticketType === ticketType)!
+const priceOf = (ticketType: keyof typeof TicketTypeSchema.enum) => findTicketPriceByType(ticketType, ticketPrices)!
 const ADULT_PRICE = priceOf(TicketTypeSchema.enum.ADULT)
 const ADULT_PRICE_ID = ADULT_PRICE.id!
 const portionDinner = {...DinnerEventFactory.defaultDinnerEventDetail(), id: DINNER_ID, seasonId: SEASON_ID}

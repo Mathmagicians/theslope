@@ -1,7 +1,8 @@
 // Factory for Order test data
-import type { OrderDisplay, BookingResult, BookingTotals, OrderDetail, OrderHistoryDisplay, TicketChange, TicketChangesResponse, OrderSnapshot, OrderCreateWithPrice, AuditContext, OrderAuditSource,CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
+import type { OrderDisplay, BookingResult, QueuePosition, TicketType, BookingTotals, OrderDetail, OrderHistoryDisplay, TicketChange, TicketChangesResponse, OrderSnapshot, OrderCreateWithPrice, AuditContext, OrderAuditSource,CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useTicket } from '~/composables/useTicket'
 import { useCoreValidation } from '~/composables/useCoreValidation'
 import type { APIResponse, BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'
@@ -22,6 +23,7 @@ const HOUSEHOLD_SCAFFOLD_ENDPOINT = '/api/household/order/scaffold'
 
 // Get enum schemas from composable
 const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema, OrderAuditSourceSchema, BookingActionSchema, TicketChangeKindSchema } = useBookingValidation()
+const { findTicketPriceByType } = useTicket()
 
 // API endpoints
 const ORDER_ENDPOINT = '/api/order'
@@ -95,8 +97,8 @@ export class OrderFactory {
   })
 
   /** An order's price row: the default row of its type, carrying the portions a ticket at it weighs */
-  static readonly ticketPriceRow = (ticketType: OrderDetail['ticketType'] = TicketTypeSchema.enum.ADULT): NonNullable<OrderDetail['ticketPrice']> => {
-    const row = TicketFactory.defaultTicketPricesData.find(price => price.ticketType === ticketType)!
+  static readonly ticketPriceRow = (ticketType: TicketType = TicketTypeSchema.enum.ADULT): NonNullable<OrderDetail['ticketPrice']> => {
+    const row = TicketFactory.defaultPriceOf(ticketType)
     return {id: 1, ticketType: row.ticketType, price: 45, description: row.description ?? null, portions: row.portions}
   }
 
@@ -578,7 +580,14 @@ export class OrderFactory {
   /** One order's result in a scaffold run */
   static readonly defaultBookingResult = (overrides?: Partial<BookingResult>): BookingResult => ({
     inhabitantId: 1, inhabitantName: 'Anna', isGuestTicket: false, ticketType: TicketTypeSchema.enum.ADULT, dinnerEventId: 1,
-    dinnerMode: DinnerModeSchema.enum.DINEIN, action: BookingActionSchema.enum.BOOK,
+    priceAtBooking: TicketFactory.defaultPriceOf(TicketTypeSchema.enum.ADULT).price, dinnerMode: DinnerModeSchema.enum.DINEIN, action: BookingActionSchema.enum.BOOK,
+    ...overrides
+  })
+
+  /** A wish's place on a dinner's waiting list in a scaffold run */
+  static readonly defaultQueuePosition = (overrides?: Partial<QueuePosition>): QueuePosition => ({
+    inhabitantId: 1, dinnerEventId: 1, isGuestTicket: false, position: 1, ticketType: TicketTypeSchema.enum.ADULT,
+    priceAtBooking: TicketFactory.defaultPriceOf(TicketTypeSchema.enum.ADULT).price,
     ...overrides
   })
 
@@ -773,7 +782,7 @@ export class OrderFactory {
       menuTitle: salt(`Fixture-${daysFromNow}d`, testSalt)
     })
 
-    const ticketPriceId = season.ticketPrices?.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)?.id
+    const ticketPriceId = findTicketPriceByType(TicketTypeSchema.enum.ADULT, season.ticketPrices)?.id
     if (!ticketPriceId) throw new Error('No ADULT ticket price found')
 
     let order: OrderDisplay

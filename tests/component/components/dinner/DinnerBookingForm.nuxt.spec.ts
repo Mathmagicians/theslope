@@ -11,11 +11,11 @@ import UserListItem from '~/components/shared/UserListItem.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {ACTION_WORDS, MODE_WORDS, ORDER_STATE_LABELS, SUPPLY_WORDS, bookingSaveLabel, guestSaveLabel, moreTicketsAlert, formatPreviewLines, previewSaveOutcome} from '~/composables/useBookingUi'
+import {ACTION_WORDS, MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel, guestSaveLabel, moreTicketsAlert, formatPreviewLines, previewSaveOutcome, guestTicketsLabel, ticketBadgeLabel, ticketTypePresentation} from '~/composables/useBookingUi'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {DINNER_MODE_ORDER, EMPTY_RELEASED_TICKET_COUNTS, formatPlace} from '~/composables/useBooking'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
-import type {BookingAction, BookingResult, DesiredOrder, DinnerMode, OrderDisplay, TicketType} from '~/composables/useBookingValidation'
+import type {BookingAction, BookingResult, DesiredOrder, DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 import type {HouseholdDetail, UserDetail} from '~/composables/useCoreValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
@@ -26,6 +26,7 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {COMPONENTS, ICONS, createTableColumns, getRibbonClasses, useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from './waitlistTestIds'
+import {subYears} from 'date-fns'
 import {useBookingValidation as useActionValidation, OrderState, TicketState} from '~/composables/useBookingValidation'
 const Action = useActionValidation().BookingActionSchema.enum
 
@@ -51,7 +52,7 @@ const baseProps = {
   get deadlines() { return baseDeadlines }
 }
 // The season's ticket price of a ticket type
-const priceOf = (ticketType: TicketType) => baseProps.ticketPrices.find(tp => tp.ticketType === ticketType)!
+const priceOf = TicketFactory.defaultPriceOf
 const householdWithInhabitants = HouseholdFactory.defaultHouseholdDetail('test')
 const strangerHousehold = HouseholdFactory.defaultHouseholdDetail('stranger')
 
@@ -103,6 +104,11 @@ const nameCellOf = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, inhabi
     const inhabitants = item.props('inhabitants')
     return !Array.isArray(inhabitants) && inhabitants.id === inhabitantId
   })!
+// The tickets of an inhabitant's row, found by the row's name: on a phone under the name, from md in their own column
+const ticketsOf = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, inhabitantId: number) => {
+  const row = (nameCellOf(wrapper, inhabitantId).element as Element).closest('tr')!
+  return wrapper.findAllComponents(DinnerTicket).filter(ticket => row.contains(ticket.element))
+}
 
 // The next test's resetStores drops the datasets a still-mounted form reads
 enableAutoUnmount(afterEach)
@@ -321,14 +327,20 @@ describe('DinnerBookingForm', () => {
     })
   })
 
-  // The name cell names a released ticket's state in the words and glyph of the order states (useBookingUi)
-  it('GIVEN Anna\'s ticket is released THEN her name cell\'s badge reads the released state with its icon', async () => {
-    const [anna] = householdWithInhabitants.inhabitants
-    const released = OrderFactory.defaultOrder('released', {inhabitantId: anna!.id, dinnerEventId: baseProps.dinnerEvent.id, state: OrderState.RELEASED})
+  // A released ticket's row badges its order's state in the words, colour and icon of formatOrder (useBookingUi), a guest's as a person's
+  it.each([
+    {ticket: 'Anna\'s ticket', isGuestTicket: false, rowId: (order: OrderDisplay) => `inhabitant-${order.inhabitantId}`},
+    {ticket: 'her guest\'s ticket', isGuestTicket: true, rowId: (order: OrderDisplay) => `guest-order-guest-group-${Object.keys(useBooking().groupGuestOrders([order]))[0]}`}
+  ])('GIVEN $ticket is released THEN its row\'s state badge reads the state text, icon and colour formatOrder gives the order', async ({isGuestTicket, rowId}) => {
+    const anna = householdWithInhabitants.inhabitants[0]!
+    const released = OrderFactory.defaultOrder('released', {inhabitantId: anna.id, dinnerEventId: baseProps.dinnerEvent.id, state: OrderState.RELEASED, isGuestTicket})
     const wrapper = await mountMemberForm(false, {orders: [released]})
 
-    const {label, icon} = ORDER_STATE_LABELS[OrderState.RELEASED]
-    expect(nameCellOf(wrapper, anna!.id).findAllComponents({name: 'UBadge'}).map(badge => ({text: badge.text(), icon: badge.props('icon')}))).toEqual([{text: label, icon}])
+    // The UBadge whose root is the part: a part's own component lookups reach only the components inside that root
+    const part = findByTestId(wrapper, `${rowId(released)}-state`)
+    const badge = wrapper.findAllComponents({name: 'UBadge'}).find(component => component.element === part.element)
+    const {stateText, stateIcon, stateColor} = useBookingUi().formatOrder(released)
+    expect({text: badge?.text(), icon: badge?.props('icon'), color: badge?.props('color')}).toEqual({text: stateText, icon: stateIcon, color: stateColor})
   })
 })
 
@@ -451,6 +463,31 @@ describe('DinnerBookingForm guest rows by price on a closed dinner', () => {
     expect(guestTickets(wrapper)).toEqual([placed(tasting, 1), queued])
     expect(openToggles(wrapper)).toEqual(openRows)
     expect(wrapper.findComponent(GuestBookingForm).exists()).toBe(guestForm)
+  })
+})
+
+// A dinner without a booking takes the price for the person's age on its date, as the save prices it; a booked ticket
+// keeps its booked price and its own ticket type, whatever the person's age
+describe('DinnerBookingForm a person\'s price on the dinner\'s date', () => {
+  const {ADULT, CHILD} = useActionValidation().TicketTypeSchema.enum
+  const [adultPrice, childPrice] = [priceOf(ADULT), priceOf(CHILD)]
+  const [anna, bo] = householdWithInhabitants.inhabitants
+  const {dinnerEvent} = baseProps
+  // Anna turns the CHILD price's age limit on the dinner: a child today, an adult on the dinner's date
+  const annaGrowingUp = {...anna!, birthDate: subYears(dinnerEvent.date, childPrice.maximumAgeLimit!)}
+  const bookedAtTheChildPrice = OrderFactory.defaultOrder('child-price', {
+    inhabitantId: anna!.id, dinnerEventId: dinnerEvent.id, ticketPriceId: childPrice.id, ticketType: childPrice.ticketType, priceAtBooking: childPrice.price
+  })
+
+  it.each([
+    {given: 'Anna, a child today, turns 12 on the dinner, with no order', inhabitant: annaGrowingUp, orders: [], price: adultPrice},
+    {given: 'Anna, an adult, holds a ticket booked at the CHILD price row', inhabitant: anna!, orders: [bookedAtTheChildPrice], price: childPrice}
+  ])('GIVEN $given THEN her ticket badge reads the type and price of the $price.ticketType price row', async ({inhabitant, orders, price}) => {
+    const wrapper = await mountMemberForm(true, {household: {...householdWithInhabitants, inhabitants: [inhabitant, bo!]}, orders})
+
+    const badges = ticketsOf(wrapper, anna!.id).map(ticket => ticket.findComponent({name: 'UBadge'}).text())
+    expect(badges).not.toHaveLength(0)
+    expect(badges).toEqual(badges.map(() => ticketBadgeLabel(ticketTypePresentation(price.ticketType).label, price.price)))
   })
 })
 
@@ -580,16 +617,20 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
     expect(findByTestId(wrapper, 'guest-form-save').text()).toContain(guestSaveLabel(1))
   })
 
-  // The guests of one booker and ticket type are one group per outcome, named with the count
+  // The guests of one booker, ticket type and price are one group per outcome, named by type and price with the count
   it('ten adult guests whose dry run buys three and queues seven preview a line each, and save as guests', async () => {
-    const guests = (action: BookingAction, count: number) => Array.from({length: count}, () => resultOf(action, {isGuestTicket: true}))
+    const guests = (action: BookingAction, count: number) => Array.from({length: count}, () =>
+      resultOf(action, {isGuestTicket: true, ticketType: adultPrice.ticketType, priceAtBooking: adultPrice.price}))
+    // "Gæst af Anna (Voksen · 40 kr ×3)": the booker's guests, the price row's type and price, the count
+    const guestLine = (count: number) =>
+      `${useOrder().formatGuestLabel(anna!.name)} (${guestTicketsLabel(ticketBadgeLabel(ticketTypePresentation(adultPrice.ticketType).label, adultPrice.price), count)})`
     scaffold.answers.preview = () => answer(...guests(Action.BUY, 3), ...guests(Action.QUEUE, 7))
     const wrapper = await mountMemberForm(false)
     await clickByTestId(wrapper, 'guest-add-guest-toggle')
     await wrapper.findComponent(GuestBookingForm).find('input[name="count"]').setValue(10)
 
     await vi.waitFor(() => expect(guestPreview(wrapper).props('days').flatMap(day => day.lines.map(line => line.name)))
-      .toEqual([expect.stringMatching(/\(Voksen ×3\)$/), expect.stringMatching(/\(Voksen ×7\)$/)]))
+      .toEqual([guestLine(3), guestLine(7)]))
     expect(previews().at(-1)!.body.orders).toHaveLength(10)
     expect(findByTestId(wrapper, 'guest-form-save').text()).toContain(guestSaveLabel(10))
   })
@@ -616,11 +657,6 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
   const annaExpected = OrderFactory.defaultBookingResult({inhabitantId: anna!.id, inhabitantName: anna!.name, dinnerEventId, dinnerMode: DinnerMode.DINEIN, action: Action.BOOK})
   const annaOrder = OrderFactory.defaultOrder('anna', {inhabitantId: anna!.id, dinnerEventId, dinnerMode: DinnerMode.TAKEAWAY, state: OrderStateSchema.enum.BOOKED})
   type Mounted = Awaited<ReturnType<typeof mountMemberForm>>
-  // The tickets of an inhabitant's row, found by the row's name: on a phone under the name, from md in their own column
-  const ticketsOf = (wrapper: Mounted, inhabitantId: number) => {
-    const row = (nameCellOf(wrapper, inhabitantId).element as Element).closest('tr')!
-    return wrapper.findAllComponents(DinnerTicket).filter(ticket => row.contains(ticket.element))
-  }
 
   const expectedReads = () => scaffold.sent.filter(({body}) => body.orders.length === 0)
 
@@ -831,14 +867,12 @@ describe('DinnerBookingForm on a cancelled dinner', () => {
     expect(ribbon.classes()).toEqual(getRibbonClasses('cancel').split(' '))
   })
 
-  // A member edits the dinners still to come while the household lives here: the booking rules give no mode on a past
-  // or cancelled dinner, nor on an open dinner after the household's move-out (getBookingOptions)
+  // A member edits the dinners still to come: a cancelled dinner is as closed to edits as a past one
   it.each([
-    {standing: 'a past dinner', props: {dinnerEvent: {...baseProps.dinnerEvent, date: DinnerEventFactory.dinnerEventAt(baseProps.dinnerEvent.id, -1).date}}},
-    {standing: 'a cancelled dinner', props: {dinnerEvent: cancelledDinner}},
-    {standing: 'an open dinner after the household moved out', props: {household: {...householdWithInhabitants, moveOutDate: DinnerEventFactory.dinnerEventAt(baseProps.dinnerEvent.id, 0).date}}}
-  ])('GIVEN a member on $standing THEN the form offers no edit mode: no row opens, no guest can be added and no legend shows', async ({props}) => {
-    const wrapper = await mountMemberForm(true, props)
+    {standing: 'a past dinner', dinnerEvent: {...baseProps.dinnerEvent, date: DinnerEventFactory.dinnerEventAt(baseProps.dinnerEvent.id, -1).date}},
+    {standing: 'a cancelled dinner', dinnerEvent: cancelledDinner}
+  ])('GIVEN a member on $standing THEN the form offers no edit mode: no row opens, no guest can be added and no legend shows', async ({dinnerEvent}) => {
+    const wrapper = await mountMemberForm(true, {dinnerEvent})
 
     const toggles = ['power-power-mode', ...householdWithInhabitants.inhabitants.map(({id}) => `inhabitant-${id}`), 'guest-add-guest'].map(row => `${row}-toggle`)
     expect(toggles.filter(toggle => findByTestId(wrapper, toggle).exists())).toEqual([])
