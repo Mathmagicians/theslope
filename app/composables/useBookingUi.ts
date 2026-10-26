@@ -450,9 +450,16 @@ export const scaffoldToastLook = (result: Pick<ScaffoldResult, 'errored'>) => ({
     ui: {description: COMPONENTS.bookingResult.lines}
 })
 
-/** A booker's guest tickets of one type, as the guest row badges them: "Barn", "Barn ×2"; the count alone when the type is gone */
+/** A booker's guest tickets of one type in a preview line or a toast line: "Barn", "Barn ×2"; the count alone when the type is gone */
 export const guestTicketsLabel = (label: string | undefined, count: number): string =>
     [label, count > 1 ? BOOKING_WORDS.guests.count(count) : undefined].filter(Boolean).join(' ')
+
+/** A ticket's badge, in the day view and in the grid: its type and its price, then its guests: "Baby · 0 kr · 2 Gæster" */
+export const ticketBadgeLabel = (label: string, price: number, guestCount?: number): string =>
+    [
+        BOOKING_WORDS.ticketPrice.label(label, useTicket().formatPrice(price)),
+        guestCount === undefined ? undefined : BOOKING_WORDS.guests.label(guestCount)
+    ].filter(Boolean).join(' · ')
 
 /** A booker's guests of one ticket type in a preview line or a toast line: "Gæst af Anna (Barn ×2)" */
 const guestGroupName = (bookerName: string, ticketType: TicketType | null | undefined, count: number): string => {

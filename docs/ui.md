@@ -99,8 +99,9 @@ phone. A column sizes through its `meta.class` (`{th, td}`); `COMPONENTS.masterD
 `primaryColumn` and `compactColumn`. A row that spans the table, the moment line in `TicketChanges.vue`, sets the first
 column's `meta.colspan.td` to the column count and binds `table.spannedCell` on the other cells. An `#expanded` row
 spans every column: in a table that scrolls sideways, its content keeps to the part of the box in view, sticky at the
-cell's inset and no wider than the box (`table.gridUi` makes its box a size container on a phone,
-`bookingGrid.expandedPanel` holds the booking grid's guest form).
+cell's inset and no wider than the box (`table.gridUi` and `table.adminUsersUi` make their box a size container on a
+phone; `bookingGrid.expandedPanel` holds the booking grid's guest form, `adminUsers.expandedPanel` the user's profile
+card).
 
 ### Choice groups
 

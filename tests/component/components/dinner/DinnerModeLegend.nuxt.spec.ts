@@ -94,11 +94,10 @@ describe('DinnerModeLegend', () => {
     it('explains the expected booking with the sliders beside the expected mode on every surface', async () => {
         const wrapper = await mountSuspended(DinnerModeLegend)
         const entry = findByTestId(wrapper, 'dinner-mode-legend-expected')
-        const sliders = wrapper.findAllComponents({name: 'UIcon'})
-            .find(icon => entry.element.contains(icon.element) && icon.props('name') === ICONS.preferences)
+        const sliders = entry.findAllComponents({name: 'UIcon'}).find(icon => icon.props('name') === ICONS.preferences)
 
         expect(entry.text()).toContain(BOOKING_WORDS.expectedBooking)
         expect(sliders?.classes()).toEqual(expect.arrayContaining(COMPONENTS.ticket.stateIcon.expected.split(' ')))
-        expect(wrapper.findAllComponents(DinnerModeSelector).some(selector => entry.element.contains(selector.element) && selector.props('expected'))).toBe(true)
+        expect(entry.findAllComponents(DinnerModeSelector).some(selector => selector.props('expected'))).toBe(true)
     })
 })

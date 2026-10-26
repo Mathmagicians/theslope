@@ -1,9 +1,9 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
-import {flushPromises, enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
+import {flushPromises, enableAutoUnmount, type DOMWrapper, type VueWrapper} from '@vue/test-utils'
 import {nextTick, ref, type ComponentPublicInstance} from 'vue'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, iconNamesIn} from '~~/tests/component/testHelpers'
 import CookingTeamCard from '~/components/cooking-team/CookingTeamCard.vue'
 import {usePlanStore} from '~/stores/plan'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -18,7 +18,6 @@ const {TeamRoleSchema} = useCookingTeamValidation()
 const Role = TeamRoleSchema.enum
 const ROLES = [Role.CHEF, Role.COOK, Role.JUNIORHELPER]
 
-type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
 // A face carries its icon; the overflow avatar of a group carries the count as its text
 type AvatarWrapper = VueWrapper<ComponentPublicInstance<{icon?: string, text?: string}>>
 const classesOf = (token: string) => token.split(' ')
@@ -98,19 +97,15 @@ const mountCard = async (mode: 'monitor' | 'regular' | 'edit', detail: Partial<C
     return wrapper
 }
 
-const iconsIn = (element: Pick<VueWrapper, 'findAllComponents'>): IconWrapper[] =>
-    element.findAllComponents({name: 'UIcon'}) as IconWrapper[]
-
-const avatarsIn = (wrapper: VueWrapper, element: Element): AvatarWrapper[] =>
-    (wrapper.findAllComponents({name: 'UAvatar'}) as AvatarWrapper[]).filter(avatar => element.contains(avatar.element))
+const avatarsIn = (element: DOMWrapper<Element>): AvatarWrapper[] =>
+    element.findAllComponents({name: 'UAvatar'}) as AvatarWrapper[]
 
 const expectHeadingWithGlyph = (wrapper: VueWrapper, testId: string, glyph: string) => {
     const heading = findByTestId(wrapper, testId)
     expect(heading.exists()).toBe(true)
     expect(heading.classes()).toEqual(expect.arrayContaining(classesOf(COMPONENTS.roleBox.heading)))
-    const icons = iconsIn(wrapper).filter(icon => heading.element.contains(icon.element))
-    expect(icons.map(icon => icon.props('name'))).toEqual([glyph])
-    expect(icons[0]!.classes()).toEqual(expect.arrayContaining(classesOf(COMPONENTS.roleBox.glyph)))
+    expect(iconNamesIn(heading)).toEqual([glyph])
+    expect(heading.findComponent({name: 'UIcon'}).classes()).toEqual(expect.arrayContaining(classesOf(COMPONENTS.roleBox.glyph)))
 }
 
 enableAutoUnmount(afterEach)
@@ -145,8 +140,7 @@ describe('CookingTeamCard', () => {
                 const line = lines[index]!
                 expect(line.text()).toContain(`${formatDate(slot.startDate)}-${formatDate(slot.endDate)}`)
                 expect(line.text()).toContain(slot.note!)
-                const glyphs = iconsIn(wrapper).filter(icon => line.element.contains(icon.element)).map(icon => icon.props('name'))
-                expect(glyphs).toContain(ROLE_ICONS[slot.role])
+                expect(iconNamesIn(line)).toContain(ROLE_ICONS[slot.role])
             })
         })
 
@@ -167,8 +161,7 @@ describe('CookingTeamCard', () => {
                 expect(badge.attributes('aria-label')).toBe(labels[index])
                 expect(badge.classes()).toEqual(expect.arrayContaining(classesOf(countBadge.class)))
                 expect(badges.find(component => component.element === badge.element)!.props('size')).toBe(createResponsiveSizes(ref(true)).small)
-                const glyphs = iconsIn(wrapper).filter(icon => badge.element.contains(icon.element)).map(icon => icon.props('name'))
-                expect(glyphs).toEqual([countBadge.icon])
+                expect(iconNamesIn(badge)).toEqual([countBadge.icon])
                 expect(line.text()).not.toContain('vagt')
             })
         })
@@ -244,7 +237,7 @@ describe('CookingTeamCard', () => {
             {group: 'the edit face\'s member summary', mode: 'edit' as const, testId: TEST_IDS.memberSummary}
         ])('$group', async ({mode, testId}) => {
             const wrapper = await mountCard(mode, {assignments: cooks}, TEAM_ID, isMd)
-            const avatars = avatarsIn(wrapper, findByTestId(wrapper, testId).element)
+            const avatars = avatarsIn(findByTestId(wrapper, testId))
 
             expect(avatars.filter(avatar => !avatar.props('text'))).toHaveLength(shown)
             expect(avatars.map(avatar => avatar.props('text')).filter(Boolean)).toEqual([`+${cooks.length - shown}`])
@@ -301,7 +294,7 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
         expect(follows(finderHeading.element, jokerHeading.element)).toBe(true)
         expect(follows(jokerHeading.element, row.element)).toBe(true)
 
-        expect(avatarsIn(wrapper, row.element)[0]!.props('icon')).toBe(ICONS.joker)
+        expect(avatarsIn(row)[0]!.props('icon')).toBe(ICONS.joker)
         expect(row.text()).toContain('Joker · en plads uden navn')
         expect(addButton(wrapper).text()).toBe('Tilføj')
         expect(addButton(wrapper).attributes('aria-expanded')).toBe('false')

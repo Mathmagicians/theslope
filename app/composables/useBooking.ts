@@ -333,7 +333,7 @@ export const buildDesiredOrder = (
     return {...intent, ticketPriceId, isGuestTicket: false, orderId: existing?.id, state: BOOKED}
 }
 
-/** A user's dinner-mode change for one guest group (groupGuestOrders: one booker, ticket type and dinner) */
+/** A user's dinner-mode change for one guest group (groupGuestOrders: one booker, ticket type, price and dinner) */
 export type GuestBookingIntent = {guestOrders: OrderDisplay[], dinnerMode: DinnerMode}
 
 /** A user's dinner-mode change for one place the household holds on a dinner's waiting list */
@@ -979,14 +979,14 @@ export const useBooking = () => {
     }
 
     /**
-     * Group the guest tickets among the orders by (booker, ticketType, dinnerEventId, allergies, provenance)
-     * Returns a map from group key to array of orders
-     *
-     * Guests with different allergies or claimed tickets (provenanceHousehold) are separate rows.
+     * The guest tickets among the orders by group key: one booker, ticket type, price, dinner, allergies and provenance.
+     * Guests at another price (a baby who tastes, a hungry baby), with other allergies or on a bought ticket
+     * (provenanceHousehold) are separate rows.
      */
     const groupGuestOrders = <T extends {
         inhabitantId: number | null
         ticketType?: string | null
+        priceAtBooking: number
         dinnerEventId: number
         isGuestTicket: boolean
         provenanceHousehold?: string | null
@@ -996,7 +996,7 @@ export const useBooking = () => {
     ): Record<string, T[]> => Object.fromEntries(groupBy<T, string>(order => {
         const allergiesKey = order.provenanceAllergies?.slice().sort().join(',') ?? ''
         const provenanceKey = order.provenanceHousehold ?? ''
-        return `${order.inhabitantId}-${order.ticketType ?? 'unknown'}-${order.dinnerEventId}-${allergiesKey}-${provenanceKey}`
+        return `${order.inhabitantId}-${order.ticketType ?? 'unknown'}-${order.priceAtBooking}-${order.dinnerEventId}-${allergiesKey}-${provenanceKey}`
     })(orders.filter(order => order.isGuestTicket)))
 
     // ============================================================================

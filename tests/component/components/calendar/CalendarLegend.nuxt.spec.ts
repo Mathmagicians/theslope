@@ -5,7 +5,7 @@ import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
 import CalendarLegend from '~/components/calendar/CalendarLegend.vue'
 import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
-import {mountWithTooltipProvider, findAllByTestId, findByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findAllByTestId, findByTestId, resetStores, iconNamesIn} from '~~/tests/component/testHelpers'
 import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
 
 enableAutoUnmount(afterEach)
@@ -51,7 +51,7 @@ describe('CalendarLegend', () => {
             // UChip passes attrs through to the slot, so the indicator is reached by its slot name
             const indicator = entry.find('[data-slot="base"]')
             expect(indicator.text(), chip.label).toBe('count' in chip ? chip.count : '')
-            expect(wrapper.findAllComponents({name: 'UIcon'}).filter(icon => indicator.element.contains(icon.element)).map(icon => icon.props('name')), chip.label)
+            expect(iconNamesIn(indicator), chip.label)
                 .toEqual('icon' in chip ? [chip.icon] : [])
         })
     })

@@ -4,10 +4,13 @@ import {expect} from '@playwright/test'
 import testHelpers from '../testHelpers'
 import {useWaitlistValidation, type TicketWaitlistDetail, type WaitlistQueueSummary, type WaitlistAssignmentResult, type TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {useBookingValidation, type DesiredOrder, type ScaffoldResult} from '~/composables/useBookingValidation'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 
 const {headers} = testHelpers
-const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
+const ADULT_PRICE = TicketFactory.defaultTicketPrices().find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!
 
 const entriesEndpoint = (dinnerEventIds: number[]) =>
     `/api/order/waitlist?${dinnerEventIds.map(id => `dinnerEventIds=${id}`).join('&')}`
@@ -27,9 +30,10 @@ export class WaitlistFactory {
         ...overrides
     })
 
-    // An entry as the household read returns it; the held order follows the entry's keys and mode
-    static readonly defaultEntry = (overrides: Partial<Omit<TicketWaitlistDetail, 'order'>> & {dinnerMode?: TicketWaitlistDetail['order']['dinnerMode'], ticketPriceId?: number, householdId?: number} = {}): TicketWaitlistDetail => {
-        const {dinnerMode = DinnerModeSchema.enum.DINEIN, ticketPriceId = 1, householdId = 1, ...entry} = overrides
+    // An entry as the household read returns it; the held order follows the entry's keys, mode and price row, whose price
+    // is the entry's price at booking
+    static readonly defaultEntry = (overrides: Partial<Omit<TicketWaitlistDetail, 'order'>> & {dinnerMode?: TicketWaitlistDetail['order']['dinnerMode'], ticketPrice?: TicketPrice, householdId?: number} = {}): TicketWaitlistDetail => {
+        const {dinnerMode = DinnerModeSchema.enum.DINEIN, ticketPrice = ADULT_PRICE, householdId = 1, ...entry} = overrides
         const keys = {id: 1, dinnerEventId: 1, inhabitantId: 1, isGuestTicket: false, position: 1, createdAt: new Date(), placingAt: null, placingOrderId: null, ...entry}
         return {
             ...keys,
@@ -37,8 +41,8 @@ export class WaitlistFactory {
                 dinnerEventId: keys.dinnerEventId,
                 inhabitantId: keys.inhabitantId,
                 bookedByUserId: 1,
-                ticketPriceId,
-                priceAtBooking: 5500,
+                ticketPriceId: ticketPrice.id!,
+                priceAtBooking: ticketPrice.price,
                 householdId,
                 dinnerMode,
                 state: OrderStateSchema.enum.BOOKED,

@@ -1,11 +1,12 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, guestTicketsLabel, ticketBadgeLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS} from '~/composables/useBooking'
-import {useBookingValidation, TicketState, type BookingAction, type BookingResult, type QueuePosition, type TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, TicketState, type BookingAction, type BookingResult, type QueuePosition} from '~/composables/useBookingValidation'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {lockedDinnerSupply} from '~~/tests/component/testHelpers'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -368,13 +369,16 @@ describe('scaffoldToastLook', () => {
     })
 })
 
-// The people of a booking result: Anna and her guests of one ticket type, Lars, Knud and Lene
-const ANNA = {inhabitantId: 1, inhabitantName: 'Anna', ticketType: ADULT}
-const guestsOfAnna = (ticketType: TicketType | null) => ({...ANNA, isGuestTicket: true, ticketType})
-const LARS = {inhabitantId: 2, inhabitantName: 'Lars', ticketType: ADULT}
-const KNUD = {inhabitantId: 3, inhabitantName: 'Knud', ticketType: ADULT}
-const LENE = {inhabitantId: 4, inhabitantName: 'Lene', ticketType: ADULT}
-type Person = Pick<BookingResult, 'inhabitantId' | 'inhabitantName' | 'ticketType'> & {isGuestTicket?: boolean}
+// The season's prices a result carries, in the config's order: the baby who tastes, the hungry baby, the child, the adult
+const [TASTING_TICKET, HUNGRY_TICKET, CHILD_TICKET, ADULT_TICKET] = TicketFactory.defaultTicketPrices() as [TicketPrice, TicketPrice, TicketPrice, TicketPrice]
+// The people of a booking result: Anna and her guests of one ticket type and price, Lars, Knud and Lene
+const adult = (inhabitantId: number, inhabitantName: string) => ({inhabitantId, inhabitantName, ticketType: ADULT, priceAtBooking: ADULT_TICKET.price})
+const ANNA = adult(1, 'Anna')
+const guestsOfAnna = ({ticketType, price}: TicketPrice) => ({...ANNA, isGuestTicket: true, ticketType, priceAtBooking: price})
+const LARS = adult(2, 'Lars')
+const KNUD = adult(3, 'Knud')
+const LENE = adult(4, 'Lene')
+type Person = Pick<BookingResult, 'inhabitantId' | 'inhabitantName' | 'ticketType'> & {isGuestTicket?: boolean, priceAtBooking: number}
 
 // One order's result per action listed, all on one dinner: a booker's guests at one table
 const resultsOnDinner = (dinnerEventId: number, person: Person, ...actions: BookingAction[]): BookingResult[] =>
@@ -383,7 +387,7 @@ const resultsOnDinner = (dinnerEventId: number, person: Person, ...actions: Book
 const resultsAt = (person: Person, action: BookingAction, ...dinnerEventIds: number[]): BookingResult[] =>
     dinnerEventIds.map(dinnerEventId => OrderFactory.defaultBookingResult({...person, dinnerEventId, action}))
 const placeOf = (person: Person, position: number, dinnerEventId = 1): QueuePosition =>
-    ({inhabitantId: person.inhabitantId, dinnerEventId, isGuestTicket: !!person.isGuestTicket, position, ticketType: person.ticketType})
+    ({inhabitantId: person.inhabitantId, dinnerEventId, isGuestTicket: !!person.isGuestTicket, position, ticketType: person.ticketType, priceAtBooking: person.priceAtBooking})
 const soldToWaitlist = (count: number, dinnerEventId = 1) =>
     Array.from({length: count}, (_, index) => ({
         dinnerEventId, ticketPriceId: 1, orderId: 80 + index, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false, buyerInhabitantId: 9, buyerHouseholdId: 2,
@@ -406,10 +410,10 @@ const saleOf = (seller: Person, dinnerEventId: number) =>
 
 // The toast and the "Sidste ændring" alerts: the preview compacted, a line per day
 describe('formatResultLines', () => {
-    const SKRAANINGEN = {inhabitantId: 5, inhabitantName: 'Skraaningen', ticketType: ADULT}
-    const MARIE = {inhabitantId: 6, inhabitantName: 'Marie', ticketType: ADULT}
-    const BO = {inhabitantId: 7, inhabitantName: 'Bo', ticketType: ADULT}
-    const CARL = {inhabitantId: 8, inhabitantName: 'Carl', ticketType: ADULT}
+    const SKRAANINGEN = adult(5, 'Skraaningen')
+    const MARIE = adult(6, 'Marie')
+    const BO = adult(7, 'Bo')
+    const CARL = adult(8, 'Carl')
     const HOUSEHOLD = [ANNA, LARS, KNUD, LENE, SKRAANINGEN, MARIE, BO, CARL].map(person => person.inhabitantId)
     const conflictsAt = (person: Person, action: BookingAction, dinnerEventId: number): BookingResult[] =>
         resultsAt(person, action, dinnerEventId).map(result => ({...result, reason: useBookingValidation().BookingFailureSchema.enum.CONFLICT}))
@@ -455,21 +459,21 @@ describe('formatResultLines', () => {
             text: () => `${dayOf(11)}  tilmeldt: Anna, Knud · frameldt: Lars`
         },
         {
-            // A booker's guests of one ticket type at one dinner are one name, counted as the guest row counts them
+            // A booker's guests of one ticket type and price at one dinner are one name, named by the ticket and counted
             desc: 'a booker\'s guests after the booker',
-            result: inResultDays({results: [...resultsOnDinner(11, guestsOfAnna(CHILD), Action.BOOK, Action.BOOK), ...resultsAt(ANNA, Action.BOOK, 11)]}),
-            text: () => `${dayOf(11)}  tilmeldt: Anna, Gæst af Anna (Barn ×2)`
+            result: inResultDays({results: [...resultsOnDinner(11, guestsOfAnna(CHILD_TICKET), Action.BOOK, Action.BOOK), ...resultsAt(ANNA, Action.BOOK, 11)]}),
+            text: () => `${dayOf(11)}  tilmeldt: Anna, Gæst af Anna (Barn · 17 kr ×2)`
         },
         {
             // A place on the waiting list follows its person's name
             desc: 'places on the waiting list',
             result: inResultDays({
-                results: [...resultsAt(ANNA, Action.QUEUE, 11, 12), ...resultsAt(guestsOfAnna(ADULT), Action.QUEUE, 12)],
-                positions: [placeOf(ANNA, 5, 12), placeOf(guestsOfAnna(ADULT), 6, 12), placeOf(ANNA, 3, 11)]
+                results: [...resultsAt(ANNA, Action.QUEUE, 11, 12), ...resultsAt(guestsOfAnna(ADULT_TICKET), Action.QUEUE, 12)],
+                positions: [placeOf(ANNA, 5, 12), placeOf(guestsOfAnna(ADULT_TICKET), 6, 12), placeOf(ANNA, 3, 11)]
             }),
             text: () => [
                 `${dayOf(11)}  på ventelisten: Anna (Voksen #3)`,
-                `${dayOf(12)}  på ventelisten: Anna (Voksen #5), Gæst af Anna (Voksen) (Voksen #6)`
+                `${dayOf(12)}  på ventelisten: Anna (Voksen #5), Gæst af Anna (Voksen · 40 kr) (Voksen #6)`
             ].join('\n')
         },
         {
@@ -547,25 +551,37 @@ describe('formatPreviewLines', () => {
             ]
         },
         {
-            // A booker's guests of one ticket type at one dinner are one group, named with the count as the guest row badges it
+            // A booker's guests of one ticket type and price at one dinner are one group, named by the ticket and counted
             desc: 'a booker\'s guests after the booker',
-            results: [...resultsOnDinner(1, guestsOfAnna(CHILD), Action.BOOK, Action.BOOK), ...resultsAt(ANNA, Action.BOOK, 1), ...resultsAt(guestsOfAnna(CHILD), Action.BOOK, 2)],
+            results: [...resultsOnDinner(1, guestsOfAnna(TASTING_TICKET), Action.BOOK, Action.BOOK), ...resultsAt(ANNA, Action.BOOK, 1), ...resultsAt(guestsOfAnna(TASTING_TICKET), Action.BOOK, 2)],
             days: [
-                {dinnerEventId: 1, lines: ['Anna tilmeldes', 'Gæst af Anna (Barn ×2) tilmeldes']},
-                {dinnerEventId: 2, lines: ['Gæst af Anna (Barn) tilmeldes']}
+                {dinnerEventId: 1, lines: ['Anna tilmeldes', 'Gæst af Anna (Baby · 0 kr ×2) tilmeldes']},
+                {dinnerEventId: 2, lines: ['Gæst af Anna (Baby · 0 kr) tilmeldes']}
             ]
         },
         {
-            // One group per ticket type, in the order the results name them
+            // One group per ticket type and price, in the order the results name them
             desc: 'a booker\'s guests of two ticket types at one dinner',
-            results: [...resultsOnDinner(1, guestsOfAnna(CHILD), Action.BOOK, Action.BOOK), ...resultsOnDinner(1, guestsOfAnna(ADULT), Action.BOOK)],
-            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Barn ×2) tilmeldes', 'Gæst af Anna (Voksen) tilmeldes']}]
+            results: [...resultsOnDinner(1, guestsOfAnna(CHILD_TICKET), Action.BOOK, Action.BOOK), ...resultsOnDinner(1, guestsOfAnna(ADULT_TICKET), Action.BOOK)],
+            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Barn · 17 kr ×2) tilmeldes', 'Gæst af Anna (Voksen · 40 kr) tilmeldes']}]
+        },
+        {
+            desc: 'a booker\'s guests of one ticket type at two prices at one dinner',
+            results: [...resultsOnDinner(1, guestsOfAnna(TASTING_TICKET), Action.BOOK), ...resultsOnDinner(1, guestsOfAnna(HUNGRY_TICKET), Action.BOOK)],
+            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Baby · 0 kr) tilmeldes', 'Gæst af Anna (Baby · 9 kr) tilmeldes']}]
+        },
+        {
+            // A baby who tastes books at any time; the hungry baby's place is the one of its type and price
+            desc: 'a booker\'s baby who tastes booked and hungry baby queued at one dinner',
+            results: [...resultsOnDinner(1, guestsOfAnna(TASTING_TICKET), Action.BOOK), ...resultsOnDinner(1, guestsOfAnna(HUNGRY_TICKET), Action.QUEUE)],
+            positions: [placeOf(guestsOfAnna(HUNGRY_TICKET), 2)],
+            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Baby · 0 kr) tilmeldes', 'Gæst af Anna (Baby · 9 kr) skrives på ventelisten (Baby #2)']}]
         },
         {
             // The save buys the one ticket for sale for the first guest and queues the rest: a group per action
             desc: 'a booker\'s guests of one ticket type split by what the save does for them',
-            results: resultsOnDinner(1, guestsOfAnna(ADULT), Action.BUY, Action.QUEUE, Action.QUEUE),
-            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Voksen) køber en billet til salg', 'Gæst af Anna (Voksen ×2) skrives på ventelisten']}]
+            results: resultsOnDinner(1, guestsOfAnna(ADULT_TICKET), Action.BUY, Action.QUEUE, Action.QUEUE),
+            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Voksen · 40 kr) køber en billet til salg', 'Gæst af Anna (Voksen · 40 kr ×2) skrives på ventelisten']}]
         },
         {
             desc: 'a ticket for sale bought',
@@ -575,11 +591,11 @@ describe('formatPreviewLines', () => {
         {
             // Each line carries its places on its dinner, ascending, as the toast names them
             desc: 'places on the waiting list',
-            results: [...resultsAt(ANNA, Action.QUEUE, 2, 3), ...resultsAt(guestsOfAnna(ADULT), Action.QUEUE, 3)],
-            positions: [placeOf(ANNA, 5, 3), placeOf(guestsOfAnna(ADULT), 6, 3), placeOf(ANNA, 3, 2)],
+            results: [...resultsAt(ANNA, Action.QUEUE, 2, 3), ...resultsAt(guestsOfAnna(ADULT_TICKET), Action.QUEUE, 3)],
+            positions: [placeOf(ANNA, 5, 3), placeOf(guestsOfAnna(ADULT_TICKET), 6, 3), placeOf(ANNA, 3, 2)],
             days: [
                 {dinnerEventId: 2, lines: ['Anna skrives på ventelisten (Voksen #3)']},
-                {dinnerEventId: 3, lines: ['Anna skrives på ventelisten (Voksen #5)', 'Gæst af Anna (Voksen) skrives på ventelisten (Voksen #6)']}
+                {dinnerEventId: 3, lines: ['Anna skrives på ventelisten (Voksen #5)', 'Gæst af Anna (Voksen · 40 kr) skrives på ventelisten (Voksen #6)']}
             ]
         },
         {
@@ -650,7 +666,7 @@ describe('formatPreviewLines', () => {
     })
 })
 
-// A booker's guest tickets of one type, as the guest row badges them and the preview and the toast name them
+// A booker's guest tickets of one type, as the preview and the toast name them
 describe('guestTicketsLabel', () => {
     it.each([
         {label: 'Barn', count: 1, text: 'Barn'},
@@ -661,13 +677,24 @@ describe('guestTicketsLabel', () => {
     })
 })
 
+// A ticket's badge, in the day view and in the grid: its type and its price, then its guests
+describe('ticketBadgeLabel', () => {
+    it.each([
+        {holder: 'a person', label: 'Voksen', price: 5500, guestCount: undefined, text: 'Voksen · 55 kr'},
+        {holder: 'one guest', label: 'Baby', price: 900, guestCount: 1, text: 'Baby · 9 kr · Gæst'},
+        {holder: 'two guests', label: 'Baby', price: 0, guestCount: 2, text: 'Baby · 0 kr · 2 Gæster'}
+    ])('$label at $price øre for $holder reads "$text"', ({label, price, guestCount, text}) => {
+        expect(ticketBadgeLabel(label, price, guestCount)).toBe(text)
+    })
+})
+
 // A dry run with no orders names what the scaffold will book in the people's own cells
 describe('expectedBookings', () => {
     const {DINEIN, TAKEAWAY, NONE} = DinnerModeSchema.enum
     it.each([
         {desc: 'an eating mode is the cell\'s expected booking', results: [OrderFactory.defaultBookingResult({...ANNA, dinnerEventId: 4, dinnerMode: TAKEAWAY})], expected: [[expectedBookingKey(ANNA.inhabitantId, 4), TAKEAWAY]]},
         {desc: 'Ingen expects no booking', results: [OrderFactory.defaultBookingResult({...ANNA, dinnerEventId: 4, dinnerMode: NONE, action: Action.CANCEL})], expected: []},
-        {desc: 'a guest ticket is no person\'s own cell', results: [OrderFactory.defaultBookingResult({...guestsOfAnna(ADULT), dinnerEventId: 4, dinnerMode: DINEIN})], expected: []},
+        {desc: 'a guest ticket is no person\'s own cell', results: [OrderFactory.defaultBookingResult({...guestsOfAnna(ADULT_TICKET), dinnerEventId: 4, dinnerMode: DINEIN})], expected: []},
         {desc: 'no reply yet expects nothing', results: null, expected: []}
     ])('$desc', ({results, expected}) => {
         expect([...expectedBookings(results === null ? null : run({results}))]).toEqual(expected)

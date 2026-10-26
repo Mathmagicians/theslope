@@ -42,9 +42,11 @@ Updated 2026-10-25. Release 0.9 shipped in f5b5205 (#168).
 | Test factory dates at call time | § Test factory dates at call time | – | specified |
 | AdminTeams loading row | § AdminTeams loading row | – | discovery |
 | Avatar ring colours | § Avatar ring colours | – | specified |
-| User saves and deserializers | § User saves and deserializers | – | approved 2026-10-26 |
-| The job boxes' latest run | § The job boxes' latest run | – | approved 2026-10-26 |
-| Zero-portion tickets get a place | § Zero-portion tickets get a place | – | approved 2026-10-26 |
+| User saves and deserializers | § User saves and deserializers | – | committed (f7a4b6f) |
+| The job boxes' latest run | § The job boxes' latest run | – | committed (17c3401) |
+| Zero-portion tickets get a place | § Zero-portion tickets get a place | – | committed (17c3401) |
+| Tables keep their columns on a phone | § Tables keep their columns on a phone | – | implemented |
+| The grid shows the day view's tickets | § The grid shows the day view's tickets | – | specified; guest groups by price implemented |
 
 ## Server payload of the shared stores
 
@@ -789,6 +791,73 @@ ADR-016 [Unified Booking Through Scaffold], below the decision matrix, gains on 
 `app/composables/useBooking.ts` (`decideOrderAction`, `resolveDesiredOrdersToBuckets`, `BookingContext`),
 `server/utils/scaffoldPrebookings.ts`, `BookingGridView.vue`, `GuestBookingForm.vue`, `DinnerBookingForm.vue`,
 `docs/adr.md` (ADR-016).
+
+## Tables keep their columns on a phone
+
+### Problem
+
+The job history on `/admin/system` and the user table on `/admin/users` showed part of their columns below md and the
+rest in an expanded row, where the other data tables keep every column and scroll sideways.
+
+### Solution
+
+Both tables show every column at every width and scroll sideways in their box (`COMPONENTS.table.ui`). The users'
+chevron opens the profile card at every width; on a phone the card keeps to the part of the box in view while the
+columns scroll, as the booking grid's guest form does. The job history has no expanded row.
+
+### TDD
+
+Component `AdminSystem.nuxt.spec.ts` and `AdminUsers.nuxt.spec.ts`: the headers per viewport and a row's cells by
+header (`tableHeaders`, `cellsByHeader`).
+
+### Affected
+
+`AdminSystem.vue`, `AdminUsers.vue`, `useTheSlopeDesignSystem.ts` (`adminSystem`), `tests/component/testHelpers.ts`.
+
+## The grid shows the day view's tickets
+
+### Problem
+
+The week grid badges a person "Voksen" and a guest group "Baby ×2", where the day view reads "Voksen · 55 kr" and
+"Baby · 0 kr · 2 Gæster". Guest tickets of one type at two prices (a baby who tastes, a hungry baby) group as one row
+at the first one's price, in both views.
+
+### Solution
+
+- A guest group is one booker, ticket type, price, dinner, allergies and provenance (`groupGuestOrders`).
+- Every grid badge reads the day view's ticket badge (`ticketBadgeLabel`): the type and the price, a guest's "Gæst" or
+  "2 Gæster", the household row's "Powermode!".
+- A person has one grid row per price their dinners in view hold. A booked dinner sits on the row of its booked price,
+  a dinner without a booking on the row of the price for the person's age today, the day view's price. On the other
+  row that dinner's cell is empty, and each row's name cell counts its own dinners. A cell books, releases or cancels
+  its own dinner; a dinner booked again gets today's price and moves to that row on the reload.
+- The preview and the toast name a booker's guests by type and price, as the rows group them: "Gæst af Anna (Baby ·
+  9 kr)", "Gæst af Anna (Baby · 0 kr ×2)". A run's results and its waiting-list places carry the ticket's price: a
+  booked order's frozen price, else its price row's.
+
+```
+Beboer                        | M 26/10  | T 27/10  | O 28/10  | T 29/10  |
+Alle    [Powermode!]          | Spisesal | Spisesal | blandet  | Spisesal |
+Anna    [Voksen · 50 kr]      | Spisesal | Spisesal |          |          |  booked before the price changed
+Anna    [Voksen · 55 kr]      |          |          | Takeaway | Spisesal |  today's price: her other dinners
+Gæst af Anna [Baby · 0 kr · Gæst] |      | Spisesal |          |          |
+Gæst af Anna [Baby · 9 kr · Gæst] |      | venteliste |        |          |
+```
+
+### TDD
+
+- `useBooking.nuxt.spec.ts`: `groupGuestOrders` at two prices.
+- `useBookingUi.nuxt.spec.ts`: `ticketBadgeLabel`.
+- `DinnerBookingForm.nuxt.spec.ts`, `BookingGridView.nuxt.spec.ts`: guest rows by price; the grid's badges read the
+  day view's; a person's rows by price.
+- `useBookingUi.nuxt.spec.ts`: the preview's and the toast's guest lines by type and price. Unit, the scaffold: a
+  result's and a place's price.
+
+### Affected
+
+`useBooking.ts`, `useBookingUi.ts`, `useBookingValidation.ts` (`BookingResultSchema`, `QueuePositionSchema`),
+`server/utils/scaffoldPrebookings.ts`, `bookingWords.ts`, `DinnerTicket.vue`, `BookingGridView.vue`,
+`DinnerBookingForm.vue`.
 
 ## Decisions carried from release 0.9
 

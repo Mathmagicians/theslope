@@ -1,7 +1,8 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {enableAutoUnmount} from '@vue/test-utils'
+import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
+import {shallowReactive} from 'vue'
 import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, registerScaffoldEndpoint, VIEWPORTS, lockedDinnerSupply, isTableLoading, untilTrue} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
@@ -16,6 +17,7 @@ import {DINNER_MODE_ORDER, EMPTY_RELEASED_TICKET_COUNTS, formatPlace} from '~/co
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import type {BookingAction, BookingResult, DesiredOrder, DinnerMode, OrderDisplay, TicketType} from '~/composables/useBookingValidation'
 import type {HouseholdDetail, UserDetail} from '~/composables/useCoreValidation'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -82,12 +84,13 @@ const previews = () => scaffold.sent.filter(({body}) => body.orders.length > 0)
 
 const mountForm = (props: Record<string, unknown>, isMd?: boolean) => mountWithTooltipProvider(DinnerBookingForm, {props, isMd})
 
-/** A member of the household on a dinner open or closed for changes; the dining mode stays editable */
-const mountMemberForm = (canModify: boolean, props: Record<string, unknown> = {}) => {
+/** The props of a member of the household on a dinner open or closed for changes; the dining mode stays editable */
+const memberFormProps = (canModify: boolean, props: Record<string, unknown> = {}): Record<string, unknown> => {
   session.user.value = member
   const deadlines = {...baseDeadlines, canModifyOrders: () => canModify, canEditDiningMode: () => true}
-  return mountForm({...baseProps, household: householdWithInhabitants, deadlines, ...props})
+  return {...baseProps, household: householdWithInhabitants, deadlines, ...props}
 }
+const mountMemberForm = (canModify: boolean, props: Record<string, unknown> = {}) => mountForm(memberFormProps(canModify, props))
 
 /** The mode selector of an expanded row, by the row's test id prefix (`inhabitant-<id>`, `power-power-mode`) */
 const rowSelector = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, row: string) =>
@@ -320,8 +323,8 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
   const [adultPrice, childPrice] = [priceOf(ADULT), priceOf(CHILD)]
   const [anna, bo] = householdWithInhabitants.inhabitants
   const dinnerEventId = baseProps.dinnerEvent.id
-  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY, ticketPriceId: adultPrice.id})
-  const guestQueued = WaitlistFactory.defaultEntry({id: 41, inhabitantId: bo!.id, dinnerEventId, isGuestTicket: true, position: 3, ticketPriceId: childPrice.id, dinnerMode: DinnerMode.DINEIN})
+  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY, ticketPrice: adultPrice})
+  const guestQueued = WaitlistFactory.defaultEntry({id: 41, inhabitantId: bo!.id, dinnerEventId, isGuestTicket: true, position: 3, ticketPrice: childPrice, dinnerMode: DinnerMode.DINEIN})
 
   const mountClosed = (props: {orders?: OrderDisplay[], waitlistEntries?: ReturnType<typeof WaitlistFactory.defaultEntry>[]} = {}) =>
     mountMemberForm(false, props)
@@ -378,6 +381,63 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
   })
 })
 
+// A guest row is one booker's guests at one price: a baby who tastes for free and a hungry baby are two rows, placed or
+// queued
+describe('DinnerBookingForm guest rows by price on a closed dinner', () => {
+  const {TicketTypeSchema} = useBookingValidation()
+  // The factory lists the baby who tastes first, the hungry baby second
+  const babyPrices = baseProps.ticketPrices.filter(price => price.ticketType === TicketTypeSchema.enum.BABY)
+  const [tasting, hungry] = [babyPrices[0]!, babyPrices[1]!]
+  const booker = householdWithInhabitants.inhabitants[0]!
+  const dinnerEventId = baseProps.dinnerEvent.id
+  const guestBaby = (id: number, price: TicketPrice) => OrderFactory.defaultOrder('guest-baby', {
+    id, inhabitantId: booker.id, dinnerEventId, ticketPriceId: price.id, ticketType: price.ticketType, priceAtBooking: price.price, isGuestTicket: true
+  })
+  const queuedHungryBaby = WaitlistFactory.defaultEntry({id: 51, inhabitantId: booker.id, dinnerEventId, isGuestTicket: true, ticketPrice: hungry})
+  const placed = (price: TicketPrice, guestCount: number) => ({price: price.price, guestCount, ticketState: TicketState.normal})
+  const queued = {price: hungry.price, guestCount: 1, ticketState: TicketState.queued}
+
+  // The ticket of each guest row as it renders, one per row: a row renders its ticket inline on a phone and in its column from md
+  const guestTickets = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>) => wrapper.findAll('tbody tr').flatMap(row => {
+    const ticket = row.findAllComponents(DinnerTicket).find(candidate => candidate.props('guestCount') !== undefined)
+    return ticket ? [{price: ticket.props('price'), guestCount: ticket.props('guestCount'), ticketState: ticket.props('ticketState')}] : []
+  })
+
+  it.each([
+    {guests: 'a baby who tastes placed and a hungry baby queued', orders: [guestBaby(101, tasting)], entries: [queuedHungryBaby], rows: [placed(tasting, 1), queued]},
+    {guests: 'a baby who tastes and a hungry baby placed', orders: [guestBaby(101, tasting), guestBaby(102, hungry)], entries: [], rows: [placed(tasting, 1), placed(hungry, 1)]},
+    {guests: 'two babies who taste placed and a hungry baby queued', orders: [guestBaby(101, tasting), guestBaby(103, tasting)], entries: [queuedHungryBaby], rows: [placed(tasting, 2), queued]}
+  ])('GIVEN one booker\'s guests: $guests THEN each price is its own guest row', async ({orders, entries, rows}) => {
+    const wrapper = await mountMemberForm(false, {orders, waitlistEntries: entries})
+
+    expect(guestTickets(wrapper)).toEqual(rows)
+  })
+
+  // The toggles of the open rows: an open row's toggle points down
+  const openToggles = (wrapper: Awaited<ReturnType<typeof mountForm>>) => wrapper.findAllComponents({name: 'UButton'})
+    .filter(button => button.props('icon') === ICONS.chevronDown)
+    .map(button => button.attributes('data-testid'))
+
+  // The form shows the placed baby; the save's re-read then hands it the same order anew and the queued hungry baby,
+  // a row above the add-guest row. The open row follows its row by id, not by position
+  it.each([
+    {opened: 'no row open', open: async () => {}, openRows: [], guestForm: false},
+    {opened: 'the add-guest row open', open: (wrapper: Awaited<ReturnType<typeof mountForm>>) => clickByTestId(wrapper, 'guest-add-guest-toggle'),
+      openRows: ['guest-add-guest-toggle'], guestForm: true}
+  ])('GIVEN a baby who tastes placed, with $opened, WHEN the re-read adds a queued hungry baby THEN both guest rows show, and the open row stays open', async ({open, openRows, guestForm}) => {
+    const props = shallowReactive(memberFormProps(false, {orders: [guestBaby(101, tasting)], waitlistEntries: []}))
+    const wrapper = await mountForm(props)
+    await open(wrapper)
+
+    Object.assign(props, {orders: [guestBaby(101, tasting)], waitlistEntries: [queuedHungryBaby]})
+    await flushPromises()
+
+    expect(guestTickets(wrapper)).toEqual([placed(tasting, 1), queued])
+    expect(openToggles(wrapper)).toEqual(openRows)
+    expect(wrapper.findComponent(GuestBookingForm).exists()).toBe(guestForm)
+  })
+})
+
 // Hele familien reaches every row on a closed dinner: Anna's ticket, Bo's place and the place of Bo's queued guest
 describe('DinnerBookingForm power mode on a closed dinner where the household waits', () => {
   const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
@@ -388,9 +448,9 @@ describe('DinnerBookingForm power mode on a closed dinner where the household wa
   const annaTicket = OrderFactory.defaultOrder('power', {
     id: 201, inhabitantId: anna!.id, dinnerEventId, ticketPriceId: adultPrice!.id, ticketType: adultPrice!.ticketType, priceAtBooking: adultPrice!.price, dinnerMode: DinnerMode.TAKEAWAY
   })
-  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY, ticketPriceId: adultPrice!.id})
+  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY, ticketPrice: adultPrice!})
   const guestQueued = (dinnerMode: DinnerMode) => {
-    const entry = WaitlistFactory.defaultEntry({id: 41, inhabitantId: bo!.id, dinnerEventId, isGuestTicket: true, position: 1, ticketPriceId: childPrice!.id, dinnerMode})
+    const entry = WaitlistFactory.defaultEntry({id: 41, inhabitantId: bo!.id, dinnerEventId, isGuestTicket: true, position: 1, ticketPrice: childPrice!, dinnerMode})
     return {...entry, order: {...entry.order, allergyTypeIds: [7]}}
   }
   const mountWaiting = (guestWish: DinnerMode) => mountMemberForm(false, {orders: [annaTicket], waitlistEntries: [boQueued, guestQueued(guestWish)]})

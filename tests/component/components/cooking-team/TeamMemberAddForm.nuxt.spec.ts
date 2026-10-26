@@ -1,9 +1,9 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import TeamMemberAddForm from '~/components/cooking-team/TeamMemberAddForm.vue'
-import {nextTick, type ComponentPublicInstance} from 'vue'
+import {nextTick} from 'vue'
 import {enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, resetStores, iconNamesIn} from '~~/tests/component/testHelpers'
 import {ROLE_ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
@@ -22,14 +22,8 @@ describe('TeamMemberAddForm', () => {
     const mount = (props: Record<string, unknown> = {}) =>
         mountWithTooltipProvider(TeamMemberAddForm, {props, isMd: true})
 
-    type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
     // The glyphs on the role select's trigger
-    const triggerGlyphs = (wrapper: VueWrapper) => {
-        const select = findByTestId(wrapper, 'team-member-role-select')
-        return (wrapper.findAllComponents({name: 'UIcon'}) as IconWrapper[])
-            .filter(icon => select.element.contains(icon.element))
-            .map(icon => icon.props('name'))
-    }
+    const triggerGlyphs = (wrapper: VueWrapper) => iconNamesIn(findByTestId(wrapper, 'team-member-role-select'))
 
     // ========== RENDERING ==========
 

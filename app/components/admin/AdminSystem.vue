@@ -26,19 +26,13 @@ Admins can manually re-trigger jobs if they failed.
 UX MOCKUP: Job history on a phone
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-┌───────────────────────────────────────────────┐
-│ (clock icon) Jobhistorik                      │
-├─────────────────┬─────────┬─────────┬─────────┤
-│                 │ Dato    │ Job     │ Status  │
-│ (expand icon)   │ …       │ …       │ [badge] │
-│ (collapse icon) │ …       │ …       │ [badge] │
-│ ┌───────────────────────────────────────────┐ │
-│ │ Varighed · Kilde                          │ │
-│ │ Resultat                                  │ │
-│ └───────────────────────────────────────────┘ │
-└───────────────────────────────────────────────┘
-
-From md: Dato, Job, Status, Varighed, Kilde, Resultat; no chevron.
+┌─────────────────────────────────┐
+│ (clock icon) Jobhistorik        │
+├──────────────────┬──────────┬───┼ - - - - - - - - - - - - - - - - -
+│ Dato             │ Job      │ St│atus      Varighed  Kilde  Resultat
+│ 26/10/2026 18:43 │ Daglig … │ [b│adge]     7.0s      ADMIN  Middage …
+└─────────────────────────────────┘
+The table keeps its six columns and scrolls sideways inside its card.
 
 UX MOCKUP: Job boxes
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -69,7 +63,7 @@ const props = withDefaults(defineProps<Props>(), {
   canEdit: false
 })
 
-const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, ALERTS, BUTTONS, COMPONENTS, columnVisibility, getRandomEmptyMessageText, getRainbowBand, NOISE, breakpoint } = useTheSlopeDesignSystem()
+const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, ALERTS, COMPONENTS, getRandomEmptyMessageText, getRainbowBand, NOISE } = useTheSlopeDesignSystem()
 
 const {
     jobTypeLabels,
@@ -146,20 +140,11 @@ const jobHistoryEmpty = getRandomEmptyMessageText('jobHistory')
 // JOB HISTORY TABLE
 // ============================================================================
 
-// On a phone the chevron opens these in the expanded row; from md every column shows and the chevron hides
-const HIDDEN_ON_PHONE = ['durationMs', 'triggeredBy', 'resultSummary'] as const
-const HIDDEN_FROM_MD = ['expand'] as const
-
-const { expanded } = useExpandableRow()
-// A row opened on a phone has no chevron to close it from md (a phone turned to landscape)
-watch(breakpoint.isMd, () => { expanded.value = {} })
-
 const jobHistoryColumns = [
-  { id: 'expand' },
   { accessorKey: 'startedAt', header: 'Dato' },
   { accessorKey: 'jobType', header: 'Job' },
   { accessorKey: 'status', header: 'Status' },
-  { accessorKey: 'durationMs', header: 'Varighed' },
+  { accessorKey: 'duration', header: 'Varighed' },
   { accessorKey: 'triggeredBy', header: 'Kilde' },
   { accessorKey: 'resultSummary', header: 'Resultat' }
 ]
@@ -173,7 +158,7 @@ const jobHistoryRows = computed(() => {
     statusColor: getJobStatusColor(jr.status),
     statusIcon: getJobStatusIcon(jr.status),
     statusLabel: jobStatusLabels[jr.status],
-    durationMs: formatDuration(jr.durationMs),
+    duration: formatDuration(jr.durationMs),
     triggeredBy: formatTriggeredBy(jr.triggeredBy),
     resultSummary: formatResultSummary(jr.jobType, jr.resultSummary)
   }))
@@ -377,26 +362,13 @@ const jobDefinitions = computed(() => [
       </template>
 
       <UTable
-        v-model:expanded="expanded"
         :data="jobHistoryRows"
         :columns="jobHistoryColumns"
         :loading="isJobHistoryLoading"
         caption="Seneste jobkørsler"
         :class="COMPONENTS.adminSystem.historyTable"
         :ui="COMPONENTS.table.ui"
-        :column-visibility="columnVisibility(HIDDEN_ON_PHONE, HIDDEN_FROM_MD)"
       >
-        <template #expand-cell="{ row }">
-          <UButton
-            v-bind="BUTTONS.edit"
-            :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
-            :aria-label="row.getIsExpanded() ? 'Luk' : 'Vis detaljer'"
-            :aria-expanded="row.getIsExpanded()"
-            :data-testid="`job-history-expand-${row.original.id}`"
-            @click="row.toggleExpanded()"
-          />
-        </template>
-
         <template #status-cell="{ row }">
           <UBadge :color="row.original.statusColor" :variant="NOISE.subtle" :class="COMPONENTS.adminSystem.statusBadge">
             <UIcon :name="row.original.statusIcon" :class="COMPONENTS.adminSystem.statusIcon" />
@@ -412,17 +384,6 @@ const jobDefinitions = computed(() => [
         </template>
 
         <template #empty>{{ jobHistoryEmpty }}</template>
-
-        <!-- Phone: the columns hidden on a phone -->
-        <template #expanded="{ row }">
-          <div :class="COMPONENTS.adminSystem.details" data-testid="job-history-details">
-            <p>
-              <span :class="COMPONENTS.adminSystem.detailLabel">Varighed</span> {{ row.original.durationMs }} ·
-              <span :class="COMPONENTS.adminSystem.detailLabel">Kilde</span> {{ row.original.triggeredBy }}
-            </p>
-            <p>{{ row.original.resultSummary }}</p>
-          </div>
-        </template>
       </UTable>
     </UCard>
 

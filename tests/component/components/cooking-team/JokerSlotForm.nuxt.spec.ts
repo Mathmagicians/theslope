@@ -2,7 +2,7 @@
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {nextTick, type ComponentPublicInstance} from 'vue'
 import {enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, iconNamesIn} from '~~/tests/component/testHelpers'
 import {JOKER_SLOT_IDS, toggleEveryWeekday, submitJokerSlotForm} from '~~/tests/component/components/cooking-team/jokerSlotForm'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import JokerSlotForm from '~/components/cooking-team/JokerSlotForm.vue'
@@ -14,7 +14,6 @@ import {createDefaultWeekdayMap, WEEKDAYS} from '~/types/dateTypes'
 const {TeamRoleSchema} = useCookingTeamValidation()
 const Role = TeamRoleSchema.enum
 
-type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
 type FieldWrapper = VueWrapper<ComponentPublicInstance<{name?: string}>>
 
 const roleGlyphs: string[] = Object.values(ROLE_ICONS)
@@ -36,13 +35,8 @@ const mountForm = () => mountWithTooltipProvider(JokerSlotForm, {
 })
 
 // The role glyphs on the trigger; the trigger also carries its chevron
-const roleTriggerGlyphs = (wrapper: VueWrapper) => {
-    const select = findByTestId(wrapper, JOKER_SLOT_IDS.roleSelect)
-    return (wrapper.findAllComponents({name: 'UIcon'}) as IconWrapper[])
-        .filter(icon => select.element.contains(icon.element))
-        .map(icon => icon.props('name'))
-        .filter(name => roleGlyphs.includes(name))
-}
+const roleTriggerGlyphs = (wrapper: VueWrapper) =>
+    iconNamesIn(findByTestId(wrapper, JOKER_SLOT_IDS.roleSelect)).filter(name => roleGlyphs.includes(name))
 
 const fieldNamed = (wrapper: VueWrapper, name: string) =>
     (wrapper.findAllComponents({name: 'UFormField'}) as FieldWrapper[]).find(field => field.props('name') === name)

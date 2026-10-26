@@ -26,7 +26,7 @@ const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema, BookingActionSchem
 const {DINEIN, DINEINLATE, TAKEAWAY, NONE} = DinnerModeSchema.enum
 const {BOOKED, RELEASED} = OrderStateSchema.enum
 const {CANCELLED} = DinnerStateSchema.enum
-const {ADULT} = TicketTypeSchema.enum
+const {ADULT, BABY} = TicketTypeSchema.enum
 const Action = BookingActionSchema.enum
 
 enableAutoUnmount(afterEach)
@@ -77,6 +77,9 @@ type Mounted = Awaited<ReturnType<typeof mount>>
 const weekAround = (first: DinnerEventDisplay, last: DinnerEventDisplay = first) => ({start: addDays(first.date, -3), end: addDays(last.date, 3)})
 const mountGrid = (dinnerEvents: DinnerEventDisplay[], props: Record<string, unknown> = {}) =>
   mount({view: week, dateRange: weekAround(dinnerEvents[0]!, dinnerEvents.at(-1)), dinnerEvents, ...props})
+// The ids of the rows the grid hands its table
+const rowIdsOf = (wrapper: Mounted) =>
+  (wrapper.findComponent({name: 'UTable'}).props('data') as {id: string | number}[]).map(row => row.id)
 
 // A grid cell's selector by its name: cell-<inhabitant>-<dinner>, power-<dinner>, guest-<row>-<dinner>
 const selectorNamed = (wrapper: Mounted, name: string) =>
@@ -340,9 +343,6 @@ describe('BookingGridView', () => {
       outside: OrderFactory.defaultOrder(undefined, {id: 72, inhabitantId: anna.id, dinnerEventId: outside.id, isGuestTicket: true})
     }
     const groupRowId = (order: OrderDisplay) => `guest-group-${Object.keys(useBooking().groupGuestOrders([order]))[0]}`
-    // The ids of the rows the grid hands its table
-    const rowIdsOf = (wrapper: Mounted) =>
-      (wrapper.findComponent({name: 'UTable'}).props('data') as {id: string | number}[]).map(row => row.id)
 
     it.each([
       {kind: 'queued guest', props: {waitlistEntries: [entries.inWeek, entries.outside]}, rowIds: () => ({kept: `guest-entry-${entries.inWeek.id}`, dropped: `guest-entry-${entries.outside.id}`})},
@@ -354,6 +354,18 @@ describe('BookingGridView', () => {
       expect(rowIdsOf(wrapper)).toContain(kept)
       expect(rowIdsOf(wrapper)).not.toContain(dropped)
     })
+  })
+
+  // A guest row is one booker's guests at one price: a baby who tastes for free and a hungry baby are two rows
+  it('GIVEN Anna\'s guest baby who tastes and guest hungry baby on one dinner THEN the grid has a guest row for each', async () => {
+    const dinner = DinnerEventFactory.dinnerEventAt(1, 1)
+    // The factory lists the baby who tastes first, the hungry baby second
+    const guestBabies = ticketPrices.filter(price => price.ticketType === BABY).map((price, index) => OrderFactory.defaultOrder(undefined, {
+      id: 71 + index, inhabitantId: anna.id, dinnerEventId: dinner.id, ticketPriceId: price.id, ticketType: price.ticketType, priceAtBooking: price.price, isGuestTicket: true
+    }))
+    const wrapper = await mountGrid([dinner], {orders: guestBabies})
+
+    expect(rowIdsOf(wrapper).filter(id => String(id).startsWith('guest-group-'))).toHaveLength(guestBabies.length)
   })
 
   // The power cell reaches every place the household holds on the dinner: Lars's own and Anna's queued guest's
@@ -408,7 +420,7 @@ describe('BookingGridView', () => {
     const cancelled = {...DinnerEventFactory.dinnerEventAt(1, 1), state: CANCELLED}
     const annaTicket = OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: anna.id, dinnerEventId: cancelled.id, dinnerMode: DINEIN})
     const wrapper = await mountGrid([cancelled], {orders: [annaTicket], formMode: FORM_MODES.EDIT})
-    const inHeader = (name: string) => wrapper.findAllComponents({name}).filter(component => wrapper.find('thead').element.contains(component.element))
+    const inHeader = (name: string) => wrapper.find('thead').findAllComponents({name})
 
     const {label, color, icon} = DINNER_STATE_BADGES.CANCELLED
     const badge = inHeader('UBadge').find(candidate => candidate.props('color') === color && candidate.props('icon') === icon)
@@ -439,6 +451,122 @@ describe('BookingGridView', () => {
 
       expect(headerChip(wrapper).exists() ? headerChip(wrapper).text() : null).toBe(chip)
     })
+  })
+})
+
+type TablePart = ReturnType<Mounted['find']>
+// The first component of a name inside a part of the table: a row, a cell
+const componentIn = (name: string, part: TablePart) => part.findAllComponents({name})[0]
+// The ticket badge of a body row: the first badge in its name cell, ahead of the cell's counts
+const ticketBadgeIn = (row: TablePart) => componentIn('UBadge', row.find('td'))?.text()
+// A person's body rows: the name cell holds the person. A guest row names its booker there too, so a case that reads a
+// person's rows holds no guest
+const personRowsIn = (wrapper: Mounted, inhabitantId: number) => wrapper.findAll('tbody tr')
+  .filter(row => (componentIn('UserListItem', row.find('td'))?.props('inhabitants') as Inhabitant | undefined)?.id === inhabitantId)
+
+// A row's badge reads as the day view's ticket badge: the type and the price, then the guests; power mode names itself.
+// A person with no order in view carries the price their age gives
+describe('BookingGridView ticket badges in the name cells', () => {
+  type TicketPrice = (typeof ticketPrices)[number]
+  type RowId = string | number
+  const dinner = DinnerEventFactory.dinnerEventAt(1, 1)
+  // The factory lists the baby who tastes first, the hungry baby second
+  const [tasting, hungry] = ticketPrices.filter(price => price.ticketType === BABY) as [TicketPrice, TicketPrice]
+  const adultPrice = ticketPrices.find(price => price.ticketType === ADULT)!
+
+  const babyLars = {...lars, birthDate: addDays(new Date(), -180)}
+  const annasGuest = (id: number, price: TicketPrice) =>
+    OrderFactory.defaultOrder(undefined, {id, inhabitantId: anna.id, dinnerEventId: dinner.id, ticketPriceId: price.id, ticketType: price.ticketType, priceAtBooking: price.price, isGuestTicket: true})
+  const queuedHungryBaby = WaitlistFactory.defaultEntry({id: 51, inhabitantId: anna.id, dinnerEventId: dinner.id, isGuestTicket: true, ticketPrice: hungry})
+
+  const rowWhere = (isRow: (id: RowId) => boolean) => (wrapper: Mounted) => wrapper.findAll('tbody tr')[rowIdsOf(wrapper).findIndex(isRow)]
+  const rowWithId = (rowId: RowId) => rowWhere(id => id === rowId)
+  const personRow = (inhabitantId: number) => (wrapper: Mounted) => personRowsIn(wrapper, inhabitantId)[0]
+  // A placed group's id carries its group key; each case places one group
+  const guestGroupRow = rowWhere(id => String(id).startsWith('guest-group-'))
+
+  it.each([
+    {row: 'the power row', props: {}, rowOf: rowWithId('power-mode'), text: 'Powermode!'},
+    {row: 'an adult with no order in view', props: {}, rowOf: personRow(anna.id), text: 'Voksen · 40 kr'},
+    {row: 'a baby who tastes with no order in view', props: {household: {...household, inhabitants: [anna, babyLars]}}, rowOf: personRow(lars.id), text: 'Baby · 0 kr'},
+    {row: 'a placed guest', props: {orders: [annasGuest(71, tasting)]}, rowOf: guestGroupRow, text: 'Baby · 0 kr · Gæst'},
+    {row: 'a placed group of two guests', props: {orders: [annasGuest(71, adultPrice), annasGuest(72, adultPrice)]}, rowOf: guestGroupRow, text: 'Voksen · 40 kr · 2 Gæster'},
+    {row: 'a queued guest', props: {waitlistEntries: [queuedHungryBaby]}, rowOf: rowWithId(`guest-entry-${queuedHungryBaby.id}`), text: 'Baby · 9 kr · Gæst'}
+  ])('GIVEN $row THEN its badge reads "$text"', async ({props, rowOf, text}) => {
+    const wrapper = await mountGrid([dinner], props)
+
+    expect(ticketBadgeIn(rowOf(wrapper)!)).toBe(text)
+  })
+})
+
+// A person has a row per price their dinners in view hold: a booked dinner sits on the row of its booked price, a dinner
+// without an order on the row of the price for the person's age today; the other row leaves that dinner's cell empty
+describe('BookingGridView a person\'s rows by price', () => {
+  const PRICE_BEFORE_THE_RISE = 5000
+  const pricesToday = TicketFactory.defaultTicketPrices({adultPrice: 5500})
+  const adultToday = pricesToday.find(price => price.ticketType === ADULT)!
+  // Five dinners ahead of every deadline, one a day: the columns in their order
+  const dinners = [1, 2, 3, 4, 5].map(day => DinnerEventFactory.dinnerEventAt(day, 60 + day))
+  const [first, second, third, fourth, fifth] = dinners as [DinnerEventDisplay, DinnerEventDisplay, DinnerEventDisplay, DinnerEventDisplay, DinnerEventDisplay]
+  const annaBooked = (id: number, dinner: DinnerEventDisplay, priceAtBooking: number, state: OrderState = BOOKED) =>
+    OrderFactory.defaultOrder(undefined, {id, inhabitantId: anna.id, dinnerEventId: dinner.id, ticketPriceId: adultToday.id, ticketType: ADULT, priceAtBooking, dinnerMode: DINEIN, state})
+  // Anna booked the first and the third dinner before the adult price rose; she holds nothing on the other three
+  const bookedBeforeTheRise = [annaBooked(81, first, PRICE_BEFORE_THE_RISE), annaBooked(82, third, PRICE_BEFORE_THE_RISE)]
+  const mountPrices = (props: Record<string, unknown>) => mountGrid(dinners, {ticketPrices: pricesToday, ...props})
+
+  const countIn = (row: TablePart, kind: string) => {
+    const badge = findByTestId(row, `inhabitant-${kind}-count-${anna.id}`)
+    return badge.exists() ? badge.text() : null
+  }
+  // The cell of a dinner on a row: the cells after the name cell follow the dinners
+  const cellIn = (row: TablePart, dinner: DinnerEventDisplay) => row.findAll('td')[dinners.indexOf(dinner) + 1]!
+  // Anna's rows in the order of their badges, which the rules leave open: the badge, the dinners whose cell holds a mode
+  // selector, the name cell's counts
+  const annasRows = (wrapper: Mounted) => personRowsIn(wrapper, anna.id)
+    .map(row => ({
+      badge: ticketBadgeIn(row),
+      dinners: dinners.filter(dinner => componentIn('DinnerModeSelector', cellIn(row, dinner))).map(({id}) => id),
+      tickets: countIn(row, 'ticket'),
+      released: countIn(row, 'released')
+    }))
+    .sort((a, b) => String(a.badge).localeCompare(String(b.badge)))
+  const annasRowAt = (wrapper: Mounted, badge: string) => personRowsIn(wrapper, anna.id).find(row => ticketBadgeIn(row) === badge)
+
+  it('GIVEN Anna booked two dinners before the price rose and holds nothing on three THEN she has a row at each price, each with the cells of its own dinners', async () => {
+    const wrapper = await mountPrices({orders: bookedBeforeTheRise})
+
+    expect(annasRows(wrapper)).toEqual([
+      expect.objectContaining({badge: 'Voksen · 50 kr', dinners: [first.id, third.id]}),
+      expect.objectContaining({badge: 'Voksen · 55 kr', dinners: [second.id, fourth.id, fifth.id]})
+    ])
+  })
+
+  it('GIVEN Anna booked at today\'s price on every dinner THEN she keeps one row with every dinner\'s cell', async () => {
+    const wrapper = await mountPrices({orders: dinners.map((dinner, index) => annaBooked(81 + index, dinner, adultToday.price))})
+
+    expect(annasRows(wrapper)).toEqual([expect.objectContaining({badge: 'Voksen · 55 kr', dinners: dinners.map(({id}) => id)})])
+  })
+
+  it('GIVEN Anna\'s tickets at both prices, one of the old price released, THEN each row\'s name cell counts its own dinners', async () => {
+    const orders = [annaBooked(81, first, PRICE_BEFORE_THE_RISE), annaBooked(82, third, PRICE_BEFORE_THE_RISE, RELEASED), annaBooked(83, fourth, adultToday.price)]
+    const wrapper = await mountPrices({orders})
+
+    expect(annasRows(wrapper)).toEqual([
+      expect.objectContaining({badge: 'Voksen · 50 kr', tickets: '2', released: '1'}),
+      expect.objectContaining({badge: 'Voksen · 55 kr', tickets: '1', released: null})
+    ])
+  })
+
+  it('WHEN the cell of a dinner on the old price\'s row changes THEN the draft changes that dinner\'s booking, by its order', async () => {
+    const wrapper = await mountPrices({orders: bookedBeforeTheRise, formMode: FORM_MODES.EDIT})
+    const selector = componentIn('DinnerModeSelector', cellIn(annasRowAt(wrapper, 'Voksen · 50 kr')!, first))!
+
+    await clickByTestId(wrapper, selector.props('name'))
+    await untilTrue(() => scaffold.sent.some(({body}) => body.orders.length > 0))
+
+    expect(scaffold.sent.find(({body}) => body.orders.length > 0)!.body.orders).toEqual([
+      expect.objectContaining({inhabitantId: anna.id, dinnerEventId: first.id, orderId: bookedBeforeTheRise[0]!.id})
+    ])
   })
 })
 
@@ -499,6 +627,19 @@ describe('BookingGridView add-guest button', () => {
 
     expect(wrapper.emitted('addGuest')).toEqual([[guests]])
     expect(wrapper.findComponent(GuestBookingForm).exists()).toBe(false)
+  })
+
+  // The open row follows the add-guest row by its id: a guest row the orders bring in above it leaves the form open
+  it('GIVEN the guest form open on a dinner WHEN the orders bring in a guest row above the add-guest row THEN the form stays open on that dinner', async () => {
+    const props = shallowReactive<Record<string, unknown>>({...baseProps, ...editProps})
+    const wrapper = await mountWithTooltipProvider(BookingGridView, {props})
+    await clickByTestId(wrapper, `guest-add-${future.id}`)
+
+    props.orders = [OrderFactory.defaultOrder(undefined, {id: 91, inhabitantId: anna.id, dinnerEventId: future.id, isGuestTicket: true})]
+    await nextTick()
+
+    const form = wrapper.findComponent(GuestBookingForm)
+    expect(form.exists() ? form.props('dinnerEvent') : undefined).toEqual(future)
   })
 
   describe('with the guest form open on one of two dinners', () => {

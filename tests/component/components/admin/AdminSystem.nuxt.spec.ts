@@ -1,11 +1,11 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeAll, beforeEach, afterEach} from 'vitest'
 import {mockNuxtImport, registerEndpoint} from '@nuxt/test-utils/runtime'
-import {DOMWrapper, enableAutoUnmount, flushPromises} from '@vue/test-utils'
-import {nextTick, ref, shallowReactive, type Ref} from 'vue'
+import {DOMWrapper, enableAutoUnmount} from '@vue/test-utils'
+import {shallowReactive} from 'vue'
 import {createError, getQuery, type H3Event} from 'h3'
 import {addDays} from 'date-fns'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, untilTrue, findLoadingRow, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, resetStores, registerEmptyStoreEndpoints, untilTrue, findLoadingRow, tableHeaders, cellsByHeader, VIEWPORTS} from '~~/tests/component/testHelpers'
 import AdminSystem from '~/components/admin/AdminSystem.vue'
 import {formatDate} from '~/utils/date'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -88,59 +88,29 @@ beforeEach(() => {
 // A read still held answers, so no handler outlives its test
 afterEach(() => heldReads.clear())
 
-const PHONE_HEADERS = ['Dato', 'Job', 'Status']
-const ALL_HEADERS = [...PHONE_HEADERS, 'Varighed', 'Kilde', 'Resultat']
-const EXPAND = `job-history-expand-${jobRun.id}`
-const DETAILS = 'job-history-details'
+const HEADERS = ['Dato', 'Job', 'Status', 'Varighed', 'Kilde', 'Resultat']
 // The mask a box and the history show a run's start in
 const RUN_START_MASK = 'dd/MM/yyyy HH:mm'
 const NO_RUNS = 'Ingen kørsler endnu'
 
-const mountSystem = (isMd: boolean | Ref<boolean>) => mountWithTooltipProvider(AdminSystem, {props: {canEdit: true}, isMd})
+const mountSystem = (isMd: boolean) => mountWithTooltipProvider(AdminSystem, {props: {canEdit: true}, isMd})
 type SystemWrapper = Awaited<ReturnType<typeof mountSystem>>
 
 const hasJobRow = (wrapper: SystemWrapper) => wrapper.find('tbody').text().includes(maintenance.jobTypeLabels[JobType.MONTHLY_BILLING])
 
-const headers = (wrapper: SystemWrapper) =>
-    wrapper.find('table').findAll('th').map(th => th.text()).filter(Boolean)
-
+// Every viewport shows all six columns, each run's values under them; on a phone the table scrolls sideways in its card
 describe('AdminSystem job history', () => {
-    const mountWithHistory = async (isMd: boolean | Ref<boolean>) => {
+    it.each(VIEWPORTS)('$viewport: the columns read Dato to Resultat, the row holds the run\'s duration, source and result under theirs, and no row expands', async ({isMd}) => {
         const wrapper = await mountSystem(isMd)
         await vi.waitFor(() => expect(hasJobRow(wrapper)).toBe(true))
-        return wrapper
-    }
 
-    it.each(VIEWPORTS.map(({viewport, isMd}) => ({viewport, isMd, columns: isMd ? ALL_HEADERS : PHONE_HEADERS, hasChevron: !isMd})))(
-        '$viewport: shows the columns $columns, expand chevron $hasChevron', async ({isMd, columns, hasChevron}) => {
-            const wrapper = await mountWithHistory(isMd)
-            expect(headers(wrapper)).toEqual(columns)
-            expect(findByTestId(wrapper, EXPAND).exists()).toBe(hasChevron)
+        expect(tableHeaders(wrapper)).toEqual(HEADERS)
+        expect(cellsByHeader(wrapper)).toMatchObject({
+            Varighed: maintenance.formatDuration(jobRun.durationMs),
+            Kilde: maintenance.formatTriggeredBy(jobRun.triggeredBy),
+            Resultat: maintenance.formatResultSummary(jobRun.jobType, jobRun.resultSummary)
         })
-
-    it('phone: the chevron opens Varighed, Kilde and Resultat in the expanded row', async () => {
-        const wrapper = await mountWithHistory(false)
-        expect(findByTestId(wrapper, DETAILS).exists()).toBe(false)
-
-        await clickByTestId(wrapper, EXPAND)
-
-        const details = findByTestId(wrapper, DETAILS).text()
-        expect(details).toContain(maintenance.formatDuration(jobRun.durationMs))
-        expect(details).toContain(maintenance.formatTriggeredBy(jobRun.triggeredBy))
-        expect(details).toContain(maintenance.formatResultSummary(jobRun.jobType, jobRun.resultSummary))
-    })
-
-    it('phone turned to md: the open row closes, since md has no chevron to close it', async () => {
-        const isMd = ref(false)
-        const wrapper = await mountWithHistory(isMd)
-        await clickByTestId(wrapper, EXPAND)
-        expect(findByTestId(wrapper, DETAILS).exists()).toBe(true)
-
-        isMd.value = true
-        await flushPromises()
-        await nextTick()
-
-        expect(findByTestId(wrapper, DETAILS).exists()).toBe(false)
+        expect(findByTestId(wrapper, `job-history-expand-${jobRun.id}`).exists()).toBe(false)
     })
 })
 

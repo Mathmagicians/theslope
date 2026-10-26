@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, iconNamesIn} from '~~/tests/component/testHelpers'
 import ChefMenuCard from '~/components/chef/ChefMenuCard.vue'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import AllergenMultiSelector from '~/components/allergy/AllergenMultiSelector.vue'
@@ -126,8 +126,7 @@ describe('ChefMenuCard', () => {
             expect(label.text()).toBe('Allergener')
             expect(label.element.firstElementChild).toBe(label.findComponent({name: 'UIcon'}).element)
             expect(label.findComponent({name: 'UIcon'}).props('name')).toBe(ICONS.allergy)
-            const icons = overview.findAllComponents({name: 'UIcon'}) as VueWrapper<ComponentPublicInstance<{name: string}>>[]
-            expect(icons.filter(icon => icon.props('name') === ICONS.allergy)).toHaveLength(0)
+            expect(iconNamesIn(overview)).not.toContain(ICONS.allergy)
         })
 
         it('GIVEN a menu without allergens THEN reads the no-allergens message', async () => {
@@ -180,15 +179,13 @@ describe('ChefMenuCard', () => {
     })
 
     describe('Chef portrait', () => {
-        type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
-        const chef = {id: 7, heynaboId: 7, householdId: 1, name: 'Anna', lastName: 'Kok', pictureUrl: null, birthDate: null}
+        const chef ={id: 7, heynaboId: 7, householdId: 1, name: 'Anna', lastName: 'Kok', pictureUrl: null, birthDate: null}
 
         it('renders a wanted poster without a chef, the chef glyph as its hat', async () => {
             const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), chef: null}
             const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW})
 
-            const icons = findByTestId(wrapper, 'chef-wanted').findAllComponents({name: 'UIcon'})
-            expect(icons.some((icon: IconWrapper) => icon.props('name') === ICONS.chef)).toBe(true)
+            expect(iconNamesIn(findByTestId(wrapper, 'chef-wanted'))).toContain(ICONS.chef)
         })
 
         it('renders the chef', async () => {

@@ -469,10 +469,13 @@ describe('useBooking', () => {
 
 // The season's default prices: an order at a ticket type holds that type's price
 const SEASON_PRICES = TicketFactory.defaultTicketPrices()
-const priceIdOf = (ticketType: typeof TicketTypes[keyof typeof TicketTypes]) => SEASON_PRICES.find(price => price.ticketType === ticketType)!.id!
+// The first price row of a ticket type: the baby who tastes for BABY
+const priceRowOf = (ticketType: typeof TicketTypes[keyof typeof TicketTypes]) => SEASON_PRICES.find(price => price.ticketType === ticketType)!
+const priceIdOf = (ticketType: typeof TicketTypes[keyof typeof TicketTypes]) => priceRowOf(ticketType).id!
 // The factory lists the baby who tastes first, the hungry baby second; the season's prices weigh the first 0 portions
-const BABY_PRICE_IDS = SEASON_PRICES.filter(price => price.ticketType === TicketTypes.BABY).map(price => price.id!)
-const [TASTING_PRICE_ID, HUNGRY_PRICE_ID] = [BABY_PRICE_IDS[0]!, BABY_PRICE_IDS[1]!]
+const BABY_PRICES = SEASON_PRICES.filter(price => price.ticketType === TicketTypes.BABY)
+const [TASTING_PRICE, HUNGRY_PRICE] = [BABY_PRICES[0]!, BABY_PRICES[1]!]
+const [TASTING_PRICE_ID, HUNGRY_PRICE_ID] = [TASTING_PRICE.id!, HUNGRY_PRICE.id!]
 const seasonTakesNoPortion = (ticketPriceId: number) => takesNoPortionOf(SEASON_PRICES)(ticketPriceId)
 // A case not about portions: every ticket takes a portion from the kitchen
 const everyTicketTakesAPortion = (_ticketPriceId: number) => false
@@ -800,7 +803,7 @@ describe('decideOrderAction', () => {
     })
 
     describe('queue entry rows', () => {
-        const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 101, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 1})
+        const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 101, dinnerMode: DinnerMode.DINEIN, ticketPrice: priceRowOf(TicketTypes.BABY)})
 
         it.each([
             {desc: 'NONE on an entry → leave', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.NONE}), canEditMode: true, expectedBucket: Bucket.leave, expectedMode: DinnerMode.NONE},
@@ -941,7 +944,7 @@ describe('resolveDesiredOrdersToBuckets', () => {
         const cannotModify = () => false
         const cannotEdit = () => false
 
-        const regularEntry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 201, ticketPriceId: 1})
+        const regularEntry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 201, ticketPrice: priceRowOf(TicketTypes.BABY)})
 
         it.each([
             {
@@ -1122,7 +1125,7 @@ describe('buildDesiredOrder', () => {
 
     describe('buildEntryDesiredOrder', () => {
         it('names a queued guest\'s place at its held price, with the guest flag and the allergies', () => {
-            const queued = WaitlistFactory.defaultEntry({id: 28, inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, isGuestTicket: true, ticketPriceId: priceIdOf(TicketType.CHILD)})
+            const queued = WaitlistFactory.defaultEntry({id: 28, inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, isGuestTicket: true, ticketPrice: priceRowOf(TicketTypes.CHILD)})
             const entry = {...queued, order: {...queued.order, allergyTypeIds: [3]}}
 
             expect(buildEntryDesiredOrder({entry, dinnerMode: DinnerMode.NONE}, OrderState.BOOKED)).toEqual({
@@ -1517,7 +1520,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         const allDaysPrefs = dinnerModeMap(DinnerMode.DINEIN)
         const noDaysPrefs = dinnerModeMap(DinnerMode.NONE)
         // The inhabitant's place on the dinner's waiting list, held for a dine-in at the adult price
-        const queued = WaitlistFactory.defaultEntry({id: 21, inhabitantId: 1, dinnerEventId: tomorrowDinner.id, ticketPriceId: 4})
+        const queued = WaitlistFactory.defaultEntry({id: 21, inhabitantId: 1, dinnerEventId: tomorrowDinner.id, ticketPrice: priceRowOf(TicketTypes.ADULT)})
 
         // A preference decides like a member's change: with no order it buys or queues, on a place it leaves or requeues
         it.each([
@@ -1750,7 +1753,7 @@ describe('getBookingOptions — the rules matrix', () => {
         candidate: dinnerMode => buildDesiredOrder({inhabitantId: person.id, dinnerEventId: dinner.id, dinnerMode}, order ? [order] : [], [person], [dinner], resolver, BOOKED)
     })
     const entryRow = (dinner: Dinner, wish: DinnerMode): BookingRow => {
-        const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, dinnerMode: wish, ticketPriceId: adultPriceId})
+        const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, dinnerMode: wish, ticketPrice: priceRowOf(TicketTypes.ADULT)})
         return {order: null, waitlistEntry: entry, candidate: dinnerMode => buildEntryDesiredOrder({entry, dinnerMode}, BOOKED)}
     }
     const guestRow = (dinner: Dinner, held: DinnerMode): BookingRow => {
@@ -1885,26 +1888,28 @@ describe('powerOptions — the household row offers what every row offers', () =
 
 describe('groupGuestOrders', () => {
 
-    const order = (overrides: {id?: number, allergies?: string[] | null, provenance?: string | null} = {}) => ({
-        inhabitantId: 1, ticketType: TicketTypes.ADULT, dinnerEventId: 101, isGuestTicket: true,
-        provenanceAllergies: overrides.allergies ?? null,
-        provenanceHousehold: overrides.provenance ?? null
-    })
+    // One booker's guest ticket on one dinner; a row varies one part of the key
+    const order = (overrides: Partial<OrderDisplay> = {}) =>
+        OrderFactory.defaultOrder(undefined, {inhabitantId: 1, dinnerEventId: 101, isGuestTicket: true, ...overrides})
 
     it.each([
         {desc: 'empty input', orders: [], expected: 0},
         {desc: 'same key → 1 group', orders: [order(), order()], expected: 1},
-        {desc: 'different allergies → 2 groups', orders: [order({allergies: ['A']}), order({allergies: ['B']})], expected: 2},
-        {desc: 'same allergies (diff order) → 1 group', orders: [order({allergies: ['A', 'B']}), order({allergies: ['B', 'A']})], expected: 1},
-        {desc: 'allergies vs none → 2 groups', orders: [order({allergies: ['A']}), order()], expected: 2},
-        {desc: 'different provenance → 2 groups', orders: [order({provenance: 'AR_1'}), order({provenance: 'S31'})], expected: 2},
-        {desc: 'provenance vs none → 2 groups', orders: [order({provenance: 'AR_1'}), order()], expected: 2},
+        {desc: 'different allergies → 2 groups', orders: [order({provenanceAllergies: ['A']}), order({provenanceAllergies: ['B']})], expected: 2},
+        {desc: 'same allergies (diff order) → 1 group', orders: [order({provenanceAllergies: ['A', 'B']}), order({provenanceAllergies: ['B', 'A']})], expected: 1},
+        {desc: 'allergies vs none → 2 groups', orders: [order({provenanceAllergies: ['A']}), order()], expected: 2},
+        {desc: 'different provenance → 2 groups', orders: [order({provenanceHousehold: 'AR_1'}), order({provenanceHousehold: 'S31'})], expected: 2},
+        {desc: 'provenance vs none → 2 groups', orders: [order({provenanceHousehold: 'AR_1'}), order()], expected: 2},
         {desc: 'allergies + provenance combo → 4 groups', orders: [
             order(), order(),
-            order({allergies: ['A']}),
-            order({provenance: 'AR_1'}),
-            order({allergies: ['A'], provenance: 'AR_1'})
+            order({provenanceAllergies: ['A']}),
+            order({provenanceHousehold: 'AR_1'}),
+            order({provenanceAllergies: ['A'], provenanceHousehold: 'AR_1'})
         ], expected: 4},
+        {desc: 'one ticket type at two prices (a baby who tastes, a hungry baby) → 2 groups', orders: [
+            order({ticketType: TicketTypes.BABY, ticketPriceId: TASTING_PRICE_ID, priceAtBooking: TASTING_PRICE.price}),
+            order({ticketType: TicketTypes.BABY, ticketPriceId: HUNGRY_PRICE_ID, priceAtBooking: HUNGRY_PRICE.price})
+        ], expected: 2}
     ])('$desc → $expected groups', ({orders, expected}) => {
         expect(Object.keys(groupGuestOrders(orders))).toHaveLength(expected)
     })

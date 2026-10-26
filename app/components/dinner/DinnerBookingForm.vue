@@ -437,7 +437,7 @@ const tableData = computed((): TableRow[] => {
     return {...row, enabledModes: enabledModesOf(row)}
   })
 
-  // A guest row is a placed group (booker, ticketType, eventId) or one queued guest: the same row, booked or queued
+  // A guest row is a placed group (booker, ticket type, price, dinner) or one queued guest: the same row, booked or queued
   type GuestItem = {id: string, orders: OrderDisplay[], waitlistEntry?: TicketWaitlistDetail}
   const placedGuests: GuestItem[] = Object.entries(groupGuestOrders(eventOrders.value))
     .filter(([, orders]) => orders.length > 0)

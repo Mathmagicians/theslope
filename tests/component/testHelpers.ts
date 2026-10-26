@@ -1,4 +1,4 @@
-import {nextTick, h, defineComponent, ref, isRef, effectScope, watch, shallowReactive, type Component, type Ref} from 'vue'
+import {nextTick, h, defineComponent, ref, isRef, effectScope, watch, shallowReactive, type Component, type ComponentPublicInstance, type Ref} from 'vue'
 import {expect, beforeEach, afterEach} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
@@ -184,6 +184,21 @@ export const findAllByTestId = (wrapper: Searchable, testId: string) =>
 export const findLoadingRow = (wrapper: Searchable) => wrapper.find('[data-slot="loading"]')
 
 export const findAllLoadingRows = (wrapper: Searchable) => wrapper.findAll('[data-slot="loading"]')
+
+/** A table's rendered column headers, a column without header text (an expand column) as '' */
+export const tableHeaders = (wrapper: Searchable) => wrapper.find('table').findAll('th').map(th => th.text())
+
+/** The cells of a table's body row by the header of their column */
+export const cellsByHeader = (wrapper: Searchable, rowIndex = 0): Record<string, string | undefined> => {
+    const cells = wrapper.find('table').findAll('tbody tr')[rowIndex]?.findAll('td').map(td => td.text()) ?? []
+    return Object.fromEntries(tableHeaders(wrapper).map((header, index) => [header, cells[index]]))
+}
+
+type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
+
+/** The names of the icons rendered inside a wrapper: a DOM wrapper's findAllComponents keeps the components its element contains */
+export const iconNamesIn = (wrapper: Pick<BaseWrapper<Node>, 'findAllComponents'>): string[] =>
+    (wrapper.findAllComponents({name: 'UIcon'}) as IconWrapper[]).map(icon => icon.props('name'))
 
 /** Whether the table binds `loading`: UTable runs its loading bar under the column headers, a bar that carries no attribute */
 export const isTableLoading = (wrapper: Pick<VueWrapper, 'findComponent'>): boolean =>

@@ -658,6 +658,8 @@ const TABLE_CELL_WRAP = 'whitespace-normal'
 const TABLE_CELL_PADDING = 'px-2 py-1 md:px-4 md:py-2'
 /** A data table's cell, the one `table.ui` gives every td and a sum row binds through `table.sumCell` */
 const TABLE_CELL = `${TABLE_CELL_PADDING} ${TABLE_CELL_WRAP}`
+/** A data table's cells: `table.ui`, and the tables that add to it */
+const TABLE_UI = {th: 'px-2 md:px-4', td: TABLE_CELL} as const
 
 /** Compact tables with many narrow columns */
 const TABLE_DENSE_UI = {th: 'px-1 py-1 md:px-4 md:py-3', td: `px-1 md:px-4 ${TABLE_CELL_WRAP}`} as const
@@ -1196,7 +1198,7 @@ export const COMPONENTS = {
 
     /**
      * AdminSystem: the job cards (coloured header, icon, title, description, stats or skeletons) and the panels'
-     * headers, the job history table and its expanded details
+     * headers, the job history table
      */
     adminSystem: {
         root: 'space-y-6',
@@ -1222,9 +1224,7 @@ export const COMPONENTS = {
         panelTitle: 'font-semibold',
         historyTable: 'w-full',
         statusBadge: 'gap-1',
-        statusIcon: 'text-xs',
-        details: `p-4 space-y-1 ${BG.panel}`,
-        detailLabel: 'font-semibold'
+        statusIcon: 'text-xs'
     },
 
     /**
@@ -1243,7 +1243,8 @@ export const COMPONENTS = {
 
     /**
      * AdminUsers: the card, its header and search row, the table with its loading bar, a user's role badges, and the
-     * expanded row's detail
+     * expanded row's detail in its `expandedPanel`: the expanded row spans every column, so where the table scrolls
+     * sideways in its box the panel keeps to the part in view, sticky at the cell's inset and no wider than the box
      */
     adminUsers: {
         card: 'w-full px-0',
@@ -1253,7 +1254,9 @@ export const COMPONENTS = {
         loadingBar: {loadingColor: COLOR.secondary, loadingAnimation: 'carousel' as const},
         roles: 'flex gap-1 flex-wrap',
         roleIcon: 'mr-1',
-        detail: 'p-4'
+        detail: 'p-4',
+        // The inset follows the cell padding of `table.adminUsersUi.td` (px-2 md:px-4); the cap, the box less that padding, binds on a phone
+        expandedPanel: 'sticky left-2 md:left-4 max-w-[calc(100cqw-1rem)] overflow-x-auto'
     },
 
     /** InhabitantSelector: the stack of search row and table, the name cell, and the table's empty state */
@@ -1454,7 +1457,9 @@ export const COMPONENTS = {
          * Cells wrap between words on every viewport (Nuxt UI's theme cell is `whitespace-nowrap`); a word stays whole.
          * A data table wider than a phone scrolls inside its own box, the page never does (MobileViewport.e2e).
          */
-        ui: {th: 'px-2 md:px-4', td: TABLE_CELL},
+        ui: TABLE_UI,
+        /** The users table: `ui`'s cells; on a phone the scroll box is the size container `adminUsers.expandedPanel` measures its width against */
+        adminUsersUi: {...TABLE_UI, root: '@container md:@container-normal'},
         /** A history table (Billetændringer): `ui`'s padding, every row on one line, so on a phone the table scrolls sideways */
         historyUi: {th: 'px-2 md:px-4', td: `${TABLE_CELL_PADDING} whitespace-nowrap`},
         /** A cell a row's spanning cell covers (a column's `meta.class.td`): out of the row's layout */

@@ -73,10 +73,11 @@ export const BOOKING_WORDS = {
         [Action.REQUEUE]: 'Opdater',
         [Action.CHANGE_MODE]: 'Opdater'
     } satisfies Record<BookingOutcome, string>,
-    /** The guest form's button, and a booker's guests of one ticket type counted as the guest row badges them */
+    /** The guest form's button, a booker's guests of one ticket type counted in a preview or toast line, and the guests a ticket's badge names */
     guests: {
         save: (count: number) => count === 1 ? 'Tilmeld gæst' : 'Tilmeld gæster',
-        count: (count: number) => `×${count}`
+        count: (count: number) => `×${count}`,
+        label: (count: number) => count === 1 ? 'Gæst' : `${count} Gæster`
     },
     /** A ticket's state: CostLine and the order badges */
     orderStates: {

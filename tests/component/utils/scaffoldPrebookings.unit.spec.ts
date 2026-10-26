@@ -279,7 +279,7 @@ const givenClaims = ({households: people, dinners, forSale = 0, waiting = 0, que
         householdId: OTHER_HOUSEHOLD_ID
     })))
     const entryOn = (dinnerEventId: number, inhabitantId: number, ticketType: TicketType, householdId: number, minutesAgo: number) =>
-        WaitlistFactory.defaultEntry({dinnerEventId, inhabitantId, ticketPriceId: priceOf(ticketType).id, householdId, createdAt: subMinutes(new Date(), minutesAgo)})
+        WaitlistFactory.defaultEntry({dinnerEventId, inhabitantId, ticketPrice: priceOf(ticketType), householdId, createdAt: subMinutes(new Date(), minutesAgo)})
     const entries = [
         ...closedDinners.flatMap(dinner => Array.from({length: waiting}, (_, index) => entryOn(dinner.id, OTHER_INHABITANT_ID + index, ADULT, OTHER_HOUSEHOLD_ID, 60 - index))),
         ...(queued ? closedDinners.flatMap(dinner => claimers.map((claimer, index) => entryOn(dinner.id, claimer.id, claims[index]!.ticketType, claimer.householdId, 30))) : [])
@@ -511,7 +511,7 @@ describe('scaffoldPrebookings', () => {
         const {season, household, anna, bo, dinner, adultPrice} = givenSave()
         vi.mocked(fetchOrders).mockResolvedValue([])
         vi.mocked(fetchWaitlistForDinners).mockResolvedValue([
-            WaitlistFactory.defaultEntry({id: 21, inhabitantId: anna.id, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, householdId: household.id})
+            WaitlistFactory.defaultEntry({id: 21, inhabitantId: anna.id, dinnerEventId: dinner.id, ticketPrice: adultPrice, householdId: household.id})
         ])
         vi.mocked(fetchUserIntentKeys).mockResolvedValue({confirmedKeys: new Set([`${anna.id}-${dinner.id}`]), cancelledKeys: new Set()})
         vi.mocked(fetchHouseholds).mockResolvedValue([{...household, inhabitants: [
@@ -537,7 +537,7 @@ describe('scaffoldPrebookings', () => {
             vi.mocked(fetchSeason).mockResolvedValue({...season, dinnerEvents: [dinner, dayAfter]})
             vi.mocked(fetchOrders).mockResolvedValue([])
             const place = (id: number, inhabitantId: number) =>
-                WaitlistFactory.defaultEntry({id, inhabitantId, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, householdId: household.id})
+                WaitlistFactory.defaultEntry({id, inhabitantId, dinnerEventId: dinner.id, ticketPrice: adultPrice, householdId: household.id})
             const [annaPlace, boPlace] = [place(21, anna.id), place(22, bo.id)]
             givenSupply(season.ticketPrices, [], [annaPlace, boPlace])
             vi.mocked(deleteWaitlistEntries).mockImplementation(async (_d1, leaves) => leaves.length)
