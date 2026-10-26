@@ -99,7 +99,7 @@ One e-mail template per notification kind in `app/config/notificationTemplates.t
 | `TEST` | `make theslope-sender-event-test-<env>` | `NUXT_NOTIFICATIONS_ADMIN_EMAIL` |
 | `BILLING_PERIOD_CLOSED` | monthly billing (cron / `POST /api/admin/maintenance/monthly`) closes a period (v1); re-send `make theslope-sender-event-monthly-billing-<env> bpid=<billingPeriodSummaryId>` | `NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL`, cc `NUXT_NOTIFICATIONS_ADMIN_EMAIL`; the period CSV attached (`…-v1.csv`) |
 | `BILLING_PERIOD_UPDATED` | a later version of a period (catch-up billing changed it) — subject `opdatering v<n>`, replaces the earlier mail | same, CSV `…-v<n>.csv` |
-| `WAITLIST_JOINED`, `TICKET_SOLD`, `TICKET_BOUGHT`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_EXTRA_PORTION`, `WAITLIST_BUILDUP` | the booking status sender event: a booking, a season change or the chef's extra portions, sent in the background after the response; the nightly run sends the notifications of the dinners past their booking deadline that have no delivery record | the closest user of the inhabitant (`findClosestUserInHousehold`); the buildup, the closest user of the dinner's chef |
+| `WAITLIST_JOINED`, `TICKET_SOLD`, `TICKET_BOUGHT`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_EXTRA_PORTION`, `WAITLIST_BUILDUP` | the booking status sender event: a booking, a season change or the chef's extra portions, sent in the background after the response; the DAILY_MAINTENANCE job sends the notifications of the dinners past their booking deadline that have no delivery record | the closest user of the inhabitant (`findClosestUserInHousehold`); the buildup, the closest user of the dinner's chef |
 
 ### Booking emails flag
 
@@ -115,7 +115,7 @@ sender events send.
 Turning it on in an environment:
 
 ```bash
-make theslope-sender-dry-run-booking-status-prod   # the delivery dry run: per user, the booking notifications the nightly run sends; sends and records nothing
+make theslope-sender-dry-run-booking-status-prod   # the delivery dry run: per user, the booking notifications the DAILY_MAINTENANCE job sends; sends and records nothing
 # set SHOULD_SEND_BOOKING_EMAILS_FLAG = "true" in [env.prod.vars], then deploy (§ Deployment Routing Table)
 ```
 
@@ -156,7 +156,7 @@ make deploy-dev                 # both workers: sender first, then the app (the 
 make theslope-sender-event-test-dev      # admin login on dev.skraaningen.dk → POST /api/admin/sender/event/test
                                 # → prints {queued, dedupeKey}; the mail arrives in the admin mailbox (NUXT_NOTIFICATIONS_ADMIN_EMAIL) with that id in its text
 make theslope-sender-event-monthly-billing-dev bpid=<id>   # re-send the accountant mail for a billing period (GET /api/admin/billing/periods lists ids)
-make theslope-sender-dry-run-booking-status-dev  # GET /api/admin/sender/delivery?dryRun=BOOKING_STATUS → the delivery dry run: per user, the booking notifications the nightly run sends
+make theslope-sender-dry-run-booking-status-dev  # GET /api/admin/sender/delivery?dryRun=BOOKING_STATUS → the delivery dry run: per user, the booking notifications the DAILY_MAINTENANCE job sends
 make logs-sender-dev            # tail the sender: 📮 > SENDER > [EMAIL] delivered {dedupeKey, …}
 make queues-info-dev            # backlog of the queue
 make run-sender-local           # run the sender on this machine (miniflare, port 3100) → http://localhost:3100/sender/health

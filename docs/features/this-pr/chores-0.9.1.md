@@ -8,7 +8,7 @@ The release carries no migration; the schema work is in `../release-0.9.3/featur
 
 | Delivery | Description or spec | Gherkin | Status |
 |---|---|---|---|
-| Workflow checks | The workflows' `run:` scripts read `${{ }}` values through `env` (code scanning alert #10), and `npm run lint:gh-actions` runs CodeQL's Actions queries in `pre:all`, locally through `gh codeql`, in CI on the runner image's bundle. | – | done 93834f4 |
+| Workflow checks | The workflows' `run:` scripts read `${{ }}` values through `env` (code scanning alert #10), and `npm run pre:all` runs CodeQL's Actions queries (`make lint-gh-actions`, through `gh codeql`) when the branch or the working tree changes `.github`; in CI the CodeQL pipeline scans the workflows. | – | done 93834f4 |
 | Household data access and GET previews | Every member reads, a household changes its own data, an admin or the allergy manager (allergies) another household's through a logged override (ADR-004 § Access), and previews are GETs. | – | done 52c5d68 |
 | Three faces on a phone (#171) | An avatar group shows three faces below md, five from md. | – | done 0b6d7d0 |
 | One master-detail layout (#169) | `LAYOUTS.masterDetailPage` on /dinner, /chef, /admin/allergies, /admin/teams and the household bookings tab, with the calendar circle a step up at lg. | – | done 0b6d7d0 |
@@ -162,7 +162,7 @@ back at UTC midnight.
 `InhabitantCreateSchema` (`useCoreValidation.ts:207`) accepts `dinnerPreferences`, and the create
 (`saveInhabitant`, `prismaRepository.ts:339-354`; the import's `createInhabitants`, `:415-424`) writes the row without
 it. The season initialises a person's preferences: `clipPreferences` (`server/utils/initializePreferences.ts`) runs on
-activation, on a season update and nightly, writes Spisesal on the cooking days and Ingen on the rest into a `null`
+activation, on a season update and in the DAILY_MAINTENANCE job, writes Spisesal on the cooking days and Ingen on the rest into a `null`
 map, and sets a stored map's non-cooking days to Ingen. A map sent with a create is dropped silently; a spec that
 creates a person with Ingen and then activates a season finds the person booked (`AdminEconomy.e2e.spec.ts`, 2026-10-19).
 The specs set preferences through the preference write after the create.

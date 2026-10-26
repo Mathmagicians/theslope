@@ -50,7 +50,8 @@ The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL
 - **Deploy**: `npm run deploy` - Build and deploy with Wrangler
 - **Lint**: `npm run lint`, `npm run lint-fix` - Run ESLint
 - **Typecheck**: `npm run ts` (root/app project), `npm run ts:server` (Nitro server project - catches bare auto-imports in composables the server imports, ADR-017), `npm run ts:node` (build-time project)
-- **Pre-ship gate**: `npm run pre:all` - lint + all three typechecks; identical to the CI "Lint and typecheck" step
+- **Pre-ship gate**: `npm run pre:all` - lint, the workflow lint when the branch or the working tree changes `.github/`, the C4 check and the four typechecks; the CI "Lint and typecheck" step (CI skips the workflow lint)
+- **Workflow lint**: `make lint-gh-actions` - CodeQL's Actions queries on `.github/`; `pre:all` runs it through `make lint-gh-actions-changed`
 - **Test**: 
   - All unit and component tests: `npm run test:unit` - Run all Vitest tests
   - E2E tests: `npm run test:e2e` - Run Playwright tests

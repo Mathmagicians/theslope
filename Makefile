@@ -83,6 +83,21 @@ c4: ## Generate the C4 container diagram from the wrangler configs and render do
 c4-check: ## Fail when the C4 container diagram differs from the wrangler configs
 	@$(C4_GENERATE) | diff -u $(C4_CONTAINER) - || { echo "$(C4_CONTAINER) is stale - run make c4"; exit 1; }
 
+# --- GitHub Actions workflows → CodeQL's Actions queries (.output/codeql-actions); pre:all runs the scan when the branch or
+# the working tree changes .github, CI's CodeQL pipeline scans the pushed workflows
+.PHONY: lint-gh-actions lint-gh-actions-changed
+
+lint-gh-actions-changed: ## Run lint-gh-actions when the branch or the working tree changes .github (skipped in CI)
+	@[ -n "$$CI" ] || { git diff --quiet $$(git merge-base origin/main HEAD) -- .github && [ -z "$$(git ls-files --others --exclude-standard .github)" ]; } || $(MAKE) --no-print-directory lint-gh-actions
+
+lint-gh-actions: ## Run CodeQL's Actions queries (latest) on the workflows; prints the findings and fails on one
+	@mkdir -p .output
+	@gh codeql set-version latest
+	@gh codeql pack download codeql/actions-queries
+	@gh codeql database create .output/codeql-actions --language=actions --source-root=. --overwrite --quiet
+	@gh codeql database analyze .output/codeql-actions codeql/actions-queries --format=csv --output=.output/codeql-actions.csv --quiet
+	@! grep . .output/codeql-actions.csv
+
 # --- Schema → migration files → Prisma client + zod (prisma/generated, committed)
 .PHONY: d1-prisma-zod d1-prisma d1-prisma-check d1-create-migration d1-flatten-migrations
 

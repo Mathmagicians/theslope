@@ -91,10 +91,7 @@ jobs:
       - name: Generated Prisma layer matches the schema
         run: make d1-prisma-check
       - name: Lint and typecheck
-        # lint:gh-actions runs the CodeQL bundle the runner image ships, the one GitHub's code scanning uses
-        run: |
-          export CODEQL="$(ls -d "$RUNNER_TOOL_CACHE"/CodeQL/*/x64/codeql/codeql | sort -V | tail -1)"
-          npm run pre:all
+        run: npm run pre:all
       - name: Run unit tests
         id: unit_tests
         run: npm run test:unit

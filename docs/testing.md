@@ -91,7 +91,7 @@ const season = await SeasonFactory.createSeason(context, SeasonFactory.defaultSe
 **Factories on disk:** `AllergyFactory`, `BillingFactory`, `DinnerEventFactory`, `ExpenseFactory`, `FeedbackFactory`, `HouseholdFactory`, `NotificationFactory`, `OrderFactory`, `SeasonFactory`, `SeasonImportFactory`, `SenderFactory`, `SettingFactory`, `TicketFactory`, `UserFactory`, `WaitlistFactory`; `reconciliationTestData.ts` holds the data for the four reconciliation outcomes of households, inhabitants and users, shared by unit and e2e specs.
 
 **Scenario methods:**
-- `SeasonFactory.createActiveSeason(context)` - the singleton active season `TestSeason-E2E-Singleton`: the `setup-season` project (`tests/e2e/season.setup.ts`) creates and activates it once per run, before the spec workers start; a spec's call returns it, and global teardown deletes it after the run. Its dinners are open (`ticketIsCancellableDaysBefore` 0); a case on a closed dinner creates its own season
+- `SeasonFactory.createActiveSeason(context)` - the singleton active season `TestSeason-E2E-Singleton`: the `setup-season` project (`tests/e2e/season.setup.ts`) creates and activates it once per run, before the spec workers start; a spec's call returns it, and global teardown deletes it after the run. A spec resolves it in `beforeAll` and a feature in the `BeforeAll` of `fixtures.ts`, so a run without setup-season (`--no-deps`) creates it there, outside a test's timeout. Its dinners are open (`ticketIsCancellableDaysBefore` 0); a case on a closed dinner creates its own season
 - `SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days, deadline?, cookingDays?, startInDays?})` - a serial spec's own active season, returned as `{season, dinnerEvents}`: starts `startInDays` days from today at midnight (1 by default) and ends `days` days after the start, inside the pre-booking window (ADR-015); `cookingDays` picks `'all'` or `'weekdays'` over the default Mon/Wed/Fri; `deadline` is the cancel deadline in days. Serial only: activating it displaces the singleton active season
 - `SeasonFactory.createCookingTeamWithChefAndDinner(context, season, chefInhabitantId, {teamName?, dinner?, day?})` - a cooking team of the season with the chef as CHEF and a dinner of the team with that chef, returned as `{team, dinner}`: `dinner` sets the dinner's fields (`chefId: null` leaves the duty vacant); `day` places the dinner on a free day of the season (`'free'`, a browser spec) or alone on a given day (a serial spec), else on the date `dinner` names, tomorrow by default
 - `DinnerEventFactory.createDinnerEventOnFreeDay(context, season, data?)` - a browser spec's dinner alone on a free day of the season, picked at random after the season's last dinner where one is free; a day that turns double in the meantime gives the dinner up and another day is tried
@@ -129,7 +129,9 @@ spec's own household goes with the household.
 own household (`HouseholdFactory.createHousehold`), which the admin writes with `?adminBypass=true`; under the override
 the preference write keeps the season's deadlines. The session households hold the access cases. The admin and the
 member are the two users who log in: a role change runs inside `UserFactory.withSystemRoles`, which restores the roles,
-and the roles an endpoint accepts are proven in the `requireHouseholdAccess` unit table.
+and the roles an endpoint accepts are proven in the `requireHouseholdAccess` unit table. The cases of a parallel suite
+that save the member's settings run in order in one worker: `test.describe.configure({mode: 'serial'})` in a spec,
+`@mode:serial` on a feature.
 
 **ALWAYS verify:** `npx playwright test path/to/test.e2e.spec.ts --workers=4`
 
@@ -211,7 +213,8 @@ const wrapper = await mountWithTooltipProvider(AdminAllergies, {props: {canEdit:
 `bddgen` (`npm run test:bdd:generate`) generates a Playwright spec per feature into `.output/bdd/<suite>/`; the Playwright
 projects, the setup projects and the factories run the scenarios. A project picks its scenarios by tag through
 `defineBddProject` in `playwright.config.ts` (`chromium-smoke`: `@smoke`). A feature carries one suite tag: `@smoke`,
-`@api-parallel`, `@api-serial`, `@e2e-parallel` or `@e2e-serial`. A `*.e2e.spec.ts` migrates to features when a change
+`@api-parallel`, `@api-serial`, `@e2e-parallel` or `@e2e-serial`; a parallel feature whose scenarios save the member's
+settings also carries `@mode:serial` (Rule 3). A `*.e2e.spec.ts` migrates to features when a change
 touches it; its cases become the scenarios and example rows that check the same behaviours. Rules 0 to 5 hold for the
 steps.
 

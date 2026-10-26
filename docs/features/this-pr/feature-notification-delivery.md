@@ -18,11 +18,11 @@ Priority high, issue #170.
 ### Problem
 
 A booking email goes to the user who made the booking, or to the person's own user. A place on the waiting list that
-the nightly run or a preference change joined emails the system account; a child's ticket from the waiting list or
+the DAILY_MAINTENANCE job or a preference change joined emails the system account; a child's ticket from the waiting list or
 extra portion emails nobody; a sold ticket emails every member of the selling household. Issue #170: a place on the
 waiting list of 27/10, joined by a preference change, greeted the person in an email to the API account.
 
-An email lost on the way stays lost, and the booking and the nightly run each decide on their own what to send.
+An email lost on the way stays lost, and the booking and the DAILY_MAINTENANCE job each decide on their own what to send.
 
 A user's opt-out holds until the next Heynabo import: the import resets a user's channels and appearance when the
 user's email, phone or admin role changes in Heynabo.
@@ -58,16 +58,16 @@ dinner's chef); the billing notifications go to the accountant's mailbox. A chan
 waiting list at its join; an order at the extra portion that created it and at each sale; a dinner at its first buildup
 and at each extra portion after it. A new version is a new notification.
 
-**One derivation.** The booking, the chef's extra portions and the nightly run read the notifications off the dinners
+**One derivation.** The booking, the chef's extra portions and the DAILY_MAINTENANCE job read the notifications off the dinners
 as they stand. Notifications are an idempotent service: in the absence of failures, one run and two runs have the same
 effects. A sent mail writes a delivery record.
 
 **Background notifications.** The user does not wait for notifications. A booking, a season change or the chef's extra
 portions write their data, respond to the user, and send the notifications in the background. Cloudflare gives
 background work 30 seconds after the response; a notification a background run did not send has no delivery record,
-and the nightly run sends it.
+and the DAILY_MAINTENANCE job sends it.
 
-**Diagnostics.** A notification the nightly run sends again heals by itself and needs no report. What stays broken is
+**Diagnostics.** A notification the DAILY_MAINTENANCE job sends again heals by itself and needs no report. What stays broken is
 reported:
 
 | Breakdown | Where the admin sees it |
@@ -78,7 +78,7 @@ reported:
 | Two runs on one dinner send the same notification | the delivery step's sent-twice line, naming the notification, the subject, the version and the user, at the next run on that dinner |
 | The app cannot hand a notification to the queue (no sender binding, no mailbox) | the app's error line on the dashboard |
 | The sender stops taking messages off the queue | the queue's backlog on the dashboard |
-| The nightly run fails | the job runs page |
+| The DAILY_MAINTENANCE job fails | the job runs page |
 
 Each environment has its dashboard over the app's and the sender's Workers Logs. The dev sender delivers to the test
 mailbox alone, so the dev dashboard filters the sender's lines for the allowed addresses.
@@ -190,12 +190,12 @@ The rules below the features, each in its unit spec:
 | `server/utils/sender/events/monthly-billing.ts`, `server/utils/monthlyBillingService.ts`, `app/composables/useBilling.ts` | the monthly billing sender event |
 | `server/data/financesRepository.ts` | the delivery records in one write |
 | `server/routes/api/admin/sender/delivery.get.ts`, `Makefile` | the delivery dry run, one make target per environment |
-| the seven booking routes, the chef's extra portions, the nightly run, the billing re-send | background notifications, the admin's override |
+| the seven booking routes, the chef's extra portions, the DAILY_MAINTENANCE job, the billing re-send | background notifications, the admin's override |
 | `useHeynaboValidation.ts`, `useCoreValidation.ts` | the opt-out |
 | `wrangler.toml`, `docs/ops-runbook.md` | the flag per environment |
 | `package.json` | the dev script sets the flag on locally, in e2e and in CI, as it sets the deploy URL |
-| `server/utils/dailyMaintenanceService.ts`, `app/composables/useMaintenance.ts` | the nightly run's counts on the job runs page |
-| `server/utils/sender/events/chef-deadlines.ts` (new), `app/config/notificationTemplates.ts`, `server/utils/dailyMaintenanceService.ts` | the chef deadlines sender event, its words, the nightly run sending it |
+| `server/utils/dailyMaintenanceService.ts`, `app/composables/useMaintenance.ts` | the DAILY_MAINTENANCE job's counts on the job runs page |
+| `server/utils/sender/events/chef-deadlines.ts` (new), `app/config/notificationTemplates.ts`, `server/utils/dailyMaintenanceService.ts` | the chef deadlines sender event, its words, the DAILY_MAINTENANCE job sending it |
 | `docs/ops-runbook.md` | the Cloudflare dashboards, dev and prod, over the sender's and the app's Workers Logs and the queue's backlog |
 
 ADR notes: ADR-016 [Unified Booking Through Scaffold] rule 9 and Key Files, ADR-015 [Idempotent Automated Jobs with
@@ -243,7 +243,7 @@ The menu deadline is ten days before the dinner at 18:00. The link opens the din
 
 ```
 CHEF_DINNER_DEADLINES  → findClosestUserInHousehold(the chef)
-When:   the nightly run, one notice a dinner at most: an alarm turned yellow or red since the last notice, or an
+When:   the DAILY_MAINTENANCE job, one notice a dinner at most: an alarm turned yellow or red since the last notice, or an
         alarm is overdue; none after the dinner date (getChefDeadlineAlarm, getAlarmLevel)
 Alarms: Menu publiceret  deadline getMenuDeadlineTime, met when the menu is published
         Indkøb           deadline getDinnerStartTime, met when the groceries are ordered
@@ -286,7 +286,7 @@ The deadlines and the alarms come from the chef page's deadline rules, proven in
 
 **2026-10-24**
 - A delivery dry run lists the booking notifications per user before they go out.
-- The booking, the chef's extra portions and the nightly run read the notifications off the dinners as they stand:
+- The booking, the chef's extra portions and the DAILY_MAINTENANCE job read the notifications off the dinners as they stand:
   notifications are an idempotent service, in the absence of failures one run and two runs have the same effects, and
   a sent mail writes a delivery record.
 
@@ -294,19 +294,19 @@ The deadlines and the alarms come from the chef page's deadline rules, proven in
 - A notification has no channel of its own; email is the first channel.
 - The notifications come from sender events: booking status, monthly billing, chef deadlines. The team assignment
   notifications ship with the duty roster.
-- With no active season, no dinner sends a notification: the nightly run and the delivery dry run count zero.
+- With no active season, no dinner sends a notification: the DAILY_MAINTENANCE job and the delivery dry run count zero.
 - The recipient rule is findClosestUserInHousehold.
 - Should send: a delivery is sent when no recorded delivery covers it; the re-send is an admin's override.
 - The booking emails are behind the Cloudflare variable `SHOULD_SEND_BOOKING_EMAILS_FLAG`, read from the environment
   and kept out of the database; a configuration release turns it on, and the release after it removes it.
 - The features state the delivery records a db admin sees and the emails sent, in numbers.
 - Monthly billing sends through the same delivery step as the booking notifications (DRY).
-- The user does not wait for notifications: they go in the background after the response, and the nightly run sends,
+- The user does not wait for notifications: they go in the background after the response, and the DAILY_MAINTENANCE job sends,
   idempotently, what a background run did not finish.
 - The delivery dry run has no page: a make target per environment, in our regular env style.
 - A cancelled dinner sends no notification.
 - A failed job sends no notification for now.
-- The nightly run's result counts the new notifications.
+- The DAILY_MAINTENANCE job's result counts the new notifications.
 - A Cloudflare dashboard monitors the sender worker's failed sends and the background errors.
 - What heals by itself needs no report; what breaks down gets a diagnostic: a log line the admin sees on the dashboard.
 - A dashboard per environment; the dev dashboard filters for the allowed addresses.

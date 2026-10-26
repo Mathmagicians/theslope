@@ -17,6 +17,8 @@ the cloud resources, with `file:line`.
   pull request only on the user's explicit instruction; no AI attribution in titles or bodies
 - `/peer-sessions` - documentar owns the PR body text; you post the text it hands over
 - `/prepare-to-ship` - the local gates in CI order before a branch is pushed
+- A change under `.github/` passes `make lint-gh-actions` (CodeQL's Actions queries, which `pre:all` runs when the branch
+  changes `.github/`) before the push; a finding in a workflow you review goes to the user with `file:line`
 
 **References**
 
