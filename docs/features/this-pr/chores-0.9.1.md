@@ -46,7 +46,8 @@ Updated 2026-10-25. Release 0.9 shipped in f5b5205 (#168).
 | The job boxes' latest run | § The job boxes' latest run | – | committed (17c3401) |
 | Zero-portion tickets get a place | § Zero-portion tickets get a place | – | committed (17c3401) |
 | Tables keep their columns on a phone | § Tables keep their columns on a phone | – | implemented |
-| The grid shows the day view's tickets | § The grid shows the day view's tickets | – | specified; guest groups by price implemented |
+| The grid shows the day view's tickets | § The grid shows the day view's tickets | – | specified; guest groups by price, badges and rows by price implemented |
+| Tables key their rows by id | § Tables key their rows by id | – | implemented |
 
 ## Server payload of the shared stores
 
@@ -827,10 +828,20 @@ at the first one's price, in both views.
 - A guest group is one booker, ticket type, price, dinner, allergies and provenance (`groupGuestOrders`).
 - Every grid badge reads the day view's ticket badge (`ticketBadgeLabel`): the type and the price, a guest's "Gæst" or
   "2 Gæster", the household row's "Powermode!".
-- A person has one grid row per price their dinners in view hold. A booked dinner sits on the row of its booked price,
-  a dinner without a booking on the row of the price for the person's age today, the day view's price. On the other
-  row that dinner's cell is empty, and each row's name cell counts its own dinners. A cell books, releases or cancels
+- A person has one grid row per price their dinners in view hold. A booked dinner sits on the row of its booked price
+  and type, a dinner without a booking on the row of the price for the person's age on that dinner's date, as the save
+  prices it; a birthday in view gives two rows. The day view shows the same price for its dinner. On the other row
+  that dinner's cell is empty, and each row's name cell counts its own dinners. A cell books, releases or cancels
   its own dinner; a dinner booked again gets today's price and moves to that row on the reload.
+- A dinner's chip in the grid shows the dinner's supply, its tickets for sale or its waiting list, as the dinner
+  calendar's chip on that day (`lockChip` on the store's `lockStatus`).
+- A released ticket's cell, a person's or a guest row's, carries the day view's released icon in the released colour,
+  in the corner and at the size of a waiting-list place's hourglass.
+- The day view names a bought ticket's seller; the grid, a compact view, reads its orders without the seller and groups
+  a bought guest with the booker's other guests of that type and price.
+- The day view's released badge reads the released state's word, icon and colour, as the other order states do.
+- The day view opens a row while the member may change the household and the booking rules give the row a mode, as
+  a grid cell does; the add-guest row and the legend show while a row can open (ADR-016).
 - The preview and the toast name a booker's guests by type and price, as the rows group them: "Gæst af Anna (Baby ·
   9 kr)", "Gæst af Anna (Baby · 0 kr ×2)". A run's results and its waiting-list places carry the ticket's price: a
   booked order's frozen price, else its price row's.
@@ -849,7 +860,7 @@ Gæst af Anna [Baby · 9 kr · Gæst] |      | venteliste |        |          |
 - `useBooking.nuxt.spec.ts`: `groupGuestOrders` at two prices.
 - `useBookingUi.nuxt.spec.ts`: `ticketBadgeLabel`.
 - `DinnerBookingForm.nuxt.spec.ts`, `BookingGridView.nuxt.spec.ts`: guest rows by price; the grid's badges read the
-  day view's; a person's rows by price.
+  day view's; a person's rows by price; a birthday in view; the dinner chip on the dinner's supply; the released cell.
 - `useBookingUi.nuxt.spec.ts`: the preview's and the toast's guest lines by type and price. Unit, the scaffold: a
   result's and a place's price.
 
@@ -858,6 +869,31 @@ Gæst af Anna [Baby · 9 kr · Gæst] |      | venteliste |        |          |
 `useBooking.ts`, `useBookingUi.ts`, `useBookingValidation.ts` (`BookingResultSchema`, `QueuePositionSchema`),
 `server/utils/scaffoldPrebookings.ts`, `bookingWords.ts`, `DinnerTicket.vue`, `BookingGridView.vue`,
 `DinnerBookingForm.vue`.
+
+## Tables key their rows by id
+
+### Problem
+
+A table keys its rows by position, so an open row moves to another row when rows arrive above it or the order
+changes: after a guest save in the day view the add-guest form closes and the queued guest's card opens.
+
+### Solution
+
+- Every table gives its rows their id (`getRowId`, Nuxt UI's table option): the row's own id, or its dinner's id on the
+  economy tables (`rowIdOf`, `dinnerRowIdOf`).
+- The open row is kept by id (`useExpandableRow`): one row open at a time, and it stays with its row through a save,
+  a reload and a sort.
+
+### TDD
+
+- Unit `useExpandableRow.unit.spec.ts`: one row open, by id.
+- `DinnerBookingForm.nuxt.spec.ts`: the add-guest row stays open when a save brings in a queued guest.
+- `BookingGridView.nuxt.spec.ts`: the guest form stays open when a guest row arrives above it.
+
+### Affected
+
+`useExpandableRow.ts`, `utils.ts`, `BookingGridView.vue`, `DinnerBookingForm.vue`, `HouseholdCard.vue`,
+`EconomyTable.vue`, `AdminEconomy.vue`, `HouseholdEconomy.vue`.
 
 ## Decisions carried from release 0.9
 

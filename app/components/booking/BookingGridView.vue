@@ -154,17 +154,17 @@ import {EMPTY_RELEASED_TICKET_COUNTS, type BookingChanges, type BookingContext, 
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
-// Row types for synthetic rows (same pattern as HouseholdCard)
+// The power row, a person at a price, a guest row and the add-guest row
 type RowType = 'power' | 'inhabitant' | 'guest-order' | 'guest-add'
 
-// Ticket config type (same as DinnerBookingForm)
+// The add-guest row's id: its chevrons open the guest form in it
+const GUEST_ADD_ROW_ID = 'guest-add'
 
 interface GridRow {
   rowType: RowType
   id: string
   name: string
   inhabitant?: InhabitantDisplay // For inhabitant row, or booker for guest-order
-  inhabitants?: InhabitantDisplay[] // For power mode
   guestOrders?: OrderDisplay[] // A guest group: one booker, ticket type, price and dinner (groupGuestOrders)
   waitlistEntry?: TicketWaitlistDetail // A queued guest's place
   dinnerEventId?: number // A guest row's dinner
@@ -221,19 +221,15 @@ const emit = defineEmits<{
   addGuest: [orders: DesiredOrder[]]
 }>()
 
-// Design system
 const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, ORDER_STATE_COLORS, DINNER_STATE_BADGES, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
-// Ticket price formatting
 const {formatPrice, resolveTicketPrice, takesNoPortionOf} = useTicket()
 
-// Booking helpers (shared with DinnerBookingForm)
 const {groupGuestOrders, getDayBillSummary, getBookingOptions, powerOptions, newGuestRow, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
 const {lockChip} = useBookingUi()
 const bookingsStore = useBookingsStore()
 
-// Validation schemas
 const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
 
@@ -374,41 +370,24 @@ const handleSave = () => {
 // GUEST BOOKING EXPANDABLE ROW
 // ============================================================================
 
-// Track which event's + button was clicked (for GuestBookingForm context)
+// The dinner whose add-guest chevron opened the guest form
 const activeGuestEventId = ref<number | null>(null)
 
-// Expandable row state (single row at a time)
+// Only the add-guest row expands; handleGuestAdd sets its dinner before it opens
 const {expanded} = useExpandableRow({
-  onExpand: (rowIndex) => {
-    // Row expanded - activeGuestEventId already set by handleGuestAdd
-    const row = tableData.value[rowIndex]
-    if (row?.rowType !== 'guest-add') {
-      activeGuestEventId.value = null // Safety: only guest-add row should expand
-    }
+  onExpand: (rowId) => {
+    if (rowId !== GUEST_ADD_ROW_ID) activeGuestEventId.value = null
   },
   onCollapse: () => {
     activeGuestEventId.value = null
   }
 })
 
-// Get the row index for guest-add row (needed to toggle expansion)
-const guestAddRowIndex = computed(() =>
-  tableData.value.findIndex(r => r.rowType === 'guest-add')
-)
-
-// Handle + button click: set event context and expand row
+// The open dinner's chevron closes the form, another dinner's moves the form to it
 const handleGuestAdd = (eventId: number) => {
-  // Toggle expansion - the open dinner's chevron collapses, another dinner's switches the form to it
   const isOpenDinner = activeGuestEventId.value === eventId
   activeGuestEventId.value = eventId
-  const rowIdx = guestAddRowIndex.value
-  if (rowIdx >= 0) {
-    if (expanded.value[rowIdx] && isOpenDinner) {
-      expanded.value = {}
-    } else {
-      expanded.value = {[rowIdx]: true}
-    }
-  }
+  expanded.value = expanded.value[GUEST_ADD_ROW_ID] && isOpenDinner ? {} : {[GUEST_ADD_ROW_ID]: true}
 }
 
 // Get active event for GuestBookingForm
@@ -422,15 +401,6 @@ const activeGuestEvent = computed(() =>
 const handleGuestSave = (orders: DesiredOrder[]) => {
   emit('addGuest', orders)
   expanded.value = {}
-}
-
-// Handle mode change from the view switcher (reserved for future use)
-const _handleModeChange = (mode: FormMode) => {
-  if (mode === FORM_MODES.VIEW && hasPendingChanges.value) {
-    // If switching back to VIEW with pending changes, clear them
-    clearDrafts()
-  }
-  emit('update:formMode', mode)
 }
 
 // ============================================================================
@@ -447,8 +417,6 @@ const flatEvents = computed(() => eventsByWeek.value.flat())
 // ============================================================================
 // THE SERVER'S DRY RUN: the expected bookings and the preview of the draft
 // ============================================================================
-
-const householdOrder = computed(() => props.household.inhabitants.map(i => i.id))
 
 // The bookings the scaffold will make on the dinners on view: its dry run with no orders, read again once the orders change.
 // Every viewer reads them, on the season's deadlines
@@ -475,7 +443,7 @@ const {result: preview, pending: isPreviewPending} = useScaffoldPreview(
   request => bookingsStore.previewBookings(request, props.adminBypass),
   {debounced: true}
 )
-const previewDays = computed(() => preview.value ? formatPreviewLines(preview.value, householdOrder.value) : [])
+const previewDays = computed(() => preview.value ? formatPreviewLines(preview.value, householdInhabitantIds.value) : [])
 
 // ============================================================================
 // COMPUTED: Dynamic columns (fixed + dinner events)
@@ -580,7 +548,6 @@ const tableData = computed((): GridRow[] => {
   // the table populated and its #empty slot unreachable.
   if (flatEvents.value.length === 0) return []
 
-  const inhabitants = props.household.inhabitants
   const rows: GridRow[] = []
 
   // Power row - ALWAYS shown (consensus in VIEW, editable in EDIT)
@@ -588,7 +555,6 @@ const tableData = computed((): GridRow[] => {
     rowType: 'power',
     id: 'power-mode',
     name: 'Alle',
-    inhabitants,
     isSynthetic: true
   })
 
@@ -599,7 +565,7 @@ const tableData = computed((): GridRow[] => {
   if (props.formMode === FORM_MODES.EDIT) {
     rows.push({
       rowType: 'guest-add',
-      id: 'guest-add',
+      id: GUEST_ADD_ROW_ID,
       name: 'Tilføj gæst',
       isSynthetic: true
     })
@@ -727,11 +693,6 @@ const navigationLabel = computed(() => {
 })
 
 // ============================================================================
-// GUEST ORDERS
-// ============================================================================
-
-
-// ============================================================================
 // EVENT SUMMARIES (for footer - matches economy view format)
 // ============================================================================
 
@@ -794,7 +755,7 @@ const getEventSummary = (eventId: number) => {
       :data="tableData"
       :columns="columns"
       :loading="loading || isExpectedPending"
-      row-key="id"
+      :get-row-id="rowIdOf"
       :ui="COMPONENTS.table.gridUi"
     >
       <template #loading>

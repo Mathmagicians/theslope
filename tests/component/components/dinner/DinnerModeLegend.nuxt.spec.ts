@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {enableAutoUnmount} from '@vue/test-utils'
+import {enableAutoUnmount, type BaseWrapper} from '@vue/test-utils'
 import {findByTestId, resetStores} from '~~/tests/component/testHelpers'
 import DinnerModeLegend from '~/components/dinner/DinnerModeLegend.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
@@ -93,7 +93,7 @@ describe('DinnerModeLegend', () => {
     // The expected booking is a standing entry: a surface explains it whether or not one of its rows is expected now
     it('explains the expected booking with the sliders beside the expected mode on every surface', async () => {
         const wrapper = await mountSuspended(DinnerModeLegend)
-        const entry = findByTestId(wrapper, 'dinner-mode-legend-expected')
+        const entry: BaseWrapper<Node> = findByTestId(wrapper, 'dinner-mode-legend-expected')
         const sliders = entry.findAllComponents({name: 'UIcon'}).find(icon => icon.props('name') === ICONS.preferences)
 
         expect(entry.text()).toContain(BOOKING_WORDS.expectedBooking)

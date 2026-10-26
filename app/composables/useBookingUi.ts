@@ -450,7 +450,7 @@ export const scaffoldToastLook = (result: Pick<ScaffoldResult, 'errored'>) => ({
     ui: {description: COMPONENTS.bookingResult.lines}
 })
 
-/** A booker's guest tickets of one type in a preview line or a toast line: "Barn", "Barn ×2"; the count alone when the type is gone */
+/** A booker's guest tickets of one kind in a preview line or a toast line: "Barn · 17 kr", "Barn · 17 kr ×2"; the count alone when the ticket's type is gone */
 export const guestTicketsLabel = (label: string | undefined, count: number): string =>
     [label, count > 1 ? BOOKING_WORDS.guests.count(count) : undefined].filter(Boolean).join(' ')
 
@@ -461,16 +461,19 @@ export const ticketBadgeLabel = (label: string, price: number, guestCount?: numb
         guestCount === undefined ? undefined : BOOKING_WORDS.guests.label(guestCount)
     ].filter(Boolean).join(' · ')
 
-/** A booker's guests of one ticket type in a preview line or a toast line: "Gæst af Anna (Barn ×2)" */
-const guestGroupName = (bookerName: string, ticketType: TicketType | null | undefined, count: number): string => {
-    const tickets = guestTicketsLabel(ticketType ? ticketTypeLabel(ticketType) : undefined, count)
-    const guests = useOrder().formatGuestLabel(bookerName)
+/** A booker's guests of one ticket type and price in a preview line or a toast line: "Gæst af Anna (Baby · 0 kr ×2)" */
+const guestGroupName = ({inhabitantName, ticketType, priceAtBooking}: BookingResult, count: number): string => {
+    const ticket = ticketType && priceAtBooking !== null
+        ? BOOKING_WORDS.ticketPrice.label(ticketTypeLabel(ticketType), useTicket().formatPrice(priceAtBooking))
+        : undefined
+    const tickets = guestTicketsLabel(ticket, count)
+    const guests = useOrder().formatGuestLabel(inhabitantName)
     return tickets ? `${guests} (${tickets})` : guests
 }
 
-/** The person a result names: the inhabitant, or a booker's guests of one ticket type */
-const personOf = ({inhabitantId, isGuestTicket, ticketType}: Pick<BookingResult, 'inhabitantId' | 'isGuestTicket' | 'ticketType'>): string =>
-    isGuestTicket ? `${inhabitantId}:guest:${ticketType}` : `${inhabitantId}`
+/** The person a result or a place names: the inhabitant, or a booker's guests of one ticket type and price */
+const personOf = ({inhabitantId, isGuestTicket, ticketType, priceAtBooking}: BookingResult | QueuePosition): string =>
+    isGuestTicket ? `${inhabitantId}:guest:${ticketType}:${priceAtBooking}` : `${inhabitantId}`
 
 /** Places on the waiting list ascending, each in the line of its ticket type: "Voksen #3" */
 const queuePlaces = (positions: QueuePosition[]): string[] =>
@@ -536,7 +539,7 @@ const previewItem = (name: string, action: BookingAction, words: string, places:
     text: withPlaces(`${name} ${words}`, places)
 })
 
-/** A line of a result's day: an action's person, or a booker's guests of one ticket type, with the rows it names */
+/** A line of a result's day: an action's person, or a booker's guests of one ticket type and price, with the rows it names */
 type DayLine = {row: BookingResult, rows: BookingResult[], name: string, places: string[]}
 
 /** A dinner's part of a booking result: its lines and its failed orders, and the tickets sold on it, to the waiting list or to a claim */
@@ -549,12 +552,12 @@ type DayRow = {dinnerEventId: number} & ({result: BookingResult} | {failed: Book
  * The days of a booking result, one per dinner the run decided, ascending: the preview and the toast read their lines
  * from them. Within a day a line per action in the word table's order, then per person in the household's order, a
  * booker's guests after the booker; a person outside that order keeps the place the results first give them. A booker's
- * guests of one ticket type are one group, counted as the guest row counts them. A queue line carries its places on the
- * dinner
+ * guests of one ticket type and price are one group, counted as the guest row counts them. A queue line carries its
+ * places on the dinner
  */
 const resultDays = (result: Pick<ScaffoldResult, 'dinners' | 'results' | 'failed' | 'positions' | 'outcomes'>, householdOrder: number[]): ResultDay[] => {
     const dateById = new Map(result.dinners.map(({id, date}) => [id, date]))
-    const placeKey = (place: Pick<QueuePosition, 'inhabitantId' | 'isGuestTicket' | 'ticketType' | 'dinnerEventId'>) => `${personOf(place)}:${place.dinnerEventId}`
+    const placeKey = (place: BookingResult | QueuePosition) => `${personOf(place)}:${place.dinnerEventId}`
     const placesBy = groupBy<QueuePosition, string>(placeKey)(result.positions)
     const personRank = ({inhabitantId}: BookingResult) => {
         const rank = householdOrder.indexOf(inhabitantId)
@@ -568,7 +571,7 @@ const resultDays = (result: Pick<ScaffoldResult, 'dinners' | 'results' | 'failed
             return {
                 row,
                 rows,
-                name: row.isGuestTicket ? guestGroupName(row.inhabitantName, row.ticketType, rows.length) : row.inhabitantName,
+                name: row.isGuestTicket ? guestGroupName(row, rows.length) : row.inhabitantName,
                 places: row.action === Action.QUEUE ? queuePlaces(placesBy.get(placeKey(row)) ?? []) : []
             }
         },

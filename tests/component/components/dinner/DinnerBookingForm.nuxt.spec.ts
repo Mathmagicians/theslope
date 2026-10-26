@@ -1,9 +1,9 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
+import {enableAutoUnmount, flushPromises, type BaseWrapper} from '@vue/test-utils'
 import {shallowReactive} from 'vue'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, registerScaffoldEndpoint, VIEWPORTS, lockedDinnerSupply, isTableLoading, untilTrue} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId,clickByTestId, resetStores, registerEmptyStoreEndpoints, registerScaffoldEndpoint, VIEWPORTS, lockedDinnerSupply, isTableLoading, untilTrue} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
@@ -11,7 +11,7 @@ import UserListItem from '~/components/shared/UserListItem.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {ACTION_WORDS, MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel, guestSaveLabel, moreTicketsAlert, formatPreviewLines, previewSaveOutcome} from '~/composables/useBookingUi'
+import {ACTION_WORDS, MODE_WORDS, ORDER_STATE_LABELS, SUPPLY_WORDS, bookingSaveLabel, guestSaveLabel, moreTicketsAlert, formatPreviewLines, previewSaveOutcome} from '~/composables/useBookingUi'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {DINNER_MODE_ORDER, EMPTY_RELEASED_TICKET_COUNTS, formatPlace} from '~/composables/useBooking'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
@@ -26,7 +26,7 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {COMPONENTS, ICONS, createTableColumns, getRibbonClasses, useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from './waitlistTestIds'
-import {useBookingValidation as useActionValidation, TicketState} from '~/composables/useBookingValidation'
+import {useBookingValidation as useActionValidation, OrderState, TicketState} from '~/composables/useBookingValidation'
 const Action = useActionValidation().BookingActionSchema.enum
 
 /**
@@ -97,6 +97,12 @@ const rowSelector = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, row: 
   wrapper.findAllComponents({name: 'DinnerModeSelector'}).find(selector => selector.props('name') === `${row}-mode-edit`)!
 /** The mode selector of an inhabitant's expanded row */
 const editSelector = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, inhabitantId: number) => rowSelector(wrapper, `inhabitant-${inhabitantId}`)
+/** The name cell of an inhabitant's row: the UserListItem naming that inhabitant alone */
+const nameCellOf = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, inhabitantId: number) =>
+  wrapper.findAllComponents(UserListItem).find(item => {
+    const inhabitants = item.props('inhabitants')
+    return !Array.isArray(inhabitants) && inhabitants.id === inhabitantId
+  })!
 
 // The next test's resetStores drops the datasets a still-mounted form reads
 enableAutoUnmount(afterEach)
@@ -314,6 +320,16 @@ describe('DinnerBookingForm', () => {
       expect(findByTestId(wrapper, WAITLIST_TEST_IDS.householdQueued).exists()).toBe(shown)
     })
   })
+
+  // The name cell names a released ticket's state in the words and glyph of the order states (useBookingUi)
+  it('GIVEN Anna\'s ticket is released THEN her name cell\'s badge reads the released state with its icon', async () => {
+    const [anna] = householdWithInhabitants.inhabitants
+    const released = OrderFactory.defaultOrder('released', {inhabitantId: anna!.id, dinnerEventId: baseProps.dinnerEvent.id, state: OrderState.RELEASED})
+    const wrapper = await mountMemberForm(false, {orders: [released]})
+
+    const {label, icon} = ORDER_STATE_LABELS[OrderState.RELEASED]
+    expect(nameCellOf(wrapper, anna!.id).findAllComponents({name: 'UBadge'}).map(badge => ({text: badge.text(), icon: badge.props('icon')}))).toEqual([{text: label, icon}])
+  })
 })
 
 describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => {
@@ -398,7 +414,7 @@ describe('DinnerBookingForm guest rows by price on a closed dinner', () => {
   const queued = {price: hungry.price, guestCount: 1, ticketState: TicketState.queued}
 
   // The ticket of each guest row as it renders, one per row: a row renders its ticket inline on a phone and in its column from md
-  const guestTickets = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>) => wrapper.findAll('tbody tr').flatMap(row => {
+  const guestTickets = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>) => wrapper.findAll('tbody tr').flatMap((row: BaseWrapper<Node>) => {
     const ticket = row.findAllComponents(DinnerTicket).find(candidate => candidate.props('guestCount') !== undefined)
     return ticket ? [{price: ticket.props('price'), guestCount: ticket.props('guestCount'), ticketState: ticket.props('ticketState')}] : []
   })
@@ -602,11 +618,7 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
   type Mounted = Awaited<ReturnType<typeof mountMemberForm>>
   // The tickets of an inhabitant's row, found by the row's name: on a phone under the name, from md in their own column
   const ticketsOf = (wrapper: Mounted, inhabitantId: number) => {
-    const name = wrapper.findAllComponents(UserListItem).find(item => {
-      const inhabitants = item.props('inhabitants')
-      return !Array.isArray(inhabitants) && inhabitants.id === inhabitantId
-    })!
-    const row = (name.element as Element).closest('tr')!
+    const row = (nameCellOf(wrapper, inhabitantId).element as Element).closest('tr')!
     return wrapper.findAllComponents(DinnerTicket).filter(ticket => row.contains(ticket.element))
   }
 
@@ -819,15 +831,20 @@ describe('DinnerBookingForm on a cancelled dinner', () => {
     expect(ribbon.classes()).toEqual(getRibbonClasses('cancel').split(' '))
   })
 
-  // A member edits the dinners still to come: a cancelled dinner is as closed to edits as a past one
+  // A member edits the dinners still to come while the household lives here: the booking rules give no mode on a past
+  // or cancelled dinner, nor on an open dinner after the household's move-out (getBookingOptions)
   it.each([
-    {standing: 'a past dinner', dinnerEvent: {...baseProps.dinnerEvent, date: DinnerEventFactory.dinnerEventAt(baseProps.dinnerEvent.id, -1).date}},
-    {standing: 'a cancelled dinner', dinnerEvent: cancelledDinner}
-  ])('GIVEN a member on $standing THEN the form offers no edit mode: no row opens and no guest can be added', async ({dinnerEvent}) => {
-    const wrapper = await mountMemberForm(true, {dinnerEvent})
+    {standing: 'a past dinner', props: {dinnerEvent: {...baseProps.dinnerEvent, date: DinnerEventFactory.dinnerEventAt(baseProps.dinnerEvent.id, -1).date}}},
+    {standing: 'a cancelled dinner', props: {dinnerEvent: cancelledDinner}},
+    {standing: 'an open dinner after the household moved out', props: {household: {...householdWithInhabitants, moveOutDate: DinnerEventFactory.dinnerEventAt(baseProps.dinnerEvent.id, 0).date}}}
+  ])('GIVEN a member on $standing THEN the form offers no edit mode: no row opens, no guest can be added and no legend shows', async ({props}) => {
+    const wrapper = await mountMemberForm(true, props)
 
     const toggles = ['power-power-mode', ...householdWithInhabitants.inhabitants.map(({id}) => `inhabitant-${id}`), 'guest-add-guest'].map(row => `${row}-toggle`)
     expect(toggles.filter(toggle => findByTestId(wrapper, toggle).exists())).toEqual([])
+    // The add-guest row's name cell is the one UserListItem wearing the add-guest face
+    expect(wrapper.findAllComponents(UserListItem).some(item => item.props('icon') === ICONS.userPlus)).toBe(false)
+    expect(wrapper.findComponent({name: 'DinnerModeLegend'}).exists()).toBe(false)
   })
 
   it('GIVEN a cancelled dinner THEN every ticket of its rows wears the cancelled face', async () => {

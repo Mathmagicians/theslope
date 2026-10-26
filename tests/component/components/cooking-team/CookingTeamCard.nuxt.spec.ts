@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
-import {flushPromises, enableAutoUnmount, type DOMWrapper, type VueWrapper} from '@vue/test-utils'
+import {flushPromises, enableAutoUnmount, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
 import {nextTick, ref, type ComponentPublicInstance} from 'vue'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, iconNamesIn} from '~~/tests/component/testHelpers'
 import CookingTeamCard from '~/components/cooking-team/CookingTeamCard.vue'
@@ -97,7 +97,7 @@ const mountCard = async (mode: 'monitor' | 'regular' | 'edit', detail: Partial<C
     return wrapper
 }
 
-const avatarsIn = (element: DOMWrapper<Element>): AvatarWrapper[] =>
+const avatarsIn = (element: BaseWrapper<Node>): AvatarWrapper[] =>
     element.findAllComponents({name: 'UAvatar'}) as AvatarWrapper[]
 
 const expectHeadingWithGlyph = (wrapper: VueWrapper, testId: string, glyph: string) => {

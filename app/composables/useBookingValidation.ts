@@ -485,13 +485,15 @@ export const useBookingValidation = () => {
     // SCAFFOLD PRE-BOOKINGS RESULT
     // ============================================================================
 
-    // A queued entry's place in the line of its ticket type on a dinner; the type is null when the entry's price is gone
+    // A queued entry's place in the line of its ticket type on a dinner, at the price its entry froze; the type is null when
+    // the entry's price is gone
     const QueuePositionSchema = z.object({
         inhabitantId: IdSchema,
         dinnerEventId: IdSchema,
         isGuestTicket: z.boolean(),
         position: z.number().int().positive(),
-        ticketType: TicketTypeSchema.nullable()
+        ticketType: TicketTypeSchema.nullable(),
+        priceAtBooking: z.number().int()
     })
 
     // A wish joined a dinner's waiting list: its place, the ticket it waits for, and the queue at its join
@@ -708,13 +710,16 @@ export const useBookingValidation = () => {
         olderCount: z.number().int().min(0)
     })
 
-    // One order's result in a scaffold run: who, the ticket type, which dinner, the eating mode and the action; the ticket
-    // type groups a booker's guests and is null when the order's price is gone
+    // One order's result in a scaffold run: who, the ticket type and the price, which dinner, the eating mode and the action.
+    // The type and the price group a booker's guests. The type is null when the order's price row is gone. The price is the
+    // one the ticket holds after the run: a held order's or place's frozen price, unless the run moves it to another of the
+    // season's price rows; a new ticket's price row's; null when neither the order nor a price row holds one
     const BookingResultSchema = z.object({
         inhabitantId: IdSchema,
         inhabitantName: z.string(),
         isGuestTicket: z.boolean(),
         ticketType: TicketTypeSchema.nullable(),
+        priceAtBooking: z.number().int().nullable(),
         dinnerEventId: IdSchema,
         dinnerMode: DinnerModeSchema,
         action: BookingActionSchema,

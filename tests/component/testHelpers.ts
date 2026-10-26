@@ -171,40 +171,39 @@ export const kitchenConfig = () => {
     return {baseRatePercent: kitchen?.baseRatePercent ?? 5, vatPercent: kitchen?.vatPercent ?? 25}
 }
 
-// Anything with find/findAll: a mountSuspended root, a findComponent() result or a DOMWrapper
-type Searchable = Pick<BaseWrapper<Node>, 'find' | 'findAll'>
-
-export const findByTestId = (wrapper: Searchable, testId: string) =>
+// A mountSuspended root, a findComponent() result or a DOMWrapper. A part typed BaseWrapper<Node> keeps the typed
+// findAllComponents overloads, which DOMWrapper types any
+export const findByTestId = (wrapper: BaseWrapper<Node>, testId: string) =>
     wrapper.find(`[data-testid="${testId}"]`)
 
-export const findAllByTestId = (wrapper: Searchable, testId: string) =>
+export const findAllByTestId = (wrapper: BaseWrapper<Node>, testId: string) =>
     wrapper.findAll(`[data-testid="${testId}"]`)
 
 /** The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows */
-export const findLoadingRow = (wrapper: Searchable) => wrapper.find('[data-slot="loading"]')
+export const findLoadingRow = (wrapper: BaseWrapper<Node>) => wrapper.find('[data-slot="loading"]')
 
-export const findAllLoadingRows = (wrapper: Searchable) => wrapper.findAll('[data-slot="loading"]')
+export const findAllLoadingRows = (wrapper: BaseWrapper<Node>) => wrapper.findAll('[data-slot="loading"]')
 
 /** A table's rendered column headers, a column without header text (an expand column) as '' */
-export const tableHeaders = (wrapper: Searchable) => wrapper.find('table').findAll('th').map(th => th.text())
+export const tableHeaders = (wrapper: BaseWrapper<Node>) => wrapper.find('table').findAll('th').map(th => th.text())
 
 /** The cells of a table's body row by the header of their column */
-export const cellsByHeader = (wrapper: Searchable, rowIndex = 0): Record<string, string | undefined> => {
+export const cellsByHeader = (wrapper: BaseWrapper<Node>, rowIndex = 0): Record<string, string | undefined> => {
     const cells = wrapper.find('table').findAll('tbody tr')[rowIndex]?.findAll('td').map(td => td.text()) ?? []
     return Object.fromEntries(tableHeaders(wrapper).map((header, index) => [header, cells[index]]))
 }
 
 type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
 
-/** The names of the icons rendered inside a wrapper: a DOM wrapper's findAllComponents keeps the components its element contains */
-export const iconNamesIn = (wrapper: Pick<BaseWrapper<Node>, 'findAllComponents'>): string[] =>
+/** The names of the icons rendered inside a wrapper or a part of it */
+export const iconNamesIn = (wrapper: BaseWrapper<Node>): string[] =>
     (wrapper.findAllComponents({name: 'UIcon'}) as IconWrapper[]).map(icon => icon.props('name'))
 
 /** Whether the table binds `loading`: UTable runs its loading bar under the column headers, a bar that carries no attribute */
-export const isTableLoading = (wrapper: Pick<VueWrapper, 'findComponent'>): boolean =>
+export const isTableLoading = (wrapper: BaseWrapper<Node>): boolean =>
     wrapper.findComponent({name: 'UTable'}).props('loading') === true
 
-export const clickByTestId = async (wrapper: Searchable, testId: string) => {
+export const clickByTestId = async (wrapper: BaseWrapper<Node>, testId: string) => {
     await findByTestId(wrapper, testId).trigger('click')
     await nextTick()
 }
@@ -267,7 +266,7 @@ export const mountWithTooltipProvider = async <T extends MountableComponent>(
 /**
  * Opens a UPopover by clicking its trigger, then lets reka-ui mount the teleported content.
  */
-export const openPopover = async (wrapper: Searchable) => {
+export const openPopover = async (wrapper: BaseWrapper<Node>) => {
     await wrapper.find('[aria-expanded]').trigger('click')
     await flushPromises()
     await nextTick()
@@ -281,7 +280,7 @@ export const asCalendarDays = (ranges: Array<{start: Date, end: Date}>) =>
     ranges.map(range => ({start: calendarDay(range.start), end: calendarDay(range.end)}))
 
 /** The typed date segments (reka DateField) of one kind, in field order: one per date field below `wrapper` */
-export const findDateSegments = (wrapper: Searchable, segment: 'day' | 'month' | 'year') =>
+export const findDateSegments = (wrapper: BaseWrapper<Node>, segment: 'day' | 'month' | 'year') =>
     wrapper.findAll(`[data-segment="${segment}"]`)
 
 /** Types digits into one segment and waits a tick; the field commits when every segment holds a value */
@@ -296,7 +295,7 @@ export const typeIntoSegment = async (segment: {trigger: (e: string, o: {key: st
  * UCalendar binds the token is the architecture spec's rule (designSystemUsage); how the
  * grid looks (hidden outside-view days, head-cell type) is the visual check's.
  */
-export const expectSharedCalendarGrid = (wrapper: Pick<VueWrapper, 'findAll'>) => {
+export const expectSharedCalendarGrid = (wrapper: BaseWrapper<Node>) => {
     // A picker's open calendar teleports to body (UPopover): read the document when the wrapper subtree holds no grid
     const inWrapper = wrapper.findAll('th').map(th => th.text())
     const headDays = (inWrapper.length ? inWrapper : Array.from(document.querySelectorAll('th')).map(th => th.textContent ?? ''))

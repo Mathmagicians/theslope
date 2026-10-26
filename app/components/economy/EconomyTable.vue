@@ -38,18 +38,16 @@
  * UTable renders the value from row.original[accessorKey] automatically.
  */
 import {formatDate} from '~/utils/date'
-import {getPaginationRowModel} from '@tanstack/vue-table'
-
-// Column definition matching UTable expectations
-type ColumnDef = { id?: string; accessorKey?: string; header?: string }
+import type {TableColumn} from '@nuxt/ui'
+import {getPaginationRowModel, type Table} from '@tanstack/vue-table'
 
 interface Props {
     /** Table data */
     data: T[]
     /** Column definitions - passed through to UTable */
-    columns: ColumnDef[]
-    /** Unique row identifier field (string key from T) */
-    rowKey: string
+    columns: TableColumn<T>[]
+    /** UTable's getRowId: a row's id, so an open row stays open when the rows around it change */
+    getRowId: (row: T) => string
     /** Extract date from item for filtering/sorting */
     dateAccessor: (item: T) => Date
     /** Loading state */
@@ -74,18 +72,12 @@ const props = withDefaults(defineProps<Props>(), {
 
 const {COMPONENTS, ICONS, SIZES, PAGINATION, COLOR, NOISE} = useTheSlopeDesignSystem()
 
-// Table ref for accessing TanStack table API
-const tableRef = ref<{ tableApi?: { setPageIndex: (index: number) => void; getState: () => { pagination: { pageIndex: number; pageSize: number } }; getFilteredRowModel: () => { rows: unknown[] } } } | null>(null)
+const table = useTemplateRef<{tableApi: Table<T>}>('table')
 
-// Internal state
 const search = ref('')
-const sortDesc = ref(props.defaultSortDesc)  // Use prop for default direction
+const sortDesc = ref(props.defaultSortDesc)
 const pagination = ref({pageIndex: 0, pageSize: props.pageSize})
 const {expanded} = useExpandableRow()
-
-// Cast columns through unknown to match UTable's strict TableColumn type
-// Runtime validation is handled by UTable itself
-const tableColumns = computed(() => props.columns as unknown as Array<{ id: string } | { accessorKey: keyof T; header: string }>)
 
 // Filter by date only, then sort
 const filteredData = computed(() => {
@@ -106,17 +98,17 @@ const filteredData = computed(() => {
 
 // Pagination display - use table API state when available
 const totalRows = computed(() =>
-    tableRef.value?.tableApi?.getFilteredRowModel().rows.length ?? filteredData.value.length
+    table.value?.tableApi.getFilteredRowModel().rows.length ?? filteredData.value.length
 )
 const showPagination = computed(() => totalRows.value > props.pageSize)
 const currentPage = computed(() => {
-    const pageIndex = tableRef.value?.tableApi?.getState().pagination.pageIndex ?? pagination.value.pageIndex
+    const pageIndex = table.value?.tableApi.getState().pagination.pageIndex ?? pagination.value.pageIndex
     return pageIndex + 1
 })
 
 const handlePageChange = (page: number) => {
     // Use table API directly for reliable pagination control
-    tableRef.value?.tableApi?.setPageIndex(page - 1)
+    table.value?.tableApi.setPageIndex(page - 1)
     pagination.value.pageIndex = page - 1  // Keep local state in sync
 }
 
@@ -158,15 +150,15 @@ const toggleSort = () => {
     </div>
 
     <UTable
-        ref="tableRef"
+        ref="table"
         v-model:expanded="expanded"
         v-model:pagination="pagination"
         :data="filteredData"
-        :columns="tableColumns"
+        :columns="columns"
         :ui="COMPONENTS.table.ui"
         :loading="loading"
         :pagination-options="{getPaginationRowModel: getPaginationRowModel()}"
-        :row-key="rowKey"
+        :get-row-id="getRowId"
     >
 
       <!-- Pass through all other slots -->

@@ -159,10 +159,8 @@ import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES} from '~/types/form'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 
-// Row types for synthetic rows in table
+// An inhabitant, the power row, the add-guest row ('guest') and a guest's row
 type RowType = 'inhabitant' | 'power' | 'guest' | 'guest-order'
-
-// Ticket config type
 
 interface TableRow {
   rowType: RowType
@@ -242,18 +240,14 @@ const formMode = computed(() => {
   return canEdit ? FORM_MODES.EDIT : FORM_MODES.VIEW
 })
 
-// Design system
 const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, getResidencyDisplay, LAYOUTS, NOISE, TYPOGRAPHY, TABLE_COLUMNS, ORIENTATIONS} = useTheSlopeDesignSystem()
 const emptyStateMessage = getRandomEmptyMessage('household')
 
-// Ticket business logic
 const {resolveTicketPrice, formatPrice, takesNoPortionOf} = useTicket()
 
-// Season business logic
 const {isDinnerPast} = useSeason()
 const {canModifyOrders} = props.deadlines
 
-// Validation
 const {DinnerModeSchema, OrderStateSchema, BookingActionSchema, DinnerStateSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
 const OrderStateEnum = OrderStateSchema.enum
@@ -277,10 +271,9 @@ const toggleHistory = (orderId: number | null) => {
     historyOrderId.value = historyOrderId.value === orderId ? null : orderId
 }
 
-// Expandable row with callbacks
 const {expanded} = useExpandableRow({
-  onExpand: (rowIndex) => {
-    const row = tableData.value[rowIndex]
+  onExpand: (rowId) => {
+    const row = tableData.value.find(candidate => rowIdOf(candidate) === rowId)
     if (row) {
       editingRowId.value = row.id
       // A plan's draft starts on the person's click; a row without a ticket shows Ingen, its draft starts on the first mode it may pick
@@ -644,6 +637,7 @@ const handleGuestSave = (orders: DesiredOrder[]) => completeBooking(orders)
 
 const {groupGuestOrders, getBookingOptions, powerOptions, newGuestRow, getDayBillSummary, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
 const {createBookingBadges, createWaitlistBadge, bookingSaveLabel} = useBookingUi()
+const releasedState = ORDER_STATE_LABELS[OrderStateEnum.RELEASED]
 
 // A queue entry's place names the line of the ticket type its price holds
 const ticketTypeOfEntry = computed(() => useWaitlist().ticketTypeOfEntry(props.ticketPrices))
@@ -745,7 +739,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
       :data="tableData"
       :columns="columns"
       :loading="loading || isExpectedPending"
-      row-key="id"
+      :get-row-id="rowIdOf"
       data-testid="booking-table"
       :ui="COMPONENTS.table.bookingUi"
     >
@@ -815,12 +809,12 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
                 <!-- Released badge -->
                 <UBadge
                   v-if="row.original.ticketState === TicketState.released"
-                  :color="COLOR.error"
+                  :color="releasedState.color"
                   :variant="NOISE.soft"
                   :size="SIZES.small"
-                  :icon="ICONS.released"
+                  :icon="releasedState.icon"
                 >
-                  FRIGIVET
+                  {{ releasedState.label }}
                 </UBadge>
                 <!-- Provenance badges -->
                 <div v-else-if="row.original.provenanceHousehold" :class="COMPONENTS.bookingForm.provenance">

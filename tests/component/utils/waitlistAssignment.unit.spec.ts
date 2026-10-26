@@ -59,13 +59,14 @@ const SEASON_ID = 9
 const RELEASED_ORDER_ID = 501
 const CREATED_ORDER_ID = 77
 const ticketPrices = TicketFactory.defaultTicketPrices({seasonId: SEASON_ID})
-const priceIdOf = (ticketType: keyof typeof TicketTypeSchema.enum) => ticketPrices.find(price => price.ticketType === ticketType)!.id!
-const ADULT_PRICE_ID = priceIdOf(TicketTypeSchema.enum.ADULT)
+const priceOf = (ticketType: keyof typeof TicketTypeSchema.enum) => ticketPrices.find(price => price.ticketType === ticketType)!
+const ADULT_PRICE = priceOf(TicketTypeSchema.enum.ADULT)
+const ADULT_PRICE_ID = ADULT_PRICE.id!
 const portionDinner = {...DinnerEventFactory.defaultDinnerEventDetail(), id: DINNER_ID, seasonId: SEASON_ID}
 
 // Two regular entries in the dinner's adult line, first joined first, and one in its child line
 const [first, second, child] = [41, 42, 43].map((inhabitantId, index) => WaitlistFactory.defaultEntry({
-    id: index + 1, dinnerEventId: DINNER_ID, inhabitantId, ticketPriceId: index < 2 ? ADULT_PRICE_ID : priceIdOf(TicketTypeSchema.enum.CHILD),
+    id: index + 1, dinnerEventId: DINNER_ID, inhabitantId, ticketPrice: index < 2 ? ADULT_PRICE : priceOf(TicketTypeSchema.enum.CHILD),
     createdAt: new Date(2026, 9, 1, 12, index)
 }))
 // A grab older than the lease is the trace of a run that stopped midway; a younger grab belongs to a run at work
@@ -315,7 +316,7 @@ describe.each([
 describe('the recovery\'s search for an order no entry records', () => {
     it('passes over the orders recorded on other entries and the orders it matched earlier in the pass', async () => {
         const guestEntry = (id: number) => WaitlistFactory.defaultEntry({
-            id, dinnerEventId: DINNER_ID, inhabitantId: first!.inhabitantId, isGuestTicket: true, ticketPriceId: ADULT_PRICE_ID, createdAt: new Date(2026, 9, 1, 13, id)
+            id, dinnerEventId: DINNER_ID, inhabitantId: first!.inhabitantId, isGuestTicket: true, ticketPrice: ADULT_PRICE, createdAt: new Date(2026, 9, 1, 13, id)
         })
         const [guest, secondGuest] = [5, 6].map(id => ({...guestEntry(id), placingAt: STALE}))
         const servedElsewhere = {...guestEntry(7), placingAt: HELD, placingOrderId: CREATED_ORDER_ID}

@@ -22,12 +22,10 @@ interface Props {
 
 const props = defineProps<Props>()
 
-// Composables
 const {formatPrice} = useTicket()
 const {groupByCostEntry, calculateCurrentBillingPeriod, formatTicketCounts} = useBilling()
 const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, NOISE} = useTheSlopeDesignSystem()
 
-// Accessor functions for CostEntry (reusable lambdas)
 const periodTitleAccessor = (period: UnifiedBillingPeriod) =>
     period.isClosed ? 'PBS Faktura' : 'Aktuel periode'
 
@@ -63,12 +61,7 @@ bookingsStore.loadHouseholdBilling()
 bookingsStore.loadUpcomingOrders(false)
 const isUpcomingOrdersLoading = computed(() => isOrdersLoading.value || !isSelectedSeasonInitialized.value)
 
-
-// Inhabitants lookup for name resolution
-const inhabitantsMap = computed(() => {
-    const inhabitants = props.household.inhabitants ?? []
-    return new Map(inhabitants.map(i => [i.id, i.name]))
-})
+const inhabitantsMap = computed(() => new Map(props.household.inhabitants.map(i => [i.id, i.name])))
 const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id}`
 
 type OrderWithContext = OrderDisplay & { dinnerEvent: DinnerEventInfo, inhabitant: { id: number, name: string } }
@@ -89,39 +82,30 @@ const upcomingOrdersData = computed(() => {
     )
 })
 
-// Curried grouper for transactions by dinner
 const groupTxByDinner = groupByCostEntry<TransactionDisplay>()
 
-// Current period grouped data
 const currentPeriodData = computed(() =>
     billing.value ? groupTxByDinner(billing.value.currentPeriod.transactions, tx => tx.amount) : []
 )
 
-// ========== UNIFIED BILLING PERIODS (matches AdminEconomy pattern) ==========
-
-/**
- * UnifiedBillingPeriod - Represents both virtual (current) and closed (past) periods
- * Same interface as AdminEconomy's unifiedBillingPeriods
- */
+// A row of the period table: the current period, not yet billed (virtual), or a past invoice
 interface UnifiedBillingPeriod {
     id: number | 'virtual'      // 'virtual' for current period, number for past invoices
     period: DateRange           // For EconomyTable date filtering/sorting
-    billingPeriod: string       // Display string
+    billingPeriod: string
     totalAmount: number
     dinnerCount: number
     ticketCounts: string
     isClosed: boolean           // true = past invoice, false = virtual/current
-    groups: CostEntry<TransactionDisplay, DinnerEventInfo>[]  // Grouped transactions by dinner
+    groups: CostEntry<TransactionDisplay, DinnerEventInfo>[]
     transactionSum: number      // Control sum: Σ transaction amounts
 }
 
-// Unified billing periods (virtual + closed)
 const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
     if (!billing.value) return []
 
     const periods: UnifiedBillingPeriod[] = []
 
-    // Virtual row (current period - not yet billed)
     const currentPeriod = billing.value.currentPeriod
     const currentPeriodRange = createDateRange(
         new Date(currentPeriod.periodStart),
@@ -129,7 +113,6 @@ const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
     )
     const currentGroups = currentPeriodData.value
 
-    // Control sum for virtual: Σ transaction amounts
     const virtualTransactionSum = sumAmounts(currentPeriod.transactions)
 
     periods.push({
@@ -144,10 +127,8 @@ const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
         transactionSum: virtualTransactionSum
     })
 
-    // Closed rows (past invoices)
     for (const inv of billing.value.pastInvoices) {
         const groups = groupTxByDinner(inv.transactions, tx => tx.amount)
-        // Control sum: Σ transaction amounts vs invoice amount
         const invoiceTransactionSum = sumAmounts(inv.transactions)
         periods.push({
             id: inv.id,
@@ -165,7 +146,6 @@ const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
     return periods
 })
 
-// Unified period columns (matches AdminEconomy pattern with control column)
 const periodColumns = [
     {id: 'expand'},
     {accessorKey: 'status', header: 'Status'},
@@ -175,13 +155,11 @@ const periodColumns = [
     {accessorKey: 'control', header: 'Kontrol'}
 ]
 
-// Single history visible at a time
 const historyOrderId = ref<number | null>(null)
 const toggleHistory = (orderId: number | null) => {
     historyOrderId.value = historyOrderId.value === orderId ? null : orderId
 }
 
-// Dinner columns (for EconomyTable)
 const dinnerColumns = [
     {id: 'expand'},
     {accessorKey: 'date', header: 'Dato'},
@@ -190,12 +168,11 @@ const dinnerColumns = [
     {accessorKey: 'totalAmount', header: 'Beløb'}
 ]
 
-// Totals (using raw data - EconomyTable handles filtering internally)
+// Every upcoming order counts: the table's search filters only the rows it shows
 const upcomingTotal = computed(() =>
     upcomingOrdersData.value.reduce((sum, g) => sum + g.totalAmount, 0)
 )
 
-// Upcoming period starts after current billing period
 const upcomingPeriodStart = computed(() => {
     const currentPeriod = calculateCurrentBillingPeriod()
     const startDate = new Date(currentPeriod.end)
@@ -210,7 +187,6 @@ const upcomingPeriodStart = computed(() => {
     <Loader v-else-if="isLoading" text="Henter økonomioversigt..."/>
 
     <template v-else-if="billing">
-      <!-- Section 1: Kommende (Upcoming Orders) -->
       <UCard>
         <template #header>
           <div :class="COMPONENTS.adminEconomy.cardTitleRow">
@@ -226,7 +202,7 @@ const upcomingPeriodStart = computed(() => {
         <EconomyTable
             :data="upcomingOrdersData"
             :columns="dinnerColumns"
-            row-key="dinnerEvent.id"
+            :get-row-id="dinnerRowIdOf"
             :date-accessor="(item) => item.dinnerEvent.date"
             :loading="isUpcomingOrdersLoading"
         >
@@ -273,7 +249,6 @@ const upcomingPeriodStart = computed(() => {
         </template>
       </UCard>
 
-      <!-- Section 2: Faktureringsperioder (Unified: Virtual + Closed) -->
       <UCard>
         <template #header>
           <div :class="COMPONENTS.adminEconomy.cardTitleRow">
@@ -285,7 +260,7 @@ const upcomingPeriodStart = computed(() => {
         <EconomyTable
             :data="unifiedBillingPeriods"
             :columns="periodColumns"
-            row-key="id"
+            :get-row-id="rowIdOf"
             :date-accessor="(item) => item.period.start"
             search-placeholder="Søg periode..."
             :default-sort-desc="true"
@@ -328,12 +303,11 @@ const upcomingPeriodStart = computed(() => {
                 :class="COMPONENTS.householdEconomy.expandedCard"
             >
               <template #default="{ items }">
-                <!-- Dinner breakdown table (ocean palette to match Level 1 header) -->
                 <UTable
                     :data="items"
                     :columns="dinnerColumns"
                     :ui="{...COMPONENTS.table.ui, thead: COMPONENTS.economyTable.level1.tableHead}"
-                    row-key="dinnerEvent.id"
+                    :get-row-id="dinnerRowIdOf"
                 >
                   <template #expand-cell="{ row: dinnerRow }">
                     <UButton
@@ -350,7 +324,6 @@ const upcomingPeriodStart = computed(() => {
                   <template #date-cell="{ row: dinnerRow }">{{ formatDate(dinnerRow.original.dinnerEvent.date) }}</template>
                   <template #totalAmount-cell="{ row: dinnerRow }">{{ formatPrice(dinnerRow.original.totalAmount) }} kr</template>
 
-                  <!-- Expanded dinner: individual transactions with history -->
                   <template #expanded="{ row: dinnerRow }">
                     <div :class="[COMPONENTS.adminEconomy.nestedList, BG.panel]">
                       <CostLine

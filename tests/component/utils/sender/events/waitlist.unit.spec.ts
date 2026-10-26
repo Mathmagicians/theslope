@@ -181,7 +181,8 @@ describe('the people a run\'s mails name', () => {
     })
     afterEach(() => vi.clearAllMocks())
 
-    const ADULT_PRICE_ID = 4
+    const ADULT_PRICE = TicketFactory.defaultTicketPrices().find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!
+    const ADULT_PRICE_ID = ADULT_PRICE.id!
     // The queue entry of a person's place
     const entryOf = (member: Member): number => 600 + member.id
     // A place in the dinner's adult line, the line's size at the join; the buildup threshold is 3
@@ -478,7 +479,7 @@ describe('the people a run\'s mails name', () => {
 
         // The parent's place on the waiting list
         const place = () => WaitlistFactory.defaultEntry({
-            id: entryOf(parent), dinnerEventId: dinner.dinnerEventId, inhabitantId: parent.id, ticketPriceId: ADULT_PRICE_ID, createdAt: at(10)
+            id: entryOf(parent), dinnerEventId: dinner.dinnerEventId, inhabitantId: parent.id, ticketPrice: ADULT_PRICE, createdAt: at(10)
         })
         // A ticket sold to the first in line: the buyer holds the order, the row's snapshot the seller's order before the sale
         const sale = () => OrderFactory.defaultOrderHistoryDisplay(undefined, {
