@@ -231,7 +231,7 @@ export const useBookingValidation = () => {
      * seasonId: Required for user intent tracking (fetchUserIntentKeys filters by seasonId)
      */
     // What wrote an order's history row: a member's booking, an admin's correction (`?adminBypass=true`), a preference
-    // change, the nightly scaffold, the chef's extra portions for the waiting list, the billing import
+    // change, the DAILY_MAINTENANCE job's scaffold, the chef's extra portions for the waiting list, the billing import
     const OrderAuditSourceSchema = z.enum(['user-booking', 'admin-correction', 'preference-update', 'scaffold-prebookings', 'waitlist-assignment', 'csv_billing'])
 
     const AuditContextSchema = z.object({
@@ -557,7 +557,7 @@ export const useBookingValidation = () => {
     // ORDER AUDIT - the auditData of an OrderHistory row (ADR-011)
     // ============================================================================
 
-    // What a history row did to its order: a booking action, or the nightly close
+    // What a history row did to its order: a booking action, or the DAILY_MAINTENANCE job's close
     const OrderAuditChangeSchema = z.enum([...BookingActionSchema.options, 'CLOSE'])
     const Change = OrderAuditChangeSchema.enum
 
@@ -669,7 +669,7 @@ export const useBookingValidation = () => {
         [TicketTypeSchema.enum.BABY]: z.number().int()
     })
 
-    // What a ticket event does: a booking action, the chef's extra portions for the waiting list, or the nightly close
+    // What a ticket event does: a booking action, the chef's extra portions for the waiting list, or the DAILY_MAINTENANCE job's close
     const TicketChangeKindSchema = z.enum([...BookingActionSchema.options, 'EXTRA_PORTIONS', Change.CLOSE])
 
     // The tickets one event touched by type; a ticket type change also names the tickets it changed from, a sale the

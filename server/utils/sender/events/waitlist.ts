@@ -1,6 +1,6 @@
 /**
  * The booking status sender event: the waiting-list notifications, ticket sold and ticket bought. The booking steps
- * return their outcomes and the caller hands them here after the action; the nightly run reads what the dinners past
+ * return their outcomes and the caller hands them here after the action; the DAILY_MAINTENANCE job reads what the dinners past
  * their booking deadline send as they stand. A notification about an inhabitant goes to the inhabitant's closest user
  * (findClosestUserInHousehold), the waitlist buildup to the chef's. The dinners and people the notifications name are
  * read once per kind (ADR-014); the delivery step (deliveries.ts) sends each once per subject, version, notification,
@@ -47,10 +47,6 @@ const {BOOKING_STATUS} = SenderEventSchema.enum
 const LOG = `📮 > SENDER > [EVENT ${BOOKING_STATUS}]`
 
 const nothingSent = (): DeliveryResult => ({counts: {sent: 0}})
-
-// The booking is saved before its notifications go: the delivery step logs a failure, and the caller gets nothing sent
-const neverThrows = <A extends unknown[]>(notify: (...args: A) => Promise<DeliveryResult>) =>
-    (...args: A): Promise<DeliveryResult> => notify(...args).catch(nothingSent)
 
 // The booking emails flag off, a run sends and records nothing; a delivery dry run counts on
 const bookingEmailsOff = (dryRun?: boolean): boolean => {
@@ -385,20 +381,18 @@ const notifiedOf = (outcomes: BookingOutcomes): NotifiedOutcomes => {
  * The notifications for what a scaffold run did: joined, the line at the buildup threshold, sold, bought, sold to the
  * first in a ticket type's line, and the extra portions it finished for a stopped run
  */
-export const notifyBookingOutcomes = neverThrows(
-    async (d1Client: D1Database, channel: EmailChannel, outcomes: BookingOutcomes, jobRunId?: number): Promise<DeliveryResult> =>
-        bookingEmailsOff() ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, notifiedOf(outcomes)), {jobRunId}))
+export const notifyBookingOutcomes = async (d1Client: D1Database, channel: EmailChannel, outcomes: BookingOutcomes, jobRunId?: number): Promise<DeliveryResult> =>
+    bookingEmailsOff() ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, notifiedOf(outcomes)), {jobRunId})
 
 /**
  * The notifications for the chef's extra portions: each waiting entry that fit got a regular order; a stopped run's
  * sale the release finished notifies as a sale to the first in a ticket type's line
  */
-export const notifyExtraPortions = neverThrows(
-    async (d1Client: D1Database, channel: EmailChannel, result: WaitlistAssignmentResult): Promise<DeliveryResult> =>
-        bookingEmailsOff() ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, notifiedOf({
-            joined: [], ticketsSold: [], waitlistTicketsSold: result.waitlistTicketsSold,
-            waitlistPortionsAssigned: result.assigned.map(entry => ({...entry, dinnerEventId: result.dinnerEventId}))
-        }))))
+export const notifyExtraPortions = async (d1Client: D1Database, channel: EmailChannel, result: WaitlistAssignmentResult): Promise<DeliveryResult> =>
+    bookingEmailsOff() ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, notifiedOf({
+        joined: [], ticketsSold: [], waitlistTicketsSold: result.waitlistTicketsSold,
+        waitlistPortionsAssigned: result.assigned.map(entry => ({...entry, dinnerEventId: result.dinnerEventId}))
+    })))
 
 // What the dinners as they stand tell: each place on a waiting list its join, each line at the buildup threshold its
 // buildup, and the latest sale or extra portion of each order its holder still holds. The history reads in time order
@@ -460,12 +454,11 @@ const notificationsOnSeason = async (d1Client: D1Database, seasonId: number | nu
  * each line at the buildup threshold, the latest sale or extra portion of each order its holder still holds. The
  * delivery records keep each from going twice; without a season it sends nothing.
  *
- * The delivery dry run shows the admin what the nightly run would send before SHOULD_SEND_BOOKING_EMAILS_FLAG goes on
+ * The delivery dry run shows the admin what the DAILY_MAINTENANCE job would send before SHOULD_SEND_BOOKING_EMAILS_FLAG goes on
  * in an environment. It ignores the flag, reads the same dinners and their delivery records, and sends and records
  * nothing: per user how many of each notification the run sends.
  */
-export const sendNotifications = neverThrows(
-    async (
-        d1Client: D1Database, channel: EmailChannel, seasonId: number | null, options: Pick<DeliveryOptions, 'jobRunId' | 'dryRun'> = {}
-    ): Promise<DeliveryResult> =>
-        bookingEmailsOff(options.dryRun) ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => notificationsOnSeason(d1Client, seasonId), options))
+export const sendNotifications = async (
+    d1Client: D1Database, channel: EmailChannel, seasonId: number | null, options: Pick<DeliveryOptions, 'jobRunId' | 'dryRun'> = {}
+): Promise<DeliveryResult> =>
+    bookingEmailsOff(options.dryRun) ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => notificationsOnSeason(d1Client, seasonId), options)

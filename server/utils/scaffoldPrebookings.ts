@@ -325,7 +325,7 @@ export async function scaffoldPrebookings(
     let totalUnchanged = 0
     let processedHouseholds = 0
     let erroredHouseholds = 0
-    // What wrote the run's order rows: an admin's correction, a member's booking, a preference change, the nightly run
+    // What wrote the run's order rows: an admin's correction, a member's booking, a preference change, the DAILY_MAINTENANCE job
     const source = options.adminCorrection
         ? Source['admin-correction']
         : isUserMode ? Source['user-booking'] : (options.householdId ? Source['preference-update'] : Source['scaffold-prebookings'])

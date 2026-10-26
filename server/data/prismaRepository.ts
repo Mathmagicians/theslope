@@ -153,7 +153,6 @@ export async function fetchUsers(d1Client: D1Database): Promise<UserDisplay[]> {
             ]
         })
 
-        // Deserialize systemRoles from JSON string to array (ADR-010 pattern)
         const deserializedUsers = users.map(deserializeUserDisplay)
 
         console.info(`🪪 > USER > [GET] Successfully fetched ${deserializedUsers.length} users`)
@@ -184,7 +183,6 @@ export async function fetchUsersByRole(d1Client: D1Database, systemRole: SystemR
             ]
         })
 
-        // Deserialize systemRoles from JSON string to array (ADR-010 pattern)
         const deserializedUsers = users.map(deserializeUserDisplay)
 
         console.info(`🪪 > USER > [GET] Successfully fetched ${deserializedUsers.length} users with role ${systemRole}`)

@@ -6,7 +6,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 
-const {JobType} = useMaintenanceValidation()
+const {JobType, JobStatus} = useMaintenanceValidation()
 
 /** The idempotent jobs (ADR-015) by their JobType value */
 defineParameterType({
@@ -41,17 +41,14 @@ Given('the {job} job has run {int} time(s)', async ({scene}, job: JobRun['job'],
 })
 
 Then('the job reports success', async ({scene}) => {
-    const run = fromScene(scene, 'jobRun')
-    switch (run.job) {
-        case JobType.HEYNABO_IMPORT:
-            // An already synced import creates nothing
-            expect(run.result.householdsCreated).toBeGreaterThanOrEqual(0)
-            break
-        case JobType.DAILY_MAINTENANCE:
-            expect(run.result.jobRunId).toBeGreaterThan(0)
-            break
-        case JobType.MONTHLY_BILLING:
-            expect(run.result?.jobRunId).toBeGreaterThan(0)
-            break
-    }
+    const {job, result} = fromScene(scene, 'jobRun')
+    expect(result, `the ${job} job answers its result`).not.toBeNull()
+
+    // Verify job run was created and completed
+    const jobRun = await SeasonFactory.getJobRun(fromScene(scene, 'context'), result!.jobRunId)
+    expect(jobRun).not.toBeNull()
+    expect(jobRun!.jobType).toBe(job)
+    expect(jobRun!.status).toBe(JobStatus.SUCCESS)
+    expect(jobRun!.completedAt).not.toBeNull()
+    expect(jobRun!.durationMs).toBeGreaterThanOrEqual(0)
 })

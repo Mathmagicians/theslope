@@ -270,4 +270,12 @@ export const test = mergeTests(base, uiTest).extend<{adminContext: BrowserContex
     }
 })
 
-export const {Given, When, Then} = createBdd(test)
+export const {Given, When, Then, BeforeAll} = createBdd(test)
+
+// The singleton active season (`activeSeasonOf`), resolved in each feature's beforeAll as `season.setup.ts` and the
+// specs' beforeAll do: a run without setup-season (--no-deps) creates it there, outside a scenario's own timeout
+BeforeAll({tags: 'not @smoke'}, async ({browser}) => {
+    const admin = await validatedBrowserContext(browser)
+    await SeasonFactory.createActiveSeason(admin)
+    await admin.close()
+})

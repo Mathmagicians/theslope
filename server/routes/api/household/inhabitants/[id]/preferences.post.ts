@@ -62,7 +62,7 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
         console.info(`${LOG} User ${user.email} updating preferences for inhabitant ${inhabitant.name} ${inhabitant.lastName}`)
         const updatedInhabitant = await updateInhabitant(d1Client, id, {dinnerPreferences})
 
-        // Re-scaffold the household on the weekdays the draft changes, the nightly run keeps the rest in step (ADR-015)
+        // Re-scaffold the household on the weekdays the draft changes, the DAILY_MAINTENANCE job keeps the rest in step (ADR-015)
         const weekdays = changedWeekdays(inhabitant.dinnerPreferences, dinnerPreferences)
         console.info(`${LOG} Re-scaffolding household ${updatedInhabitant.householdId} on ${weekdays.join(', ') || 'no weekday'}`)
         const scaffoldResult: ScaffoldResult = await scaffoldPrebookings(d1Client, {

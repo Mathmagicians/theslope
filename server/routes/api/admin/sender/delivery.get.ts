@@ -14,7 +14,7 @@ const LOG = '📬 > DELIVERY > [GET]'
  * repeated per id
  *
  * GET /api/admin/sender/delivery?dryRun=BOOKING_STATUS - the delivery dry run of the booking notifications: before
- * SHOULD_SEND_BOOKING_EMAILS_FLAG goes on in an environment, the admin sees what the nightly run would send
+ * SHOULD_SEND_BOOKING_EMAILS_FLAG goes on in an environment, the admin sees what the DAILY_MAINTENANCE job would send
  * (`make theslope-sender-dry-run-booking-status-<env>`). It reads the active season's dinners still to come and past
  * their booking deadline, as they stand, and their delivery records; with no active season it counts nothing. It
  * answers per user how many of each notification the run sends. It ignores the flag; without a deploy URL or a sender

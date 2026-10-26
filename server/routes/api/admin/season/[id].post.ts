@@ -86,7 +86,7 @@ export default defineEventHandler(async (event): Promise<SeasonUpdateResponse> =
         }
 
         // A live season keeps its bookings in step with the new schedule right away
-        // instead of waiting for the nightly job (ADR-015: both jobs are idempotent)
+        // instead of waiting for the DAILY_MAINTENANCE job (ADR-015: both jobs are idempotent)
         let scaffold = null
         if (existingSeason.isActive && scheduleChanged) {
             const clipResult = await clipPreferences(d1Client, id)

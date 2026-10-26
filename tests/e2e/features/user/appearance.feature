@@ -1,4 +1,5 @@
-@e2e-parallel
+# The examples save the settings of the one member login, so they run in order
+@e2e-parallel @mode:serial
 Feature: Appearance
   The user sees the text scale and the palette they save.
 

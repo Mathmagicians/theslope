@@ -85,13 +85,14 @@ const readsOf = () => Object.fromEntries(Object.entries(peopleAndDinnerReads)
 
 const outcomesOf = (outcomes: Partial<BookingOutcomes>): BookingOutcomes => ({...OrderFactory.defaultScaffoldResult().outcomes, ...outcomes})
 
-// The notifications follow a booking that is already saved: a failed lookup leaves the booking standing, sends nothing
-// and writes the delivery step's failure line, the one the Diagnostics dashboard reads
+// The notifications follow a booking that is already saved: a failed lookup leaves the booking standing, sends nothing,
+// writes the delivery step's failure line, the one the Diagnostics dashboard reads, and reaches the caller
 describe('booking notifications after the action', () => {
     const logs = {error: vi.spyOn(console, 'error'), warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
+    const reason = 'D1 down'
     beforeEach(() => {
         Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
-        Object.values({...dinnerReads, ...peopleReads}).filter(read => vi.isMockFunction(read)).forEach(read => read.mockRejectedValue(new Error('D1 down')))
+        Object.values({...dinnerReads, ...peopleReads}).filter(read => vi.isMockFunction(read)).forEach(read => read.mockRejectedValue(new Error(reason)))
     })
     afterEach(() => vi.clearAllMocks())
 
@@ -103,12 +104,12 @@ describe('booking notifications after the action', () => {
         {operation: 'notifyExtraPortions', notify: (channel: EmailChannel) =>
             notifyExtraPortions({} as D1Database, channel, WaitlistFactory.defaultAssignmentResult({dinnerEventId: 7, waitlistTicketsSold: [sale]}))},
         {operation: 'sendNotifications', notify: (channel: EmailChannel) => sendNotifications({} as D1Database, channel, 9)}
-    ])('$operation logs a failed lookup as the booking status sender event failed and sends no notification', async ({notify}) => {
+    ])('$operation rejects with a failed lookup\'s error, logs the booking status sender event failed and sends no notification', async ({notify}) => {
         const queue = fakeQueue()
 
-        expect(await notify(NotificationFactory.channel(queue))).toEqual({counts: {sent: 0}})
+        await expect(notify(NotificationFactory.channel(queue))).rejects.toThrow(reason)
         expect(sentMessages(queue)).toEqual([])
-        expect(logs.error).toHaveBeenCalledWith(`📬 > DELIVERY > [EVENT ${SenderEvent.BOOKING_STATUS}] failed: D1 down`)
+        expect(logs.error).toHaveBeenCalledWith(`📬 > DELIVERY > [EVENT ${SenderEvent.BOOKING_STATUS}] failed: ${reason}`)
     })
 })
 
@@ -168,7 +169,7 @@ describe('the people a run\'s mails name', () => {
     ]
     const people = households.flatMap(household => household.inhabitants)
     const addressOf = ({id}: Member): string => `${id}@example.com`
-    // The account the nightly and the preference runs book with: a login of no household, with an address
+    // The account the DAILY_MAINTENANCE job and the preference runs book with: a login of no household, with an address
     const systemUser = UserFactory.defaultUserWithInhabitant('system', {id: 9000, email: 'system@example.com'})
     const loginOf = (member: Member, notificationChannels?: NotificationChannel[]) =>
         UserFactory.defaultUserWithInhabitant(`u${member.id}`, {id: member.userId!, email: addressOf(member), notificationChannels})
@@ -519,7 +520,7 @@ describe('the people a run\'s mails name', () => {
             expect(sentMessages(sender).map(message => message.meta.kind).sort()).toEqual(sent ? kinds : [])
         })
 
-        // The admin's view of what the nightly run sends, whether or not the flag lets it send
+        // The admin's view of what the DAILY_MAINTENANCE job sends, whether or not the flag lets it send
         it('GIVEN a dinner with a ticket sold to the first in line and the booking emails flag off WHEN the maintenance run is a dry run THEN it lists the booking notifications per user, and nothing is sent or recorded', async () => {
             const [, ticketSold] = notifications
             holdDinner(ticketSold!.written(), 'false')
