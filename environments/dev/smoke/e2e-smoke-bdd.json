@@ -1,0 +1,600 @@
+[
+  {
+    "description": "  The admin's reads answer from the deployed data.",
+    "elements": [
+      {
+        "description": "",
+        "id": "api-health;the-active-season-has-dinner-events",
+        "keyword": "Scenario",
+        "line": 8,
+        "name": "The active season has dinner events",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 9,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 819000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 10,
+            "name": "the active season has dinner events",
+            "result": {
+              "status": "passed",
+              "duration": 354000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 17000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@smoke",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "api-health;the-households-list-is-non-empty",
+        "keyword": "Scenario Outline",
+        "line": 17,
+        "name": "The households list is non-empty",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 13,
+            "name": "the households list is non-empty",
+            "result": {
+              "status": "passed",
+              "duration": 657000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@smoke",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "api-health;the-users-list-is-non-empty",
+        "keyword": "Scenario Outline",
+        "line": 18,
+        "name": "The users list is non-empty",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 13,
+            "name": "the users list is non-empty",
+            "result": {
+              "status": "passed",
+              "duration": 614000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@smoke",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "api-health;the-inhabitants-list-is-non-empty",
+        "keyword": "Scenario Outline",
+        "line": 19,
+        "name": "The inhabitants list is non-empty",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 13,
+            "name": "the inhabitants list is non-empty",
+            "result": {
+              "status": "passed",
+              "duration": 469000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@smoke",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-smoke-›-api-health",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "API health",
+    "tags": [
+      {
+        "name": "@smoke",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/smoke/api-health.feature"
+  },
+  {
+    "description": "  A sign-in with the Heynabo credentials answers the user with the household (ADR-009).",
+    "elements": [
+      {
+        "description": "",
+        "id": "sign-in;the-session-answers-the-userdetail-with-its-household",
+        "keyword": "Scenario",
+        "line": 5,
+        "name": "The session answers the UserDetail with its household",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 6,
+            "name": "the admin signs in with the Heynabo credentials",
+            "result": {
+              "status": "passed",
+              "duration": 785000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 7,
+            "name": "the sign-in answers the admin's UserDetail with the household",
+            "result": {
+              "status": "passed",
+              "duration": 2000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@smoke",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-smoke-›-sign-in",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "Sign-in",
+    "tags": [
+      {
+        "name": "@smoke",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/smoke/auth.feature"
+  },
+  {
+    "description": "  The scheduled jobs are idempotent (ADR-015): a run on demand against the deployed data succeeds.",
+    "elements": [
+      {
+        "description": "",
+        "id": "cron-jobs;the-heynabo_import-job-runs-successfully",
+        "keyword": "Scenario Outline",
+        "line": 14,
+        "name": "The HEYNABO_IMPORT job runs successfully",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "the HEYNABO_IMPORT job runs",
+            "result": {
+              "status": "passed",
+              "duration": 3359000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 10,
+            "name": "the job reports success",
+            "result": {
+              "status": "passed",
+              "duration": 196000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@smoke",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "cron-jobs;the-daily_maintenance-job-runs-successfully",
+        "keyword": "Scenario Outline",
+        "line": 15,
+        "name": "The DAILY_MAINTENANCE job runs successfully",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "the DAILY_MAINTENANCE job runs",
+            "result": {
+              "status": "passed",
+              "duration": 27429000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 10,
+            "name": "the job reports success",
+            "result": {
+              "status": "passed",
+              "duration": 224000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "skipped",
+              "duration": 0
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@smoke",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "cron-jobs;the-monthly_billing-job-runs-successfully",
+        "keyword": "Scenario Outline",
+        "line": 16,
+        "name": "The MONTHLY_BILLING job runs successfully",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "the MONTHLY_BILLING job runs",
+            "result": {
+              "status": "passed",
+              "duration": 20717000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 10,
+            "name": "the job reports success",
+            "result": {
+              "status": "passed",
+              "duration": 203000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@smoke",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-smoke-›-cron-jobs",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "Cron jobs",
+    "tags": [
+      {
+        "name": "@smoke",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/smoke/cron-jobs.feature"
+  },
+  {
+    "description": "  A visitor reaches the app and its PWA manifest.",
+    "elements": [
+      {
+        "description": "",
+        "id": "the-deployed-app;the-deployed-app-has-its-title",
+        "keyword": "Scenario",
+        "line": 5,
+        "name": "The deployed app has its title",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 6,
+            "name": "a visitor opens the app",
+            "result": {
+              "status": "passed",
+              "duration": 1222000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 7,
+            "name": "the app's title names \"Theslope\"",
+            "result": {
+              "status": "passed",
+              "duration": 149000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@smoke",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "the-deployed-app;the-pwa-manifest-serves-with-its-icons-and-the-page-head-links-it",
+        "keyword": "Scenario",
+        "line": 9,
+        "name": "The PWA manifest serves with its icons and the page head links it",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 10,
+            "name": "a visitor opens the app",
+            "result": {
+              "status": "passed",
+              "duration": 622000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 11,
+            "name": "the app links its PWA manifest",
+            "result": {
+              "status": "passed",
+              "duration": 22000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the PWA manifest serves standalone with its icons",
+            "result": {
+              "status": "passed",
+              "duration": 562000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@smoke",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-smoke-›-the-deployed-app",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "The deployed app",
+    "tags": [
+      {
+        "name": "@smoke",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/smoke/pages.feature"
+  },
+  {
+    "description": "  Each worker answers the same health report and runs the deployment under test.",
+    "elements": [
+      {
+        "description": "",
+        "id": "worker-health;theslope-reports-health-and-the-expected-version",
+        "keyword": "Scenario Outline",
+        "line": 14,
+        "name": "theslope reports health and the expected version",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "\"theslope\" reports its health at \"/api/public/health\"",
+            "result": {
+              "status": "passed",
+              "duration": 104000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 10,
+            "name": "the worker runs the expected version",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@smoke",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "worker-health;theslope-sender-reports-health-and-the-expected-version",
+        "keyword": "Scenario Outline",
+        "line": 15,
+        "name": "theslope-sender reports health and the expected version",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "\"theslope-sender\" reports its health at \"/sender/health\"",
+            "result": {
+              "status": "passed",
+              "duration": 155000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 10,
+            "name": "the worker runs the expected version",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@smoke",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-smoke-›-worker-health",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "Worker health",
+    "tags": [
+      {
+        "name": "@smoke",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/smoke/worker-health.feature"
+  }
+]

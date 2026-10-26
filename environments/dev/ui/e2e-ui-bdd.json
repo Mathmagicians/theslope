@@ -1,0 +1,398 @@
+[
+  {
+    "description": "  The user sees the text scale and the palette they save.",
+    "elements": [
+      {
+        "description": "",
+        "id": "appearance;the-text-turns-larger-from-the-text-scale-normal-to-large",
+        "keyword": "Scenario Outline",
+        "line": 14,
+        "name": "The text turns larger from the text scale normal to large",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 134000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 9000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user has the setting text scale normal",
+            "result": {
+              "status": "passed",
+              "duration": 75000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "the user saves the setting text scale large",
+            "result": {
+              "status": "passed",
+              "duration": 3062000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 10,
+            "name": "the user sees the text larger",
+            "result": {
+              "status": "passed",
+              "duration": 152000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 147000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@mode:serial",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "appearance;the-text-turns-larger-from-the-text-scale-large-to-larger",
+        "keyword": "Scenario Outline",
+        "line": 15,
+        "name": "The text turns larger from the text scale large to larger",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user has the setting text scale large",
+            "result": {
+              "status": "passed",
+              "duration": 63000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "the user saves the setting text scale larger",
+            "result": {
+              "status": "passed",
+              "duration": 2888000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 10,
+            "name": "the user sees the text larger",
+            "result": {
+              "status": "passed",
+              "duration": 105000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@mode:serial",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "appearance;the-text-turns-smaller-from-the-text-scale-larger-to-normal",
+        "keyword": "Scenario Outline",
+        "line": 16,
+        "name": "The text turns smaller from the text scale larger to normal",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 5000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user has the setting text scale larger",
+            "result": {
+              "status": "passed",
+              "duration": 95000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "the user saves the setting text scale normal",
+            "result": {
+              "status": "passed",
+              "duration": 2957000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 10,
+            "name": "the user sees the text smaller",
+            "result": {
+              "status": "passed",
+              "duration": 107000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@mode:serial",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "appearance;the-colours-change-from-the-palette-default-to-high-contrast",
+        "keyword": "Scenario Outline",
+        "line": 26,
+        "name": "The colours change from the palette default to high-contrast",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 19,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "the user has the setting palette default",
+            "result": {
+              "status": "passed",
+              "duration": 61000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 21,
+            "name": "the user saves the setting palette high-contrast",
+            "result": {
+              "status": "passed",
+              "duration": 2917000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 22,
+            "name": "the user sees the colours change",
+            "result": {
+              "status": "passed",
+              "duration": 50000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@mode:serial",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "appearance;the-colours-change-from-the-palette-high-contrast-to-colorblind",
+        "keyword": "Scenario Outline",
+        "line": 27,
+        "name": "The colours change from the palette high-contrast to colorblind",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 19,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "the user has the setting palette high-contrast",
+            "result": {
+              "status": "passed",
+              "duration": 84000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 21,
+            "name": "the user saves the setting palette colorblind",
+            "result": {
+              "status": "passed",
+              "duration": 3231000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 22,
+            "name": "the user sees the colours change",
+            "result": {
+              "status": "passed",
+              "duration": 55000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@mode:serial",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "appearance;the-colours-change-from-the-palette-colorblind-to-default",
+        "keyword": "Scenario Outline",
+        "line": 28,
+        "name": "The colours change from the palette colorblind to default",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 19,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 6000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "the user has the setting palette colorblind",
+            "result": {
+              "status": "passed",
+              "duration": 75000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 21,
+            "name": "the user saves the setting palette default",
+            "result": {
+              "status": "passed",
+              "duration": 2877000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 22,
+            "name": "the user sees the colours change",
+            "result": {
+              "status": "passed",
+              "duration": 54000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@mode:serial",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-ui-›-appearance",
+    "line": 3,
+    "keyword": "Feature",
+    "name": "Appearance",
+    "tags": [
+      {
+        "name": "@e2e-parallel",
+        "line": 2
+      },
+      {
+        "name": "@mode:serial",
+        "line": 2
+      }
+    ],
+    "uri": "tests/e2e/features/user/appearance.feature"
+  }
+]
