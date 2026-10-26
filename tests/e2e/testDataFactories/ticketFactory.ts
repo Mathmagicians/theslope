@@ -1,4 +1,5 @@
 import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
+import {DEFAULT_TICKET_PRICES} from '~/config/ticketPrices'
 
 const {createTicketPrice, TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
@@ -9,21 +10,10 @@ const TicketType = TicketTypeSchema.enum
  */
 export class TicketFactory {
     /**
-     * Standard ticket price configuration used across tests
-     * Mirrors typical production pricing structure.
-     *
-     * maximumAgeLimit means UNDER that age:
-     * - BABY (under 2 years, ages 0-1): Free
-     * - BABY "Hungry Baby" (under 2 years, ages 0-1): 1500 øre
-     * - CHILD (under 12 years, ages 2-11): 3000 øre
-     * - ADULT (12+ years): 5000 øre
+     * The config's default ticket prices (app/config/ticketPrices.ts): baby, hungry baby, child, adult.
+     * maximumAgeLimit means UNDER that age: BABY ages 0-1, CHILD ages 2-11, ADULT 12+.
      */
-    static readonly defaultTicketPricesData: TicketPrice[] = [
-        createTicketPrice({ticketType: TicketType.BABY, price: 0, description: 'Baby (under 2 år)', maximumAgeLimit: 2, portions: 0}),
-        createTicketPrice({ticketType: TicketType.BABY, price: 1500, description: 'Sulten baby (under 2 år)', maximumAgeLimit: 2, portions: 0.25}),
-        createTicketPrice({ticketType: TicketType.CHILD, price: 3000, description: 'Barn (under 12 år)', maximumAgeLimit: 12, portions: 0.5}),
-        createTicketPrice({ticketType: TicketType.ADULT, price: 5000, description: 'Voksen (12+ år)', portions: 1})
-    ]
+    static readonly defaultTicketPricesData: TicketPrice[] = DEFAULT_TICKET_PRICES.map(defaultPrice => createTicketPrice(defaultPrice))
 
     /**
      * Get default ticket prices with optional overrides
@@ -49,24 +39,20 @@ export class TicketFactory {
         childPrice?: number
         adultPrice?: number
         seasonId?: number
-    }): TicketPrice[] => [
-        createTicketPrice({
-            id: 1, seasonId: overrides?.seasonId, ticketType: TicketType.BABY, price: overrides?.babyPrice ?? 0,
-            description: 'Baby (under 2 år)', maximumAgeLimit: overrides?.babyAge ?? 2, portions: 0
-        }),
-        createTicketPrice({
-            id: 2, seasonId: overrides?.seasonId, ticketType: TicketType.BABY, price: overrides?.hungryBabyPrice ?? 1500,
-            description: 'Sulten baby (under 2 år)', maximumAgeLimit: overrides?.hungryBabyAge ?? 2, portions: 0.25
-        }),
-        createTicketPrice({
-            id: 3, seasonId: overrides?.seasonId, ticketType: TicketType.CHILD, price: overrides?.childPrice ?? 3000,
-            description: 'Barn (under 12 år)', maximumAgeLimit: overrides?.childAge ?? 12, portions: 0.5
-        }),
-        createTicketPrice({
-            id: 4, seasonId: overrides?.seasonId, ticketType: TicketType.ADULT, price: overrides?.adultPrice ?? 5000,
-            description: 'Voksen (12+ år)', portions: 1
-        })
-    ]
+    }): TicketPrice[] => {
+        // In the config's order: baby, hungry baby, child, adult
+        const overridesOfRow = [
+            {price: overrides?.babyPrice, maximumAgeLimit: overrides?.babyAge},
+            {price: overrides?.hungryBabyPrice, maximumAgeLimit: overrides?.hungryBabyAge},
+            {price: overrides?.childPrice, maximumAgeLimit: overrides?.childAge},
+            {price: overrides?.adultPrice, maximumAgeLimit: undefined}
+        ]
+        return DEFAULT_TICKET_PRICES.map((defaultPrice, index) => createTicketPrice({
+            ...defaultPrice, id: index + 1, seasonId: overrides?.seasonId,
+            price: overridesOfRow[index]?.price ?? defaultPrice.price,
+            maximumAgeLimit: overridesOfRow[index]?.maximumAgeLimit ?? defaultPrice.maximumAgeLimit
+        }))
+    }
 
     /**
      * Get default ticket prices without IDs (for create scenarios in reconciliation tests)

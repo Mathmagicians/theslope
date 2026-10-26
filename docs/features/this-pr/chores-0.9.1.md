@@ -43,6 +43,8 @@ Updated 2026-10-25. Release 0.9 shipped in f5b5205 (#168).
 | AdminTeams loading row | § AdminTeams loading row | – | discovery |
 | Avatar ring colours | § Avatar ring colours | – | specified |
 | User saves and deserializers | § User saves and deserializers | – | approved 2026-10-26 |
+| The job boxes' latest run | § The job boxes' latest run | – | approved 2026-10-26 |
+| Zero-portion tickets get a place | § Zero-portion tickets get a place | – | approved 2026-10-26 |
 
 ## Server payload of the shared stores
 
@@ -722,6 +724,72 @@ repository (ADR-010 rule 3), and the `saveUser` and `deleteUser` results carry `
 
 `server/data/prismaRepository.ts`, `app/composables/useCoreValidation.ts`, `docs/adr-compliance-backend.md`.
 
+## The job boxes' latest run
+
+### Problem
+
+The System tab reads the 20 latest job runs of all jobs in a component `useFetch` (ADR-007), and each job's box takes
+its latest run from those 20. A job whose latest run is older than the 20 shows the skeleton; with two daily jobs, the
+monthly billing run leaves the 20 after ten days. A box's time line falls back to the current time while its run is
+missing from the list, its status line reads "Gennemført" for a failed or partial run, and a failed Heynabo import
+leaves the box and the list unread.
+
+### Solution
+
+- `AdminSystem.vue` reads component-local through `storeAsyncData` (ADR-007): the 20 latest runs for the list, and the
+  latest run of each box's job.
+- A box shows the loading state while its job runs or its latest run is read, then that run: its start time, its status
+  and its result. A job without runs reads "Ingen kørsler endnu". The error of a button run shows below the run.
+- A button run re-reads the box's run and the list in its `finally`, after a success or a failure; the Heynabo import
+  reloads the households after a success.
+- The file follows the code rules: job types as `JobType` members, the label maps read without a fallback, the unread
+  tree prefix removed.
+
+### TDD
+
+Component `AdminSystem.nuxt.spec.ts`, per box: no run, a run older than the list, a failed run, a held read, a button
+run that succeeds or fails.
+
+### Affected
+
+`app/components/admin/AdminSystem.vue`, `tests/component/components/admin/AdminSystem.nuxt.spec.ts`,
+`docs/adr-compliance-frontend.md`.
+
+## Zero-portion tickets get a place
+
+### Problem
+
+After the booking deadline a booking buys a released ticket of its ticket type, else joins that type's line on the
+waiting list (ADR-016). A ticket of 0 portions, the baby who eats tastes from the parents (`app.config.ts` default
+ticket prices), joins the line too, though it takes no portion from the kitchen.
+
+### Solution
+
+A ticket of 0 portions takes nothing from the kitchen, so it books and cancels as before the deadline at any time:
+booked after the deadline it gets its order at once, cancelled after the deadline it is deleted. It never joins the
+waiting list and never goes for sale. The generator decides it (`decideOrderAction`), so the booking views offer what
+the save does; its portions read as every ticket's portions read (`withPortions`, ADR-010 rule 7).
+
+ADR-016 [Unified Booking Through Scaffold], below the decision matrix, gains on implementation:
+
+> A ticket of 0 portions takes no portion from the kitchen: it books and cancels as before the deadline at any time, so
+> it neither joins the waiting list nor goes for sale.
+
+### TDD
+
+- Unit `useBooking.unit.spec.ts`: `decideOrderAction` after the deadline for a ticket of 0 portions creates a new order
+  and deletes a booked or released one; a hungry baby keeps the claim and the release. `getBookingOptions` gives a row of
+  0 portions after the deadline the modes it has before the deadline.
+- Unit, the scaffold: a baby who tastes, booked after the deadline, gets an order and no queue entry; cancelled after
+  the deadline, the order is deleted and nothing goes for sale.
+- BDD: example rows in the booking features.
+
+### Affected
+
+`app/composables/useBooking.ts` (`decideOrderAction`, `resolveDesiredOrdersToBuckets`, `BookingContext`),
+`server/utils/scaffoldPrebookings.ts`, `BookingGridView.vue`, `GuestBookingForm.vue`, `DinnerBookingForm.vue`,
+`docs/adr.md` (ADR-016).
+
 ## Decisions carried from release 0.9
 
 **2026-10-13**
@@ -735,3 +803,8 @@ repository (ADR-010 rule 3), and the `saveUser` and `deleteUser` results carry `
 
 **2026-10-18**
 - The AdminTeams loading row moves from release 0.9 to this release.
+
+**2026-10-26**
+- Zero-portion tickets get a place moves from release 0.9.3 to this release: a ticket of 0 portions books and cancels
+  as before the deadline at any time, so it neither joins the waiting list nor goes for sale; the ADR-016 line lands
+  with the implementation.

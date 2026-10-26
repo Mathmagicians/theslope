@@ -76,6 +76,7 @@ export type OrderDecisionInput = {
     existingEntry: TicketWaitlistDisplay | null
     beforeCancellationDeadline: boolean
     canEditMode: boolean
+    takesNoPortion: (ticketPriceId: number) => boolean
 }
 
 // The outcome of one order of a bucket at a supply: a claim buys while a ticket is for sale, else queues; a bucket
@@ -155,14 +156,17 @@ export const countTotals = (items: readonly BookingResult[]): BookingTotals =>
  * - orderId + eating mode + unchanged → idempotent (state: BOOKED)
  * - orderId + eating mode + changed → update (state: BOOKED)
  * - orderId + price mismatch (any state) → update (price healing)
+ * - A ticket of 0 portions books and cancels as before the deadline at any time
  */
 export const decideOrderAction = (
     input: OrderDecisionInput,
     DinnerMode: { NONE: DinnerMode; DINEIN: DinnerMode },
     OrderState: { BOOKED: OrderState; RELEASED: OrderState }
 ): OrderDecision => {
-    const { desired, existing, existingEntry, beforeCancellationDeadline, canEditMode } = input
+    const { desired, existing, existingEntry, beforeCancellationDeadline, canEditMode, takesNoPortion } = input
     const isNone = desired.dinnerMode === DinnerMode.NONE
+    // A ticket of 0 portions takes nothing from the kitchen, so the deadline does not hold it
+    const asBeforeDeadline = beforeCancellationDeadline || takesNoPortion(desired.ticketPriceId)
 
     if (existingEntry) {
         if (isNone) return { bucket: Bucket.leave, order: { ...desired, waitlistEntryId: existingEntry.id } }
@@ -180,7 +184,7 @@ export const decideOrderAction = (
     // as Spisesal, as a reclaim does
     if (!desired.orderId) {
         if (isNone) return desired.isGuestTicket ? null : { bucket: Bucket.delete, order: desired }
-        const bucket = beforeCancellationDeadline ? Bucket.create : Bucket.claim
+        const bucket = asBeforeDeadline ? Bucket.create : Bucket.claim
         return { bucket, order: { ...desired, dinnerMode: canEditMode ? desired.dinnerMode : DinnerMode.DINEIN, state: OrderState.BOOKED } }
     }
 
@@ -193,7 +197,7 @@ export const decideOrderAction = (
 
     // NONE mode = cancellation
     if (isNone) {
-        if (beforeCancellationDeadline) {
+        if (asBeforeDeadline) {
             return { bucket: Bucket.delete, order: desired }
         }
         // After deadline: release BOOKED orders, update RELEASED if price needs correction
@@ -235,6 +239,7 @@ export const decideOrderAction = (
  * @param dinnerEventById - Lookup for dinner event dates
  * @param canModifyOrders - Deadline check for cancellation
  * @param canEditDiningMode - Deadline check for mode changes
+ * @param takesNoPortion - Whether a price row's ticket takes no portion from the kitchen
  * @param existingEntries - The household's queue entries on these dinners
  */
 export const resolveDesiredOrdersToBuckets = (
@@ -243,6 +248,7 @@ export const resolveDesiredOrdersToBuckets = (
     dinnerEventById: Map<number, { date: Date }>,
     canModifyOrders: (date: Date) => boolean,
     canEditDiningMode: (date: Date) => boolean,
+    takesNoPortion: (ticketPriceId: number) => boolean,
     DinnerMode: { NONE: DinnerMode; DINEIN: DinnerMode },
     OrderState: { BOOKED: OrderState; RELEASED: OrderState },
     existingEntries: TicketWaitlistDisplay[] = []
@@ -271,7 +277,8 @@ export const resolveDesiredOrdersToBuckets = (
                 existing,
                 existingEntry: entryFor(desired),
                 beforeCancellationDeadline: canModifyOrders(de.date),
-                canEditMode: canEditDiningMode(de.date)
+                canEditMode: canEditDiningMode(de.date),
+                takesNoPortion
             },
             DinnerMode,
             OrderState
@@ -386,13 +393,14 @@ export type BookingContext = {
     event: Pick<DinnerEventDisplay, 'date' | 'state'>
     deadlines: {canModifyOrders: (date: Date) => boolean, canEditDiningMode: (date: Date) => boolean}
     isHouseholdInResidency: (date: Date) => boolean
+    takesNoPortion: (ticketPriceId: number) => boolean
 }
 
 // useSeason builds its schemas on every call and a grid asks once per cell: useBooking() binds its own past check once
 const bookingOptionsWith = (isDinnerPast: (date: Date) => boolean) =>
-    ({order, waitlistEntry, candidate}: BookingRow, {event, deadlines, isHouseholdInResidency}: BookingContext): DinnerMode[] => {
+    ({order, waitlistEntry, candidate}: BookingRow, {event, deadlines, isHouseholdInResidency, takesNoPortion}: BookingContext): DinnerMode[] => {
         if (isDinnerPast(event.date) || !isHouseholdInResidency(event.date) || CLOSED_DINNER_STATES.has(event.state)) return []
-        const input = {existing: order, existingEntry: waitlistEntry, beforeCancellationDeadline: deadlines.canModifyOrders(event.date), canEditMode: deadlines.canEditDiningMode(event.date)}
+        const input = {existing: order, existingEntry: waitlistEntry, beforeCancellationDeadline: deadlines.canModifyOrders(event.date), canEditMode: deadlines.canEditDiningMode(event.date), takesNoPortion}
         return DINNER_MODE_ORDER.filter(dinnerMode => {
             const desired = candidate(dinnerMode)
             const decision = desired && decideOrderAction({...input, desired}, DinnerModeEnum, OrderStateEnum)
@@ -482,6 +490,7 @@ export const resolveOrdersFromPreferencesToBuckets = (
     const dinnerEvents = season.dinnerEvents ?? []
     const dinnerEventById = new Map(dinnerEvents.map(de => [de.id, de]))
     const {canModifyOrders, canEditDiningMode} = deadlinesForSeason(season)
+    const takesNoPortion = useTicket().takesNoPortionOf(season.ticketPrices)
 
     const keyOf = (order: OrderDisplay) => `${order.inhabitantId}-${order.dinnerEventId}`
     // A user's own act outranks the preference: a guest ticket, an explicit booking, an explicit release
@@ -498,7 +507,7 @@ export const resolveOrdersFromPreferencesToBuckets = (
     ])
     const desiredOrders = generateDesiredOrdersFromPreferences(household.inhabitants, dinnerEvents, managedOrders, existingEntries, userIntentKeys, season.ticketPrices)
 
-    const result = resolveDesiredOrdersToBuckets(desiredOrders, managedOrders, dinnerEventById, canModifyOrders, canEditDiningMode, DinnerMode, OrderState, existingEntries)
+    const result = resolveDesiredOrdersToBuckets(desiredOrders, managedOrders, dinnerEventById, canModifyOrders, canEditDiningMode, takesNoPortion, DinnerMode, OrderState, existingEntries)
 
     const decidedOrderIds = new Set([...result.update, ...result.delete, ...result.idempotent].map(order => order.orderId))
     const orphans = managedOrders.filter(order => !decidedOrderIds.has(order.id))

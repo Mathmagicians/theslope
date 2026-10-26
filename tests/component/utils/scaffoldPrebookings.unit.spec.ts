@@ -761,6 +761,41 @@ describe('scaffoldPrebookings', () => {
         })
     })
 
+    // A ticket of 0 portions takes nothing from the kitchen: past the deadline it books and cancels as before it, never
+    // joins the waiting list and never goes for sale; the hungry baby's ticket buys or queues and releases
+    describe('a baby ticket on a dinner past its deadline', () => {
+        beforeEach(() => {
+            vi.clearAllMocks()
+        })
+
+        it.each([
+            {ticket: 'the baby who tastes', price: 'tasting', wish: 'books', dinnerMode: Mode.DINEIN, holds: false, action: Action.BOOK, writes: ['createOrders', 'sellTicketsToWaitlist'], soldToLine: []},
+            {ticket: 'the hungry baby', price: 'hungry', wish: 'books', dinnerMode: Mode.DINEIN, holds: false, action: Action.QUEUE, writes: ['joinWaitlist', 'sellTicketsToWaitlist'], soldToLine: []},
+            {ticket: 'the baby who tastes', price: 'tasting', wish: 'cancels', dinnerMode: Mode.NONE, holds: true, action: Action.CANCEL, writes: ['deleteOrder', 'sellTicketsToWaitlist'], soldToLine: []},
+            {ticket: 'the hungry baby', price: 'hungry', wish: 'cancels', dinnerMode: Mode.NONE, holds: true, action: Action.RELEASE, writes: ['writeUpdates', 'sellTicketsToWaitlist'], soldToLine: [OTHER_INHABITANT_ID]}
+        ] as const)('GIVEN a baby of household 8 waiting in the baby line WHEN Anna\'s household $wish $ticket THEN it lands as $action and the waiting baby buys from it: $soldToLine', async ({price, dinnerMode, holds, action, writes, soldToLine}) => {
+            const {season, household, anna, dinner} = givenSave()
+            // The factory lists the baby who tastes first, the hungry baby second
+            const [tasting, hungry] = season.ticketPrices.filter(ticketPrice => ticketPrice.ticketType === TicketTypeSchema.enum.BABY)
+            const babyPrice = {tasting, hungry}[price]!
+            const annaOrder = OrderFactory.defaultOrder(undefined, {id: 41, inhabitantId: anna.id, dinnerEventId: dinner.id, ticketPriceId: babyPrice.id, priceAtBooking: babyPrice.price})
+            const babyWaiting = WaitlistFactory.defaultEntry({
+                id: 21, inhabitantId: OTHER_INHABITANT_ID, dinnerEventId: dinner.id, ticketPriceId: hungry!.id, householdId: OTHER_HOUSEHOLD_ID, createdAt: subMinutes(new Date(), 60)
+            })
+            const held = holds ? [annaOrder] : []
+            vi.mocked(fetchOrders).mockResolvedValue(held)
+            givenSupply(season.ticketPrices, [], [babyWaiting], held.map(order => ({order, householdId: household.id})))
+
+            const result = await scaffoldPrebookings(d1Client, {seasonId: season.id, householdId: household.id, userId: 1, desiredOrders: [OrderFactory.defaultDesiredOrder({
+                inhabitantId: anna.id, dinnerEventId: dinner.id, ticketPriceId: babyPrice.id, orderId: held[0]?.id, dinnerMode
+            })]})
+
+            expect(result.results.map(line => [line.inhabitantId, line.action])).toEqual([[anna.id, action]])
+            expect(writersCalled()).toEqual(writes)
+            expect(result.outcomes.waitlistTicketsSold.map(sale => sale.buyerInhabitantId)).toEqual(soldToLine)
+        })
+    })
+
     // The run's first reads take every dinner of the run at once and run one after another; the repositories chunk the ids
     it('GIVEN a run over 40 dinners WHEN it reads the orders, the waiting lists and the members\' acts THEN each read names all 40 dinners, one read in flight at a time', async () => {
         vi.clearAllMocks()

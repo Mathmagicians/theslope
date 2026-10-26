@@ -52,6 +52,7 @@ const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets')
 
 // Booking logic
 const {getBookingOptions} = useBooking()
+const {takesNoPortionOf} = useTicket()
 const {createBookingBadges, guestSaveLabel} = useBookingUi()
 const bookingsStore = useBookingsStore()
 
@@ -104,15 +105,17 @@ const guestOrdersOf = ({count, ticketPriceId, dinnerMode, allergyTypeIds}: Guest
     state: OrderStateEnum.BOOKED
   }))
 
-// The modes the guest may take: the guest the save books in each mode, as the decision matrix lands it. The decision
-// reads no price, so a season price stands in while none is picked
+const takesNoPortion = computed(() => takesNoPortionOf(props.ticketPrices))
+
+// The modes the guest may take: the guest the save books in each mode, as the decision matrix lands it, at the picked
+// price; while none is picked, the season's first price stands in
 const enabledModes = computed((): DinnerMode[] => {
   const ticketPriceId = formState.ticketPriceId ?? props.ticketPrices[0]?.id
   return getBookingOptions({
     order: null,
     waitlistEntry: null,
     candidate: dinnerMode => ticketPriceId === undefined ? null : guestOrdersOf({...formState, count: 1, ticketPriceId, dinnerMode})[0] ?? null
-  }, {event: props.dinnerEvent, deadlines: props.deadlines, isHouseholdInResidency: () => props.isHouseholdInResidency})
+  }, {event: props.dinnerEvent, deadlines: props.deadlines, isHouseholdInResidency: () => props.isHouseholdInResidency, takesNoPortion: takesNoPortion.value})
 })
 
 // The preview: the server's dry run of the guests a valid draft books

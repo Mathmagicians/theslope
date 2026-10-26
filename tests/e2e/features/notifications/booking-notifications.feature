@@ -20,16 +20,15 @@ Feature: Booking notifications
     And <emails sent> <notification> emails are sent to the closest user of the <inhabitant>
 
     Examples:
-      | deadline | waiting | for sale | event                      | records | notification             | inhabitant    | emails sent |
-      | before   | 0       | 0        | dinner is booked           | 0       | WAITLIST_JOINED          | inhabitant    | 0           |
-      | past     | 0       | 0        | dinner is booked           | 1       | WAITLIST_JOINED          | inhabitant    | 1           |
-      | past     | 1       | 0        | ticket is released         | 3       | TICKET_SOLD              | seller        | 1           |
-      | past     | 1       | 0        | ticket is released         | 3       | WAITLIST_TICKET_ASSIGNED | first in line | 1           |
-      | past     | 0       | 1        | dinner is booked           | 2       | TICKET_SOLD              | seller        | 1           |
-      | past     | 0       | 1        | dinner is booked           | 2       | TICKET_BOUGHT            | inhabitant    | 1           |
-      | past     | 2       | 0        | dinner is booked           | 4       | WAITLIST_BUILDUP         | chef          | 1           |
-      | past     | 3       | 0        | portion is added           | 5       | WAITLIST_EXTRA_PORTION   | first in line | 1           |
-      | past     | 1       | 1        | DAILY_MAINTENANCE job runs | 3       | TICKET_SOLD              | seller        | 1           |
+      | deadline | waiting | for sale | event              | records | notification             | inhabitant    | emails sent |
+      | before   | 0       | 0        | dinner is booked   | 0       | WAITLIST_JOINED          | inhabitant    | 0           |
+      | past     | 0       | 0        | dinner is booked   | 1       | WAITLIST_JOINED          | inhabitant    | 1           |
+      | past     | 1       | 0        | ticket is released | 3       | TICKET_SOLD              | seller        | 1           |
+      | past     | 1       | 0        | ticket is released | 3       | WAITLIST_TICKET_ASSIGNED | first in line | 1           |
+      | past     | 0       | 1        | dinner is booked   | 2       | TICKET_SOLD              | seller        | 1           |
+      | past     | 0       | 1        | dinner is booked   | 2       | TICKET_BOUGHT            | inhabitant    | 1           |
+      | past     | 2       | 0        | dinner is booked   | 4       | WAITLIST_BUILDUP         | chef          | 1           |
+      | past     | 3       | 0        | portion is added   | 5       | WAITLIST_EXTRA_PORTION   | first in line | 1           |
 
   Rule: The DAILY_MAINTENANCE job sends the unsent notifications of the dinners
 

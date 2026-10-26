@@ -221,14 +221,24 @@ steps.
 | Path | Holds |
 |---|---|
 | `tests/e2e/features/<domain>/*.feature` | The scenarios, tagged with their suite on the feature |
-| `tests/e2e/steps/<domain>.steps.ts` | The steps of a domain and its parameter types: `auth`, `health`, `household`, `maintenance`, `pages`, `season` |
-| `tests/e2e/fixtures.ts` | playwright-bdd's `test` with the fixtures, `Given`/`When`/`Then` (`createBdd`), `fromScene` |
+| `tests/e2e/steps/<domain>.steps.ts` | The steps of a domain and its parameter types: `auth`, `billing`, `booking`, `health`, `household`, `maintenance`, `notification`, `pages`, `season`, `user` |
+| `tests/e2e/fixtures.ts` | playwright-bdd's `test` merged with the UI specs' `test` (`tests/e2e/uiTest.ts`), the fixtures, the scene helpers, `Given`/`When`/`Then`/`BeforeAll` (`createBdd`) |
 | `.output/bdd/<suite>/` | The generated specs, gitignored |
 
-**Fixtures.** `adminContext` and `memberContext` are the stored sessions (`validatedBrowserContext`,
-`memberValidatedBrowserContext`), closed after the scenario. `scene` holds what the steps of one scenario hand each
-other; `fromScene(scene, key)` reads what an earlier step set. A GIVEN that signs in puts its context in
-`scene.context`, and the steps after it read through that context, so one step serves each actor.
+**Fixtures.** `test` carries the UI specs' API error guard: a scenario fails at its end on a 4xx or 5xx from `/api/`
+that `testHelpers.expectApiError` declares nowhere. `adminContext` is the admin's stored session
+(`validatedBrowserContext`), closed after the scenario. `contextOf(actor)` opens an actor's context on first use: the
+user's stored session (`memberValidatedBrowserContext`), or a visitor's context without a session (`openContext`). A
+GIVEN that signs in puts its context in `scene.context`, and `contextOfActor(scene, actor)` reads it, so one step serves
+each actor. `scene` holds what the steps of one scenario hand each other; `fromScene(scene, key)` reads what an earlier
+step set.
+
+The scene helpers create a scenario's data through the factories and record it for the cleanup:
+`createSceneHousehold`, `createScenePerson` and `createDinnerInThePastMonth`. `activeSeasonOf` reads the season a GIVEN
+activated, else the singleton, which the `BeforeAll` resolves per feature. `personOf` reads an actor's inhabitant,
+`adultPriceIdOf` the season's ADULT price, and `periodOf` the billing period that bills the scenario's households.
+After the scenario, the scene puts back the member's settings and deletes the rows it created. Each cleanup step runs,
+and the failed steps fail the scenario together (`AggregateError`).
 
 ```gherkin
 @smoke

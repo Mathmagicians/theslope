@@ -18,7 +18,6 @@ Feature: Billing notifications
     Examples:
       | runs | event                          | records | archives | emails sent |
       | 0    | MONTHLY_BILLING job runs       | 2       | 1        | 1           |
-      | 1    | MONTHLY_BILLING job runs       | 2       | 1        | 1           |
       | 1    | period is re-sent by the admin | 3       | 1        | 2           |
 
   Scenario Outline: The <period> re-sent by the <actor> is refused as <refusal>

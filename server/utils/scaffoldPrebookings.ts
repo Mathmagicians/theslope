@@ -13,6 +13,7 @@ import {sellTicketsToWaitlist, joinWaitlist, previewJoinWaitlist, isClosedDinner
 import {fetchWaitlistForDinners, deleteWaitlistEntries, updateWaitlistEntryOrders, type WaitlistJoin} from "~~/server/data/waitlistRepository"
 import {useWaitlist, byTimeThenId, type TicketForSale} from "~/composables/useWaitlist"
 import {isHouseholdActiveOnDay} from "~/composables/useHousehold"
+import {useTicket} from "~/composables/useTicket"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {getSystemUserId} from "~~/server/utils/systemUser"
 
@@ -314,6 +315,8 @@ export async function scaffoldPrebookings(
     const ticketPriceById = new Map(season.ticketPrices.map(tp => [tp.id, tp]))
     const ticketTypeOf = ticketTypeOfEntry(season.ticketPrices)
 
+    const takesNoPortion = useTicket().takesNoPortionOf(season.ticketPrices)
+
     console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode${preview ? ' (preview)' : ''}: ${households.length} household(s), ${dinnerEvents.length} events, ${existingEntries.length} queue entries`)
 
     // Process each household and accumulate one result per order that landed or failed
@@ -410,6 +413,7 @@ export async function scaffoldPrebookings(
                     dinnerEventById,
                     canModifyOrders,
                     canEditDiningMode,
+                    takesNoPortion,
                     DinnerModeSchema.enum,
                     OrderStateSchema.enum,
                     householdEntries

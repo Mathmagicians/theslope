@@ -50,6 +50,12 @@ export const useTicket = () => {
     // A price row read from the database, with the portions the row does not store
     const withPortions = <T extends PortionTicket>(ticketPrice: T): T & {portions: number} => ({...ticketPrice, portions: portionsOf(ticketPrice)})
 
+    // The price rows whose ticket takes no portion from the kitchen, asked by price row id
+    const takesNoPortionOf = (ticketPrices: TicketPrice[]): (ticketPriceId: number) => boolean => {
+        const noPortion = new Set(ticketPrices.filter(ticketPrice => ticketPrice.portions === 0).map(ticketPrice => ticketPrice.id))
+        return ticketPriceId => noPortion.has(ticketPriceId)
+    }
+
     /**
      * Determine ticket type based on age and season ticket prices
      *
@@ -224,6 +230,7 @@ export const useTicket = () => {
         resolveTicketPrice,
         portionsOf,
         withPortions,
+        takesNoPortionOf,
         convertPriceToDecimalFormat,
         formatPrice
     }

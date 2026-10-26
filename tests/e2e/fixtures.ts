@@ -83,8 +83,8 @@ export type Scene = {
     /** The households with unbilled orders in the past month, and the billing period that bills them */
     billedHouseholds: HouseholdDetail[]
     period?: number
-    /** The answer to a request a THEN reads: the save, the re-send, the read, the test message */
-    answer?: {request: Request, status: number}
+    /** The answer to a request a THEN reads: the save, the re-send, the read, the test message; a read keeps its body */
+    answer?: {request: Request, status: number, body?: unknown}
     testMessage?: SenderEmitResult
     dryRun?: DeliveryDryRun
     /** The billing period the accountant link opened */

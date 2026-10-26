@@ -126,3 +126,17 @@ When('the delivery records of the unknown subject are read', async ({scene}) => 
     const {status} = await SenderFactory.getDeliveriesByQueryRaw(fromScene(scene, 'context'), {subjectType: 'NOT_A_SUBJECT', subjectIds: ['1']})
     scene.answer = {request: REQUEST.READ, status}
 })
+
+// A period id no billing run reaches
+const PERIOD_WITHOUT_RECORDS = 999_999_999
+
+When('the delivery records of a period without records are read', async ({scene}) => {
+    const {status, body} = await SenderFactory.getDeliveriesByQueryRaw(fromScene(scene, 'context'), {subjectType: BILLING_PERIOD, subjectIds: [String(PERIOD_WITHOUT_RECORDS)]})
+    scene.answer = {request: REQUEST.READ, status, body}
+})
+
+Then('the read answers an empty list', async ({scene}) => {
+    const {status, body} = fromScene(scene, 'answer')
+    expect(status, 'the read answers 200').toBe(200)
+    expect(body, 'the read answers no delivery records').toEqual([])
+})

@@ -214,7 +214,7 @@ const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEm
 const emptyState = getRandomEmptyMessage('noDinners')
 
 // Ticket price formatting
-const {formatPrice, resolveTicketPrice} = useTicket()
+const {formatPrice, resolveTicketPrice, takesNoPortionOf} = useTicket()
 
 // Booking helpers (shared with DinnerBookingForm)
 const {groupGuestOrders, getDayBillSummary, getBookingOptions, powerOptions, newGuestRow, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
@@ -621,7 +621,9 @@ const canBookEvent = (event: DinnerEventDisplay): boolean => canModifyOrders(eve
 
 const isHouseholdInResidency = isHouseholdActiveOnDay(props.household.movedInDate, props.household.moveOutDate)
 
-const contextOf = (event: DinnerEventDisplay): BookingContext => ({event, deadlines: props.deadlines, isHouseholdInResidency})
+const takesNoPortion = computed(() => takesNoPortionOf(props.ticketPrices))
+
+const contextOf = (event: DinnerEventDisplay): BookingContext => ({event, deadlines: props.deadlines, isHouseholdInResidency, takesNoPortion: takesNoPortion.value})
 
 // Each candidate is the desired order the save sends for the cell in a mode (buildBookingChanges' builders).
 // The cell slots render inside UTable's render: a fresh array per render makes every selector patch on every click, one array per cell lets Vue skip the untouched ones

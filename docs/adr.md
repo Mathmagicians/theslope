@@ -109,7 +109,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 
 ## ADR-016: Unified Booking Through Scaffold
 
-**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-23
+**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-26
 
 ### Context
 
@@ -146,6 +146,9 @@ Abstract composite keys (`inhabitantId-dinnerEventId`) caused bugs:
 
 A claim or a reclaim while the dining mode is locked (`canEditMode` false) lands as DINEIN, as an update does; a guest's
 bare NONE with no `orderId` lands nothing (no guest to cancel).
+
+A ticket of 0 portions takes no portion from the kitchen: it books and cancels as before the deadline at any time, so
+it neither joins the waiting list nor goes for sale.
 
 A dinner's waiting list is one first-come-first-served line per ticket type. The claim bucket executes by supply at that
 instant: a released ticket of the claim's ticket type, FIFO by `releasedAt`, while nobody waits in that type's line;

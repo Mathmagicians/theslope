@@ -247,7 +247,7 @@ const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, 
 const emptyStateMessage = getRandomEmptyMessage('household')
 
 // Ticket business logic
-const {resolveTicketPrice, formatPrice} = useTicket()
+const {resolveTicketPrice, formatPrice, takesNoPortionOf} = useTicket()
 
 // Season business logic
 const {isDinnerPast} = useSeason()
@@ -317,10 +317,13 @@ const residencyAlert = computed(() => {
   return getResidencyDisplay(household.value.movedInDate, household.value.moveOutDate)
 })
 
+const takesNoPortion = computed(() => takesNoPortionOf(props.ticketPrices))
+
 const bookingContext = computed((): BookingContext => ({
   event: props.dinnerEvent,
   deadlines: props.deadlines,
-  isHouseholdInResidency: isInResidencyOn.value
+  isHouseholdInResidency: isInResidencyOn.value,
+  takesNoPortion: takesNoPortion.value
 }))
 
 // ============================================================================

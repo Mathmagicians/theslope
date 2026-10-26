@@ -63,6 +63,7 @@ let getChefDeadlineAlarm: UseBookingT['getChefDeadlineAlarm']
 let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
 let cookingThresholds: ReturnType<ReturnType<typeof useSeason>['getCookingDeadlineThresholds']>
 let resolveTicketPrice: ReturnType<typeof useTicket>['resolveTicketPrice']
+let takesNoPortionOf: ReturnType<typeof useTicket>['takesNoPortionOf']
 beforeAll(() => {
     ({
         buildDinnerUrl,
@@ -82,7 +83,7 @@ beforeAll(() => {
         getPowerConsensus,
         getChefDeadlineAlarm
     } = useBooking());
-    resolveTicketPrice = useTicket().resolveTicketPrice
+    ({resolveTicketPrice, takesNoPortionOf} = useTicket())
 
     const {deadlinesForSeason, getCookingDeadlineThresholds} = useSeason()
     defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
@@ -469,6 +470,12 @@ describe('useBooking', () => {
 // The season's default prices: an order at a ticket type holds that type's price
 const SEASON_PRICES = TicketFactory.defaultTicketPrices()
 const priceIdOf = (ticketType: typeof TicketTypes[keyof typeof TicketTypes]) => SEASON_PRICES.find(price => price.ticketType === ticketType)!.id!
+// The factory lists the baby who tastes first, the hungry baby second; the season's prices weigh the first 0 portions
+const BABY_PRICE_IDS = SEASON_PRICES.filter(price => price.ticketType === TicketTypes.BABY).map(price => price.id!)
+const [TASTING_PRICE_ID, HUNGRY_PRICE_ID] = [BABY_PRICE_IDS[0]!, BABY_PRICE_IDS[1]!]
+const seasonTakesNoPortion = (ticketPriceId: number) => takesNoPortionOf(SEASON_PRICES)(ticketPriceId)
+// A case not about portions: every ticket takes a portion from the kitchen
+const everyTicketTakesAPortion = (_ticketPriceId: number) => false
 
 describe('bookingOutcomes', () => {
     const order = OrderFactory.defaultDesiredOrder()
@@ -578,8 +585,9 @@ describe('decideOrderAction', () => {
         existing: OrderDisplay | null,
         beforeCancellationDeadline = true,
         canEditMode = true,
-        existingEntry: TicketWaitlistDisplay | null = null
-    ): OrderDecisionInput => ({ desired, existing, existingEntry, beforeCancellationDeadline, canEditMode })
+        existingEntry: TicketWaitlistDisplay | null = null,
+        takesNoPortion: (ticketPriceId: number) => boolean = everyTicketTakesAPortion
+    ): OrderDecisionInput => ({ desired, existing, existingEntry, beforeCancellationDeadline, canEditMode, takesNoPortion })
 
     describe('decision matrix (9 cases)', () => {
         it.each([
@@ -763,6 +771,34 @@ describe('decideOrderAction', () => {
         })
     })
 
+    // A ticket of 0 portions takes nothing from the kitchen: after the deadline it books and cancels as before it, under
+    // the lock of the mode deadline; the hungry baby's ticket takes a portion and claims and releases
+    describe('after the deadline, by the portions of the ticket', () => {
+        const WISHES = {
+            'a new order': (ticketPriceId: number) => ({desired: createDesired({ticketPriceId, dinnerMode: TAKEAWAY}), existing: null}),
+            'Ingen on a booked order': (ticketPriceId: number) => ({desired: createDesired({orderId: 42, ticketPriceId, dinnerMode: NONE}), existing: createExisting({ticketPriceId})}),
+            'Ingen on a released order': (ticketPriceId: number) => ({
+                desired: createDesired({orderId: 42, ticketPriceId, dinnerMode: NONE}), existing: createExisting({ticketPriceId, state: RELEASED, dinnerMode: NONE})
+            })
+        }
+
+        it.each([
+            {ticket: 'the baby who tastes', ticketPriceId: TASTING_PRICE_ID, wish: 'a new order', canEditMode: true, bucket: Bucket.create, order: {state: BOOKED, dinnerMode: TAKEAWAY}},
+            {ticket: 'the baby who tastes', ticketPriceId: TASTING_PRICE_ID, wish: 'a new order', canEditMode: false, bucket: Bucket.create, order: {state: BOOKED, dinnerMode: DINEIN}},
+            {ticket: 'the baby who tastes', ticketPriceId: TASTING_PRICE_ID, wish: 'Ingen on a booked order', canEditMode: false, bucket: Bucket.delete, order: {orderId: 42, dinnerMode: NONE}},
+            {ticket: 'the baby who tastes', ticketPriceId: TASTING_PRICE_ID, wish: 'Ingen on a released order', canEditMode: false, bucket: Bucket.delete, order: {orderId: 42, dinnerMode: NONE}},
+            {ticket: 'the hungry baby', ticketPriceId: HUNGRY_PRICE_ID, wish: 'a new order', canEditMode: true, bucket: Bucket.claim, order: {state: BOOKED, dinnerMode: TAKEAWAY}},
+            {ticket: 'the hungry baby', ticketPriceId: HUNGRY_PRICE_ID, wish: 'Ingen on a booked order', canEditMode: false, bucket: Bucket.update, order: {orderId: 42, state: RELEASED, dinnerMode: NONE}},
+            {ticket: 'the hungry baby', ticketPriceId: HUNGRY_PRICE_ID, wish: 'Ingen on a released order', canEditMode: false, bucket: Bucket.idempotent, order: {orderId: 42, state: RELEASED, dinnerMode: NONE}}
+        ] as const)('GIVEN $ticket WHEN $wish after the deadline, the mode open: $canEditMode THEN $bucket', ({ticketPriceId, wish, canEditMode, bucket, order}) => {
+            const {desired, existing} = WISHES[wish](ticketPriceId)
+
+            const result = decideOrderAction(createInput(desired, existing, false, canEditMode, null, seasonTakesNoPortion), DinnerMode, OrderState)
+
+            expect(result).toMatchObject({bucket, order})
+        })
+    })
+
     describe('queue entry rows', () => {
         const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 101, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 1})
 
@@ -884,6 +920,7 @@ describe('resolveDesiredOrdersToBuckets', () => {
             dinnerEventById,
             canModifyOrders,
             canEditDiningMode,
+            everyTicketTakesAPortion,
             DinnerMode,
             OrderState
         )
@@ -944,6 +981,7 @@ describe('resolveDesiredOrdersToBuckets', () => {
                 pastEventById,
                 cannotModify,
                 cannotEdit,
+                everyTicketTakesAPortion,
                 DinnerMode,
                 OrderState,
                 entries
@@ -953,6 +991,15 @@ describe('resolveDesiredOrdersToBuckets', () => {
             expect({
                 claim: result.claim.length, leave: result.leave.length, requeue: result.requeue.length, idempotent: result.idempotent.length
             }).toEqual(expected)
+        })
+
+        // Each decision asks the predicate about its own ticket price: the baby who tastes books, the hungry baby claims
+        it('GIVEN the baby who tastes and the hungry baby wishing the dinner after the deadline THEN the first books and the second claims', () => {
+            const desired = [createDesired(1, 201, { ticketPriceId: TASTING_PRICE_ID }), createDesired(2, 201, { ticketPriceId: HUNGRY_PRICE_ID })]
+
+            const result = resolveDesiredOrdersToBuckets(desired, [], pastEventById, cannotModify, cannotEdit, seasonTakesNoPortion, DinnerMode, OrderState)
+
+            expect({create: result.create.map(order => order.inhabitantId), claim: result.claim.map(order => order.inhabitantId)}).toEqual({create: [1], claim: [2]})
         })
     })
 
@@ -965,6 +1012,7 @@ describe('resolveDesiredOrdersToBuckets', () => {
             dinnerEventById,
             canModifyOrders,
             canEditDiningMode,
+            everyTicketTakesAPortion,
             DinnerMode,
             OrderState
         )).toThrow('Dinner event 999 not found')
@@ -1506,6 +1554,17 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
             expect(result.create).toEqual([])
         })
 
+        // The season's prices weigh the baby who tastes 0 portions: the preference books the dinner as before the deadline
+        it('a preference to eat for a baby who tastes, with no order, books', () => {
+            const babyWhoTastes = {...createInhabitant(1, allDaysPrefs), birthDate: addYears(today, -1)}
+
+            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, createHousehold(1, [babyWhoTastes]), [], new Set(), new Set())
+
+            expect({create: result.create, claim: result.claim}).toEqual({
+                create: [expect.objectContaining({inhabitantId: babyWhoTastes.id, ticketPriceId: TASTING_PRICE_ID, state: OrderState.BOOKED})], claim: []
+            })
+        })
+
         // A guest ticket booked on a person is not the person's own ticket, in either order of the list
         it.each([
             {desc: 'the guest ticket listed last', guestLast: true},
@@ -1683,12 +1742,12 @@ describe('getBookingOptions — the rules matrix', () => {
         resolveTicketPrice(birthDate, priceAtBooking, SEASON_PRICES, referenceDate)
 
     // Each row's candidate is the save's builder bound to the row: a mode is open when the save of it lands as that mode
-    const ownOrder = (dinner: Dinner, state: OrderState, dinnerMode: DinnerMode): OrderDisplay =>
-        OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, ticketPriceId: adultPriceId, dinnerMode, state})
-    const inhabitantRow = (dinner: Dinner, order: OrderDisplay | null): BookingRow => ({
+    const ownOrder = (dinner: Dinner, state: OrderState, dinnerMode: DinnerMode, ticketPriceId = adultPriceId): OrderDisplay =>
+        OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, ticketPriceId, dinnerMode, state})
+    const inhabitantRow = (dinner: Dinner, order: OrderDisplay | null, person = inhabitant): BookingRow => ({
         order,
         waitlistEntry: null,
-        candidate: dinnerMode => buildDesiredOrder({inhabitantId: inhabitant.id, dinnerEventId: dinner.id, dinnerMode}, order ? [order] : [], [inhabitant], [dinner], resolver, BOOKED)
+        candidate: dinnerMode => buildDesiredOrder({inhabitantId: person.id, dinnerEventId: dinner.id, dinnerMode}, order ? [order] : [], [person], [dinner], resolver, BOOKED)
     })
     const entryRow = (dinner: Dinner, wish: DinnerMode): BookingRow => {
         const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, dinnerMode: wish, ticketPriceId: adultPriceId})
@@ -1710,7 +1769,8 @@ describe('getBookingOptions — the rules matrix', () => {
     const contextOf = (dinner: Dinner, {canModifyOrders, canEditDiningMode}: ColumnSpec): BookingContext => ({
         event: {date: dinner.date, state: dinner.state},
         deadlines: {canModifyOrders: () => canModifyOrders, canEditDiningMode: () => canEditDiningMode},
-        isHouseholdInResidency: () => true
+        isHouseholdInResidency: () => true,
+        takesNoPortion: everyTicketTakesAPortion
     })
     // `at` moves the column's dinner (a day, a state), `with` overrides its context; both carry the dinner they ask about
     const column = (label: string, spec: ColumnSpec) => {
@@ -1734,6 +1794,11 @@ describe('getBookingOptions — the rules matrix', () => {
     const guestBooked = rowKind('guest ticket BOOKED, Takeaway', dinner => guestRow(dinner, TAKEAWAY))
     const guestAdd    = rowKind('guest add, no order',           dinner => guestAddRow(dinner, inhabitant.id))
     const noBooker    = rowKind('guest add, no booker',          dinner => guestAddRow(dinner, undefined))
+    // The baby who tastes, a ticket of 0 portions by the season's prices
+    const babyWhoTastes = {...inhabitant, birthDate: addYears(today, -1)}
+    const tastingBooked   = rowKind('the baby who tastes BOOKED, Takeaway', dinner => inhabitantRow(dinner, ownOrder(dinner, BOOKED, TAKEAWAY, TASTING_PRICE_ID), babyWhoTastes))
+    const tastingReleased = rowKind('the baby who tastes RELEASED',         dinner => inhabitantRow(dinner, ownOrder(dinner, RELEASED, NONE, TASTING_PRICE_ID), babyWhoTastes))
+    const tastingExpected = rowKind('the baby who tastes, no order',        dinner => inhabitantRow(dinner, null, babyWhoTastes))
 
     // The columns: where the dinner stands against the deadlines
     const future      = column('future, beyond the window', {daysAhead: windowDays + 10, canModifyOrders: true,  canEditDiningMode: true})
@@ -1767,6 +1832,21 @@ describe('getBookingOptions — the rules matrix', () => {
         ${noBooker}     | ${before}       | ${[]}
     `('$row.label · $column.label → $modes', ({row, column, modes}) => {
         expect(getBookingOptions(row.of(column.dinner), column.context)).toEqual(modes)
+    })
+
+    // A ticket of 0 portions books and cancels as before the deadline at any time: past the deadline its row offers the
+    // modes it offers before it while the mode is open, and the modes of the lock after the mode deadline
+    it.each`
+        row                 | column          | modes
+        ${tastingBooked}    | ${afterOpen}    | ${ALL}
+        ${tastingBooked}    | ${afterLocked}  | ${[TAKEAWAY, NONE]}
+        ${tastingReleased}  | ${afterOpen}    | ${ALL}
+        ${tastingReleased}  | ${afterLocked}  | ${[DINEIN, NONE]}
+        ${tastingExpected}  | ${afterOpen}    | ${ALL}
+        ${tastingExpected}  | ${afterLocked}  | ${[DINEIN, NONE]}
+    `('$row.label · $column.label, by the season\'s portions → $modes', ({row, column, modes}) => {
+        const context = column.with({takesNoPortion: seasonTakesNoPortion})
+        expect(getBookingOptions(row.of(context.dinner), context)).toEqual(modes)
     })
 
     it('guest add · the candidate is the booker\'s guest ticket at a guest\'s price', () => {

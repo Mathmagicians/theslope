@@ -1,10 +1,5 @@
-// Import TicketType enum from generated Zod schemas (ADR-001 compliance)
-// Note: app.config.ts is a build-time file (typechecked by the node project, which has no ~~ alias),
-// so we import directly from the generated schemas by relative path
-import { TicketTypeSchema } from '../prisma/generated/zod'
 import { NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES } from './config/notificationTemplates'
-
-const TicketType = TicketTypeSchema.enum
+import { DEFAULT_TICKET_PRICES } from './config/ticketPrices'
 
 export default defineAppConfig({
     theslope: {
@@ -16,12 +11,7 @@ export default defineAppConfig({
             menuIsAnnouncedDaysBefore: 10,
             ticketIsCancellableDaysBefore: 8,
             diningModeIsEditableMinutesBefore: 90,
-            // A ticket weighs the portions of the default price with its type and price, else of its type's first default price
-            ticketPrices: [
-                { ticketType: TicketType.BABY, description: 'Spiser gratis smagsprøver fra forældrene', price: 0, maximumAgeLimit: 2, portions: 0 },
-                { ticketType: TicketType.BABY, description: 'Sulten baby - 1/4 kuvert', price: 900, maximumAgeLimit: 2, portions: 0.25 },
-                { ticketType: TicketType.CHILD, description: 'Barn', price: 1700, maximumAgeLimit: 12, portions: 0.5 },
-                { ticketType: TicketType.ADULT, description: 'Voksen', price: 4000, portions: 1 }],
+            ticketPrices: DEFAULT_TICKET_PRICES,
             consecutiveCookingDays: 2
         },
         defaultDinnerStartTime: 18,
