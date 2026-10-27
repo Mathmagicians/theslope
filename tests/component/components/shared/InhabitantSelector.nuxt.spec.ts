@@ -3,18 +3,17 @@ import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
 import InhabitantSelector from '~/components/shared/InhabitantSelector.vue'
-import {nextTick, ref} from 'vue'
+import {nextTick, ref, h, type VNodeChild} from 'vue'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
-import {mountWithTooltipProvider, resetStores, findLoadingRow} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, resetStores, findLoadingRow, findOpenRows, clickByTestId} from '~~/tests/component/testHelpers'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 
 enableAutoUnmount(afterEach)
 
 describe('InhabitantSelector', () => {
 
-    const makeInhabitant = (id: number, name: string, lastName: string): InhabitantDisplay => ({
-        id, heynaboId: id * 10, householdId: 1, name, lastName,
-        pictureUrl: null, birthDate: null, dinnerPreferences: null
-    })
+    const makeInhabitant = (id: number, name: string, lastName: string): InhabitantDisplay =>
+        ({...HouseholdFactory.defaultInhabitantData(`inhabitant-selector-${id}`), id, name, lastName})
 
     const inhabitants: InhabitantDisplay[] = [
         makeInhabitant(1, 'Anna', 'Hansen'),
@@ -31,9 +30,11 @@ describe('InhabitantSelector', () => {
 
     const mount = (overrides: Record<string, unknown> = {}) =>
         mountWithTooltipProvider(InhabitantSelector, {props: {inhabitants, ...overrides}, isMd: true})
+    // The row the slots receive: the inhabitant, and the toggle of its expanded row
+    type SlotRow = {original: InhabitantDisplay, toggleExpanded: () => void}
     // Slots go through the root mount alone
-    const mountWithSlots = (slots: Record<string, (props: {row: {original: InhabitantDisplay}}) => string>) =>
-        mountSuspended(InhabitantSelector, {props: {inhabitants}, global: {provide: {isMd: ref(true)}}, slots})
+    const mountWithSlots = (slots: Record<string, (props: {row: SlotRow}) => VNodeChild>, props: Record<string, unknown> = {inhabitants}) =>
+        mountSuspended(InhabitantSelector, {props, global: {provide: {isMd: ref(true)}}, slots})
 
     const typeSearch = async (wrapper: Awaited<ReturnType<typeof mount>>, query: string) => {
         await wrapper.find('input').setValue(query)
@@ -122,6 +123,24 @@ describe('InhabitantSelector', () => {
         inhabitants.forEach(i =>
             expect(text).toContain(`slot-${slotName}-${i.id}`)
         )
+    })
+
+    // ========== EXPANDED ROW ==========
+
+    // The parent opens a row through the row its #actions slot receives
+    it('GIVEN Bo\'s row open WHEN an inhabitant arrives above it THEN the #expanded slot stays under Bo\'s row', async () => {
+        const [anna, bo, carl] = inhabitants
+        const wrapper = await mountWithSlots({
+            actions: ({row}) => h('button', {'data-testid': `open-${row.original.id}`, onClick: () => row.toggleExpanded()}),
+            expanded: ({row}) => `detail-${row.original.id}`
+        }, {inhabitants: [bo, carl]})
+        await clickByTestId(wrapper, `open-${bo!.id}`)
+
+        await wrapper.setProps({inhabitants: [anna, bo, carl]})
+
+        const open = findOpenRows(wrapper)
+        expect(open.map(({row}) => row.text())).toEqual([expect.stringContaining(`${bo!.name} ${bo!.lastName}`)])
+        expect(open[0]!.detail.text()).toBe(`detail-${bo!.id}`)
     })
 
     // ========== PAGINATION ==========

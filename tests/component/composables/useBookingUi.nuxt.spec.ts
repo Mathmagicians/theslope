@@ -1,10 +1,10 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, guestTicketsLabel, ticketBadgeLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createTicketStateBadge, createBirthdayBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, guestTicketsLabel, ticketBadgeLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS} from '~/composables/useBooking'
+import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, formatPlace} from '~/composables/useBooking'
 import {useBookingValidation, TicketState, type BookingAction, type BookingResult, type QueuePosition} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
@@ -12,6 +12,7 @@ import {lockedDinnerSupply} from '~~/tests/component/testHelpers'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {ticketTypeLabel} from '~/composables/useTicket'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
@@ -138,13 +139,36 @@ describe('useBookingUi', () => {
         })
     })
 
-    describe('createWaitlistBadge', () => {
+    // The badge beside a name: the label, glyph and colour of the order state the ticket shows, the badge's words with
+    // the caller's detail (the household a ticket was bought from, the place in the line of its ticket type)
+    describe('createTicketStateBadge', () => {
         it.each([
-            {position: 2, ticketType: TicketTypeSchema.enum.ADULT, value: 'Voksen #2'},
-            {position: 3, ticketType: TicketTypeSchema.enum.CHILD, value: 'Barn #3'}
-        ])('names the place $value in the glyph and colour of the queued order state', ({position, ticketType, value}) => {
-            const {icon, color} = ORDER_STATE_LABELS.queued
-            expect(createWaitlistBadge(position, ticketType)).toMatchObject({icon, color, value})
+            {ticketState: TicketState.released, shown: OrderState.RELEASED, detail: ''},
+            {ticketState: TicketState.claimed, shown: TicketState.claimed, detail: HouseholdFactory.defaultHouseholdDetail('seller').shortName},
+            {ticketState: TicketState.queued, shown: TicketState.queued, detail: formatPlace(2, ADULT)}
+        ] as const)('a $ticketState ticket wears the $shown order state and reads its words with the detail "$detail"', ({ticketState, shown, detail}) => {
+            const {label, icon, color} = ORDER_STATE_LABELS[shown]
+            const {value, helpText} = BOOKING_WORDS.ticketStateBadge[ticketState]
+            expect(createTicketStateBadge(ticketState, detail)).toEqual({label, icon, color, value: value(detail), helpText})
+        })
+
+        it('a normal ticket has no state badge', () => {
+            expect(createTicketStateBadge(TicketState.normal)).toBeNull()
+        })
+    })
+
+    // The badge beside a name on a person's first dinner at a new ticket type: the birthday glyph, the type's label from
+    // the dinner's day and month in the badge's words, the legend's words as its help text
+    describe('createBirthdayBadge', () => {
+        it.each([ADULT, CHILD])('a first dinner at %s reads "<type> fra <day/month>" in the birthday glyph, with the legend\'s words as help text', (ticketType) => {
+            const from = addDays(new Date(), 10)
+            expect(createBirthdayBadge(ticketType, from)).toEqual({
+                label: BOOKING_WORDS.birthdayBadge.label,
+                icon: ICONS.birthday,
+                color: COLOR.neutral,
+                value: BOOKING_WORDS.birthdayBadge.from(ticketTypeLabel(ticketType), formatDate(from, DATE_SETTINGS.DAY_MONTH_MASK)),
+                helpText: BOOKING_WORDS.legend.birthday
+            })
         })
     })
 

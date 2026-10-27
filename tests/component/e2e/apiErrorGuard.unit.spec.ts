@@ -92,6 +92,19 @@ describe('the case window', () => {
         expect(reportsPerCase).toEqual([1, 1])
     })
 
+    it('GIVEN a 403 one case declared on a context opened outside a case WHEN the next case gets the 403 on it THEN the next case reports it', () => {
+        const shared = newContext()
+
+        const reportsPerCase = [true, false].map(declares => {
+            openCase()
+            if (declares) expectApiError(shared, 403, ALLERGY_URL)
+            receive(shared, forbidden)
+            return closeCase().length
+        })
+
+        expect(reportsPerCase).toEqual([0, 1])
+    })
+
     it('GIVEN a context an earlier case opened and left open WHEN it gets a 403 in a later case THEN the later case does not report it', () => {
         openCase()
         const earlier = newContext()

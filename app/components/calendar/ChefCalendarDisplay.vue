@@ -21,8 +21,10 @@
  * │  │  8   9  10  11  12  13  14             │                  │
  * │  │ 15 ⭕16 ⭕18  19  20  21  22            │                  │
  * │  │     🔴  🟡                              │  ← Rings        │
- * │  │ 22 ⭕25  26  27  28  29  30             │                  │
- * │  └────────────────────────────────────────┘                  │
+ * │  │ 22 ⭕25  26 (27) 28  29  30             │  (27) another   │
+ * │  └────────────────────────────────────────┘  team's dinner  │
+ * │  Forklaring: … Aflyst madlavning, Andet madholds             │
+ * │  fællesspisning (the plain circle)                           │
  * ├──────────────────────────────────────────────────────────────┤
  * │  AGENDA VIEW (Same visual as calendar!)                      │
  * │  ┌────────────────────────────────────────────────────────┐  │
@@ -43,7 +45,10 @@
  * Color System (Ocean - Professional Chef):
  * - Ocean blue circles: Next (bold), Future (light), Past (mocha)
  * - Deadline chips: 🔴 Red (critical <24h), 🟡 Yellow (warning 24-72h)
+ * - The other teams' dinners: a plain circle (CHEF_CALENDAR.day.otherTeam), calendar view only; a click selects it
  * - Visual continuity: Same colored circles + chips in both views
+ *
+ * Visual check: /chef calendar view with the other teams' dinners and the legend, phone and desktop, light and dark.
  *
  * Features:
  * - Countdown timer (train station style) to next cooking
@@ -67,12 +72,14 @@ import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
+import {TEAM_WORDS} from '~/config/teamWords'
 import {getPaginationRowModel} from '@tanstack/vue-table'
 
 interface Props {
   seasonDates: DateRange
   team: CookingTeamDisplay
   dinnerEvents: DinnerEventDisplay[]
+  otherTeamDinners?: DinnerEventDisplay[]
   deadlines: SeasonDeadlines
   selectedDinnerId?: number | null
   showSelection?: boolean
@@ -81,6 +88,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  otherTeamDinners: () => [],
   selectedDinnerId: null,
   showSelection: false
 })
@@ -92,6 +100,7 @@ const emit = defineEmits<{
 }>()
 
 const {useTemporalSplit, createTemporalEventLists, getDinnerForDay, isCancelledDay} = useTemporalCalendar()
+const {createEventList} = useCalendarEvents()
 const {sortDinnerEventsByTemporal} = useSeason()
 const {getChefDeadlineAlarm} = useBooking()
 const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, TEXT, BUTTONS, COLOR, NOISE, ICONS, URGENCY_TO_CHIP_COLOR, dayCircleClasses} = useTheSlopeDesignSystem()
@@ -129,15 +138,19 @@ const focusDate = computed(() => {
   return null
 })
 
-// Create event lists with ocean color (professional chef palette)
-const allEventLists = computed(() =>
-  createTemporalEventLists(
+// Create event lists with ocean color (professional chef palette); the other teams' dinners carry no temporal state
+const OTHER_TEAM_DINNERS = 'other-team-dinners'
+const allEventLists = computed(() => [
+  ...createTemporalEventLists(
     pastDinnerDates.value,
     futureDinnerDates.value,
     nextDinner.value,
     'ocean'
-  )
-)
+  ),
+  createEventList(props.otherTeamDinners.map(dinner => dinner.date), OTHER_TEAM_DINNERS, 'badge')
+])
+
+const isOtherTeamDay = (eventLists: DayEventList[]): boolean => eventLists.some(list => list.listId === OTHER_TEAM_DINNERS)
 
 // Day type detection - returns 'next' | 'future' | 'past' | null
 type DayType = 'next' | 'future' | 'past'
@@ -153,10 +166,10 @@ const getDayColorClass = (type: DayType): string => {
   return type === 'past' ? CALENDAR.day.past : CHEF_CALENDAR.day[type]
 }
 
-// Selection support
+// Selection support: a day of the team on view, or another team's dinner
 const handleDateClick = (day: DateValue) => {
   if (!props.showSelection) return
-  const dinner = getDinnerForDay(props.dinnerEvents, day)
+  const dinner = getDinnerForDay(props.dinnerEvents, day) ?? getDinnerForDay(props.otherTeamDinners, day)
   if (dinner) emit('select', dinner.id)
 }
 
@@ -196,15 +209,17 @@ const getAlarmForDay = (day: DateValue): -1 | 0 | 1 | 2 | 3 => {
 // Legend items: the deadline chips wrap a planned-day circle, as the day cells do
 const legendItems = computed((): CalendarLegendItem[] => {
   const chipCircle = dayCircleClasses(CHEF_CALENDAR.day.future)
+  const words = TEAM_WORDS.calendarLegend
   return [
-    {label: 'Næste madlavning', kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.next)},
-    {label: 'Valgt dato', kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.next, CHEF_CALENDAR.selection)},
-    {label: 'Planlagt madlavning', kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.future)},
-    {label: 'Tidligere madlavning', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past)},
-    {label: 'Deadline overskredet', kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[3], circleClass: chipCircle, chipSize: SIZES.md},
-    {label: 'Deadline kritisk (<24t)', kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[2], circleClass: chipCircle, chipSize: SIZES.md},
-    {label: 'Deadline snart (24-72t)', kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[1], circleClass: chipCircle, chipSize: SIZES.md},
-    {label: 'Aflyst madlavning', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past, CALENDAR.day.cancelled)}
+    {label: words.next, kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.next)},
+    {label: words.selected, kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.next, CHEF_CALENDAR.selection)},
+    {label: words.planned, kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.future)},
+    {label: words.past, kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past)},
+    {label: words.overdue, kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[3], circleClass: chipCircle, chipSize: SIZES.md},
+    {label: words.critical, kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[2], circleClass: chipCircle, chipSize: SIZES.md},
+    {label: words.soon, kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[1], circleClass: chipCircle, chipSize: SIZES.md},
+    {label: words.cancelled, kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past, CALENDAR.day.cancelled)},
+    {label: words.otherTeam, kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.otherTeam)}
   ]
 })
 
@@ -326,6 +341,16 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => emit('tab-click', mode)
                   isCancelledDay(dinnerEvents, day) ? `${CALENDAR.day.past} ${CALENDAR.day.cancelled}` : getDayColorClass(getDayType(eventLists)!),
                   isSelected(day) && CHEF_CALENDAR.selection
                 )"
+                @click="handleDateClick(day)"
+              >
+                {{ day.day }}
+              </div>
+
+              <!-- Another team's dinner: a plain circle -->
+              <div
+                v-else-if="isOtherTeamDay(eventLists)"
+                :data-testid="`calendar-other-team-dinner-${day.day}`"
+                :class="dayCircleClasses(CHEF_CALENDAR.day.otherTeam)"
                 @click="handleDateClick(day)"
               >
                 {{ day.day }}

@@ -3,37 +3,62 @@
  * Chef Page - Team calendar and dinner management for cooking team members
  *
  * Architecture:
- * - All team members see everything (team selector, calendar, details)
- * - Only chefs get edit controls in ChefMenuCard (formMode='EDIT')
+ * - The page shows one of the season's teams: one of the person's own, or a visit to another team
+ * - Only the team's chef gets edit controls in ChefMenuCard (formMode='EDIT'); a member and a visitor read it
+ * - The chef role panel and Kok / Kokkespire are the dinner page's, open to every member; taking a role puts the person
+ *   on the team, and the visiting tab becomes their own tab
  *
  * LAYOUTS.masterDetailPage on UPage: from md the master beside the detail, stacked on a phone.
  *
- * Master Panel (a third of the row, at least 245px):
- * ┌─────────────────────────────────────────┐
- * │ Mine Madhold                            │
- * │ [Madhold A] Madhold B                   │
- * ├─────────────────────────────────────────┤
- * │ Team Calendar (ChefDinnerCard list)     │
- * │ 📅 25/12 [PLANLAGT] ⚠️ 2 dage tilbage   │
- * │ Spaghetti Carbonara                     │
- * │ Chefkok tildelt                         │
- * └─────────────────────────────────────────┘
+ * /chef?team=3&date=04/11/2026, desktop: Anna, a cook on Madhold 2 and 5, clicked Madhold 3's dinner on Wednesday 4/11
  *
- * Detail Panel (the rest of the row):
- * ┌─────────────────────────────────────────┐
- * │ MENU HERO                               │
- * │ (chef mode if isChefFor, else view)     │
- * │                                         │
- * │ Hvem laver maden?                       │
- * │ (CookingTeamCard)                       │
- * │                                         │
- * │ Hvem kommer og spiser?                  │
- * │ (KitchenPreparation)                    │
- * └─────────────────────────────────────────┘
+ * MASTER (a third of the row)
+ * +--------------------------------------------------+
+ * | Mine Madhold                                     |
+ * |  (team icon)   (team icon)   (team icon)         |
+ * |  Madhold 2     Madhold 5     [Madhold 3]         |
+ * |                              [Ikke dit hold]     |  visiting tab, selected, with its badge
+ * | Du er ikke på Madhold 3                          |  role line
+ * +--------------------------------------------------+
+ * | NÆSTE MADLAVNING  Madhold 3                      |
+ * | TOR 12/11 · OM 16D 2T · 18:00                    |
+ * +--------------------------------------------------+
+ * | [Agenda] [Kalender]                     [skjul]  |
+ * |  november 2026                                   |
+ * |  M    T    O    T    F    L    S                 |
+ * |                           1                      |
+ * |  2   (3)  [4]   5    6    7    8                 |  [4] selected: ring
+ * |  9  (10)  11  [12]* 13   14   15                 |  * deadline chip
+ * | 16  (17)  18  [19]  20   21   22                 |
+ * |  [n] Madhold 3's dinners: chef colours,          |
+ * |      deadline chips                              |
+ * |  (n) the other teams' dinners, your own          |
+ * |      included: plain circles, clickable          |
+ * | Forklaring: Næste madlavning, Valgt dato,        |
+ * |   Planlagt madlavning, Tidligere madlavning,     |
+ * |   Deadline overskredet / kritisk / snart,        |
+ * |   Aflyst madlavning, Andet madholds              |
+ * |   fællesspisning                                 |
+ * +--------------------------------------------------+
+ *
+ * DETAIL (the rest of the row): ChefMenuCard read-only on a visit, with its state controls
+ * +----------------------------------------------------------------------------+
+ * | MIDDAG  [forrige] [næste]                                 [ANNONCERET]     |  Madhold 3's dinners
+ * | Lasagne, the chef portrait: click opens the chef role panel                |
+ * | ALLERGENER, MADBESTILLING, the state stepper with its deadline badges      |  no edits on a visit
+ * | Budget                                                                     |
+ * | Hvem laver maden?    Madhold 3's team card                                 |
+ * |   [(pot) Kok (plus)]  [(sprout) Kokkespire (plus)]  [(team) Byt Tjans]     |
+ * | Hvem kommer og spiser?   the kitchen                                       |
+ * +----------------------------------------------------------------------------+
+ * No menu, allergen, grocery or state edits, no Annoncer and no Flere: those need the team's chef.
+ *
+ * Visual check: /chef on an own team and on a visiting tab, phone and desktop, light and dark.
  *
  * Query Parameters:
- * - ?team=3 - Selected team ID
- * - ?dinner=42 - Selected dinner ID
+ * - ?team=3 - The team on view, one of the season's teams; defaults to the person's first team
+ * - ?date=04/11/2026 - The team's dinner on view
+ * - ?view=calendar:open - The calendar's view and open state
  */
 
 import {FORM_MODES, type FormMode} from '~/types/form'
@@ -42,11 +67,14 @@ import type {ExpenseCreate} from '~/composables/useBillingValidation'
 import type {CookingRoundRow} from '~/composables/useBookingUi'
 
 // Design system
-const {COLOR, ICONS, LAYOUTS, ALERTS, COMPONENTS, breakpoint} = useTheSlopeDesignSystem()
+const {ICONS, LAYOUTS, ALERTS, COMPONENTS, breakpoint} = useTheSlopeDesignSystem()
 
 // Initialize stores
 const planStore = usePlanStore()
-const {isPlanStoreReady, isPlanStoreErrored, planStoreError, selectedSeason} = storeToRefs(planStore)
+const {
+  isPlanStoreReady, isPlanStoreErrored, planStoreError, selectedSeason,
+  selectedTeam: planSelectedTeam, isSelectedTeamErrored, selectedTeamError
+} = storeToRefs(planStore)
 
 const usersStore = useUsersStore()
 const {myTeams, isMyTeamsLoading, isMyTeamsErrored, isMyTeamsInitialized, myTeamsError} = storeToRefs(usersStore)
@@ -61,9 +89,6 @@ const {
   isSelectedDinnerEventErrored: isDinnerDetailError
 } = storeToRefs(bookingsStore)
 
-// The team card reads the dinner's cooking team from the plan store
-planStore.selectTeam(() => dinnerEventDetail.value?.cookingTeamId ?? null)
-
 // Page ready when both plan store and myTeams are initialized
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
 
@@ -71,30 +96,47 @@ const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialize
 const {isChefFor, deadlinesForSeason} = useSeason()
 const authStore = useAuthStore()
 
-// Season-specific deadline functions
+// The season's teams and dinners: any of its teams opens on the page, any of its dinners opens on its team
+const seasonTeams = computed(() => selectedSeason.value?.CookingTeams ?? [])
+const seasonDinners = computed(() => selectedSeason.value?.dinnerEvents ?? [])
+const isSeasonTeam = (id: number | null) => !!id && seasonTeams.value.some(t => t.id === id)
 
-// Team selection via query parameter
+// Team selection via query parameter; with no team of the person's own and no visit the key stays off the URL
 const {value: selectedTeamId, setValue: setSelectedTeamId} = useQueryParam<number>('team', {
   serialize: (id) => id.toString(),
   deserialize: (s) => {
     const parsed = parseInt(s)
     return !isNaN(parsed) ? parsed : null
   },
-  validate: (id) => {
-    return myTeams.value.some(t => t.id === id)
-  },
+  validate: isSeasonTeam,
+  normalize: (id) => isSeasonTeam(id) ? id : null,
   defaultValue: () => {
     return myTeams.value[0]?.id ?? 0
   },
-  syncWhen: () => isPageReady.value && myTeams.value.length > 0
+  syncWhen: () => isPageReady.value && seasonTeams.value.length > 0
 })
 
-// Selected team
-const selectedTeam = computed(() => {
-  return myTeams.value.find(t => t.id === selectedTeamId.value) || null
-})
+// The team card and a visit read the team on view from the plan store
+planStore.selectTeam(() => selectedTeamId.value || null)
+
+// A visit: a team on view the person is not on. Its dinners come from the plan store's team once that team has loaded
+const ownTeam = computed(() => myTeams.value.find(t => t.id === selectedTeamId.value) ?? null)
+const visitingTeam = computed(() => ownTeam.value ? null : seasonTeams.value.find(t => t.id === selectedTeamId.value) ?? null)
+const visitedTeam = computed(() =>
+  visitingTeam.value && planSelectedTeam.value?.id === visitingTeam.value.id ? planSelectedTeam.value : null)
+const isVisitErrored = computed(() => !!visitingTeam.value && isSelectedTeamErrored.value)
+const isVisitLoading = computed(() => !!visitingTeam.value && !visitedTeam.value && !isVisitErrored.value)
+
+const selectedTeam = computed(() => ownTeam.value ?? visitedTeam.value)
+const teamOnView = computed(() => ownTeam.value ?? visitingTeam.value)
 
 const teamDinnerEvents = computed(() => selectedTeam.value?.dinnerEvents ?? [])
+
+// The other teams' dinners; a dinner without a team has no team page
+const otherTeamDinners = computed(() => seasonDinners.value.filter(dinner =>
+  dinner.cookingTeamId !== null && dinner.cookingTeamId !== selectedTeamId.value))
+
+const calendarError = computed(() => isPlanStoreErrored.value ? planStoreError.value : selectedTeamError.value)
 
 // Calendar view mode + accordion state via URL query param - survives component remounts (ADR-006)
 // Format: view=calendar:open or view=agenda:closed
@@ -147,9 +189,12 @@ const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 // Only the team's own dinners: the store resolves the date against the selected season
 bookingsStore.selectDinnerDate(() => selectedDinnerEvent.value ? selectedDate.value : null)
 
+// A dinner of any team opens on its team at its date: both writes of the tick land in one navigation (ADR-006)
 const handleDinnerSelect = (dinnerId: number) => {
-  const dinner = teamDinnerEvents.value.find((e: DinnerEventDisplay) => e.id === dinnerId)
-  if (dinner) setSelectedDate(new Date(dinner.date))
+  const dinner = seasonDinners.value.find(e => e.id === dinnerId)
+  if (!dinner?.cookingTeamId) return
+  setSelectedTeamId(dinner.cookingTeamId)
+  setSelectedDate(new Date(dinner.date))
 }
 
 // ChefMenuCard formMode: EDIT for chef, VIEW for team members
@@ -164,21 +209,12 @@ const chefFormMode = computed<FormMode>(() => {
   return isCurrentUserChef.value ? FORM_MODES.EDIT : FORM_MODES.VIEW
 })
 
-// Event handlers
-const toast = useToast()
+// Event handlers: the store toasts each action's result
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
-const handleAllergenUpdate = async (allergenIds: number[]) => {
-  if (!selectedDinnerId.value) return
-  const result = await bookingsStore.updateDinnerEventAllergens(selectedDinnerId.value, allergenIds)
-  if (!result) return
-  toast.add({
-    title: 'Allergeninformation gemt',
-    description: allergenIds.length > 0 ? 'Beboerne kan nu se allergenerne i menuen' : 'Menuen er markeret uden allergener',
-    icon: ICONS.checkCircle,
-    color: COLOR.success
-  })
+const handleAllergenUpdate = (allergenIds: number[]) => {
+  if (selectedDinnerId.value) bookingsStore.updateDinnerEventAllergens(selectedDinnerId.value, allergenIds)
 }
 
 const handleFormUpdate = async (data: ChefMenuForm) => {
@@ -236,29 +272,12 @@ const roundRows = computed<CookingRoundRow[]>(() => roundDinners.value.map(dinne
 const handleAdvanceState = async (newState: string) => {
   if (!selectedDinnerId.value) return
   if (newState !== DinnerState.ANNOUNCED) return
-  const isRepublish = dinnerEventDetail.value?.state === DinnerState.ANNOUNCED
-  const result = await bookingsStore.announceDinner(selectedDinnerId.value)
-  if (!result) return
-  toast.add({
-    title: isRepublish ? 'Du har opdateret din menu på Heynabo' : 'Du har publiceret din menu på Heynabo',
-    description: result.heynaboEventId ? `Heynabo event ID: ${result.heynaboEventId}` : 'Ingen Heynabo ID returneret',
-    icon: ICONS.megaphone,
-    color: COLOR.success
-  })
-  await usersStore.loadMyTeams()
+  if (await bookingsStore.announceDinner(selectedDinnerId.value)) await usersStore.loadMyTeams()
 }
 
 const handleCancelDinner = async () => {
   if (!selectedDinnerId.value) return
-  const result = await bookingsStore.cancelDinner(selectedDinnerId.value)
-  if (!result) return
-  toast.add({
-    title: 'Middag aflyst',
-    description: `${result.menuTitle || 'Fællesspisningen'} d. ${formatDate(result.date)} er blevet aflyst`,
-    icon: ICONS.xMark,
-    color: COLOR.warning
-  })
-  await usersStore.loadMyTeams()
+  if (await bookingsStore.cancelDinner(selectedDinnerId.value)) await usersStore.loadMyTeams()
 }
 
 const handleUndoCancelDinner = async () => {
@@ -267,15 +286,7 @@ const handleUndoCancelDinner = async () => {
   const targetState = dinnerEventDetail.value.menuTitle?.trim()
     ? DinnerState.ANNOUNCED
     : DinnerState.SCHEDULED
-  const result = await bookingsStore.undoCancelDinner(selectedDinnerId.value, targetState)
-  if (!result) return
-  toast.add({
-    title: 'Aflysning annulleret',
-    description: `${result.menuTitle || 'Fællesspisningen'} d. ${formatDate(result.date)} er genåbnet`,
-    icon: ICONS.checkCircle,
-    color: COLOR.success
-  })
-  await usersStore.loadMyTeams()
+  if (await bookingsStore.undoCancelDinner(selectedDinnerId.value, targetState)) await usersStore.loadMyTeams()
 }
 
 useHead({
@@ -313,14 +324,15 @@ useHead({
               <MyTeamSelector
                   :model-value="selectedTeamId"
                   :teams="myTeams"
-                  :season-teams="selectedSeason?.CookingTeams ?? []"
+                  :visiting-team="visitingTeam"
+                  :season-teams="seasonTeams"
                   @update:model-value="setSelectedTeamId"
               />
 
               <!-- Team role status -->
               <TeamRoleStatus
-                  v-if="selectedTeam && authStore.user?.Inhabitant?.id"
-                  :team="selectedTeam"
+                  v-if="teamOnView && authStore.user?.Inhabitant?.id"
+                  :team="teamOnView"
                   :inhabitant-id="authStore.user.Inhabitant.id"
               />
             </div>
@@ -328,17 +340,17 @@ useHead({
 
           <!-- Calendar: Team calendar with agenda/calendar views -->
           <template #calendar>
-            <!-- Loading calendar -->
-            <div v-if="!isPlanStoreReady && !isPlanStoreErrored" >
+            <!-- Loading calendar: the season, or the team a visit opens -->
+            <div v-if="(!isPlanStoreReady && !isPlanStoreErrored) || isVisitLoading" >
               <Loader text="Henter kalender..."/>
             </div>
 
             <!-- Error loading calendar -->
             <ViewError
-                v-else-if="isPlanStoreErrored"
-                :error="planStoreError?.statusCode"
+                v-else-if="isPlanStoreErrored || isVisitErrored"
+                :error="calendarError?.statusCode"
                 message="Vi kan ikke hente data til kalenderen. Prøv at genindlæse siden 🔃."
-                :cause="planStoreError"
+                :cause="calendarError"
             />
 
             <!-- No events for team -->
@@ -364,6 +376,7 @@ useHead({
                   :season-dates="selectedSeason.seasonDates"
                   :team="selectedTeam"
                   :dinner-events="teamDinnerEvents"
+                  :other-team-dinners="otherTeamDinners"
                   :deadlines="deadlinesForSeason(selectedSeason)"
                   :selected-dinner-id="selectedDinnerId"
                   :show-selection="true"

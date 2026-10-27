@@ -12,7 +12,7 @@ Feature: Daily maintenance
     And the inhabitant has a ticket with the dinner mode <mode> and <guest tickets> guest tickets
     When the DAILY_MAINTENANCE job runs
     Then the job reports success
-    And <tickets> tickets of the inhabitant are closed with the dinner mode <mode>
+    And <tickets> tickets of the inhabitant are CLOSED with the dinner mode <mode>
     And <tickets> tickets of the inhabitant have a transaction
 
     Examples:

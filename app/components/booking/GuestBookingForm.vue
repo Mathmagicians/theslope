@@ -52,7 +52,7 @@ const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets')
 
 // Booking logic
 const {getBookingOptions} = useBooking()
-const {takesNoPortionOf} = useTicket()
+const {takesNoPortionOf, findTicketPriceByType} = useTicket()
 const {createBookingBadges, guestSaveLabel} = useBookingUi()
 const bookingsStore = useBookingsStore()
 
@@ -62,13 +62,13 @@ const DinnerModeEnum = DinnerModeSchema.enum
 const OrderStateEnum = OrderStateSchema.enum
 
 // The guests a save books: how many, at which ticket price, how they eat and their allergies
-type GuestDraft = Pick<DesiredOrder, 'dinnerMode'> & {count: number, ticketPriceId: number, allergyTypeIds: number[]}
+type GuestDraft = {dinnerMode: DinnerMode, count: number, ticketPriceId: number, allergyTypeIds: number[]}
 
 // Form state - reactive object for UForm binding
 const formState = reactive<Omit<GuestDraft, 'ticketPriceId'> & {ticketPriceId: number | undefined}>({
   count: 1,
   // The form opens on the adult ticket
-  ticketPriceId: props.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)?.id,
+  ticketPriceId: findTicketPriceByType(TicketTypeSchema.enum.ADULT, props.ticketPrices)?.id,
   allergyTypeIds: [],
   dinnerMode: DinnerModeEnum.DINEIN
 })

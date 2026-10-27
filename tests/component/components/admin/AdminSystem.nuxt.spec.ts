@@ -7,7 +7,7 @@ import {createError, getQuery, type H3Event} from 'h3'
 import {addDays} from 'date-fns'
 import {mountWithTooltipProvider, findByTestId, resetStores, registerEmptyStoreEndpoints, untilTrue, findLoadingRow, tableHeaders, cellsByHeader, VIEWPORTS} from '~~/tests/component/testHelpers'
 import AdminSystem from '~/components/admin/AdminSystem.vue'
-import {formatDate} from '~/utils/date'
+import {DATE_SETTINGS, formatDate} from '~/utils/date'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -89,8 +89,6 @@ beforeEach(() => {
 afterEach(() => heldReads.clear())
 
 const HEADERS = ['Dato', 'Job', 'Status', 'Varighed', 'Kilde', 'Resultat']
-// The mask a box and the history show a run's start in
-const RUN_START_MASK = 'dd/MM/yyyy HH:mm'
 const NO_RUNS = 'Ingen kørsler endnu'
 
 const mountSystem = (isMd: boolean) => mountWithTooltipProvider(AdminSystem, {props: {canEdit: true}, isMd})
@@ -135,7 +133,7 @@ const boxOf = (wrapper: SystemWrapper, jobType: Job) =>
 const isLoading = (box: DOMWrapper<Element>) => box.findAll('[aria-busy="true"]').length > 0
 // UAlert's root, told from the card's by its orientation
 const alertOf = (box: DOMWrapper<Element>) => box.find('[data-slot="root"][data-orientation]')
-const startOf = (run: JobRunDisplay) => formatDate(run.startedAt, RUN_START_MASK)
+const startOf = (run: JobRunDisplay) => formatDate(run.startedAt, DATE_SETTINGS.DATE_TIME_MASK)
 const runOf = (jobType: Job, summary: unknown, overrides: Partial<JobRunDisplay> = {}) =>
     SeasonFactory.defaultJobRun({jobType, resultSummary: JSON.stringify(summary), ...overrides})
 

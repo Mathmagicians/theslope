@@ -6,7 +6,8 @@
 import {describe, it, expect, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
-import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import type {ButtonProps} from '@nuxt/ui'
+import {findByTestId, findComponentByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
 import {useBookingValidation, type DinnerMode} from '~/composables/useBookingValidation'
 import {DINNER_MODE_ORDER} from '~/composables/useBooking'
@@ -132,7 +133,7 @@ describe('DinnerModeSelector on a plan', () => {
 
     // A button's look: the colour and variant it renders
     const looksOf = (wrapper: Mounted) => Object.fromEntries(ALL.map(mode => {
-        const button = wrapper.findAllComponents({name: 'UButton'}).find(candidate => candidate.attributes('data-testid') === `${NAME}-${mode}`)!
+        const button = findComponentByTestId<ButtonProps>(wrapper, 'UButton', `${NAME}-${mode}`)
         return [mode, {color: button.props('color'), variant: button.props('variant')}]
     }))
 

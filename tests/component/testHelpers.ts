@@ -4,7 +4,7 @@ import {TooltipProvider} from 'reka-ui'
 import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
 import {useNuxtApp, clearNuxtData, useAppConfig} from '#app'
 import {getActivePinia, setActivePinia, type Pinia} from 'pinia'
-import {flushPromises, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
+import {flushPromises, type BaseWrapper, type DOMWrapper, type VueWrapper} from '@vue/test-utils'
 import {toCalendarDate} from '~/utils/date'
 import {sumBy} from '~/utils/ledger'
 import {TICKET_COUNTS} from '~/composables/useBilling'
@@ -179,6 +179,16 @@ export const findByTestId = (wrapper: BaseWrapper<Node>, testId: string) =>
 export const findAllByTestId = (wrapper: BaseWrapper<Node>, testId: string) =>
     wrapper.findAll(`[data-testid="${testId}"]`)
 
+/**
+ * The `name` component whose root element carries the test id, its props typed `Props`. A selector alone returns the
+ * topmost component on the element, which a table cell's renderer or a wrapping component can be
+ */
+export const findComponentByTestId = <Props>(wrapper: BaseWrapper<Node>, name: string, testId: string) => {
+    const found = wrapper.findAllComponents<ComponentPublicInstance<Props>>({name}).find(component => component.attributes('data-testid') === testId)
+    expect(found, `a ${name} with the test id ${testId}`).toBeDefined()
+    return found!
+}
+
 /** The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows */
 export const findLoadingRow = (wrapper: BaseWrapper<Node>) => wrapper.find('[data-slot="loading"]')
 
@@ -191,6 +201,12 @@ export const tableHeaders = (wrapper: BaseWrapper<Node>) => wrapper.find('table'
 export const cellsByHeader = (wrapper: BaseWrapper<Node>, rowIndex = 0): Record<string, string | undefined> => {
     const cells = wrapper.find('table').findAll('tbody tr')[rowIndex]?.findAll('td').map(td => td.text()) ?? []
     return Object.fromEntries(tableHeaders(wrapper).map((header, index) => [header, cells[index]]))
+}
+
+/** The body rows UTable marks open (`data-expanded`), each with the row after it, where the table renders its #expanded slot */
+export const findOpenRows = (wrapper: BaseWrapper<Node>): {row: DOMWrapper<Element>, detail: DOMWrapper<Element>}[] => {
+    const rows = wrapper.findAll('tbody tr')
+    return rows.flatMap((row, index) => row.attributes('data-expanded') === 'true' ? [{row, detail: rows[index + 1]!}] : [])
 }
 
 type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>

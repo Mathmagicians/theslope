@@ -4,6 +4,8 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {ticketTypeLabel, ticketTypeLetter, ticketTypeCount} from '~/composables/useTicket'
 import appConfig from '~/app.config'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {addDays, addMonths, subYears} from 'date-fns'
 
 describe('useTicket', () => {
     const referenceDate = new Date('2025-01-15')
@@ -164,6 +166,51 @@ describe('useTicket', () => {
             const result = resolveTicketPrice(new Date('2000-01-01'), 0, sortedPrices, referenceDate)
             expect(result!.ticketType).toBe(TicketType.ADULT)
             expect(result!.price).toBe(4000)
+        })
+    })
+
+    // A booked ticket keeps its own price row whatever the person's age; a dinner without one takes the row for the
+    // person's age on the dinner's date, as the save prices it
+    describe('resolveTicketPriceOn', () => {
+        const dinnerDate = addMonths(new Date(), 1)
+        const [childPrice, adultPrice] = [TicketType.CHILD, TicketType.ADULT].map(type => ticketPrices.find(tp => tp.ticketType === type)!)
+        const turnsAdultOnTheDinner = subYears(dinnerDate, childPrice!.maximumAgeLimit!)
+        const bookedAt = (ticketPriceId: number | null) =>
+            OrderFactory.defaultOrder(undefined, {ticketPriceId, ticketType: childPrice!.ticketType, priceAtBooking: childPrice!.price})
+
+        it.each([
+            {given: 'an adult booked at the CHILD price row', birthDate: new Date('1990-01-01'), order: bookedAt(childPrice!.id!), expected: childPrice},
+            {given: 'an adult booked at a price row since deleted', birthDate: new Date('1990-01-01'), order: bookedAt(null), expected: childPrice},
+            {given: 'a child today who turns 12 on the dinner, without a booking', birthDate: turnsAdultOnTheDinner, order: undefined, expected: adultPrice}
+        ])('GIVEN $given THEN the price row is $expected.ticketType', ({birthDate, order, expected}) => {
+            expect(useTicket().resolveTicketPriceOn(birthDate, order, ticketPrices, dinnerDate)).toEqual(expected)
+        })
+    })
+
+    // A person's first dinner at a new ticket type: the first dinner whose type, by the person's age on its date, differs
+    // from the type on the dinner before it
+    describe('ticketTypeChangeOf', () => {
+        const today = new Date()
+        // Three dinners a week apart, sorted; the birthdays fall around the second
+        const dinnerDates = [7, 14, 21].map(days => addDays(today, days))
+        const [firstDinner, secondDinner] = dinnerDates as [Date, Date, Date]
+        const betweenTheFirstTwo = addDays(firstDinner, 3)
+        // The birth date of a person who reaches a price row's age limit on a day
+        const reaching = (ticketType: typeof TicketType[keyof typeof TicketType], day: Date) =>
+            subYears(day, TicketFactory.defaultPriceOf(ticketType).maximumAgeLimit!)
+
+        it.each([
+            {name: 'turning 12 on a day without a dinner gives the next dinner, at ADULT', birthDate: reaching(TicketType.CHILD, betweenTheFirstTwo),
+                change: {date: secondDinner, ticketType: TicketType.ADULT}},
+            {name: 'a birthday on a dinner\'s date gives that dinner', birthDate: reaching(TicketType.CHILD, secondDinner),
+                change: {date: secondDinner, ticketType: TicketType.ADULT}},
+            {name: 'turning 2 gives CHILD', birthDate: reaching(TicketType.BABY, betweenTheFirstTwo),
+                change: {date: secondDinner, ticketType: TicketType.CHILD}},
+            {name: 'no change across the dinners, 12 the day before the first, gives null', birthDate: reaching(TicketType.CHILD, addDays(firstDinner, -1)),
+                change: null},
+            {name: 'no birth date gives null', birthDate: null, change: null}
+        ])('$name', ({birthDate, change}) => {
+            expect(useTicket().ticketTypeChangeOf(birthDate, ticketPrices)(dinnerDates)).toEqual(change)
         })
     })
 

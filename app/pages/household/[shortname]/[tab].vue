@@ -7,47 +7,62 @@
  *
  * Displays:
  * - Bookings tab: Calendar + booking management
+ * - Members tab: the household's dinner preferences
  * - Allergies tab: Family allergies
  * - Economy tab: Cost breakdown
- * - Members tab: Household members
  * - Settings tab: Settings
  */
 
-// TAB CONFIGURATION
+const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR, ALERTS, NOISE } = useTheSlopeDesignSystem()
+
+// The tab keys are the URL's last segment
+const HOUSEHOLD_TAB = {
+  bookings: 'bookings',
+  members: 'members',
+  allergies: 'allergies',
+  economy: 'economy',
+  settings: 'settings'
+} as const
+
+// `edits` marks a tab whose component declares canEdit and adminBypass; the others take neither
 const tabs = [
   {
-    key: 'bookings',
+    key: HOUSEHOLD_TAB.bookings,
     label: 'Tilmeldinger',
-    icon: 'i-heroicons-calendar',
-    component: 'HouseholdBookings'
+    icon: ICONS.calendar,
+    component: 'HouseholdBookings',
+    edits: true
   },
   {
-    key: 'members',
+    key: HOUSEHOLD_TAB.members,
     label: 'Præferencer',
-    icon: 'i-heroicons-adjustments-horizontal',
-    component: 'HouseholdCard'
+    icon: ICONS.preferences,
+    component: 'HouseholdCard',
+    edits: true
   },
   {
-    key: 'allergies',
+    key: HOUSEHOLD_TAB.allergies,
     label: 'Allergier',
-    icon: 'i-mdi-food-allergy-off-outline',
-    component: 'HouseholdAllergies'
+    icon: ICONS.allergy,
+    component: 'HouseholdAllergies',
+    edits: true
   },
   {
-    key: 'economy',
+    key: HOUSEHOLD_TAB.economy,
     label: 'Økonomi',
-    icon: 'i-heroicons-currency-dollar',
-    component: 'HouseholdEconomy'
+    icon: ICONS.economy,
+    component: 'HouseholdEconomy',
+    edits: false
   },
   {
-    key: 'settings',
+    key: HOUSEHOLD_TAB.settings,
     label: 'Indstillinger',
-    icon: 'i-heroicons-cog-6-tooth',
-    component: 'HouseholdSettings'
+    icon: ICONS.settings,
+    component: 'HouseholdSettings',
+    edits: true
   }
 ]
 
-// Async component mapping
 const asyncComponents = Object.fromEntries(
     tabs.map(tab => [
       tab.key,
@@ -56,7 +71,6 @@ const asyncComponents = Object.fromEntries(
 )
 
 const route = useRoute()
-// Get shortname from route
 const shortname = computed(() => route.params.shortname as string)
 
 // Tab navigation with URL state
@@ -66,13 +80,11 @@ const {activeTab} = useTabNavigation({
   additionalParams: ['shortname']
 })
 
-// Tab items for UTabs component
 const tabItems = tabs.map(tab => ({
   ...tab,
   value: tab.key
 }))
 
-// Initialize stores
 const householdStore = useHouseholdsStore()
 const {
   selectedHousehold, isSelectedHouseholdErrored, selectedHouseholdError,
@@ -112,11 +124,12 @@ const isMember = computed(() =>
 
 // The override unlocks editing on a household the viewer does not belong to: an admin's on every tab, the allergy
 // manager's on the allergies tab (ADR-004)
-const overrideApplies = computed(() => authStore.isAdmin || (authStore.isAllergyManager && activeTab.value === 'allergies'))
+const overrideApplies = computed(() => authStore.isAdmin || (authStore.isAllergyManager && activeTab.value === HOUSEHOLD_TAB.allergies))
 const adminOverrideArmed = ref(false)
 const adminOverrideActive = computed(() => adminOverrideArmed.value && overrideApplies.value)
 const showAdminOverride = computed(() => overrideApplies.value && !!selectedHousehold.value && !isMember.value)
 const canEdit = computed(() => isMember.value || adminOverrideActive.value)
+const editProps = computed(() => ({canEdit: canEdit.value, adminBypass: adminOverrideActive.value}))
 
 // Household status ribbon
 const ribbon = computed(() => {
@@ -129,7 +142,6 @@ const ribbon = computed(() => {
 
 // Format household title: address + family name
 const { formatHouseholdFamilyName } = useHousehold()
-const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR, ALERTS, NOISE } = useTheSlopeDesignSystem()
 const householdAddress = computed(() => selectedHousehold.value?.address ?? '')
 const householdFamilyName = computed(() =>
   selectedHousehold.value?.inhabitants
@@ -157,7 +169,7 @@ v-if="isHouseholdsErrored" :error="householdsError?.statusCode"
 v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
                :message="`Kunne ikke hente data for husstanden ${shortname}`" :cause="selectedHouseholdError"/>
     <Loader v-else-if="!isHouseholdsStoreReady" :text="`Henter husstanden ${shortname}`"/>
-    <UCard v-else class="w-full px-0 rounded-none md:rounded-lg" :ui="{ root: COMPONENTS.ribbon.container, body: 'px-0 py-2 md:px-4 md:py-6' }">
+    <UCard v-else v-bind="COMPONENTS.householdPage.card">
       <!-- Household status ribbon -->
       <div
         v-if="ribbon"
@@ -168,9 +180,9 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
       </div>
 
       <template #header>
-        <div class="flex flex-col gap-2">
-          <div class="flex items-center gap-1 md:gap-2">
-            <UIcon name="i-heroicons-home" class="text-2xl"/>
+        <div :class="COMPONENTS.householdPage.header">
+          <div :class="COMPONENTS.householdPage.title">
+            <UIcon :name="ICONS.household" :class="COMPONENTS.householdPage.titleIcon"/>
             <h2 :class="TYPOGRAPHY.cardTitle">{{ householdAddress }}</h2>
             <span v-if="householdFamilyName" :class="TYPOGRAPHY.bodyTextMuted">· {{ householdFamilyName }}</span>
           </div>
@@ -180,7 +192,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
             v-if="!isMember && !adminOverrideActive"
             v-bind="{...ALERTS.info, ...ALERTS.withActions}"
             data-testid="visitor-banner"
-            icon="i-heroicons-eye"
+            :icon="ICONS.viewOnly"
             title="Du besøger nu en anden husstand end din egen"
             description="Kigge, ikke røre"
           >
@@ -191,7 +203,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
                 confirm-label="Klik igen for at låse op"
                 :icon="ICONS.authorize"
                 :initial-color="COLOR.info"
-                initial-variant="subtle"
+                :initial-variant="NOISE.subtle"
                 @confirm="adminOverrideArmed = true"
               />
             </template>
@@ -221,13 +233,12 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
       </template>
       <UTabs
           v-model="activeTab"
+          v-bind="COMPONENTS.householdPage.tabs"
           :items="tabItems"
-          class="mt-1 mb-1 md:mt-0 md:mb-4"
-          :ui="{ label: 'hidden md:inline' }"
           :color="COLOR.primary"
       >
         <template #content="{ item }">
-          <component :is="asyncComponents[item.value]" :household="selectedHousehold" :can-edit="canEdit" :admin-bypass="adminOverrideActive"/>
+          <component :is="asyncComponents[item.value]" :household="selectedHousehold" v-bind="item.edits ? editProps : {}"/>
         </template>
       </UTabs>
     </UCard>

@@ -10,6 +10,8 @@ const TicketChangeKind = TicketChangeKindSchema.enum
 const ticketCount = (count: number) => `${count} billet${count === 1 ? '' : 'ter'}`
 const waitlistPayment = 'Du betaler, når du får en billet fra ventelisten.'
 const releasedPayment = 'Du betaler, medmindre andre køber'
+const releasedWord = 'Frigivet'
+const claimedWord = 'Købt fra anden'
 
 export const BOOKING_WORDS = {
     /** A dinner's name while the chef has written no menu */
@@ -83,17 +85,17 @@ export const BOOKING_WORDS = {
     /** A ticket's state: CostLine and the order badges */
     orderStates: {
         [OrderState.BOOKED]: 'Bestilt',
-        [OrderState.RELEASED]: 'Frigivet',
+        [OrderState.RELEASED]: releasedWord,
         [OrderState.CLOSED]: 'Lukket',
         [OrderState.CANCELLED]: 'Annulleret',
-        [TicketState.claimed]: 'Købt fra anden',
+        [TicketState.claimed]: claimedWord,
         [TicketState.queued]: 'På venteliste'
     } satisfies Record<OrderState | typeof TicketState.claimed | typeof TicketState.queued, string>,
     /** An order history action */
     orderActions: {
         [OrderAuditAction.USER_BOOKED]: 'Bestilt',
         [OrderAuditAction.USER_CANCELLED]: 'Afmeldt',
-        [OrderAuditAction.USER_CLAIMED]: 'Købt fra anden',
+        [OrderAuditAction.USER_CLAIMED]: claimedWord,
         [OrderAuditAction.SYSTEM_CREATED]: 'Automatisk bestilling',
         [OrderAuditAction.SYSTEM_DELETED]: 'Slettet',
         [OrderAuditAction.SYSTEM_UPDATED]: 'Opdateret'
@@ -121,10 +123,14 @@ export const BOOKING_WORDS = {
     },
     /** Billetændringer's household of a ticket the history cannot attribute */
     unknownHousehold: '?',
-    /** A place on the waiting list as a badge beside the name */
-    waitlistBadge: {label: 'Venteliste', helpText: 'Du får automatisk tildelt en billet, hvis en kommer til salg, eller chefkokken frigiver portioner.'},
-    /** A released ticket as a badge beside the name */
-    releasedBadge: {helpText: releasedPayment},
+    /** A ticket's state as a badge beside the name; its value reads the detail the row gives: the seller, the place in the line */
+    ticketStateBadge: {
+        [TicketState.released]: {value: () => releasedWord, helpText: releasedPayment},
+        [TicketState.claimed]: {value: (household: string) => `fra ${household}`, helpText: claimedWord},
+        [TicketState.queued]: {value: (place: string) => place, helpText: 'Du får automatisk tildelt en billet, hvis en kommer til salg, eller chefkokken frigiver portioner.'}
+    } satisfies Record<Exclude<TicketState, typeof TicketState.normal>, {value: (detail: string) => string, helpText: string}>,
+    /** A person's first dinner at a new ticket type, beside the name: "Voksen fra 04/11" */
+    birthdayBadge: {label: 'Ny billetpris', from: (typeLabel: string, date: string) => `${typeLabel} fra ${date}`},
     /** A booking result's lines in the toast and the "Sidste ændring" alerts: the word of a day's failed orders */
     result: {
         failed: 'FEJLET',
@@ -147,8 +153,8 @@ export const BOOKING_WORDS = {
     preferencePreviewLoading: 'Prøver at beregne hvad I skal spise hvornår...',
     /** The legend entry of a cell without an order, showing the booking the preferences give it */
     expectedBooking: 'Forventet bestilling ifølge præferencer',
-    /** The booking grid's legend entries: a cell with unsaved changes, and a place on the waiting list with its number */
-    legend: {modified: 'Ændret', waitlist: 'På venteliste (#n)'},
+    /** The booking views' legend entries: a cell with unsaved changes, a place on the waiting list with its number, the birthday badge */
+    legend: {modified: 'Ændret', waitlist: 'På venteliste (#n)', birthday: 'Ny billetpris fra fødselsdagen'},
     /** A cancelled dinner: the corner ribbon on the chef's card and the booking form, and the booking calendar's legend entry */
     cancelledDinner: {ribbon: 'AFLYST', legend: 'Aflyst fællesspisning'},
     /**

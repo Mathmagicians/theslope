@@ -3,7 +3,8 @@ import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
 import {nextTick, ref, type ComponentPublicInstance} from 'vue'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, iconNamesIn} from '~~/tests/component/testHelpers'
+import type {BadgeProps, ButtonProps} from '@nuxt/ui'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, findComponentByTestId, clickByTestId, resetStores, iconNamesIn} from '~~/tests/component/testHelpers'
 import CookingTeamCard from '~/components/cooking-team/CookingTeamCard.vue'
 import {usePlanStore} from '~/stores/plan'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -151,7 +152,6 @@ describe('CookingTeamCard', () => {
         ])('every joker line counts its shifts in the calendar count badge: $labels', async ({lines, labels}) => {
             const wrapper = await mountCard('regular', {jokerSlots: lines.map(({slot}) => slot)})
             const countBadge = getCalendarCountBadge(1)
-            const badges = wrapper.findAllComponents({name: 'UBadge'}) as VueWrapper<ComponentPublicInstance<{size?: string}>>[]
             const rendered = findAllByTestId(findByTestId(wrapper, TEST_IDS.jokerBox), TEST_IDS.jokerSlot)
             expect(rendered).toHaveLength(lines.length)
             lines.forEach(({shifts}, index) => {
@@ -160,7 +160,7 @@ describe('CookingTeamCard', () => {
                 expect(badge.text()).toBe(String(shifts))
                 expect(badge.attributes('aria-label')).toBe(labels[index])
                 expect(badge.classes()).toEqual(expect.arrayContaining(classesOf(countBadge.class)))
-                expect(badges.find(component => component.element === badge.element)!.props('size')).toBe(createResponsiveSizes(ref(true)).small)
+                expect(findComponentByTestId<BadgeProps>(line, 'UBadge', TEST_IDS.jokerShifts).props('size')).toBe(createResponsiveSizes(ref(true)).small)
                 expect(iconNamesIn(badge)).toEqual([countBadge.icon])
                 expect(line.text()).not.toContain('vagt')
             })
@@ -184,11 +184,10 @@ describe('CookingTeamCard', () => {
             await clickByTestId(wrapper, JOKER_SLOT_IDS.delete(slots[1]!.slot.id))
             expect(wrapper.emitted('remove:jokerSlot')).toEqual([[slots[1]!.slot.id]])
 
-            const buttons = (wrapper.findAllComponents({name: 'UButton'}) as VueWrapper<ComponentPublicInstance<{icon?: string}>>[])
             assignments.forEach(({id}) => {
-                const remove = findByTestId(wrapper, TEST_IDS.memberRemove(id!))
+                const remove = findComponentByTestId<ButtonProps>(wrapper, 'UButton', TEST_IDS.memberRemove(id!))
                 expect(remove.attributes('aria-label')).toBeTruthy()
-                expect(buttons.find(button => button.element === remove.element)!.props('icon')).toBe(ICONS.trash)
+                expect(remove.props('icon')).toBe(ICONS.trash)
             })
             await clickByTestId(wrapper, TEST_IDS.memberRemove(assignments[1]!.id!))
             expect(wrapper.emitted('remove:member')).toEqual([[assignments[1]!.id]])
@@ -274,8 +273,8 @@ describe('CookingTeamCard', () => {
 describe('CookingTeamCard edit face, Tilføj jokere', () => {
     const headingNamed = (wrapper: VueWrapper, text: string) => wrapper.findAll('h4').find(heading => heading.text() === text)!
     const addButton = (wrapper: VueWrapper) => findByTestId(findByTestId(wrapper, TEST_IDS.jokerAddRow), JOKER_SLOT_IDS.add)
-    const addButtonIcon = (wrapper: VueWrapper) => (wrapper.findAllComponents({name: 'UButton'}) as VueWrapper<ComponentPublicInstance<{icon?: string, trailingIcon?: string}>>[])
-        .find(button => button.element === addButton(wrapper).element)!
+    const addButtonIcon = (wrapper: VueWrapper) =>
+        findComponentByTestId<ButtonProps>(findByTestId(wrapper, TEST_IDS.jokerAddRow), 'UButton', JOKER_SLOT_IDS.add)
     const follows = (earlier: Element, later: Element) =>
         (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
 

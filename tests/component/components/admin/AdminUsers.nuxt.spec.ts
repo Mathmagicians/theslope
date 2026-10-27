@@ -2,8 +2,9 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, resetStores, registerEmptyStoreEndpoints, holdEndpoint, findLoadingRow, tableHeaders, cellsByHeader, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, resetStores, registerEmptyStoreEndpoints, holdEndpoint, findLoadingRow, tableHeaders, cellsByHeader, VIEWPORTS, findByTestId, findOpenRows} from '~~/tests/component/testHelpers'
 import AdminUsers from '~/components/admin/AdminUsers.vue'
+import UserProfileCard from '~/components/user/UserProfileCard.vue'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 
 // Only HTTP is faked (testing.md Rule 6)
@@ -57,5 +58,30 @@ describe('AdminUsers while the users load', () => {
 
         await vi.waitFor(() => expect(wrapper.text()).toContain('Ingen brugere at vise'))
         expect(findLoadingRow(wrapper).exists()).toBe(false)
+    })
+})
+
+// The open row follows its user when the search brings rows back above it
+describe('AdminUsers open row', () => {
+    const second = UserFactory.defaultUserWithInhabitant('admin-users-second', {id: user.id + 1})
+    let unregister: () => void = () => {}
+
+    beforeEach(() => {
+        unregister = registerEndpoint('/api/admin/users', () => [user, second])
+    })
+
+    afterEach(() => unregister())
+
+    it('GIVEN the search narrowed to the second user and their row open WHEN the search clears and the first user\'s row returns above it THEN the open row and the profile card under it stay the second user\'s', async () => {
+        const wrapper = await mountUsers(true)
+        await vi.waitFor(() => expect(wrapper.find('tbody').text()).toContain(second.email))
+        await findByTestId(wrapper, 'user-search').setValue(second.email)
+        await wrapper.find('tbody button[aria-label="Åbn detaljer"]').trigger('click')
+
+        await findByTestId(wrapper, 'user-search').setValue('')
+
+        const open = findOpenRows(wrapper)
+        expect(open.map(({row}) => row.text())).toEqual([expect.stringContaining(second.email)])
+        expect(open[0]!.detail.findComponent(UserProfileCard).props('user')).toMatchObject({id: second.id, email: second.email})
     })
 })

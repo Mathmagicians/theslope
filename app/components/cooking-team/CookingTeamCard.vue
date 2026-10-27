@@ -340,7 +340,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
 
         <!-- Compact team members view in header -->
         <div :class="COMPONENTS.teamCard.memberSummary" data-testid="team-member-summary">
-          <UAvatarGroup :size="COMPONENTS.avatar.compact.size" :ui="{base: COMPONENTS.avatar.compact.fit}" :max="SIZES.avatarMax">
+          <UAvatarGroup v-bind="COMPONENTS.avatar.compact.group" :max="SIZES.avatarMax">
             <UTooltip
               v-for="assignment in assignments"
               :key="assignment.id"

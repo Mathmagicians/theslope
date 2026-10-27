@@ -1,10 +1,9 @@
 import {expect, type APIResponse, type BrowserContext} from '@playwright/test'
 import testHelpers from '../testHelpers'
-import {NotificationFactory} from './notificationFactory'
 import {useNotificationValidation, type SenderEmitResult, type SenderEventMonthlyBillingBody} from '~/composables/useNotificationValidation'
 import {useDeliveryValidation, type Delivery, type DeliveryDryRun, type SenderEvent} from '~/composables/useDeliveryValidation'
 
-const {headers, pollUntil} = testHelpers
+const {headers} = testHelpers
 const {SenderEmitResultSchema} = useNotificationValidation()
 
 /** An answer a refused request is read by: its status and its body */
@@ -27,26 +26,15 @@ export class SenderFactory {
     static readonly triggerTestEvent = (context: BrowserContext, expectedStatus: number = 200) =>
         SenderFactory.triggerEvent(context, TEST_EVENT_ENDPOINT, undefined, expectedStatus)
 
-    /** POST /api/admin/sender/event/monthly-billing — re-sends the accountant mail for a period */
-    static readonly triggerMonthlyBillingEvent = (context: BrowserContext, body: unknown, expectedStatus: number = 200) =>
-        SenderFactory.triggerEvent(context, MONTHLY_BILLING_EVENT_ENDPOINT, body, expectedStatus)
-
     /** GET /api/admin/sender/delivery — the Delivery rows of the subjects named, all of one subject type */
-    static readonly getDeliveries = (
+    static readonly getDeliveries = async (
         context: BrowserContext,
         subjectType: Delivery['subjectType'],
         subjectIds: number[],
         expectedStatus: number = 200
-    ): Promise<Delivery[]> => SenderFactory.getDeliveriesByQuery(context, {subjectType, subjectIds: subjectIds.map(String)}, expectedStatus)
-
-    /** The delivery read with the query as given: the validation case sends a query the endpoint refuses */
-    static readonly getDeliveriesByQuery = async (
-        context: BrowserContext,
-        query: {subjectType: string, subjectIds: string[]},
-        expectedStatus: number = 200
     ): Promise<Delivery[]> => {
         const {DeliverySchema} = useDeliveryValidation()
-        const response = await SenderFactory.readDeliveries(context, query)
+        const response = await SenderFactory.readDeliveries(context, {subjectType, subjectIds: subjectIds.map(String)})
         const body = response.status() === expectedStatus ? null : await response.text()
         expect(response.status(), `Unexpected status reading the deliveries: ${body}`).toBe(expectedStatus)
         return expectedStatus === 200 ? DeliverySchema.array().parse(await response.json()) : []
@@ -66,17 +54,6 @@ export class SenderFactory {
         const named = Object.entries(subjects).filter(([, ids]) => ids.length > 0) as Array<[Delivery['subjectType'], number[]]>
         return (await Promise.all(named.map(([subjectType, ids]) => SenderFactory.getDeliveries(context, subjectType, ids)))).flat()
     }
-
-    /** A subject's Delivery rows once its notifications have gone, each by the notification its reference leads with */
-    static readonly deliveriesOf = async (
-        context: BrowserContext,
-        subjectType: Delivery['subjectType'],
-        subjectId: number,
-        count: number
-    ): Promise<Array<{kind: string, version: number}>> =>
-        (await pollUntil(() => SenderFactory.getDeliveries(context, subjectType, [subjectId]), rows => rows.length >= count))
-            .map(row => ({kind: NotificationFactory.mailKindOf(row.reference), version: row.version}))
-            .sort((a, b) => a.kind.localeCompare(b.kind))
 
     /** GET /api/admin/sender/delivery?dryRun= — what the sender event's next run sends per user, with nothing sent */
     static readonly getDeliveryDryRun = async (

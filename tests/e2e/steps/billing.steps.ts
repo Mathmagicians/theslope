@@ -2,7 +2,7 @@ import {expect, type BrowserContext} from '@playwright/test'
 import {defineParameterType} from 'playwright-bdd'
 import {
     Given, When, Then, fromScene, contextOfActor, createSceneHousehold, createScenePerson, createDinnerInThePastMonth,
-    adultPriceIdOf, periodOf, REQUEST, type Actor, type Scene
+    ticketPriceIdOf, periodOf, REQUEST, type Actor, type Scene
 } from '~~/tests/e2e/fixtures'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -27,7 +27,7 @@ defineParameterType({name: 'billingPeriod', regexp: Object.values(BILLING_PERIOD
  */
 const unbilledOrdersIn = async (admin: BrowserContext, scene: Scene, households: number): Promise<void> => {
     const dinner = await createDinnerInThePastMonth(admin, scene)
-    const ticketPriceId = await adultPriceIdOf(admin, fromScene(scene, 'dinner').season.id!)
+    const ticketPriceId = await ticketPriceIdOf(admin, fromScene(scene, 'dinner').season.id!)
     for (let billed = 1; billed <= households; billed++) {
         // Moved in before the dinner, so the dinner falls in the household's residency
         const household = await createSceneHousehold(admin, scene, {movedInDate: daysFromNow(-60)})

@@ -6,7 +6,7 @@ Feature: Chef deadline notifications
 
   Background:
     Given the admin is signed in
-    And a season is active
+    And a season of its own is active
 
   @fixme
   Scenario: The DAILY_MAINTENANCE job emails the chef's missed deadlines once

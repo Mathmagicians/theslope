@@ -5,6 +5,7 @@ import {enableAutoUnmount} from '@vue/test-utils'
 import {mountWithTooltipProvider, findByTestId, resetStores, findLoadingRow, isTableLoading} from '~~/tests/component/testHelpers'
 import EconomyTableGeneric from '~/components/economy/EconomyTable.vue'
 import {nextTick, ref, type DefineComponent} from 'vue'
+import {rowIdOf} from '~/utils/utils'
 
 // A generic component's type is a function; the mount helper keys on a constructor
 const EconomyTable = EconomyTableGeneric as unknown as DefineComponent
@@ -53,7 +54,7 @@ describe('EconomyTable', () => {
     })
 
     const createWrapper = (props: Record<string, unknown> = {}) => mountWithTooltipProvider(EconomyTable, {
-        props: {data: createTestData(), columns: defaultColumns, rowKey: 'date', dateAccessor, pageSize: 5, ...props},
+        props: {data: createTestData(), columns: defaultColumns, getRowId: rowIdOf, dateAccessor, pageSize: 5, ...props},
         isMd: true
     })
 
@@ -134,7 +135,7 @@ describe('EconomyTable', () => {
     describe('Loading State', () => {
         // Slots go through the root mount alone
         const mountEmpty = (loading: boolean) => mountSuspended(EconomyTable, {
-            props: {data: [], columns: defaultColumns, rowKey: 'date', dateAccessor, loading, loadingText: 'Henter fremtidige bestillinger'},
+            props: {data: [], columns: defaultColumns, getRowId: rowIdOf, dateAccessor, loading, loadingText: 'Henter fremtidige bestillinger'},
             slots: {empty: '<div data-testid="custom-empty">No data</div>'},
             global: {provide: {isMd: ref(true)}}
         })

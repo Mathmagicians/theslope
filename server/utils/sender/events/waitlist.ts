@@ -11,7 +11,7 @@ import {shouldSendBookingEmails, type EmailChannel} from '~~/server/utils/sender
 import {deliverDesired, type DeliveryOptions, type DeliveryResult, type DesiredOutgoing} from '~~/server/utils/sender/deliveries'
 import type {NotificationConfig} from '~/composables/useNotificationValidation'
 import {
-    useBookingValidation, DinnerState, OrderState, type BookingAction, type BookingOutcomes, type DinnerMode,
+    useBookingValidation, DinnerState, OrderState, TicketState, type BookingAction, type BookingOutcomes, type DinnerMode,
     type OrderAudit, type OrderDisplay, type OrderHistoryDisplay, type TicketSale, type WaitlistJoined
 } from '~/composables/useBookingValidation'
 import type {TicketWaitlistDisplay, WaitlistAssignmentResult} from '~/composables/useWaitlistValidation'
@@ -108,7 +108,7 @@ const pendingOf = <Tracked extends object>(notifications: BookingNotifications<T
     })
     return [
         ...notifications.joined.map(pending<BookingNotifications['joined'][number]>(NotificationKind.WAITLIST_JOINED, (notification, config) => ({
-            ...ticketValues(Action.QUEUE)(notification, config), place: notification.place, helpText: BOOKING_WORDS.waitlistBadge.helpText,
+            ...ticketValues(Action.QUEUE)(notification, config), place: notification.place, helpText: BOOKING_WORDS.ticketStateBadge[TicketState.queued].helpText,
             payment: BOOKING_WORDS.supply.waitlistPayment
         }))),
         ...notifications.buildups.map(pending<BookingNotifications['buildups'][number]>(NotificationKind.WAITLIST_BUILDUP, (notification, config) => ({

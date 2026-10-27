@@ -34,8 +34,8 @@
  * │     (sync, spinning)  Henter fremtidige bestillinger │   COMPONENTS.table.loadingRow, the text from loadingText
  * └───────────────────────────────────────────────────┘
  *
- * For columns without explicit slots (menuTitle, ticketCounts, householdCount, paymentMonth),
- * UTable renders the value from row.original[accessorKey] automatically.
+ * For columns without explicit slots (ticketCounts, householdCount, paymentMonth, dinnerEvent.menuTitle),
+ * UTable renders the value at the accessorKey's path automatically.
  */
 import {formatDate} from '~/utils/date'
 import type {TableColumn} from '@nuxt/ui'
@@ -170,10 +170,6 @@ const toggleSort = () => {
         <slot name="date-cell" v-bind="slotProps">
           {{ formatDate(dateAccessor(slotProps.row.original)) }}
         </slot>
-      </template>
-
-      <template #menuTitle-cell="slotProps">
-        <slot name="menuTitle-cell" v-bind="slotProps"/>
       </template>
 
       <template #ticketCounts-cell="slotProps">

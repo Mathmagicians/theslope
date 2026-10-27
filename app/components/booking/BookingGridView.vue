@@ -43,13 +43,13 @@
  * NAME CELL COUNTS over the row's dinners in view, each while above 0: 🎟️ the person's own tickets (booked and released),
  * 🔓 the released among them, ⌛ their own places on the waiting list (a guest's place is not theirs).
  *
- * A PERSON'S ROWS BY PRICE: a booked dinner sits on the row of its booked price, a dinner without a booking (a place on
- * the waiting list among them) on the row of the price for the person's age today, the day view's price; on the other
- * row that dinner's cell is empty. Every badge reads as the day view's ticket (ticketBadgeLabel):
+ * A PERSON'S ROWS BY PRICE: a booked dinner sits on the row of its booked price and ticket type, a dinner without a
+ * booking (a place on the waiting list among them) on the row of the price for the person's age on that dinner's date,
+ * the day view's price; on the other row that dinner's cell is empty. Every badge reads as the day view's ticket (ticketBadgeLabel):
  * Beboer                             | M 26/10  | T 27/10    | O 28/10  | T 29/10  |
  * Alle [Powermode!]                  | Spisesal | Spisesal   | blandet  | Spisesal |
  * Anna [Voksen · 50 kr]              | Spisesal | Spisesal   |          |          | <- booked before the price changed
- * Anna [Voksen · 55 kr]              |          |            | Takeaway | Spisesal | <- today's price: her other dinners
+ * Anna [Voksen · 55 kr]              |          |            | Takeaway | Spisesal | <- the current price: her other dinners
  * Gæst af Anna [Baby · 0 kr · Gæst]  |          | Spisesal   |          |          |
  * Gæst af Anna [Baby · 9 kr · Gæst]  |          | venteliste |          |          |
  *
@@ -147,7 +147,8 @@ import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, Scaffol
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {TicketPresentation} from '~/composables/useBookingUi'
+import type {DeadlineBadgeData, TicketPresentation} from '~/composables/useBookingUi'
+import {compareAsc, isSameDay} from 'date-fns'
 import type {BookingView} from '~/composables/useBookingView'
 import type {DateRange} from '~/types/dateTypes'
 import {EMPTY_RELEASED_TICKET_COUNTS, type BookingChanges, type BookingContext, type BookingIntent, type GuestBookingIntent, type ReleasedTicketCounts, type WaitlistEntryIntent} from '~/composables/useBooking'
@@ -171,6 +172,7 @@ interface GridRow {
   dinnerEventIds?: number[] // An inhabitant row's dinners in view: those at its price
   price?: number // The ticket price an inhabitant row's dinners or a guest row's tickets hold
   ticketConfig?: TicketPresentation | null // The ticket type of the row's price
+  birthdayBadge?: DeadlineBadgeData | null // An inhabitant row holding the person's first dinner at a new ticket type, in view
   guestCount?: number // Number of guest tickets in group
   isSynthetic: boolean
 }
@@ -224,10 +226,11 @@ const emit = defineEmits<{
 const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, ORDER_STATE_COLORS, DINNER_STATE_BADGES, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
-const {formatPrice, resolveTicketPrice, takesNoPortionOf} = useTicket()
+const {formatPrice, resolveTicketPrice, resolveTicketPriceOn, ticketTypeChangeOf, takesNoPortionOf} = useTicket()
+const {getReleasedOrders} = useOrder()
 
 const {groupGuestOrders, getDayBillSummary, getBookingOptions, powerOptions, newGuestRow, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
-const {lockChip} = useBookingUi()
+const {lockChip, createBirthdayBadge} = useBookingUi()
 const bookingsStore = useBookingsStore()
 
 const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema} = useBookingValidation()
@@ -489,25 +492,38 @@ const columnPinning = ref({
 
 const presentationOf = (ticketPrice: TicketPrice | undefined) => ticketPrice ? ticketTypePresentation(ticketPrice.ticketType) : null
 
+// The season's dinners, in date order: a person's first dinner at a new ticket type is found over them, in view or not
+const seasonDinnerDates = computed(() => props.dinnerEvents.map(event => event.date).sort(compareAsc))
+
 // A person's rows, a row per price their dinners in view hold: a dinner's order's price, else the day view's price for
-// their age; a place on the waiting list holds no order. Each row counts its own dinners in the name cell
+// their age on the dinner's date; a place on the waiting list holds no order. Each row counts its own dinners in the name
+// cell; the row holding the person's first dinner at a new ticket type, at that type, carries the birthday badge
 const inhabitantRows = computed(() => props.household.inhabitants.flatMap(inhabitant => {
-  const birthDate = inhabitant.birthDate ?? null
-  const agePrice = resolveTicketPrice(birthDate, undefined, props.ticketPrices)?.price ?? 0
-  const dinnersByPrice = groupBy<number, number>(eventId => getOrderForCell(inhabitant.id, eventId)?.priceAtBooking ?? agePrice)(flatEvents.value.map(event => event.id))
-  return Array.from(dinnersByPrice, ([price, dinnerEventIds]) => ({
-    row: {
-      rowType: 'inhabitant',
-      id: `inhabitant-${inhabitant.id}-${price}`,
-      name: inhabitant.name,
-      inhabitant,
-      dinnerEventIds,
-      price,
-      ticketConfig: presentationOf(resolveTicketPrice(birthDate, price, props.ticketPrices)),
-      isSynthetic: false
-    } satisfies GridRow,
-    counts: personTicketCounts(inhabitant.id, dinnerEventIds, props.orders, props.waitlistEntries)
-  }))
+  const ticketPriceOf = (event: DinnerEventDisplay) =>
+    resolveTicketPriceOn(inhabitant.birthDate ?? null, getOrderForCell(inhabitant.id, event.id), props.ticketPrices, event.date)
+  const priceOf = (event: DinnerEventDisplay) => getOrderForCell(inhabitant.id, event.id)?.priceAtBooking ?? ticketPriceOf(event)?.price ?? 0
+  const change = ticketTypeChangeOf(inhabitant.birthDate, props.ticketPrices)(seasonDinnerDates.value)
+  const birthdayBadgeOf = (events: DinnerEventDisplay[]): DeadlineBadgeData | null => {
+    const changeEvent = change && events.find(event => isSameDay(event.date, change.date))
+    return change && changeEvent && ticketPriceOf(changeEvent)?.ticketType === change.ticketType ? createBirthdayBadge(change.ticketType, change.date) : null
+  }
+  return Array.from(groupBy<DinnerEventDisplay, number>(priceOf)(flatEvents.value), ([price, events]) => {
+    const dinnerEventIds = events.map(event => event.id)
+    return {
+      row: {
+        rowType: 'inhabitant',
+        id: `inhabitant-${inhabitant.id}-${price}`,
+        name: inhabitant.name,
+        inhabitant,
+        dinnerEventIds,
+        price,
+        ticketConfig: presentationOf(ticketPriceOf(events[0]!)),
+        birthdayBadge: birthdayBadgeOf(events),
+        isSynthetic: false
+      } satisfies GridRow,
+      counts: personTicketCounts(inhabitant.id, dinnerEventIds, props.orders, props.waitlistEntries)
+    }
+  })
 }))
 
 // The guest rows, as the day view builds them: a placed group (booker, ticket type, price, dinner), then one row per queued
@@ -613,11 +629,11 @@ const {canModifyOrders} = props.deadlines
 
 const canBookEvent = (event: DinnerEventDisplay): boolean => canModifyOrders(event.date)
 
-const isHouseholdInResidency = isHouseholdActiveOnDay(props.household.movedInDate, props.household.moveOutDate)
+const isInResidencyOn = computed(() => isHouseholdActiveOnDay(props.household.movedInDate, props.household.moveOutDate))
 
 const takesNoPortion = computed(() => takesNoPortionOf(props.ticketPrices))
 
-const contextOf = (event: DinnerEventDisplay): BookingContext => ({event, deadlines: props.deadlines, isHouseholdInResidency, takesNoPortion: takesNoPortion.value})
+const contextOf = (event: DinnerEventDisplay): BookingContext => ({event, deadlines: props.deadlines, isHouseholdInResidency: isInResidencyOn.value, takesNoPortion: takesNoPortion.value})
 
 // Each candidate is the desired order the save sends for the cell in a mode (buildBookingChanges' builders).
 // The cell slots render inside UTable's render: a fresh array per render makes every selector patch on every click, one array per cell lets Vue skip the untouched ones
@@ -664,7 +680,7 @@ const isCancelledEvent = (event: DinnerEventDisplay): boolean => event.state ===
 
 // Residency alert: shown when any visible event falls outside residency
 const residencyAlert = computed(() => {
-  const hasDisabledByResidency = flatEvents.value.some(e => !isHouseholdInResidency(e.date))
+  const hasDisabledByResidency = flatEvents.value.some(e => !isInResidencyOn.value(e.date))
   if (!hasDisabledByResidency) return null
   return getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate)
 })
@@ -672,9 +688,7 @@ const residencyAlert = computed(() => {
 // The column header's lock chip on a locked dinner counts the household's own released tickets: it waits with the rows
 const getEventLockChip = (event: DinnerEventDisplay) => {
   if (props.loading || canBookEvent(event) || isDinnerPast(event.date)) return null
-  const releasedCount = props.orders.filter(o =>
-    o.dinnerEventId === event.id && ticketStateOf(o) === TicketState.released
-  ).length
+  const releasedCount = getReleasedOrders(props.orders.filter(o => o.dinnerEventId === event.id)).length
   return lockChip({...EMPTY_RELEASED_TICKET_COUNTS, total: releasedCount})
 }
 
@@ -829,6 +843,7 @@ const getEventSummary = (eventId: number) => {
               >
                 {{ rowBadgeLabel(row.original) }}
               </UBadge>
+              <DeadlineBadge v-if="row.original.birthdayBadge" :badge="row.original.birthdayBadge" compact :data-testid="`${row.original.id}-birthday`" />
             </template>
           </UserListItem>
           <!-- Ticket count badge (only if > 0) -->
@@ -1016,7 +1031,7 @@ const getEventSummary = (eventId: number) => {
             :booker-id="props.bookerId"
             :booker-name="props.household.inhabitants.find(i => i.id === props.bookerId)?.name ?? 'Ukendt'"
             :released-ticket-counts="props.lockStatus.get(activeGuestEvent.id) ?? EMPTY_RELEASED_TICKET_COUNTS"
-            :is-household-in-residency="isHouseholdInResidency(activeGuestEvent.date)"
+            :is-household-in-residency="isInResidencyOn(activeGuestEvent.date)"
             :admin-bypass="props.adminBypass"
             @save="handleGuestSave"
             @cancel="expanded = {}"
@@ -1065,6 +1080,7 @@ const getEventSummary = (eventId: number) => {
       v-if="view !== 'day'"
       show-modified
       :show-waitlist="waitlistEntries.length > 0"
+      :show-birthday="inhabitantRows.some(({row}) => row.birthdayBadge)"
       hint="Klik på en celle for at ændre din booking, den cykler igennem mulighederne. Når du er færdig, husk at trykke gem."
       :class="COMPONENTS.bookingGrid.legend"
     />

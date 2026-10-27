@@ -111,7 +111,7 @@
  * Placed guest groups and queued guests come from one guest row builder; a queued guest row carries its entry.
  *
  * The collapsed row: DinnerTicket queued (the hourglass, the wish ghosted) and the position badge on the line under
- * the name, the place in the line of the entry's ticket type (createWaitlistBadge through DeadlineBadge). One booking
+ * the name, the place in the line of the entry's ticket type (createTicketStateBadge through DeadlineBadge). One booking
  * path: the save sends the desired order through the scaffold, which books, buys a ticket for sale or queues by supply.
  * The expanded row previews its save through the server's dry run (ActionPreview under the dinner's day separator, the
  * loader while it works); the save label reads the reply's outcome (bookingSaveLabel over previewSaveOutcome: Book,
@@ -153,11 +153,12 @@ import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, Scaffol
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {TicketPresentation} from '~/composables/useBookingUi'
+import type {DeadlineBadgeData, TicketPresentation} from '~/composables/useBookingUi'
 import {EMPTY_RELEASED_TICKET_COUNTS, type BookingContext, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES} from '~/types/form'
 import {BOOKING_WORDS} from '~/config/bookingWords'
+import {compareAsc, isSameDay} from 'date-fns'
 
 // An inhabitant, the power row, the add-guest row ('guest') and a guest's row
 type RowType = 'inhabitant' | 'power' | 'guest' | 'guest-order'
@@ -183,6 +184,8 @@ interface TableRow {
   guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
   provenanceHousehold?: string
   ticketState: TicketStateValue // What the row's ticket is now: released, bought, queued for, or normal
+  stateBadge: DeadlineBadgeData | null // The ticket state's badge: beside the name, a queued one on the line under it
+  birthdayBadge: DeadlineBadgeData | null // A person's first dinner at a new ticket type, beside the name
   allergyTypes: AllergyTypeDisplay[] // The booked inhabitant's live allergy profile; empty for every other row
 }
 
@@ -243,7 +246,16 @@ const formMode = computed(() => {
 const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, getResidencyDisplay, LAYOUTS, NOISE, TYPOGRAPHY, TABLE_COLUMNS, ORIENTATIONS} = useTheSlopeDesignSystem()
 const emptyStateMessage = getRandomEmptyMessage('household')
 
-const {resolveTicketPrice, formatPrice, takesNoPortionOf} = useTicket()
+const {resolveTicketPrice, resolveTicketPriceOn, ticketTypeChangeOf, formatPrice, takesNoPortionOf} = useTicket()
+
+// The season's dinners give a person's first dinner at a new ticket type; the badge shows when that is this dinner
+const planStore = usePlanStore()
+const seasonDinnerDates = computed(() => (planStore.selectedSeason?.dinnerEvents ?? []).map(dinner => dinner.date).sort(compareAsc))
+const birthdayBadgeOf = (inhabitant: InhabitantDisplay): DeadlineBadgeData | null => {
+  const change = ticketTypeChangeOf(inhabitant.birthDate, props.ticketPrices)(seasonDinnerDates.value)
+  return change && isSameDay(change.date, props.dinnerEvent.date) ? createBirthdayBadge(change.ticketType, change.date) : null
+}
+const {getReleasedOrders} = useOrder()
 
 const {isDinnerPast} = useSeason()
 const {canModifyOrders} = props.deadlines
@@ -321,18 +333,6 @@ const bookingContext = computed((): BookingContext => ({
 }))
 
 // ============================================================================
-// RELEASED TICKETS COMPUTEDS
-// ============================================================================
-
-// Household's own released tickets (for warning message)
-const householdReleasedTickets = computed(() =>
-  (props.orders ?? []).filter(o =>
-    ticketStateOf(o) === TicketState.released &&
-    o.dinnerEventId === props.dinnerEvent.id
-  )
-)
-
-// ============================================================================
 // ORDER PARTITIONING (uses useBooking helpers)
 // ============================================================================
 
@@ -361,6 +361,7 @@ const expectedModeOf = (inhabitantId: number): DinnerMode | undefined =>
     : expectedModes.value.get(expectedBookingKey(inhabitantId, props.dinnerEvent.id))
 
 // The household's own notes on a closed dinner: the tickets it released and its places on the waiting list
+const householdReleasedTickets = computed(() => getReleasedOrders(eventOrders.value))
 const householdReleasedNote = computed(() =>
   householdReleasedTickets.value.length > 0 ? SUPPLY_WORDS.householdReleased(householdReleasedTickets.value.length) : null)
 const householdQueuedNote = computed(() =>
@@ -403,12 +404,7 @@ const tableData = computed((): TableRow[] => {
     const waitlistEntry = order ? undefined : findRegularOrder(eventWaitlistEntries.value, inhabitant.id, props.dinnerEvent.id)
     const expectedMode = expectedModeOf(inhabitant.id)
 
-    // Single DRY code path: resolveTicketPrice → ticketTypePresentation
-    const ticketPrice = resolveTicketPrice(
-      inhabitant.birthDate ?? null,
-      order?.priceAtBooking,
-      props.ticketPrices
-    )
+    const ticketPrice = resolveTicketPriceOn(inhabitant.birthDate ?? null, order, props.ticketPrices, props.dinnerEvent.date)
 
     const row = {
       rowType: 'inhabitant' as RowType,
@@ -425,7 +421,8 @@ const tableData = computed((): TableRow[] => {
       price: order?.priceAtBooking ?? ticketPrice?.price ?? 0,
       ticketPriceId: order?.ticketPriceId ?? ticketPrice?.id ?? null,
       provenanceHousehold: order?.provenanceHousehold,
-      ticketState: ticketStateOf(order, !!waitlistEntry),
+      ...ticketStateOfRow(order, waitlistEntry),
+      birthdayBadge: birthdayBadgeOf(inhabitant),
       allergyTypes: order ? (inhabitant.allergies ?? []).map(allergy => allergy.allergyType) : []
     }
     return {...row, enabledModes: enabledModesOf(row)}
@@ -465,7 +462,8 @@ const tableData = computed((): TableRow[] => {
       ticketPriceId: held.ticketPriceId ?? resolvedTicketPrice?.id ?? null,
       guestCount: Math.max(orders.length, 1),
       provenanceHousehold: firstOrder?.provenanceHousehold,
-      ticketState: ticketStateOf(firstOrder, !!waitlistEntry),
+      ...ticketStateOfRow(firstOrder, waitlistEntry),
+      birthdayBadge: null,
       allergyTypes: []
     }
     return {...row, enabledModes: enabledModesOf(row)}
@@ -484,6 +482,8 @@ const tableData = computed((): TableRow[] => {
     price: 0,
     ticketPriceId: 0,
     ticketState: TicketState.normal,
+    stateBadge: null,
+    birthdayBadge: null,
     allergyTypes: [] as AllergyTypeDisplay[]
   }
 
@@ -637,10 +637,17 @@ const handleGuestSave = (orders: DesiredOrder[]) => completeBooking(orders)
 // ============================================================================
 
 const {groupGuestOrders, getBookingOptions, powerOptions, newGuestRow, getDayBillSummary, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
-const {createBookingBadges, createWaitlistBadge, createReleasedBadge, bookingSaveLabel} = useBookingUi()
+const {createBookingBadges, createTicketStateBadge, createBirthdayBadge, bookingSaveLabel} = useBookingUi()
 
 // A queue entry's place names the line of the ticket type its price holds
 const ticketTypeOfEntry = computed(() => useWaitlist().ticketTypeOfEntry(props.ticketPrices))
+
+// A row's ticket state and its badge, which reads the place in the line of a queued ticket and the seller of a bought one
+const ticketStateOfRow = (order: OrderDisplay | null, waitlistEntry?: TicketWaitlistDetail) => {
+  const ticketState = ticketStateOf(order, !!waitlistEntry)
+  const detail = waitlistEntry ? formatPlace(waitlistEntry.position, ticketTypeOfEntry.value(waitlistEntry)) : order?.provenanceHousehold
+  return {ticketState, stateBadge: createTicketStateBadge(ticketState, detail)}
+}
 
 // Deadline badges
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
@@ -806,13 +813,8 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
               compact
             >
               <template #badge>
-                <DeadlineBadge v-if="row.original.ticketState === TicketState.released" :badge="createReleasedBadge()" compact />
-                <!-- Provenance badges -->
-                <div v-else-if="row.original.provenanceHousehold" :class="COMPONENTS.bookingForm.provenance">
-                  <UBadge :color="COLOR.info" :variant="NOISE.soft" :size="SIZES.sm" :icon="ICONS.claim">
-                    fra {{ row.original.provenanceHousehold }}
-                  </UBadge>
-                </div>
+                <DeadlineBadge v-if="row.original.stateBadge && !row.original.waitlistEntry" :badge="row.original.stateBadge" compact :data-testid="`${row.original.rowType}-${row.original.id}-state`" />
+                <DeadlineBadge v-if="row.original.birthdayBadge" :badge="row.original.birthdayBadge" compact :data-testid="`${row.original.rowType}-${row.original.id}-birthday`" />
               </template>
             </UserListItem>
           </div>
@@ -831,18 +833,15 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
               />
               <span v-else :class="TYPOGRAPHY.bodyTextSmall">ukendt</span>
             </div>
-            <!-- Released badge, else provenance badge, as on an inhabitant's row -->
-            <div v-if="row.original.ticketState === TicketState.released || row.original.provenanceHousehold" :class="COMPONENTS.bookingForm.guestProvenance">
-              <DeadlineBadge v-if="row.original.ticketState === TicketState.released" :badge="createReleasedBadge()" compact />
-              <UBadge v-else :color="COLOR.info" :variant="NOISE.soft" :size="SIZES.sm" :icon="ICONS.claim">
-                fra {{ row.original.provenanceHousehold }}
-              </UBadge>
+            <!-- A released or bought ticket's badge, as on an inhabitant's row -->
+            <div v-if="row.original.stateBadge && !row.original.waitlistEntry" :class="COMPONENTS.bookingForm.guestProvenance">
+              <DeadlineBadge :badge="row.original.stateBadge" compact :data-testid="`${row.original.rowType}-${row.original.id}-state`" />
             </div>
           </div>
 
-          <!-- Queue position of an inhabitant or a guest: the deadline badges' path, on the line under the name -->
-          <div v-if="row.original.waitlistEntry" :class="COMPONENTS.bookingForm.guestProvenance" :data-testid="`waitlist-position-${row.original.id}`">
-            <DeadlineBadge :badge="createWaitlistBadge(row.original.waitlistEntry.position, ticketTypeOfEntry(row.original.waitlistEntry))" compact />
+          <!-- Queue position of an inhabitant or a guest: the ticket state's badge, on the line under the name -->
+          <div v-if="row.original.waitlistEntry && row.original.stateBadge" :class="COMPONENTS.bookingForm.guestProvenance" :data-testid="`waitlist-position-${row.original.id}`">
+            <DeadlineBadge :badge="row.original.stateBadge" compact />
           </div>
 
           <!-- Mobile: Ticket inline (for inhabitant/guest-order rows only) -->
@@ -1021,6 +1020,6 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
     </UTable>
 
     <!-- Legend: shared with the week/month grid -->
-    <DinnerModeLegend v-if="tableData.some(canOpenRow)" :class="COMPONENTS.bookingForm.legend"/>
+    <DinnerModeLegend v-if="tableData.some(canOpenRow)" :show-birthday="tableData.some(row => row.birthdayBadge !== null)" :class="COMPONENTS.bookingForm.legend"/>
   </div>
 </template>

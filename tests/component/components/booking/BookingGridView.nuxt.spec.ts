@@ -2,7 +2,8 @@
 import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount, type BaseWrapper} from '@vue/test-utils'
-import {findByTestId, clickByTestId, resetStores, findLoadingRow, isTableLoading, registerEmptyStoreEndpoints, registerScaffoldEndpoint, mountWithTooltipProvider, untilTrue, lockedDinnerSupply, iconNamesIn} from '~~/tests/component/testHelpers'
+import type {BadgeProps, ButtonProps} from '@nuxt/ui'
+import {findByTestId, findComponentByTestId, clickByTestId, resetStores, findLoadingRow, isTableLoading, registerEmptyStoreEndpoints, registerScaffoldEndpoint, mountWithTooltipProvider, untilTrue, lockedDinnerSupply, iconNamesIn} from '~~/tests/component/testHelpers'
 import {BookingViewSchema} from '~/composables/useBookingView'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
@@ -16,11 +17,13 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {COMPONENTS, DINNER_STATE_BADGES, ICONS, ORDER_STATE_COLORS} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, DINNER_STATE_BADGES, ICONS, ORDER_STATE_COLORS, getResidencyDisplay} from '~/composables/useTheSlopeDesignSystem'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
-import {formatPreviewLines, lockChip, ticketBadgeLabel, ticketTypePresentation} from '~/composables/useBookingUi'
-import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import {createBirthdayBadge, formatPreviewLines, lockChip, ticketBadgeLabel, ticketTypePresentation} from '~/composables/useBookingUi'
+import type DeadlineBadge from '~/components/deadline/DeadlineBadge.vue'
+import {getPeriodBoundary} from '~/utils/date'
+import {DINNER_MODE_ORDER, type ReleasedTicketCounts} from '~/composables/useBooking'
 import {addDays, subYears} from 'date-fns'
 
 const {day, week, month} = BookingViewSchema.enum
@@ -195,13 +198,23 @@ describe('BookingGridView', () => {
     })
   })
 
-  // A household books the dinners of its residency: a dinner after its move-out offers no mode, and the alert says why
-  it('GIVEN a dinner after the household\'s move-out THEN the residency alert shows and the dinner\'s column offers no mode', async () => {
+  // A household books the dinners of its residency: a dinner after its move-out offers no mode, and the alert says why.
+  // The grid follows the household it is handed: a move-out that lands after mount takes the dinner out of residency
+  it('GIVEN a dinner in the household\'s residency THEN no residency alert and the dinner\'s column offers every mode; WHEN the household moves out before the dinner THEN the residency alert shows and the column offers no mode', async () => {
     const dinner = DinnerEventFactory.dinnerEventAt(2, 60)
-    const wrapper = await mountGrid([dinner], {household: {...household, moveOutDate: addDays(dinner.date, -10)}, formMode: FORM_MODES.EDIT, bookerId: anna.id})
+    const movedOut = {...household, moveOutDate: addDays(dinner.date, -10)}
+    const wrapper = await mountGrid([dinner], {formMode: FORM_MODES.EDIT, bookerId: anna.id})
+    const expectColumn = (enabledModes: DinnerMode[], formMode: FormMode) =>
+      columnCells(dinner.id).forEach(name => expect(selectorNamed(wrapper, name).props()).toMatchObject({enabledModes, formMode}))
 
-    expect(findByTestId(wrapper, 'outside-residency-alert').exists()).toBe(true)
-    columnCells(dinner.id).forEach(name => expect(selectorNamed(wrapper, name).props()).toMatchObject({enabledModes: [], formMode: FORM_MODES.VIEW}))
+    expect(findByTestId(wrapper, 'outside-residency-alert').exists()).toBe(false)
+    expectColumn(DINNER_MODE_ORDER, FORM_MODES.EDIT)
+    expect(findByTestId(wrapper, `guest-add-${dinner.id}`).exists()).toBe(true)
+
+    await wrapper.setProps({household: movedOut})
+
+    expect(findByTestId(wrapper, 'outside-residency-alert').text()).toContain(getResidencyDisplay(movedOut.movedInDate, movedOut.moveOutDate)!.alertDescription)
+    expectColumn([], FORM_MODES.VIEW)
     expect(findByTestId(wrapper, `guest-add-${dinner.id}`).exists()).toBe(false)
   })
 
@@ -233,7 +246,7 @@ describe('BookingGridView', () => {
       // The name cell's badges: the tickets, the released among them, the places on the waiting list
       const kinds = ['ticket', 'released', 'waitlist']
       const countBadge = (kind: string, inhabitantId: number) => findByTestId(wrapper, `inhabitant-${kind}-count-${inhabitantId}`)
-      const waitlistBadge = wrapper.findAllComponents({name: 'UBadge'}).find(badge => badge.attributes('data-testid') === `inhabitant-waitlist-count-${anna.id}`)!
+      const waitlistBadge = findComponentByTestId<BadgeProps>(wrapper, 'UBadge', `inhabitant-waitlist-count-${anna.id}`)
 
       expect(kinds.map(kind => countBadge(kind, anna.id).text())).toEqual(['1', '1', '1'])
       expect(kinds.filter(kind => countBadge(kind, lars.id).exists())).toEqual([])
@@ -652,6 +665,32 @@ describe('BookingGridView a person\'s rows by price', () => {
 
       expect(annasRows(wrapper)).toEqual(rows())
     })
+
+    // The first dinner at the new ticket type carries the birthday badge in the name cell of the new price's row while it
+    // is in view. The grid holds the season's dinners and shows the view's week (Monday to Sunday), as the page hands them
+    describe('the birthday badge', () => {
+      const weekOf = (date: Date) => ({start: getPeriodBoundary(date, week, -1), end: getPeriodBoundary(date, week, 1)})
+      // A dinner a week after the third: its week holds no dinner where Anna's ticket type changes
+      const aWeekAfterTheThird = {...DinnerEventFactory.dinnerEventAt(6, 0), date: addDays(third.date, 7)}
+      const seasonDinners = [...dinners, aWeekAfterTheThird]
+      const newPriceRow = `inhabitant-${anna.id}-${adultPrice.price}`
+      // The id of the row whose name cell holds a part
+      const rowIdHolding = (wrapper: Mounted, part: BaseWrapper<Node>) =>
+        rowIdsOf(wrapper)[wrapper.findAll('tbody tr').findIndex(row => row.find('td').element.contains(part.element))]
+
+      it('GIVEN Anna turns 12 on the third dinner THEN her ADULT row\'s name cell carries the birthday badge while that dinner is in view; WHEN the view moves to the week after THEN no badge', async () => {
+        const wrapper = await mountGrid(seasonDinners, {household: {...household, inhabitants: [annaGrowingUpOn(third), lars]}, dateRange: weekOf(third.date)})
+
+        const badge = findComponentByTestId<InstanceType<typeof DeadlineBadge>['$props']>(wrapper, 'DeadlineBadge', `${newPriceRow}-birthday`)
+        expect(badge.props('badge')).toEqual(createBirthdayBadge(ADULT, third.date))
+        expect(rowIdHolding(wrapper, badge)).toBe(newPriceRow)
+
+        await wrapper.setProps({dateRange: weekOf(aWeekAfterTheThird.date)})
+
+        expect(rowIdsOf(wrapper)).toContain(newPriceRow)
+        expect(findByTestId(wrapper, `${newPriceRow}-birthday`).exists()).toBe(false)
+      })
+    })
   })
 })
 
@@ -691,7 +730,7 @@ describe('BookingGridView add-guest button', () => {
     expect([...actionPanel.classList]).toEqual(expect.arrayContaining(COMPONENTS.bookingGrid.actionPanel.split(' ')))
     expect(actionPanel.contains(wrapper.findComponent(ActionPreview).element)).toBe(true)
     expect(['grid-cancel', 'grid-save'].filter(button => !actionPanel.contains(findByTestId(wrapper, button).element))).toEqual([])
-    expect(wrapper.findAllComponents({name: 'UButton'}).find(button => button.attributes('data-testid') === `guest-add-${future.id}`)!.props('icon')).toBe(ICONS.chevronDown)
+    expect(findComponentByTestId<ButtonProps>(wrapper, 'UButton', `guest-add-${future.id}`).props('icon')).toBe(ICONS.chevronDown)
 
     await clickByTestId(wrapper, `guest-add-${future.id}`)
 

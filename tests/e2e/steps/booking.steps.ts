@@ -3,7 +3,7 @@ import {defineParameterType} from 'playwright-bdd'
 import {differenceInCalendarDays} from 'date-fns'
 import {
     Given, When, Then, fromScene, contextOfActor, personOf, createSceneHousehold, createScenePerson, activeSeasonOf,
-    adultPriceIdOf, createDinnerInThePastMonth, ACTOR, HOUSEHOLD, type Actor, type HouseholdKind, type Scene
+    ticketPriceIdOf, createDinnerInThePastMonth, ACTOR, HOUSEHOLD, type Actor, type HouseholdKind, type Scene
 } from '~~/tests/e2e/fixtures'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -12,15 +12,17 @@ import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {DinnerStepState} from '~/composables/useBooking'
-import {useBookingValidation, type DinnerEventDisplay, type DinnerMode, type DinnerState} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDisplay, type DinnerMode, type DinnerState, type OrderState} from '~/composables/useBookingValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
-import type {HouseholdDetail, InhabitantDetail} from '~/composables/useCoreValidation'
+import {useCoreValidation, type HouseholdDetail, type InhabitantDetail} from '~/composables/useCoreValidation'
 import {WEEKDAYS} from '~/types/dateTypes'
 
 const {temporaryAndRandom, getSessionUserInfo, daysFromNow, MENU_DEADLINE_DAYS} = testHelpers
-const {DinnerModeSchema, DinnerStateSchema, OrderStateSchema} = useBookingValidation()
+const {DinnerModeSchema, DinnerStateSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
+const {createDefaultWeekdayMap} = useCoreValidation()
 const {TeamRoleSchema} = useCookingTeamValidation()
 const Mode = DinnerModeSchema.enum
 
@@ -36,6 +38,7 @@ defineParameterType({
 })
 defineParameterType({name: 'mode', regexp: [...DinnerModeSchema.options]})
 defineParameterType({name: 'dinnerState', regexp: [...DinnerStateSchema.options]})
+defineParameterType({name: 'orderState', regexp: [...OrderStateSchema.options]})
 
 /** The days before the dinner's start a step's deadline falls: the menu's, the booking's, the dinner's own for the groceries */
 const deadlineDaysOf = (step: DinnerStepState): number => {
@@ -110,13 +113,15 @@ const joinChefPool = async (admin: BrowserContext, {cookingTeamId}: DinnerEventD
 
 Given('a dinner {deadline} its {dinnerStep} deadline', async ({adminContext: admin, scene}, side: DeadlineSide, step: DinnerStepState) => {
     const day = SeasonFactory.dinnerDayBy(deadlineDaysOf(step), side)
+    const isActive = fromScene(scene, 'ownSeasonIsActive')
     // A season of the dinner's day alone with every day a cooking day: the DAILY_MAINTENANCE job's clip to the cooking days keeps
     // the scenario people's preference on the dinner's weekday
-    const {season} = await SeasonFactory.createActiveSeasonFromTomorrow(admin, temporaryAndRandom(), {
+    const createSeason = isActive ? SeasonFactory.createActiveSeasonFromTomorrow : SeasonFactory.createSeasonFromTomorrow
+    const {season} = await createSeason(admin, temporaryAndRandom(), {
         days: 0, deadline: SeasonFactory.DEFAULT_BOOKING_DEADLINE_DAYS, cookingDays: 'all', startInDays: differenceInCalendarDays(day, new Date())
     })
     scene.created.seasonIds.push(season.id!)
-    scene.activeSeason = season
+    if (isActive) scene.activeSeason = season
     // The chef has a household and a login of its own: the chef's mails go to the chef's user
     const chefsHousehold = await createSceneHousehold(admin, scene)
     const chef = await createScenePerson(admin, scene, chefsHousehold.id, partOf(ACTOR.CHEF), true)
@@ -139,7 +144,7 @@ const hasTicket = async (admin: BrowserContext, scene: Scene, actor: Actor, dinn
     if (event.state === DinnerStateSchema.enum.CONSUMED) {
         const household = await createSceneHousehold(admin, scene, {movedInDate: daysFromNow(-60)})
         const person = await createScenePerson(admin, scene, household.id, partOf(actor))
-        const ticketPriceId = await adultPriceIdOf(admin, season.id!)
+        const ticketPriceId = await ticketPriceIdOf(admin, season.id!, actor)
         await OrderFactory.bookTickets(admin, {householdId: household.id, dinnerEventId: event.id, inhabitantId: person.id, ticketPriceId, dinnerMode, guestTickets})
         scene.people[actor] = person
         return
@@ -203,7 +208,7 @@ const bookTheDinnerFor = async (admin: BrowserContext, scene: Scene, actor: Acto
             const member = contextOfActor(scene, ACTOR.USER)
             const {householdId, inhabitantId} = await getSessionUserInfo(member)
             const {season, event} = fromScene(scene, 'dinner')
-            const order = OrderFactory.createBookingOrder(inhabitantId, event.id, await adultPriceIdOf(admin, season.id!))
+            const order = OrderFactory.createBookingOrder(inhabitantId, event.id, await ticketPriceIdOf(admin, season.id!, actor))
             await WaitlistFactory.queue(member, householdId, season.id!, order)
             const person = await HouseholdFactory.getInhabitantById(admin, inhabitantId)
             if (!person) throw new Error(`The user's inhabitant ${inhabitantId} is gone`)
@@ -257,10 +262,63 @@ Given('the dinner has {int} expense(s)', async ({adminContext: admin, scene}, co
     expect(dinner?.totalCost, 'the dinner\'s cost is the sum of its expenses').toBe(count * expense.amount)
 })
 
-Then('{int} ticket(s) of {actor} is/are closed with the dinner mode {mode}', async ({adminContext: admin, scene}, count: number, actor: Actor, mode: DinnerMode) => {
+/** The person of an actor's part, a baby of the user's household created on first use with no preference: the user books for the household's own people */
+const householdPersonOf = async (admin: BrowserContext, member: BrowserContext, scene: Scene, actor: Actor): Promise<InhabitantDetail> => {
+    const known = scene.people[actor]
+    if (known) return known
+    switch (actor) {
+        case ACTOR.BABY_WHO_TASTES:
+        case ACTOR.HUNGRY_BABY: {
+            const {householdId} = await getSessionUserInfo(member)
+            const person = await HouseholdFactory.createInhabitantWithConfig(admin, householdId, {
+                lastName: partOf(actor),
+                birthDate: TicketFactory.birthDateForTicketType(TicketTypeSchema.enum.BABY, fromScene(scene, 'dinner').event.date),
+                dinnerPreferences: createDefaultWeekdayMap(Mode.NONE)
+            })
+            scene.created.inhabitantIds.push(person.id)
+            scene.people[actor] = person
+            return person
+        }
+        default:
+            return personOf(scene, actor)
+    }
+}
+
+Given('{int} ticket(s) of {actor} is/are BOOKED with the dinner mode {mode}', async ({adminContext: admin, contextOf, scene}, count: number, actor: Actor, mode: DinnerMode) => {
+    const person = await householdPersonOf(admin, await contextOf(ACTOR.USER), scene, actor)
+    if (count === 0) return
+    const {season, event} = fromScene(scene, 'dinner')
+    // The admin's correction: the person's own ticket, the further tickets guest tickets booked on the person
+    await OrderFactory.bookTickets(admin, {
+        householdId: person.householdId, dinnerEventId: event.id, inhabitantId: person.id,
+        ticketPriceId: await ticketPriceIdOf(admin, season.id!, actor), dinnerMode: mode, guestTickets: count - 1
+    })
+})
+
+// The booker's own booking write for a person of the booker's household, naming the person's own order when it has one
+When('{actor} picks the dinner mode {mode} for {actor}', async ({adminContext: admin, contextOf, scene}, booker: Actor, mode: DinnerMode, actor: Actor) => {
+    const person = personOf(scene, actor)
+    const {season, event} = fromScene(scene, 'dinner')
+    const own = await OrderFactory.getOrderOf(admin, event.id, person)
+    const order = OrderFactory.createBookingOrder(person.id, event.id, await ticketPriceIdOf(admin, season.id!, actor), mode, own?.id)
+    await OrderFactory.scaffoldOrders(await contextOf(booker), {householdId: person.householdId, seasonId: season.id!, dinnerEventIds: [event.id], orders: [order]})
+})
+
+Then('{int} ticket(s) of {actor} is/are {orderState} with the dinner mode {mode}', async ({adminContext: admin, scene}, count: number, actor: Actor, orderState: OrderState, mode: DinnerMode) => {
     const orders = await OrderFactory.getOrdersOf(admin, fromScene(scene, 'dinner').event.id, personOf(scene, actor))
-    expect(orders.map(({state, dinnerMode}) => ({state, dinnerMode})), `${count} closed ${mode} tickets of ${actor}`)
-        .toEqual(Array.from({length: count}, () => ({state: OrderStateSchema.enum.CLOSED, dinnerMode: mode})))
+    expect(orders.map(({state, dinnerMode}) => ({state, dinnerMode})), `${count} ${orderState} ${mode} tickets of ${actor}`)
+        .toEqual(Array.from({length: count}, () => ({state: orderState, dinnerMode: mode})))
+})
+
+Then('{actor} has {int} place(s) on the waiting list', async ({adminContext: admin, scene}, actor: Actor, count: number) => {
+    const {id} = personOf(scene, actor)
+    const places = (await WaitlistFactory.entries(admin, [fromScene(scene, 'dinner').event.id])).filter(entry => entry.inhabitantId === id)
+    expect(places, `${count} places of ${actor} on the dinner's waiting list`).toHaveLength(count)
+})
+
+Then('{int} ticket(s) is/are released', async ({adminContext: admin, scene}, count: number) => {
+    const orders = await OrderFactory.getAllOrdersForEvents(admin, fromScene(scene, 'dinner').event.id)
+    expect(orders.filter(order => order.state === OrderStateSchema.enum.RELEASED), `${count} released tickets on the dinner`).toHaveLength(count)
 })
 
 Then('{int} ticket(s) of {actor} has/have a transaction', async ({adminContext: admin, scene}, count: number, actor: Actor) => {

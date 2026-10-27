@@ -3,19 +3,21 @@ import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount, flushPromises, type BaseWrapper} from '@vue/test-utils'
 import {shallowReactive} from 'vue'
-import {mountWithTooltipProvider, findByTestId,clickByTestId, resetStores, registerEmptyStoreEndpoints, registerScaffoldEndpoint, VIEWPORTS, lockedDinnerSupply, isTableLoading, untilTrue} from '~~/tests/component/testHelpers'
+import type {AlertProps} from '@nuxt/ui'
+import {mountWithTooltipProvider, findByTestId, findComponentByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, registerScaffoldEndpoint, VIEWPORTS, lockedDinnerSupply, isTableLoading, untilTrue, mountedStore} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
+import type DeadlineBadge from '~/components/deadline/DeadlineBadge.vue'
 import UserListItem from '~/components/shared/UserListItem.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {ACTION_WORDS, MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel, guestSaveLabel, moreTicketsAlert, formatPreviewLines, previewSaveOutcome, guestTicketsLabel, ticketBadgeLabel, ticketTypePresentation} from '~/composables/useBookingUi'
+import {ACTION_WORDS, MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel, createTicketStateBadge, createBirthdayBadge, guestSaveLabel, moreTicketsAlert, formatPreviewLines, previewSaveOutcome, guestTicketsLabel, ticketBadgeLabel, ticketTypePresentation} from '~/composables/useBookingUi'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {DINNER_MODE_ORDER, EMPTY_RELEASED_TICKET_COUNTS, formatPlace} from '~/composables/useBooking'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
-import type {BookingAction, BookingResult, DesiredOrder, DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
+import type {BookingAction, BookingResult, DesiredOrder, DinnerEventDisplay, DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 import type {HouseholdDetail, UserDetail} from '~/composables/useCoreValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
@@ -26,7 +28,8 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {COMPONENTS, ICONS, createTableColumns, getRibbonClasses, useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from './waitlistTestIds'
-import {subYears} from 'date-fns'
+import {addDays, subYears} from 'date-fns'
+import {usePlanStore} from '~/stores/plan'
 import {useBookingValidation as useActionValidation, OrderState, TicketState} from '~/composables/useBookingValidation'
 const Action = useActionValidation().BookingActionSchema.enum
 
@@ -55,6 +58,8 @@ const baseProps = {
 const priceOf = TicketFactory.defaultPriceOf
 const householdWithInhabitants = HouseholdFactory.defaultHouseholdDetail('test')
 const strangerHousehold = HouseholdFactory.defaultHouseholdDetail('stranger')
+// The household a bought ticket was bought from
+const seller = strangerHousehold.shortName
 
 /** A session user living in the household: the auth store's isMemberOfHousehold reads the inhabitant's householdId */
 const userInHousehold = (salt: string, household: HouseholdDetail): UserDetail => {
@@ -205,13 +210,12 @@ describe('DinnerBookingForm', () => {
       }
     )
 
-    it('GIVEN a claimed guest order THEN its name cell leads with the user-plus disc, the "Gæst af" label and "fra X"', async () => {
-      const wrapper = await mountMember(guestOrders.map(order => ({...order, provenanceHousehold: 'Hansen'})))
+    // The badge naming the seller is the state badge case's (below)
+    it('GIVEN a claimed guest order THEN its name cell leads with the user-plus disc and the "Gæst af" label', async () => {
+      const wrapper = await mountMember(guestOrders.map(order => ({...order, provenanceHousehold: seller})))
 
       const row = wrapper.findAll('span').find(span => span.text() === 'Gæst af')!.element.parentElement!
       expect(wrapper.findAllComponents({name: 'UAvatar'}).some(avatar => row.contains(avatar.element) && avatar.props('icon') === ICONS.userPlus)).toBe(true)
-      // The name cell's provenance badge; the ticket's own "fra" line is plain text
-      expect(wrapper.findAllComponents({name: 'UBadge'}).some(badge => badge.text().includes('fra Hansen'))).toBe(true)
     })
 
     describe('ticket allergies', () => {
@@ -327,20 +331,21 @@ describe('DinnerBookingForm', () => {
     })
   })
 
-  // A released ticket's row badges its order's state in the words, colour and icon of formatOrder (useBookingUi), a guest's as a person's
+  // A released or a bought ticket's row carries the DeadlineBadge of createTicketStateBadge (useBookingUi), a guest's as
+  // a person's; a bought ticket's badge names the household it was bought from
   it.each([
     {ticket: 'Anna\'s ticket', isGuestTicket: false, rowId: (order: OrderDisplay) => `inhabitant-${order.inhabitantId}`},
     {ticket: 'her guest\'s ticket', isGuestTicket: true, rowId: (order: OrderDisplay) => `guest-order-guest-group-${Object.keys(useBooking().groupGuestOrders([order]))[0]}`}
-  ])('GIVEN $ticket is released THEN its row\'s state badge reads the state text, icon and colour formatOrder gives the order', async ({isGuestTicket, rowId}) => {
+  ].flatMap(row => [
+    {...row, ticketState: TicketState.released, order: {state: OrderState.RELEASED}, detail: undefined},
+    {...row, ticketState: TicketState.claimed, order: {provenanceHousehold: seller}, detail: seller}
+  ]))('GIVEN $ticket is $ticketState THEN its row\'s state badge is the DeadlineBadge of createTicketStateBadge', async ({isGuestTicket, rowId, ticketState, order, detail}) => {
     const anna = householdWithInhabitants.inhabitants[0]!
-    const released = OrderFactory.defaultOrder('released', {inhabitantId: anna.id, dinnerEventId: baseProps.dinnerEvent.id, state: OrderState.RELEASED, isGuestTicket})
-    const wrapper = await mountMemberForm(false, {orders: [released]})
+    const ticket = OrderFactory.defaultOrder('state', {inhabitantId: anna.id, dinnerEventId: baseProps.dinnerEvent.id, isGuestTicket, ...order})
+    const wrapper = await mountMemberForm(false, {orders: [ticket]})
 
-    // The UBadge whose root is the part: a part's own component lookups reach only the components inside that root
-    const part = findByTestId(wrapper, `${rowId(released)}-state`)
-    const badge = wrapper.findAllComponents({name: 'UBadge'}).find(component => component.element === part.element)
-    const {stateText, stateIcon, stateColor} = useBookingUi().formatOrder(released)
-    expect({text: badge?.text(), icon: badge?.props('icon'), color: badge?.props('color')}).toEqual({text: stateText, icon: stateIcon, color: stateColor})
+    const badge = findComponentByTestId<InstanceType<typeof DeadlineBadge>['$props']>(wrapper, 'DeadlineBadge', `${rowId(ticket)}-state`)
+    expect(badge.props('badge')).toEqual(createTicketStateBadge(ticketState, detail))
   })
 })
 
@@ -365,10 +370,12 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
     {row: 'the place of Bo\'s guest', entry: guestQueued, ticketType: CHILD, rowId: `guest-order-guest-entry-${guestQueued.id}`, positionId: `guest-entry-${guestQueued.id}`, guestCount: 1, requeue: DinnerMode.TAKEAWAY, saved: {isGuestTicket: true, ticketPriceId: childPrice.id}}
   ]
 
+  // The place is the DeadlineBadge of createTicketStateBadge (useBookingUi) on the queued state
   it.each(queuedRows)('GIVEN $row THEN the row shows the place in its ticket type\'s line, and its ticket the hourglass with the wish ghosted', async ({entry, ticketType, positionId, guestCount}) => {
     const wrapper = await mountClosed({waitlistEntries: [entry]})
 
-    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(positionId)).text()).toContain(formatPlace(entry.position, ticketType))
+    const place = findByTestId(wrapper, WAITLIST_TEST_IDS.position(positionId)).findComponent<typeof DeadlineBadge>({name: 'DeadlineBadge'})
+    expect(place.props('badge')).toEqual(createTicketStateBadge(TicketState.queued, formatPlace(entry.position, ticketType)))
     const queuedTickets = wrapper.findAllComponents(DinnerTicket).filter(ticket => ticket.props('ticketState') === TicketState.queued)
     expect(queuedTickets).not.toHaveLength(0)
     queuedTickets.forEach(ticket => expect(ticket.props()).toMatchObject({dinnerMode: entry.order.dinnerMode, guestCount}))
@@ -783,9 +790,8 @@ describe('DinnerBookingForm on a closed dinner: the "Har du brug for flere bille
     const counts = lockedDinnerSupply({[CHILD]: 1}, {[ADULT]: 8})
     const wrapper = await mountMemberForm(false, {releasedTicketCounts: counts})
 
-    const bar = findByTestId(wrapper, WAITLIST_TEST_IDS.moreTickets)
-    const alert = wrapper.findAllComponents({name: 'UAlert'}).find(component => component.element === bar.element)
-    expect(alert?.props()).toMatchObject(moreTicketsAlert(counts)!)
+    const alert = findComponentByTestId<AlertProps>(wrapper, 'UAlert', WAITLIST_TEST_IDS.moreTickets)
+    expect(alert.props()).toMatchObject(moreTicketsAlert(counts)!)
   })
 
   it.each([
@@ -814,7 +820,7 @@ describe('DinnerBookingForm on a closed dinner: the household\'s own places on t
     const {title, description} = SUPPLY_WORDS.householdQueued(count)
     expect(noteOf(wrapper).text()).toContain(title)
     expect(noteOf(wrapper).text()).toContain(description)
-    const note = wrapper.findAllComponents({name: 'UAlert'}).find(alert => alert.element === noteOf(wrapper).element)!
+    const note = findComponentByTestId<AlertProps>(wrapper, 'UAlert', WAITLIST_TEST_IDS.householdQueued)
     expect(note.props()).toMatchObject({icon: ICONS.waitlist, color: useTheSlopeDesignSystem().ALERTS.warning.color})
   })
 
@@ -887,5 +893,49 @@ describe('DinnerBookingForm on a cancelled dinner', () => {
     const tickets = wrapper.findAllComponents(DinnerTicket)
     expect(tickets).not.toHaveLength(0)
     tickets.forEach(ticket => expect(ticket.props('cancelled')).toBe(true))
+  })
+})
+
+// A person's first dinner at a new ticket type carries the birthday badge beside the name. The change is worked out
+// over the dinners of the plan store's season, so a birthday between two dinners falls on the next
+describe('DinnerBookingForm the birthday badge on a person\'s first dinner at a new ticket type', () => {
+  const {ADULT, CHILD} = useActionValidation().TicketTypeSchema.enum
+  const [anna, bo] = householdWithInhabitants.inhabitants
+  // The season's dinners, a week apart
+  const [first, second, third] = [1, 2, 3].map(id => DinnerEventFactory.dinnerEventAt(id, 7 * id)) as [DinnerEventDisplay, DinnerEventDisplay, DinnerEventDisplay]
+  const season = {...SeasonFactory.defaultSeason('birthday'), id: 7, dinnerEvents: [first, second, third]}
+  // Anna turns 12 between the first and the second dinner: the second is her first at the ADULT price
+  const annaGrowingUp = {...anna!, birthDate: subYears(addDays(first.date, 3), priceOf(CHILD).maximumAgeLimit!)}
+  const birthdayTestId = `inhabitant-${anna!.id}-birthday`
+  const unregister: Array<() => void> = []
+
+  beforeEach(() => {
+    unregister.push(
+      registerEndpoint('/api/admin/season/active', () => season.id),
+      registerEndpoint('/api/admin/season', () => [season]),
+      registerEndpoint(`/api/admin/season/${season.id}`, () => season)
+    )
+  })
+
+  afterEach(() => {
+    unregister.splice(0).forEach(remove => remove())
+  })
+
+  it('GIVEN Anna turns 12 between the season\'s first and second dinner THEN the second dinner carries the birthday badge beside her name; WHEN the form shows the third dinner THEN no badge', async () => {
+    const props = shallowReactive(memberFormProps(true, {dinnerEvent: second, household: {...householdWithInhabitants, inhabitants: [annaGrowingUp, bo!]}}))
+    const wrapper = await mountForm(props)
+    const planStore = mountedStore(usePlanStore)
+    await untilTrue(() => planStore.selectedSeason?.id === season.id)
+    await flushPromises()
+
+    const badge = findComponentByTestId<InstanceType<typeof DeadlineBadge>['$props']>(wrapper, 'DeadlineBadge', birthdayTestId)
+    expect(badge.props('badge')).toEqual(createBirthdayBadge(ADULT, second.date))
+    expect((nameCellOf(wrapper, anna!.id).element as Element).contains(badge.element)).toBe(true)
+
+    Object.assign(props, {dinnerEvent: third})
+    await flushPromises()
+
+    expect(nameCellOf(wrapper, anna!.id)).toBeDefined()
+    expect(findByTestId(wrapper, birthdayTestId).exists()).toBe(false)
   })
 })

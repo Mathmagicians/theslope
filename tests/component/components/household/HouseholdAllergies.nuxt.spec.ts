@@ -3,10 +3,11 @@ import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
 import {getQuery, type H3Event} from 'h3'
-import {mountWithTooltipProvider, resetStores, registerEmptyStoreEndpoints, holdEndpoint, isTableLoading, untilTrue, mountedStore, clickByTestId, findByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, resetStores, registerEmptyStoreEndpoints, holdEndpoint, isTableLoading, untilTrue, mountedStore, clickByTestId, findByTestId, findOpenRows} from '~~/tests/component/testHelpers'
 import HouseholdAllergies from '~/components/household/HouseholdAllergies.vue'
+import AllergyEditor from '~/components/allergy/AllergyEditor.vue'
 import {useAllergiesStore} from '~/stores/allergies'
-import {nextTick} from 'vue'
+import {nextTick, shallowReactive} from 'vue'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
@@ -21,10 +22,35 @@ const user = UserFactory.defaultUserWithInhabitant('household-allergies')
 const household = {...HouseholdFactory.defaultHouseholdDetail('household-allergies'), id: user.Inhabitant!.household!.id}
 registerEmptyStoreEndpoints()
 registerEndpoint('/api/admin/allergy-type', () => [])
+registerEndpoint('/api/household/allergy', () => [])
 registerEndpoint(`/api/admin/household/${household.id}`, () => household)
 
 // The next test's resetStores drops the datasets a still-mounted table reads
 enableAutoUnmount(afterEach)
+
+// The open row follows its inhabitant through a change of the household's inhabitants
+describe('HouseholdAllergies open row', () => {
+    const [arriving, opened] = household.inhabitants
+    const toggleOf = (inhabitant: typeof opened) => `inhabitant-${inhabitant!.id}-allergy-toggle`
+
+    beforeEach(() => {
+        resetStores()
+        session.user.value = user
+    })
+
+    it('GIVEN an inhabitant\'s row open WHEN the household brings in an inhabitant above it THEN the open row and the allergy editor under it stay with that inhabitant', async () => {
+        const props = shallowReactive<Record<string, unknown>>({household: {...household, inhabitants: [opened]}, canEdit: true})
+        const wrapper = await mountWithTooltipProvider(HouseholdAllergies, {props, isMd: true})
+        await clickByTestId(wrapper, toggleOf(opened))
+
+        props.household = {...household, inhabitants: [arriving, opened]}
+        await nextTick()
+
+        const open = findOpenRows(wrapper)
+        expect(open.map(({row}) => findByTestId(row, toggleOf(opened)).exists())).toEqual([true])
+        expect(open[0]!.detail.findComponent(AllergyEditor).exists()).toBe(true)
+    })
+})
 
 // While the household's allergies load, the table runs its loading bar over its inhabitants
 describe('HouseholdAllergies while the allergies load', () => {

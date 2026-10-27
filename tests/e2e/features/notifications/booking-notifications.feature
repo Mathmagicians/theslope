@@ -7,7 +7,7 @@ Feature: Booking notifications
 
   Background:
     Given the admin is signed in
-    And a season is active
+    And a season of its own is active
 
   Scenario Outline: The <event> <deadline> the deadline: <notification> email to the closest user of the <inhabitant>
     Given a dinner <deadline> its BOOKING_CLOSED deadline

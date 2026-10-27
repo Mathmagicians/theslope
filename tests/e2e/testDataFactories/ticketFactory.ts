@@ -14,10 +14,6 @@ export class TicketFactory {
     /**
      * The config's default ticket prices (app/config/ticketPrices.ts): baby, hungry baby, child, adult.
      * maximumAgeLimit means UNDER that age: BABY ages 0-1, CHILD ages 2-11, ADULT 12+.
-     */
-    static readonly defaultTicketPricesData: TicketPrice[] = DEFAULT_TICKET_PRICES.map(defaultPrice => createTicketPrice(defaultPrice))
-
-    /**
      * Get default ticket prices with optional overrides
      * Uses spread pattern for easy customization in tests
      *

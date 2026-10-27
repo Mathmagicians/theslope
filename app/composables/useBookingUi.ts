@@ -42,7 +42,7 @@ import type {WatchSource} from 'vue'
 export interface DeadlineBadgeData {
     label: string
     icon: string
-    color: typeof COLOR.success | typeof COLOR.error | typeof COLOR.warning | typeof COLOR.neutral
+    color: typeof COLOR.success | typeof COLOR.error | typeof COLOR.warning | typeof COLOR.neutral | typeof COLOR.info
     value: string       // Badge text
     helpText: string
     step?: number       // Chef stepper: which step this badge belongs to
@@ -486,20 +486,31 @@ const CONFLICT_WORDS: Partial<Record<BookingAction, string>> = BOOKING_WORDS.res
 const conflictWordsOf = ({reason, action}: Pick<BookingResult, 'reason' | 'action'>): string | undefined =>
     reason === BookingFailureEnum.CONFLICT ? CONFLICT_WORDS[action] : undefined
 
-/** A place on the waiting list of a sold-out dinner, in the line of its ticket type, rendered compact beside the name */
-export const createWaitlistBadge = (position: number, ticketType?: TicketType | null): DeadlineBadgeData => ({
-    label: BOOKING_WORDS.waitlistBadge.label,
-    icon: ORDER_STATE_LABELS.queued.icon,
-    color: ORDER_STATE_LABELS.queued.color,
-    value: formatPlace(position, ticketType),
-    helpText: BOOKING_WORDS.waitlistBadge.helpText
-})
+// The look of a ticket's state: a released ticket wears its order state, a bought or queued one its ticket state
+const TICKET_STATE_LABELS = {
+    [TicketStateEnum.released]: ORDER_STATE_LABELS[OrderStateEnum.RELEASED],
+    [TicketStateEnum.claimed]: ORDER_STATE_LABELS[TicketStateEnum.claimed],
+    [TicketStateEnum.queued]: ORDER_STATE_LABELS[TicketStateEnum.queued]
+} satisfies Record<Exclude<TicketState, typeof TicketStateEnum.normal>, OrderDisplayConfig>
 
-/** A released ticket, rendered compact beside the name as a place on the waiting list is */
-export const createReleasedBadge = (): DeadlineBadgeData => ({
-    ...ORDER_STATE_LABELS[OrderStateEnum.RELEASED],
-    value: ORDER_STATE_LABELS[OrderStateEnum.RELEASED].label,
-    helpText: BOOKING_WORDS.releasedBadge.helpText
+/**
+ * A ticket's state as a badge, rendered compact beside the name: the detail is the seller of a bought ticket or the
+ * place in the line of a queued one (formatPlace); a normal ticket has none
+ */
+export const createTicketStateBadge = (ticketState: TicketState, detail = ''): DeadlineBadgeData | null => {
+    if (ticketState === TicketStateEnum.normal) return null
+    const {label, icon, color} = TICKET_STATE_LABELS[ticketState]
+    const {value, helpText} = BOOKING_WORDS.ticketStateBadge[ticketState]
+    return {label, icon, color, value: value(detail), helpText}
+}
+
+/** A person's first dinner at a new ticket type, rendered compact beside the name as the ticket-state badge: "Voksen fra 04/11" */
+export const createBirthdayBadge = (ticketType: TicketType, from: Date): DeadlineBadgeData => ({
+    label: BOOKING_WORDS.birthdayBadge.label,
+    icon: ICONS.birthday,
+    color: COLOR.neutral,
+    value: BOOKING_WORDS.birthdayBadge.from(ticketTypeLabel(ticketType), formatDate(from, DATE_SETTINGS.DAY_MONTH_MASK)),
+    helpText: BOOKING_WORDS.legend.birthday
 })
 
 // ============================================================================
@@ -772,11 +783,10 @@ export const useBookingUi = () => {
     type FormattableOrder = Pick<OrderDisplay, 'state' | 'dinnerMode' | 'provenanceHousehold' | 'isGuestTicket'>
     // A ticket that is neither released nor bought reads its order's own state
     const orderLabel = (order: FormattableOrder): OrderDisplayConfig => {
-        switch (ticketStateOf(order)) {
-            case TicketStateEnum.released: return ORDER_STATE_LABELS[OrderStateEnum.RELEASED]
-            case TicketStateEnum.claimed: return ORDER_STATE_LABELS[TicketStateEnum.claimed]
-            case TicketStateEnum.queued: return ORDER_STATE_LABELS[TicketStateEnum.queued]
+        const ticketState = ticketStateOf(order)
+        switch (ticketState) {
             case TicketStateEnum.normal: return ORDER_STATE_LABELS[order.state]
+            default: return TICKET_STATE_LABELS[ticketState]
         }
     }
 
@@ -865,8 +875,8 @@ export const useBookingUi = () => {
         createBookingBadge,
         createDiningModeBadge,
         createBookingBadges,
-        createWaitlistBadge,
-        createReleasedBadge,
+        createTicketStateBadge,
+        createBirthdayBadge,
         lockChip,
         bookingSaveLabel,
         guestSaveLabel,

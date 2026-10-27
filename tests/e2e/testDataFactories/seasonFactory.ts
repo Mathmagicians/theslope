@@ -814,12 +814,11 @@ export class SeasonFactory {
     }
 
     /**
-     * A serial spec's own active season: starts `startInDays` days from today at midnight (tomorrow by default) and
-     * ends `days` days after the start, inside the pre-booking window (ADR-015). `cookingDays` picks all seven days
-     * or Monday to Friday over the default Mon/Wed/Fri; `deadline` is the cancel deadline in days. Serial only:
-     * activating it displaces the singleton active season.
+     * A spec's own season: starts `startInDays` days from today at midnight (tomorrow by default) and ends `days` days
+     * after the start, inside the pre-booking window (ADR-015). `cookingDays` picks all seven days or Monday to Friday
+     * over the default Mon/Wed/Fri; `deadline` is the cancel deadline in days.
      */
-    static readonly createActiveSeasonFromTomorrow = async (
+    static readonly createSeasonFromTomorrow = async (
         context: BrowserContext,
         testSalt: string,
         {days, deadline, cookingDays, startInDays = 1}: {days: number, deadline?: number, cookingDays?: 'all' | 'weekdays', startInDays?: number}
@@ -833,11 +832,20 @@ export class SeasonFactory {
             all: createDefaultWeekdayMap([true, true, true, true, true, true, true]),
             weekdays: createDefaultWeekdayMap([true, true, true, true, true, false, false])
         }
-        const created = await this.createSeasonWithDinnerEvents(context, testSalt, {
+        return this.createSeasonWithDinnerEvents(context, testSalt, {
             seasonDates: {start, end},
             cookingDays: cookingDays === undefined ? this.defaultSeasonData.cookingDays : cookingDayMaps[cookingDays],
             ticketIsCancellableDaysBefore: deadline ?? this.DEFAULT_BOOKING_DEADLINE_DAYS
         })
+    }
+
+    /** A serial spec's own season (`createSeasonFromTomorrow`), activated: serial only, it displaces the singleton active season */
+    static readonly createActiveSeasonFromTomorrow = async (
+        context: BrowserContext,
+        testSalt: string,
+        options: Parameters<typeof SeasonFactory.createSeasonFromTomorrow>[2]
+    ): Promise<{ season: Season, dinnerEvents: DinnerEventDisplay[] }> => {
+        const created = await this.createSeasonFromTomorrow(context, testSalt, options)
         await this.activateSeason(context, created.season.id!)
         return created
     }

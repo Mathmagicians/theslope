@@ -15,10 +15,12 @@ one vertical line.
 │  [❓]         Blandet                                    │
 │  ┃[🍽️]        Ændret                                     │
 │  (mode)°⌛    På venteliste (#n)                          │
+│  [cake]       Ny billetpris fra fødselsdagen             │
 │  [ex] (mode)  Forventet bestilling ifølge præferencer     │
 │  Klik på en celle for at ændre din booking … (hint)      │
 └──────────────────────────────────────────────────────────┘
 (mode)°⌛ = the wish ghosted (COMPONENTS.waitlist) under the corner chip, grid only
+[cake] = the birthday badge's glyph on its neutral badge, where a row carries the badge
 [ex] (mode) = the sliders the day form's ticket carries (ICONS.preferences at COMPONENTS.ticket.stateIcon.expected)
 beside an expected booking ghosted on neutral (COMPONENTS.bookingGrid.expectedBadge)
 -->
@@ -36,6 +38,8 @@ withDefaults(defineProps<{
   showModified?: boolean
   /** Grid only: the queued cell, the wish ghosted under the hourglass */
   showWaitlist?: boolean
+  /** A row carries the birthday badge: a person's first dinner at a new ticket type */
+  showBirthday?: boolean
   /** Grid only: how to operate the cells */
   hint?: string
 }>(), {
@@ -43,10 +47,11 @@ withDefaults(defineProps<{
   showNoConsensus: true,
   showModified: false,
   showWaitlist: false,
+  showBirthday: false,
   hint: undefined
 })
 
-const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, COLOR, NOISE} = useTheSlopeDesignSystem()
 </script>
 
 <template>
@@ -98,6 +103,12 @@ const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
         </UChip>
       </div>
       <span :class="TYPOGRAPHY.finePrint">{{ BOOKING_WORDS.legend.waitlist }}</span>
+    </div>
+    <div v-if="showBirthday" :class="COMPONENTS.legend.entry" data-testid="dinner-mode-legend-birthday">
+      <div :class="COMPONENTS.legend.sample">
+        <UBadge :color="COLOR.neutral" :variant="NOISE.soft" :size="SIZES.small" :icon="ICONS.birthday" />
+      </div>
+      <span :class="TYPOGRAPHY.finePrint">{{ BOOKING_WORDS.legend.birthday }}</span>
     </div>
     <div :class="COMPONENTS.legend.entry" data-testid="dinner-mode-legend-expected">
       <div :class="COMPONENTS.legend.sample">

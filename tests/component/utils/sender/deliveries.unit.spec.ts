@@ -10,6 +10,7 @@ import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFa
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {fakeSenderQueue as fakeQueue, sentBatches, sentMessages, type FakeSenderQueue} from '~~/tests/component/utils/sender/fakeSenderQueue'
 import {fakeDeliveries} from '~~/tests/component/utils/sender/fakeDeliveries'
+import {spyOnLogs} from '~~/tests/component/logSpies'
 
 // The unit runtime has no D1: the Delivery rows answer from the test
 vi.mock('~~/server/data/financesRepository', () => ({fetchDeliveries: vi.fn(), recordDeliveries: vi.fn()}))
@@ -27,7 +28,7 @@ const anna = UserFactory.defaultUserWithInhabitant('anna', {id: 6, email: 'anna@
 const knud = UserFactory.defaultUserWithInhabitant('knud', {id: 7, email: 'knud@example.com'})
 const outgoing = NotificationFactory.defaultDesiredOutgoing
 
-const logs = {error: vi.spyOn(console, 'error'), warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
+const logs = spyOnLogs()
 // Each line of a log level, its arguments as text
 const linesOf = (spy: typeof logs.error): string[] => spy.mock.calls.map(args =>
     args.map(arg => arg instanceof Error ? arg.message : typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' '))
@@ -189,7 +190,7 @@ describe('deliverDesired', () => {
         {run: 'a run delivers', options: {}},
         {run: 'a dry run delivers', options: {dryRun: true}}
     ])('GIVEN email off in the environment WHEN $run THEN it loads no deliveries, records nothing, counts nothing sent, and one line logs the sender event, the missing setting and nothing sent', async ({options}) => {
-        const off = {on: false, missing: 'DEPLOY_URL'} as const
+        const off = NotificationFactory.channelOff
         const load = vi.fn(async () => [outgoing(anna)])
 
         const result = await deliverDesired({} as D1Database, off, SenderEvent.BOOKING_STATUS, load, options)

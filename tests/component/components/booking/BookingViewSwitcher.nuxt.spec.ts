@@ -2,7 +2,8 @@
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {findByTestId, resetStores} from '~~/tests/component/testHelpers'
+import type {ButtonProps} from '@nuxt/ui'
+import {findByTestId, findComponentByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {nextTick} from 'vue'
 import BookingViewSwitcher from '~/components/booking/BookingViewSwitcher.vue'
 import {BookingViewSchema, type BookingView} from '~/composables/useBookingView'
@@ -22,7 +23,7 @@ const btn = (wrapper: Wrapper, view: BookingView) =>
   findByTestId(wrapper, `booking-view-${view}`)
 
 const buttonOf = (wrapper: Wrapper, view: BookingView) =>
-  wrapper.findAllComponents({name: 'UButton'}).find(button => button.attributes('data-testid') === `booking-view-${view}`)!
+  findComponentByTestId<ButtonProps>(wrapper, 'UButton', `booking-view-${view}`)
 
 describe('BookingViewSwitcher', () => {
   beforeEach(() => {

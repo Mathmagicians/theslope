@@ -1,7 +1,7 @@
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount, type BaseWrapper} from '@vue/test-utils'
-import {findByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {findByTestId, iconNamesIn, resetStores} from '~~/tests/component/testHelpers'
 import DinnerModeLegend from '~/components/dinner/DinnerModeLegend.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
 import {DinnerMode} from '~/composables/useBookingValidation'
@@ -88,6 +88,17 @@ describe('DinnerModeLegend', () => {
         expect(grid.find('[data-testid="dinner-mode-legend-waitlist"]').text()).toContain(BOOKING_WORDS.legend.waitlist)
         expect(grid.findAllComponents(DinnerModeSelector).some(selector => selector.props('ghost'))).toBe(true)
         expect(plain.find('[data-testid="dinner-mode-legend-waitlist"]').exists()).toBe(false)
+    })
+
+    // The birthday badge on a person's first dinner at a new ticket type: its glyph beside the legend's words
+    it('explains the birthday badge only where the surface shows it', async () => {
+        const plain = await mountSuspended(DinnerModeLegend)
+        const withBirthday = await mountSuspended(DinnerModeLegend, {props: {showBirthday: true}})
+        const entry: BaseWrapper<Node> = findByTestId(withBirthday, 'dinner-mode-legend-birthday')
+
+        expect(entry.text()).toContain(BOOKING_WORDS.legend.birthday)
+        expect(iconNamesIn(entry)).toContain(ICONS.birthday)
+        expect(findByTestId(plain, 'dinner-mode-legend-birthday').exists()).toBe(false)
     })
 
     // The expected booking is a standing entry: a surface explains it whether or not one of its rows is expected now

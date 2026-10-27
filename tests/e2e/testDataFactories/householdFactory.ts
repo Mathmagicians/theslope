@@ -3,7 +3,7 @@
 import type {APIResponse, BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
-import type {HouseholdDetail, HouseholdDisplay, InhabitantDetail, InhabitantCreate, UserCreate, UserDisplay} from "~/composables/useCoreValidation"
+import type {HouseholdDetail, HouseholdDisplay, InhabitantDetail, InhabitantCreate, InhabitantUpdate, UserCreate, UserDisplay} from "~/composables/useCoreValidation"
 import {useCoreValidation} from "~/composables/useCoreValidation"
 import {useBookingValidation, type InhabitantUpdateResponse, type HouseholdUpdateResponse, type DinnerMode as DinnerModeType} from "~/composables/useBookingValidation"
 import type {WeekDayMap} from "~/types/dateTypes"
@@ -113,7 +113,7 @@ export class HouseholdFactory {
      */
     static readonly createAtExistingAddress = async (
         context: BrowserContext,
-        sibling: Pick<HouseholdDetail, 'heynaboId' | 'name' | 'address'>,
+        sibling: HouseholdDetail,
         overrides: {pbsId: number, movedInDate: Date, moveOutDate?: Date | null},
         expectedStatus: number = 201
     ): Promise<HouseholdDetail> => this.createHousehold(context, {
@@ -251,7 +251,7 @@ export class HouseholdFactory {
     static readonly createInhabitantWithConfig = async (
         context: BrowserContext,
         householdId: number,
-        partialInhabitant: Partial<Omit<InhabitantCreate, 'householdId'> & Pick<InhabitantDetail, 'dinnerPreferences'>> = {},
+        partialInhabitant: Partial<Omit<InhabitantCreate, 'householdId'>> & Omit<InhabitantUpdate, 'id' | 'householdId'> = {},
         expectedStatus: number = 201
     ): Promise<InhabitantDetail> => {
         const {dinnerPreferences, ...fields} = partialInhabitant
@@ -315,7 +315,7 @@ export class HouseholdFactory {
      */
     static readonly closestUserIdOf = async (
         context: BrowserContext,
-        inhabitant: Pick<InhabitantDetail, 'userId' | 'householdId'>
+        inhabitant: InhabitantDetail
     ): Promise<number | null> => {
         if (inhabitant.userId) return inhabitant.userId
         const household = await this.getHouseholdById(context, inhabitant.householdId)

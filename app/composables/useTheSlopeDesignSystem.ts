@@ -699,6 +699,13 @@ const CANCELLED_STRIKE = 'line-through decoration-2 decoration-amber-900'
 // The lock chip that carries the waiting-list hourglass: a step above SIZES.lockChip, so the glyph sits with a small inset
 const QUEUE_LOCK_CHIP = {ui: {base: 'h-3.5 min-w-3.5 md:h-4.5 md:min-w-4.5'}, icon: 'size-2.5 md:size-3.5'} as const
 
+// The box a corner ribbon is clipped to (`COMPONENTS.ribbon.container`, the household page's card root)
+const RIBBON_CONTAINER = 'relative overflow-hidden'
+
+// An inhabitant avatar size (`COMPONENTS.avatar`): `size` everywhere, `fit` the step up from md on each `UAvatar`, and
+// `group` for a `UAvatarGroup`, whose `ui.base` carries the fit to its faces and the overflow count
+const avatarFace = (size: NuxtUIAvatarSize, fit: string) => ({size, fit, group: {size, ui: {base: fit}}})
+
 export const COMPONENTS = {
     // The turn of an open-panel chevron on a button whose own icon carries it; BUTTONS.flipOpen turns a trailing chevron
     openTurn: flipOpenTurn,
@@ -985,15 +992,15 @@ export const COMPONENTS = {
      * Inhabitant avatars (`UserListItem`): the server renders before the breakpoint is known, so `size` is one
      * value everywhere and `fit` steps the avatar up a size from md. A group's default face count is the responsive
      * `SIZES.avatarMax`; the compact household list item (`listItemMax`) and the power rows (`powerRowMax`) show three everywhere.
-     * `fit` goes on each `UAvatar` and on the group's `ui.base`, which reaches the overflow count.
+     * `fit` goes on each `UAvatar`; a `UAvatarGroup` binds the size's `group` (`avatarFace`).
      */
     avatar: {
         // The compact household list item shows three faces before the overflow count
         listItemMax: 3,
         // A power row (the household preferences, the booking form) shows three faces before the overflow count, so its table fits a phone
         powerRowMax: 3,
-        regular: {size: 'md' as const, fit: 'md:size-9 md:text-lg'},
-        compact: {size: 'sm' as const, fit: 'md:size-8 md:text-base'}
+        regular: avatarFace('md', 'md:size-9 md:text-lg'),
+        compact: avatarFace('sm', 'md:size-8 md:text-base')
     },
 
     /**
@@ -1081,10 +1088,11 @@ export const COMPONENTS = {
         }
     },
 
-    /** MyTeamSelector tab body: the team icon above the badge on phone, beside it on desktop */
+    /** MyTeamSelector tab body: the team icon above the badge on phone, beside it on desktop; a visit's badge under the name */
     myTeamSelector: {
         tab: 'flex flex-col items-center gap-1 md:flex-row md:gap-2',
-        icon: 'shrink-0'
+        icon: 'shrink-0',
+        label: 'flex flex-col items-center gap-1'
     },
 
     /** TeamCalendarDisplay days: a selectable day rings on hover, the selected dinner's day rings in primary */
@@ -1188,6 +1196,19 @@ export const COMPONENTS = {
         feedLabel: `${TYPOGRAPHY.bodyTextMuted} mb-2`,
         feedLink: 'text-primary hover:underline text-sm',
         noPlansIcon: 'text-warning-700 dark:text-warning-400'
+    },
+
+    /**
+     * The household page (`pages/household/[shortname]/[tab].vue`): the `card`, full-bleed on a phone, whose root clips
+     * the residency ribbon; the `header` stack over the banners, the `title` row with its `titleIcon`, and the `tabs`
+     * whose labels show from md
+     */
+    householdPage: {
+        card: {class: `w-full px-0 ${LAYOUTS.cardResponsive}`, ui: {root: RIBBON_CONTAINER, body: 'px-0 py-2 md:px-4 md:py-6'}},
+        header: 'flex flex-col gap-2',
+        title: 'flex items-center gap-1 md:gap-2',
+        titleIcon: 'text-2xl',
+        tabs: {class: 'mt-1 mb-1 md:mt-0 md:mb-4', ui: {label: 'hidden md:inline'}}
     },
 
     /** HouseholdBookings: the booking panel's header row and title */
@@ -1396,15 +1417,22 @@ export const COMPONENTS = {
     },
 
     /**
+     * DeadlineBadge: the badge above its help text (`root`), the help text in fine print (`helpText`)
+     */
+    deadlineBadge: {
+        root: 'flex flex-col items-start',
+        helpText: `${TYPOGRAPHY.finePrint} ${TEXT.muted} mt-0.5`
+    },
+
+    /**
      * DinnerBookingForm: the ticket under the name on a phone (`ticketPhone`) and in its own column from md
-     * (`ticketDesktop`), the `provenance` badge row in an inhabitant's name cell and `guestProvenance` under a guest
-     * order's booker, the `guestOf` row with its `guestOfLabel`, and the expanded row's `allergyLine` (`ICONS.allergy`, then the allergy types)
+     * (`ticketDesktop`), `guestProvenance` under a guest order's booker, the `guestOf` row with its `guestOfLabel`, and
+     * the expanded row's `allergyLine` (`ICONS.allergy`, then the allergy types)
      */
     bookingForm: {
         ticketPhone: 'mt-2 md:hidden',
         ticketDesktop: 'hidden md:block',
-        provenance: 'flex flex-wrap items-center gap-1',
-        // Indent = the guestOf disc (avatar.compact: sm, size-7, md:size-8) plus guestOf's gap-3, so "fra X" starts under "Gæst af"
+        // Indent = the guestOf disc (avatar.compact: sm, size-7, md:size-8) plus guestOf's gap-3, so a guest's badge starts under "Gæst af"
         guestProvenance: 'flex flex-wrap items-center gap-1 mt-1 ml-10 md:ml-11',
         // A guest order's name cell: the add-guest row's disc, label and gap, so both rows share their x
         guestOf: 'flex items-center gap-3',
@@ -1735,7 +1763,7 @@ export const COMPONENTS = {
     // Diagonal corner ribbon - top-right status overlay (cancelled dinners, move-out, move-in)
     ribbon: {
         base: 'absolute top-8 -right-10 z-10 text-white text-xs font-bold py-1 pl-14 pr-12 rotate-45 shadow-md',
-        container: 'relative overflow-hidden',
+        container: RIBBON_CONTAINER,
         colors: {
             cancel: 'bg-red-600',
             past: BG.gray[500],
@@ -2070,6 +2098,8 @@ export const ICONS = {
     agenda: 'i-heroicons-list-bullet',
     calendarDays: 'i-heroicons-calendar-days',
     user: 'i-heroicons-user',
+    /** A person's first dinner at a new ticket type */
+    birthday: 'i-heroicons-cake',
     search: 'i-heroicons-magnifying-glass',
     /** The child ticket type */
     userCircle: 'i-heroicons-user-circle',
@@ -2171,6 +2201,8 @@ export const ICONS = {
     info: 'i-heroicons-information-circle',
 
     // Status/state
+    /** Look, don't touch: the visitor banner on another household, the admin pages for a non-admin */
+    viewOnly: 'i-heroicons-eye',
     lockOpen: 'i-heroicons-lock-open',
     lockClosed: 'i-heroicons-lock-closed',
     authorize: 'i-heroicons-shield-check',
@@ -3000,7 +3032,9 @@ export const calendarPickerProps = () => ({
 export const CHEF_CALENDAR = {
     day: {
         next: `text-white dark:text-black font-bold ${BG.ocean[400]}`,
-        future: `font-medium ${BG.ocean[200]} ${TEXT.ocean[800]}`
+        future: `font-medium ${BG.ocean[200]} ${TEXT.ocean[800]}`,
+        // Another team's dinner: a plain outlined circle, without the team on view's colours
+        otherTeam: `font-medium border ${BORDER.gray[500]}`
     },
     countdown: {
         border: 'border-ocean-400',

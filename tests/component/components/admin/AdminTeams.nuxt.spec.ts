@@ -3,7 +3,8 @@ import {describe, it, expect, vi, beforeEach, afterEach, onTestFinished} from 'v
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick, ref} from 'vue'
-import {mountWithTooltipProvider, clickByTestId, findAllByTestId, findByTestId, pollFor, resetStores, VIEWPORTS, holdEndpoint, findLoadingRow, expectMasterDetail} from '~~/tests/component/testHelpers'
+import type {ButtonProps} from '@nuxt/ui'
+import {mountWithTooltipProvider, clickByTestId, findAllByTestId, findByTestId, findComponentByTestId, pollFor, resetStores, VIEWPORTS, holdEndpoint, findLoadingRow, expectMasterDetail} from '~~/tests/component/testHelpers'
 import AdminTeams from '~/components/admin/AdminTeams.vue'
 import TeamCalendarDisplay from '~/components/calendar/TeamCalendarDisplay.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -218,9 +219,8 @@ describe('AdminTeams team selection', () => {
 
         it(`turns its toggle to the open-detail chevron of its viewport and renders its detail once, ${isMd ? 'in the pane beside the table' : 'docked in the table row'}`, async () => {
             const wrapper = await openTeam()
-            const toggle = wrapper.findAllComponents({name: 'UButton'})
-                .find(button => button.attributes('data-testid') === `team-toggle-${team.id}`)
-            expect(toggle?.props('icon')).toBe(createResponsiveIcons(ref(isMd)).detailOpen)
+            const toggle = findComponentByTestId<ButtonProps>(wrapper, 'UButton', `team-toggle-${team.id}`)
+            expect(toggle.props('icon')).toBe(createResponsiveIcons(ref(isMd)).detailOpen)
 
             await vi.waitFor(() => expect(findAllByTestId(wrapper, 'edit-team')).toHaveLength(1))
             expect(wrapper.find('tbody [data-testid="edit-team"]').exists()).toBe(!isMd)

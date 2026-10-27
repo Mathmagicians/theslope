@@ -21,7 +21,8 @@ import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, DinnerState} from '~/composables/useBookingValidation'
+import {TEAM_WORDS} from '~/config/teamWords'
 import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {addDays} from 'date-fns'
 import {flushPromises} from '@vue/test-utils'
@@ -858,6 +859,16 @@ const removeExpenseEndpoint = vi.fn(() => EXPENSE_LINE)
 registerEndpoint(`/api/chef/dinner/${DINNER_ID}/expenses`, {method: 'PUT', handler: addExpenseEndpoint})
 registerEndpoint(`/api/chef/dinner/${DINNER_ID}/expenses/${EXPENSE_LINE.id}`, {method: 'DELETE', handler: removeExpenseEndpoint})
 
+// A chef's write that fails resolves null, shows no success toast and ends the updating flag
+type ChefWrite = {act: (store: ReturnType<typeof useBookingsStore>) => Promise<unknown>, endpoint: {mockImplementation: (implementation: typeof failure) => unknown}, title: string}
+const expectFailedWithoutSuccessToast = async ({act, endpoint, title}: ChefWrite) => {
+    endpoint.mockImplementation(failure)
+    const store = useBookingsStore()
+    expect(await act(store)).toBeNull()
+    expect(toastTitles()).not.toContain(title)
+    expect(store.isDinnerUpdating).toBe(false)
+}
+
 describe('Bookings store — expense lines', () => {
     beforeEach(() => {
         addExpenseEndpoint.mockImplementation(() => EXPENSE_LINE)
@@ -884,13 +895,77 @@ describe('Bookings store — expense lines', () => {
     it.each([
         {desc: 'add', act: (store: ReturnType<typeof useBookingsStore>) => store.addExpense(DINNER_ID, ExpenseFactory.defaultExpenseCreate()), endpoint: addExpenseEndpoint, title: 'Indkøb gemt'},
         {desc: 'remove', act: (store: ReturnType<typeof useBookingsStore>) => store.removeExpense(DINNER_ID, EXPENSE_LINE.id), endpoint: removeExpenseEndpoint, title: 'Indkøb slettet'}
-    ])('resolves null without a success toast when the $desc fails', async ({act, endpoint, title}) => {
-        endpoint.mockImplementation(failure)
-        const store = useBookingsStore()
-        expect(await act(store)).toBeNull()
-        expect(toastTitles()).not.toContain(title)
-        expect(store.isDinnerUpdating).toBe(false)
+    ])('resolves null without a success toast when the $desc fails', expectFailedWithoutSuccessToast)
+})
+
+// ---- The chef's dinner actions: each toasts its own result ----
+
+// The dinner on view, already announced: announcing it again republishes the menu
+registerEndpoint(`/api/admin/dinner-event/${DINNER_ID}`, () => ({...dinnerResponse(), state: DinnerState.ANNOUNCED}))
+
+describe('Bookings store — the chef\'s dinner actions', () => {
+    type Store = ReturnType<typeof useBookingsStore>
+    const Toasts = TEAM_WORDS.toasts
+    const HEYNABO_EVENT_ID = 4711
+    // The dinner the write answers: a titled one, and one without a menu title named untitledDinner in the toast
+    const answered = (menuTitle: string) => ({...dinnerResponse(), menuTitle, heynaboEventId: HEYNABO_EVENT_ID})
+    const titled = answered('Updated Menu')
+    const untitled = answered('')
+    const dinnerOf = (dinner: typeof titled) => [dinner.menuTitle || Toasts.untitledDinner, formatDate(dinner.date)] as const
+
+    const saveAllergens = (allergenIds: number[]) => (store: Store) => store.updateDinnerEventAllergens(DINNER_ID, allergenIds)
+    const announce = (store: Store) => store.announceDinner(DINNER_ID)
+    const cancel = (store: Store) => store.cancelDinner(DINNER_ID)
+    const undoCancel = (store: Store) => store.undoCancelDinner(DINNER_ID)
+
+    beforeEach(() => {
+        resetStores()
     })
+
+    const expectToast = (toast: {title: string, description: string}) =>
+        expect(useToast().toasts.value).toContainEqual(expect.objectContaining(toast))
+
+    it.each([
+        {action: 'allergens are saved', act: saveAllergens([1, 2]), dinner: titled,
+            toast: {title: Toasts.allergensSaved.title, description: Toasts.allergensSaved.withAllergens}},
+        {action: 'the menu is saved without allergens', act: saveAllergens([]), dinner: titled,
+            toast: {title: Toasts.allergensSaved.title, description: Toasts.allergensSaved.withoutAllergens}},
+        {action: 'a dinner not announced is announced', act: announce, dinner: titled,
+            toast: {title: Toasts.announced.title(false), description: Toasts.announced.description(HEYNABO_EVENT_ID)}},
+        ...[{named: 'a titled dinner', dinner: titled}, {named: 'a dinner without a menu title', dinner: untitled}].flatMap(({named, dinner}) => [
+            {action: `${named} is cancelled`, act: cancel, dinner,
+                toast: {title: Toasts.cancelled.title, description: Toasts.cancelled.description(...dinnerOf(dinner))}},
+            {action: `the cancel of ${named} is undone`, act: undoCancel, dinner,
+                toast: {title: Toasts.reopened.title, description: Toasts.reopened.description(...dinnerOf(dinner))}}
+        ])
+    ])('WHEN $action THEN the store toasts the result', async ({act, dinner, toast}) => {
+        updateDinnerEndpoint.mockImplementation(() => dinner)
+        const store = useBookingsStore()
+
+        expect(await act(store)).not.toBeNull()
+
+        expectToast(toast)
+    })
+
+    it('WHEN the dinner on view is already ANNOUNCED THEN announcing it again toasts the update of the menu', async () => {
+        const onView = {...DinnerEventFactory.defaultDinnerEventDisplay('republish'), id: DINNER_ID}
+        selectSeason([onView])
+        updateDinnerEndpoint.mockImplementation(() => titled)
+        const store = useBookingsStore()
+        store.selectDinnerDate(() => new Date(onView.date))
+        await vi.waitFor(() => expect(store.selectedDinnerEventDetail?.state).toBe(DinnerState.ANNOUNCED))
+
+        await announce(store)
+
+        expectToast({title: Toasts.announced.title(true), description: Toasts.announced.description(HEYNABO_EVENT_ID)})
+    })
+
+    it.each([
+        {desc: 'save of allergens', act: saveAllergens([1]), endpoint: updateDinnerEndpoint, title: Toasts.allergensSaved.title},
+        {desc: 'announce', act: announce, endpoint: updateDinnerEndpoint, title: Toasts.announced.title(false)},
+        {desc: 'cancel', act: cancel, endpoint: updateDinnerEndpoint, title: Toasts.cancelled.title},
+        {desc: 'undo of a cancel', act: undoCancel, endpoint: updateDinnerEndpoint, title: Toasts.reopened.title}
+    ])('resolves null without a success toast when the $desc fails', expectFailedWithoutSuccessToast)
 })
 
 // ---- Ticket changes (the chef's Billetændringer) ----

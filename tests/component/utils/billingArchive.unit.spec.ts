@@ -2,6 +2,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {archiveBillingCsv, getBillingArchiveKey} from '~~/server/utils/billingArchive'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
+import {spyOnLogs} from '~~/tests/component/logSpies'
 
 const {generateBillingCsv, generateCsvFilename} = useBillingValidation()
 const summary = BillingFactory.defaultSummaryData('archive')
@@ -18,7 +19,7 @@ describe('getBillingArchiveKey', () => {
 })
 
 describe('archiveBillingCsv', () => {
-    const logs = {warn: vi.spyOn(console, 'warn'), error: vi.spyOn(console, 'error'), info: vi.spyOn(console, 'info')}
+    const logs = spyOnLogs()
     beforeEach(() => Object.values(logs).forEach(spy => spy.mockImplementation(() => {})))
     afterEach(() => Object.values(logs).forEach(spy => spy.mockClear()))
 

@@ -8,6 +8,7 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import type {Season} from '~/composables/useSeasonValidation'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {HouseholdDetail, InhabitantDetail, UserDetail} from '~/composables/useCoreValidation'
 import {useBookingValidation, type DailyMaintenanceResult, type DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
@@ -29,7 +30,8 @@ type JobTypes = typeof JobType
 /**
  * The actors of the features: the admin (SystemRoleSchema ADMIN) and the user (a User) log in, a visitor has no
  * session; the inhabitant, the seller, the first in line and the chef are inhabitants by their part in a dinner, the
- * user's inhabitant the inhabitant of the signed-in user (Inhabitant.userId)
+ * user's inhabitant the inhabitant of the signed-in user (Inhabitant.userId); the baby who tastes and the hungry baby
+ * are babies of the user's household, on the BABY ticket of 0 portions and on the BABY ticket of a share
  */
 export const ACTOR = {
     ADMIN: 'the admin',
@@ -39,7 +41,9 @@ export const ACTOR = {
     SELLER: 'the seller',
     FIRST_IN_LINE: 'the first in line',
     CHEF: 'the chef',
-    USERS_INHABITANT: 'the user\'s inhabitant'
+    USERS_INHABITANT: 'the user\'s inhabitant',
+    BABY_WHO_TASTES: 'the baby who tastes',
+    HUNGRY_BABY: 'the hungry baby'
 } as const
 export type Actor = typeof ACTOR[keyof typeof ACTOR]
 
@@ -68,6 +72,8 @@ export type Scene = {
     /** The page a UI step opened in the actor's context */
     page?: Page
     activeSeason?: Season
+    /** Whether the season the dinner step builds around the dinner's day is activated, as the Background states it */
+    ownSeasonIsActive?: boolean
     health?: {worker: string, report: HealthReport}
     /** The last job a step ran, and every run of the scenario in order */
     jobRun?: JobRun
@@ -95,13 +101,13 @@ export type Scene = {
     before?: {textSize: number, palette: string | null}
     /** The member's settings as the scenario found them, put back after it */
     memberSettings?: {userId: number, notificationChannels: NotificationChannel[], appearance: Appearance, phone: string | null}
-    /** The rows the scenario created, removed after it */
-    created: {householdIds: number[], userIds: number[], dinnerEventIds: number[], seasonIds: number[]}
+    /** The rows the scenario created, removed after it; the inhabitants are the people it added to the user's household */
+    created: {inhabitantIds: number[], householdIds: number[], userIds: number[], dinnerEventIds: number[], seasonIds: number[]}
 }
 
 const emptyScene = (): Scene => ({
     jobRuns: [], people: {}, waiting: [], households: {}, places: [], billedHouseholds: [],
-    created: {householdIds: [], userIds: [], dinnerEventIds: [], seasonIds: []}
+    created: {inhabitantIds: [], householdIds: [], userIds: [], dinnerEventIds: [], seasonIds: []}
 })
 
 /** The value an earlier step of the scenario put in the scene */
@@ -154,11 +160,23 @@ export const activeSeasonOf = async (admin: BrowserContext, scene: Scene): Promi
     return scene.activeSeason
 }
 
-/** The id of the season's ADULT ticket price: the factory persons are adults */
-export const adultPriceIdOf = async (admin: BrowserContext, seasonId: number): Promise<number> => {
+/** The season's ticket price of an actor's part: a BABY ticket of 0 portions, a BABY ticket of a share, else ADULT (the factory persons are adults) */
+const ticketPriceOf = (ticketPrices: TicketPrice[], actor: Actor): TicketPrice | undefined => {
+    switch (actor) {
+        case ACTOR.BABY_WHO_TASTES:
+            return ticketPrices.find(({ticketType, portions}) => ticketType === TicketTypeSchema.enum.BABY && portions === 0)
+        case ACTOR.HUNGRY_BABY:
+            return ticketPrices.find(({ticketType, portions}) => ticketType === TicketTypeSchema.enum.BABY && portions > 0)
+        default:
+            return findTicketPriceByType(TicketTypeSchema.enum.ADULT, ticketPrices)
+    }
+}
+
+/** The id of the season's ticket price of an actor's part, the inhabitant's (ADULT) when no part is named */
+export const ticketPriceIdOf = async (admin: BrowserContext, seasonId: number, actor: Actor = ACTOR.INHABITANT): Promise<number> => {
     const {ticketPrices} = await SeasonFactory.getSeason(admin, seasonId)
-    const priceId = findTicketPriceByType(TicketTypeSchema.enum.ADULT, ticketPrices)?.id
-    if (priceId === undefined) throw new Error(`Season ${seasonId} has no ${TicketTypeSchema.enum.ADULT} ticket price`)
+    const priceId = ticketPriceOf(ticketPrices, actor)?.id
+    if (priceId === undefined) throw new Error(`Season ${seasonId} has no ticket price for ${actor}`)
     return priceId
 }
 
@@ -224,7 +242,8 @@ const cleanUpScene = async (browser: Browser, {memberSettings, created}: Scene):
             }
         })
     }
-    // The households take their people, orders and places; the users outlive their people; a season takes its dinners
+    // An inhabitant and a household take their orders and places; the users outlive their people; a season takes its dinners
+    await attempt(() => Promise.all(created.inhabitantIds.map(id => HouseholdFactory.deleteInhabitant(admin, id))))
     await attempt(() => HouseholdFactory.deleteHousehold(admin, created.householdIds))
     await attempt(() => UserFactory.cleanupUsers(admin, created.userIds))
     await attempt(() => Promise.all(created.dinnerEventIds.map(id => DinnerEventFactory.deleteDinnerEvent(admin, id))))

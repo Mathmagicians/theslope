@@ -145,7 +145,7 @@ const groupNamesDisplay = computed(() => {
 
 // An explicit size is fixed; the defaults step up from md through CSS
 const avatarSize = computed(() => {
-  if (props.size) return {size: props.size, fit: ''}
+  if (props.size) return {size: props.size, fit: '', group: {size: props.size}}
   return props.compact ? COMPONENTS.avatar.compact : COMPONENTS.avatar.regular
 })
 const avatarClass = computed(() => [avatarSize.value.fit, props.ringColor ? userListItem.ring(props.ringColor) : ''])
@@ -163,7 +163,7 @@ const {getUserUrl} = useHeynabo()
     <!-- Avatars + Names row -->
     <div :class="userListItem.groupRow">
       <!-- Avatar group -->
-      <UAvatarGroup :max="max ?? SIZES.avatarMax" :size="avatarSize.size" :ui="{base: avatarSize.fit}">
+      <UAvatarGroup v-bind="avatarSize.group" :max="max ?? SIZES.avatarMax">
         <template v-for="inhabitant in inhabitantsList" :key="inhabitant.heynaboId">
           <ULink
             v-if="linkToProfile"

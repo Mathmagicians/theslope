@@ -1,4 +1,4 @@
-import {useBookingValidation, type TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, type TicketType, type OrderDisplay} from '~/composables/useBookingValidation'
 import type {TicketPrice, PortionTicket} from '~/composables/useTicketPriceValidation'
 import {calculateAgeOnDate} from '~/utils/date'
 
@@ -209,6 +209,27 @@ export const useTicket = () => {
     }
 
     /**
+     * The price row a person holds on a dinner: a booked order's own row whatever the person's age (by its id, else by
+     * its frozen price when the row is gone), else the row for the person's age on the dinner's date, as the save prices it
+     */
+    const resolveTicketPriceOn = (
+        birthDate: Date | null,
+        order: OrderDisplay | null | undefined,
+        ticketPrices: TicketPrice[],
+        dinnerDate: Date
+    ): TicketPrice | undefined => order
+        ? ticketPrices.find(ticketPrice => ticketPrice.id === order.ticketPriceId) ?? resolveTicketPrice(null, order.priceAtBooking, ticketPrices)
+        : resolveTicketPrice(birthDate, undefined, ticketPrices, dinnerDate)
+
+    /** The first of the sorted dinners at another ticket type than the dinner before it: the birthday crosses an age limit */
+    const ticketTypeChangeOf = (birthDate: Date | null | undefined, ticketPrices: TicketPrice[]) =>
+        (dinnerDates: Date[]): {date: Date, ticketType: TicketType} | null => {
+            if (!birthDate) return null
+            const days = dinnerDates.map(date => ({date, ticketType: determineTicketType(birthDate, ticketPrices, date)}))
+            return days.find((day, index) => index > 0 && day.ticketType !== days[index - 1]!.ticketType) ?? null
+        }
+
+    /**
      * Convert price from øre to DKK (integer)
      * @param dkkFraction - Price in øre (100 øre = 1 kr)
      * @returns Price in DKK as integer
@@ -228,6 +249,8 @@ export const useTicket = () => {
         groupInhabitantsByTicketCategory,
         findTicketPriceByType,
         resolveTicketPrice,
+        resolveTicketPriceOn,
+        ticketTypeChangeOf,
         portionsOf,
         withPortions,
         takesNoPortionOf,

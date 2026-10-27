@@ -9,7 +9,7 @@ import {fetchWaitlistForDinners} from '~~/server/data/waitlistRepository'
 import type {EmailChannel} from '~~/server/utils/sender/config'
 import type {EmailMessage} from '~/composables/useNotificationValidation'
 import type {HouseholdDetail, InhabitantDisplay, UserDisplay} from '~/composables/useCoreValidation'
-import {useBookingValidation, type BookingOutcomes, type OrderHistoryDisplay, type TicketSale, type WaitlistJoined} from '~/composables/useBookingValidation'
+import {useBookingValidation, TicketState, type BookingOutcomes, type OrderHistoryDisplay, type TicketSale, type WaitlistJoined} from '~/composables/useBookingValidation'
 import {useDeliveryValidation, type Delivery} from '~/composables/useDeliveryValidation'
 import {useUserPreferenceValidation, type NotificationChannel} from '~/composables/useUserPreferenceValidation'
 import {formatPlace} from '~/composables/useBooking'
@@ -25,6 +25,7 @@ import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {fakeSenderQueue as fakeQueue, sentMessages as sentBodies, type FakeSenderQueue} from '~~/tests/component/utils/sender/fakeSenderQueue'
 import {fakeDeliveries} from '~~/tests/component/utils/sender/fakeDeliveries'
+import {spyOnLogs} from '~~/tests/component/logSpies'
 
 // The unit runtime has no D1: the lookups answer from the test
 vi.mock('~~/server/data/prismaRepository', () => ({
@@ -88,7 +89,7 @@ const outcomesOf = (outcomes: Partial<BookingOutcomes>): BookingOutcomes => ({..
 // The notifications follow a booking that is already saved: a failed lookup leaves the booking standing, sends nothing,
 // writes the delivery step's failure line, the one the Diagnostics dashboard reads, and reaches the caller
 describe('booking notifications after the action', () => {
-    const logs = {error: vi.spyOn(console, 'error'), warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
+    const logs = spyOnLogs()
     const reason = 'D1 down'
     beforeEach(() => {
         Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
@@ -116,7 +117,7 @@ describe('booking notifications after the action', () => {
 // A placement a run finished for another's stopped run sends the notifications of its kind: an extra portion tells its
 // buyer, a sold ticket the seller and the buyer. Here one person sold and bought: one login hears both kinds of one order
 describe('the mails of the waiting list\'s placements', () => {
-    const logs = {warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
+    const logs = spyOnLogs()
     const household = HouseholdFactory.defaultHouseholdDetail()
     const member = {...household.inhabitants[0]!, userId: 6}
     beforeEach(() => {
@@ -146,7 +147,7 @@ describe('the mails of the waiting list\'s placements', () => {
 // A run's mails resolve their recipients from the people they name, read in bulk: one read of each kind, whatever the
 // number of events
 describe('the people a run\'s mails name', () => {
-    const logs = {warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
+    const logs = spyOnLogs()
     const {TicketTypeSchema, DinnerModeSchema, BookingActionSchema} = useBookingValidation()
     type Member = HouseholdDetail['inhabitants'][number]
     const template = HouseholdFactory.defaultHouseholdDetail().inhabitants[0]!
@@ -310,7 +311,7 @@ describe('the people a run\'s mails name', () => {
     // A mail greets the one who hears and names what it is about in the words of the booking pages and the chef's alert
     it.each([
         {mail: 'a child\'s place, joined by a system run', kind: Kind.WAITLIST_JOINED, outcomes: outcomesOf({joined: [joinedEvent(child, systemUser.id, 2)]}),
-            reads: [parent.name, child.name, formatPlace(2, TicketTypeSchema.enum.ADULT), BOOKING_WORDS.waitlistBadge.helpText]},
+            reads: [parent.name, child.name, formatPlace(2, TicketTypeSchema.enum.ADULT), BOOKING_WORDS.ticketStateBadge[TicketState.queued].helpText]},
         {mail: 'a guest\'s place, booked on the parent', kind: Kind.WAITLIST_JOINED, outcomes: outcomesOf({joined: [joinedEvent(parent, parent.userId!, 1, {isGuestTicket: true})]}),
             reads: [parent.name, useOrder().formatGuestLabel(parent.name)]},
         {mail: 'a ticket sold to a waiting child', kind: Kind.WAITLIST_TICKET_ASSIGNED, outcomes: outcomesOf({waitlistTicketsSold: [saleTo(buyerWithoutLogin)]}),

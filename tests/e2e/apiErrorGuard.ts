@@ -33,9 +33,9 @@ export const undeclaredApiErrors = (responses: ResponseSeen[], declared: Declare
 /** The responses each guarded context received while the case runs */
 type RunningCase = Map<BrowserContext, ResponseSeen[]>
 
-// A worker runs one case at a time
+// A worker runs one case at a time; a declaration is the case's, so a context shared across cases starts each without one
 let runningCase: RunningCase | null = null
-const declarations = new WeakMap<BrowserContext, DeclaredApiError[]>()
+let declarations = new WeakMap<BrowserContext, DeclaredApiError[]>()
 
 /**
  * Records the responses the context's pages receive. A context opened in a case reports to that case alone, so a page
@@ -61,6 +61,7 @@ export const expectApiError = (context: BrowserContext, status: number, url: str
 /** Starts recording a case */
 export const openCase = (): void => {
     runningCase = new Map()
+    declarations = new WeakMap()
 }
 
 /** Ends the case: the API errors its pages got and it did not declare */

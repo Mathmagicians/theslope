@@ -4,6 +4,7 @@ import type {WaitlistAssignmentResult, TicketWaitlistDisplay, TicketWaitlistDeta
 import {useWaitlist} from '~/composables/useWaitlist'
 import type {ReleasedTicketCounts, WaitlistCounts} from '~/composables/useBooking'
 import {useBilling} from '~/composables/useBilling'
+import {TEAM_WORDS} from '~/config/teamWords'
 import {isSameDay} from 'date-fns'
 
 export const useBookingsStore = defineStore("Bookings", () => {
@@ -438,7 +439,17 @@ export const useBookingsStore = defineStore("Bookings", () => {
             finally { isDinnerUpdating.value = false }
         }
 
-    const updateDinnerEventAllergens = withLoading((id: number, allergenIds: number[]) => updateDinner(id, {allergenIds}, 'Kunne ikke gemme allergeninformation'))
+    const updateDinnerEventAllergens = withLoading(async (id: number, allergenIds: number[]) => {
+        const updated = await updateDinner(id, {allergenIds}, 'Kunne ikke gemme allergeninformation')
+        const words = TEAM_WORDS.toasts.allergensSaved
+        toast.add({
+            title: words.title,
+            description: allergenIds.length > 0 ? words.withAllergens : words.withoutAllergens,
+            icon: ICONS.checkCircle,
+            color: COLOR.success
+        })
+        return updated
+    })
     // The chef's grocery lines: the API answers the line, the dinner detail re-reads for its computed cost
     const {ExpenseSchema} = useBillingValidation()
     const {formatPrice} = useTicket()
@@ -460,15 +471,46 @@ export const useBookingsStore = defineStore("Bookings", () => {
         return removed
     })
 
-    const announceDinner = withLoading((id: number) => updateDinner(id, {state: DinnerState.ANNOUNCED}, 'Kunne ikke annoncere fællesspisningen'))
+    // An announce of a dinner on view that is already announced republishes its menu; read before the write re-reads the detail
+    const announceDinner = withLoading(async (id: number) => {
+        const isRepublish = selectedDinnerEventDetail.value?.id === id && selectedDinnerEventDetail.value.state === DinnerState.ANNOUNCED
+        const announced = await updateDinner(id, {state: DinnerState.ANNOUNCED}, 'Kunne ikke annoncere fællesspisningen')
+        toast.add({
+            title: TEAM_WORDS.toasts.announced.title(isRepublish),
+            description: TEAM_WORDS.toasts.announced.description(announced.heynaboEventId),
+            icon: ICONS.megaphone,
+            color: COLOR.success
+        })
+        return announced
+    })
     // A cancel and its undo change what the booking views offer on the dinner: the season they read it off is read again
     const updateDinnerState = async (id: number, state: DinnerState, action: string): Promise<DinnerEventDetail> => {
         const updated = await updateDinner(id, {state}, action)
         await refreshSelectedSeason()
         return updated
     }
-    const cancelDinner = withLoading((id: number) => updateDinnerState(id, DinnerState.CANCELLED, 'Kunne ikke aflyse fællesspisningen'))
-    const undoCancelDinner = withLoading((id: number, targetState: DinnerState = DinnerState.SCHEDULED) => updateDinnerState(id, targetState, 'Kunne ikke annullere aflysningen'))
+    const dinnerWords = (dinner: DinnerEventDetail) =>
+        [dinner.menuTitle || TEAM_WORDS.toasts.untitledDinner, formatDate(dinner.date)] as const
+    const cancelDinner = withLoading(async (id: number) => {
+        const cancelled = await updateDinnerState(id, DinnerState.CANCELLED, 'Kunne ikke aflyse fællesspisningen')
+        toast.add({
+            title: TEAM_WORDS.toasts.cancelled.title,
+            description: TEAM_WORDS.toasts.cancelled.description(...dinnerWords(cancelled)),
+            icon: ICONS.xMark,
+            color: COLOR.warning
+        })
+        return cancelled
+    })
+    const undoCancelDinner = withLoading(async (id: number, targetState: DinnerState = DinnerState.SCHEDULED) => {
+        const reopened = await updateDinnerState(id, targetState, 'Kunne ikke annullere aflysningen')
+        toast.add({
+            title: TEAM_WORDS.toasts.reopened.title,
+            description: TEAM_WORDS.toasts.reopened.description(...dinnerWords(reopened)),
+            icon: ICONS.checkCircle,
+            color: COLOR.success
+        })
+        return reopened
+    })
 
     // ========================================
     // WAITING LIST (ADR-007)

@@ -2,7 +2,8 @@
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from "@nuxt/test-utils/runtime"
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
+import type {BadgeProps} from '@nuxt/ui'
+import {mountWithTooltipProvider, findByTestId, findComponentByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
 import {createResponsiveSizes, ICONS, SEASON_STATUS_GLYPHS} from '~/composables/useTheSlopeDesignSystem'
 import {getSeasonStatus} from '~/utils/season'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
@@ -131,8 +132,8 @@ describe('SeasonSelector', () => {
             expect(item.status).toBe(getSeasonStatus(item))
             expect(item.icon).toBe(item.status === SEASON_STATUS.PAST ? ICONS.seasonPast : ICONS.calendar)
         }
-        const glyph = wrapper.findAllComponents({name: 'UBadge'}).find(badge => badge.attributes('data-testid') === 'season-status-mark')
-        expect(glyph?.exists()).toBe(true)
-        expect(glyph!.classes()).toEqual(expect.arrayContaining(SEASON_STATUS_GLYPHS[getSeasonStatus(mockSeasons[0]!)].class.split(' ')))
+        const glyph = findComponentByTestId<BadgeProps>(wrapper, 'UBadge', 'season-status-mark')
+        expect(glyph.exists()).toBe(true)
+        expect(glyph.classes()).toEqual(expect.arrayContaining(SEASON_STATUS_GLYPHS[getSeasonStatus(mockSeasons[0]!)].class.split(' ')))
     })
 })

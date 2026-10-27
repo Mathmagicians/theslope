@@ -9,6 +9,7 @@ import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFa
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {fakeSenderQueue, sentMessages} from '~~/tests/component/utils/sender/fakeSenderQueue'
 import {fakeDeliveries} from '~~/tests/component/utils/sender/fakeDeliveries'
+import {spyOnLogs} from '~~/tests/component/logSpies'
 
 // The unit runtime has no D1: the Delivery rows answer from the test
 vi.mock('~~/server/data/financesRepository', () => ({fetchDeliveries: vi.fn(), recordDeliveries: vi.fn()}))
@@ -23,7 +24,7 @@ const {EMAIL} = DeliveryKindSchema.enum
 const config = NotificationFactory.config()
 const summary = BillingFactory.defaultSummaryData('billing')
 
-const logs = {error: vi.spyOn(console, 'error'), warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
+const logs = spyOnLogs()
 let recorded: {rows: Delivery[]}
 beforeEach(() => {
     Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
@@ -118,11 +119,11 @@ describe('notifyBillingPeriod', () => {
     })
 
     it('reports not sent and logs the missing setting when e-mail is off', async () => {
-        const result = await notify({on: false, missing: 'DEPLOY_URL'})
+        const result = await notify(NotificationFactory.channelOff)
 
         expect(result).toMatchObject({queued: false, degraded: true})
         expect(recorded.rows).toEqual([])
-        expect(logs.warn).toHaveBeenCalledWith(expect.stringContaining('DEPLOY_URL'))
+        expect(logs.warn).toHaveBeenCalledWith(expect.stringContaining(NotificationFactory.channelOff.missing))
     })
 
     // The re-send is the admin's override (ADR-004): it goes whatever is recorded, and its line names the admin

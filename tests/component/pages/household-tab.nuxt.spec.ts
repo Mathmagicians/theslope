@@ -5,8 +5,13 @@ import {enableAutoUnmount} from '@vue/test-utils'
 import {toValue} from 'vue'
 import HouseholdPage from '~/pages/household/[shortname]/[tab].vue'
 import HouseholdAllergies from '~/components/household/HouseholdAllergies.vue'
+import HouseholdBookings from '~/components/household/HouseholdBookings.vue'
+import HouseholdCard from '~/components/household/HouseholdCard.vue'
+import HouseholdEconomy from '~/components/household/HouseholdEconomy.vue'
+import HouseholdSettings from '~/components/household/HouseholdSettings.vue'
 import {useHouseholdsStore} from '~/stores/households'
 import {useCoreValidation, type HouseholdDetail} from '~/composables/useCoreValidation'
+import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {findByTestId, mountWithTooltipProvider, mountedStore, registerEmptyStoreEndpoints, resetStores} from '~~/tests/component/testHelpers'
@@ -27,6 +32,7 @@ const other = {...HouseholdFactory.defaultHouseholdDetail('household-tab-other')
 registerEmptyStoreEndpoints()
 registerEndpoint('/api/admin/allergy-type', () => [])
 registerEndpoint('/api/household/allergy', () => [])
+registerEndpoint('/api/billing', () => BillingFactory.defaultHouseholdBilling(other.id))
 registerEndpoint('/api/admin/household', () => [mine, other])
 // The detail never arrives: the page stays behind its ready gate, so no tab mounts
 registerEndpoint(`/api/admin/household/${mine.id}`, () => new Promise(() => {}))
@@ -136,11 +142,21 @@ describe('household/[shortname]/[tab] - the override on another household', () =
         expect(findByTestId(wrapper, 'admin-override-btn').exists()).toBe(shows)
     })
 
-    it('GIVEN the allergy manager on another household\'s allergies tab WHEN the override is confirmed THEN the allergies tab can edit', async () => {
-        session.user.value = userWith([SystemRole.ALLERGYMANAGER])
-        const wrapper = await mountOn(other, 'allergies')
-        await vi.waitFor(() => expect(wrapper.findComponent(HouseholdAllergies).exists()).toBe(true))
-        expect(wrapper.findComponent(HouseholdAllergies).props('canEdit')).toBe(false)
+    // The page hands canEdit and adminBypass to the tabs that declare them; a tab without them takes neither, so
+    // neither lands on its root as an attribute
+    it.each([
+        {viewer: 'the allergy manager', roles: [SystemRole.ALLERGYMANAGER], tab: 'allergies', component: HouseholdAllergies, declares: true},
+        {viewer: 'an admin', roles: [SystemRole.ADMIN], tab: 'bookings', component: HouseholdBookings, declares: true},
+        {viewer: 'an admin', roles: [SystemRole.ADMIN], tab: 'members', component: HouseholdCard, declares: true},
+        {viewer: 'an admin', roles: [SystemRole.ADMIN], tab: 'settings', component: HouseholdSettings, declares: true},
+        {viewer: 'an admin', roles: [SystemRole.ADMIN], tab: 'economy', component: HouseholdEconomy, declares: false}
+    ] as const)('GIVEN $viewer on another household\'s $tab tab WHEN the override is confirmed THEN the tab takes canEdit and adminBypass as props: $declares, and no attribute falls through', async ({roles, tab, component, declares}) => {
+        session.user.value = userWith([...roles])
+        // A visitor neither edits nor bypasses until the override is confirmed
+        const handed = (override: boolean) => declares ? {canEdit: override, adminBypass: override} : {}
+        const wrapper = await mountOn(other, tab)
+        await vi.waitFor(() => expect(wrapper.findComponent(component).exists()).toBe(true))
+        expect(wrapper.findComponent(component).props()).toMatchObject(handed(false))
         expect(findByTestId(wrapper, 'admin-override-btn').exists()).toBe(true)
 
         // The override asks twice: the first click arms it, the second confirms
@@ -148,6 +164,11 @@ describe('household/[shortname]/[tab] - the override on another household', () =
         await override.trigger('click')
         await override.trigger('click')
 
-        await vi.waitFor(() => expect(wrapper.findComponent(HouseholdAllergies).props('canEdit')).toBe(true))
+        await vi.waitFor(() => expect(findByTestId(wrapper, 'admin-override-active').exists()).toBe(true))
+        const tabComponent = wrapper.findComponent(component)
+        expect(tabComponent.props()).toMatchObject(handed(true))
+        expect(tabComponent.vm.$attrs).toEqual({})
+        expect(tabComponent.attributes()).not.toHaveProperty('can-edit')
+        expect(tabComponent.attributes()).not.toHaveProperty('admin-bypass')
     })
 })

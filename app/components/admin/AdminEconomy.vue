@@ -116,7 +116,7 @@ const upcomingOrdersTotal = computed(() =>
 const dinnerColumns = [
     {id: 'expand'},
     {accessorKey: 'date', header: 'Dato'},
-    {accessorKey: 'menuTitle', header: 'Menu'},
+    {accessorKey: 'dinnerEvent.menuTitle', header: 'Menu'},
     {accessorKey: 'ticketCounts', header: 'Kuverter'},
     {accessorKey: 'totalAmount', header: 'Beløb'}
 ]

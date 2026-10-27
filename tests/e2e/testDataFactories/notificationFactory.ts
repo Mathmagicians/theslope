@@ -38,6 +38,9 @@ export class NotificationFactory {
     static readonly channel = (queue: Queue, overrides: Partial<NotificationConfig> = {}): EmailChannel =>
         ({on: true, queue, config: NotificationFactory.config(overrides)})
 
+    /** E-mail switched off: the deployment lacks its address */
+    static readonly channelOff = {on: false, missing: 'DEPLOY_URL'} as const satisfies EmailChannel
+
     /** A value for every placeholder of the kind's template, each its own name */
     static readonly valuesOf = (kind: NotificationKind): Record<string, string> => {
         const {subject, text} = NOTIFICATION_TEMPLATES[kind]
@@ -77,10 +80,9 @@ export class NotificationFactory {
         kind: Delivery['kind'] = DeliveryKindSchema.enum.EMAIL
     ): Delivery => {
         const {deliveryReferencePrefix} = useDeliveryValidation()
-        const prefix = userId === null ? `${notification}:${kind}:` : deliveryReferencePrefix(notification, kind, userId)
         return NotificationFactory.defaultDelivery({
             subjectType, subjectId, version, kind,
-            reference: `${prefix}${MASKED_ADDRESS}:${crypto.randomUUID()}`
+            reference: `${deliveryReferencePrefix(notification, kind, userId)}${MASKED_ADDRESS}:${crypto.randomUUID()}`
         })
     }
 
@@ -89,7 +91,7 @@ export class NotificationFactory {
      * values of the notification's template
      */
     static readonly defaultDesiredOutgoing = (
-        recipient: Pick<UserDisplay, 'id' | 'email' | 'notificationChannels'>,
+        recipient: UserDisplay,
         overrides: Partial<Omit<DesiredDelivery, 'userId'>> = {}
     ): DesiredOutgoing => {
         const desired = NotificationFactory.defaultDesiredDelivery({...overrides, userId: recipient.id})

@@ -10,6 +10,7 @@ import {fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import {completeJobRun, createJobRun} from '~~/server/data/maintenanceRepository'
 import {deleteWaitlistForConsumedDinners} from '~~/server/data/waitlistRepository'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -29,6 +30,7 @@ vi.mock('~~/server/data/waitlistRepository', () => ({deleteWaitlistForConsumedDi
 await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).stubAppConfig())
 
 const {JobStatus} = useMaintenanceValidation()
+const {BOOKING_STATUS} = useDeliveryValidation().SenderEventSchema.enum
 const d1Client = {} as D1Database
 
 beforeEach(() => {
@@ -37,18 +39,45 @@ beforeEach(() => {
 })
 
 describe('runDailyMaintenance', () => {
-    // A step's failure is the run's: the job run records it, and the caller hears it
-    it('GIVEN the notifications step fails WHEN the daily maintenance runs THEN the job run completes FAILED with the reason, and the run rethrows', async () => {
-        const jobRun = SeasonFactory.defaultJobRun({status: JobStatus.RUNNING})
-        const steps = OrderFactory.defaultDailyMaintenanceResult({jobRunId: jobRun.id})
+    const ACTIVE_SEASON_ID = 9
+    const jobRun = SeasonFactory.defaultJobRun({status: JobStatus.RUNNING})
+    // Each step answers a count of its own, so the run's result shows which step it came from
+    const steps = OrderFactory.defaultDailyMaintenanceResult({
+        jobRunId: jobRun.id, consume: {consumed: 2}, close: {closed: 3}, transact: {created: 4}, initPrefs: {initialized: 5}
+    })
+    const scaffold = OrderFactory.defaultScaffoldResult()
+    const counts = {sent: 6}
+    const answerSteps = (activeSeasonId: number | null) => {
         vi.mocked(createJobRun).mockResolvedValue(jobRun)
         vi.mocked(consumeDinners).mockResolvedValue(steps.consume)
         vi.mocked(closeOrders).mockResolvedValue(steps.close)
         vi.mocked(createTransactions).mockResolvedValue(steps.transact)
         vi.mocked(deleteWaitlistForConsumedDinners).mockResolvedValue(steps.clearWaitlist)
-        vi.mocked(fetchActiveSeasonId).mockResolvedValue(9)
+        vi.mocked(fetchActiveSeasonId).mockResolvedValue(activeSeasonId)
         vi.mocked(clipPreferences).mockResolvedValue(steps.initPrefs)
-        vi.mocked(scaffoldPrebookings).mockResolvedValue(OrderFactory.defaultScaffoldResult())
+        vi.mocked(scaffoldPrebookings).mockResolvedValue(scaffold)
+        vi.mocked(sendNotifications).mockResolvedValue({counts})
+    }
+
+    // Without an active season the run ends after the waiting list: the season's steps report nothing
+    it.each([
+        {given: 'an active season', activeSeasonId: ACTIVE_SEASON_ID, result: {...steps, scaffold, notifications: {[BOOKING_STATUS]: counts}}, seasonsRun: [ACTIVE_SEASON_ID]},
+        {given: 'no active season', activeSeasonId: null, result: {...steps, initPrefs: {initialized: 0}, scaffold: null, notifications: {}}, seasonsRun: []}
+    ])('GIVEN $given WHEN the daily maintenance runs THEN the job run completes SUCCESS with the result of each step it ran', async ({activeSeasonId, result, seasonsRun}) => {
+        answerSteps(activeSeasonId)
+        const email = NotificationFactory.channel(fakeSenderQueue())
+
+        expect(await runDailyMaintenance(d1Client, jobRun.triggeredBy, email)).toEqual(result)
+
+        expect(completeJobRun).toHaveBeenCalledExactlyOnceWith(d1Client, jobRun.id, JobStatus.SUCCESS, result)
+        expect(vi.mocked(clipPreferences).mock.calls).toEqual(seasonsRun.map(seasonId => [d1Client, seasonId]))
+        expect(vi.mocked(scaffoldPrebookings).mock.calls).toEqual(seasonsRun.map(seasonId => [d1Client, {seasonId}]))
+        expect(vi.mocked(sendNotifications).mock.calls).toEqual(seasonsRun.map(seasonId => [d1Client, email, seasonId, {jobRunId: jobRun.id}]))
+    })
+
+    // A step's failure is the run's: the job run records it, and the caller hears it
+    it('GIVEN the notifications step fails WHEN the daily maintenance runs THEN the job run completes FAILED with the reason, and the run rethrows', async () => {
+        answerSteps(ACTIVE_SEASON_ID)
         const failure = new Error('D1 down')
         vi.mocked(sendNotifications).mockRejectedValue(failure)
 
