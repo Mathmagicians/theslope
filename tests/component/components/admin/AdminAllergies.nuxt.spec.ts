@@ -8,7 +8,7 @@ import AllergyCatalogTable from '~/components/allergy/AllergyCatalogTable.vue'
 import {useAllergiesStore} from '~/stores/allergies'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from '../allergy/allergyTestIds'
-import {mountWithTooltipProvider, mountedStore, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS, expectMasterDetail} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS, expectMasterDetail, findOpenRows} from '~~/tests/component/testHelpers'
 
 // The test environment has no router: navigateTo lands the written query on the route the component reads
 const {mockRoute, mockNavigateTo, landNavigation, useRoute} = await vi.hoisted(async () =>
@@ -266,10 +266,12 @@ describe('AdminAllergies', () => {
             expect(wrapper.text()).not.toContain('Detaljer')
         })
 
-        it('tapping the selected row again collapses the detail', async () => {
+        it('tapping a row docks the detail in the row after it, and tapping it again collapses the detail', async () => {
             const wrapper = await mountAdmin({}, false)
             await clickByTestId(wrapper, firstRow)
-            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).exists()).toBe(true)
+            const open = findOpenRows(wrapper)
+            expect(open.map(({row}) => findByTestId(row, firstRow).exists())).toEqual([true])
+            expect(open.map(({detail}) => findByTestId(detail, ALLERGY_TEST_IDS.edit).exists())).toEqual([true])
 
             await clickByTestId(wrapper, firstRow)
 

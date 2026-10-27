@@ -168,7 +168,7 @@ Same for prod with `-prod`. A mail from dev is recognisable twice over: sender `
 
 ### Failures
 
-`E_RECIPIENT_NOT_ALLOWED`: a `to` or `cc` outside the binding's `allowed_destination_addresses` (on dev the test mailbox only, `workers/sender/wrangler.toml`) — the app reports the mail as sent (its act ends at the queue), the sender logs the code with the masked recipient and acknowledges; fix the mailbox secret (`NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL` / `_ADMIN_EMAIL`) or the allow-list and re-send with `make theslope-sender-event-monthly-billing-<env> bpid=<id>`. A retryable failure (`E_RATE_LIMIT_EXCEEDED`, `E_DAILY_LIMIT_EXCEEDED`, `E_INTERNAL_SERVER_ERROR`, network) is retried 3× at 30/60/120 s; the last attempt logs `[EMAIL] failed after 4 attempts` with the masked recipient and acknowledges the message. Every other failure is logged and acknowledged on the first attempt. `make logs-sender-<env>` shows them. The log line carries the message's `dedupeKey` (`<kind>:<channel>:<masked recipient>:<message id>`), which connects the app's producer log and the sender's log.
+`E_RECIPIENT_NOT_ALLOWED`: a `to` or `cc` outside the binding's `allowed_destination_addresses` (on dev the test mailbox only, `workers/sender/wrangler.toml`) — the app reports the mail as sent (its act ends at the queue), the sender logs the code with the masked recipient and acknowledges; fix the mailbox secret (`NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL` / `_ADMIN_EMAIL`) or the allow-list and re-send with `make theslope-sender-event-monthly-billing-<env> bpid=<id>`. A retryable failure (`E_RATE_LIMIT_EXCEEDED`, `E_DAILY_LIMIT_EXCEEDED`, `E_INTERNAL_SERVER_ERROR`, network) is retried 3× at 30/60/120 s; the last attempt logs `[EMAIL] failed after 4 attempts` with the masked recipient and acknowledges the message. Every other failure is logged and acknowledged on the first attempt. `make logs-sender-<env>` shows them. The log line carries the message's `dedupeKey` (`<kind>:<channel>:user-<user id>/<masked recipient>:<message id>`; a mailbox's key carries no `user-<user id>/`), which connects the app's producer log and the sender's log.
 
 ### Dashboards
 
@@ -470,7 +470,8 @@ GitHub Pages serves the `gh-pages` branch at `https://mathmagicians.github.io/th
 | Item | Value |
 |------|-------|
 | Workflow | `.github/workflows/developer.yml` — runs when the CI/CD pipeline completes and publishes the run that uploaded the artifact `deployment` (a deploy to `dev` or `prod`), and on `workflow_dispatch` from the chosen branch |
-| Make targets | `make developer-resolve run=`, `make developer-assemble env= run= version= sha= [url=]`, `make developer-build [base=] [domain=]`, `make developer-publish` |
+| Make targets | `make developer-resolve run=`, `make developer-assemble env= run= version= sha= [url=]`, `make developer-build [base=] [domain=]`, `make developer-publish`, `make developer-test url=` |
+| Site test | `make developer-test url=<site address>` follows the body links of the docs and environment pages and reads the header's GitHub link (`developer/tests/links.spec.ts`, `developer/playwright.config.ts`); the workflow runs it once GitHub Pages serves the published manifest |
 | Site build | `make developer-build` runs `npx nuxi generate developer` with `NUXT_APP_BASE_URL=<base>`, copies `.output/developer/public/` into the `gh-pages` checkout and writes `CNAME` from `domain` |
 | Base path | `DEVELOPER_DOMAIN` set: `base=/ domain=<DEVELOPER_DOMAIN>`; unset: `base=/<repository>/` |
 | Local preview | `npx nuxi dev developer` |

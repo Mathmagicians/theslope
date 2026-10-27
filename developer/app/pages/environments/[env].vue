@@ -12,7 +12,7 @@ interface SuiteRow {
 const route = useRoute()
 const env = computed(() => String(route.params.env))
 
-const {fetchManifest, exists, scenarios, resultText, resultColor, reportPath, displayVersion, shortSha} = useManifests()
+const {fetchManifest, exists, scenarios, resultText, resultColor, reportPath, openApiPath, siteHref, displayVersion, shortSha} = useManifests()
 
 // The manifest and the spec exist on the published site only, so the page renders in the browser
 const {data: manifest, status} = await useAsyncData(
@@ -22,7 +22,7 @@ const {data: manifest, status} = await useAsyncData(
 )
 const {data: hasOpenApi} = await useAsyncData(
     () => `openapi-${env.value}`,
-    () => exists(`/environments/${env.value}/openapi.json`),
+    () => exists(openApiPath(env.value)),
     {server: false, default: () => false, watch: [env]}
 )
 
@@ -71,13 +71,13 @@ const reportText = (row: SuiteRow) => `Report${row.suite === 'smoke' ? ' (live)'
             </UBadge>
           </template>
           <template #report-cell="{ row }">
-            <ULink :to="row.original.report" target="_blank">
+            <ULink :to="siteHref(row.original.report)" target="_blank">
               {{ reportText(row.original) }}
             </ULink>
           </template>
         </UTable>
         <p v-if="hasOpenApi">
-          <ULink :to="`/environments/${env}/openapi.json`" target="_blank">
+          <ULink :to="siteHref(openApiPath(env))" target="_blank">
             API reference of this version
           </ULink>
         </p>

@@ -90,7 +90,7 @@ const season = await SeasonFactory.createSeason(context, SeasonFactory.defaultSe
 
 **Factories on disk:** `AllergyFactory`, `BillingFactory`, `DinnerEventFactory`, `ExpenseFactory`, `FeedbackFactory`, `HouseholdFactory`, `NotificationFactory`, `OrderFactory`, `SeasonFactory`, `SeasonImportFactory`, `SenderFactory`, `SettingFactory`, `TicketFactory`, `UserFactory`, `WaitlistFactory`; `reconciliationTestData.ts` holds the data for the four reconciliation outcomes of households, inhabitants and users, shared by unit and e2e specs.
 
-**Config values:** a factory reads the app's config from the plain modules in `app/config/`, which `app.config.ts` imports: `TicketFactory` prices at `DEFAULT_TICKET_PRICES` (`ticketPrices.ts`), `NotificationFactory` reads `notificationTemplates.ts`. Playwright runs without Nuxt, so `app.config.ts` itself stays out of the specs.
+**Config values:** a factory reads the app's config from the plain modules in `app/config/`, which `app.config.ts` imports: `TicketFactory` prices at `DEFAULT_TICKET_PRICES` (`ticketPrices.ts`), `NotificationFactory` reads `notificationTemplates.ts`. A spec takes a ticket type's price row from `TicketFactory.defaultPriceOf` (the default rows) or `useTicket().findTicketPriceByType` (a season's rows). Playwright runs without Nuxt, so `app.config.ts` itself stays out of the specs.
 
 **Scenario methods:**
 - `SeasonFactory.createActiveSeason(context)` - the singleton active season `TestSeason-E2E-Singleton`: the `setup-season` project (`tests/e2e/season.setup.ts`) creates and activates it once per run, before the spec workers start; a spec's call returns it, and global teardown deletes it after the run. A spec resolves it in `beforeAll` and a feature in the `BeforeAll` of `fixtures.ts`, so a run without setup-season (`--no-deps`) creates it there, outside a test's timeout. Its dinners are open (`ticketIsCancellableDaysBefore` 0); a case on a closed dinner creates its own season
@@ -410,16 +410,21 @@ await doScreenshot(page, 'dropdown-timeout')  // Debug: test-results/
 await doScreenshot(page, 'admin/page', true)  // Docs: docs/screenshots/
 ```
 
-### Hydration and request helpers
+### Hydration, request and dinner-time helpers
 
 | Helper | Use |
 |--------|-----|
 | `gotoHydrated(page, url)` | Navigates and waits for hydration: the entry point for a test that interacts with the page |
+| `gotoAllergyCatalog(page)` | Opens `/admin/allergies` and waits for the detail pane's content, the catalog's hydration signal |
+| `openPreferences(page)` | Opens "Mine indstillinger" through the settings button in the profile card header and waits for the card |
+| `savePreferences(page, testIds)` | Rediger, clicks the controls of `testIds`, Gem; returns the response of `POST /api/user/preferences` |
 | `collectHydrationWarnings(page)` | Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation |
 | `expectHydratedWithoutMismatch(page, url)` | Navigates, waits for hydration and asserts Vue logged no hydration mismatch on the way |
 | `waitForApi(page, path, method, options?)` | The next response to a `method` request whose url contains `path`; attach it before the action that sends the request |
 | `isScaffoldSave`, `isExpectedRead` | Response predicates for `page.waitForResponse`: the save of the household's booking write (the POST), and a booking view's read of the expected bookings (the dry run's GET without orders) |
 | `PAST_THE_SCAFFOLD_WINDOW_DAYS` | A day past the prebooking window, where only the preferences speak for a dinner |
+| `dinnerStartOf(date)` | The start of the dinner on `date` as the server reads it: the dinner hour in Copenhagen |
+| `isBeforeDinnerDeadline(offsetDays)(date)` | Whether now lies before the deadline `offsetDays` before that dinner starts: the application's predicate |
 
 ### Component helpers: `/tests/component/testHelpers.ts`
 
@@ -432,10 +437,11 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 | `mountWithTooltipProvider(Component, {props?, isMd?})` | `mountSuspended` under reka-ui's `TooltipProvider` (the context `UApp` supplies in the app). Returns the component's own wrapper, so `find`, `text`, `emitted` and `props` read the component, not the shell. `isMd` provides the layout's responsive breakpoint ref when given (`null` before the layout has measured); pass a ref to change the breakpoint after mount. `setProps` reaches the shell alone: a case that changes props after mount passes a `shallowReactive` object and changes its keys in place |
 | `withTooltipProvider(Component, props)` | The bare wrapper definition, for the rare spec that needs the root wrapper |
 | `findByTestId(wrapper, id)` / `findAllByTestId(wrapper, id)` | `data-testid` lookups - never hand-build the selector string |
+| `findComponentByTestId<Props>(wrapper, name, id)` | The `name` component whose root element carries the test id, its props typed `Props` (`ButtonProps`, `BadgeProps`); the case fails when none does. A CSS selector alone returns the topmost component on the element, which a table cell's renderer or a wrapping component can be |
 | `findLoadingRow(wrapper)` / `findAllLoadingRows(wrapper)` | The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows |
 | `isTableLoading(wrapper)` | Whether the UTable under the wrapper binds `loading`: its loading bar runs under the column headers and carries no attribute to find |
 | `tableHeaders(wrapper)` / `cellsByHeader(wrapper, rowIndex = 0)` | A table's rendered column headers, a column without header text (an expand column) as `''`; a body row's cells by the header of their column |
-| `iconNamesIn(wrapper)` | The names of the `UIcon`s inside a wrapper. A DOM wrapper's `findAllComponents` returns the components its element contains, so `findByTestId(wrapper, id).findAllComponents(...)` reaches the components of one part; a part typed `BaseWrapper<Node>` keeps VTU's typed overloads, which `DOMWrapper` types `any` |
+| `iconNamesIn(wrapper)` | The names of the `UIcon`s inside a wrapper. A DOM wrapper's `findAllComponents` returns the components its element contains, so `findByTestId(wrapper, id).findAllComponents(...)` reaches the components of one part; a part typed `BaseWrapper<Node>` keeps VTU's typed overloads, which `DOMWrapper` types `any`. The component whose root is a test-id part is `findComponentByTestId` |
 | `registerScaffoldEndpoint()` | The scaffold's dry run (`GET`) for a component that previews: `answers.preview` answers a read with orders and `answers.expected` one without (`OrderFactory.defaultScaffoldOrdersResponse()` until set); `sent` records each read's request, its orders decoded by `DesiredOrderQuerySchema`, and its other query parameters (`bypassDeadlines`); `hold(kind)` keeps a read pending until released |
 | `holdEndpoint(url, body)` | An endpoint that answers `body` once the test calls `release()`: the window in which a dataset is pending; `unregister()` in `afterEach` hands the url back to the registration before it |
 | `untilTrue(condition)` | Resolves once a reactive condition holds (store state, a flag), watching it rather than polling; the test's own timeout bounds it |
@@ -469,6 +475,7 @@ mockNuxtImport('navigateTo', () => mockNavigateTo)
 |--------|-----|
 | `mockSession(user?)` | The session nuxt-auth-utils hydrates from a cookie the test runtime lacks; the auth store reading it is real. `session.user` is the one switch: `loggedIn` follows it, and a spec that gates on login alone writes `loggedIn` itself |
 | `mockRouteAndNavigation({path?, params?, query?})` | The route a page reads and the navigation it writes, with no router in the test runtime. `mockRoute` is reactive, so the computeds over `route.query` follow a write; `mockNavigateTo` records the calls, and `mockNavigateTo.mockImplementation(landNavigation)` lands each call on the route, as the router does |
+| `stubAppConfig()` | The app config from `app.config.ts` for a server module that reads it through `useAppConfig` as it loads: stubs `defineAppConfig` and `useAppConfig` before the imports. Returns the config |
 
 ---
 

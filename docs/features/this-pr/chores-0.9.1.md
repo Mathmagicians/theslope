@@ -4,6 +4,8 @@
 
 The release carries no migration; the schema work is in `../release-0.9.3/feature-0.9.3.md`.
 
+QA with human eyes: [qa.md](qa.md). Review defects: [defects.md](defects.md).
+
 ## Delivered
 
 | Delivery | Description or spec | Gherkin | Status |
@@ -22,13 +24,13 @@ Updated 2026-10-25. Release 0.9 shipped in f5b5205 (#168).
 | Delivery | Description or spec | Gherkin | Status |
 |---|---|---|---|
 | Notification delivery | [feature-notification-delivery.md](feature-notification-delivery.md) | `booking-notifications.feature`, `billing-notifications.feature`, `chef-deadline-notifications.feature`, `delivery-records.feature`, `test-message.feature` (16586f1) | in your test: desired deliveries, diagnostics, booking emails flag (39e14a6, 16586f1) |
-| UI cases fail on an unexpected API error | § UI cases fail on an unexpected API error | – | implemented |
-| Dev-server flakes in CI | § Dev-server flakes in CI | – | implemented |
+| UI cases fail on an unexpected API error | § UI cases fail on an unexpected API error | – | committed (52c5d68, fc87352) |
+| Dev-server flakes in CI | § Dev-server flakes in CI | – | committed (4349c92, fc87352) |
 | UI suites fail the build | § UI suites fail the build | – | specified |
 | Slow client after a save | § Slow client after a save | – | discovery |
 | Scaffold: a save naming an order bought by another household | § Scaffold: a save naming an order bought by another household | – | specified |
 | Minimal test seasons | § Minimal test seasons | – | specified |
-| Preferences at an inhabitant's creation | § Preferences at an inhabitant's creation | – | specified |
+| Preferences at an inhabitant's creation | § Preferences at an inhabitant's creation | – | committed (6a0b5e7) |
 | Server payload of the shared stores | § Server payload of the shared stores | – | specified |
 | Waitlist: no-seat notice at dinner start | § Waitlist: no-seat notice at dinner start | – | specified |
 | Map.groupBy in the Workers runtime | § Map.groupBy in the Workers runtime | – | specified |
@@ -45,9 +47,11 @@ Updated 2026-10-25. Release 0.9 shipped in f5b5205 (#168).
 | User saves and deserializers | § User saves and deserializers | – | committed (f7a4b6f) |
 | The job boxes' latest run | § The job boxes' latest run | – | committed (17c3401) |
 | Zero-portion tickets get a place | § Zero-portion tickets get a place | – | committed (17c3401) |
-| Tables keep their columns on a phone | § Tables keep their columns on a phone | – | implemented |
+| Tables keep their columns on a phone | § Tables keep their columns on a phone | – | committed (d159610) |
 | The grid shows the day view's tickets | § The grid shows the day view's tickets | – | specified; guest groups by price, badges and rows by price implemented |
-| Tables key their rows by id | § Tables key their rows by id | – | implemented |
+| Tables key their rows by id | § Tables key their rows by id | – | committed (ea978dd, d159610) |
+| One path for the grid and the day view | § One path for the grid and the day view | – | specified |
+| Chef calendar visit | § Chef calendar visit | – | specified |
 
 ## Server payload of the shared stores
 
@@ -780,7 +784,7 @@ ADR-016 [Unified Booking Through Scaffold], below the decision matrix, gains on 
 
 ### TDD
 
-- Unit `useBooking.unit.spec.ts`: `decideOrderAction` after the deadline for a ticket of 0 portions creates a new order
+- `useBooking.nuxt.spec.ts`: `decideOrderAction` after the deadline for a ticket of 0 portions creates a new order
   and deletes a booked or released one; a hungry baby keeps the claim and the release. `getBookingOptions` gives a row of
   0 portions after the deadline the modes it has before the deadline.
 - Unit, the scaffold: a baby who tastes, booked after the deadline, gets an order and no queue entry; cancelled after
@@ -839,7 +843,13 @@ at the first one's price, in both views.
   in the corner and at the size of a waiting-list place's hourglass.
 - The day view names a bought ticket's seller; the grid, a compact view, reads its orders without the seller and groups
   a bought guest with the booker's other guests of that type and price.
-- The day view's released badge reads the released state's word, icon and colour, as the other order states do.
+- The day view's released badge, on a person's row and a guest row, reads the released state's word, icon and colour, as
+  the other order states do.
+- A ticket's state beside the name is one badge in the state's icon and colour: released reads "Frigivet", bought reads
+  "fra" and the seller's household, a place on the waiting list reads the place in its ticket type's line.
+- A person's first dinner at a new ticket type, after turning 2 or 12, carries the badge "Voksen fra 4/11" with the
+  birthday icon: in the grid on the new price's row's name cell while that dinner is in view, in the day view on that
+  dinner. The legend reads "Ny billetpris fra fødselsdagen".
 - The day view opens a row while the member may change the household and the booking rules give the row a mode, as
   a grid cell does; the add-guest row and the legend show while a row can open (ADR-016).
 - The preview and the toast name a booker's guests by type and price, as the rows group them: "Gæst af Anna (Baby ·
@@ -861,14 +871,42 @@ Gæst af Anna [Baby · 9 kr · Gæst] |      | venteliste |        |          |
 - `useBookingUi.nuxt.spec.ts`: `ticketBadgeLabel`.
 - `DinnerBookingForm.nuxt.spec.ts`, `BookingGridView.nuxt.spec.ts`: guest rows by price; the grid's badges read the
   day view's; a person's rows by price; a birthday in view; the dinner chip on the dinner's supply; the released cell.
+- `DinnerBookingForm.nuxt.spec.ts`: the released badge on a guest row. `useTicket.nuxt.spec.ts`, the grid and the day
+  view: the birthday badge on the first dinner at the new ticket type.
 - `useBookingUi.nuxt.spec.ts`: the preview's and the toast's guest lines by type and price. Unit, the scaffold: a
   result's and a place's price.
 
 ### Affected
 
 `useBooking.ts`, `useBookingUi.ts`, `useBookingValidation.ts` (`BookingResultSchema`, `QueuePositionSchema`),
-`server/utils/scaffoldPrebookings.ts`, `bookingWords.ts`, `DinnerTicket.vue`, `BookingGridView.vue`,
-`DinnerBookingForm.vue`.
+`server/utils/scaffoldPrebookings.ts`, `bookingWords.ts`, `useTicket.ts`, `useTheSlopeDesignSystem.ts`, `DinnerTicket.vue`,
+`DinnerModeLegend.vue`, `BookingGridView.vue`, `DinnerBookingForm.vue`.
+
+## One path for the grid and the day view
+
+### Problem
+
+The week grid and the day view each work out a person's ticket and waiting-list place, the ticket's price and type,
+the mode a cell shows, the planned booking, the guest rows, a row's booking choices and a cancelled dinner with
+helpers of their own, so the two views can show different numbers for one dinner.
+
+### Solution
+
+- Both views read each of these through one shared function in the booking composables, and keep no helper of
+  their own for them; the row types are one enum.
+- The ticket held is a booked ticket's own price and type, else the price for the person's age on the dinner's date
+  (§ The grid shows the day view's tickets).
+- Both views ask for the planned bookings of their dinners that have not started.
+- Everything else each view shows stays as it is.
+
+### TDD
+
+- Unit: each shared function, with the cases the views' copies cover.
+- `BookingGridView.nuxt.spec.ts`, `DinnerBookingForm.nuxt.spec.ts`: their assertions stay green.
+
+### Affected
+
+`useBooking.ts`, `useBookingUi.ts`, `useTicket.ts`, `BookingGridView.vue`, `DinnerBookingForm.vue`.
 
 ## Tables key their rows by id
 
@@ -895,6 +933,122 @@ changes: after a guest save in the day view the add-guest form closes and the qu
 `useExpandableRow.ts`, `utils.ts`, `BookingGridView.vue`, `DinnerBookingForm.vue`, `HouseholdCard.vue`,
 `EconomyTable.vue`, `AdminEconomy.vue`, `HouseholdEconomy.vue`.
 
+## Chef calendar visit
+
+### Problem
+
+The chef page opens only the teams a person is on. A click on a day of another team's dinner does nothing, and a team
+in the address that is not the person's opens their first team instead.
+
+### Decision (2026-10-27)
+
+- The chef calendar shows the season's dinners: the team on view's in its colours with the deadline chips, the other
+  teams' as plain circles. A click on any dinner opens that dinner's team on the chef page at that dinner; a dinner
+  without a team has no team page and shows as a plain day.
+- A team the person is not on opens on a visiting tab, after their own teams, with the badge "Ikke dit hold" and the
+  line "Du er ikke på <team>". The dinner card reads as for a member who is not the chef: no menu, allergen, grocery or
+  state edits. The chef's role panel, Kok and Kokkespire are the dinner page's, open to every member; taking a role
+  puts the person on the team, and the visiting tab becomes their own tab.
+- The legend adds "Andet madholds fællesspisning".
+- The chef page's words live in `app/config/` (ADR-017); its toasts of the allergen, announce, cancel and undo-cancel
+  actions move into the bookings store (ADR-007, defect 78); the role line's icons are the design system's role icons
+  (defect 79).
+
+### Mockup
+
+```
+/chef?team=3&date=04/11/2026, desktop: Anna, a cook on Madhold 2 and 5, clicked Madhold 3's dinner on Wednesday 4/11
+Desktop puts the master beside the detail; a phone stacks the master above the detail, as today.
+
+MASTER (a third of the row)
++--------------------------------------------------+
+| Mine Madhold                                     |
+|  (team icon)   (team icon)   (team icon)         |
+|  Madhold 2     Madhold 5     [Madhold 3]         |
+|                              [Ikke dit hold]     |  visiting tab, selected, with its badge
+| Du er ikke på Madhold 3                          |  role line
++--------------------------------------------------+
+| NÆSTE MADLAVNING  Madhold 3                      |
+| TOR 12/11 · OM 16D 2T · 18:00                    |
++--------------------------------------------------+
+| [Agenda] [Kalender]                     [skjul]  |
+|  november 2026                                   |
+|  M    T    O    T    F    L    S                 |
+|                           1                      |
+|  2   (3)  [4]   5    6    7    8                 |  [4] selected: ring
+|  9  (10)  11  [12]* 13   14   15                 |  * deadline chip
+| 16  (17)  18  [19]  20   21   22                 |
+|  [n] Madhold 3's dinners: chef colours,          |
+|      deadline chips                              |
+|  (n) the other teams' dinners, your own          |
+|      included: plain circles, clickable          |
+| Forklaring: Næste madlavning, Valgt dato,        |
+|   Planlagt madlavning, Tidligere madlavning,     |
+|   Deadline overskredet / kritisk / snart,        |
+|   Aflyst madlavning, Andet madholds              |
+|   fællesspisning                                 |
++--------------------------------------------------+
+
+DETAIL (the rest of the row): ChefMenuCard read-only, with its state controls
++----------------------------------------------------------------------------+
+| MIDDAG                                                    [ANNONCERET]     |
+| [forrige]                                                      [næste]     |  Madhold 3's dinners
++----------------------------------------------------------------------------+
+| Lasagne                                                                    |
+| Med salat og hjemmebagt brød                                               |
+|  (portrait, chef hat) Mette S.                                             |  click: the chef role panel,
+|                       Chefkok                                              |  [Rediger chefkokketjans]
+|  no chef: (frame, chef hat) WANTED / Chefkok           click: [Bliv chefkok] |
++----------------------------------------------------------------------------+
+| (allergy) ALLERGENER  2,5 kuv. | Mælk · 2,5 | Gluten · 0                   |  no Rediger allergener
++----------------------------------------------------------------------------+
+| (cart) MADBESTILLING  1.310 / 1.638 kr                                     |  no Rediger madbestilling
+|   Netto · Grøntsager                                    420 / 525 kr       |
+|   Rema · Kød                                            890 / 1.113 kr     |
++----------------------------------------------------------------------------+
+|  (o)------------(o)------------( )------------( )------------( )           |
+|  Planlagt       Publiceret     Lukket for     Madbestilling  Afholdt       |
+|                                ændringer      klar                         |
+|                 [om 2d]        [åben]         [om 1d]        [om 8d]       |  deadline badges, as for the chef
++----------------------------------------------------------------------------+
+| Budget                                                                [>]  |
+| +-(money) INDTÆGTER-+ +-(cart) RÅDIGHEDSBELØB-----+ +-(house) KØKKENBIDRAG-+ |
+| | 1.875 kr          | | 1.425 / 1.781 kr          | | 75 / 94 kr           | |
+| | 45 kuverter       | | ex / inkl. moms           | | ex / inkl. moms      | |
+| |                   | | Brugt   1.310 / 1.638 kr  | | 5% af indtægter      | |
+| |                   | | Tilbage  +115 / +143 kr   | |                      | |
+| +-------------------+ +---------------------------+ +----------------------+ |
+|  unfolded: Billetter, this dinner's spending, Madhold 3's round,          |
+|  Billetændringer                                                          |
++----------------------------------------------------------------------------+
+| Hvem laver maden?    Madhold 3's team card                                 |
+| (dinner icon) Vil du hjælpe til med madlavningen?                          |
+|   [(pot) Kok (plus)]  [(sprout) Kokkespire (plus)]  [(team) Byt Tjans]     |  Byt Tjans disabled, as on /dinner
++----------------------------------------------------------------------------+
+| Hvem kommer og spiser?   the kitchen: Takeaway | Spisesal | Sen | Til salg |
++----------------------------------------------------------------------------+
+The chef role panel and Kok / Kokkespire are /dinner's, open to every member.
+No menu, allergen, grocery or state edits, no Annoncer and no Flere: those need Madhold 3's chef (requireChefForDinner).
+Taking a role makes Madhold 3 yours: the tab drops "Ikke dit hold", the role line goes, and as chef the card opens for editing.
+```
+
+### TDD
+
+- `MyTeamSelector.nuxt.spec.ts`: the visiting team is the last tab with the badge "Ikke dit hold"; choosing it emits
+  its id.
+- `TeamRoleStatus.nuxt.spec.ts`: each role reads its line and icon; a person without a role reads the visitor line.
+- `ChefCalendarDisplay.nuxt.spec.ts`: another team's dinner renders a plain circle; a click on it emits that dinner;
+  the legend carries the line.
+- `bookings.nuxt.spec.ts`: each of the four chef actions toasts its result.
+- BDD: a cook on one team clicks another team's dinner and lands on its visiting tab with the read-only card and the
+  role buttons.
+
+### Affected
+
+`app/pages/chef/index.vue`, `MyTeamSelector.vue`, `TeamRoleStatus.vue`, `ChefCalendarDisplay.vue`,
+`app/config/teamWords.ts` (new), `useTheSlopeDesignSystem.ts`, `app/stores/bookings.ts`, `docs/ui.md`,
+`docs/adr-compliance-frontend.md`, `docs/chef-guide.md`.
+
 ## Decisions carried from release 0.9
 
 **2026-10-13**
@@ -908,6 +1062,18 @@ changes: after a guest save in the day view the add-guest form closes and the qu
 
 **2026-10-18**
 - The AdminTeams loading row moves from release 0.9 to this release.
+
+**2026-10-20**
+- A component's own one-line text, such as an empty state or a loading line, stays in its template; the other words
+  users read live in `app/config/` (ADR-017 rules 6 and 7).
+
+**2026-10-23**
+- Every member reads. A household changes its own data; an admin, or the allergy manager for allergies, changes another
+  household's data through an override asked per change and logged with the actor and the household (ADR-004 § Access).
+- A preview is a read: the booking and preference previews carry their draft in a GET, and an admin's preview lifts the
+  deadlines without an override (ADR-004, ADR-016 § One path).
+- A responsive class carries its breakpoints in its design-system token; the breakpoint read in code drives only the
+  values Nuxt UI takes as properties (ADR-018).
 
 **2026-10-26**
 - Zero-portion tickets get a place moves from release 0.9.3 to this release: a ticket of 0 portions books and cancels

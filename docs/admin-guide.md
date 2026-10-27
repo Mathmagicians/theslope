@@ -193,11 +193,15 @@ Beboere kan flyttes mellem husstande på **samme adresse** (samme Heynabo-ID). D
 Admin kan besøge enhver husstands side og aktivere admin-tilgang:
 
 1. Gå til en husstand via linket i husstandstabellen
-2. Klik **Admin røre alligevel** på banneret "Du besøger nu en anden husstand end din egen"
-3. Nu kan du ændre på vegne af beboerne:
+2. Klik **Admin røre alligevel** på banneret "Du besøger nu en anden husstand end din egen", og **Klik igen for at låse op**
+3. Banneret skifter til "Admin rører, men forsigtigt", og nu kan du ændre på vegne af beboerne:
    - **Præferencer** — ændre madpræferencer (genberegner bookinger)
    - **Fraflytningsdato** — sætte eller fjerne fraflytningsdato (genberegner bookinger)
    - **Bookinger** — rette tilmeldinger også efter deadline er passeret
+4. Klik **Afslut**, når du er færdig
+
+Hver ændring logges med dig og husstanden. Den allergiansvarlige har samme knap på husstandens **Allergier**-fane og
+retter husstandens allergier derfra.
 
 ### Sådan sletter du en husstand
 
@@ -253,6 +257,8 @@ Brugerfanen viser alle brugere importeret fra Heynabo.
 2. Brug søgefeltet til at finde brugere på navn eller email
 3. Klik på pilen ved en bruger for at se detaljer
 
+På telefonen scroller tabellen sidelæns, og pilen åbner brugerens profilkort.
+
 ### Systemroller
 
 Admin kan tildele systemroller til brugere:
@@ -260,7 +266,7 @@ Admin kan tildele systemroller til brugere:
 | Rolle | Beskrivelse | Tildeles af |
 |-------|-------------|-------------|
 | **ADMIN** | Fuld adgang til alle administrative funktioner | Heynabo (via Bestyrelse-rolle) |
-| **ALLERGYMANAGER** | Kan redigere allergi-kataloget | Admin i TheSlope |
+| **ALLERGYMANAGER** | Kan redigere allergi-kataloget og husstandenes allergier (via **Admin røre alligevel**) | Admin i TheSlope |
 
 ### Sådan tildeler du Allergi-ansvarlig rollen
 
@@ -421,8 +427,10 @@ Som admin kan du rette bookinger for alle husstande - også efter deadline er pa
 
 1. Gå til [System](https://www.skraaningen.dk/admin/system)
 2. Find jobbet i oversigten
-3. Klik **Kør nu**
-4. Se resultat i jobhistorikken nedenfor
+3. Klik jobbets knap: **Kør import**, **Kør daglig vedligeholdelse** eller **Kør fakturering**
+4. Boksen viser jobbets seneste kørsel: tidspunkt, status og resultat - og fejlen under kørslen, hvis den fejler. Kørslen står også i **Jobhistorik**
+
+Et job uden kørsler viser **Ingen kørsler endnu**. På telefonen scroller **Jobhistorik** sidelæns.
 
 Alle jobs er idempotente og kan køres igen uden problemer.
 
@@ -434,4 +442,4 @@ Alle jobs er idempotente og kan køres igen uden problemer.
 
 ---
 
-*Sidst opdateret: Oktober 2026 (sæsonmærker, ventelisten i den daglige vedligeholdelse, madhold-fanen og jokere, sæsonredigering, allergiplakat, mail til bogholder, ny husstand)*
+*Sidst opdateret: Oktober 2026 (sæsonmærker, ventelisten i den daglige vedligeholdelse, madhold-fanen og jokere, sæsonredigering, allergiplakat, mail til bogholder, ny husstand, den allergiansvarliges adgang, jobboksenes seneste kørsel)*

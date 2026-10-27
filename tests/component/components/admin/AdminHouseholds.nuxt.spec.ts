@@ -69,8 +69,8 @@ describe('AdminHouseholds open row', () => {
         await vi.waitFor(() => expect(findByTestId(wrapper, addressOf(second)).exists()).toBe(true))
         await findByTestId(wrapper, 'household-search').setValue(second!.address)
         // The edit button stands in the row's first cell
-        const row = wrapper.findAll('tbody tr').find(tr => findByTestId(tr, addressOf(second)).exists())
-        await row!.find('td button').trigger('click')
+        const secondRow = wrapper.findAll('tbody tr').find(tr => findByTestId(tr, addressOf(second)).exists())
+        await secondRow!.find('td button').trigger('click')
 
         await findByTestId(wrapper, 'household-search').setValue('')
 

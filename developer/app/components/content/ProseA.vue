@@ -19,7 +19,8 @@ const repoPath = (relative: string) => {
 const onGitHub = (path: string, hash: string) => path.endsWith('/')
   ? `${REPO}/tree/main/${path.replace(/\/$/, '')}`
   : `${REPO}/blob/main/${/\.[a-z0-9]+$/i.test(path) ? path : `${path}.md`}${hash}`
-// The site carries the top-level docs; a link into the rest of the repository leads to it on GitHub
+// The site carries the top-level docs at /docs/<name>, the name lowercased as Nuxt Content routes it; a link into
+// the rest of the repository leads to it on GitHub
 const href = computed(() => {
   const given = props.href ?? ''
   if (/^(#|[a-z][a-z0-9+.-]*:)/i.test(given)) return given
@@ -30,7 +31,7 @@ const href = computed(() => {
     return inSite ? given : onGitHub(path.replace(/^\//, ''), hash)
   }
   const resolved = repoPath(path)
-  return /^docs\/[^/]+(\.md)?$/.test(resolved) ? given : onGitHub(resolved, hash)
+  return /^docs\/[^/]+(\.md)?$/.test(resolved) ? `/${resolved.replace(/\.md$/, '').toLowerCase()}${hash}` : onGitHub(resolved, hash)
 })
 const target = computed(() => href.value.startsWith('http') ? '_blank' : props.target)
 </script>

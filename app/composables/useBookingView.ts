@@ -11,6 +11,13 @@ export const BookingViewSchema = z.enum(['day', 'week', 'month'])
 export type BookingView = z.infer<typeof BookingViewSchema>
 
 /**
+ * The rows of the day view and the grid: the power row, a person, a guest's tickets and the add-guest row.
+ * A row's test ids start with its type and id (`guest-add-guest-toggle`).
+ */
+export const BookingRowTypeSchema = z.enum(['power', 'inhabitant', 'guest-order', 'guest-add'])
+export type BookingRowType = z.infer<typeof BookingRowTypeSchema>
+
+/**
  * useDinnerDateParam - Reusable date query param for dinner navigation
  *
  * Validates that selected date is a dinner date, defaults to next upcoming dinner.

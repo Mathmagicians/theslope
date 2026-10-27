@@ -149,20 +149,20 @@ import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {DeadlineBadgeData, TicketPresentation} from '~/composables/useBookingUi'
 import {compareAsc, isSameDay} from 'date-fns'
-import type {BookingView} from '~/composables/useBookingView'
+import {BookingViewSchema, BookingRowTypeSchema, type BookingView, type BookingRowType} from '~/composables/useBookingView'
 import type {DateRange} from '~/types/dateTypes'
 import {EMPTY_RELEASED_TICKET_COUNTS, type BookingChanges, type BookingContext, type BookingIntent, type GuestBookingIntent, type ReleasedTicketCounts, type WaitlistEntryIntent} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
-// The power row, a person at a price, a guest row and the add-guest row
-type RowType = 'power' | 'inhabitant' | 'guest-order' | 'guest-add'
+const BookingRow = BookingRowTypeSchema.enum
+const View = BookingViewSchema.enum
 
 // The add-guest row's id: its chevrons open the guest form in it
 const GUEST_ADD_ROW_ID = 'guest-add'
 
 interface GridRow {
-  rowType: RowType
+  rowType: BookingRowType
   id: string
   name: string
   inhabitant?: InhabitantDisplay // For inhabitant row, or booker for guest-order
@@ -423,7 +423,7 @@ const flatEvents = computed(() => eventsByWeek.value.flat())
 
 // The bookings the scaffold will make on the dinners on view: its dry run with no orders, read again once the orders change.
 // Every viewer reads them, on the season's deadlines
-const expectedRequest = computed(() => props.view !== 'day' && flatEvents.value.length > 0
+const expectedRequest = computed(() => props.view !== View.day && flatEvents.value.length > 0
   ? {householdId: props.household.id, dinnerEventIds: flatEvents.value.map(e => e.id)}
   : null)
 const {result: expectedRun, pending: isExpectedPending} = useScaffoldPreview(
@@ -511,7 +511,7 @@ const inhabitantRows = computed(() => props.household.inhabitants.flatMap(inhabi
     const dinnerEventIds = events.map(event => event.id)
     return {
       row: {
-        rowType: 'inhabitant',
+        rowType: BookingRow.inhabitant,
         id: `inhabitant-${inhabitant.id}-${price}`,
         name: inhabitant.name,
         inhabitant,
@@ -533,7 +533,7 @@ const guestRows = computed((): GridRow[] => {
   const onView = new Set(flatEvents.value.map(event => event.id))
   const bookerOf = (inhabitantId: number) => props.household.inhabitants.find(i => i.id === inhabitantId)
   const placed = Object.entries(groupGuestOrders(props.orders.filter(order => onView.has(order.dinnerEventId)))).map(([key, orders]): GridRow => ({
-    rowType: 'guest-order',
+    rowType: BookingRow['guest-order'],
     id: `guest-group-${key}`,
     name: 'Gæst',
     inhabitant: bookerOf(orders[0]!.inhabitantId),
@@ -545,7 +545,7 @@ const guestRows = computed((): GridRow[] => {
     isSynthetic: false
   }))
   const queued = props.waitlistEntries.filter(entry => entry.isGuestTicket && onView.has(entry.dinnerEventId)).map((entry): GridRow => ({
-    rowType: 'guest-order',
+    rowType: BookingRow['guest-order'],
     id: `guest-entry-${entry.id}`,
     name: 'Gæst',
     inhabitant: bookerOf(entry.inhabitantId),
@@ -568,7 +568,7 @@ const tableData = computed((): GridRow[] => {
 
   // Power row - ALWAYS shown (consensus in VIEW, editable in EDIT)
   rows.push({
-    rowType: 'power',
+    rowType: BookingRow.power,
     id: 'power-mode',
     name: 'Alle',
     isSynthetic: true
@@ -580,7 +580,7 @@ const tableData = computed((): GridRow[] => {
   // Guest add row - only in EDIT mode
   if (props.formMode === FORM_MODES.EDIT) {
     rows.push({
-      rowType: 'guest-add',
+      rowType: BookingRow['guest-add'],
       id: GUEST_ADD_ROW_ID,
       name: 'Tilføj gæst',
       isSynthetic: true
@@ -700,8 +700,8 @@ const navigationLabel = computed(() => {
   if (!props.dateRange.start || !props.dateRange.end) return ''
 
   switch (props.view) {
-    case 'day': return formatFullWeekdayDate(props.dateRange.start)
-    case 'week': return formatWeekRange(props.dateRange.start, props.dateRange.end)
+    case View.day: return formatFullWeekdayDate(props.dateRange.start)
+    case View.week: return formatWeekRange(props.dateRange.start, props.dateRange.end)
     default: return formatMonthYear(props.dateRange.start)
   }
 })
@@ -735,7 +735,7 @@ const getEventSummary = (eventId: number) => {
       <div :class="COMPONENTS.bookingGrid.navEnd">
         <!-- Pencil button to enter edit mode (week/month grid only, hidden when !canEdit) -->
         <UButton
-          v-if="view !== 'day' && formMode === FORM_MODES.VIEW && canEdit"
+          v-if="view !== View.day && formMode === FORM_MODES.VIEW && canEdit"
           v-bind="BUTTONS.edit"
           :disabled="props.isSaving"
           data-testid="grid-edit"
@@ -746,7 +746,7 @@ const getEventSummary = (eventId: number) => {
 
     <!-- Residency alert: grid views only (week/month). Day view delegates to DinnerBookingForm. -->
     <UAlert
-      v-if="residencyAlert && view !== 'day'"
+      v-if="residencyAlert && view !== View.day"
       v-bind="ALERTS[residencyAlert.color]"
       :icon="residencyAlert.icon"
       :title="residencyAlert.alertTitle"
@@ -756,7 +756,7 @@ const getEventSummary = (eventId: number) => {
     />
 
     <!-- Day view: slot for DinnerBookingForm -->
-    <div v-if="view === 'day'" :class="COMPONENTS.bookingGrid.dayContent">
+    <div v-if="view === View.day" :class="COMPONENTS.bookingGrid.dayContent">
       <slot name="day-content" />
     </div>
 
@@ -787,7 +787,7 @@ const getEventSummary = (eventId: number) => {
         >
           <template #title>{{ emptyState.text }}</template>
           <template #description>
-            {{ view === 'week' ? 'Ingen middage denne uge' : 'Ingen middage denne måned' }}
+            {{ view === View.week ? 'Ingen middage denne uge' : 'Ingen middage denne måned' }}
           </template>
         </UAlert>
       </template>
@@ -821,14 +821,14 @@ const getEventSummary = (eventId: number) => {
       <!-- Name column -->
       <template #name-cell="{row}">
         <!-- Power row -->
-        <div v-if="row.original.rowType === 'power'" :class="COMPONENTS.bookingGrid.powerName">
+        <div v-if="row.original.rowType === BookingRow.power" :class="COMPONENTS.bookingGrid.powerName">
           <UIcon :name="COMPONENTS.powerMode.buttonIcon" :class="COMPONENTS.powerMode.iconClass" />
           <UBadge :color="COMPONENTS.powerMode.color" :variant="NOISE.subtle" :size="SIZES.sm">
             {{ COMPONENTS.powerMode.ticketConfig.label }}
           </UBadge>
         </div>
         <!-- Inhabitant row: user + ticket count badge + released badge + waiting-list badge -->
-        <div v-else-if="row.original.rowType === 'inhabitant' && row.original.inhabitant" :class="COMPONENTS.bookingGrid.inhabitantName">
+        <div v-else-if="row.original.rowType === BookingRow.inhabitant && row.original.inhabitant" :class="COMPONENTS.bookingGrid.inhabitantName">
           <UserListItem
             :inhabitants="row.original.inhabitant"
             :link-to-profile="false"
@@ -881,7 +881,7 @@ const getEventSummary = (eventId: number) => {
           </UBadge>
         </div>
         <!-- Guest order row - show who invited using UserListItem (same as DinnerBookingForm) -->
-        <div v-else-if="row.original.rowType === 'guest-order'" :class="COMPONENTS.bookingGrid.guestName">
+        <div v-else-if="row.original.rowType === BookingRow['guest-order']" :class="COMPONENTS.bookingGrid.guestName">
           <UIcon :name="ICONS.userPlus" :class="COMPONENTS.bookingGrid.guestIcon" />
           <span :class="COMPONENTS.bookingGrid.guestLabel">Gæst af</span>
           <UserListItem
@@ -905,7 +905,7 @@ const getEventSummary = (eventId: number) => {
           <span v-else :class="COMPONENTS.bookingGrid.guestUnknown">ukendt</span>
         </div>
         <!-- Guest add row -->
-        <div v-else-if="row.original.rowType === 'guest-add'" :class="COMPONENTS.bookingGrid.guestAddName">
+        <div v-else-if="row.original.rowType === BookingRow['guest-add']" :class="COMPONENTS.bookingGrid.guestAddName">
           <UIcon :name="COMPONENTS.guestRow.addIcon" :class="COMPONENTS.guestRow.iconClass" />
           <span :class="COMPONENTS.bookingGrid.guestAddLabel">{{ row.original.name }}</span>
         </div>
@@ -915,7 +915,7 @@ const getEventSummary = (eventId: number) => {
       <template v-for="event in flatEvents" :key="event.id" #[`event-${event.id}-cell`]="{row}">
         <!-- Power row: consensus mode or ? (DinnerModeSelector handles both) -->
         <DinnerModeSelector
-          v-if="row.original.rowType === 'power'"
+          v-if="row.original.rowType === BookingRow.power"
           :model-value="getEventConsensus(event.id).value"
           :form-mode="cellFormMode(getPowerModes(event))"
           :interaction="cellInteraction(getPowerModes(event))"
@@ -929,7 +929,7 @@ const getEventSummary = (eventId: number) => {
         />
         <!-- Inhabitant row, queued: the wish ghosted under the hourglass until a draft takes its place -->
         <UChip
-          v-else-if="row.original.rowType === 'inhabitant' && row.original.inhabitant && holdsDinner(row.original, event.id) && getWaitlistEntryForCell(row.original.inhabitant.id, event.id)"
+          v-else-if="row.original.rowType === BookingRow.inhabitant && row.original.inhabitant && holdsDinner(row.original, event.id) && getWaitlistEntryForCell(row.original.inhabitant.id, event.id)"
           v-bind="COMPONENTS.waitlist.chip"
           :data-testid="`grid-waitlist-${row.original.inhabitant.id}-${event.id}`"
         >
@@ -951,7 +951,7 @@ const getEventSummary = (eventId: number) => {
         </UChip>
         <!-- Inhabitant row: a dinner at the row's price -->
         <DinnerModeSelector
-          v-else-if="row.original.rowType === 'inhabitant' && row.original.inhabitant && holdsDinner(row.original, event.id)"
+          v-else-if="row.original.rowType === BookingRow.inhabitant && row.original.inhabitant && holdsDinner(row.original, event.id)"
           :model-value="getCellMode(row.original.inhabitant.id, event.id)"
           :form-mode="cellFormMode(getCellModes(row.original.inhabitant.id, event.id))"
           :interaction="cellInteraction(getCellModes(row.original.inhabitant.id, event.id))"
@@ -965,7 +965,7 @@ const getEventSummary = (eventId: number) => {
         />
         <!-- Guest row, queued: the guest's wish ghosted under the hourglass, as a queued inhabitant's -->
         <UChip
-          v-else-if="row.original.rowType === 'guest-order' && row.original.waitlistEntry && row.original.dinnerEventId === event.id"
+          v-else-if="row.original.rowType === BookingRow['guest-order'] && row.original.waitlistEntry && row.original.dinnerEventId === event.id"
           v-bind="COMPONENTS.waitlist.chip"
           :data-testid="`grid-waitlist-${row.original.id}-${event.id}`"
         >
@@ -987,7 +987,7 @@ const getEventSummary = (eventId: number) => {
         </UChip>
         <!-- Guest order row: a group holds the guest tickets of one dinner -->
         <DinnerModeSelector
-          v-else-if="row.original.rowType === 'guest-order' && row.original.guestOrders && row.original.dinnerEventId === event.id"
+          v-else-if="row.original.rowType === BookingRow['guest-order'] && row.original.guestOrders && row.original.dinnerEventId === event.id"
           :model-value="getGuestCellMode(row.original.guestOrders)"
           :form-mode="cellFormMode(getGuestModes(row.original))"
           :interaction="cellInteraction(getGuestModes(row.original))"
@@ -1000,7 +1000,7 @@ const getEventSummary = (eventId: number) => {
         />
         <!-- Guest add row: a chevron per dinner a new guest may take a mode on, turned up while its form is open below -->
         <UButton
-          v-else-if="row.original.rowType === 'guest-add' && getNewGuestModes(event).length > 0"
+          v-else-if="row.original.rowType === BookingRow['guest-add'] && getNewGuestModes(event).length > 0"
           :icon="ICONS.chevronDown"
           :color="COMPONENTS.guestRow.color"
           :variant="NOISE.quiet"
@@ -1021,7 +1021,7 @@ const getEventSummary = (eventId: number) => {
 
       <!-- Expanded row: GuestBookingForm for guest-add row -->
       <template #expanded="{row}">
-        <div v-if="row.original.rowType === 'guest-add' && activeGuestEvent && props.bookerId" :class="COMPONENTS.bookingGrid.expandedPanel">
+        <div v-if="row.original.rowType === BookingRow['guest-add'] && activeGuestEvent && props.bookerId" :class="COMPONENTS.bookingGrid.expandedPanel">
           <GuestBookingForm
             :household-id="props.household.id"
             :dinner-event="activeGuestEvent"
@@ -1077,7 +1077,7 @@ const getEventSummary = (eventId: number) => {
 
     <!-- Legend: hidden in day view (DinnerBookingForm has its own) -->
     <DinnerModeLegend
-      v-if="view !== 'day'"
+      v-if="view !== View.day"
       show-modified
       :show-waitlist="waitlistEntries.length > 0"
       :show-birthday="inhabitantRows.some(({row}) => row.birthdayBadge)"

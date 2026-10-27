@@ -316,7 +316,7 @@ d1-copy-dev-to-local: ## Replace the local D1 with a copy of dev (schema, data, 
 # ============================================================================
 # TESTING
 # ============================================================================
-.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod test-report bdd-report bdd-steps developer-resolve developer-assemble developer-build developer-publish
+.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod test-report bdd-report bdd-steps developer-resolve developer-assemble developer-build developer-publish developer-test
 
 # The summary tables are jq programs under scripts/ (test-report.jq, bdd-report.jq); the step reuse is
 # scripts/bdd-steps.mjs, which matches the feature lines through playwright-bdd's generator
@@ -404,6 +404,11 @@ developer-publish: ## Force-push site/ as the single commit of gh-pages - [env=<
 		commit-tree "$$(git write-tree)" -m "Developer companion $$(date -u +%Y-%m-%dT%H:%MZ) $(env)") && \
 	git update-ref refs/heads/gh-pages "$$commit" && \
 	git push -q --force origin refs/heads/gh-pages:refs/heads/gh-pages
+
+# The spec and its Playwright config live in developer/ (developer/playwright.config.ts)
+developer-test: ## Follow the links of the published site and read its header - url=<site address>
+	@test -n "$(url)" || { echo "usage: make developer-test url=<site address>"; exit 1; }
+	@BASE_URL="$(url)" npx playwright test -c developer
 
 unit-test: ## Run all unit tests
 	@npx vitest --run

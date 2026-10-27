@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-10-23
+**Last Updated:** 2026-10-27
 **History:** git and the feature plans under `docs/features/` (shipped plans in `docs/features/archived/`)
 
 One row per route, component, store and composable: which ADRs it answers to, its markers and its test coverage. The code
@@ -28,7 +28,7 @@ and the component headers hold the detail; a row names a gap in a few words.
 | `/admin/households` | `AdminHouseholds.vue` | ✅ households | ❓ | ✅ `?mode=` | ✅ | ⚠️ loading row only | ⚠️ audit needed |
 | `/admin/allergies` | `AdminAllergies.vue` | ✅ allergies | N/A | ✅ `?allergy=` | ✅ | ✅ | ✅ master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
 | `/admin/users` | `AdminUsers.vue` | ✅ users | N/A | ✅ | ✅ | ⚠️ loading row only | ⚠️ partial unit |
-| `/admin/economy` | `AdminEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?period=` `?invoice=` | ✅ serial | ⚠️ | ⚠️ e2e only |
+| `/admin/economy` | `AdminEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?period=` `?invoice=` | ✅ serial | ⚠️ the URL's selection, the loading rows, the upcoming table's Menu cell | ⚠️ partial unit |
 | `/admin/system` | `AdminSystem.vue` | N/A, `storeAsyncData` (ADR-007 component-local) | N/A | ✅ | ✅ | ✅ | ✅ |
 | `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ allergies, plan | N/A | N/A | ✅ smoke | ✅ | ✅ |
 | **Household** | | | | | | | |
@@ -36,12 +36,12 @@ and the component headers hold the detail; a row names a gap in a few words.
 | `/household/[shortname]/bookings` | `HouseholdBookings.vue` | ✅ plan, households, bookings | N/A | ✅ `?pbs=` `?cal=` | ✅ | ✅ | ✅ master-detail on `LAYOUTS.masterDetailPage` while the calendar shows (ADR-018) |
 | `/household/[shortname]/allergies` | `HouseholdAllergies.vue` | ✅ allergies | ❓ | ✅ `?pbs=` | ✅ | ⚠️ loading only | ⚠️ partial unit |
 | `/household/[shortname]/settings` | `HouseholdSettings.vue` | ✅ households | N/A | ✅ `?pbs=` | ✅ | ⚠️ the undo's toast and alert | ⚠️ partial unit |
-| `/household/[shortname]/economy` | `HouseholdEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?pbs=` | ❌ | ⚠️ store specs | ⚠️ store specs only |
+| `/household/[shortname]/economy` | `HouseholdEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?pbs=` | ❌ | ⚠️ the upcoming table's Menu cell | ⚠️ partial unit |
 | **Other** | | | | | | | |
 | `/` | `Hero.vue` | N/A | N/A | N/A | ✅ | ✅ | ✅ |
 | `/login` | `Login.vue` | ✅ auth | N/A | ✅ | ✅ | ⚠️ via the cards | ⚠️ e2e only |
 | `/dinner` | `dinner/index.vue` | ✅ plan, bookings, auth | N/A | ✅ `?date=` `?cal=` | ✅ | ❌ | ⚠️ e2e only; master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
-| `/chef` | `chef/index.vue` | ✅ plan, users, allergies, bookings | N/A | ✅ `?team=` `?view=` | ✅ | ❌ | ⚠️ e2e only; master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
+| `/chef` | `chef/index.vue` | ✅ plan, users, allergies, bookings | N/A | ✅ `?team=` over the season's teams, `?date=`, `?view=`; a calendar click writes `?team=` and `?date=` in one navigation | ✅ | ❌ | ⚠️ e2e only; master-detail on `LAYOUTS.masterDetailPage` (ADR-018); a team the person is not on opens as a visit, read through the plan store's selected team; the bookings store toasts the chef's dinner actions (ADR-007) |
 | **Public** | | | | | | | |
 | `/public/billing/[token]` | `public/billing/[token].vue` | N/A, `storeAsyncData` (ADR-007 component-local) | N/A | N/A | ✅ `PublicBilling` | ❌ | ⚠️ e2e only |
 | `/public/billing/[token].csv` | `public/billing/[token].csv.vue` | N/A | N/A | N/A | ❌ | ❌ | ❌ no tests; no link reaches it |
@@ -71,7 +71,7 @@ Status.
 | `TeamMemberAddForm.vue` | `/admin/teams` | none | ✅ | ✅ parent | ✅ |
 | `TeamRoleFields.vue` | `/admin/teams` | none | ✅ parent | ✅ parent | ✅ |
 | `JokerSlotForm.vue` | `/admin/teams` | none | ✅ | ✅ | ✅ |
-| `MyTeamSelector.vue` | `/chef` | none | ✅ | ✅ parent | ✅ |
+| `MyTeamSelector.vue` | `/chef` | none | ✅ | ✅ parent | ✅ the visiting tab last, its badge word from `TEAM_WORDS` (ADR-017) |
 | `WorkAssignment.vue` | `/dinner`, `/chef` | plan, auth | ❌ | ✅ parent | ⚠️ missing unit |
 | `InhabitantSelector.vue` | `/admin/teams` | none | ✅ | ✅ parent | ✅ |
 | `CookingTeamBadges.vue` | `/admin/teams`, `/chef`, `/dinner` | none | ✅ | ✅ parent | ✅ |
@@ -135,7 +135,7 @@ Status.
 | `BaseCalendar.vue` | every calendar | none | ❌ | N/A | ⚠️ missing unit |
 | `CalendarLegend.vue` | `/admin/teams`, `/chef`, `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | none | ✅ | ✅ parent | ✅ the one "Forklaring" panel, one entry per row (`COMPONENTS.legend.list`, `sample`); `DinnerModeLegend`'s rows join its list |
 | `CalendarDisplay.vue` | `/admin/planning` | none | ✅ | ❌ | ✅ |
-| `ChefCalendarDisplay.vue` | `/chef` | none | ✅ | ✅ | ✅ the dinner on a day and a cancelled day from `useTemporalCalendar`'s `getDinnerForDay` and `isCancelledDay` |
+| `ChefCalendarDisplay.vue` | `/chef` | none | ✅ | ✅ | ✅ the dinner on a day and a cancelled day from `useTemporalCalendar`'s `getDinnerForDay` and `isCancelledDay`; the other teams' dinners as plain circles from their own event list, the legend words from `TEAM_WORDS` (ADR-017) |
 | `DinnerCalendarDisplay.vue` | `/dinner`, `/household/[shortname]/bookings` | none | ✅ | ✅ serial `Waitlist` | ✅ a cancelled day from `useTemporalCalendar`'s `isCancelledDay`, drawn as the chef calendar's (`CALENDAR.day.past` + `CALENDAR.day.cancelled`), its legend word from `BOOKING_WORDS.cancelledDinner` |
 | `CountdownTimer.vue` | `/chef`, `/dinner` | none | ❌ | ✅ | ⚠️ missing unit |
 | `CalendarDateNav.vue` | `/household/[shortname]/bookings`, `/chef`, `/dinner` | none | ✅ parent | ✅ serial | ✅ |
@@ -150,7 +150,7 @@ Status.
 | `BookingViewSwitcher.vue` | `/household/[shortname]/bookings` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `ActionPreview.vue` | `/household/[shortname]/bookings`, `/household/[shortname]`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ |
 | `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ parent `DinnerBookingForm.nuxt.spec.ts`, `BookingGridView.nuxt.spec.ts` | ✅ parent | ✅ its modes from `useBooking`'s `getBookingOptions` |
-| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | allergies, auth, households | ✅ `DinnerBookingForm.nuxt.spec.ts` | ✅ serial, incl. `Waitlist` | ✅ each row's modes from `useBooking`'s `getBookingOptions`, the power row's from `powerOptions`; an expected row's draft starts on the person's click (ADR-007); a cancelled dinner wears the cancel ribbon (`getRibbonClasses`, `ribbon` false inside ChefMenuCard), its word from `BOOKING_WORDS.cancelledDinner` (ADR-017), and its tickets and the expanded row's selector `cancelled` (ADR-018); no edit on a cancelled dinner, as on a past one |
+| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | allergies, auth, bookings, households, plan | ✅ `DinnerBookingForm.nuxt.spec.ts` | ✅ serial, incl. `Waitlist` | ✅ each row's modes from `useBooking`'s `getBookingOptions`, the power row's from `powerOptions`; an expected row's draft starts on the person's click (ADR-007); a cancelled dinner wears the cancel ribbon (`getRibbonClasses`, `ribbon` false inside ChefMenuCard), its word from `BOOKING_WORDS.cancelledDinner` (ADR-017), and its tickets and the expanded row's selector `cancelled` (ADR-018); no edit on a cancelled dinner, as on a past one |
 | `DinnerModeLegend.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ renders its rows into `CalendarLegend`'s list, its words from `BOOKING_WORDS` (ADR-017) |
 | `DinnerModeSelector.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ✅ `DinnerModeSelector.nuxt.spec.ts` | ✅ parent | ✅ offers the `enabledModes` its parent reads from `getBookingOptions`, in `DINNER_MODE_ORDER` (`useBooking`); a plan's faces bind `COMPONENTS.bookingGrid.expectedBadge` and `dinnerModeSelector.plannedButton`, a wish's `waitlist.ghostBadge`, in edit mode too, a cancelled dinner's view face `dinnerModeSelector.cancelledFace` in every form mode (ADR-018) |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ❌ | ✅ parent | ⚠️ missing unit |
@@ -170,7 +170,7 @@ Status.
 | `VatAmount.vue` | `/chef` | none | ✅ | ✅ parent | ✅ |
 | `CookingRoundSpending.vue` | `/chef` | bookings | ✅ | ❌ | ✅; an arrow (`table.currentMarker`) before the name of the dinner on view; the team's round binds the round's orders loading |
 | `TicketChanges.vue` | `/chef` | bookings | ✅ | ❌ | ✅ |
-| `TeamRoleStatus.vue` | `/chef` | none | ❌ | ✅ parent | ⚠️ missing unit |
+| `TeamRoleStatus.vue` | `/chef` | none | ✅ | ✅ parent | ✅ the role glyphs from `ROLE_ICONS`, the role and visitor lines from `TEAM_WORDS` (ADR-017, ADR-018) |
 | `ChefDinnerCard.vue` | `/chef` | bookings | ✅ | ✅ parent | ✅ |
 | `DinnerStatusStepper.vue` | `/chef` | bookings | ✅ parent | ✅ parent | ✅ |
 
@@ -205,7 +205,7 @@ Status.
 | `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `users.ts` | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ no ready flag, no `isEmpty`, `isInitialized` on my teams only; 0.9.1 |
 | `auth.ts` | N/A | ✅ | N/A | ✅ | ✅ |
-| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ✅ spec covers the queue entries, the household places, the dinner's queue, `addExtraPortions`, `isBookingsReloading`, and the GET reads `fetchExpectedBookings` and `previewBookings` |
+| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ✅ spec covers the queue entries, the household places, the dinner's queue, `addExtraPortions`, `isBookingsReloading`, the toasts of the chef's dinner actions, and the GET reads `fetchExpectedBookings` and `previewBookings` |
 
 ## Composables
 
@@ -258,7 +258,7 @@ Status.
 | `useInstallPrompt()` | pure UI | N/A | N/A | N/A | ✅ | ✅ |
 | `useTemporalCalendar()` | client | N/A | N/A | ✅ | ✅ parent | ✅ the dinner on a calendar day and a cancelled day (`getDinnerForDay`, `isCancelledDay`), for the three calendars |
 | `useCalendarEvents()` | client | N/A | N/A | N/A | ✅ | ✅ |
-| `useExpandableRow()` | client | N/A | N/A | N/A | ❌ | ⚠️ missing unit |
+| `useExpandableRow()` | client | N/A | N/A | N/A | ✅ | ✅ |
 | `useTheSlopeDesignSystem()` | design system (ADR-018) | N/A | N/A | N/A | ✅ architecture specs, unit | ✅ |
 
 ## Checklist

@@ -4,8 +4,9 @@ import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick, ref} from 'vue'
 import type {ButtonProps} from '@nuxt/ui'
-import {mountWithTooltipProvider, clickByTestId, findAllByTestId, findByTestId, findComponentByTestId, pollFor, resetStores, VIEWPORTS, holdEndpoint, findLoadingRow, expectMasterDetail} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, clickByTestId, findAllByTestId, findByTestId, findComponentByTestId, pollFor, resetStores, VIEWPORTS, holdEndpoint, findLoadingRow, expectMasterDetail, findOpenRows} from '~~/tests/component/testHelpers'
 import AdminTeams from '~/components/admin/AdminTeams.vue'
+import CookingTeamCard from '~/components/cooking-team/CookingTeamCard.vue'
 import TeamCalendarDisplay from '~/components/calendar/TeamCalendarDisplay.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
@@ -208,23 +209,39 @@ describe('AdminTeams team selection', () => {
         expect(holds(master.nextElementSibling!, wrapper)).toBe(true)
     })
 
-    describe.each(VIEWPORTS)('$viewport: an open row', ({isMd}) => {
-        const openTeam = async () => {
-            const wrapper = await mountTeams(isMd)
-            await clickByTestId(wrapper, `team-row-${team.id}`)
-            await vi.waitFor(() => expect(mockRoute.query.team).toBe(String(team.id)))
-            await flushPromises()
-            return wrapper
-        }
+    const openTeam = async (isMd: boolean) => {
+        const wrapper = await mountTeams(isMd)
+        await clickByTestId(wrapper, `team-row-${team.id}`)
+        await vi.waitFor(() => expect(mockRoute.query.team).toBe(String(team.id)))
+        await flushPromises()
+        return wrapper
+    }
 
+    describe.each(VIEWPORTS)('$viewport: an open row', ({isMd}) => {
         it(`turns its toggle to the open-detail chevron of its viewport and renders its detail once, ${isMd ? 'in the pane beside the table' : 'docked in the table row'}`, async () => {
-            const wrapper = await openTeam()
+            const wrapper = await openTeam(isMd)
             const toggle = findComponentByTestId<ButtonProps>(wrapper, 'UButton', `team-toggle-${team.id}`)
             expect(toggle.props('icon')).toBe(createResponsiveIcons(ref(isMd)).detailOpen)
 
             await vi.waitFor(() => expect(findAllByTestId(wrapper, 'edit-team')).toHaveLength(1))
-            expect(wrapper.find('tbody [data-testid="edit-team"]').exists()).toBe(!isMd)
+            // The phone docks the detail in the row after the tapped team's row; md opens no row
+            const open = findOpenRows(wrapper)
+            expect(open.map(({row}) => findByTestId(row, `team-toggle-${team.id}`).exists())).toEqual(isMd ? [] : [true])
+            expect(open.map(({detail}) => findByTestId(detail, 'edit-team').exists())).toEqual(isMd ? [] : [true])
         })
+    })
+
+    it('phone: GIVEN a team open WHEN the season reloads with a team listed above it THEN the docked detail stays under the open team\'s row', async () => {
+        const listedAbove = SeasonFactory.defaultCookingTeamDisplay({id: 32, name: 'Hold 2'})
+        const wrapper = await openTeam(false)
+
+        seasonByIdEndpoint.mockReturnValue({...season, CookingTeams: [listedAbove, team]})
+        await usePlanStore().selectedSeasonDataset.refresh()
+        await vi.waitFor(() => expect(findByTestId(wrapper, `team-row-${listedAbove.id}`).exists()).toBe(true))
+
+        const open = findOpenRows(wrapper)
+        expect(open.map(({row}) => findByTestId(row, `team-toggle-${team.id}`).exists())).toEqual([true])
+        expect(open[0]!.detail.findComponent(CookingTeamCard).props('teamId')).toBe(team.id)
     })
 })
 

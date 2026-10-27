@@ -76,26 +76,36 @@ jobs:
         if: env.PUBLISH == 'true'
       - name: Build the site
         if: env.PUBLISH == 'true'
-        # With the custom domain the site lives at the root, on the repository's github.io address under /<repository>/
+        # With the custom domain the site lives at the root, on the repository's github.io address under /<repository>/;
+        # SITE is its address for the summary and the test
         env:
           DEVELOPER_DOMAIN: ${{ vars.DEVELOPER_DOMAIN }}
         run: |
           if [ -n "$DEVELOPER_DOMAIN" ]; then
             [[ "$DEVELOPER_DOMAIN" =~ ^[a-z0-9.-]+$ ]] || { echo "❌ Not a host name: $DEVELOPER_DOMAIN"; exit 1; }
             make developer-build base=/ domain="$DEVELOPER_DOMAIN"
+            echo "SITE=https://$DEVELOPER_DOMAIN" >> "$GITHUB_ENV"
           else
             make developer-build base="/${GITHUB_REPOSITORY#*/}/"
+            echo "SITE=https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}" >> "$GITHUB_ENV"
           fi
       - run: make developer-publish env="$ENV"
         if: env.PUBLISH == 'true'
       - name: Summary
         if: env.PUBLISH == 'true'
-        env:
-          DEVELOPER_DOMAIN: ${{ vars.DEVELOPER_DOMAIN }}
+        run: echo "Published run $RUN_ID ($ENV $RELEASE_VERSION): $SITE/environments/$ENV" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Wait for GitHub Pages to serve the site
+        if: env.PUBLISH == 'true'
+        # GitHub Pages deploys the gh-pages commit in its own workflow; the site is live once it serves this build's
+        # manifest. The query keeps each attempt past the CDN's cached copy
         run: |
-          if [ -n "$DEVELOPER_DOMAIN" ]; then
-            site="https://$DEVELOPER_DOMAIN"
-          else
-            site="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
-          fi
-          echo "Published run $RUN_ID ($ENV $RELEASE_VERSION): $site/environments/$ENV" | tee -a "$GITHUB_STEP_SUMMARY"
+          for attempt in $(seq 60); do
+            curl -fsSL "$SITE/environments/$ENV.json?attempt=$attempt" | cmp -s - ".output/developer/site/environments/$ENV.json" && exit 0
+            sleep 10
+          done
+          echo "❌ GitHub Pages serves no manifest of run $RUN_ID after 10 minutes" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 1
+      - run: npx playwright install chromium
+        if: env.PUBLISH == 'true'
+      - run: make developer-test url="$SITE"
+        if: env.PUBLISH == 'true'

@@ -34,3 +34,5 @@ SHOULD_SEND_BOOKING_EMAILS_FLAG = "true"
 ```
 
 3. The pull request deploys dev, the merge to main deploys prod (`../../ops-runbook.md` § Deployment Routing Table).
+4. The guides name the booking mails: in `user-guide.md` a ticket from the waiting list and a sold ticket send a mail,
+   in `chef-guide.md` the portions Frigiv gives to the first in line send them a mail.

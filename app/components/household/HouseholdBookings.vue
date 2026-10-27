@@ -17,6 +17,7 @@ import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import type {DesiredOrder} from '~/composables/useBookingValidation'
 import {EMPTY_RELEASED_TICKET_COUNTS, type BookingChanges} from '~/composables/useBooking'
 import {BookingViewSchema, type BookingView} from '~/composables/useBookingView'
+import {FORM_MODES, type FormMode} from '~/types/form'
 
 interface Props {
   household: HouseholdDetail
@@ -117,7 +118,7 @@ const ticketPrices = computed(() => selectedSeason.value?.ticketPrices ?? [])
 const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value) : undefined)
 
 // Grid view form mode
-const gridFormMode = ref<'view' | 'edit'>('view')
+const gridFormMode = ref<FormMode>(FORM_MODES.VIEW)
 
 // The order a save's toast names the people in
 const householdOrder = computed(() => household.value.inhabitants.map(({id}) => id))
