@@ -59,12 +59,13 @@ The checks with human eyes, as a walk through the app. A check passes with its d
 | 91 | Chef calendar visit | The visit's Hvem laver maden?, desktop and phone; then the own team's dinner | On the visit "Ikke dit hold" after the team's badges; on the own team no badge | |
 | 92 | Defect 87 | A dinner with a season-wide run in its history: Budget, Billetændringer, Vis fuld historik; desktop, then phone | A line over many households reads two names and "+N" in the line; a click lists every name wrapped in the Husstand column, ending in "skjul"; on a desktop every column stays in view | |
 
-## Layout (2)
+## Layout (3)
 
 | # | Package | State, viewport | What to see | Signed off |
 |---|---|---|---|---|
 | 14 | One master-detail layout (#169) | `/dinner`, `/chef`, `/admin/allergies`, `/admin/teams`, `/household/<S>/bookings` at about 800px, then lg | The list takes a third (min 245px), the detail the rest; the calendar has room at md; its day circles step up a size from lg | |
 | 15 | Three faces on a phone (#171) | `/dinner` the team card, `/admin/teams` the team card and the household list; phone then desktop | 3 faces and "+N" on a phone, 5 from md; the names wrap under the faces, each row stays inside its card, the page does not scroll sideways | |
+| 94 | Defect 93 | `/dinner` a person's row and the power row, `/household/<S>/members` a member's and the power row's preferences, `/chef` add a team member and a joker, `/admin/households` Ny husstand and its form, `/admin/users` a profile's roles, Hjælp feedback, `/admin/teams` create; phone then desktop | Save and cancel read one size side by side on every form, the power save in the power colour with the bolt | |
 
 ## /admin/system (3)
 

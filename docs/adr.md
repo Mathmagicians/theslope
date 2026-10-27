@@ -925,7 +925,7 @@ export default defineEventHandler(async (event) => {
 
 ## ADR-001: Core Framework and Technology Stack
 
-**Status:** Accepted | **Date:** 2025-01-22 | **Updated:** 2025-11-11
+**Status:** Accepted | **Date:** 2025-01-22 | **Updated:** 2026-10-27
 
 ### Decision
 
@@ -977,6 +977,10 @@ if (order.state === OrderStateSchema.enum.BOOKED) { }
 1. MUST import from validation composables
 2. MUST use `.enum` property for values
 3. MUST NOT import from `~~/prisma/generated/zod` or `@prisma/client`
+4. A form's input schema and the types of its state MAY live in its component when no other file reads them, derived
+   from the validation composables' schemas and types (`Omit<GuestBookingFormData, 'dinnerMode'> & {dinnerMode:
+   DinnerMode}` in `GuestBookingForm.vue`); what the form emits, stores or sends is a domain type from a validation
+   composable (`DesiredOrder[]`)
 
 **Exceptions:**
 - Build-time config (`app.config.ts`): MUST import from generated layer

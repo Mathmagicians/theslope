@@ -1082,3 +1082,8 @@ Taking a role makes Madhold 3 yours: the tab drops "Ikke dit hold", the role lin
 - Zero-portion tickets get a place moves from release 0.9.3 to this release: a ticket of 0 portions books and cancels
   as before the deadline at any time, so it neither joins the waiting list nor goes for sale; the ADR-016 line lands
   with the implementation.
+
+**2026-10-27**
+- A form's input schema and the types of its state may live in its component when no other file reads them, derived
+  from the validation composables' schemas and types; what the form emits, stores or sends is a domain type (ADR-001,
+  defect 46).

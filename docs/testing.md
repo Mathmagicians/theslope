@@ -97,6 +97,7 @@ const season = await SeasonFactory.createSeason(context, SeasonFactory.defaultSe
 - `SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days, deadline?, cookingDays?, startInDays?})` - a serial spec's own active season, returned as `{season, dinnerEvents}`: starts `startInDays` days from today at midnight (1 by default) and ends `days` days after the start, inside the pre-booking window (ADR-015); `cookingDays` picks `'all'` or `'weekdays'` over the default Mon/Wed/Fri; `deadline` is the cancel deadline in days. Serial only: activating it displaces the singleton active season
 - `SeasonFactory.createCookingTeamWithChefAndDinner(context, season, chefInhabitantId, {teamName?, dinner?, day?})` - a cooking team of the season with the chef as CHEF and a dinner of the team with that chef, returned as `{team, dinner}`: `dinner` sets the dinner's fields (`chefId: null` leaves the duty vacant); `day` places the dinner on a free day of the season (`'free'`, a browser spec) or alone on a given day (a serial spec), else on the date `dinner` names, tomorrow by default
 - `DinnerEventFactory.createDinnerEventOnFreeDay(context, season, data?)` - a browser spec's dinner alone on a free day of the season, picked at random after the season's last dinner where one is free; a day that turns double in the meantime gives the dinner up and another day is tried
+- `DinnerEventFactory.takenDaysOf(context, season)` - the days of the season from tomorrow that hold a dinner, in order: a spec's own team takes its dinner on one of them when the page selects among the team's dinners (the chef page)
 - `DinnerEventFactory.createDinnerEventAloneOnDay(context, season, day, data?)` - a serial spec's dinner alone on `day`: the dinners the season holds on that day give way. Serial only: a parallel spec's dinner on the day goes with them
 
 ### Rule 3: E2E Tests MUST Be Parallel-Safe
@@ -135,9 +136,15 @@ and the roles an endpoint accepts are proven in the `requireHouseholdAccess` uni
 that save the member's settings run in order in one worker: `test.describe.configure({mode: 'serial'})` in a spec,
 `@mode:serial` on a feature.
 
+**Serial:** a spec and a feature run in parallel on rows of their own, salted. A spec runs serially when what it tests
+rests on state the specs share whatever their salt: the active season (a season of its own is activated), a job
+over all entities (the scaffold, the maintenance), the settings of the one member login. The serial line (a serial
+folder, `@api-serial`, `@e2e-serial`, `mode: 'serial'`, `@mode:serial`) carries that argument in a comment and lands on
+the user's approval. A case that fails in parallel has a gap in its isolation, and the fix is rows of its own.
+
 **ALWAYS verify:** `npx playwright test path/to/test.e2e.spec.ts --workers=4`
 
-**One dinner per day in browser specs:** the dinner and chef pages select a dinner by date, and a new team receives the season's generated dinners. A browser spec creates its dinner with `DinnerEventFactory.createDinnerEventOnFreeDay(context, season, data)`, which puts it alone on a free day of the season, opens the page with `?date=` on that day, and deletes the dinner in `afterAll`.
+**One dinner per day in browser specs:** the dinner page selects a dinner by date across the season, a click on another team's dinner on the chef calendar takes the first dinner of its day, and a new team takes the season's dinners without a team. A browser spec creates such a dinner with `DinnerEventFactory.createDinnerEventOnFreeDay(context, season, data)`, which puts it alone on a free day of the season, opens the page with `?date=` on that day, and deletes the dinner in `afterAll`. The chef page selects among its team's dinners: a spec's own team takes its dinner on a day that holds a dinner already (`DinnerEventFactory.takenDaysOf`), and the free days stay with the specs that select across the season.
 
 ### Rule 3a: E2E Interactions Wait for Hydration
 
@@ -863,7 +870,7 @@ test.afterAll(async ({ browser }) => {
 
 ### Serial Tests
 
-Some E2E tests must run serially due to shared state. Two categories:
+A test runs serially on the terms of Rule 3 (Serial). Two categories:
 
 | Category | Location | Reason |
 |----------|----------|--------|
