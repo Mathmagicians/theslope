@@ -5,9 +5,7 @@ import {isAdmin} from '~/composables/usePermissions'
 import {useBookingValidation, type ScaffoldOrdersRequest, type ScaffoldOrdersResponse} from "~/composables/useBookingValidation"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {useBooking} from "~/composables/useBooking"
-import {emailChannel} from "~~/server/utils/sender/config"
-import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
-import {deliverInBackground} from "~~/server/utils/sender/deliveries"
+import {notifyBookingOutcomesInBackground} from "~~/server/utils/sender/events/waitlist"
 import {AdminBypassQuerySchema} from '~/composables/useCoreValidation'
 import {OPEN_DEADLINES} from '~/composables/useSeason'
 
@@ -63,7 +61,7 @@ export default defineEventHandler<Promise<ScaffoldOrdersResponse>>(async (event)
             deadlines: adminCorrection ? OPEN_DEADLINES : undefined,
             adminCorrection
         })
-        deliverInBackground(event, () => notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), result.outcomes))
+        notifyBookingOutcomesInBackground(event, result.outcomes)
 
         console.info(`${LOG} Scaffold complete: ${useBooking().formatScaffoldResult(result)}`)
 

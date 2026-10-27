@@ -137,13 +137,14 @@ export const useHeynaboValidation = () => {
      *
      * @param locations - Array of HeynaboLocation data from API
      * @param members - Array of HeynaboMember data from API
+     * @param now - The import's moment, a new household's move-in date
      * @returns Array of HouseholdCreate ready for database creation
      */
-    const createHouseholdsFromImport = (locations: HeynaboLocation[], members: HeynaboMember[]): HouseholdCreate[] => {
+    const createHouseholdsFromImport = (locations: HeynaboLocation[], members: HeynaboMember[], now: Date): HouseholdCreate[] => {
         const households = locations.map(location => {
             const newHousehold: HouseholdCreate = {
                 heynaboId: location.id,
-                movedInDate: new Date(), // Date of first import (preserved on subsequent imports)
+                movedInDate: now, // Date of first import (preserved on subsequent imports)
                 pbsId: location.id, // Default initial value (preserved on subsequent imports)
                 name: location.address.replace(/[^a-zA-Z]*/g, location.address.substring(0, 1)),
                 address: location.address,

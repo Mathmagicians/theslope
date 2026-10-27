@@ -9,6 +9,7 @@
  * Uses EconomyTable for tables, CostEntry/CostLine for grouped items.
  * Data: billing and upcoming orders from bookingsStore, dinnerEvents from planStore
  */
+import {addDays} from 'date-fns'
 import {formatDate, createDateRange, formatDateRange} from '~/utils/date'
 import type {DateRange} from '~/types/dateTypes'
 import type {TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
@@ -24,6 +25,7 @@ const props = defineProps<Props>()
 
 const {formatPrice} = useTicket()
 const {groupByCostEntry, calculateCurrentBillingPeriod, formatTicketCounts} = useBilling()
+const now = useClock()
 const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, NOISE} = useTheSlopeDesignSystem()
 
 const periodTitleAccessor = (period: UnifiedBillingPeriod) =>
@@ -173,12 +175,7 @@ const upcomingTotal = computed(() =>
     upcomingOrdersData.value.reduce((sum, g) => sum + g.totalAmount, 0)
 )
 
-const upcomingPeriodStart = computed(() => {
-    const currentPeriod = calculateCurrentBillingPeriod()
-    const startDate = new Date(currentPeriod.end)
-    startDate.setDate(startDate.getDate() + 1)
-    return startDate
-})
+const upcomingPeriodStart = computed(() => addDays(calculateCurrentBillingPeriod(now.value).end, 1))
 </script>
 
 <template>

@@ -33,6 +33,7 @@ import {useHousehold} from '~/composables/useHousehold'
 import {getHouseholdShortName} from '~/composables/useCoreValidation'
 import {fetchActiveSeasonId, costRowsInclude, readByIds} from '~~/server/data/prismaRepository'
 import {useBilling} from '~/composables/useBilling'
+import {formatDate} from '~/utils/date'
 import {
     useBillingValidation,
     type HouseholdBillingResponse,
@@ -1367,7 +1368,7 @@ export async function fetchUnbilledTransactions(
     const {deserializeTransaction} = useBillingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
-    console.info(`💰 > BILLING > Fetching unbilled transactions for dinners <= ${cutoffDate.toISOString().split('T')[0]}`)
+    console.info(`💰 > BILLING > Fetching unbilled transactions for dinners <= ${formatDate(cutoffDate)}`)
 
     // Ordered by household address, then pbsId as tiebreaker.
     const transactions = await prisma.transaction.findMany({
@@ -1576,7 +1577,7 @@ export async function fetchHouseholdBilling(
         return null
     }
 
-    const currentPeriod = calculateCurrentBillingPeriod()
+    const currentPeriod = calculateCurrentBillingPeriod(new Date())
 
     // Order selection: id + isGuestTicket + dinnerMode + relations (matches deserializeTransaction signature)
     const orderSelect = {

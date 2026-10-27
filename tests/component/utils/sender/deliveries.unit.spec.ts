@@ -44,7 +44,7 @@ afterEach(() => vi.clearAllMocks())
 
 // A sender event's run on a channel: the run loads its desired deliveries through the closure
 const deliverOn = (channel: EmailChannel, senderEvent: Parameters<typeof deliverDesired>[2], desired: DesiredOutgoing[], options?: Parameters<typeof deliverDesired>[4]) =>
-    deliverDesired({} as D1Database, channel, senderEvent, async () => desired, options)
+    deliverDesired({} as D1Database, channel, senderEvent, async () => ({desired}), options)
 
 // A booking status run on email through the queue
 const deliver = (queue: FakeSenderQueue, desired: DesiredOutgoing[], options?: Parameters<typeof deliverDesired>[4]) =>
@@ -189,16 +189,16 @@ describe('deliverDesired', () => {
     it.each([
         {run: 'a run delivers', options: {}},
         {run: 'a dry run delivers', options: {dryRun: true}}
-    ])('GIVEN email off in the environment WHEN $run THEN it loads no deliveries, records nothing, counts nothing sent, and one line logs the sender event, the missing setting and nothing sent', async ({options}) => {
+    ])('GIVEN email off in the environment WHEN $run THEN it loads no deliveries, records nothing, counts nothing sent, names the missing setting, and one error line logs the sender event, the missing setting and nothing sent', async ({options}) => {
         const off = NotificationFactory.channelOff
-        const load = vi.fn(async () => [outgoing(anna)])
+        const load = vi.fn(async () => ({desired: [outgoing(anna)]}))
 
         const result = await deliverDesired({} as D1Database, off, SenderEvent.BOOKING_STATUS, load, options)
 
         expect(load).not.toHaveBeenCalled()
         expect(recorded.rows).toEqual([])
-        expect(result).toStrictEqual({counts: {sent: 0}})
-        const [line, ...more] = linesOf(logs.warn)
+        expect(result).toStrictEqual({counts: {sent: 0}, missing: off.missing})
+        const [line, ...more] = linesOf(logs.error)
         expect(more).toEqual([])
         for (const named of [`[EVENT ${SenderEvent.BOOKING_STATUS}]`, off.missing, 'nothing sent']) {
             expect(line).toContain(named)
@@ -216,6 +216,28 @@ describe('deliverDesired', () => {
         for (const named of [delivery.notification, delivery.subjectType, `${delivery.subjectId}`, `v${delivery.version}`, `user-${anna.id}`]) {
             expect(line).toContain(named)
         }
+    })
+
+    // A dry run has no side effects: the dashboard's [SENT TWICE] lines come from runs that send
+    it('GIVEN two recorded rows of one delivery WHEN a dry run reads them THEN no line reports it sent twice', async () => {
+        const delivery = outgoing(anna, {subjectId: 601, version: 2})
+        recorded.rows = [NotificationFactory.recordedDelivery(delivery), NotificationFactory.recordedDelivery(delivery)]
+
+        await deliver(fakeQueue(), [delivery], {dryRun: true})
+
+        expect(linesOf(logs.warn).some(line => line.includes('[SENT TWICE]'))).toBe(false)
+    })
+
+    it('GIVEN the sender event read the recorded rows of its deliveries WHEN a run delivers THEN it reads none again and sends what no row covers', async () => {
+        const sentBefore = outgoing(anna, {subjectId: 601})
+        const queue = fakeQueue()
+
+        const {counts} = await deliverDesired({} as D1Database, NotificationFactory.channel(queue), SenderEvent.BOOKING_STATUS,
+            async () => ({desired: [sentBefore, outgoing(knud, {subjectId: 602})], recorded: [NotificationFactory.recordedDelivery(sentBefore)]}))
+
+        expect(vi.mocked(fetchDeliveries)).not.toHaveBeenCalled()
+        expect(sentMessages<EmailMessage>(queue).map(message => message.to)).toEqual([knud.email])
+        expect(counts).toEqual({sent: 1})
     })
 
     it.each([

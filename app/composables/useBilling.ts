@@ -1,4 +1,5 @@
 import type {DateRange} from '~/types/dateTypes'
+import {addMonths, setDate, startOfDay, startOfMonth} from 'date-fns'
 import {createDateRange, formatDate, formatDateRange} from '~/utils/date'
 import {useSeason} from '~/composables/useSeason'
 import {ticketTypeCount, ticketTypeLabel, ticketTypeLetter} from '~/composables/useTicket'
@@ -161,39 +162,33 @@ export const useBilling = () => {
      *
      * @param referenceDate - Date to calculate from
      * @param monthOffset - 0 for current period, -1 for previous (closed) period
-     * @returns DateRange for the billing period
+     * @returns DateRange for the billing period, from midnight of the day after the cutoff to midnight of the next cutoff
      */
     const calculateBillingPeriodRange = (referenceDate: Date, monthOffset: number): DateRange => {
         const cutoffDay = getBillingCutoffDay()
-        const currentDay = referenceDate.getDate()
-        const baseOffset = currentDay <= cutoffDay ? -1 : 0
+        const baseOffset = referenceDate.getDate() <= cutoffDay ? -1 : 0
+        const startMonth = addMonths(startOfDay(referenceDate), baseOffset + monthOffset)
 
-        return createDateRange(
-            new Date(referenceDate.getFullYear(), referenceDate.getMonth() + baseOffset + monthOffset, cutoffDay + 1),
-            new Date(referenceDate.getFullYear(), referenceDate.getMonth() + baseOffset + monthOffset + 1, cutoffDay)
-        )
+        return createDateRange(setDate(startMonth, cutoffDay + 1), setDate(addMonths(startMonth, 1), cutoffDay))
     }
+
+    /** Payment date is the 1st of the month after the period ends */
+    const paymentDateOf = (dateRange: DateRange): Date => startOfMonth(addMonths(dateRange.end, 1))
 
     /**
      * Calculate the CLOSED billing period (for monthly billing generation).
      * Returns the last completed billing period that should be billed.
      */
-    const calculateClosedBillingPeriod = (referenceDate: Date = new Date()): {
+    const calculateClosedBillingPeriod = (now: Date): {
         dateRange: DateRange
         paymentDate: Date
         billingPeriod: string
     } => {
-        const cutoffDay = getBillingCutoffDay()
-        const currentDay = referenceDate.getDate()
-        const dateRange = calculateBillingPeriodRange(referenceDate, -1)
-
-        const paymentDate = currentDay <= cutoffDay
-            ? new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1)
-            : new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 1)
+        const dateRange = calculateBillingPeriodRange(now, -1)
 
         return {
             dateRange,
-            paymentDate,
+            paymentDate: paymentDateOf(dateRange),
             billingPeriod: formatDateRange(dateRange)
         }
     }
@@ -202,8 +197,8 @@ export const useBilling = () => {
      * Calculate the CURRENT (open) billing period (for household view).
      * Returns the period currently accumulating transactions.
      */
-    const calculateCurrentBillingPeriod = (referenceDate: Date = new Date()): DateRange =>
-        calculateBillingPeriodRange(referenceDate, 0)
+    const calculateCurrentBillingPeriod = (now: Date): DateRange =>
+        calculateBillingPeriodRange(now, 0)
 
     /**
      * Get the billing period that a given dinner date belongs to.
@@ -219,32 +214,12 @@ export const useBilling = () => {
         billingPeriod: string
         paymentDate: Date
     } => {
-        const cutoffDay = getBillingCutoffDay()
-        const day = dinnerDate.getDate()
-
-        let periodStart: Date
-        let periodEnd: Date
-
-        if (day <= cutoffDay) {
-            // Dinner is in first half of month → period started previous month
-            // E.g., Oct 10 with cutoff 17 → Sep 18 - Oct 17
-            periodStart = new Date(dinnerDate.getFullYear(), dinnerDate.getMonth() - 1, cutoffDay + 1)
-            periodEnd = new Date(dinnerDate.getFullYear(), dinnerDate.getMonth(), cutoffDay)
-        } else {
-            // Dinner is in second half of month → period started this month
-            // E.g., Oct 25 with cutoff 17 → Oct 18 - Nov 17
-            periodStart = new Date(dinnerDate.getFullYear(), dinnerDate.getMonth(), cutoffDay + 1)
-            periodEnd = new Date(dinnerDate.getFullYear(), dinnerDate.getMonth() + 1, cutoffDay)
-        }
-
-        const dateRange = createDateRange(periodStart, periodEnd)
-        // Payment date is 1st of month after period ends
-        const paymentDate = new Date(periodEnd.getFullYear(), periodEnd.getMonth() + 1, 1)
+        const dateRange = calculateBillingPeriodRange(dinnerDate, 0)
 
         return {
             dateRange,
             billingPeriod: formatDateRange(dateRange),
-            paymentDate
+            paymentDate: paymentDateOf(dateRange)
         }
     }
 

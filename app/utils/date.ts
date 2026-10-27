@@ -1,7 +1,7 @@
 import {
     addDays, setISOWeek, startOfISOWeekYear, isSameDay, isSameWeek, eachDayOfInterval, getISODay,
     isValid, parse, format, isWithinInterval, areIntervalsOverlapping, eachWeekOfInterval, getISOWeek, parseISO,
-    formatDistanceToNowStrict, differenceInHours, differenceInDays, intervalToDuration,
+    formatDistanceStrict, differenceInHours, differenceInDays, intervalToDuration,
     startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth
 } from "date-fns"
 import {da} from "date-fns/locale"
@@ -15,6 +15,7 @@ export const DATE_SETTINGS =
         DATE_MASK: 'dd/MM/yyyy',
         DAY_MONTH_MASK: 'dd/MM',
         DATE_TIME_MASK: 'dd/MM/yyyy HH:mm',
+        ISO_MONTH_MASK: 'yyyy-MM',
         locale: da,
         localeString: 'da-DK',
         USER_MASK: 'dd/mm/åååå',
@@ -34,7 +35,7 @@ export function calculateDayFromWeekNumber(weekday: number, weekNumber: number, 
     return addDays(firstDay, weekday)
 }
 
-export function createDateRange(start: Date = new Date(), end: Date = new Date()): DateRange {
+export function createDateRange(start: Date, end: Date): DateRange {
     return {
         start: start,
         end: end
@@ -49,7 +50,8 @@ export function copyPartialDateRange(range: Partial<DateRange>): Partial<DateRan
 export const formatDate = (date: Date | undefined, mask: string = DATE_SETTINGS.DATE_MASK) =>
     date !== undefined && isValid(date) ? format(date, mask, {locale: DATE_SETTINGS.locale}) : ''
 
-export const parseDate = (dateStr: string) => parse(dateStr, DATE_SETTINGS.DATE_MASK, new Date())
+// The mask sets every field of the date, so the reference date only types the result
+export const parseDate = (dateStr: string) => parse(dateStr, DATE_SETTINGS.DATE_MASK, new Date(0))
 
 export function formatDateRange(range: DateRange | undefined, mask: string = DATE_SETTINGS.DATE_MASK): string {
     return !range ? '?->?' : `${formatDate(range?.start, mask)}-${formatDate(range?.end, mask)}`
@@ -224,11 +226,12 @@ export function calculateAgeOnDate(birthDate: Date, eventDate: Date): number {
 /**
  * Check if a date is considered "new" (within 7 days)
  * @param dateString - ISO date string or Date object
- * @returns True if the date is within 7 days from now
+ * @param now - The current moment
+ * @returns True if the date is within 7 days of now
  */
-export function isNew(dateString: string | Date): boolean {
+export function isNew(dateString: string | Date, now: Date): boolean {
     const date = typeof dateString === 'string' ? new Date(dateString) : dateString
-    const days = differenceInDays(new Date(), date)
+    const days = differenceInDays(now, date)
     return days <= 7
 }
 
@@ -283,12 +286,12 @@ export function formatWeekRange(start: Date, end: Date): string {
  * Calculate countdown from current time to target time
  * Shows days when >24h away, hours and minutes when <24h away
  * @param targetDate - Target date/time (e.g., dinner time)
- * @param currentDate - Current date/time (defaults to now)
+ * @param currentDate - The current moment
  * @returns Countdown object with hours, minutes, and formatted Danish string
  */
 export function calculateCountdown(
     targetDate: Date,
-    currentDate: Date = new Date()
+    currentDate: Date
 ): { hours: number; minutes: number; formatted: string } {
     if (targetDate <= currentDate) {
         return { hours: 0, minutes: 0, formatted: 'Overskredet' }
@@ -298,7 +301,7 @@ export function calculateCountdown(
 
     // More than 24 hours away - show days
     if (totalHours >= 24) {
-        const daysText = formatDistanceToNowStrict(targetDate, {
+        const daysText = formatDistanceStrict(targetDate, currentDate, {
             locale: DATE_SETTINGS.locale,
             unit: 'day'
         })
@@ -350,7 +353,7 @@ export type PeriodView = 'day' | 'week' | 'month'
  * Return the boundary timestamp for a view/direction pair.
  *
  * Used by calendar navigation to find the "adjacent" dinner: feed this into
- * `splitDinnerEvents(events, undefined, boundary)` and pick from the resulting
+ * `splitDinnerEvents(events, boundary)` and pick from the resulting
  * past/future buckets.
  *
  * Forward boundary is `endOf*` so that today/this-week/this-month's dinners fall

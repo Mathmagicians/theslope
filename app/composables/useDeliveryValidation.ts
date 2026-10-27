@@ -101,8 +101,7 @@ const coveringDeliveries = (recorded: Delivery[], desired: DesiredDelivery, chan
 }
 
 /** A delivery is sent when no recorded row covers it; an admin's override sends it again */
-const shouldSend = (recorded: Delivery[], desired: DesiredDelivery, channel: Delivery['kind'], adminOverride: boolean): boolean =>
-    adminOverride || coveringDeliveries(recorded, desired, channel).length === 0
+const shouldSend = (covering: number, adminOverride: boolean): boolean => adminOverride || covering === 0
 
 export type Delivery = z.infer<typeof DeliverySchema>
 export type DeliveryCreate = z.infer<typeof DeliveryCreateSchema>

@@ -84,7 +84,8 @@ const cancelEdit = () => {
 }
 
 // Status display: use shared residency config, fallback for active households
-const residencyDisplay = computed(() => getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate))
+const now = useClock()
+const residencyDisplay = computed(() => getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate, now.value))
 const statusIcon = computed(() => residencyDisplay.value?.icon ?? ICONS.noMoveOutPlans)
 const statusIconClass = computed(() => residencyDisplay.value ? householdSettings.factIcon : householdSettings.noPlansIcon)
 const statusText = computed(() => residencyDisplay.value?.dateText ?? 'Familien har ingen flytteplaner')

@@ -1,7 +1,7 @@
 import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {findByTestId, findAllByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {findByTestId, findAllByTestId, resetStores, setClock} from '~~/tests/component/testHelpers'
 import ChefDinnerCard from '~/components/chef/ChefDinnerCard.vue'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -21,14 +21,14 @@ describe('ChefDinnerCard', () => {
     let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
     beforeAll(() => {
         const {deadlinesForSeason} = useSeason()
-        defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+        defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason(), REFERENCE_TIME)
     })
 
     beforeEach(() => {
         resetStores()
         // Use fake timers for temporal consistency
         vi.useFakeTimers()
-        vi.setSystemTime(REFERENCE_TIME)
+        setClock(REFERENCE_TIME)
     })
 
     afterEach(() => {

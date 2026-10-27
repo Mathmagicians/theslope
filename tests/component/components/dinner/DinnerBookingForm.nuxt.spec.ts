@@ -46,7 +46,7 @@ mockNuxtImport('useUserSession', () => useUserSession)
 let baseDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
 beforeAll(() => {
   const {deadlinesForSeason} = useSeason()
-  baseDeadlines = deadlinesForSeason(SeasonFactory.defaultSeasonData)
+  baseDeadlines = deadlinesForSeason(SeasonFactory.defaultSeasonData, new Date())
 })
 const baseProps = {
   dinnerEvent: DinnerEventFactory.defaultDinnerEventDisplay(),

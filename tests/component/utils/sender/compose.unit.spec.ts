@@ -9,7 +9,7 @@ import {maskEmail} from '~~/workers/common/mask'
 const {NotificationMessageSchema} = useNotificationValidation()
 const {deliveryReferencePrefix, DeliveryKindSchema} = useDeliveryValidation()
 const config = NotificationFactory.config()
-const toAnna = {kind: 'TEST', to: 'anna@example.com', values: {}} as const
+const toAnna = {kind: NotificationFactory.Kind.TEST, to: 'anna@example.com', values: {}} as const
 
 describe('senderDisplayName', () => {
     it('derives the sender line for an environment', () => {
@@ -67,7 +67,7 @@ describe('composeEmail', () => {
         expect(message.subject).toBe('Skråningen: testbesked fra theslope-sender (dev)')
         expect(message.text).toContain(`id: ${message.meta.dedupeKey}`)
         expect(message.text.endsWith('— Skråningen · dev.skraaningen.dk')).toBe(true)
-        expect(message).toMatchObject({from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {environment: 'dev', source: 'theslope-app', kind: 'TEST'}})
+        expect(message).toMatchObject({from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {environment: 'dev', source: 'theslope-app', kind: NotificationFactory.Kind.TEST}})
     })
 
     it('sends without a Reply-To when no admin mailbox is configured', () => {
@@ -109,7 +109,6 @@ describe('composeEmail', () => {
     })
 
     it.each([
-        ['an unknown kind', {...toAnna, kind: 'NOPE'}, /template.*NOPE/i],
         ['a value no template uses', {...toAnna, values: {unused: 'x'}}, /unused/]
     ])('throws on %s — a template bug must fail in tests', (_name, input, error) => {
         expect(() => composeEmail(config, input)).toThrow(error)

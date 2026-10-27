@@ -134,7 +134,8 @@ const importAndReloadHouseholds = async () => {
     await refreshSelectedHousehold()
 }
 
-const jobHistoryEmpty = getRandomEmptyMessageText('jobHistory')
+const now = useClock()
+const jobHistoryEmpty = getRandomEmptyMessageText('jobHistory', now.value)
 
 // ============================================================================
 // JOB HISTORY TABLE

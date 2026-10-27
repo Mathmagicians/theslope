@@ -22,7 +22,7 @@ import {archiveBillingCsv} from '~~/server/utils/billingArchive'
 import {useBilling} from '~/composables/useBilling'
 import {billingMailKind, notificationsForAccountant} from '~~/server/utils/sender/events/monthly-billing'
 import {deliverDesired, type DeliveryOptions} from '~~/server/utils/sender/deliveries'
-import {channelOff, notSent} from '~~/server/utils/sender/emit'
+import {notSent} from '~~/server/utils/sender/emit'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import type {BillingPeriodSideEffects, BillingPeriodSummaryDetail, MonthlyBillingResponse} from '~/composables/useBillingValidation'
 import type {SenderEmitResult} from '~/composables/useNotificationValidation'
@@ -47,12 +47,10 @@ export type MonthlyBillingSideEffects = {
  * and the admin's re-send share it. Its result is the queue's answer, or not sent when nothing went
  */
 export const notifyBillingPeriod = async (
-    d1Client: D1Database, email: EmailChannel, summary: BillingPeriodSummaryDetail, options: Pick<DeliveryOptions, 'jobRunId' | 'adminOverride'> = {}
+    d1Client: D1Database, email: EmailChannel, summary: BillingPeriodSummaryDetail, options: DeliveryOptions = {}
 ): Promise<SenderEmitResult> => {
-    const kind = billingMailKind(summary.version)
-    if (!email.on) return channelOff(kind, email.missing, summary.billingPeriod)
-    const {emitted} = await deliverDesired(d1Client, email, MONTHLY_BILLING, notificationsForAccountant(email.config, summary), options)
-    return emitted?.[0] ?? notSent(kind, summary.billingPeriod)
+    const {emitted} = await deliverDesired(d1Client, email, MONTHLY_BILLING, notificationsForAccountant(summary), options)
+    return emitted?.[0] ?? notSent(billingMailKind(summary.version), summary.billingPeriod)
 }
 
 /** Bring one closed period to its end state: CSV in R2 and accountant mail, at the period's current version */

@@ -57,7 +57,7 @@ const priceFieldsOf = (price: TicketPrice) => ({ticketPriceId: price.id, ticketT
 let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
 beforeAll(() => {
   const {deadlinesForSeason} = useSeason()
-  deadlines = deadlinesForSeason(SeasonFactory.defaultSeasonData)
+  deadlines = deadlinesForSeason(SeasonFactory.defaultSeasonData, new Date())
 })
 
 // Anna and Lars, in residency on every dinner the spec places, the past ones too
@@ -107,10 +107,11 @@ const chipFaceOf = (chip: NonNullable<ReturnType<typeof componentIn>>) => {
   const corner = chip.find(':scope > [data-slot="base"]')
   return {text: corner.text(), color: chip.props('color'), glyphs: iconNamesIn(corner)}
 }
-// The chip a cell's selector sits under; a cell under no chip has none
+// The chip a cell's selector sits under, as it shows; a cell under no chip, or under one that shows no corner, has none
 const cellChipOf = (wrapper: Mounted, cellName: string) => {
   const cell = selectorNamed(wrapper, cellName).element
-  const chip = wrapper.findAllComponents({name: 'UChip'}).find(candidate => candidate.element.contains(cell))
+  const chip = wrapper.findAllComponents({name: 'UChip'})
+    .find(candidate => candidate.element.contains(cell) && candidate.find(':scope > [data-slot="base"]').exists())
   return chip ? chipFaceOf(chip) : null
 }
 // A dinner's column: its power cell and the household's cells
@@ -215,7 +216,7 @@ describe('BookingGridView', () => {
 
     await wrapper.setProps({household: movedOut})
 
-    expect(findByTestId(wrapper, 'outside-residency-alert').text()).toContain(getResidencyDisplay(movedOut.movedInDate, movedOut.moveOutDate)!.alertDescription)
+    expect(findByTestId(wrapper, 'outside-residency-alert').text()).toContain(getResidencyDisplay(movedOut.movedInDate, movedOut.moveOutDate, new Date())!.alertDescription)
     expectColumn([], FORM_MODES.VIEW)
     expect(findByTestId(wrapper, `guest-add-${dinner.id}`).exists()).toBe(false)
   })
@@ -516,7 +517,7 @@ describe('BookingGridView', () => {
         OrderFactory.defaultOrder(undefined, {id: 900 + index, inhabitantId, dinnerEventId: locked.id, dinnerMode: NONE, state: RELEASED}))
       const wrapper = await mountGrid([locked], {orders, lockStatus: new Map([[locked.id, supply]])})
 
-      expect(headerChip(wrapper)).toEqual({text, color: lockChip(locked, new Map([[locked.id, supply]]))!.color, glyphs})
+      expect(headerChip(wrapper)).toEqual({text, color: lockChip(locked, new Map([[locked.id, supply]]), new Date())!.color, glyphs})
     })
 
     it.each`

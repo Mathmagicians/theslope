@@ -17,13 +17,10 @@
  */
 import {toValue, type MaybeRefOrGetter} from 'vue'
 import type {DateValue} from '@internationalized/date'
-import {isSameDay} from 'date-fns'
 import {DinnerState, type DinnerEventDisplay} from '~/composables/useBookingValidation'
 
-const getDinnerForDay = <T extends { date: Date }>(dinnerEvents: T[], day: DateValue): T | undefined => {
-  const dayDate = toDate(day)
-  return dinnerEvents.find(event => isSameDay(event.date, dayDate))
-}
+const getDinnerForDay = <T extends { date: Date }>(dinnerEvents: T[], day: DateValue): T | undefined =>
+  getDinnerOnDate(dinnerEvents)(toDate(day))
 
 const isCancelledDay = (dinnerEvents: DinnerEventDisplay[], day: DateValue): boolean =>
   getDinnerForDay(dinnerEvents, day)?.state === DinnerState.CANCELLED
@@ -45,8 +42,9 @@ export const useTemporalCalendar = () => {
    */
   const useTemporalSplit = <T extends { date: Date }>(events: MaybeRefOrGetter<T[]>) => {
     const dinnerStartHour = getDefaultDinnerStartTime()
+    const now = useClock()
 
-    const splitResult = computed(() => splitDinnerEvents<T>(toValue(events)))
+    const splitResult = computed(() => splitDinnerEvents<T>(toValue(events), now.value))
 
     const nextDinner = computed(() => splitResult.value.nextDinner)
     // Extract dates from events for calendar badge display

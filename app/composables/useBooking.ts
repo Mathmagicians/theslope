@@ -394,12 +394,13 @@ export type BookingContext = {
     deadlines: {canModifyOrders: (date: Date) => boolean, canEditDiningMode: (date: Date) => boolean}
     isHouseholdInResidency: (date: Date) => boolean
     takesNoPortion: (ticketPriceId: number) => boolean
+    now: Date
 }
 
 // useSeason builds its schemas on every call and a grid asks once per cell: useBooking() binds its own past check once
-const bookingOptionsWith = (isDinnerPast: (date: Date) => boolean) =>
-    ({order, waitlistEntry, candidate}: BookingRow, {event, deadlines, isHouseholdInResidency, takesNoPortion}: BookingContext): DinnerMode[] => {
-        if (isDinnerPast(event.date) || !isHouseholdInResidency(event.date) || CLOSED_DINNER_STATES.has(event.state)) return []
+const bookingOptionsWith = (isDinnerPast: (date: Date, now: Date) => boolean) =>
+    ({order, waitlistEntry, candidate}: BookingRow, {event, deadlines, isHouseholdInResidency, takesNoPortion, now}: BookingContext): DinnerMode[] => {
+        if (isDinnerPast(event.date, now) || !isHouseholdInResidency(event.date) || CLOSED_DINNER_STATES.has(event.state)) return []
         const input = {existing: order, existingEntry: waitlistEntry, beforeCancellationDeadline: deadlines.canModifyOrders(event.date), canEditMode: deadlines.canEditDiningMode(event.date), takesNoPortion}
         return DINNER_MODE_ORDER.filter(dinnerMode => {
             const desired = candidate(dinnerMode)
@@ -412,11 +413,11 @@ const bookingOptionsWith = (isDinnerPast: (date: Date) => boolean) =>
 export const getBookingOptions = (row: BookingRow, context: BookingContext): DinnerMode[] =>
     bookingOptionsWith(useSeason().isDinnerPast)(row, context)
 
-/** A household's booking context on each of its dinners; without a household every day counts as in residency */
-export const bookingContextOf = (household: HouseholdDisplay | null, deadlines: SeasonDeadlines, ticketPrices: TicketPrice[]) => {
+/** A household's booking context on each of its dinners at `now`, the moment the deadlines were built for; without a household every day counts as in residency */
+export const bookingContextOf = (household: HouseholdDisplay | null, deadlines: SeasonDeadlines, ticketPrices: TicketPrice[], now: Date) => {
     const isHouseholdInResidency = household ? isHouseholdActiveOnDay(household.movedInDate, household.moveOutDate) : () => true
     const takesNoPortion = useTicket().takesNoPortionOf(ticketPrices)
-    return (event: BookingContext['event']): BookingContext => ({event, deadlines, isHouseholdInResidency, takesNoPortion})
+    return (event: BookingContext['event']): BookingContext => ({event, deadlines, isHouseholdInResidency, takesNoPortion, now})
 }
 
 /** The household row: the modes every row may pick */
@@ -486,9 +487,10 @@ export const resolveOrdersFromPreferencesToBuckets = (
     season: Season,
     household: HouseholdDisplay,
     existingOrders: OrderDisplay[],
-    confirmedKeys: Set<string> = new Set(),
-    cancelledKeys: Set<string> = new Set(),
-    existingEntries: TicketWaitlistDisplay[] = []
+    confirmedKeys: Set<string>,
+    cancelledKeys: Set<string>,
+    existingEntries: TicketWaitlistDisplay[],
+    now: Date
 ): OrderBucketResult<DesiredOrder> => {
     const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
     const {deadlinesForSeason} = useSeason()
@@ -496,7 +498,7 @@ export const resolveOrdersFromPreferencesToBuckets = (
     const OrderState = OrderStateSchema.enum
     const dinnerEvents = season.dinnerEvents ?? []
     const dinnerEventById = new Map(dinnerEvents.map(de => [de.id, de]))
-    const {canModifyOrders, canEditDiningMode} = deadlinesForSeason(season)
+    const {canModifyOrders, canEditDiningMode} = deadlinesForSeason(season, now)
     const takesNoPortion = useTicket().takesNoPortionOf(season.ticketPrices)
 
     const keyOf = (order: OrderDisplay) => `${order.inhabitantId}-${order.dinnerEventId}`
@@ -765,13 +767,14 @@ export const useBooking = () => {
      */
     const getChefDeadlineAlarm = (
         dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost' | 'heynaboEventId'>,
-        deadlines: Pick<SeasonDeadlines, 'getMenuDeadlineTime' | 'getDinnerStartTime'>
+        deadlines: Pick<SeasonDeadlines, 'getMenuDeadlineTime' | 'getDinnerStartTime'>,
+        now: Date
     ): AlarmLevel => {
         const {getCookingDeadlineThresholds} = useSeason()
         const thresholds = getCookingDeadlineThresholds()
 
-        const menuCountdown = calculateCountdown(deadlines.getMenuDeadlineTime(dinnerEvent.date))
-        const dinnerCountdown = calculateCountdown(deadlines.getDinnerStartTime(dinnerEvent.date))
+        const menuCountdown = calculateCountdown(deadlines.getMenuDeadlineTime(dinnerEvent.date), now)
+        const dinnerCountdown = calculateCountdown(deadlines.getDinnerStartTime(dinnerEvent.date), now)
 
         const alarms: AlarmLevel[] = []
 
@@ -797,16 +800,8 @@ export const useBooking = () => {
      */
     const HEYNABO_EVENT_TEMPLATE = BOOKING_WORDS.heynaboEvent
 
-    /**
-     * Build dinner URL for Heynabo event description
-     * Format: /dinner?date=dd/mm/yy
-     */
-    const buildDinnerUrl = (baseUrl: string, dinnerDate: Date): string => {
-        const day = String(dinnerDate.getDate()).padStart(2, '0')
-        const month = String(dinnerDate.getMonth() + 1).padStart(2, '0')
-        const year = String(dinnerDate.getFullYear()).slice(-2)
-        return `${baseUrl}/dinner?date=${day}/${month}/${year}`
-    }
+    /** The dinner page of a date, its ?date= in the format the page reads (useBookingView) */
+    const buildDinnerUrl = (baseUrl: string, dinnerDate: Date): string => `${baseUrl}/dinner?date=${formatDate(dinnerDate)}`
 
     /**
      * Transform a DinnerEvent to Heynabo event payload (ADR-013)
@@ -902,9 +897,9 @@ export const useBooking = () => {
      * Extract IDs of past dinners from a list of pending dinners.
      * Uses splitDinnerEvents to determine "past" based on dinner time.
      */
-    const getPastDinnerIds = (pendingDinners: {id: number, date: Date}[]): number[] => {
+    const getPastDinnerIds = (pendingDinners: {id: number, date: Date}[], now: Date): number[] => {
         if (pendingDinners.length === 0) return []
-        const {pastDinners} = splitDinnerEvents(pendingDinners)
+        const {pastDinners} = splitDinnerEvents(pendingDinners, now)
         return pastDinners.map(d => d.id)
     }
 

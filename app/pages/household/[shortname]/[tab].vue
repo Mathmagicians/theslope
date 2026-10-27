@@ -15,6 +15,7 @@
 import {HELP_TEXTS} from '~/config/help-texts'
 
 const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR, ALERTS, NOISE } = useTheSlopeDesignSystem()
+const now = useClock()
 
 // The tab keys are the URL's last segment
 const HOUSEHOLD_TAB = {
@@ -136,7 +137,7 @@ const editProps = computed(() => ({canEdit: canEdit.value, adminBypass: adminOve
 const ribbon = computed(() => {
   const h = selectedHousehold.value
   if (!h) return null
-  const display = getResidencyDisplay(h.movedInDate, h.moveOutDate)
+  const display = getResidencyDisplay(h.movedInDate, h.moveOutDate, now.value)
   if (!display) return null
   return { classes: getRibbonClasses(display.type), text: display.badgeText }
 })

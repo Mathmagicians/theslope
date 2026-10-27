@@ -30,7 +30,8 @@ import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
 const { COLOR, COMPONENTS, ICONS, ALERTS, LAYOUTS, getRandomEmptyMessage, NOISE, SIZES } = useTheSlopeDesignSystem()
 
 // Fun empty state for no team assigned
-const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
+const now = useClock()
+const noTeamMessage = getRandomEmptyMessage('noTeamAssigned', now.value)
 
 // Toast for user feedback
 const toast = useToast()
@@ -74,6 +75,7 @@ const cookingDays = computed(() => selectedSeason.value?.cookingDays)
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 
 const {deadlinesForSeason} = useSeason()
+const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value, now.value) : undefined)
 
 // Date selection via URL query parameter (curried pattern)
 const dinnerDates = computed(() => dinnerEvents.value.map(e => new Date(e.date)))
@@ -197,9 +199,9 @@ useHead({
       <!-- #hero: ChefMenuCard in VIEW mode with DinnerBookingForm -->
       <template #hero>
         <ChefMenuCard
-          v-if="dinnerEventDetail && selectedSeason"
+          v-if="dinnerEventDetail && selectedSeason && deadlines"
           :dinner-event="dinnerEventDetail"
-          :deadlines="deadlinesForSeason(selectedSeason)"
+          :deadlines="deadlines"
           :form-mode="FORM_MODES.VIEW"
           :show-state-controls="false"
           :show-allergens="true"
@@ -216,7 +218,7 @@ useHead({
             :dinner-event="dinnerEventDetail"
             :orders="householdOrders"
             :ticket-prices="selectedSeason?.ticketPrices ?? []"
-            :deadlines="deadlinesForSeason(selectedSeason)"
+            :deadlines="deadlines"
             :released-ticket-counts="lockStatus.get(dinnerEventDetail.id) ?? EMPTY_RELEASED_TICKET_COUNTS"
             :waitlist-entries="householdWaitlist"
             :loading="isBookingsReloading"

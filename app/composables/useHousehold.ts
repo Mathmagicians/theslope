@@ -37,10 +37,10 @@ export type ResidencyStatus = 'pending' | 'active' | 'leaving' | 'moved-out'
 export const getResidencyStatus = (
     movedInDate: Date,
     moveOutDate: Date | null,
-    referenceDate: Date = new Date()
+    now: Date
 ): ResidencyStatus => {
-    if (isAfter(movedInDate, referenceDate)) return 'pending'
-    if (moveOutDate && isBefore(moveOutDate, referenceDate)) return 'moved-out'
+    if (isAfter(movedInDate, now)) return 'pending'
+    if (moveOutDate && isBefore(moveOutDate, now)) return 'moved-out'
     if (moveOutDate) return 'leaving'
     return 'active'
 }

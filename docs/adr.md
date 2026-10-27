@@ -50,7 +50,7 @@ An architecture spec reads every `.vue` under `app/` and fails on a rule breach;
 
 ## ADR-017: Isomorphic Composables, Pure UI Composables and Per-Context Type Checking
 
-**Status:** Accepted | **Date:** 2026-09-02 | **Updated:** 2026-10-20
+**Status:** Accepted | **Date:** 2026-09-02 | **Updated:** 2026-10-27
 
 ### Context
 
@@ -85,6 +85,9 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 6. User-facing text MUST live in `app/config/`, a component's own one-line text excepted (rule 7); the isomorphic composable formats a domain object's text from it, and `use<Domain>Ui` adds the icon and the colour
 7. New text starts in `app/config/`; an existing literal moves there when its file is touched. A component's own
    one-line text (an empty state, a loading line) stays in its template
+8. Date operations call the season's curried helpers (`useSeason`, `app/utils/season.ts`) and `app/utils/date.ts`;
+   `date-fns` only where neither has the operation. The app reads the time through `useClock`, and only the server calls
+   `new Date()`; a date becomes text through `formatDate` and its named formats
 
 ### Key Files
 
@@ -654,7 +657,7 @@ const createDraft = ref<CookingTeam[]>([])
 
 ## ADR-007: SSR-Friendly Store Pattern with useAsyncData
 
-**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2026-10-08
+**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2026-10-27
 
 ### Decision
 
@@ -721,10 +724,8 @@ const isStoreReady = computed(() => /* combine all checks */)
 
 ### Component-Local Data Exception
 
-Components MAY use `useAsyncData` directly when:
-- Data is component-specific (not shared)
-- Multiple instances need separate data
-- Fetch calls **store methods** built on `apiRequest` (`planStore.fetchTeamDetail`, `bookingsStore.fetchOrderDetail`)
+Components MAY read data themselves through `storeAsyncData` by url when it is component-specific (not shared) or
+multiple instances need separate data (`AdminSystem`'s job runs, the public billing page)
 
 ### Compliance
 

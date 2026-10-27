@@ -41,6 +41,7 @@ import type {TicketPresentation} from '~/composables/useBookingUi'
 
 // Design system
 const {SIZES, COLOR, COMPONENTS, NOISE, TYPOGRAPHY, ICONS} = useTheSlopeDesignSystem()
+const now = useClock()
 const display = COMPONENTS.householdAllergies
 
 // Ticket type config for display (label, color, icon); active season prices carry the age limits
@@ -163,7 +164,7 @@ const tableData = computed((): TableDataRow[] => {
       lastName: inhabitant.lastName,
       pictureUrl: inhabitant.pictureUrl,
       birthDate: inhabitant.birthDate,
-      ticketConfig: resolveTicketTypePresentation(inhabitant.birthDate ?? null, activeSeason.value?.ticketPrices),
+      ticketConfig: resolveTicketTypePresentation(inhabitant.birthDate ?? null, activeSeason.value?.ticketPrices, now.value),
       allergies: inhabitantAllergies
     }
   })

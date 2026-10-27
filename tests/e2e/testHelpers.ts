@@ -275,11 +275,33 @@ const gotoAllergyCatalog = async (page: Page): Promise<void> => {
     await expect(page.getByText('Detaljer').or(page.getByText('Vælg en allergi')).first()).toBeAttached()
 }
 
-/** Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation */
+const HYDRATION_SUMMARY = 'Hydration completed but contains mismatches.'
+
+/** A countdown's minutes from its text ("22T 40M", "40M"); null for the days ("2 DAGE") */
+const countdownMinutes = (text: string): number | null => {
+    const match = text.trim().match(/^(?:(\d+)T )?(\d+)M$/)
+    return match ? Number(match[1] ?? 0) * 60 + Number(match[2]) : null
+}
+
+/** A countdown that crossed a minute or an hour between the server render and the hydration: its texts lie one minute apart */
+const isCountdownTick = (warning: string): boolean => {
+    const [, server, client] = warning.match(/rendered on server: ([^\n]*)\n[^\n]*expected on client: ([^\n]*)\n\s*at <CountdownTimer/) ?? []
+    const [serverMinutes, clientMinutes] = [countdownMinutes(server ?? ''), countdownMinutes(client ?? '')]
+    return serverMinutes !== null && clientMinutes !== null && Math.abs(serverMinutes - clientMinutes) === 1
+}
+
+/**
+ * Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation. A countdown one
+ * minute apart is the clock, and Vue's closing summary goes with it when it was the only mismatch
+ */
 const collectHydrationWarnings = (page: Page): string[] => {
     const warnings: string[] = []
+    let ticks = 0
     page.on('console', message => {
-        if (message.text().includes('Hydration')) warnings.push(message.text())
+        const text = message.text()
+        if (!text.includes('Hydration')) return
+        if (isCountdownTick(text)) ticks++
+        else if (text !== HYDRATION_SUMMARY || ticks === 0 || warnings.length > 0) warnings.push(text)
     })
     return warnings
 }

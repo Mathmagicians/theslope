@@ -24,7 +24,7 @@ and the component headers hold the detail; a row names a gap in a few words.
 |---|---|---|---|---|---|---|---|
 | **Admin** | | | | | | | |
 | `/admin/planning` | `AdminPlanning.vue` | ✅ plan | ✅ full | ✅ `?mode=` `?season=` | ✅ | ✅ | ✅ |
-| `/admin/teams` | `AdminTeams.vue` | ✅ plan | ✅ partial | ✅ `?mode=` `?team=` | ✅ | ⚠️ | ⚠️ partial unit; master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
+| `/admin/teams` | `AdminTeams.vue` | ✅ plan | ✅ partial | ✅ `?mode=` `?team=` | ✅ | ⚠️ the open row by id | ⚠️ partial unit; master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
 | `/admin/households` | `AdminHouseholds.vue` | ✅ households | ❓ | ✅ `?mode=` | ✅ | ⚠️ loading row, the open row by id | ⚠️ audit needed |
 | `/admin/allergies` | `AdminAllergies.vue` | ✅ allergies | N/A | ✅ `?allergy=` | ✅ | ✅ | ✅ master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
 | `/admin/users` | `AdminUsers.vue` | ✅ users | N/A | ✅ | ✅ | ⚠️ loading row, the open row by id | ⚠️ partial unit |
@@ -67,7 +67,7 @@ Status.
 
 | Component | Routes | Stores | Component spec | E2E | Status |
 |---|---|---|---|---|---|
-| `AdminTeams.vue` | `/admin/teams` | plan, households | ⚠️ | ✅ | ⚠️ partial unit |
+| `AdminTeams.vue` | `/admin/teams` | plan, households | ⚠️ the open row by id | ✅ | ⚠️ partial unit |
 | `CookingTeamCard.vue` | `/admin/teams`, `/chef`, `/dinner` | plan, households | ✅ | ✅ parent | ✅; on a visit on /chef the header carries "Ikke dit hold" (`COMPONENTS.visitBadge`, shared with the visiting tab) |
 | `TeamMemberAddForm.vue` | `/admin/teams` | none | ✅ | ✅ parent | ✅ |
 | `TeamRoleFields.vue` | `/admin/teams` | none | ✅ parent | ✅ parent | ✅ |

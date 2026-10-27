@@ -59,19 +59,8 @@ const paletteStyles = computed(() =>
     props.palette === 'chef' ? CHEF_CALENDAR.countdown : DINNER_CALENDAR.countdown
 )
 
-// Real-time clock for countdown updates
-const currentTime = ref(new Date())
-let intervalId: ReturnType<typeof setInterval> | null = null
-
-onMounted(() => {
-    intervalId = setInterval(() => {
-        currentTime.value = new Date()
-    }, 1000)
-})
-
-onUnmounted(() => {
-    if (intervalId) clearInterval(intervalId)
-})
+// The page's clock: the server and the browser render the same minute, and it ticks after hydration
+const now = useClock()
 
 // Import from useSeason for consistent time range calculation
 const {getDinnerTimeRange} = useSeason()
@@ -84,19 +73,16 @@ const isDuringEvent = computed(() => {
         props.eventStartHour,
         props.eventDurationMinutes
     )
-    return isWithinInterval(currentTime.value, eventTimeRange)
+    return isWithinInterval(now.value, eventTimeRange)
 })
 
+// The event's start, the countdown's target
+const eventStart = computed(() =>
+    props.nextEvent ? getDinnerTimeRange(new Date(props.nextEvent.date), props.eventStartHour, 0).start : undefined
+)
+
 // Calculate countdown
-const countdown = computed(() => {
-    if (!props.nextEvent) return null
-    const eventTimeRange = getDinnerTimeRange(
-        new Date(props.nextEvent.date),
-        props.eventStartHour,
-        0
-    )
-    return calculateCountdown(eventTimeRange.start, currentTime.value)
-})
+const countdown = computed(() => eventStart.value ? calculateCountdown(eventStart.value, now.value) : null)
 
 // Computed display state
 const displayState = computed((): 'during' | 'future' | 'empty' => {
@@ -119,11 +105,11 @@ const handleClick = () => {
     :class="[
       CALENDAR.countdown.container,
       paletteStyles.border,
-      clickable && nextEvent ? 'cursor-pointer hover:ring-2 hover:ring-opacity-50 transition-all' : ''
+      clickable && nextEvent ? CALENDAR.countdown.clickable : ''
     ]"
     @click="handleClick"
   >
-    <div class="text-center space-y-2">
+    <div :class="CALENDAR.countdown.content">
       <!-- Title - always shown -->
       <div :class="CALENDAR.countdown.title">
         {{ title }}
@@ -145,18 +131,18 @@ const handleClick = () => {
           <!-- Future: show OM X -->
           <template v-else-if="displayState === 'future' && countdown">
             <span :class="CALENDAR.countdown.numberPrefix">OM</span>
-            <span class="ml-2">{{ countdown.formatted }}</span>
+            <span :class="CALENDAR.countdown.numberValue">{{ countdown.formatted }}</span>
           </template>
         </div>
 
         <!-- Event Time (Smaller) with blinking dot during event -->
-        <div class="flex items-baseline justify-center gap-2">
+        <div :class="CALENDAR.countdown.timeRow">
           <span :class="[CALENDAR.countdown.timeLabel, paletteStyles.accentLight]">{{ timeLabel }} kl </span>
           <span :class="[CALENDAR.countdown.timeValue, paletteStyles.accentMedium]">
             {{ eventStartHour.toString().padStart(2, '0') }}:00
           </span>
           <!-- Invisible spacer for centering -->
-          <span class="text-xs md:text-sm invisible" aria-hidden="true">{{ timeLabel }} kl </span>
+          <span :class="CALENDAR.countdown.timeSpacer" aria-hidden="true">{{ timeLabel }} kl </span>
           <!-- Blinking dot during event -->
           <span
             v-if="isDuringEvent"

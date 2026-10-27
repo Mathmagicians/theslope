@@ -46,7 +46,7 @@ describe('ChefMenuCard', () => {
     let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
     beforeAll(() => {
         const {deadlinesForSeason} = useSeason()
-        defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+        defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason(), new Date())
     })
 
     const createWrapper = (props: Record<string, unknown> = {}) => mountCard({
@@ -86,7 +86,7 @@ describe('ChefMenuCard', () => {
             }
 
             const wrapper = await createWrapper({dinnerEvent})
-            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens').text)
+            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens', new Date()).text)
 
             // An empty selection, no crash
             const selector = await openAllergenEditor(wrapper)
@@ -133,7 +133,7 @@ describe('ChefMenuCard', () => {
             const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [], tickets}
             const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW})
 
-            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens').text)
+            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens', new Date()).text)
             expect(findByTestId(wrapper, ALLERGEN_OVERVIEW).exists()).toBe(false)
         })
 
@@ -202,7 +202,7 @@ describe('ChefMenuCard', () => {
 describe('ChefMenuCard — Madbestilling', () => {
     let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
     beforeAll(() => {
-        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason())
+        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason(), new Date())
     })
 
     const mountChefCard = (props: Record<string, unknown> = {}) => mountCard({
@@ -270,7 +270,7 @@ describe('ChefMenuCard — Madbestilling', () => {
 describe('ChefMenuCard — release portions', () => {
     let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
     beforeAll(() => {
-        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason())
+        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason(), new Date())
     })
 
     const QUEUE = WaitlistFactory.defaultQueueSummary({entries: 4, portions: 2.5})

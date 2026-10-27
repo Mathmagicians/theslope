@@ -8,7 +8,8 @@ import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from '~~/server/data/
 import {createOrders} from '~~/server/data/financesRepository'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {getSystemUserId} from '~~/server/utils/systemUser'
-import {isSameDay} from 'date-fns'
+import {formatDate} from '~/utils/date'
+import {getDinnerOnDate} from '~/utils/season'
 import {getHouseholdShortName} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
@@ -95,11 +96,11 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
         const ordersByHousehold = parsedOrders.reduce<Map<number, OrderCreateWithPrice[]>>((acc, parsedOrder) => {
             const shortName = getHouseholdShortName(parsedOrder.address)
             const household = householdByShortName.get(shortName)!
-            const dinnerEvent = season.dinnerEvents?.find(de => isSameDay(de.date, parsedOrder.date))
+            const dinnerEvent = getDinnerOnDate(season.dinnerEvents ?? [])(parsedOrder.date)
             const firstInhabitant = household.inhabitants?.[0]
 
             if (!dinnerEvent) {
-                throw createError({statusCode: 400, message: `No dinner event for ${parsedOrder.date.toISOString().split('T')[0]} (${parsedOrder.address})`})
+                throw createError({statusCode: 400, message: `No dinner event for ${formatDate(parsedOrder.date)} (${parsedOrder.address})`})
             }
             if (!firstInhabitant) {
                 throw createError({statusCode: 400, message: `No inhabitants in household ${household.address}`})

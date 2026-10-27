@@ -269,6 +269,8 @@ export async function scaffoldPrebookings(
     const effectiveUserId = options.userId ?? await getSystemUserId(d1Client)
     // A write to a place on the waiting list records the act it is, by the run's user
     const auditOf = (action: BookingAction): WaitlistAuditContext => ({action: getAuditAction(isUserTriggered, action), performedByUserId: effectiveUserId, seasonId: effectiveSeasonId})
+    // One moment for the run: its window, its deadlines and its preference decisions
+    const now = new Date()
 
     // Filter dinner events: user mode uses IDs from desiredOrders, system uses rolling window. A cancelled dinner is
     // closed to every run, a consumed one to every run but an admin's correction; the run leaves a closed dinner's
@@ -287,7 +289,7 @@ export async function scaffoldPrebookings(
         ? [...new Set(desiredOrders!.map(o => o.dinnerEventId))]
         : (options.dinnerEventIds
             ? options.dinnerEventIds
-            : getScaffoldableDinnerEvents(allDinnerEvents).filter(onWeekdays).map(e => e.id)))
+            : getScaffoldableDinnerEvents(allDinnerEvents, now).filter(onWeekdays).map(e => e.id)))
         .filter(isBookable)
     const dinnerEvents = allDinnerEvents.filter(de => dinnerEventIds.includes(de.id))
 
@@ -408,7 +410,7 @@ export async function scaffoldPrebookings(
             // Build lookup: orderId → existing order (for updates)
             const orderById = new Map(householdOrders.map(o => [o.id, o]))
             const dinnerEventById = new Map(householdDinnerEvents.map(de => [de.id, de]))
-            const {canModifyOrders, canEditDiningMode} = options.deadlines ?? deadlinesForSeason(season)
+            const {canModifyOrders, canEditDiningMode} = options.deadlines ?? deadlinesForSeason(season, now)
             const run = householdRunOf(household)
             const {toOrderCreate, holderOf, placeSnapshotOf, resultOf, landedAs, failedAs} = run
 
@@ -432,7 +434,8 @@ export async function scaffoldPrebookings(
                     householdOrders,
                     confirmedKeys,
                     cancelledKeys,
-                    householdEntries
+                    householdEntries,
+                    now
                 )
 
             // The generator skips an order the household no longer holds (bought by another household, or deleted); the save lists it as failed

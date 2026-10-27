@@ -31,7 +31,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 const {household} = toRefs(props)
 
-const {deadlinesForSeason} = useSeason()
+const {deadlinesForSeason, getDinnerOnDate} = useSeason()
+const now = useClock()
 const {BOOKING_TOAST_TITLES, buildBookingChanges} = useBooking()
 const {ICONS, ALERTS, COMPONENTS, LAYOUTS} = useTheSlopeDesignSystem()
 
@@ -50,7 +51,9 @@ const householdsStore = useHouseholdsStore()
 const {myInhabitant} = storeToRefs(householdsStore)
 const bookerId = computed(() => myInhabitant.value?.id)
 
-const seasonDates = computed(() => selectedSeason.value?.seasonDates ?? { start: new Date(), end: new Date() })
+// Without a season the calendar shows the day of the first render; a fallback that followed the clock would move the view every minute
+const today = now.value
+const seasonDates = computed(() => selectedSeason.value?.seasonDates ?? { start: today, end: today })
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 const dinnerDates = computed(() => dinnerEvents.value.map(e => new Date(e.date)))
 const holidays = computed(() => selectedSeason.value?.holidays ?? [])
@@ -92,9 +95,7 @@ const handleNavigate = (direction: 'prev' | 'next') => navigate(direction === 'n
 // Find dinner event for selected date
 const selectedDinnerEvent = computed(() => {
   if (!selectedDate.value) return null
-  return dinnerEvents.value.find(e =>
-    new Date(e.date).toDateString() === selectedDate.value.toDateString()
-  ) ?? null
+  return getDinnerOnDate(dinnerEvents.value)(selectedDate.value) ?? null
 })
 
 // Grid view (week/month) is full-width without calendar
@@ -115,7 +116,7 @@ bookingsStore.loadOrdersForDinners(() => ({
 
 // Season data for view components
 const ticketPrices = computed(() => selectedSeason.value?.ticketPrices ?? [])
-const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value) : undefined)
+const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value, now.value) : undefined)
 
 // Grid view form mode
 const gridFormMode = ref<FormMode>(FORM_MODES.VIEW)

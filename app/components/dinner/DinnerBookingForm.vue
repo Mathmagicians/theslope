@@ -244,7 +244,8 @@ const formMode = computed(() => {
 })
 
 const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, getResidencyDisplay, LAYOUTS, NOISE, TYPOGRAPHY, TABLE_COLUMNS, ORIENTATIONS} = useTheSlopeDesignSystem()
-const emptyStateMessage = getRandomEmptyMessage('household')
+const now = useClock()
+const emptyStateMessage = getRandomEmptyMessage('household', now.value)
 
 const {findTicketPriceById, resolveTicketPrice, resolveTicketPriceOn, ticketTypeChangeOf, formatPrice} = useTicket()
 
@@ -258,7 +259,6 @@ const birthdayBadgeOf = (inhabitant: InhabitantDisplay): DeadlineBadgeData | nul
 const {getReleasedOrders} = useOrder()
 
 const {isDinnerPast} = useSeason()
-const {canModifyOrders} = props.deadlines
 
 const {DinnerModeSchema, OrderStateSchema, BookingActionSchema, DinnerStateSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
@@ -303,8 +303,8 @@ const {expanded} = useExpandableRow({
 // DEADLINE COMPUTEDS
 // ============================================================================
 
-const canBook = computed(() => canModifyOrders(props.dinnerEvent.date))
-const dinnerHasPassed = computed(() => isDinnerPast(props.dinnerEvent.date))
+const canBook = computed(() => props.deadlines.canModifyOrders(props.dinnerEvent.date))
+const dinnerHasPassed = computed(() => isDinnerPast(props.dinnerEvent.date, now.value))
 // Nothing lands on a cancelled dinner: the form wears the corner ribbon, and every ticket the cancelled face
 const isCancelled = computed(() => props.dinnerEvent.state === DinnerStateSchema.enum.CANCELLED)
 const showRibbon = computed(() => props.ribbon && isCancelled.value)
@@ -312,12 +312,12 @@ const showRibbon = computed(() => props.ribbon && isCancelled.value)
 // A row opens while the member may change the household and the booking rules give the row a mode (ADR-016)
 const canOpenRow = (row: TableRow): boolean => formMode.value === FORM_MODES.EDIT && row.enabledModes.length > 0
 
-const bookingContext = computed(() => bookingContextOf(household.value, props.deadlines, props.ticketPrices)(props.dinnerEvent))
+const bookingContext = computed(() => bookingContextOf(household.value, props.deadlines, props.ticketPrices, now.value)(props.dinnerEvent))
 const isHouseholdInResidency = computed(() => bookingContext.value.isHouseholdInResidency(props.dinnerEvent.date))
 
 const residencyAlert = computed(() => {
   if (isHouseholdInResidency.value || !household.value) return null
-  return getResidencyDisplay(household.value.movedInDate, household.value.moveOutDate)
+  return getResidencyDisplay(household.value.movedInDate, household.value.moveOutDate, now.value)
 })
 
 // ============================================================================
@@ -637,8 +637,8 @@ const ticketStateOfRow = (order: OrderDisplay | null, waitlistEntry?: TicketWait
   return {ticketState, stateBadge: createTicketStateBadge(ticketState, detail)}
 }
 
-// Deadline badges
-const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
+// Deadline badges, counted from the page's clock
+const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, now.value, props.releasedTicketCounts))
 
 // Day bill summary (ticket counts + total price)
 const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))

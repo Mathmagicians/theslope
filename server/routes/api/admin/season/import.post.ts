@@ -1,9 +1,9 @@
 import {defineEventHandler, setResponseStatus, readValidatedBody} from 'h3'
 import {z} from 'zod'
-import {isSameDay} from 'date-fns'
+import {formatDate} from '~/utils/date'
 import {parseCalendarCSV, parseTeamsCSV} from '~~/server/utils/csvImport'
 import {fetchSeasons, createSeason, updateSeason, fetchInhabitants, createTeam, fetchTeams, createTeamAssignment, updateTeam} from '~~/server/data/prismaRepository'
-import {dateToWeekDay} from '~/utils/season'
+import {dateToWeekDay, getDinnerOnDate} from '~/utils/season'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {pruneAndCreate} from '~/utils/batchUtils'
 import {assignCookingTeamToDinnerEvent, fetchDinnerEvents} from '~~/server/data/financesRepository'
@@ -71,7 +71,7 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
         // Step 1: Parse calendar CSV
         console.info(`${LOG} Parsing calendar CSV`)
         const parsedCalendar = parseCalendarCSV(calendarCsv)
-        console.info(`${LOG} Calendar parsed: ${parsedCalendar.teamDateMapping.size} teams, dates ${parsedCalendar.seasonDates.start.toISOString().split('T')[0]} to ${parsedCalendar.seasonDates.end.toISOString().split('T')[0]}`)
+        console.info(`${LOG} Calendar parsed: ${parsedCalendar.teamDateMapping.size} teams, dates ${formatDate(parsedCalendar.seasonDates.start)} to ${formatDate(parsedCalendar.seasonDates.end)}`)
 
         // Step 2: Parse teams CSV with inhabitant matching
         console.info(`${LOG} Parsing teams CSV`)
@@ -87,7 +87,7 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
         // Step 3: Build season data from defaults + CSV
         const {getDefaultSeason, createSeasonName} = useSeason()
 
-        const defaultSeason = getDefaultSeason()
+        const defaultSeason = getDefaultSeason(new Date())
         const seasonFromCsv: Partial<Season> = {
             shortName: createSeasonName(parsedCalendar.seasonDates),
             seasonDates: parsedCalendar.seasonDates,
@@ -237,7 +237,7 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
             }
 
             for (const date of dates) {
-                const dinnerEvent = dinnerEvents.find(de => isSameDay(de.date, date))
+                const dinnerEvent = getDinnerOnDate(dinnerEvents)(date)
                 // Skip if already assigned to correct team (idempotent - ADR-015)
                 if (dinnerEvent && dinnerEvent.cookingTeamId !== cookingTeamId) {
                     await assignCookingTeamToDinnerEvent(d1Client, dinnerEvent.id!, cookingTeamId)

@@ -191,7 +191,7 @@ describe('ExpenseLines', () => {
         it('GIVEN no lines WHEN open THEN the table says so under its headers and the form is ready', async () => {
             const wrapper = await mount({editable: true, expenses: []})
             await open(wrapper)
-            expect(findByTestId(wrapper, 'expense-table-empty').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noReceipts').text)
+            expect(findByTestId(wrapper, 'expense-table-empty').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noReceipts', new Date()).text)
             expect(lineRows(wrapper)).toHaveLength(0)
             expect(findByTestId(wrapper, 'expense-form').exists()).toBe(true)
         })

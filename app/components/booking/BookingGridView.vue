@@ -110,6 +110,13 @@
  *   The power cell reaches every place the household holds on the dinner: the wishes count in its consensus, as an
  *   expected cell counts its expected mode, and its Ingen leaves the places.
  *
+ * RELEASED CELL (a ticket released after the booking deadline, which the household pays for unless it is sold):
+ * | Beboer                       | T 14/1                |
+ * | Anna  [Voksen · 55 kr]       | Ingen  (released)     | <- the released icon in the released colour, in the corner
+ * | Gæst af Anna [Baby · 0 kr]   | Ingen  (released)     |    and at the size of the hourglass (COMPONENTS.waitlist.chip)
+ * | Lars  [Voksen · 55 kr]       | Spisesal (hourglass)  |
+ *   The day view's ticket reads "Frigivet" in the same icon and colour; a guest group reads its first ticket's state.
+ *
  * THE RULES: every cell offers the modes getBookingOptions gives its row, as the day view does; a cell with none shows
  * its view face, the power cell offers the modes every inhabitant cell may take, and the add-guest chevron shows while a
  * new guest may take a mode: before the deadline and after it (a ticket for sale or the waiting list).
@@ -238,7 +245,8 @@ const emit = defineEmits<{
 }>()
 
 const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, ORDER_STATE_COLORS, DINNER_STATE_BADGES, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
-const emptyState = getRandomEmptyMessage('noDinners')
+const now = useClock()
+const emptyState = getRandomEmptyMessage('noDinners', now.value)
 
 const {formatPrice, findTicketPriceById, resolveTicketPrice, resolveTicketPriceOn, ticketTypeChangeOf} = useTicket()
 const {personTicketCounts} = useOrder()
@@ -286,6 +294,9 @@ const effectiveFormMode = computed(() => props.isSaving ? FORM_MODES.VIEW : prop
 
 const getOrderForCell = (inhabitantId: number, eventId: number): OrderDisplay | undefined =>
   findRegularOrder(props.orders, inhabitantId, eventId)
+
+// A released ticket, a person's or a guest's, carries the released icon in its cell's corner, as the day view's ticket
+const isReleased = (order: OrderDisplay | undefined): boolean => ticketStateOf(order ?? null) === TicketState.released
 
 // A cell without a ticket may hold a queue entry; an order supersedes it
 const getWaitlistEntryForCell = (inhabitantId: number, eventId: number): TicketWaitlistDetail | undefined =>
@@ -638,11 +649,9 @@ const isFirstEventOfWeek = (event: DinnerEventDisplay, idx: number): boolean => 
 // THE RULES: the modes each cell may pick (getBookingOptions, as the day view)
 // ============================================================================
 
-const {canModifyOrders} = props.deadlines
+const canBookEvent = (event: DinnerEventDisplay): boolean => props.deadlines.canModifyOrders(event.date)
 
-const canBookEvent = (event: DinnerEventDisplay): boolean => canModifyOrders(event.date)
-
-const householdContext = computed(() => bookingContextOf(props.household, props.deadlines, props.ticketPrices))
+const householdContext = computed(() => bookingContextOf(props.household, props.deadlines, props.ticketPrices, now.value))
 const contextOf = (event: DinnerEventDisplay): BookingContext => householdContext.value(event)
 
 // Each candidate is the desired order the save sends for the cell in a mode (buildBookingChanges' builders).
@@ -691,13 +700,13 @@ const isCancelledEvent = (event: DinnerEventDisplay): boolean => event.state ===
 const residencyAlert = computed(() => {
   const hasDisabledByResidency = flatEvents.value.some(e => !contextOf(e).isHouseholdInResidency(e.date))
   if (!hasDisabledByResidency) return null
-  return getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate)
+  return getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate, now.value)
 })
 
 // The column header's lock chip on a locked dinner shows the dinner's supply, as the dinner calendar's: it waits with the rows
 const getEventLockChip = (event: DinnerEventDisplay) => {
   if (props.loading || canBookEvent(event)) return null
-  return lockChip(event, props.lockStatus)
+  return lockChip(event, props.lockStatus, now.value)
 }
 
 // ============================================================================
@@ -962,20 +971,29 @@ const getEventSummary = (eventId: number) => {
             <UIcon :name="ICONS.waitlist" :class="COMPONENTS.waitlist.chipIcon" />
           </template>
         </UChip>
-        <!-- Inhabitant row: a dinner at the row's price -->
-        <DinnerModeSelector
+        <!-- Inhabitant row: a dinner at the row's price; a released ticket carries the released icon in the corner -->
+        <UChip
           v-else-if="row.original.rowType === BookingRow.inhabitant && row.original.inhabitant && holdsDinner(row.original, event.id)"
-          :model-value="getCellMode(row.original.inhabitant.id, event.id)"
-          :form-mode="cellFormMode(getCellModes(row.original.inhabitant.id, event.id))"
-          :interaction="cellInteraction(getCellModes(row.original.inhabitant.id, event.id))"
-          :enabled-modes="getCellModes(row.original.inhabitant.id, event.id)"
-          :cancelled="isCancelledEvent(event)"
-          :size="SIZES.standard"
-          :name="`cell-${row.original.inhabitant.id}-${event.id}`"
-          :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
-          :expected="isCellExpected(row.original.inhabitant.id, event.id)"
-          @update:model-value="(mode: DinnerMode) => handleCellUpdate(row.original.inhabitant!.id, event.id, mode)"
-        />
+          v-bind="COMPONENTS.waitlist.chip"
+          :color="ORDER_STATE_COLORS[TicketState.released]"
+          :show="isReleased(getOrderForCell(row.original.inhabitant.id, event.id))"
+        >
+          <DinnerModeSelector
+            :model-value="getCellMode(row.original.inhabitant.id, event.id)"
+            :form-mode="cellFormMode(getCellModes(row.original.inhabitant.id, event.id))"
+            :interaction="cellInteraction(getCellModes(row.original.inhabitant.id, event.id))"
+            :enabled-modes="getCellModes(row.original.inhabitant.id, event.id)"
+            :cancelled="isCancelledEvent(event)"
+            :size="SIZES.standard"
+            :name="`cell-${row.original.inhabitant.id}-${event.id}`"
+            :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
+            :expected="isCellExpected(row.original.inhabitant.id, event.id)"
+            @update:model-value="(mode: DinnerMode) => handleCellUpdate(row.original.inhabitant!.id, event.id, mode)"
+          />
+          <template #content>
+            <UIcon :name="ICONS.released" :class="COMPONENTS.waitlist.chipIcon" />
+          </template>
+        </UChip>
         <!-- Guest row, queued: the guest's wish ghosted under the hourglass, as a queued inhabitant's -->
         <UChip
           v-else-if="row.original.rowType === BookingRow['guest-order'] && row.original.waitlistEntry && row.original.dinnerEventId === event.id"
@@ -998,19 +1016,28 @@ const getEventSummary = (eventId: number) => {
             <UIcon :name="ICONS.waitlist" :class="COMPONENTS.waitlist.chipIcon" />
           </template>
         </UChip>
-        <!-- Guest order row: a group holds the guest tickets of one dinner -->
-        <DinnerModeSelector
+        <!-- Guest order row: a group holds the guest tickets of one dinner; its first ticket's state, as the day view's guest row reads it -->
+        <UChip
           v-else-if="row.original.rowType === BookingRow['guest-order'] && row.original.guestOrders && row.original.dinnerEventId === event.id"
-          :model-value="getGuestCellMode(row.original.guestOrders)"
-          :form-mode="cellFormMode(getGuestModes(row.original))"
-          :interaction="cellInteraction(getGuestModes(row.original))"
-          :enabled-modes="getGuestModes(row.original)"
-          :cancelled="isCancelledEvent(event)"
-          :size="SIZES.standard"
-          :name="`guest-${row.original.id}-${event.id}`"
-          :is-modified="isGuestCellModified(row.original.guestOrders)"
-          @update:model-value="(mode: DinnerMode) => handleGuestCellUpdate({guestOrders: row.original.guestOrders!, dinnerMode: mode})"
-        />
+          v-bind="COMPONENTS.waitlist.chip"
+          :color="ORDER_STATE_COLORS[TicketState.released]"
+          :show="isReleased(row.original.guestOrders[0])"
+        >
+          <DinnerModeSelector
+            :model-value="getGuestCellMode(row.original.guestOrders)"
+            :form-mode="cellFormMode(getGuestModes(row.original))"
+            :interaction="cellInteraction(getGuestModes(row.original))"
+            :enabled-modes="getGuestModes(row.original)"
+            :cancelled="isCancelledEvent(event)"
+            :size="SIZES.standard"
+            :name="`guest-${row.original.id}-${event.id}`"
+            :is-modified="isGuestCellModified(row.original.guestOrders)"
+            @update:model-value="(mode: DinnerMode) => handleGuestCellUpdate({guestOrders: row.original.guestOrders!, dinnerMode: mode})"
+          />
+          <template #content>
+            <UIcon :name="ICONS.released" :class="COMPONENTS.waitlist.chipIcon" />
+          </template>
+        </UChip>
         <!-- Guest add row: a chevron per dinner a new guest may take a mode on, turned up while its form is open below -->
         <UButton
           v-else-if="row.original.rowType === BookingRow['guest-add'] && getNewGuestModes(event).length > 0"

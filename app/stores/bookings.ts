@@ -6,11 +6,11 @@ import type {ReleasedTicketCounts, WaitlistCounts} from '~/composables/useBookin
 import {useBilling} from '~/composables/useBilling'
 import {TEAM_WORDS} from '~/config/teamWords'
 import {BOOKING_WORDS} from '~/config/bookingWords'
-import {isSameDay} from 'date-fns'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {storeAsyncData, apiRequest, runJob} = useApiHandler()
+    const now = useClock()
     const {OrderDisplaySchema, OrderDetailSchema, OrderStateSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema, TicketChangesResponseSchema, TicketTypeSchema, encodeDesiredOrder} = useBookingValidation()
     const {formatScaffoldResult} = useBooking()
     const {formatDailyMaintenanceStats, jobTypeLabels} = useMaintenance()
@@ -73,8 +73,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const lockedDinnerIds = computed(() => {
         const season = planStore.selectedSeason
         if (!season?.dinnerEvents?.length) return []
-        const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents)
-        return getLockedFutureDinnerIds(nextDinner, futureDinners, deadlinesForSeason(season))
+        const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents, now.value)
+        return getLockedFutureDinnerIds(nextDinner, futureDinners, deadlinesForSeason(season, now.value))
     })
 
     // The locked dinners are read too: the calendar counts their waiting lists
@@ -223,7 +223,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const lockStatus = computed(() => {
         const season = planStore.selectedSeason
         if (!season?.dinnerEvents) return new Map<number, ReleasedTicketCounts | null>()
-        return computeLockStatus(season.dinnerEvents, deadlinesForSeason(season), releasedCounts.value, waitlistCounts.value)
+        return computeLockStatus(season.dinnerEvents, deadlinesForSeason(season, now.value), releasedCounts.value, waitlistCounts.value)
     })
 
 
@@ -368,7 +368,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const selectedDinnerEventId = computed(() => {
         const date = dinnerDate.value()
         if (!date) return null
-        return planStore.selectedSeason?.dinnerEvents?.find(dinner => isSameDay(dinner.date, date))?.id ?? null
+        return getDinnerOnDate(planStore.selectedSeason?.dinnerEvents ?? [])(date)?.id ?? null
     })
 
     const {
@@ -390,7 +390,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 },
                 retries: 0,
                 toast: BOOKING_WORDS.notFound.dinner,
-                message: () => getRandomEmptyMessageText('dinnerGone')
+                message: () => getRandomEmptyMessageText('dinnerGone', now.value)
             }
         }
     )

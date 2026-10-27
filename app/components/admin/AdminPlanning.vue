@@ -34,6 +34,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const {ALERTS, BUTTONS, COLOR, ICONS, LAYOUTS} = useTheSlopeDesignSystem()
 const {getDefaultSeason, getDefaultHolidays} = useSeason()
+const now = useClock()
 const toast = useToast()
 const store = usePlanStore()
 const {
@@ -49,7 +50,7 @@ const {createSeason, updateSeason, activateSeason, deactivateSeason} = store
 
 // FORM MANAGEMENT - Delegated to composable (ADR-007)
 const {formMode, currentModel, onModeChange} = useEntityFormManager<Season>({
-  getDefaultEntity: getDefaultSeason,
+  getDefaultEntity: () => getDefaultSeason(now.value),
   selectedEntity: computed(() => selectedSeason.value)
 })
 

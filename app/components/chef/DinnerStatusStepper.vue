@@ -41,7 +41,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, SIZES, ORIENTATIONS, TYPOGRAPHY, ALERTS } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, ORIENTATIONS, ALERTS, COMPONENTS, DINNER_STATE_BADGES } = useTheSlopeDesignSystem()
 
 // Business logic from useBooking
 const { getStepConfig } = useBooking()
@@ -53,8 +53,9 @@ const DinnerState = DinnerStateSchema.enum
 const bookingsStore = useBookingsStore()
 const releasedTicketCount = computed(() => bookingsStore.lockStatus.get(props.dinnerEvent.id) ?? undefined)
 
-// Badges from factory (pass released count for booking badge)
-const badges = computed(() => createChefBadges(props.dinnerEvent, props.deadlines, releasedTicketCount.value))
+// Badges from factory (pass released count for booking badge), counted from the page's clock
+const now = useClock()
+const badges = computed(() => createChefBadges(props.dinnerEvent, props.deadlines, now.value, releasedTicketCount.value))
 
 // Current step (using season-specific deadlines from props)
 const currentStepConfig = computed(() => getStepConfig(props.dinnerEvent, props.deadlines))
@@ -97,7 +98,7 @@ const steps = computed(() => {
     <UAlert
       v-if="isCancelled"
       v-bind="ALERTS.error"
-      icon="i-heroicons-x-circle"
+      :icon="DINNER_STATE_BADGES.CANCELLED.icon"
     >
       <template #title>
         Aflyst
@@ -115,13 +116,13 @@ const steps = computed(() => {
       :size="SIZES.small"
       :orientation="ORIENTATIONS.responsive.value"
       :color="COLOR.primary"
-      :ui="{ description: TYPOGRAPHY.finePrint }"
+      :ui="COMPONENTS.dinnerStatusStepper.ui"
     >
       <!-- Custom description: text + badge below (show overdue badges even for past events) -->
       <template #description="{ item }">
-        <div class="flex flex-col items-center">
+        <div :class="COMPONENTS.dinnerStatusStepper.description">
           <span>{{ item.description }}</span>
-          <div v-if="getBadgeForStep(item.step) && (!isPastEvent || getBadgeForStep(item.step)!.alarm === 3)" class="mt-1">
+          <div v-if="getBadgeForStep(item.step) && (!isPastEvent || getBadgeForStep(item.step)!.alarm === 3)" :class="COMPONENTS.dinnerStatusStepper.badge">
             <DeadlineBadge :badge="getBadgeForStep(item.step)!" compact />
           </div>
         </div>

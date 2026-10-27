@@ -439,6 +439,41 @@ edit mode "T" over "20/10" (`BookingGridView.vue:616-617`).
 `app/utils/date.ts`, the call sites in the table, `BookingGridView.vue`, `useSeason.ts`, `useMaintenance.ts`,
 `tests/component/utils/date.unit.spec.ts`.
 
+### Dates and time through the season helpers and useClock
+
+#### Problem
+
+Date code in app, server and tests works on a date's fields and strings by hand:
+- same-day compares by `toDateString()`: `useBookingView.ts:38`, `DinnerCalendarDisplay.vue:179`,
+  `HouseholdBookings.vue:96`, `pages/chef/index.vue:182`
+- day and month arithmetic on a date's fields: `useBilling.ts:168–242` (the billing periods), `HouseholdEconomy.vue:179`,
+  `app/utils/season.ts:467–474`, `useSeason.ts:89`
+- date strings cut from `toISOString()`: `billingArchive.ts:14`, `generateBilling.ts:58, 62`, `financesRepository.ts:1370`,
+  `api/admin/billing/current-period.get.ts:26`, `api/admin/season/import.post.ts:74`, `api/admin/billing/import.post.ts:102`
+- an hour written by hand: `CountdownTimer.vue:145`; a timestamp by `toLocaleString`: `OrderHistoryDisplay.vue:39`
+- `new Date()` for the time in 14 app files (32 calls), beside `useClock` (`app/composables/useClock.ts`), which six
+  components read
+- `date-fns` called directly in 22 app and server files
+- specs building dates from a date's fields: `getDate` 46, `setDate` 24, `getFullYear` 19, `setHours` 18, `Date.now()` 16,
+  `getMonth` 13
+
+#### Solution
+
+Date operations call the season's curried helpers (`useSeason`, `app/utils/season.ts`: `deadlinesForSeason`,
+`isDinnerPast`, `splitDinnerEvents`, …). `date-fns` is called only where neither the season's helpers nor `app/utils/date.ts` has the operation;
+a direct call is reviewed for a missing helper, which lands in the season composable. The app reads the time through `useClock`; a function that needs the time takes it as its
+`now`, and only the server reads it with `new Date()`. A date becomes text through `formatDate` and its named formats
+(§ Date formats). Specs build, compare and format their dates the same way.
+
+#### TDD
+
+The moved sites keep their specs green; a new format gets its `date.unit` case (§ Date formats).
+
+#### Affected
+
+`useSeason.ts` and `app/utils/season.ts` (the helpers the review finds missing), the sites above, the specs that build
+dates by hand.
+
 ### Raw utility classes
 
 #### Problem
@@ -465,17 +500,15 @@ A `COMPONENTS.<surface>` token per file, swept file by file, the touched files f
 rule); `COMPONENTS.pageTabs` and `COMPONENTS.pageCard` for the pages; `COMPONENTS.avatar.regular/compact` carry their
 `ui` so a group spreads the token. A `MOTION` group holds the primitives (spin, the two hover kinds, the colour fade,
 the marquee) and `COMPONENTS.viewError.tilt` maps the error code to its turn; one token per distinct original value,
-named by its site, proof a before/after class-set comparison per template. The architecture spec gains a rule that
-fails any raw utility class in a `.vue` template, motion utilities included, with the print CSS of
-`pages/admin/allergies/pdf.vue` exempt, so the sweep cannot regress.
+named by its site, proof a before/after class-set comparison per template; a raw class met in a touched file is fixed
+on sight.
 
 **OPEN** — `motion-reduce:animate-none` on the infinite animations the design system still runs without it (pulse,
 marquee, fireworks): a rendered-class change, decided with the sweep.
 
 #### Affected
 
-The sixty-one components, `app/composables/useTheSlopeDesignSystem.ts`,
-`tests/component/architecture/designSystemUsage.unit.spec.ts`, `docs/ui.md` (one line under Rules).
+The sixty-one components, `app/composables/useTheSlopeDesignSystem.ts`.
 
 ### Route and composable leftovers
 
@@ -1087,3 +1120,9 @@ Taking a role makes Madhold 3 yours: the tab drops "Ikke dit hold", the role lin
 - A form's input schema and the types of its state may live in its component when no other file reads them, derived
   from the validation composables' schemas and types; what the form emits, stores or sends is a domain type (ADR-001,
   defect 46).
+- A component reads data of its own through `storeAsyncData` by url when the data is component-specific or multiple
+  instances need separate data (ADR-007, defect 66); the order history and the ticket changes keep their store reads.
+- Date operations call the season's curried helpers and `app/utils/date.ts`; `date-fns` only where neither has the
+  operation. The app reads the time through `useClock`, only the server through `new Date()`; a date becomes text
+  through `formatDate` (ADR-017 compliance 8).
+  Hand-written date code is a broken window, fixed project wide (§ Dates and time through the season helpers and useClock).

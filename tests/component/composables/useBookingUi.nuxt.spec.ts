@@ -26,7 +26,7 @@ const {ICONS, COLOR, COMPONENTS, BOOKING_LOCK_STATUS, ORDER_STATE_COLORS} = useT
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: useSeason runs there, not at module level
 let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
 beforeAll(() => {
-    deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason())
+    deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason(), new Date())
 })
 
 // Far enough ahead that every deadline is still open (app.config imported directly: the value feeds collection-time it.each data)
@@ -211,16 +211,16 @@ describe('useBookingUi', () => {
             {desc: 'neither leaves the closed chip without a number or a glyph', supply: lockedDinnerSupply(), chip: {color: BOOKING_LOCK_STATUS.locked.color}},
             {desc: 'an open dinner has no chip', supply: null, chip: null}
         ])('$desc', ({supply, chip}) => {
-            expect(lockChip(dinner, new Map([[dinner.id, supply]]))).toEqual(chip)
+            expect(lockChip(dinner, new Map([[dinner.id, supply]]), new Date())).toEqual(chip)
         })
 
         it('a dinner outside the lock map has no chip', () => {
-            expect(lockChip(dinner, new Map())).toBeNull()
+            expect(lockChip(dinner, new Map(), new Date())).toBeNull()
         })
 
         it('a dinner that has started has no chip, whatever its supply', () => {
             const started = DinnerEventFactory.dinnerEventAt(2, -1)
-            expect(lockChip(started, new Map([[started.id, lockedDinnerSupply({[ADULT]: 2})]]))).toBeNull()
+            expect(lockChip(started, new Map([[started.id, lockedDinnerSupply({[ADULT]: 2})]]), new Date())).toBeNull()
         })
     })
 
@@ -266,7 +266,7 @@ describe('useBookingUi', () => {
 
     describe('createBookingBadges', () => {
         it('returns open booking and dining-mode badges for a far-future dinner', () => {
-            const badges = createBookingBadges(farFutureDinner(), deadlines)
+            const badges = createBookingBadges(farFutureDinner(), deadlines, new Date())
             expect(badges.booking.color).toBe('success')
             expect(badges.diningMode.color).toBe('success')
         })
@@ -279,7 +279,7 @@ describe('useBookingUi', () => {
         })
 
         it('returns badges for steps 1-4', () => {
-            const badges = createChefBadges(farFutureDinner(), deadlines)
+            const badges = createChefBadges(farFutureDinner(), deadlines, new Date())
             expect([...badges.keys()]).toEqual([1, 2, 3, 4])
             badges.forEach((badge, step) => expect(badge.step).toBe(step))
         })
@@ -291,7 +291,7 @@ describe('useBookingUi', () => {
             {desc: 'groceries bought: groceries step done', overrides: {totalCost: 1200}, step: 3, done: true},
             {desc: 'consumed dinner: dinner step done', overrides: {state: DinnerState.CONSUMED}, step: 4, done: true}
         ])('$desc', ({overrides, step, done}) => {
-            const badge = createChefBadges(farFutureDinner(overrides), deadlines).get(step)!
+            const badge = createChefBadges(farFutureDinner(overrides), deadlines, new Date()).get(step)!
             expect(badge.alarm).toBe(done ? -1 : 0)
             if (done) expect(badge.value).toBe('')
             else expect(badge.value).not.toBe('')
@@ -299,7 +299,7 @@ describe('useBookingUi', () => {
 
         it('booking badge carries released ticket counts once booking is closed', () => {
             const yesterday = {...DinnerEventFactory.defaultDinnerEventDisplay(), date: addDays(new Date(), -1)}
-            const badge = createChefBadges(yesterday, deadlines, lockedDinnerSupply({[ADULT]: 2})).get(2)!
+            const badge = createChefBadges(yesterday, deadlines, new Date(), lockedDinnerSupply({[ADULT]: 2})).get(2)!
             expect(badge.alarm).toBe(-1)
             expect(badge.value).toBe('2V til salg')
         })

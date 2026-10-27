@@ -123,7 +123,7 @@ describe('notifyBillingPeriod', () => {
 
         expect(result).toMatchObject({queued: false, degraded: true})
         expect(recorded.rows).toEqual([])
-        expect(logs.warn).toHaveBeenCalledWith(expect.stringContaining(NotificationFactory.channelOff.missing))
+        expect(logs.error).toHaveBeenCalledWith(expect.stringContaining(NotificationFactory.channelOff.missing))
     })
 
     // The re-send is the admin's override (ADR-004): it goes whatever is recorded, and its line names the admin

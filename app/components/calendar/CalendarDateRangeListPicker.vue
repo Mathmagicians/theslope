@@ -35,7 +35,9 @@ const rowName = (index: number) => `${ADD_ROW_NAME}-${index}`
 const errors = ref<Map<string, string[]>>(new Map())
 
 // COMPUTED
-const defaultDate = computed(() => props.seasonDates?.start ?? new Date())
+// Without season dates the picker starts on the day of the first render; a fallback that followed the clock would reset the draft every minute
+const today = useClock().value
+const defaultDate = computed(() => props.seasonDates?.start ?? today)
 
 //  STATE & INITIALIZATION
 const addedRange = ref<DateRange>(createDateRange(defaultDate.value, defaultDate.value))

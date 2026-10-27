@@ -324,14 +324,16 @@ export const createDiningModeBadge = (
 }
 
 /**
- * Create booking view badges (for DinnerBookingForm, BookingGridView)
+ * Create booking view badges (for DinnerBookingForm, GuestBookingForm)
+ * @param now - The page's clock (useClock), so the server and the browser count down from the same moment
  */
 export const createBookingBadges = (
     dinnerEvent: DinnerEventDisplay,
     deadlines: SeasonDeadlines,
+    now: Date,
     releasedCounts?: ReleasedTicketCounts
 ): { booking: DeadlineBadgeData; diningMode: DeadlineBadgeData } => {
-    const diningModeCountdown = calculateCountdown(deadlines.getDiningModeDeadlineTime(dinnerEvent.date))
+    const diningModeCountdown = calculateCountdown(deadlines.getDiningModeDeadlineTime(dinnerEvent.date), now)
     return {
         booking: createBookingBadge(deadlines.canModifyOrders(dinnerEvent.date), releasedCounts),
         diningMode: createDiningModeBadge(deadlines.canEditDiningMode(dinnerEvent.date), diningModeCountdown)
@@ -351,10 +353,10 @@ const LOCK_CHIPS: Record<SupplyState, (supply: ReleasedTicketCounts) => LockChip
  * The lock chip of a dinner past its booking deadline: the tickets for sale as a number, else the waiting list's
  * hourglass, else the closed chip alone. A released ticket goes to the first waiting for its ticket type, so a dinner
  * can hold both; the chip then shows the tickets for sale.
- * Null without supply, when the dinner is open for booking, and from the dinner's start.
+ * Null without supply, when the dinner is open for booking, and from the dinner's start (`now`).
  */
-export const lockChip = (dinner: DinnerEventDisplay, lockStatus: Map<number, ReleasedTicketCounts | null>): LockChip | null => {
-    const supply = useSeason().isDinnerPast(dinner.date) ? null : lockStatus.get(dinner.id)
+export const lockChip = (dinner: DinnerEventDisplay, lockStatus: Map<number, ReleasedTicketCounts | null>, now: Date): LockChip | null => {
+    const supply = useSeason().isDinnerPast(dinner.date, now) ? null : lockStatus.get(dinner.id)
     return supply ? LOCK_CHIPS[supplyStateOf(supply)](supply) : null
 }
 
@@ -836,19 +838,21 @@ export const useBookingUi = () => {
 
     /**
      * Create chef workflow badges for a dinner event.
-     * Each badge uses countdown to its specific deadline (from SeasonDeadlines time getters).
+     * Each badge uses countdown to its specific deadline (from SeasonDeadlines time getters), counted from `now`, the
+     * page's clock (useClock), so the server and the browser count down from the same moment.
      */
     const createChefBadges = (
         dinnerEvent: DinnerEventDisplay,
         deadlines: SeasonDeadlines,
+        now: Date,
         releasedCounts?: ReleasedTicketCounts
     ): Map<number, DeadlineBadgeData> => {
         const thresholds = getCookingDeadlineThresholds()
 
         // Each badge counts to its specific deadline
-        const menuCountdown = calculateCountdown(deadlines.getMenuDeadlineTime(dinnerEvent.date))
-        const bookingCountdown = calculateCountdown(deadlines.getBookingDeadlineTime(dinnerEvent.date))
-        const dinnerCountdown = calculateCountdown(deadlines.getDinnerStartTime(dinnerEvent.date))
+        const menuCountdown = calculateCountdown(deadlines.getMenuDeadlineTime(dinnerEvent.date), now)
+        const bookingCountdown = calculateCountdown(deadlines.getBookingDeadlineTime(dinnerEvent.date), now)
+        const dinnerCountdown = calculateCountdown(deadlines.getDinnerStartTime(dinnerEvent.date), now)
 
         const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
             (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)

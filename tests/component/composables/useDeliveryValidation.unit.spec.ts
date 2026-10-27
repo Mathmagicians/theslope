@@ -56,7 +56,7 @@ describe('coveringDeliveries and shouldSend', () => {
         const asked = {...desired, ...delivery}
 
         expect(coveringDeliveries(recorded, asked, EMAIL)).toEqual(recorded.slice(0, covered))
-        expect(shouldSend(recorded, asked, EMAIL, adminOverride)).toBe(send)
+        expect(shouldSend(coveringDeliveries(recorded, asked, EMAIL).length, adminOverride)).toBe(send)
     })
 })
 

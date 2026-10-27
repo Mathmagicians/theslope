@@ -13,9 +13,10 @@ Given('a season of its own is {seasonActivity}', ({scene}, isActive: boolean) =>
     scene.ownSeasonIsActive = isActive
 })
 
-// Activates the e2e singleton season; under SHOULD_NOT_MUTATE it reads the deployment's active season
-Given('a season is active', async ({scene}) => {
-    const activeSeason = await SeasonFactory.createActiveSeason(fromScene(scene, 'context'))
+// The admin activates the e2e singleton season, before or without a sign-in; under SHOULD_NOT_MUTATE it reads the
+// deployment's active season
+Given('a season is active', async ({adminContext: admin, scene}) => {
+    const activeSeason = await SeasonFactory.createActiveSeason(admin)
     expect(activeSeason).toBeDefined()
     expect(activeSeason.id).toBeGreaterThan(0)
     expect(activeSeason.isActive).toBe(true)

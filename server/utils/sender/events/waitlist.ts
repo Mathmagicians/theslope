@@ -6,13 +6,17 @@
  * read once per kind (ADR-014); the delivery step (deliveries.ts) sends each once per subject, version, notification,
  * channel and user. The booking emails flag (SHOULD_SEND_BOOKING_EMAILS_FLAG) off, a run sends and records nothing.
  */
+import type {H3Event} from 'h3'
 import {siteUrl} from '~~/server/utils/sender/compose'
-import {shouldSendBookingEmails, type EmailChannel} from '~~/server/utils/sender/config'
-import {deliverDesired, type DeliveryOptions, type DeliveryResult, type DesiredOutgoing} from '~~/server/utils/sender/deliveries'
+import {emailChannel, shouldSendBookingEmails, type EmailChannel} from '~~/server/utils/sender/config'
+import {
+    deliverDesired, deliverInBackground, nothingSent, readRecorded, type DeliveryOptions, type DeliveryResult, type LoadedDeliveries,
+    type NotificationSubject
+} from '~~/server/utils/sender/deliveries'
 import type {NotificationConfig} from '~/composables/useNotificationValidation'
 import {
-    useBookingValidation, DinnerState, OrderState, TicketState, type BookingAction, type BookingOutcomes, type DinnerMode,
-    type OrderAudit, type OrderDisplay, type OrderHistoryDisplay, type TicketSale, type WaitlistJoined
+    useBookingValidation, DinnerState, OrderState, TicketState, type BookingAction, type BookingOutcomes, type DinnerEventDisplay,
+    type DinnerMode, type OrderAudit, type OrderDisplay, type OrderHistoryDisplay, type TicketSale, type WaitlistJoined
 } from '~/composables/useBookingValidation'
 import type {TicketWaitlistDisplay, WaitlistAssignmentResult} from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
@@ -29,7 +33,7 @@ import {TICKET_COUNTS} from '~/composables/useBilling'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {NotificationKind, WAITLIST_BUYER} from '~/config/notificationTemplates'
 import {fetchHouseholdsByIds, fetchInhabitantsByIds, fetchSeason, fetchUsersByIds} from '~~/server/data/prismaRepository'
-import {fetchDeliveries, fetchDinnerEvents, fetchDinnerEventsByIds, fetchOrderHistoryForDinners, fetchOrders} from '~~/server/data/financesRepository'
+import {fetchDinnerEvents, fetchDinnerEventsByIds, fetchOrderHistoryForDinners, fetchOrders} from '~~/server/data/financesRepository'
 import {fetchWaitlistForDinners} from '~~/server/data/waitlistRepository'
 import {dinnerForWaitlist, type DinnerForWaitlist} from '~~/server/utils/waitlistAssignment'
 import {formatDate} from '~/utils/date'
@@ -45,8 +49,6 @@ const Subject = DeliverySubjectSchema.enum
 const {BOOKING_STATUS} = SenderEventSchema.enum
 
 const LOG = `📮 > SENDER > [EVENT ${BOOKING_STATUS}]`
-
-const nothingSent = (): DeliveryResult => ({counts: {sent: 0}})
 
 // The booking emails flag off, a run sends and records nothing; a delivery dry run counts on
 const bookingEmailsOff = (dryRun?: boolean): boolean => {
@@ -123,12 +125,6 @@ const pendingOf = <Tracked extends object>(notifications: BookingNotifications<T
         ...notifications.bought.map(pending(NotificationKind.TICKET_BOUGHT, ticketValues(Action.BUY))),
         ...notifications.extraPortions.map(pending(NotificationKind.WAITLIST_EXTRA_PORTION, ticketValues(Action.BOOK)))
     ]
-}
-
-/** What a notification is about, as its Delivery row names it */
-interface NotificationSubject {
-    subjectType: Delivery['subjectType']
-    subjectId: number
 }
 
 type Tracked = {subject: NotificationSubject, notificationChannels: NotificationChannel[]}
@@ -219,11 +215,23 @@ const readNamed = async <T extends {id: number}>(
     return new Map((named.length === 0 ? [] : await read(d1Client, named)).map(row => [row.id, row]))
 }
 
-// The dinners in one read and the ticket prices of their seasons, one season read after another
-const loadDinners = async (d1Client: D1Database, dinnerEventIds: number[]): Promise<Map<number, DinnerForWaitlist>> => {
-    const dinners = await readNamed(d1Client, dinnerEventIds, fetchDinnerEventsByIds)
-    const seasons = new Map<number, Season | null>()
-    for (const seasonId of idsOf([...dinners.values()].map(dinner => dinner.seasonId))) seasons.set(seasonId, await fetchSeason(d1Client, seasonId))
+/** What the run that raises the notifications read already: they read it no second time */
+interface ReadAlready {
+    history?: OrderHistoryDisplay[]
+    season?: Season
+    dinners?: DinnerEventDisplay[]
+}
+
+// The dinners not read already in one read and the ticket prices of their seasons, one season read after another
+const loadDinners = async (
+    d1Client: D1Database, dinnerEventIds: number[], {season, dinners: given = []}: ReadAlready
+): Promise<Map<number, DinnerForWaitlist>> => {
+    const known = new Map(given.map(dinner => [dinner.id, dinner]))
+    const dinners = new Map([...known, ...await readNamed(d1Client, dinnerEventIds.filter(id => !known.has(id)), fetchDinnerEventsByIds)])
+    const seasons = new Map<number, Season | null>(season?.id ? [[season.id, season]] : [])
+    for (const seasonId of idsOf([...dinners.values()].map(dinner => dinner.seasonId))) {
+        if (!seasons.has(seasonId)) seasons.set(seasonId, await fetchSeason(d1Client, seasonId))
+    }
     return new Map(idsOf(dinnerEventIds).map(id => {
         const dinner = dinners.get(id)
         if (!dinner) throw new Error(`${LOG} Dinner ${id} not found`)
@@ -233,9 +241,9 @@ const loadDinners = async (d1Client: D1Database, dinnerEventIds: number[]): Prom
 
 // Every dinner, inhabitant, household and user the notifications name, read before they compose: the chefs come with
 // their dinners, the households of the inhabitants with their members
-const load = async (d1Client: D1Database, notified: NotifiedOutcomes): Promise<NotificationRecords> => {
+const load = async (d1Client: D1Database, notified: NotifiedOutcomes, readAlready: ReadAlready): Promise<NotificationRecords> => {
     const sales = [...notified.ticketsSold, ...notified.waitlistTicketsSold]
-    const dinners = await loadDinners(d1Client, [...notified.joined, ...notified.buildups, ...sales, ...notified.waitlistPortionsAssigned].map(outcome => outcome.dinnerEventId))
+    const dinners = await loadDinners(d1Client, [...notified.joined, ...notified.buildups, ...sales, ...notified.waitlistPortionsAssigned].map(outcome => outcome.dinnerEventId), readAlready)
     const inhabitants = await readNamed(d1Client, [
         ...notified.joined.map(event => event.inhabitantId),
         ...sales.flatMap(sale => [sale.buyerInhabitantId, sale.sellerInhabitantId]),
@@ -339,20 +347,15 @@ const composer = ({dinners, households, inhabitants, users}: NotificationRecords
     })
 }
 
-// A dinner's version counts from the delivery record of its first buildup
-const buildupDeliveries = async (d1Client: D1Database, notifications: Pending<ResolvedNotification & Tracked>[]): Promise<Delivery[]> => {
-    const dinnerEventIds = idsOf(notifications.map(({subject}) => subject.subjectType === Subject.DINNER_EVENT ? subject.subjectId : null))
-    return dinnerEventIds.length === 0 ? [] : fetchDeliveries(d1Client, Subject.DINNER_EVENT, dinnerEventIds)
-}
-
-// The notifications an operation sends, resolved and versioned for the delivery step; an order's and a dinner's versions
-// read their history
-const desiredOf = async (d1Client: D1Database, notified: NotifiedOutcomes, history?: OrderHistoryDisplay[]): Promise<DesiredOutgoing[]> => {
-    const notifications = pendingOf(composer(await load(d1Client, notified))(notified))
+// The notifications an operation sends, resolved and versioned for the delivery step, with the recorded rows of their
+// subjects read once: an order's and a dinner's versions read their history, a dinner's the delivery of its first buildup
+const desiredOf = async (d1Client: D1Database, notified: NotifiedOutcomes, readAlready: ReadAlready = {}): Promise<LoadedDeliveries> => {
+    const notifications = pendingOf(composer(await load(d1Client, notified, readAlready))(notified))
     const versioned = idsOf([...notified.buildups, ...notified.ticketsSold, ...notified.waitlistTicketsSold, ...notified.waitlistPortionsAssigned].map(outcome => outcome.dinnerEventId))
-    const rows = history ?? (versioned.length === 0 ? [] : await fetchOrderHistoryForDinners(d1Client, versioned))
-    const versionOf = versionsOf(rows, await buildupDeliveries(d1Client, notifications))
-    return notifications.flatMap(notification => {
+    const rows = readAlready.history ?? (versioned.length === 0 ? [] : await fetchOrderHistoryForDinners(d1Client, versioned))
+    const recorded = await readRecorded(d1Client, notifications.map(({subject}) => subject))
+    const versionOf = versionsOf(rows, recorded)
+    const desired = notifications.flatMap(notification => {
         const {to, userId} = notification
         if (to === null || userId === null) return []
         return [{
@@ -361,6 +364,7 @@ const desiredOf = async (d1Client: D1Database, notified: NotifiedOutcomes, histo
             correlationId: `dinner ${notification.dinner.dinnerEventId}`
         }]
     })
+    return {desired, recorded}
 }
 
 // A dinner's line asks its chef for portions once its queue reaches the threshold: the join that left the longest
@@ -381,8 +385,14 @@ const notifiedOf = (outcomes: BookingOutcomes): NotifiedOutcomes => {
  * The notifications for what a scaffold run did: joined, the line at the buildup threshold, sold, bought, sold to the
  * first in a ticket type's line, and the extra portions it finished for a stopped run
  */
-export const notifyBookingOutcomes = async (d1Client: D1Database, channel: EmailChannel, outcomes: BookingOutcomes, jobRunId?: number): Promise<DeliveryResult> =>
-    bookingEmailsOff() ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, notifiedOf(outcomes)), {jobRunId})
+export const notifyBookingOutcomes = async (d1Client: D1Database, channel: EmailChannel, outcomes: BookingOutcomes): Promise<DeliveryResult> =>
+    bookingEmailsOff() ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, notifiedOf(outcomes)))
+
+/** A route's booking notifications, sent after its response on the e-mail channel of its environment */
+export const notifyBookingOutcomesInBackground = (event: H3Event, outcomes: BookingOutcomes): void => {
+    const {env} = event.context.cloudflare
+    deliverInBackground(event, () => notifyBookingOutcomes(env.DB, emailChannel(env), outcomes))
+}
 
 /**
  * The notifications for the chef's extra portions: each waiting entry that fit got a regular order; a stopped run's
@@ -434,19 +444,19 @@ const notificationsOnDinners = (queue: TicketWaitlistDisplay[], history: OrderHi
 }
 
 // The season's dinners still to come and past their booking deadline, where the waiting list and the sales live
-const notificationsOnSeason = async (d1Client: D1Database, seasonId: number | null): Promise<DesiredOutgoing[]> => {
-    if (seasonId === null) return []
+const notificationsOnSeason = async (d1Client: D1Database, seasonId: number | null): Promise<LoadedDeliveries> => {
+    if (seasonId === null) return {desired: []}
     const season = await fetchSeason(d1Client, seasonId)
-    if (!season) return []
-    const {canModifyOrders} = useSeason().deadlinesForSeason(season)
+    if (!season) return {desired: []}
+    const {canModifyOrders} = useSeason().deadlinesForSeason(season, new Date())
     const dinners = (await fetchDinnerEvents(d1Client, {seasonId, excludeStates: [DinnerState.CONSUMED, DinnerState.CANCELLED]}))
         .filter(dinner => !canModifyOrders(dinner.date))
-    if (dinners.length === 0) return []
+    if (dinners.length === 0) return {desired: []}
     const dinnerEventIds = dinners.map(dinner => dinner.id)
     const queue = await fetchWaitlistForDinners(d1Client, dinnerEventIds)
     const history = await fetchOrderHistoryForDinners(d1Client, dinnerEventIds)
     const booked = await fetchOrders(d1Client, dinnerEventIds, undefined, OrderState.BOOKED)
-    return desiredOf(d1Client, notificationsOnDinners(queue, history, booked, season.ticketPrices), history)
+    return desiredOf(d1Client, notificationsOnDinners(queue, history, booked, season.ticketPrices), {history, season, dinners})
 }
 
 /**
@@ -459,6 +469,6 @@ const notificationsOnSeason = async (d1Client: D1Database, seasonId: number | nu
  * nothing: per user how many of each notification the run sends.
  */
 export const sendNotifications = async (
-    d1Client: D1Database, channel: EmailChannel, seasonId: number | null, options: Pick<DeliveryOptions, 'jobRunId' | 'dryRun'> = {}
+    d1Client: D1Database, channel: EmailChannel, seasonId: number | null, options: DeliveryOptions = {}
 ): Promise<DeliveryResult> =>
     bookingEmailsOff(options.dryRun) ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => notificationsOnSeason(d1Client, seasonId), options)

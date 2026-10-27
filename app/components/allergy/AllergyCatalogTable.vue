@@ -49,6 +49,7 @@ const {COLOR, COMPONENTS, ICONS, SIZES} = useTheSlopeDesignSystem()
 
 // Business logic
 const {hasNewAllergyInhabitants} = useAllergy()
+const now = useClock()
 
 const isMulti = computed(() => props.mode === 'multi')
 
@@ -171,7 +172,7 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
           @click="handleRowClick(row.original.id)"
       >
         <UIcon
-            v-if="hasNewAllergyInhabitants(row.original)"
+            v-if="hasNewAllergyInhabitants(row.original, now)"
             :name="ICONS.new"
             :class="COMPONENTS.rowIconClass"
         />

@@ -92,7 +92,9 @@ const {
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
 
 // Permission helpers and date utilities
-const {isChefFor, deadlinesForSeason} = useSeason()
+const {isChefFor, deadlinesForSeason, getDinnerOnDate} = useSeason()
+const now = useClock()
+const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value, now.value) : undefined)
 const authStore = useAuthStore()
 
 // The season's teams and dinners: any of its teams opens on the page, any of its dinners opens on its team
@@ -176,12 +178,7 @@ const {hasPrev, hasNext, navigate} = useBookingView({
   dinnerDates: () => teamDinnerDates.value
 })
 
-const selectedDinnerEvent = computed(() => {
-  return teamDinnerEvents.value.find((e: DinnerEventDisplay) => {
-    const eventDate = new Date(e.date)
-    return eventDate.toDateString() === selectedDate.value.toDateString()
-  })
-})
+const selectedDinnerEvent = computed(() => getDinnerOnDate(teamDinnerEvents.value)(selectedDate.value))
 
 const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 
@@ -369,14 +366,14 @@ useHead({
             <!-- Calendar display -->
             <div v-else>
               <ChefCalendarDisplay
-                  v-if="selectedSeason && selectedTeam"
+                  v-if="selectedSeason && selectedTeam && deadlines"
                   :view-mode="calendarViewMode"
                   :accordion-open="calendarAccordionOpen"
                   :season-dates="selectedSeason.seasonDates"
                   :team="selectedTeam"
                   :dinner-events="teamDinnerEvents"
                   :other-team-dinners="otherTeamDinners"
-                  :deadlines="deadlinesForSeason(selectedSeason)"
+                  :deadlines="deadlines"
                   :selected-dinner-id="selectedDinnerId"
                   :show-selection="true"
                   @select="handleDinnerSelect"
@@ -398,9 +395,9 @@ useHead({
         <!-- #hero: ChefMenuCard with chef/view mode based on permissions -->
         <template #hero>
           <ChefMenuCard
-              v-if="dinnerEventDetail && selectedSeason"
+              v-if="dinnerEventDetail && deadlines"
               :dinner-event="dinnerEventDetail"
-              :deadlines="deadlinesForSeason(selectedSeason)"
+              :deadlines="deadlines"
               :form-mode="chefFormMode"
               :show-state-controls="true"
               :round-rows="roundRows"

@@ -31,7 +31,7 @@
  *
  * ADR Compliance:
  * - ADR-001: Types from validation composables, badge factory in useBooking
- * - Uses design system for card styling (CALENDAR, CHEF_CALENDAR)
+ * - Uses design system for card styling (COMPONENTS.chefDinnerCard, CALENDAR, CHEF_CALENDAR)
  * - Mobile-first responsive design
  */
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
@@ -54,15 +54,16 @@ const emit = defineEmits<{
 }>()
 
 // Design system & badge factory
-const { CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, TEXT } = useTheSlopeDesignSystem()
+const { CALENDAR, CHEF_CALENDAR, COMPONENTS } = useTheSlopeDesignSystem()
 const { createChefBadges } = useBookingUi()
 
 // Get released ticket count from store (for booking badge)
 const bookingsStore = useBookingsStore()
 const releasedTicketCount = computed(() => bookingsStore.lockStatus.get(props.dinnerEvent.id) ?? undefined)
 
-// Chef workflow badges (pass released count for booking badge)
-const badges = computed(() => createChefBadges(props.dinnerEvent, props.deadlines, releasedTicketCount.value))
+// Chef workflow badges (pass released count for booking badge), counted from the page's clock
+const now = useClock()
+const badges = computed(() => createChefBadges(props.dinnerEvent, props.deadlines, now.value, releasedTicketCount.value))
 
 // Get color class based on temporal category (matches calendar view)
 // Use past styling for cancelled dinners
@@ -92,33 +93,26 @@ const handleClick = () => {
 <template>
   <div :data-testid="`chef-dinner-card-${dinnerEvent.id}`" @click="handleClick">
   <UCard
-    :ui="{
-      root: `cursor-pointer transition-shadow duration-200 hover:shadow-lg w-full ${selected ? CHEF_CALENDAR.selection : ''}`,
-      body: 'p-1.5 md:p-3 w-full'
-    }"
+    :ui="COMPONENTS.chefDinnerCard.ui(selected)"
   >
     <!-- Compact vertical layout (fits narrow sidebar) -->
-    <div class="space-y-0.5 md:space-y-1 w-full">
+    <div :class="COMPONENTS.chefDinnerCard.stack">
       <!-- Date with weekday (color matches temporal category) -->
-      <div class="text-center">
-        <div :class="[dateColorClass, isCancelled ? 'line-through' : '']" class="text-sm font-semibold rounded-md px-2 py-0.5 inline-block">
+      <div :class="COMPONENTS.chefDinnerCard.dateRow">
+        <div :class="[COMPONENTS.chefDinnerCard.date, dateColorClass, isCancelled ? COMPONENTS.chefDinnerCard.dateCancelled : '']">
           {{ formattedDate }}
         </div>
       </div>
 
       <!-- Menu title -->
       <div
-        :class="[
-          TYPOGRAPHY.bodyTextMedium,
-          'line-clamp-2 text-balance text-center',
-          isMenuAnnounced ? '' : `italic ${TEXT.neutral[500]}`
-        ]"
+        :class="[COMPONENTS.chefDinnerCard.menuTitle, isMenuAnnounced ? '' : COMPONENTS.chefDinnerCard.menuPlaceholder]"
       >
         {{ menuTitle }}
       </div>
 
       <!-- Status/deadline badges - hidden for past events and cancelled -->
-      <div v-if="temporalCategory !== 'past' && !isCancelled" class="pt-0.5 md:pt-1 space-y-0.5">
+      <div v-if="temporalCategory !== 'past' && !isCancelled" :class="COMPONENTS.chefDinnerCard.badges">
         <DeadlineBadge v-for="badge in badges.values()" :key="badge.step" :badge="badge" />
       </div>
     </div>

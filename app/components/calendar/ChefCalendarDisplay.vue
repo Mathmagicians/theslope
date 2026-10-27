@@ -103,6 +103,7 @@ const {useTemporalSplit, createTemporalEventLists, getDinnerForDay, isCancelledD
 const {createEventList} = useCalendarEvents()
 const {sortDinnerEventsByTemporal} = useSeason()
 const {getChefDeadlineAlarm} = useBooking()
+const now = useClock()
 const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, TEXT, BUTTONS, COLOR, NOISE, ICONS, URGENCY_TO_CHIP_COLOR, dayCircleClasses} = useTheSlopeDesignSystem()
 
 // Selected dinner for detail display
@@ -182,7 +183,7 @@ const isSelected = (day: DateValue): boolean => {
 // Agenda view - temporal order: next (today), future, past
 // Each event has temporalCategory ('next' | 'future' | 'past') attached
 const sortedDinnerEvents = computed(() =>
-  sortDinnerEventsByTemporal(props.dinnerEvents, nextDinnerDateRange.value)
+  sortDinnerEventsByTemporal(props.dinnerEvents, nextDinnerDateRange.value, now.value)
 )
 
 // Agenda table configuration (UTable + UPagination pattern from AdminHouseholds)
@@ -203,7 +204,7 @@ const agendaColumns = [
 const getAlarmForDay = (day: DateValue): -1 | 0 | 1 | 2 | 3 => {
   const dinner = getDinnerForDay(props.dinnerEvents, day)
   if (!dinner) return -1
-  return getChefDeadlineAlarm(dinner, props.deadlines)
+  return getChefDeadlineAlarm(dinner, props.deadlines, now.value)
 }
 
 // Legend items: the deadline chips wrap a planned-day circle, as the day cells do

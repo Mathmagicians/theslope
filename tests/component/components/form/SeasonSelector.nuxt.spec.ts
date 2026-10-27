@@ -129,11 +129,11 @@ describe('SeasonSelector', () => {
         const items = wrapper.findComponent({name: 'USelect'}).props('items') as Array<Season & {status: string, icon: string}>
         expect(items).toHaveLength(mockSeasons.length)
         for (const item of items) {
-            expect(item.status).toBe(getSeasonStatus(item))
+            expect(item.status).toBe(getSeasonStatus(item, new Date()))
             expect(item.icon).toBe(item.status === SEASON_STATUS.PAST ? ICONS.seasonPast : ICONS.calendar)
         }
         const glyph = findComponentByTestId<BadgeProps>(wrapper, 'UBadge', 'season-status-mark')
         expect(glyph.exists()).toBe(true)
-        expect(glyph.classes()).toEqual(expect.arrayContaining(SEASON_STATUS_GLYPHS[getSeasonStatus(mockSeasons[0]!)].class.split(' ')))
+        expect(glyph.classes()).toEqual(expect.arrayContaining(SEASON_STATUS_GLYPHS[getSeasonStatus(mockSeasons[0]!, new Date())].class.split(' ')))
     })
 })

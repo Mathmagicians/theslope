@@ -27,6 +27,12 @@ import {DinnerEventFactory} from "./dinnerEventFactory"
 // Nested assignment type for CookingTeamCreate (omits id, cookingTeamId, inhabitant)
 type CookingTeamCreateAssignment = NonNullable<CookingTeamCreate['assignments']>[number]
 
+/** A team to create: its name, salted on creation, and its members */
+type TeamWithAssignments = {teamName?: string, assignments: CookingTeamCreateAssignment[]}
+
+/** A chef's team and its dinner: the team's name, the dinner's fields and the day the dinner goes on */
+type ChefTeamWithDinner = {teamName?: string, dinner?: Partial<Omit<DinnerEventCreate, 'seasonId' | 'cookingTeamId'>>, day?: 'free' | Date}
+
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
@@ -877,19 +883,56 @@ export class SeasonFactory {
         context: BrowserContext,
         season: Season,
         chefInhabitantId: number,
-        {teamName = 'ChefTeam', dinner = {}, day}: {teamName?: string, dinner?: Partial<Omit<DinnerEventCreate, 'seasonId' | 'cookingTeamId'>>, day?: 'free' | Date} = {}
-    ): Promise<{ team: CookingTeamDetail, dinner: DinnerEventDisplay }> => {
-        const created = await this.createCookingTeamForSeason(context, season.id!, teamName)
-        await this.assignMemberToTeam(context, created.id!, chefInhabitantId, TeamRoleSchema.enum.CHEF)
-        const dinnerData = {chefId: chefInhabitantId, ...dinner, cookingTeamId: created.id!}
-        const placeDinner = () => {
-            if (day === 'free') return DinnerEventFactory.createDinnerEventOnFreeDay(context, season, dinnerData)
-            if (day) return DinnerEventFactory.createDinnerEventAloneOnDay(context, season, day, dinnerData)
-            return DinnerEventFactory.createDinnerEvent(context, {...dinnerData, seasonId: season.id!})
+        teamWithDinner: ChefTeamWithDinner = {}
+    ): Promise<{ team: CookingTeamDetail, dinner: DinnerEventDisplay }> =>
+        (await this.createCookingTeamsWithChefAndDinners(context, season, chefInhabitantId, [teamWithDinner]))[0]!
+
+    /**
+     * Teams in `season` in one team creation, each with its assignments in the body: a team creation rewrites the
+     * affinities of every team of the season, so a scenario in the shared season creates its teams at once. Returned in
+     * the order given, with their assignments.
+     */
+    static readonly createCookingTeams = async (
+        context: BrowserContext,
+        season: Season,
+        teams: TeamWithAssignments[]
+    ): Promise<CookingTeamDetail[]> => {
+        const response = await context.request.put(ADMIN_TEAM_ENDPOINT, {
+            headers: headers,
+            data: teams.map(({teamName = 'TestTeam', assignments}) => ({name: salt(teamName), seasonId: season.id!, assignments}))
+        })
+        expect(response.status(), `Unexpected status. Response: ${await response.text()}`).toBe(201)
+        return CreateTeamsResponseSchema.parse(await response.json()).teams
+    }
+
+    /**
+     * Several of `createCookingTeamWithChefAndDinner`'s teams in one team creation (`createCookingTeams`), the chef's
+     * CHEF assignment in its body. Returned in the order given.
+     */
+    static readonly createCookingTeamsWithChefAndDinners = async (
+        context: BrowserContext,
+        season: Season,
+        chefInhabitantId: number,
+        teamsWithDinner: ChefTeamWithDinner[]
+    ): Promise<{ team: CookingTeamDetail, dinner: DinnerEventDisplay }[]> => {
+        const chef = this.defaultCookingTeamCreateAssignment({inhabitantId: chefInhabitantId, role: TeamRoleSchema.enum.CHEF})
+        const teams = await this.createCookingTeams(context, season, teamsWithDinner.map(({teamName = 'ChefTeam'}) => ({teamName, assignments: [chef]})))
+
+        const created: { team: CookingTeamDetail, dinner: DinnerEventDisplay }[] = []
+        // One at a time: a dinner on a free day checks the day it took before the next dinner looks for one
+        for (const [index, {dinner = {}, day}] of teamsWithDinner.entries()) {
+            const teamId = teams[index]!.id!
+            const dinnerData = {chefId: chefInhabitantId, ...dinner, cookingTeamId: teamId}
+            const placeDinner = () => {
+                if (day === 'free') return DinnerEventFactory.createDinnerEventOnFreeDay(context, season, dinnerData)
+                if (day) return DinnerEventFactory.createDinnerEventAloneOnDay(context, season, day, dinnerData)
+                return DinnerEventFactory.createDinnerEvent(context, {...dinnerData, seasonId: season.id!})
+            }
+            const teamDinner = await placeDinner()
+            const team = await this.getCookingTeamById(context, teamId)
+            created.push({team: team!, dinner: teamDinner})
         }
-        const teamDinner = await placeDinner()
-        const team = await this.getCookingTeamById(context, created.id!)
-        return {team: team!, dinner: teamDinner}
+        return created
     }
 
     /**

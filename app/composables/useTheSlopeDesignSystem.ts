@@ -279,7 +279,7 @@ export const TEXT = {
     },
     neutral: {
         400: 'text-neutral-400',  // Economy tree - the "no value" dash
-        500: 'text-neutral-500'   // Household edit panel labels, chef menu placeholder
+        500: 'text-neutral-500'   // Household edit panel labels
     },
     blue: {
         500: 'text-blue-500',     // External link
@@ -2036,6 +2036,31 @@ export const COMPONENTS = {
     },
 
     /**
+     * ChefDinnerCard in the chef calendar's agenda: the card (`selected` adds the chef calendar's selection outline), the
+     * stack of date, menu title and badges, the date chip (struck through when cancelled), the title and its placeholder
+     */
+    chefDinnerCard: {
+        ui: (selected: boolean) => ({
+            root: `cursor-pointer transition-shadow duration-200 hover:shadow-lg w-full ${selected ? CHEF_CALENDAR.selection : ''}`,
+            body: 'p-1.5 md:p-3 w-full'
+        }),
+        stack: 'space-y-0.5 md:space-y-1 w-full',
+        dateRow: 'text-center',
+        date: 'text-sm font-semibold rounded-md px-2 py-0.5 inline-block',
+        dateCancelled: 'line-through',
+        menuTitle: `${TYPOGRAPHY.bodyTextMedium} line-clamp-2 text-balance text-center`,
+        menuPlaceholder: `italic ${TEXT.muted}`,
+        badges: 'pt-0.5 md:pt-1 space-y-0.5'
+    },
+
+    // DinnerStatusStepper: the step descriptions in fine print, each with its deadline badge centred below
+    dinnerStatusStepper: {
+        ui: {description: TYPOGRAPHY.finePrint},
+        description: 'flex flex-col items-center',
+        badge: 'mt-1'
+    },
+
+    /**
      * ChefMenuCard below the hero: the compact face (a calendar list row: date, title, badges, budget), the full card's
      * ring and hero header, the menu row with its title, the Flere panel above the danger zone, the stacked sections with
      * a rule above each, the chef row, the alerts under the menu row, and the menu and release forms' stack and fields
@@ -2299,9 +2324,9 @@ export const RESIDENCY_CONFIG: Record<import('~/composables/useHousehold').Resid
     'active':    null
 }
 
-/** Resolve residency display data for a household. Returns null for active households. */
-export const getResidencyDisplay = (movedInDate: Date, moveOutDate: Date | null) => {
-    const config = RESIDENCY_CONFIG[getResidencyStatus(movedInDate, moveOutDate)]
+/** Resolve residency display data for a household on `now`. Returns null for active households. */
+export const getResidencyDisplay = (movedInDate: Date, moveOutDate: Date | null, now: Date) => {
+    const config = RESIDENCY_CONFIG[getResidencyStatus(movedInDate, moveOutDate, now)]
     if (!config) return null
     const date = config.dateField === 'movedInDate' ? movedInDate : moveOutDate
     const dateText = `${config.description} ${formatDate(date!)}`
@@ -2943,11 +2968,17 @@ export const CALENDAR = {
     },
     countdown: {
         container: 'bg-amber-950 text-amber-50 py-6 md:py-8 border-b-2',
+        clickable: 'cursor-pointer hover:ring-2 hover:ring-opacity-50 transition-all',
+        content: 'text-center space-y-2',
         title: 'text-xs md:text-sm font-semibold tracking-widest uppercase opacity-90 text-amber-50',
         date: 'text-sm font-medium uppercase',
         number: 'text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight',
         numberPrefix: 'opacity-75 text-amber-50',
+        numberValue: 'ml-2',
+        timeRow: 'flex items-baseline justify-center gap-2',
         timeLabel: 'text-xs md:text-sm',
+        // The time label again, invisible, so the time sits centred
+        timeSpacer: 'text-xs md:text-sm invisible',
         timeValue: 'text-xl md:text-2xl font-medium',
         dot: 'w-3 h-3 rounded-full animate-pulse'
     },
@@ -3291,8 +3322,8 @@ export const EMPTY_STATE_MESSAGES = {
     ]
 } as const
 
-/** Pick a random message from a context - seeded by UTC date so SSR and client agree */
-export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES, today: Date = new Date()) => {
+/** Pick a random message from a context - seeded by the UTC date of `today` so SSR and client agree */
+export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES, today: Date) => {
     const messages = EMPTY_STATE_MESSAGES[context]
     // UTC parts: local date parts diverge between a UTC server and a Danish browser
     // in the evening, giving each side a different "random" message (hydration mismatch)
@@ -3302,8 +3333,8 @@ export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES
 }
 
 /** The day's empty message as one line of text, emoji first */
-export const getRandomEmptyMessageText = (context: keyof typeof EMPTY_STATE_MESSAGES) => {
-    const {emoji, text} = getRandomEmptyMessage(context)
+export const getRandomEmptyMessageText = (context: keyof typeof EMPTY_STATE_MESSAGES, today: Date) => {
+    const {emoji, text} = getRandomEmptyMessage(context, today)
     return `${emoji} ${text}`
 }
 

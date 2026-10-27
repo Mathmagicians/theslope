@@ -61,7 +61,7 @@ export default defineEventHandler(async (event): Promise<TicketChangesResponse> 
         const householdByInhabitant = new Map(buyerHouseholds.flatMap(household => household.inhabitants.map(inhabitant => [inhabitant.id, household] as const)))
         const householdOfInhabitant = (inhabitantId: number) => householdByInhabitant.get(inhabitantId) ?? null
         // The moment Framelding closes: after it only the admin's correction deletes an order
-        const bookingDeadline = season ? deadlinesForSeason(season).getBookingDeadlineTime(dinner.date) : undefined
+        const bookingDeadline = season ? deadlinesForSeason(season, new Date()).getBookingDeadlineTime(dinner.date) : undefined
 
         const all = replayTicketChanges(history, ticketPriceOf, systemUserId, householdShortnameOf, householdOfInhabitant, bookingDeadline).reverse()
         const changes = since ? all.filter(change => change.timestamp >= since) : all

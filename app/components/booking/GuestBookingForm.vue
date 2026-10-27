@@ -47,8 +47,10 @@ const emit = defineEmits<{
 const {SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, LAYOUTS, NOISE, COMPONENTS, ORIENTATIONS} = useTheSlopeDesignSystem()
 const guestForm = COMPONENTS.guestBookingForm
 
+const now = useClock()
+
 // Empty state message when no booking action available
-const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets'))
+const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets', now.value))
 
 // Booking logic
 const {getBookingOptions, buildGuestOrder} = useBooking()
@@ -87,8 +89,8 @@ const validateForm = () => {
 }
 
 
-// Deadline badges using existing factory
-const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
+// Deadline badges using existing factory, counted from the page's clock
+const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, now.value, props.releasedTicketCounts))
 // The header's badge while tickets are for sale
 const forSaleWords = computed(() => ticketsForSale(props.releasedTicketCounts))
 

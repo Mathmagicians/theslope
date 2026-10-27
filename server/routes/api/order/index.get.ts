@@ -89,7 +89,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
             }
 
             const {splitDinnerEvents} = useSeason()
-            const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents ?? [])
+            const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents ?? [], new Date())
             eventIds = [
                 ...(nextDinner ? [nextDinner.id] : []),
                 ...futureDinners.map(e => e.id)

@@ -574,6 +574,14 @@ describe('calculateCountdown', () => {
             expectedFormatted: '45M'
         },
         {
+            description: 'target is 3 days away from a given moment, not from the real now',
+            currentDate: new Date(2025, 0, 12, 18, 0, 0),
+            targetDate: new Date(2025, 0, 15, 18, 0, 0),
+            expectedHours: 72,
+            expectedMinutes: 0,
+            expectedFormatted: '3 DAGE'
+        },
+        {
             description: 'target is exactly now (same time)',
             currentDate: new Date(2025, 0, 15, 18, 0, 0),
             targetDate: new Date(2025, 0, 15, 18, 0, 0),

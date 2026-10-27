@@ -7,9 +7,7 @@ import type {HouseholdUpdate} from "~/composables/useCoreValidation"
 import {useBookingValidation, type HouseholdUpdateResponse} from "~/composables/useBookingValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {rescaffoldOnFieldChange} from "~~/server/utils/scaffoldPrebookings"
-import {emailChannel} from "~~/server/utils/sender/config"
-import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
-import {deliverInBackground} from "~~/server/utils/sender/deliveries"
+import {notifyBookingOutcomesInBackground} from "~~/server/utils/sender/events/waitlist"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {isAdmin} from '~/composables/usePermissions'
 
@@ -53,7 +51,7 @@ export default defineEventHandler<Promise<HouseholdUpdateResponse>>(async (event
             moveOutDate: householdData.moveOutDate,
             movedInDate: householdData.movedInDate
         })
-        deliverInBackground(event, () => notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffoldResult.outcomes))
+        notifyBookingOutcomesInBackground(event, scaffoldResult.outcomes)
 
         console.info(`${LOG} Updated household ${updatedHousehold.name}`)
         setResponseStatus(event, 200)

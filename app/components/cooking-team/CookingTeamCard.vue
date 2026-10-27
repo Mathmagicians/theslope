@@ -194,7 +194,8 @@ const isEditable = computed(() => props.mode === 'edit')
 const hasNoMembers = computed(() => assignments.value.length === 0)
 
 // Random fun empty state message from design system
-const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
+const now = useClock()
+const emptyStateMessage = getRandomEmptyMessage('cookingTeam', now.value)
 
 // ========== INHABITANT SELECTOR (EDIT mode) ==========
 

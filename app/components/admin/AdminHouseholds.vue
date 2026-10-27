@@ -14,6 +14,7 @@ const {households, isHouseholdsLoading, isHouseholdsErrored, householdsError} = 
 
 
 const {COMPONENTS, SIZES, BUTTONS, ICONS, TYPOGRAPHY, TEXT, getResidencyDisplay, NOISE} = useTheSlopeDesignSystem()
+const now = useClock()
 
 // The open edit panels, keyed by the household's row id
 const expanded = ref<Record<string, boolean>>({})
@@ -66,8 +67,8 @@ const filteredHouseholds = computed(() => {
 
   // Sort: non-active residency status first (pending, leaving, moved-out), then by address
   result = [...result].sort((a, b) => {
-    const aInteresting = getResidencyStatus(a.movedInDate, a.moveOutDate) !== 'active'
-    const bInteresting = getResidencyStatus(b.movedInDate, b.moveOutDate) !== 'active'
+    const aInteresting = getResidencyStatus(a.movedInDate, a.moveOutDate, now.value) !== 'active'
+    const bInteresting = getResidencyStatus(b.movedInDate, b.moveOutDate, now.value) !== 'active'
     if (aInteresting !== bInteresting) return aInteresting ? -1 : 1
     return (a.address ?? '').localeCompare(b.address ?? '')
   })
@@ -195,7 +196,7 @@ v-if="isHouseholdsErrored"
       <template #pbsId-cell="{ row }">
         <div :class="COMPONENTS.adminHouseholds.pbsCell">
           <span>{{ row.original.pbsId }}</span>
-          <template v-for="residency in [getResidencyDisplay(row.original.movedInDate, row.original.moveOutDate)]" :key="residency?.badgeText">
+          <template v-for="residency in [getResidencyDisplay(row.original.movedInDate, row.original.moveOutDate, now)]" :key="residency?.badgeText">
             <UBadge
               v-if="residency"
               :color="residency.color"

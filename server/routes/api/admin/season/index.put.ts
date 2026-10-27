@@ -50,7 +50,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
 
         // Step 2: Generate dinner events for the season
         const {generateDinnerEventDataForSeason} = useSeason()
-        const dinnerEventData = generateDinnerEventDataForSeason(savedSeason)
+        const dinnerEventData = generateDinnerEventDataForSeason(savedSeason, new Date())
 
         if (dinnerEventData.length > 0) {
             const savedEvents = await saveDinnerEvents(d1Client, dinnerEventData)

@@ -106,7 +106,7 @@ describe('CookingRoundSpending, this dinner', () => {
     it('GIVEN no receipts WHEN rendering THEN the table\'s empty state is a noReceipts message', async () => {
         const wrapper = await mount({fragment: dinnerSpendingFragment(rows[2]!, [])})
         expect(dataRows(wrapper)).toHaveLength(1)
-        expect(findByTestId(wrapper, 'cooking-round-empty').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noReceipts').text)
+        expect(findByTestId(wrapper, 'cooking-round-empty').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noReceipts', new Date()).text)
     })
 })
 

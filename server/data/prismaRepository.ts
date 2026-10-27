@@ -1610,6 +1610,10 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Coo
             },
             include: cookingTeamDetailInclude
         })
+        // The D1 adapter reads the team back after the write; a team deleted in between reads as null
+        if (!updatedTeam) {
+            throw createError({statusCode: 404, message: `Team ${id} not found after update`})
+        }
         console.info(`👥 > TEAM > [UPDATE] Successfully updated team ${updatedTeam.name} (ID: ${updatedTeam.id})`)
         return toCookingTeamDetail(updatedTeam)
     } catch (error) {

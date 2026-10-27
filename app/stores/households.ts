@@ -15,6 +15,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     // DEPENDENCIES
     const {storeAsyncData, loadOrThrow, apiRequest, toastSaved, notFoundToast} = useApiHandler()
+    const now = useClock()
     const {formatScaffoldResult, sumScaffoldResults} = useBooking()
     const {HouseholdDisplaySchema, HouseholdDetailSchema, serializeWeekDayMap} = useCoreValidation()
     const {InhabitantUpdateResponseSchema, HouseholdUpdateResponseSchema} = useBookingValidation()
@@ -89,7 +90,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
                 },
                 retries: 1,
                 toast: notFoundToast(households, selectedHouseholdId, 'husstanden'),
-                message: () => getRandomEmptyMessageText('household')
+                message: () => getRandomEmptyMessageText('household', now.value)
             }
         }
     )

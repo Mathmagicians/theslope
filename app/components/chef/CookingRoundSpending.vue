@@ -50,7 +50,8 @@ const {COMPONENTS, ICONS, TYPOGRAPHY, ALERTS, getRandomEmptyMessageText} = useTh
 // A team's cooking days read their allowance off the round's orders; this dinner's rows are its receipts
 const {isOrdersLoading} = storeToRefs(useBookingsStore())
 const loading = computed(() => isOrdersLoading.value && props.fragment.rows.some(row => row.kind === 'dinner'))
-const noReceipts = getRandomEmptyMessageText('noReceipts')
+const now = useClock()
+const noReceipts = getRandomEmptyMessageText('noReceipts', now.value)
 const {spendingLeft, spendingAwaitsTickets} = useOrder()
 
 const columns: TableColumn<SpendingTableRow>[] = [

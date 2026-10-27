@@ -8,23 +8,25 @@ The checks with human eyes, as a walk through the app. A check passes with its d
 
 | # | Package | State, viewport | What to see | Signed off |
 |---|---|---|---|---|
-| 1 | User saves and deserializers | Signed in, desktop: Rediger, change Farvevalg and a channel, Gem | A green toast; after a reload the choice holds | |
-| 2 | Notification delivery | Same card: Send testbesked | Toast "Testbesked afsendt – tjek din indbakke/telefon"; on dev the mail reaches the test mailbox | |
+| 1 | User saves and deserializers | Signed in, desktop: Rediger, change Farvevalg and a channel, Gem | A green toast; after a reload the choice holds | 2026-10-27 |
+| 2 | Notification delivery | Same card: Send testbesked | Toast "Testbesked afsendt – tjek din indbakke/telefon"; on dev the mail reaches the test mailbox | 2026-10-27 |
 
-## /dinner and /household/&lt;S&gt;/bookings (10)
+## /dinner and /household/&lt;S&gt;/bookings (12)
 
 | # | Package | State, viewport | What to see | Signed off |
 |---|---|---|---|---|
-| 3 | Zero-portion tickets get a place | `/dinner?date=<dinner past its booking deadline>`, desktop: Tilføj gæst on a ticket price of 0 portions, Gem | The preview names a booking; the guest row reads booked, without the hourglass | |
-| 4 | Zero-portion tickets get a place | Same guest row: Ingen, Gem | The guest row is gone; the dinner's tickets for sale stay as before | |
-| 5 | Zero-portion tickets get a place | Same dinner, no ticket for sale of a type with portions: Tilføj gæst on that ticket price | The button reads Skriv på venteliste; after Gem the row reads its type and place, e.g. "Barn #1" | |
+| 3 | Zero-portion tickets get a place | `/dinner?date=<dinner past its booking deadline>`, desktop: Tilføj gæst on a ticket price of 0 portions, Gem | The preview names a booking; the guest row reads booked, without the hourglass | 2026-10-27 |
+| 4 | Zero-portion tickets get a place | Same guest row: Ingen, Gem | The guest row is gone; the dinner's tickets for sale stay as before | 2026-10-27 |
+| 5 | Zero-portion tickets get a place | Same dinner, no ticket for sale of a type with portions: Tilføj gæst on that ticket price | The button reads Skriv på venteliste; after Gem the row reads its type and place, e.g. "Barn #1" | 2026-10-27 |
 | 6 | Tables key their rows by id | `/dinner?date=<past deadline>`: open Tilføj gæst, save a guest that queues | The add-guest row stays open; the queued guest's card stays closed | |
-| 7 | Tables key their rows by id | `/household/<S>/bookings`, week grid: guest form open, save so a guest row arrives above it | The form stays open on its own row | |
-| 8 | The grid shows the day view's tickets | `/dinner?date=<dinner with a place on the waiting list>`, desktop and phone | The line under the name reads the place in its ticket type's line, e.g. "Baby #1", with the hourglass | |
+| 7 | Tables key their rows by id | `/household/<S>/bookings`, week grid: guest form open, save so a guest row arrives above it | The form stays open on its own row | 2026-10-27 |
+| 8 | The grid shows the day view's tickets | `/dinner?date=<dinner with a place on the waiting list>`, desktop and phone | The line under the name reads the place in its ticket type's line, e.g. "Baby #1", with the hourglass | 2026-10-27 |
 | 9 | The grid shows the day view's tickets | `/dinner?date=<dinner with a released ticket>`, light and dark mode | A person's row and a guest row read "Frigivet" in red with the released icon, as on the ticket | 2026-10-27 |
 | 76 | The grid shows the day view's tickets | `/dinner?date=<past its booking deadline, tickets for sale>`: set a person to Spisesal, Køb billet | The person's row reads "fra &lt;seller's household&gt;" in blue with the claim icon, one size larger on desktop | 2026-10-27 |
 | 80 | The grid shows the day view's tickets | `/dinner?date=<a person's first dinner after turning 12>`, without a booking, desktop and phone, light and dark mode | The person's ticket reads Voksen at the adult price; beside the name the neutral badge "Voksen fra &lt;dd/MM&gt;" with the cake icon; Forklaring adds "Ny billetpris fra fødselsdagen". The dinner before reads Barn without the badge | 2026-10-27 |
 | 81 | The grid shows the day view's tickets | `/household/<S>/bookings`, the week of that dinner, then the week after | The person has a Barn row and a Voksen row; the Voksen row's name cell carries the badge after the ticket badge. The week after: one Voksen row, no badge | 2026-10-27 |
+| 97 | Defect 24 | `/household/<S>/bookings`, week view with dinners past their booking deadline: one with tickets for sale, one with only a waiting list, one with neither; phone then desktop | Each column chip reads as the dinner calendar's chip on that day: the yellow chip with the number for sale, the yellow chip with the hourglass, the peach chip alone; the day view's Framelding badge names the same supply. An open dinner carries no chip; from the dinner's start (18:00) neither the grid's column nor the calendar's day carries one. The grid's chip sits centred under the date | 2026-10-27 |
+| 100 | The grid shows the day view's tickets | `/household/<S>/bookings`, week view with a released ticket of a person and of a guest; phone then desktop, light and dark mode | Each released cell carries the released icon in the released colour in its corner, at the size of a waiting-list cell's hourglass; the day view's "Frigivet" badge for that dinner shows the same icon and colour | 2026-10-27 |
 
 ## /household/&lt;S&gt;/economy and /admin/economy (1)
 

@@ -18,7 +18,7 @@ const LOG = '📬 > DELIVERY > [GET]'
  * (`make theslope-sender-dry-run-booking-status-<env>`). It reads the active season's dinners still to come and past
  * their booking deadline, as they stand, and their delivery records; with no active season it counts nothing. It
  * answers per user how many of each notification the run sends. It ignores the flag; without a deploy URL or a sender
- * binding the dry run answers an error.
+ * binding the dry run answers an error naming the setting it needs.
  *
  * Each read sends and records nothing; every member reads (ADR-004).
  */
@@ -40,9 +40,9 @@ export default defineEventHandler(async (event): Promise<Delivery[] | DeliveryDr
         switch (query.read) {
             case DeliveryReadSchema.enum.DRY_RUN: {
                 const seasonId = await fetchActiveSeasonId(d1Client)
-                const {dryRun} = await sendNotifications(d1Client, emailChannel(cloudflare.env), seasonId, {dryRun: true})
+                const {dryRun, missing} = await sendNotifications(d1Client, emailChannel(cloudflare.env), seasonId, {dryRun: true})
                 if (!dryRun) {
-                    return throwH3Error(`${LOG} The delivery dry run of ${query.senderEvent} failed`, new Error('No delivery dry run'))
+                    return throwH3Error(`${LOG} The delivery dry run of ${query.senderEvent} failed`, new Error(`The delivery dry run of ${query.senderEvent} needs ${missing}`))
                 }
                 console.info(`${LOG} Delivery dry run of ${query.senderEvent} on active season ${seasonId ?? 'none'}: ${dryRun.users.length} user(s)`)
                 setResponseStatus(event, 200)

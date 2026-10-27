@@ -10,10 +10,13 @@ import {senderAddress, senderDisplayName} from '~/config/notificationTemplates'
 
 const {NotificationConfigSchema} = useNotificationValidation()
 
+/** A setting e-mail needs: the deployment's URL and the sender binding */
+export type EmailSetting = 'DEPLOY_URL' | 'SENDER'
+
 /** E-mail is on with its queue and settings, or off with the setting that is missing */
 export type EmailChannel =
     | {on: true, queue: Queue, config: NotificationConfig}
-    | {on: false, missing: 'DEPLOY_URL' | 'SENDER'}
+    | {on: false, missing: EmailSetting}
 
 const notificationConfig = (deployUrl: string): NotificationConfig => {
     const {environment, site} = deploymentFromUrl(deployUrl)

@@ -1,6 +1,6 @@
 import {z} from 'zod'
 import {TicketTypeSchema, DinnerModeSchema, OrderStateSchema, LedgerEntryTypeSchema} from '~~/prisma/generated/zod'
-import {parse as parseDate, endOfMonth} from 'date-fns'
+import {endOfMonth} from 'date-fns'
 import {
     ExpenseFragmentSchema,
     SerializedExpenseFragmentSchema,
@@ -10,7 +10,7 @@ import {
 } from '~/composables/fragments/domainFragments'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {sumAmounts} from '~/utils/ledger'
-import {formatDate} from '~/utils/date'
+import {formatDate, parseDate} from '~/utils/date'
 import type {DinnerEventInfo, DinnerMode} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
@@ -168,7 +168,7 @@ export const useBillingValidation = () => {
             const dateStr = headerCells[i]?.trim()
             if (dateStr) {
                 // Parse DD/MM/YYYY format
-                const date = parseDate(dateStr, 'dd/MM/yyyy', new Date())
+                const date = parseDate(dateStr)
                 if (isNaN(date.getTime())) {
                     throw new Error(`Invalid date format in header column ${i + 1}: '${dateStr}'. Expected DD/MM/YYYY`)
                 }

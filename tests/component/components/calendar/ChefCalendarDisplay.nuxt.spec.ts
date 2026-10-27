@@ -42,7 +42,7 @@ const mountCalendar = async ({viewMode = 'agenda', accordionOpen = true, showSel
             team,
             dinnerEvents,
             otherTeamDinners,
-            deadlines: deadlinesForSeason({ticketIsCancellableDaysBefore: 4, diningModeIsEditableMinutesBefore: 0}),
+            deadlines: deadlinesForSeason({ticketIsCancellableDaysBefore: 4, diningModeIsEditableMinutesBefore: 0}, new Date()),
             viewMode,
             accordionOpen,
             showSelection

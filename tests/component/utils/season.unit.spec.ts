@@ -947,7 +947,7 @@ describe('Active Season Management utilities', () => {
                     expectedFutureCount: 0
                 }
             ])('$scenario', ({ referenceTime, events, expectedNextDinnerId, expectedPastCount, expectedFutureCount }) => {
-                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, undefined, referenceTime)
+                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, referenceTime)
 
                 // Validate structure
                 const parseResult = SplitDinnerEventsResultSchema.safeParse(result)
@@ -981,7 +981,7 @@ describe('Active Season Management utilities', () => {
                     expectedFutureCount: 0
                 }
             ])('$scenario', ({ referenceTime, events, expectedPastCount, expectedFutureCount }) => {
-                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, undefined, referenceTime)
+                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, referenceTime)
 
                 expect(result.nextDinner?.id).toBe(events.length > 0 && expectedPastCount < events.length ? events[expectedPastCount]?.id : undefined)
                 expect(result.pastDinners).toHaveLength(expectedPastCount)
@@ -1037,7 +1037,7 @@ describe('Active Season Management utilities', () => {
                     expectedFutureCount: 0
                 }
             ])('$scenario', ({ referenceTime, events, maxDaysAhead, expectedNextDinnerId, expectedFutureCount }) => {
-                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, maxDaysAhead, referenceTime)
+                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, referenceTime, maxDaysAhead)
                 expect(result.nextDinner?.id).toBe(expectedNextDinnerId)
                 expect(result.futureDinners).toHaveLength(expectedFutureCount)
             })
@@ -1077,7 +1077,7 @@ describe('Active Season Management utilities', () => {
                     expectedEnd: null
                 }
             ])('$scenario', ({ referenceTime, events, expectedStart, expectedEnd }) => {
-                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, undefined, referenceTime)
+                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, referenceTime)
 
                 if (expectedStart === null) {
                     expect(result.nextDinnerDateRange).toBeNull()
@@ -1188,17 +1188,7 @@ describe('Active Season Management utilities', () => {
     })
 
     describe('sortDinnerEventsByTemporal', () => {
-        // Use fixed reference date for predictable tests
         const referenceDate = new Date(2025, 5, 15, 12, 0) // June 15, 2025 noon
-
-        beforeEach(() => {
-            vi.useFakeTimers()
-            vi.setSystemTime(referenceDate)
-        })
-
-        afterEach(() => {
-            vi.useRealTimers()
-        })
 
         it('should sort events in temporal order: next, future (ascending), past (descending)', () => {
             const pastEvent1 = { id: 1, date: new Date(2025, 5, 10, 18, 0) } // June 10
@@ -1210,7 +1200,7 @@ describe('Active Season Management utilities', () => {
             const events = [futureEvent2, pastEvent1, nextEvent, pastEvent2, futureEvent1]
             const nextDinnerDateRange = { start: nextEvent.date, end: new Date(2025, 5, 15, 19, 0) }
 
-            const result = sortDinnerEventsByTemporal(events, nextDinnerDateRange)
+            const result = sortDinnerEventsByTemporal(events, nextDinnerDateRange, referenceDate)
 
             // Order: next, future (ascending), past (descending - most recent first)
             expect(result.map(e => e.id)).toEqual([3, 4, 5, 2, 1])
@@ -1221,7 +1211,7 @@ describe('Active Season Management utilities', () => {
             const pastEvent = { id: 1, date: new Date(2025, 5, 10, 18, 0) }
             const futureEvent = { id: 2, date: new Date(2025, 5, 20, 18, 0) }
 
-            const result = sortDinnerEventsByTemporal([pastEvent, futureEvent], null)
+            const result = sortDinnerEventsByTemporal([pastEvent, futureEvent], null, referenceDate)
 
             expect(result.map(e => e.id)).toEqual([2, 1])
             expect(result.map(e => e.temporalCategory)).toEqual(['future', 'past'])
@@ -1231,6 +1221,7 @@ describe('Active Season Management utilities', () => {
     describe('getNextDinnerDate', () => {
         const dinnerStartHour = 18
         const dinnerDurationMinutes = 60
+        const now = new Date(2025, 0, 1, 12, 0)
 
         it('should find next dinner when there are future dates', () => {
             const futureDate = new Date(2030, 10, 17)
@@ -1239,7 +1230,7 @@ describe('Active Season Management utilities', () => {
                 futureDate
             ]
 
-            const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)(dinnerDates)
+            const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)(dinnerDates, now)
 
             expect(result).not.toBeNull()
             expect(result?.start).toEqual(createDateInTimezone(futureDate, dinnerStartHour))
@@ -1251,7 +1242,7 @@ describe('Active Season Management utilities', () => {
                 new Date(2020, 0, 3, 18, 0)
             ]
 
-            const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)(dinnerDates)
+            const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)(dinnerDates, now)
 
             expect(result).toBeNull()
         })
@@ -1305,7 +1296,7 @@ describe('Active Season Management utilities', () => {
                     expectedUtcHour: 16
                 }
             ])('$scenario: 18:00 Copenhagen → $expectedUtcHour:00 UTC', ({ dinnerDate, expectedUtcHour }) => {
-                const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)([dinnerDate])
+                const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)([dinnerDate], now)
 
                 expect(result).not.toBeNull()
                 expect(result!.start.getUTCHours()).toBe(expectedUtcHour)
@@ -1314,18 +1305,8 @@ describe('Active Season Management utilities', () => {
     })
 
     describe('isBeforeDeadline', () => {
-        let mockNow: Date
-
-        beforeEach(() => {
-            // Set a fixed "now" for testing: Jan 15, 2025 at 12:00
-            mockNow = new Date(2025, 0, 15, 12, 0, 0)
-            vi.useFakeTimers()
-            vi.setSystemTime(mockNow)
-        })
-
-        afterEach(() => {
-            vi.useRealTimers()
-        })
+        // A fixed "now" for testing: Jan 15, 2025 at 12:00
+        const mockNow = new Date(2025, 0, 15, 12, 0, 0)
 
         it.each([
             {
@@ -1365,19 +1346,19 @@ describe('Active Season Management utilities', () => {
             }
         ])('$scenario', ({ dinnerStartTime, offsetDays, offsetMinutes, expected }) => {
             // WHEN: Checking if now is before deadline
-            const checkDeadline = isBeforeDeadline(offsetDays, offsetMinutes)
+            const checkDeadline = isBeforeDeadline(offsetDays, offsetMinutes, mockNow)
             const result = checkDeadline(dinnerStartTime)
 
             // THEN: Returns expected result
             expect(result).toBe(expected)
         })
 
-        it('should use default parameters (0 days, 0 minutes)', () => {
+        it('without an offset checks against the dinner start', () => {
             // GIVEN: Dinner tomorrow at 18:00
             const dinnerStartTime = new Date(2025, 0, 16, 18, 0)
 
-            // WHEN: Calling with default parameters
-            const checkDeadline = isBeforeDeadline()
+            // WHEN: Calling with no offset
+            const checkDeadline = isBeforeDeadline(0, 0, mockNow)
             const result = checkDeadline(dinnerStartTime)
 
             // THEN: Checks against dinner time directly (no offset)

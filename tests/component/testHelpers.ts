@@ -1,14 +1,15 @@
 import {nextTick, h, defineComponent, ref, isRef, effectScope, watch, shallowReactive, type Component, type ComponentPublicInstance, type Ref} from 'vue'
-import {expect, beforeEach, afterEach} from 'vitest'
+import {expect, beforeEach, afterEach, vi} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
-import {useNuxtApp, clearNuxtData, useAppConfig} from '#app'
+import {useNuxtApp, clearNuxtData, useAppConfig, useState} from '#app'
 import {getActivePinia, setActivePinia, type Pinia} from 'pinia'
 import {flushPromises, type BaseWrapper, type DOMWrapper, type VueWrapper} from '@vue/test-utils'
 import {toCalendarDate} from '~/utils/date'
 import {sumBy} from '~/utils/ledger'
 import {TICKET_COUNTS} from '~/composables/useBilling'
 import {LAYOUTS} from '~/composables/useTheSlopeDesignSystem'
+import {CLOCK_STATE} from '~/composables/useClock'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {useBookingValidation, type ScaffoldOrdersRequest, type ScaffoldOrdersResponse, type TicketType} from '~/composables/useBookingValidation'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
@@ -319,4 +320,13 @@ export const expectSharedCalendarGrid = (wrapper: BaseWrapper<Node>) => {
     expect(headDays.length).toBeGreaterThan(0)
     expect(headDays.length % 7).toBe(0)
     headDays.filter((_, i) => i % 7 === 0).forEach(monday => expect(monday).toBe('M'))
+}
+
+/**
+ * The moment a time-dependent case runs at: the system time and the page's clock (useClock). The app seeds the clock
+ * on its first read and its interval ticks it on real timers, so a faked system time alone leaves the clock behind
+ */
+export const setClock = (date: Date) => {
+    vi.setSystemTime(date)
+    useState<Date>(CLOCK_STATE).value = date
 }

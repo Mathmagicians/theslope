@@ -63,6 +63,7 @@ const emit = defineEmits<{
 
 const planStore = usePlanStore()
 const {getSeasonStatus, canSeasonBeActive} = useSeason()
+const now = useClock()
 const {BUTTONS, COLOR, ICONS, SIZES, TYPOGRAPHY, ALERTS, SEASON_STATUS_GLYPHS} = useTheSlopeDesignSystem()
 
 // Reactively get season from store - updates when store changes
@@ -77,7 +78,7 @@ const isActivatingSeason = computed(() => planStore.isActivatingSeasonFlowInProg
 // Compute season status
 const status = computed(() => {
   if (!season.value) return null
-  return getSeasonStatus(season.value)
+  return getSeasonStatus(season.value, now.value)
 })
 
 // Alert configuration - intelligent descriptions based on status
@@ -120,7 +121,7 @@ const alertConfig = computed(() => {
 // Show button only if season is eligible (can be activated or is already active)
 const showButton = computed(() => {
   if (!props.showActivationButton || !season.value) return false
-  return season.value.isActive || canSeasonBeActive(season.value)
+  return season.value.isActive || canSeasonBeActive(season.value, now.value)
 })
 </script>
 

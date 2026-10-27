@@ -72,13 +72,13 @@ export const useTicket = () => {
      *
      * @param birthDate - Date of birth (null/undefined → ADULT)
      * @param ticketPrices - Season ticket prices with age limits (falls back to defaults if not provided)
-     * @param referenceDate - Date to calculate age on (default: today)
+     * @param referenceDate - Date to calculate age on (a dinner's date, or now)
      * @returns Ticket type enum value
      */
     const determineTicketType = (
         birthDate: Date | null | undefined,
-        ticketPrices?: TicketPrice[],
-        referenceDate: Date = new Date()
+        ticketPrices: TicketPrice[] | undefined,
+        referenceDate: Date
     ): typeof TicketType[keyof typeof TicketType] => {
         // Default to ADULT if no birthDate
         if (!birthDate) return TicketType.ADULT
@@ -109,13 +109,13 @@ export const useTicket = () => {
      *
      * @param birthDate - Date of birth (preferred for inhabitants)
      * @param ticketPrices - Season ticket prices
-     * @param referenceDate - Date to calculate age on (default: today)
+     * @param referenceDate - Date to calculate age on (a dinner's date, or now)
      * @param priceAtBooking - Frozen price from order (fallback for guests/orphans)
      */
     const resolveTicketType = (
         birthDate: Date | null,
-        ticketPrices?: TicketPrice[],
-        referenceDate?: Date,
+        ticketPrices: TicketPrice[] | undefined,
+        referenceDate: Date,
         priceAtBooking?: number | null
     ): TicketType => {
         const resolved = resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
@@ -132,8 +132,8 @@ export const useTicket = () => {
      */
     const groupInhabitantsByTicketCategory = <T extends {birthDate?: Date | null}>(
         inhabitants: T[],
-        ticketPrices?: TicketPrice[],
-        referenceDate?: Date
+        ticketPrices: TicketPrice[] | undefined,
+        referenceDate: Date
     ) => {
         const classified = inhabitants.map(inhabitant => ({
             ...inhabitant,
@@ -184,7 +184,7 @@ export const useTicket = () => {
      * @param birthDate - Date of birth (preferred, determines ticket type by age)
      * @param priceAtBooking - Frozen price from existing order (fallback when no birthDate)
      * @param ticketPrices - Season ticket prices to search (must be sorted by price asc)
-     * @param referenceDate - Date to calculate age on (default: today)
+     * @param referenceDate - Date to calculate age on; without it the price decides
      * @returns Matching TicketPrice or undefined if no prices available
      */
     const resolveTicketPrice = (
@@ -196,7 +196,7 @@ export const useTicket = () => {
         if (!ticketPrices?.length) return undefined
 
         // Priority 1: birthDate → ticketType → cheapest price for type
-        if (birthDate) {
+        if (birthDate && referenceDate) {
             const ticketType = determineTicketType(birthDate, ticketPrices, referenceDate)
             const match = findTicketPriceByType(ticketType, ticketPrices)
             if (match) return match

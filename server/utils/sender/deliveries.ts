@@ -1,14 +1,15 @@
 /**
- * The delivery step every sender event shares. With e-mail off it loads nothing. Otherwise it loads the deliveries the
- * sender event's data sends, drops the channels each user opted out of, reads their recorded rows, one chunked read per
- * subject type (ADR-014), sends what no recorded row covers in one emit and records what the queue took in one write.
+ * The delivery step every sender event shares. With e-mail off it loads nothing and answers the missing setting.
+ * Otherwise it loads the deliveries the sender event's data sends, drops the channels each user opted out of, reads their
+ * recorded rows, one chunked read per subject type (ADR-014), unless the sender event read them already, sends what no
+ * recorded row covers in one emit and records what the queue took in one write.
  * A configured mailbox has no user and no channels to opt out of. A delivery dry run takes the same path and stops
  * before the send.
  */
 import type {H3Event} from 'h3'
 import {composeEmail, type TextAttachment} from '~~/server/utils/sender/compose'
 import {emit} from '~~/server/utils/sender/emit'
-import type {EmailChannel} from '~~/server/utils/sender/config'
+import type {EmailChannel, EmailSetting} from '~~/server/utils/sender/config'
 import type {NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
 import {
     useDeliveryValidation, type Delivery, type DeliveryCounts, type DeliveryCreate, type DeliveryDryRun, type SenderEvent, type DesiredDelivery
@@ -46,7 +47,18 @@ export interface DeliveryResult {
     /** The queue's answer per delivery handed to it, empty when nothing goes; absent with e-mail off and in a delivery dry run */
     emitted?: SenderEmitResult[]
     dryRun?: DeliveryDryRun
+    /** The setting e-mail misses while it is off */
+    missing?: EmailSetting
 }
+
+/** A sender event's deliveries, with the recorded rows of their subjects when the sender event read them */
+export interface LoadedDeliveries {
+    desired: DesiredOutgoing[]
+    recorded?: Delivery[]
+}
+
+/** The one empty result: nothing sent, naming the setting e-mail misses while it is off */
+export const nothingSent = (missing?: DeliveryResult['missing']): DeliveryResult => ({counts: {sent: 0}, missing})
 
 type ToUser = DesiredOutgoing & {userId: number}
 
@@ -58,11 +70,17 @@ const wantsEmail = (delivery: DesiredOutgoing): boolean => !isToUser(delivery) |
 const once = (desired: DesiredOutgoing[]): DesiredOutgoing[] => [...new Map(desired.map(delivery =>
     [`${delivery.subjectType}:${delivery.subjectId}:v${delivery.version}:${delivery.notification}:${delivery.userId ?? delivery.to}`, delivery])).values()]
 
-// The recorded rows of the deliveries' subjects, the subject types read one after another (ADR-014)
-const readRecorded = async (d1Client: D1Database, deliveries: DesiredDelivery[]): Promise<Delivery[]> => {
+/** What a notification is about, as its Delivery row names it */
+export interface NotificationSubject {
+    subjectType: Delivery['subjectType']
+    subjectId: number
+}
+
+// The recorded rows of the subjects, the subject types read one after another (ADR-014)
+export const readRecorded = async (d1Client: D1Database, subjects: NotificationSubject[]): Promise<Delivery[]> => {
     const rows: Delivery[] = []
-    for (const [subjectType, ofType] of groupBy<DesiredDelivery, Delivery['subjectType']>(delivery => delivery.subjectType)(deliveries)) {
-        rows.push(...await fetchDeliveries(d1Client, subjectType, [...new Set(ofType.map(delivery => delivery.subjectId))]))
+    for (const [subjectType, ofType] of groupBy<NotificationSubject, Delivery['subjectType']>(subject => subject.subjectType)(subjects)) {
+        rows.push(...await fetchDeliveries(d1Client, subjectType, [...new Set(ofType.map(subject => subject.subjectId))]))
     }
     return rows
 }
@@ -72,11 +90,13 @@ type NotificationCounts = DeliveryDryRun['users'][number]['toSend']
 const countByNotification = (deliveries: DesiredDelivery[]): NotificationCounts =>
     deliveries.reduce<NotificationCounts>((counts, {notification}) => ({...counts, [notification]: (counts[notification] ?? 0) + 1}), {})
 
+/** A delivery with the count of the recorded rows that cover it */
+type Covered = {delivery: DesiredOutgoing, covering: number}
+
 // Two runs on one dinner raced when two recorded rows cover one user's delivery; a mailbox's goes again on the admin's re-send
-const warnSentTwice = (deliveries: ToUser[], recorded: Delivery[]): void => {
-    for (const delivery of deliveries) {
-        const covering = coveringDeliveries(recorded, delivery, EMAIL).length
-        if (covering > 1) {
+const warnSentTwice = (covered: Covered[]): void => {
+    for (const {delivery, covering} of covered) {
+        if (isToUser(delivery) && covering > 1) {
             console.warn(`${LOG} [SENT TWICE] ${delivery.notification} ${delivery.subjectType} ${delivery.subjectId} v${delivery.version} to user-${delivery.userId}: ${covering} recorded`)
         }
     }
@@ -115,20 +135,22 @@ const send = async (
  * them, or counted by a delivery dry run. A failure of the load, the read or the send is its one failed line
  */
 export const deliverDesired = async (
-    d1Client: D1Database, channel: EmailChannel, senderEvent: SenderEvent, load: () => Promise<DesiredOutgoing[]>,
+    d1Client: D1Database, channel: EmailChannel, senderEvent: SenderEvent, load: (config: NotificationConfig) => Promise<LoadedDeliveries>,
     {jobRunId, adminOverride, dryRun}: DeliveryOptions = {}
 ): Promise<DeliveryResult> => {
     if (!channel.on) {
-        console.warn(`${LOG} [EVENT ${senderEvent}] e-mail is off (${channel.missing} not set): nothing sent`)
-        return {counts: {sent: 0}}
+        console.error(`${LOG} [EVENT ${senderEvent}] e-mail is off (${channel.missing} not set): nothing sent`)
+        return nothingSent(channel.missing)
     }
     try {
-        const onChannel = once(await load()).filter(wantsEmail)
-        const recorded = await readRecorded(d1Client, onChannel)
-        warnSentTwice(onChannel.filter(isToUser), recorded)
-        const sending = onChannel.filter(delivery => shouldSend(recorded, delivery, EMAIL, adminOverride !== undefined))
+        const loaded = await load(channel.config)
+        const onChannel = once(loaded.desired).filter(wantsEmail)
+        const recorded = loaded.recorded ?? await readRecorded(d1Client, onChannel)
+        const covered = onChannel.map(delivery => ({delivery, covering: coveringDeliveries(recorded, delivery, EMAIL).length}))
+        const sending = covered.filter(({covering}) => shouldSend(covering, adminOverride !== undefined)).map(({delivery}) => delivery)
         if (dryRun) return {counts: {sent: sending.length}, dryRun: dryRunOf(senderEvent, sending)}
 
+        warnSentTwice(covered)
         const {sent, emitted} = await send(d1Client, channel, sending, jobRunId)
         if (adminOverride && sent.length > 0) {
             console.info(`${LOG} [EVENT ${senderEvent}] re-sent by admin ${adminOverride.adminUserId} to ${recipientsOf(sent)}`)

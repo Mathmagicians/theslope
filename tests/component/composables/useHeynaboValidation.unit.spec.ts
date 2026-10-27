@@ -253,7 +253,7 @@ describe('useHeynaboValidation', () => {
                 const locations = locationIds.map(id => parsedLocations.find(l => l.id === id)!)
                 const members = memberLocations.map((locId, idx) => ({...parsedMembers[idx]!, locationId: locId}))
 
-                const result = createHouseholdsFromImport(locations, members)
+                const result = createHouseholdsFromImport(locations, members, new Date())
 
                 expect(result).toHaveLength(expectedHouseholds)
                 result.forEach((household, idx) => {

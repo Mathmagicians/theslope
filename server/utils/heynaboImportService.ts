@@ -70,7 +70,7 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
 
         // 2. Transform to domain models
         console.info(`${LOG} Transforming to household domain models`)
-        const incomingHouseholds = createHouseholdsFromImport(locations, members)
+        const incomingHouseholds = createHouseholdsFromImport(locations, members, new Date())
         console.info(`${LOG} Transformed ${incomingHouseholds.length} households with ${incomingHouseholds.reduce((sum, h) => sum + (h.inhabitants?.length || 0), 0)} inhabitants`)
 
         // 3. Fetch existing data for reconciliation

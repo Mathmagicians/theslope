@@ -2,7 +2,7 @@ import {describe, it, expect, beforeAll, beforeEach, afterEach, vi} from 'vitest
 import {addDays, addHours, addYears} from 'date-fns'
 import {useBooking, type AlarmLevel, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, bookingContextOf, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
-import {dateToWeekDay} from '~/utils/season'
+import {dateToWeekDay, isBeforeDeadline} from '~/utils/season'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {sumBy} from '~/utils/ledger'
 import {useBookingValidation, TicketState, SupplyState, type OrderDisplay, type DinnerMode, type DinnerState, type DesiredOrder, type OrderAuditAction, type OrderAuditChange, type OrderAuditSource, type OrderSnapshot, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
@@ -87,7 +87,7 @@ beforeAll(() => {
     ({resolveTicketPrice, takesNoPortionOf} = useTicket())
 
     const {deadlinesForSeason, getCookingDeadlineThresholds} = useSeason()
-    defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+    defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason(), new Date())
     cookingThresholds = getCookingDeadlineThresholds()
 })
 
@@ -99,25 +99,25 @@ describe('useBooking', () => {
                 name: 'single digit day and month',
                 date: new Date(2025, 0, 5), // Jan 5, 2025
                 baseUrl: 'https://skraaningen.dk',
-                expected: 'https://skraaningen.dk/dinner?date=05/01/25'
+                expected: 'https://skraaningen.dk/dinner?date=05/01/2025'
             },
             {
                 name: 'double digit day and month',
                 date: new Date(2025, 10, 15), // Nov 15, 2025
                 baseUrl: 'https://skraaningen.dk',
-                expected: 'https://skraaningen.dk/dinner?date=15/11/25'
+                expected: 'https://skraaningen.dk/dinner?date=15/11/2025'
             },
             {
                 name: 'end of year',
                 date: new Date(2025, 11, 31), // Dec 31, 2025
                 baseUrl: 'https://example.com',
-                expected: 'https://example.com/dinner?date=31/12/25'
+                expected: 'https://example.com/dinner?date=31/12/2025'
             },
             {
                 name: 'different base URL',
                 date: new Date(2026, 5, 20), // Jun 20, 2026
                 baseUrl: 'http://localhost:3000',
-                expected: 'http://localhost:3000/dinner?date=20/06/26'
+                expected: 'http://localhost:3000/dinner?date=20/06/2026'
             }
         ])('formats URL correctly for $name', ({date, baseUrl, expected}) => {
             expect(buildDinnerUrl(baseUrl, date)).toBe(expected)
@@ -215,7 +215,7 @@ describe('useBooking', () => {
 
                 const day = String(event.date.getDate()).padStart(2, '0')
                 const month = String(event.date.getMonth() + 1).padStart(2, '0')
-                const year = String(event.date.getFullYear()).slice(-2)
+                const year = String(event.date.getFullYear())
 
                 expect(payload.description).toContain(`dinner?date=${day}/${month}/${year}`)
             })
@@ -371,8 +371,6 @@ describe('useBooking', () => {
         // The menu open with the groceries ordered, and the groceries open with the menu published
         const menuOpen = {state: DinnerStates.SCHEDULED, heynaboEventId: null, totalCost: GROCERIES_COST}
         const groceriesOpen = {state: DinnerStates.ANNOUNCED, heynaboEventId: 1, totalCost: 0}
-        beforeEach(() => vi.useFakeTimers({toFake: ['Date']}))
-        afterEach(() => vi.useRealTimers())
 
         it.each([
             {deadlines: 'the menu open', clock: 'outside the warning hours', now: menu.green, dinner: menuOpen, alarm: 'green'},
@@ -390,9 +388,8 @@ describe('useBooking', () => {
             {deadlines: 'the menu and the groceries open', clock: 'inside the critical hours of the dinner', now: groceries.red, dinner: {...menuOpen, totalCost: 0}, alarm: 'overdue'}
         ] as const)('GIVEN $deadlines WHEN the clock is $clock THEN the alarm is $alarm', ({now, dinner, alarm}) => {
             const deadlines = {menu: defaultDeadlines.getMenuDeadlineTime(dinnerDate), dinner: defaultDeadlines.getDinnerStartTime(dinnerDate)}
-            vi.setSystemTime(now(deadlines, cookingThresholds))
 
-            expect(getChefDeadlineAlarm({...DinnerEventFactory.defaultDinnerEventDisplay(), date: dinnerDate, ...dinner}, defaultDeadlines)).toBe(ALARM[alarm])
+            expect(getChefDeadlineAlarm({...DinnerEventFactory.defaultDinnerEventDisplay(), date: dinnerDate, ...dinner}, defaultDeadlines, now(deadlines, cookingThresholds))).toBe(ALARM[alarm])
         })
     })
 
@@ -421,7 +418,7 @@ describe('useBooking', () => {
             {desc: 'all past', dinners: [{id: 1, date: daysFromNow(-1)}, {id: 2, date: daysFromNow(-2)}], expectedIds: [1, 2]},
             {desc: 'mixed', dinners: [{id: 1, date: daysFromNow(-1)}, {id: 2, date: daysFromNow(1)}, {id: 3, date: daysFromNow(-2)}], expectedIds: [1, 3]}
         ])('$desc → returns $expectedIds', ({dinners, expectedIds}) => {
-            const result = getPastDinnerIds(dinners)
+            const result = getPastDinnerIds(dinners, new Date())
             expect(result.sort()).toEqual(expectedIds.sort())
         })
     })
@@ -1448,7 +1445,9 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
             createHousehold(1, inhabitants),
             existing,
             confirmed,
-            cancelled
+            cancelled,
+            [],
+            new Date()
         )
 
         expect(result.create).toHaveLength(expected.create)
@@ -1484,7 +1483,9 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
                 household,
                 [existingOrder],
                 new Set(),  // confirmedKeys
-                new Set()   // cancelledKeys
+                new Set(),  // cancelledKeys
+                [],
+                new Date()
             )
 
             expect(result.delete).toHaveLength(expected.delete)
@@ -1504,7 +1505,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         const household = createHousehold(1, [createInhabitant(1, allNone)])
         const guest = {...createOrder(99, 1, 101, {isGuestTicket: true, priceAtBooking: 5000}), ticketPriceId: null}
 
-        const result = resolveOrdersFromPreferencesToBuckets(testSeason, household, [guest], new Set(), new Set())
+        const result = resolveOrdersFromPreferencesToBuckets(testSeason, household, [guest], new Set(), new Set(), [], new Date())
 
         expect(result.idempotent.map(order => order.orderId)).toEqual([99])
         expect(result.update).toEqual([])
@@ -1519,7 +1520,9 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
             household,
             [guestOrder],
             new Set(),  // confirmedKeys
-            new Set()   // cancelledKeys
+            new Set(),  // cancelledKeys
+            [],
+            new Date()
         )
 
         // Guest order should be idempotent, not deleted
@@ -1565,7 +1568,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         ])('$desc', ({prefs, entries, expected}) => {
             const household = createHousehold(1, [createInhabitant(1, prefs)])
 
-            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, household, [], new Set(), new Set(), entries)
+            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, household, [], new Set(), new Set(), entries, new Date())
 
             expect({claim: result.claim, leave: result.leave, requeue: result.requeue}).toEqual(expected)
             expect(result.create).toEqual([])
@@ -1575,7 +1578,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         it('a preference to eat for a baby who tastes, with no order, books', () => {
             const babyWhoTastes = {...createInhabitant(1, allDaysPrefs), birthDate: addYears(today, -1)}
 
-            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, createHousehold(1, [babyWhoTastes]), [], new Set(), new Set())
+            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, createHousehold(1, [babyWhoTastes]), [], new Set(), new Set(), [], new Date())
 
             expect({create: result.create, claim: result.claim}).toEqual({
                 create: [expect.objectContaining({inhabitantId: babyWhoTastes.id, ticketPriceId: TASTING_PRICE_ID, state: OrderState.BOOKED})], claim: []
@@ -1591,7 +1594,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
             const own = createOrder(10, 1, tomorrowDinner.id)
             const guest = createOrder(11, 1, tomorrowDinner.id, {isGuestTicket: true})
 
-            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, household, guestLast ? [own, guest] : [guest, own], new Set(), new Set())
+            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, household, guestLast ? [own, guest] : [guest, own], new Set(), new Set(), [], new Date())
 
             expect(result.update).toEqual([expect.objectContaining({orderId: own.id, state: OrderState.RELEASED})])
             expect(result.idempotent).toEqual([expect.objectContaining({orderId: guest.id, isGuestTicket: true})])
@@ -1602,7 +1605,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
             const household = createHousehold(1, [createInhabitant(1, noDaysPrefs)])
             const guests = [11, 12].map(id => createOrder(id, 1, tomorrowDinner.id, {isGuestTicket: true}))
 
-            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, household, guests, new Set(), new Set())
+            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, household, guests, new Set(), new Set(), [], new Date())
 
             expect(result.idempotent.map(order => order.orderId)).toEqual([11, 12])
             expect(result.delete).toEqual([])
@@ -1622,10 +1625,7 @@ describe('Lock Status Utilities', () => {
     })
 
     const makeDeadlines = (lockedDaysAhead: number) => ({
-        canModifyOrders: (date: Date) => {
-            const daysAhead = Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-            return daysAhead > lockedDaysAhead
-        }
+        canModifyOrders: isBeforeDeadline(lockedDaysAhead, 0, new Date())
     })
 
     describe('getLockedFutureDinnerIds', () => {
@@ -1787,7 +1787,8 @@ describe('getBookingOptions — the rules matrix', () => {
         event: {date: dinner.date, state: dinner.state},
         deadlines: {canModifyOrders: () => canModifyOrders, canEditDiningMode: () => canEditDiningMode},
         isHouseholdInResidency: () => true,
-        takesNoPortion: everyTicketTakesAPortion
+        takesNoPortion: everyTicketTakesAPortion,
+        now: new Date()
     })
     // `at` moves the column's dinner (a day, a state), `with` overrides its context; both carry the dinner they ask about
     const column = (label: string, spec: ColumnSpec) => {
@@ -1894,7 +1895,7 @@ describe('bookingContextOf — the context the day view, the grid and the guest 
         'staying': () => ({...HouseholdFactory.defaultHouseholdDetail(), movedInDate: movedIn, moveOutDate: null}),
         'no household': () => null
     }
-    const contextOf = (household: HouseholdDisplay | null) => bookingContextOf(household, defaultDeadlines, SEASON_PRICES)(event)
+    const contextOf = (household: HouseholdDisplay | null) => bookingContextOf(household, defaultDeadlines, SEASON_PRICES, new Date())(event)
 
     it.each`
         household         | day                       | when                         | inResidency

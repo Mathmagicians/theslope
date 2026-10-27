@@ -6,10 +6,10 @@
 import {fillTemplate, templatePlaceholders} from '~/utils/template'
 import {maskEmail} from '~~/workers/common/mask'
 import {NOTIFICATION_ADDRESS_VARS, type EmailMessage, type NotificationConfig} from '~/composables/useNotificationValidation'
-import {NOTIFICATION_SENDER_NAME} from '~/config/notificationTemplates'
+import {NOTIFICATION_SENDER_NAME, type NotificationKind} from '~/config/notificationTemplates'
 import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 
-const {DeliveryKindSchema, NotificationKindSchema, deliveryReferencePrefix} = useDeliveryValidation()
+const {DeliveryKindSchema, deliveryReferencePrefix} = useDeliveryValidation()
 const {EMAIL} = DeliveryKindSchema.enum
 
 export type TextAttachment = {
@@ -20,7 +20,7 @@ export type TextAttachment = {
 }
 
 export type ComposeInput = {
-    kind: string
+    kind: NotificationKind
     to: string
     /** The login the mail goes to: its id leads the key's recipient, so two logins whose addresses mask alike stay two */
     userId?: number | null
@@ -43,9 +43,8 @@ export const missingAddress = (config: NotificationConfig, recipient: 'adminEmai
 
 export const composeEmail = (config: NotificationConfig, input: ComposeInput): EmailMessage => {
     const {kind, to, userId, cc = [], values = {}, attachments = [], correlationId, now = new Date()} = input
-    const notification = NotificationKindSchema.safeParse(kind)
     const template = config.templates[kind]
-    if (!notification.success || !template) throw new Error(`No notification template for kind ${kind}`)
+    if (!template) throw new Error(`No notification template for kind ${kind}`)
 
     const placeholders = new Set([template.subject, template.text, config.signature].flatMap(templatePlaceholders))
     const unused = Object.keys(values).filter(name => !placeholders.has(name))
@@ -53,12 +52,12 @@ export const composeEmail = (config: NotificationConfig, input: ComposeInput): E
 
     // {kind}:{channel}:{maskedRecipient}:{messageId}, the recipient led by user-{id}/ for a mail to a login — one grep on
     // the masked address finds every send to that mailbox
-    const dedupeKey = `${deliveryReferencePrefix(notification.data, EMAIL, userId ?? null)}${maskEmail(to)}:${crypto.randomUUID()}`
+    const dedupeKey = `${deliveryReferencePrefix(kind, EMAIL, userId ?? null)}${maskEmail(to)}:${crypto.randomUUID()}`
     const allValues = {...values, senderName: NOTIFICATION_SENDER_NAME, site: config.site, environment: config.environment, dedupeKey}
 
     return {
         v: 1,
-        channel: 'EMAIL',
+        channel: EMAIL,
         to,
         cc,
         from: config.from,

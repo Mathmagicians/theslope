@@ -86,8 +86,10 @@ export type Scene = {
     signedInUser?: UserDetail
     /** The dinner a GIVEN placed, with its season */
     dinner?: {season: Season, event: DinnerEventDisplay}
-    /** The teams of the user's inhabitant, in the order a GIVEN created them */
+    /** The teams a GIVEN created, by their number in a feature: team n at index n - 1 */
     teams: CookingTeamDetail[]
+    /** The dinner a GIVEN placed for each team, at the index of its team in `teams` */
+    teamDinners: DinnerEventDisplay[]
     /** The people of the dinner by their part; the waiting list's people in queue order */
     people: Partial<Record<Actor, InhabitantDetail>>
     waiting: InhabitantDetail[]
@@ -112,7 +114,7 @@ export type Scene = {
 }
 
 const emptyScene = (): Scene => ({
-    jobRuns: [], people: {}, waiting: [], teams: [], households: {}, places: [], billedHouseholds: [],
+    jobRuns: [], people: {}, waiting: [], teams: [], teamDinners: [], households: {}, places: [], billedHouseholds: [],
     created: {inhabitantIds: [], householdIds: [], userIds: [], dinnerEventIds: [], teamIds: [], seasonIds: []}
 })
 
@@ -134,6 +136,13 @@ export const personOf = (scene: Scene, actor: Actor): InhabitantDetail => {
     const person = scene.people[actor]
     if (!person) throw new Error(`The scene holds no ${actor}: a step before this one places ${actor}`)
     return person
+}
+
+/** The team by its number in a feature, counted from 1 */
+export const teamOf = (scene: Scene, number: number): CookingTeamDetail => {
+    const team = scene.teams[number - 1]
+    if (!team) throw new Error(`The scene holds no team ${number}: a GIVEN creates the teams`)
+    return team
 }
 
 /** A household of the scenario, removed after it */

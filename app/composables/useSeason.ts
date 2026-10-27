@@ -1,13 +1,13 @@
 import type {DateRange, WeekDayMap} from '~/types/dateTypes'
 import {WEEKDAYS} from '~/types/dateTypes'
-import {isWithinInterval, isBefore, subDays, subMinutes} from "date-fns"
+import {isWithinInterval, isBefore, subDays, subMinutes, getYear} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
 import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, type OrderState as OrderStateEnum, useBookingValidation} from '~/composables/useBookingValidation'
 import {useCookingTeamValidation, type CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
 import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
-    findFirstCookingDayInDates, getNextDinnerDate, getAdjacentDinner, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
+    findFirstCookingDayInDates, getNextDinnerDate, getAdjacentDinner, getDinnerTimeRange, getDinnerOnDate, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
     selectMostAppropriateActiveSeason, isBeforeDeadline} from "~/utils/season"
 import {getEachDayOfIntervalWithSelectedWeekdays, formatDate, calculateDayFromWeekNumber, formatDateRange, DATE_SETTINGS,
@@ -84,9 +84,10 @@ export const useSeason = () => {
     /**
      * Create a default season based on app configuration.
      * Returns empty holidays - component should calculate holidays reactively using getDefaultHolidays()
+     * @param now - The current moment; the season starts in its year
      */
-    const getDefaultSeason = (): Season => {
-        const thisYear = new Date().getFullYear()
+    const getDefaultSeason = (now: Date): Season => {
+        const thisYear = getYear(now)
         const dateRange = {
             start: calculateDayFromWeekNumber(0, theslope.defaultSeason.startWeek, thisYear),
             end: calculateDayFromWeekNumber(4, theslope.defaultSeason.endWeek, thisYear + 1)
@@ -140,16 +141,16 @@ export const useSeason = () => {
      * which dates should have dinner events. Returns data structures ready for persistence.
      *
      * @param season - Season configuration (must be deserialized with Date objects)
+     * @param now - The current moment, the events' creation stamp
      * @returns Array of DinnerEventCreate objects for each valid dinner date
      */
-    const generateDinnerEventDataForSeason = (season: Season): DinnerEventCreate[] => {
+    const generateDinnerEventDataForSeason = (season: Season, now: Date): DinnerEventCreate[] => {
         if (!SeasonSchema.safeParse(season).success) return []
         const cookingDates = computeCookingDates(
             season.cookingDays,
             season.seasonDates,
             season.holidays
         )
-        const now = new Date()
         return cookingDates.map(date => ({
             date,
             menuTitle: '',
@@ -257,13 +258,14 @@ export const useSeason = () => {
      * Pure function extracted for testability and reuse by scaffoldPrebookings.
      *
      * @param allDinnerEvents - All dinner events for a season
+     * @param now - The current moment, the window's start
      * @returns Dinner events within the scaffoldable window (next dinner + future within window)
      */
-    const getScaffoldableDinnerEvents = (allDinnerEvents: DinnerEventDisplay[]): DinnerEventDisplay[] => {
+    const getScaffoldableDinnerEvents = (allDinnerEvents: DinnerEventDisplay[], now: Date): DinnerEventDisplay[] => {
         if (allDinnerEvents.length === 0) return []
 
         const prebookingWindow = getPrebookingWindowDays()
-        const {nextDinner, futureDinners} = configuredSplitDinnerEvents(allDinnerEvents, prebookingWindow)
+        const {nextDinner, futureDinners} = configuredSplitDinnerEvents(allDinnerEvents, now, prebookingWindow)
 
         // All scaffoldable events: nextDinner + futureDinners
         return nextDinner ? [nextDinner, ...futureDinners] : futureDinners
@@ -293,10 +295,11 @@ export const useSeason = () => {
      */
     const getScheduleChangeDesiredEvents = (
         oldSeason: Season,
-        newSeason: Season
+        newSeason: Season,
+        now: Date
     ): DinnerEventCreate[] | null => {
         const oldKeys = computeCookingDates(oldSeason.cookingDays, oldSeason.seasonDates, oldSeason.holidays).map(toDateKey)
-        const desiredEvents = generateDinnerEventDataForSeason(newSeason)
+        const desiredEvents = generateDinnerEventDataForSeason(newSeason, now)
         const newKeys = desiredEvents.map(e => toDateKey(e.date))
 
         if (oldKeys.join(',') === newKeys.join(',')) return null
@@ -337,8 +340,9 @@ export const useSeason = () => {
     /**
      * Get deadline functions configured for a specific season.
      * Menu deadline from config (10 days), booking deadline from season (8 days).
+     * The predicates compare against `now`, so a caller builds the deadlines per moment (a computed over the clock, a run's start).
      */
-    const deadlinesForSeason = (season: Pick<Season, 'ticketIsCancellableDaysBefore' | 'diningModeIsEditableMinutesBefore'>): SeasonDeadlines => {
+    const deadlinesForSeason = (season: Pick<Season, 'ticketIsCancellableDaysBefore' | 'diningModeIsEditableMinutesBefore'>, now: Date): SeasonDeadlines => {
         const dinnerStartHour = getDefaultDinnerStartTime()
         const menuDeadlineDays = getMenuAnnouncementDeadlineDays()
 
@@ -356,15 +360,14 @@ export const useSeason = () => {
             subMinutes(getDinnerStartTime(dinnerEventDate), season.diningModeIsEditableMinutesBefore)
 
         // DERIVED: Predicates
-        const now = () => new Date()
         const canModifyOrders = (dinnerEventDate: Date): boolean =>
-            isBefore(now(), getBookingDeadlineTime(dinnerEventDate))
+            isBefore(now, getBookingDeadlineTime(dinnerEventDate))
 
         const canEditDiningMode = (dinnerEventDate: Date): boolean =>
-            isBefore(now(), getDiningModeDeadlineTime(dinnerEventDate))
+            isBefore(now, getDiningModeDeadlineTime(dinnerEventDate))
 
         const isAnnounceMenuPastDeadline = (dinnerEventDate: Date): boolean =>
-            !isBefore(now(), getMenuDeadlineTime(dinnerEventDate))
+            !isBefore(now, getMenuDeadlineTime(dinnerEventDate))
 
         const getOrderCancellationAction = (dinnerEventDate: Date): {
             updates: { dinnerMode: DinnerMode, state: typeof OrderState.RELEASED, releasedAt: Date }
@@ -375,7 +378,7 @@ export const useSeason = () => {
                 updates: {
                     dinnerMode: DinnerMode.NONE,
                     state: OrderState.RELEASED,
-                    releasedAt: new Date()
+                    releasedAt: now
                 },
                 auditAction: OrderAuditActionEnum.USER_CANCELLED
             }
@@ -397,12 +400,13 @@ export const useSeason = () => {
      * Check if a dinner event has started (is in the past)
      * Uses dinner start time, not end time - once dinner starts, no more booking changes
      * @param dinnerEventDate - Date of the dinner event
+     * @param now - The current moment
      * @returns True if dinner has started (past)
      */
-    const isDinnerPast = (dinnerEventDate: Date): boolean => {
+    const isDinnerPast = (dinnerEventDate: Date, now: Date): boolean => {
         const dinnerStartHour = getDefaultDinnerStartTime()
         const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
-        return !isBeforeDeadline(0, 0)(dinnerStartTime)
+        return !isBeforeDeadline(0, 0, now)(dinnerStartTime)
     }
 
     /**
@@ -442,11 +446,12 @@ export const useSeason = () => {
     /**
      * Calculate deadline urgency for cooking tasks using thresholds from app.config.ts
      * @param dinnerStartTime - The dinner event start time
+     * @param now - The page's clock (useClock), so the server and the browser count from the same moment
      * @returns 0 (on track) | 1 (warning) | 2 (critical)
      */
-    const getDeadlineUrgency = (dinnerStartTime: Date): DeadlineUrgency => {
+    const getDeadlineUrgency = (dinnerStartTime: Date, now: Date): DeadlineUrgency => {
         const { critical: criticalHours, warning: warningHours } = getCookingDeadlineThresholds()
-        return calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours)
+        return calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours, now)
     }
 
     /**
@@ -492,6 +497,7 @@ export const useSeason = () => {
         getNextDinnerDate: configuredGetNextDinnerDate,
         getAdjacentDinner: configuredGetAdjacentDinner,
         splitDinnerEvents: configuredSplitDinnerEvents,
+        getDinnerOnDate,
         sortDinnerEventsByTemporal,
         deadlinesForSeason,
         isDinnerPast,

@@ -32,6 +32,7 @@ const emit = defineEmits<{
 
 const {BUTTONS, SIZES, COLOR, ICONS, ALERTS, TYPOGRAPHY, LAYOUTS, COMPONENTS} = useTheSlopeDesignSystem()
 const {HouseholdCreateFormSchema} = useCoreValidation()
+const now = useClock()
 
 const formRef = useTemplateRef<Form<HouseholdCreateFormData>>('formRef')
 
@@ -75,7 +76,7 @@ const prevOwners = computed((): HouseholdDisplay[] => {
 })
 
 const isImmutable = (s: HouseholdDisplay) =>
-    getResidencyStatus(s.movedInDate, s.moveOutDate ?? null) === 'moved-out'
+    getResidencyStatus(s.movedInDate, s.moveOutDate ?? null, now.value) === 'moved-out'
 
 // Admin overrides per prevOwner. Falls back to original moveOutDate or new movedInDate.
 const prevOwnerDates = reactive<Record<number, Date | null>>({})

@@ -58,7 +58,7 @@
  */
 import type {TicketChange} from '~/composables/useBookingValidation'
 import type {TableColumn, TableRow} from '@nuxt/ui'
-import {isBefore, isFuture} from 'date-fns'
+import {isAfter, isBefore} from 'date-fns'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 
 const props = defineProps<{
@@ -69,7 +69,8 @@ const props = defineProps<{
 
 const {COMPONENTS, BUTTONS, SIZES, ICONS, NOISE, COLOR, TYPOGRAPHY, ALERTS, getRandomEmptyMessageText} = useTheSlopeDesignSystem()
 const WORDS = BOOKING_WORDS.ticketChange
-const noTicketChanges = getRandomEmptyMessageText('noTicketChanges')
+const now = useClock()
+const noTicketChanges = getRandomEmptyMessageText('noTicketChanges', now.value)
 
 // The moment Framelding closes, as a row of the table
 type DeadlineRow = {deadline: Date}
@@ -93,7 +94,7 @@ const open = ref(false)
 const showAll = ref(false)
 
 // Before Framelding closes nothing has moved since that moment, so the history is read whole and the newest change shown
-const beforeDeadline = computed(() => props.since !== null && isFuture(props.since))
+const beforeDeadline = computed(() => props.since !== null && isAfter(props.since, now.value))
 const windowStart = computed(() => showAll.value || beforeDeadline.value ? undefined : props.since ?? undefined)
 const {data, status, error, execute} = useAsyncData(
   computed(() => `ticket-changes-${props.dinnerEventId}-${windowStart.value?.getTime() ?? 'all'}`),

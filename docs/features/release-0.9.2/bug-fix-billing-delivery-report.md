@@ -20,6 +20,7 @@ and 699 report the two remaining archives and nothing; `Delivery` holds the Sept
 - `JobRunDisplay` carries `delivered: {ARCHIVE, EMAIL, SMS}`, the run's deliveries through the `JobRun → Delivery` relation
   (`fetchJobRuns` in `maintenanceRepository.ts`).
 - `syncBillingPeriod` decides from `summary.delivered`; `fetchDeliveries` goes.
+- The mail's should-send is the delivery step's alone (`deliverDesired`); `decideBillingSideEffects` decides the archive.
 
 **Stored run summary — OPEN.** In `periods[]`, the period fields, `csvUploaded` / `emailSent`, `archive.archived` / `key` and
 `notification.queued` / `dedupeKey` repeat the period row and `Delivery`. `results` and the failures (`archive.degraded`,

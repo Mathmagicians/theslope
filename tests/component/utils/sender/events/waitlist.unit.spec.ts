@@ -1,6 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
-import {createError} from 'h3'
-import {notifyBookingOutcomes, notifyExtraPortions, sendNotifications} from '~~/server/utils/sender/events/waitlist'
+import {createError, type H3Event} from 'h3'
+import {notifyBookingOutcomes, notifyBookingOutcomesInBackground, notifyExtraPortions, sendNotifications} from '~~/server/utils/sender/events/waitlist'
 import * as peopleReads from '~~/server/data/prismaRepository'
 import * as dinnerReads from '~~/server/data/financesRepository'
 import {fetchHouseholdsByIds, fetchInhabitantsByIds, fetchSeason, fetchUsersByIds} from '~~/server/data/prismaRepository'
@@ -111,6 +111,19 @@ describe('booking notifications after the action', () => {
         await expect(notify(NotificationFactory.channel(queue))).rejects.toThrow(reason)
         expect(sentMessages(queue)).toEqual([])
         expect(logs.error).toHaveBeenCalledWith(`📬 > DELIVERY > [EVENT ${SenderEvent.BOOKING_STATUS}] failed: ${reason}`)
+    })
+
+    // A route answers first; the mails go after the response on the channel of the route's environment
+    it('GIVEN a route\'s outcomes WHEN their notifications go in the background THEN the request waits on them on its environment\'s channel', async () => {
+        const {missing} = NotificationFactory.channelOff
+        vi.stubEnv(missing, '')
+        const waitUntil = vi.fn()
+
+        notifyBookingOutcomesInBackground({waitUntil, context: {cloudflare: {env: {DB: {}}}}} as unknown as H3Event, outcomesOf({ticketsSold: [sale]}))
+
+        expect(waitUntil).toHaveBeenCalledOnce()
+        await expect(waitUntil.mock.calls[0]![0]).resolves.toEqual({counts: {sent: 0}, missing})
+        expect(logs.error).toHaveBeenCalledWith(`📬 > DELIVERY > [EVENT ${SenderEvent.BOOKING_STATUS}] e-mail is off (${missing} not set): nothing sent`)
     })
 })
 
@@ -537,6 +550,18 @@ describe('the people a run\'s mails name', () => {
             ])
             expect(sentMessages(sender)).toEqual([])
             expect(recorded.rows).toEqual([])
+        })
+
+        it('GIVEN a dinner with a ticket sold to the first in line WHEN a maintenance run sends the booking notifications THEN it reads the season and its dinners once, and the delivery records once per subject type', async () => {
+            const [, ticketSold] = notifications
+            holdDinner(ticketSold!.written(), 'true')
+
+            await send(fakeQueue())
+
+            expect(fetchSeason).toHaveBeenCalledOnce()
+            expect(fetchDinnerEvents).toHaveBeenCalledOnce()
+            expect(fetchDinnerEventsByIds).not.toHaveBeenCalled()
+            expect(vi.mocked(dinnerReads.fetchDeliveries).mock.calls.map(([, subjectType]) => subjectType)).toEqual([DeliverySubjectSchema.enum.ORDER])
         })
 
         // Without an active season no dinner has notifications to send

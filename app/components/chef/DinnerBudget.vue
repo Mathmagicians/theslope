@@ -58,7 +58,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const { TYPOGRAPHY, COMPONENTS, ICONS, BUTTONS, COLOR, NOISE, SIZES, ALERTS, getRandomEmptyMessageText } = useTheSlopeDesignSystem()
-const noTicketsSold = getRandomEmptyMessageText('noTicketsSold')
+const now = useClock()
+const noTicketsSold = getRandomEmptyMessageText('noTicketsSold', now.value)
 
 // Kitchen config from app.config.ts
 const appConfig = useAppConfig()

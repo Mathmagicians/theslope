@@ -1,6 +1,6 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {createError} from 'h3'
-import {createUsers, deleteUser, saveUser} from '~~/server/data/prismaRepository'
+import {createUsers, deleteUser, saveUser, updateTeam} from '~~/server/data/prismaRepository'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS, TextScaleSchema} from '~/composables/useUserPreferenceValidation'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
@@ -11,7 +11,8 @@ vi.stubGlobal('createError', createError)
 // The unit runtime has no D1: a client standing for the binding answers each statement from the test
 const {fakePrisma} = await vi.hoisted(async () => ({
     fakePrisma: (await import('~~/tests/component/data/fakePrismaClient')).fakePrismaClient({
-        user: ['update', 'upsert', 'delete', 'createManyAndReturn']
+        user: ['update', 'upsert', 'delete', 'createManyAndReturn'],
+        cookingTeam: ['update']
     })
 }))
 vi.mock('~~/server/utils/database', () => ({getPrismaClientConnection: async () => fakePrisma}))
@@ -85,5 +86,15 @@ describe('the user a mutation returns', () => {
 
         expect(detail).not.toHaveProperty('passwordHash')
         expect(detail.Inhabitant).toBeNull()
+    })
+})
+
+// The D1 adapter reads a team back after its update; a team a parallel request deleted in between reads as null
+describe('a team deleted while it is updated', () => {
+    it('GIVEN the team read back as null WHEN updated THEN the update answers not found', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+        fakePrisma.cookingTeam.update.mockResolvedValue(null)
+
+        await expect(updateTeam(d1Client, 2, {id: 2, affinity: null})).rejects.toMatchObject({statusCode: 404})
     })
 })

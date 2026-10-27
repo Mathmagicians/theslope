@@ -16,9 +16,10 @@ const store = useAllergiesStore()
 const {allergyTypes, isAllergyTypesLoading, posterNotes} = storeToRefs(store)
 const planStore = usePlanStore()
 const {activeSeason} = storeToRefs(planStore)
+const now = useClock()
 
 // Current date for header (formatted in Danish)
-const currentDate = computed(() => formatDate(new Date(), 'd. MMMM yyyy'))
+const currentDate = computed(() => formatDate(now.value, 'd. MMMM yyyy'))
 
 // QR Code URL (uses current request URL for correct environment - local/dev/prod)
 const requestUrl = useRequestURL()
@@ -31,7 +32,8 @@ const allergyData = computed(() => {
       .map(allergyType => {
         const categories = groupInhabitantsByTicketCategory(
             allergyType.inhabitants ?? [],
-            activeSeason.value?.ticketPrices
+            activeSeason.value?.ticketPrices,
+            now.value
         )
         const members = categories.flatMap(category => category.inhabitants)
         return {

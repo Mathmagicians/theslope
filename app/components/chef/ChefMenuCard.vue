@@ -199,6 +199,8 @@ const bookingDeadline = computed(() => props.deadlines.getBookingDeadlineTime(pr
 // Time logic from useSeason (ADR-001: business logic in composables)
 const { getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
 const dinnerStartHour = getDefaultDinnerStartTime()
+// The page's clock: the server and the browser count down from the same moment
+const now = useClock()
 
 // Allergies store for allergen data
 const allergiesStore = useAllergiesStore()
@@ -234,8 +236,8 @@ const formattedShortDate = computed(() => formatDate(props.dinnerEvent.date))
 // Menu status - uses getDeadlineUrgency from useSeason
 const menuStatus = computed(() => {
   const dinnerTimeRange = getDinnerTimeRange(props.dinnerEvent.date, dinnerStartHour, 0)
-  const countdown = calculateCountdown(dinnerTimeRange.start)
-  const urgency = getDeadlineUrgency(dinnerTimeRange.start)
+  const countdown = calculateCountdown(dinnerTimeRange.start, now.value)
+  const urgency = getDeadlineUrgency(dinnerTimeRange.start, now.value)
 
   // 0 = compliant (green), 1 = warning, 2 = critical
   return {
@@ -275,7 +277,7 @@ const menuAllergenOverview = computed(() =>
   computeAllergenOverview(props.dinnerEvent.tickets ?? [], props.dinnerEvent.allergens ?? [])
 )
 
-const noAllergensMessage = getRandomEmptyMessage('noAllergens')
+const noAllergensMessage = getRandomEmptyMessage('noAllergens', now.value)
 
 // Draft allergen selection for editing
 const draftAllergenIds = ref<number[]>([])

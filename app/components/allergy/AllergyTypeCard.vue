@@ -19,8 +19,9 @@ const getHouseholdShortName = (householdId: number) => props.householdShortNames
 
 // Age category badge - the active season's ticket prices carry the age limits
 const {activeSeason} = storeToRefs(usePlanStore())
+const now = useClock()
 const ageBadge = (birthDate: Date | null | undefined) =>
-    resolveTicketTypePresentation(birthDate ?? null, activeSeason.value?.ticketPrices)
+    resolveTicketTypePresentation(birthDate ?? null, activeSeason.value?.ticketPrices, now.value)
 
 // EMITS
 const emit = defineEmits<{
@@ -57,11 +58,11 @@ const handleCancel = () => {
 const isCreate = computed(() => !props.allergyType)
 const inhabitantCount = computed(() => props.allergyType?.inhabitants?.length || 0)
 const hasRecentAllergies = computed(() =>
-    props.allergyType?.inhabitants?.some(i => isNew(i.allergyUpdatedAt)) || false
+    props.allergyType?.inhabitants?.some(i => isNew(i.allergyUpdatedAt, now.value)) || false
 )
 
 // Random fun empty state message from design system
-const emptyStateMessage = getRandomEmptyMessage('allergy')
+const emptyStateMessage = getRandomEmptyMessage('allergy', now.value)
 </script>
 
 <template>

@@ -7,6 +7,7 @@ import {FORM_MODES, type FormMode} from '~/types/form'
 export const usePlanStore = defineStore("Plan", () => {
         // DEPENDENCIES
         const {storeAsyncData, loadOrThrow, apiRequest, toastSaved, notFoundToast} = useApiHandler()
+        const now = useClock()
         const {SeasonSchema, SeasonUpdateResponseSchema, ActiveSeasonIdSchema} = useSeasonValidation()
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
@@ -40,7 +41,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 return activeSeasonId.value
             } else if (seasons.value.length > 0) {
                 const {sortSeasonsByActivePriority} = useSeason()
-                const sortedSeasons = sortSeasonsByActivePriority(seasons.value)
+                const sortedSeasons = sortSeasonsByActivePriority(seasons.value, now.value)
                 const firstId = sortedSeasons[0]?.id ?? null
                 console.info(`${LOG_CTX} 🗓️ > No active season, using first sorted season ID: ${firstId}`)
                 return firstId
@@ -77,7 +78,7 @@ export const usePlanStore = defineStore("Plan", () => {
                     },
                     retries: 1,
                     toast: notFoundToast(seasons, selectedSeasonId, 'sæsonen'),
-                    message: () => getRandomEmptyMessageText('seasonGone')
+                    message: () => getRandomEmptyMessageText('seasonGone', now.value)
                 }
             }
         )

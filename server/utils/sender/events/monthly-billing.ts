@@ -5,7 +5,7 @@
  * it and its HTTP twin (POST /api/admin/sender/event/monthly-billing) re-sends it.
  */
 import {missingAddress, siteUrl} from '~~/server/utils/sender/compose'
-import type {DesiredOutgoing} from '~~/server/utils/sender/deliveries'
+import type {LoadedDeliveries} from '~~/server/utils/sender/deliveries'
 import {useBillingValidation, type BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 import type {NotificationConfig} from '~/composables/useNotificationValidation'
 import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
@@ -25,14 +25,14 @@ export const billingMailKind = (version: number): NotificationKind =>
     version > 1 ? NotificationKind.BILLING_PERIOD_UPDATED : NotificationKind.BILLING_PERIOD_CLOSED
 
 /** The notifications a period's current version sends the accountant, cc the admin mailbox, with the CSV attached */
-export const notificationsForAccountant = (config: NotificationConfig, summary: BillingPeriodSummaryDetail) => async (): Promise<DesiredOutgoing[]> => {
+export const notificationsForAccountant = (summary: BillingPeriodSummaryDetail) => async (config: NotificationConfig): Promise<LoadedDeliveries> => {
     const missing = missingAddress(config, 'accountantEmail')
     if (missing) {
         console.error(`${LOG} ${missing} not set — mail not sent`, {billingPeriod: summary.billingPeriod, version: summary.version})
-        return []
+        return {desired: []}
     }
     const notification = billingMailKind(summary.version)
-    return [{
+    return {desired: [{
         subjectType: BILLING_PERIOD, subjectId: summary.id, version: summary.version, notification, userId: null,
         to: config.accountantEmail, notificationChannels: [NotificationChannelSchema.enum.EMAIL],
         cc: config.adminEmail ? [config.adminEmail] : [],
@@ -45,5 +45,5 @@ export const notificationsForAccountant = (config: NotificationConfig, summary: 
         }),
         attachments: [{filename: generateCsvFilename(summary), contentType: 'text/csv; charset=utf-8', content: generateBillingCsv(summary)}],
         correlationId: `${summary.billingPeriod} v${summary.version}`
-    }]
+    }]}
 }

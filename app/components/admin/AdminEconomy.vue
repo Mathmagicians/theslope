@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<{
 
 const {formatPrice} = useTicket()
 const {groupByCostEntry, groupByHouseholdEntry, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
+const now = useClock()
 const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, BORDER, NOISE} = useTheSlopeDesignSystem()
 
 const planStore = usePlanStore()
@@ -156,7 +157,7 @@ const futureDinnerStatsAccessor = (entry: CostEntry<OrderWithInhabitant, DinnerE
     ]
 }
 
-const currentPeriod = computed(() => calculateCurrentBillingPeriod())
+const currentPeriod = computed(() => calculateCurrentBillingPeriod(now.value))
 
 const groupTxByDinner = groupByCostEntry<TransactionDisplay>()
 

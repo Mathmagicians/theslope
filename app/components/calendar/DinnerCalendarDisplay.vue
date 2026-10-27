@@ -54,6 +54,7 @@ import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import {isSameDay} from 'date-fns'
 import {isCalendarDateInDateList, toDate} from '~/utils/date'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 
@@ -84,6 +85,7 @@ const {getHolidayDatesFromDateRangeList} = useSeason()
 const {useTemporalSplit, createTemporalEventLists, getDinnerForDay, isCancelledDay} = useTemporalCalendar()
 const {CALENDAR, DINNER_CALENDAR, COMPONENTS, SIZES, ICONS, BOOKING_LOCK_STATUS, dayCircleClasses} = useTheSlopeDesignSystem()
 const {lockChip} = useBookingUi()
+const now = useClock()
 
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
 
@@ -108,7 +110,7 @@ const isHoliday = (day: DateValue): boolean => {
 const getLockChipForDay = (day: DateValue) => {
   if (!props.lockStatus) return null
   const dinner = getDinnerForDay(props.dinnerEvents, day)
-  return dinner ? lockChip(dinner, props.lockStatus) : null
+  return dinner ? lockChip(dinner, props.lockStatus, now.value) : null
 }
 
 // Day type detection - returns 'next' | 'future' | 'past' | null
@@ -175,8 +177,7 @@ const handleCountdownClick = (dinnerId: number) => {
 
 const isSelected = (day: DateValue): boolean => {
   if (!props.selectedDate) return false
-  const dayDate = toDate(day)
-  return dayDate.toDateString() === props.selectedDate.toDateString()
+  return isSameDay(toDate(day), props.selectedDate)
 }
 </script>
 

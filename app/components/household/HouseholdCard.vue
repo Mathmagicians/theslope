@@ -116,6 +116,7 @@ const householdOrder = computed(() => props.household.inhabitants.map(({id}) => 
 const {computeAggregatedPreferences} = useHousehold()
 
 const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES, ALERTS, NOISE, ORIENTATIONS, TABLE_COLUMNS } = useTheSlopeDesignSystem()
+const now = useClock()
 const { powerMode } = COMPONENTS
 
 // No inhabitant has a negative id, so the power row's id never meets a person's
@@ -136,7 +137,7 @@ const tableData = computed((): PreferencesRow[] => {
     id,
     name,
     dinnerPreferences,
-    ticketConfig: resolveTicketTypePresentation(birthDate ?? null, activeSeason.value?.ticketPrices),
+    ticketConfig: resolveTicketTypePresentation(birthDate ?? null, activeSeason.value?.ticketPrices, now.value),
     consensus: null,
     isSynthetic: false
   }))

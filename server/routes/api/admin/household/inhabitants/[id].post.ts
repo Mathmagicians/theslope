@@ -5,9 +5,7 @@ import type {InhabitantUpdate} from "~/composables/useCoreValidation"
 import {useBookingValidation, type InhabitantUpdateResponse} from "~/composables/useBookingValidation"
 import {updateInhabitant, fetchInhabitant, fetchHousehold} from "~~/server/data/prismaRepository"
 import {rescaffoldOnFieldChange} from "~~/server/utils/scaffoldPrebookings"
-import {emailChannel} from "~~/server/utils/sender/config"
-import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
-import {deliverInBackground} from "~~/server/utils/sender/deliveries"
+import {notifyBookingOutcomesInBackground} from "~~/server/utils/sender/events/waitlist"
 import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
@@ -63,7 +61,7 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
             {preferences: inhabitantData.dinnerPreferences, birthDate: inhabitantData.birthDate, householdId: inhabitantData.householdId},
             seasonId
         )
-        deliverInBackground(event, () => notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffoldResult.outcomes))
+        notifyBookingOutcomesInBackground(event, scaffoldResult.outcomes)
 
         setResponseStatus(event, 200)
         return InhabitantUpdateResponseSchema.parse({

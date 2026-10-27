@@ -7,8 +7,9 @@ import {channelOff, emit, notSent} from '~~/server/utils/sender/emit'
 import {composeEmail, missingAddress} from '~~/server/utils/sender/compose'
 import type {EmailMessage, NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
 import type {EmailChannel} from '~~/server/utils/sender/config'
+import {NotificationKind} from '~/config/notificationTemplates'
 
-const KIND = 'TEST'
+const KIND = NotificationKind.TEST
 const LOG = `📮 > SENDER > [EVENT ${KIND}]`
 
 export const buildTestEmail = (config: NotificationConfig, to: string = config.adminEmail, now?: Date): EmailMessage =>

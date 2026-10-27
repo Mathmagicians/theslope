@@ -32,7 +32,8 @@ const {SIZES, ICONS, TYPOGRAPHY, BUTTONS, COLOR, TEXT, BG, LAYOUTS, NOISE} = use
 
 // ========== RESIDENS ==========
 
-const residency = computed(() => getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate))
+const now = useClock()
+const residency = computed(() => getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate, now.value))
 
 // ========== BEBOERE ==========
 

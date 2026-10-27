@@ -68,7 +68,8 @@ const emit = defineEmits<{
 }>()
 
 const {COMPONENTS, BUTTONS, ICONS, COLOR, LAYOUTS, SIZES, ALERTS, getRandomEmptyMessageText} = useTheSlopeDesignSystem()
-const noReceipts = getRandomEmptyMessageText('noReceipts')
+const now = useClock()
+const noReceipts = getRandomEmptyMessageText('noReceipts', now.value)
 const {ExpenseLineFormSchema, VatModeSchema} = useBillingValidation()
 const {formatPrice} = useTicket()
 const {typedKrToGrossOre, typedKrOtherUnitOre} = useOrder()

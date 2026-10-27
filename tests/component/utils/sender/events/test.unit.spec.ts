@@ -18,13 +18,13 @@ describe('buildTestEmail', () => {
 
         it('is a contract-valid TEST e-mail to the admin mailbox from the environment\'s sender', () => {
             expect(NotificationMessageSchema.safeParse(message).success).toBe(true)
-            expect(message).toMatchObject({channel: EMAIL, to: config.adminEmail, from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {kind: 'TEST', environment}})
+            expect(message).toMatchObject({channel: EMAIL, to: config.adminEmail, from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {kind: NotificationFactory.Kind.TEST, environment}})
         })
 
         it('addresses the recipient the caller names, keeping the admin mailbox as Reply-To', () => {
             const mine = buildTestEmail(config, 'anna@example.com')
 
-            expect(mine).toMatchObject({to: 'anna@example.com', replyTo: config.adminEmail, meta: {kind: 'TEST'}})
+            expect(mine).toMatchObject({to: 'anna@example.com', replyTo: config.adminEmail, meta: {kind: NotificationFactory.Kind.TEST}})
         })
 
         it('names the environment in the subject and the site in the signature', () => {
@@ -72,6 +72,6 @@ describe('emitTestEmail', () => {
         const result = await emitTestEmail(NotificationFactory.channelOff)
 
         expect(result).toMatchObject({queued: false, degraded: true})
-        expect(logs.warn).toHaveBeenCalledWith(expect.stringContaining(NotificationFactory.channelOff.missing))
+        expect(logs.error).toHaveBeenCalledWith(expect.stringContaining(NotificationFactory.channelOff.missing))
     })
 })
