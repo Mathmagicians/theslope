@@ -143,7 +143,7 @@ useHead({
   title: "😎 Administration",
   meta: [
     {
-      name: "Administration",
+      name: "description",
       content: "you can view households and their dinner preferences here",
     },
   ],

@@ -3,6 +3,7 @@ import { useCookingTeam } from '~/composables/useCookingTeam'
 import { useCookingTeamValidation, type CookingTeamAssignment, type TeamRole } from '~/composables/useCookingTeamValidation'
 import type { InhabitantDisplay } from '~/composables/useCoreValidation'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
+import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { createDefaultWeekdayMap } from '~/types/dateTypes'
 import { RAINBOW, getRainbowBand } from '~/composables/useTheSlopeDesignSystem'
 
@@ -31,11 +32,11 @@ describe('useCookingTeam', () => {
   })
 
   describe('getTeamNumber', () => {
-    const { getTeamNumber, getDefaultCookingTeam } = useCookingTeam()
+    const { getTeamNumber } = useCookingTeam()
     // Listed out of number order, so a position-derived number differs from the named one
-    const seasonTeams = [3, 1, 2].map(n => getDefaultCookingTeam(1, 'S1', n, { id: 10 + n }))
-    const unnumbered = (id: number) => getDefaultCookingTeam(1, 'S1', 1, { id, name: 'Holdet uden tal' })
-    const named = (id: number, name: string) => getDefaultCookingTeam(1, 'S1', 1, { id, name })
+    const seasonTeams = [3, 1, 2].map(n => SeasonFactory.defaultCookingTeamDisplay({ id: 10 + n, name: `Madhold ${n} - S1` }))
+    const unnumbered = (id: number) => SeasonFactory.defaultCookingTeamDisplay({ id, name: 'Holdet uden tal' })
+    const named = (id: number, name: string) => SeasonFactory.defaultCookingTeamDisplay({ id, name })
 
     it.each([
       { team: seasonTeams[0]!, teams: seasonTeams, expected: 3, description: 'number in the name, listed first' },
@@ -95,9 +96,7 @@ describe('useCookingTeam', () => {
       expect(team).toEqual({
         seasonId: 1,
         name: 'Madhold 2 - Winter 2025',
-        assignments: [],
-        cookingDaysCount: 0,
-        jokerSlotCount: 0
+        assignments: []
       })
     })
 

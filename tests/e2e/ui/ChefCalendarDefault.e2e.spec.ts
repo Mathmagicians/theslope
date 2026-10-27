@@ -42,23 +42,6 @@ test.describe('Chef calendar default', () => {
         for (const id of createdTeamIds) await SeasonFactory.deleteCookingTeam(adminContext, id)
     })
 
-    for (const {face, viewport, expected} of [
-        {face: 'desktop', viewport: DESKTOP, expected: 'calendar:open'},
-        {face: 'phone', viewport: PHONE, expected: 'calendar:closed'}
-    ]) {
-        test(`GIVEN ${face} WHEN /chef loads without a view THEN the URL settles on view=${expected}`, async ({browser}) => {
-            const context = await memberValidatedBrowserContext(browser)
-            const page = await context.newPage()
-            await page.setViewportSize(viewport)
-
-            await gotoHydrated(page, chefUrl())
-
-            await expect.poll(() => viewParam(page)).toBe(expected)
-            if (expected === 'calendar:open') await expect(calendarContent(page)).toBeVisible()
-            else await expect(calendarContent(page)).toBeHidden()
-        })
-    }
-
     for (const {face, viewport, given} of [
         {face: 'desktop', viewport: DESKTOP, given: 'calendar:closed'},
         {face: 'phone', viewport: PHONE, given: 'calendar:open'}

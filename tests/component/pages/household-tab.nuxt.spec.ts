@@ -10,6 +10,7 @@ import HouseholdCard from '~/components/household/HouseholdCard.vue'
 import HouseholdEconomy from '~/components/household/HouseholdEconomy.vue'
 import HouseholdSettings from '~/components/household/HouseholdSettings.vue'
 import {useHouseholdsStore} from '~/stores/households'
+import {HELP_TEXTS} from '~/config/help-texts'
 import {useCoreValidation, type HouseholdDetail} from '~/composables/useCoreValidation'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -126,6 +127,15 @@ describe('household/[shortname]/[tab] - the override on another household', () =
         await vi.waitFor(() => expect(wrapper.text()).toContain(household.address))
         return wrapper
     }
+
+    it('the tabs carry the titles of the household page\'s help texts, in the tabs\' order', async () => {
+        session.user.value = me
+
+        const wrapper = await mountOn(mine, 'bookings')
+
+        const labels = (wrapper.findComponent({name: 'UTabs'}).props('items') as {label: string}[]).map(item => item.label)
+        expect(labels).toEqual((['bookings', 'members', 'allergies', 'economy', 'settings'] as const).map(tab => HELP_TEXTS.household[tab].title))
+    })
 
     it.each([
         {viewer: 'an admin', roles: [SystemRole.ADMIN], on: 'another household', tab: 'settings', shows: true},

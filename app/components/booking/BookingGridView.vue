@@ -27,7 +27,7 @@
  * │  ◀  Uge 3 (13-19 jan)  ▶                                   │
  * ├──────────────────┬──────┬──────╫──────┬──────┬──────╫──────┤
  * │ Beboer           │ 13   │ 14   ║ 15   │To 16 │Fr 17 ║Sø 19 │
- * │                  │(🟠)  │(🟡2) ║(🟠)  │      │      ║      │ <- chip: 🟠=locked, 🟡N=tickets
+ * │                  │(🟠)  │(🟡2) ║(🟠)  │      │      ║      │ <- chip: the dinner's supply (THE COLUMN CHIP)
  * ├──────────────────┼──────┼──────╫──────┼──────┼──────╫──────┤
  * │⚡Alle            │  🍽️  │  ?   ║  🍽️  │  🍽️  │  ?°  ║  ❌  │ <- past=view, future=edit
  * ├──────────────────┼──────┼──────╫──────┼──────┼──────╫──────┤
@@ -42,6 +42,19 @@
  *
  * NAME CELL COUNTS over the row's dinners in view, each while above 0: 🎟️ the person's own tickets (booked and released),
  * 🔓 the released among them, ⌛ their own places on the waiting list (a guest's place is not theirs).
+ *
+ * THE COLUMN CHIP on a dinner past its booking deadline shows the dinner's supply, as the dinner calendar's chip and the
+ * day view's Framelding badge (lockChip on the store's lockStatus); the name cells keep the household's own counts.
+ * Mon 13/1 nothing for sale, nobody waiting; Tue 14/1 3 tickets for sale (2V 1B), 2 of them released by the household;
+ * Wed 15/1 nothing for sale, 8V on the waiting list:
+ * | Beboer                      |    M     |    T     |    O      |
+ * |                             |   13/1   |   14/1   |   15/1    |
+ * |                             | (closed) |   (3)    |(hourglass)|
+ * | Hele familien               |   ...    |   ...    |   ...     |
+ * | Lars  tickets 3, released 1 |   ...    |   ...    |   ...     |
+ * The day view on the same dinners: Lukket for framelding · 2V 1B til salg · 8V på venteliste.
+ * (closed) = the peach chip, (3) = the yellow chip with the number for sale, (hourglass) = the yellow chip with the
+ * hourglass; a dinner with tickets for sale and a waiting list both shows the number.
  *
  * A PERSON'S ROWS BY PRICE: a booked dinner sits on the row of its booked price and ticket type, a dinner without a
  * booking (a place on the waiting list among them) on the row of the price for the person's age on that dinner's date,
@@ -228,7 +241,7 @@ const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEm
 const emptyState = getRandomEmptyMessage('noDinners')
 
 const {formatPrice, findTicketPriceById, resolveTicketPrice, resolveTicketPriceOn, ticketTypeChangeOf} = useTicket()
-const {getReleasedOrders, personTicketCounts} = useOrder()
+const {personTicketCounts} = useOrder()
 
 const {groupGuestOrders, getDayBillSummary, getBookingOptions, powerOptions, newGuestRow, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
 const {lockChip, createBirthdayBadge, bookingSaveLabel} = useBookingUi()
@@ -625,7 +638,6 @@ const isFirstEventOfWeek = (event: DinnerEventDisplay, idx: number): boolean => 
 // THE RULES: the modes each cell may pick (getBookingOptions, as the day view)
 // ============================================================================
 
-const {isDinnerPast} = useSeason()
 const {canModifyOrders} = props.deadlines
 
 const canBookEvent = (event: DinnerEventDisplay): boolean => canModifyOrders(event.date)
@@ -682,11 +694,10 @@ const residencyAlert = computed(() => {
   return getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate)
 })
 
-// The column header's lock chip on a locked dinner counts the household's own released tickets: it waits with the rows
+// The column header's lock chip on a locked dinner shows the dinner's supply, as the dinner calendar's: it waits with the rows
 const getEventLockChip = (event: DinnerEventDisplay) => {
-  if (props.loading || canBookEvent(event) || isDinnerPast(event.date)) return null
-  const releasedCount = getReleasedOrders(props.orders.filter(o => o.dinnerEventId === event.id)).length
-  return lockChip({...EMPTY_RELEASED_TICKET_COUNTS, total: releasedCount})
+  if (props.loading || canBookEvent(event)) return null
+  return lockChip(event, props.lockStatus)
 }
 
 // ============================================================================
@@ -810,7 +821,12 @@ const getEventSummary = (eventId: number) => {
               v-bind="COMPONENTS.bookingGrid.lockChip"
               :color="getEventLockChip(event)!.color"
               :text="getEventLockChip(event)!.text"
-            />
+              :ui="getEventLockChip(event)!.icon ? COMPONENTS.dinnerCalendar.queueChip.ui : undefined"
+            >
+              <template v-if="getEventLockChip(event)!.icon" #content>
+                <UIcon :name="getEventLockChip(event)!.icon!" :class="COMPONENTS.dinnerCalendar.queueChip.icon" />
+              </template>
+            </UChip>
           </div>
         </div>
       </template>

@@ -23,3 +23,12 @@ Feature: The chef page
       | from | to |
       | 1    | 2  |
       | 2    | 1  |
+
+  Scenario Outline: On a <screen>, the chef calendar is <calendar is> when the address names no view
+    When the user opens the chef page of team 1 on a <screen>
+    Then the chef calendar is <calendar is>
+
+    Examples:
+      | screen  | calendar is |
+      | desktop | open        |
+      | phone   | closed      |

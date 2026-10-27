@@ -1,17 +1,16 @@
-import {expect} from '@playwright/test'
+import {expect, type ViewportSize} from '@playwright/test'
 import {defineParameterType} from 'playwright-bdd'
 import {Given, When, Then, fromScene, contextOfActor, ACTOR, type Actor, type Scene} from '~~/tests/e2e/fixtures'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {useCookingTeamValidation, type CookingTeamDetail, type TeamRole} from '~/composables/useCookingTeamValidation'
 import {useCookingTeam} from '~/composables/useCookingTeam'
 import {TEAM_WORDS} from '~/config/teamWords'
 import {SEASON_CONFIG} from '~/config/season'
-import {splitDinnerEvents} from '~/utils/season'
+import {computeCookingDates, splitDinnerEvents} from '~/utils/season'
 import {formatDanishWeekdayDate} from '~/utils/date'
 
-const {getSessionUserInfo, gotoHydrated, collectHydrationWarnings, salt, temporaryAndRandom} = testHelpers
+const {getSessionUserInfo, gotoHydrated, collectHydrationWarnings, salt, temporaryAndRandom, PHONE_VIEWPORT} = testHelpers
 const {TeamRoleSchema} = useCookingTeamValidation()
 const {getTeamShortName} = useCookingTeam()
 
@@ -20,6 +19,15 @@ const nextDinnerOf = splitDinnerEvents(SEASON_CONFIG.defaultDinnerStartTime, SEA
 
 defineParameterType({name: 'teamRole', regexp: [...TeamRoleSchema.options]})
 
+/** The screens by their words in a feature: a desktop (md and up) and a phone */
+const SCREENS = {desktop: {width: 1280, height: 900}, phone: PHONE_VIEWPORT} satisfies Record<string, ViewportSize>
+defineParameterType({name: 'screen', regexp: Object.keys(SCREENS), transformer: (words: string) => SCREENS[words as keyof typeof SCREENS]})
+
+/** The chef calendar open or closed, as `?view=calendar:<state>` names it */
+const CALENDAR_STATES = ['open', 'closed'] as const
+type CalendarState = typeof CALENDAR_STATES[number]
+defineParameterType({name: 'calendarState', regexp: [...CALENDAR_STATES]})
+
 /** The user's team by its number in a feature, counted from 1 in the order a GIVEN created the teams */
 const teamOf = (scene: Scene, number: number): CookingTeamDetail => {
     const team = scene.teams[number - 1]
@@ -27,17 +35,17 @@ const teamOf = (scene: Scene, number: number): CookingTeamDetail => {
     return team
 }
 
-// Team n cooks on the nth day from tomorrow that holds a dinner: the chef page selects among the team's dinners, so the
-// free days stay with the specs that select across the season
+// Team n cooks on the nth cooking day ahead, beside the season's own dinner: the chef page selects among the team's
+// dinners, so the free days stay with the specs that select across the season
 Given('the user\'s inhabitant is a CHEF on {int} teams with a dinner each', async ({adminContext: admin, contextOf, scene}, count: number) => {
     const {inhabitantId} = await getSessionUserInfo(await contextOf(ACTOR.USER))
     const season = fromScene(scene, 'activeSeason')
-    const takenDays = await DinnerEventFactory.takenDaysOf(admin, season)
-    expect(takenDays.length, `season ${season.shortName} has ${count} days with a dinner ahead`).toBeGreaterThanOrEqual(count)
+    const cookingDays = computeCookingDates(season.cookingDays, season.seasonDates, season.holidays).filter(date => date > new Date())
+    expect(cookingDays.length, `season ${season.shortName} has ${count} cooking days ahead`).toBeGreaterThanOrEqual(count)
     const testSalt = temporaryAndRandom()
     for (const number of Array.from({length: count}, (_, index) => index + 1)) {
         const {team, dinner} = await SeasonFactory.createCookingTeamWithChefAndDinner(admin, season, inhabitantId, {
-            teamName: salt(`ChefTeam${number}`, testSalt), dinner: {menuTitle: salt(`Team${number}Dinner`, testSalt), date: takenDays[number - 1]}
+            teamName: salt(`ChefTeam${number}`, testSalt), dinner: {menuTitle: salt(`Team${number}Dinner`, testSalt), date: cookingDays[number - 1]}
         })
         scene.teams.push(team)
         scene.created.teamIds.push(team.id!)
@@ -45,13 +53,20 @@ Given('the user\'s inhabitant is a CHEF on {int} teams with a dinner each', asyn
     }
 })
 
-When('{actor} opens the chef page of team {int}', async ({scene}, actor: Actor, number: number) => {
+/** Opens the chef page of the team in the actor's context, collecting the hydration warnings from the start */
+const openChefPage = async (scene: Scene, actor: Actor, number: number, viewport?: ViewportSize) => {
     const team = teamOf(scene, number)
     const page = await contextOfActor(scene, actor).newPage()
+    if (viewport) await page.setViewportSize(viewport)
     scene.page = page
     scene.hydrationWarnings = collectHydrationWarnings(page)
     await gotoHydrated(page, `${CHEF_PAGE}?team=${team.id}`)
-})
+}
+
+When('{actor} opens the chef page of team {int}', ({scene}, actor: Actor, number: number) => openChefPage(scene, actor, number))
+
+When('{actor} opens the chef page of team {int} on a {screen}', ({scene}, actor: Actor, number: number, viewport: ViewportSize) =>
+    openChefPage(scene, actor, number, viewport))
 
 When('{actor} chooses the tab of team {int}', async ({scene}, actor: Actor, number: number) => {
     contextOfActor(scene, actor)
@@ -85,4 +100,13 @@ Then('{actor} sees the next cooking day of team {int}', async ({adminContext: ad
     const {nextDinner} = nextDinnerOf(team!.dinnerEvents)
     expect(nextDinner, `team ${number} has a dinner ahead`).not.toBeNull()
     await expect(fromScene(scene, 'page').getByTestId('chef-next-cooking-countdown')).toContainText(formatDanishWeekdayDate(new Date(nextDinner!.date)))
+})
+
+// The view syncs to the URL once the layout has measured the screen
+Then('the chef calendar is {calendarState}', async ({scene}, state: CalendarState) => {
+    const page = fromScene(scene, 'page')
+    await expect.poll(() => new URL(page.url()).searchParams.get('view'), 'the address names the view').toBe(`calendar:${state}`)
+    const content = page.getByTestId('chef-calendar-content')
+    if (state === 'open') await expect(content).toBeVisible()
+    else await expect(content).toBeHidden()
 })

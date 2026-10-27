@@ -351,10 +351,12 @@ const LOCK_CHIPS: Record<SupplyState, (supply: ReleasedTicketCounts) => LockChip
  * The lock chip of a dinner past its booking deadline: the tickets for sale as a number, else the waiting list's
  * hourglass, else the closed chip alone. A released ticket goes to the first waiting for its ticket type, so a dinner
  * can hold both; the chip then shows the tickets for sale.
- * Null without supply: the dinner is open for booking.
+ * Null without supply, when the dinner is open for booking, and from the dinner's start.
  */
-export const lockChip = (supply: ReleasedTicketCounts | null | undefined): LockChip | null =>
-    supply ? LOCK_CHIPS[supplyStateOf(supply)](supply) : null
+export const lockChip = (dinner: DinnerEventDisplay, lockStatus: Map<number, ReleasedTicketCounts | null>): LockChip | null => {
+    const supply = useSeason().isDinnerPast(dinner.date) ? null : lockStatus.get(dinner.id)
+    return supply ? LOCK_CHIPS[supplyStateOf(supply)](supply) : null
+}
 
 const MODE_LABELS = BOOKING_WORDS.modes
 /** The words of a dinner mode, once: DinnerModeSelector's glyph and label, and the mode a preview line names */

@@ -509,13 +509,14 @@ describe('BookingGridView', () => {
       label                                                         | ownReleased | supply                                  | text   | glyphs
       ${'3 tickets for sale, 1 of them released by the household'} | ${1}        | ${lockedDinnerSupply({[ADULT]: 3})}     | ${'3'} | ${[]}
       ${'no tickets for sale and 2 on the waiting list'}            | ${0}        | ${lockedDinnerSupply({}, {[ADULT]: 2})} | ${''}  | ${[ICONS.waitlist]}
+      ${'3 tickets for sale and 2 on the waiting list'}             | ${0}        | ${lockedDinnerSupply({[CHILD]: 3}, {[ADULT]: 2})} | ${'3'} | ${[]}
       ${'neither tickets for sale nor a waiting list'}              | ${0}        | ${lockedDinnerSupply()}                 | ${''}  | ${[]}
     `('GIVEN a locked dinner with $label THEN its chip shows the dinner\'s supply', async ({ownReleased, supply, text, glyphs}) => {
       const orders = householdOrder.slice(0, ownReleased).map((inhabitantId, index) =>
         OrderFactory.defaultOrder(undefined, {id: 900 + index, inhabitantId, dinnerEventId: locked.id, dinnerMode: NONE, state: RELEASED}))
       const wrapper = await mountGrid([locked], {orders, lockStatus: new Map([[locked.id, supply]])})
 
-      expect(headerChip(wrapper)).toEqual({text, color: lockChip(supply)!.color, glyphs})
+      expect(headerChip(wrapper)).toEqual({text, color: lockChip(locked, new Map([[locked.id, supply]]))!.color, glyphs})
     })
 
     it.each`

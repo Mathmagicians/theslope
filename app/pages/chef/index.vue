@@ -292,7 +292,7 @@ useHead({
   title: '👨‍🍳 Madlavning',
   meta: [
     {
-      name: 'Chef Dashboard',
+      name: 'description',
       content: 'Menu editing and dinner management for cooking teams'
     }
   ]

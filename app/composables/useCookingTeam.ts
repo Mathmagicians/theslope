@@ -1,4 +1,4 @@
-import {useCookingTeamValidation, ROLE_LABELS, type CookingTeamDisplay, type CookingTeamAssignment, type TeamRole, type RoleAssignmentPlan} from '~/composables/useCookingTeamValidation'
+import {useCookingTeamValidation, ROLE_LABELS, type CookingTeamCreate, type CookingTeamDisplay, type CookingTeamAssignment, type TeamRole, type RoleAssignmentPlan} from '~/composables/useCookingTeamValidation'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
@@ -48,7 +48,7 @@ export const useCookingTeam = () => {
      * A team's number: the one in its name when it is 1 or more, else its position in the season's full team list + 1,
      * else 1. Names are free text, so every site passes the same season list to agree on the fallback.
      */
-    const getTeamNumber = (team: Pick<CookingTeamDisplay, 'id' | 'name'>, seasonTeams: Array<Pick<CookingTeamDisplay, 'id'>>): number => {
+    const getTeamNumber = (team: CookingTeamDisplay, seasonTeams: CookingTeamDisplay[]): number => {
         const named = extractTeamNumber(team.name)
         return named !== null && named >= 1
             ? named
@@ -83,14 +83,12 @@ export const useCookingTeam = () => {
         seasonId: number,
         seasonShortName: string,
         teamNumber: number = 1,
-        overrides?: Partial<CookingTeamDisplay>
-    ): CookingTeamDisplay => {
+        overrides?: Partial<CookingTeamCreate>
+    ): CookingTeamCreate => {
         return {
             seasonId,
             name: createDefaultTeamName(seasonShortName, teamNumber),
             assignments: [],
-            cookingDaysCount: 0,
-            jokerSlotCount: 0,
             ...overrides
         }
     }

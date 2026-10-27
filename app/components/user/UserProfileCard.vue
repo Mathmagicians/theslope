@@ -69,7 +69,7 @@ const props = withDefaults(defineProps<Props>(), {
   preferencesOpen: false
 })
 
-const {TYPOGRAPHY, SIZES, ICONS, IMG, BUTTONS, ALERTS, COLOR, NOISE, LAYOUTS} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, SIZES, ICONS, IMG, BUTTONS, ALERTS, COLOR, NOISE, LAYOUTS, COMPONENTS} = useTheSlopeDesignSystem()
 const {roleLabels} = useUserRolesUi()
 const {getUserUrl} = useHeynabo()
 const authStore = useAuthStore()
@@ -165,7 +165,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
   <UCard>
     <!-- Header: User info + buttons -->
     <template #header>
-      <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+      <div :class="COMPONENTS.userProfileCard.header">
         <!-- Left: UserListItem with role badges in slot -->
         <UserListItem
           v-if="inhabitant"
@@ -175,15 +175,15 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           :link-to-profile="false"
         >
           <template #badge>
-            <div v-if="visibleRoles.length > 0" class="flex flex-wrap gap-2">
+            <div v-if="visibleRoles.length > 0" :class="COMPONENTS.userProfileCard.roleBadges">
               <UBadge
                 v-for="role in visibleRoles"
                 :key="role"
-                :color="roleLabels[role]?.color || 'neutral'"
+                :color="roleLabels[role]?.color || COLOR.neutral"
                 :variant="NOISE.subtle"
                 :size="SIZES.small"
               >
-                <UIcon :name="roleLabels[role]?.icon || 'i-heroicons-user'" class="mr-1" />
+                <UIcon :name="roleLabels[role]?.icon || ICONS.user" :class="COMPONENTS.adminUsers.roleIcon" />
                 {{ roleLabels[role]?.label || role }}
               </UBadge>
             </div>
@@ -191,7 +191,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
         </UserListItem>
 
         <!-- Right: action buttons - one outline shape; they wrap on a phone, one row from md -->
-        <div class="flex flex-wrap items-center gap-2 md:gap-4 md:flex-nowrap md:shrink-0 md:ml-auto">
+        <div :class="COMPONENTS.userProfileCard.actions">
           <!-- Own settings: reveals UserPreferencesCard under this card -->
           <UButton
             v-if="shouldShowActions"
@@ -232,25 +232,25 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
     </template>
 
     <!-- Body: Contact info -->
-    <div class="space-y-2">
+    <div :class="COMPONENTS.householdSettings.facts">
       <!-- Email -->
-      <div class="flex items-center gap-2">
-        <UIcon :name="ICONS.mail" class="opacity-60" />
+      <div :class="COMPONENTS.householdSettings.fact">
+        <UIcon :name="ICONS.mail" :class="COMPONENTS.householdSettings.factIcon" />
         <span :class="TYPOGRAPHY.bodyTextMuted">{{ email }}</span>
       </div>
 
       <!-- Phone -->
-      <div v-if="phone" class="flex items-center gap-2">
-        <UIcon :name="ICONS.phone" class="opacity-60" />
+      <div v-if="phone" :class="COMPONENTS.householdSettings.fact">
+        <UIcon :name="ICONS.phone" :class="COMPONENTS.householdSettings.factIcon" />
         <span :class="TYPOGRAPHY.bodyTextMuted">{{ phone }}</span>
       </div>
 
       <!-- Household -->
-      <div v-if="householdShortName && householdPbsId" class="flex items-center gap-2">
-        <UIcon :name="ICONS.household" class="opacity-60" />
+      <div v-if="householdShortName && householdPbsId" :class="COMPONENTS.householdSettings.fact">
+        <UIcon :name="ICONS.household" :class="COMPONENTS.householdSettings.factIcon" />
         <NuxtLink
           :to="getHouseholdUrl(householdShortName, householdPbsId)"
-          :class="[TYPOGRAPHY.bodyTextMuted, 'underline hover:no-underline hover:text-primary transition-colors']"
+          :class="[TYPOGRAPHY.bodyTextMuted, COMPONENTS.userProfileCard.householdLink]"
         >
           {{ householdShortName }}
         </NuxtLink>
@@ -265,7 +265,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
     <!-- Role Management Section (footer) -->
     <template v-if="showRoleManager" #footer>
       <!-- Header: Title + Edit/Save/Cancel buttons -->
-      <div class="flex items-center justify-between mb-3">
+      <div :class="COMPONENTS.userProfileCard.rolesHeader">
         <span :class="TYPOGRAPHY.bodyTextMedium">Systemroller</span>
 
         <!-- View mode: Edit button (admin only) -->
@@ -303,33 +303,33 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
       </div>
 
       <!-- View mode: Role badges -->
-      <div v-if="isViewMode" class="flex flex-wrap gap-2">
+      <div v-if="isViewMode" :class="COMPONENTS.userProfileCard.roleBadges">
         <UBadge
           v-for="role in visibleRoles"
           :key="role"
-          :color="roleLabels[role]?.color || 'neutral'"
+          :color="roleLabels[role]?.color || COLOR.neutral"
           :variant="NOISE.soft"
           :size="SIZES.md"
         >
-          <UIcon :name="roleLabels[role]?.icon || 'i-heroicons-user'" class="mr-1" />
+          <UIcon :name="roleLabels[role]?.icon || ICONS.user" :class="COMPONENTS.adminUsers.roleIcon" />
           {{ roleLabels[role]?.label || role }}
         </UBadge>
         <span v-if="visibleRoles.length === 0" :class="TYPOGRAPHY.bodyTextMuted">Ingen roller</span>
       </div>
 
       <!-- Edit mode: Role toggles -->
-      <div v-if="isEditMode" class="space-y-3">
+      <div v-if="isEditMode" :class="COMPONENTS.userProfileCard.roleToggles">
         <div
           v-for="role in allRoles"
           :key="role"
-          class="flex items-center justify-between"
+          :class="COMPONENTS.userProfileCard.roleToggle"
         >
-          <div class="flex items-center gap-2">
+          <div :class="COMPONENTS.userProfileCard.roleLabel">
             <UIcon
-              :name="roleLabels[role]?.icon || 'i-heroicons-user'"
-              :class="isRoleDisabled(role) ? 'opacity-40' : ''"
+              :name="roleLabels[role]?.icon || ICONS.user"
+              :class="isRoleDisabled(role) ? COMPONENTS.userProfileCard.roleDisabled : ''"
             />
-            <span :class="[TYPOGRAPHY.bodyText, isRoleDisabled(role) ? 'opacity-40' : '']">
+            <span :class="[TYPOGRAPHY.bodyText, isRoleDisabled(role) ? COMPONENTS.userProfileCard.roleDisabled : '']">
               {{ roleLabels[role]?.label || role }}
             </span>
             <span v-if="isRoleDisabled(role)" :class="TYPOGRAPHY.bodyTextMuted">(Heynabo)</span>
@@ -349,7 +349,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           title="Om systemroller"
         >
           <template #description>
-            <ul class="list-disc list-inside space-y-1 mt-1">
+            <ul :class="COMPONENTS.userProfileCard.roleNotes">
               <li><strong>Admin</strong> - Synkroniseres fra Heynabo, kan ikke ændres her</li>
               <li><strong>Allergichef</strong> - Giver adgang til at administrere allergidata</li>
             </ul>

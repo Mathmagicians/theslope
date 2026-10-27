@@ -88,7 +88,7 @@ export async function assignAffinitiesAndEvents(
 
     for (const batch of affinityBatches) {
         await Promise.all(
-            batch.map(team => updateTeam(d1Client, team.id!, {id: team.id!, affinity: team.affinity}))
+            batch.map(team => updateTeam(d1Client, team.id, {id: team.id, affinity: team.affinity}))
         )
     }
     console.info(`${LOG} Assigned affinities to ${teamsWithAffinities.length} teams`)

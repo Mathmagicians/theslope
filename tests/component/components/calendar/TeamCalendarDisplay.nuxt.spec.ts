@@ -5,6 +5,7 @@ import TeamCalendarDisplay from '~/components/calendar/TeamCalendarDisplay.vue'
 import {RAINBOW, getRainbowBand} from '~/composables/useTheSlopeDesignSystem'
 import {mountWithTooltipProvider, findAllByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 
 enableAutoUnmount(afterEach)
@@ -17,13 +18,11 @@ enableAutoUnmount(afterEach)
  * token is worth - that is the contrast and colour-vision specs' business.
  */
 describe('TeamCalendarDisplay legend', () => {
-    const {getDefaultCookingTeam} = useCookingTeam()
-
     const seasonDates = {start: new Date('2026-01-01'), end: new Date('2026-01-31')}
 
     /** One more team than the rainbow has stops, listed from the highest number down, so position and number differ */
     const teams = Array.from({length: RAINBOW.length + 1}, (_, index) =>
-        getDefaultCookingTeam(1, 'S1', index + 1, {id: index + 1})).reverse()
+        SeasonFactory.defaultCookingTeamDisplay({id: index + 1, name: `Madhold ${index + 1} - S1`})).reverse()
     const bandOf = (number: number) => getRainbowBand(number - 1).split(' ')
 
     beforeEach(() => {
@@ -54,12 +53,12 @@ describe('TeamCalendarDisplay legend', () => {
 
     it('a renamed team with no number in its name, shown alone, wears the stop of its position in the season on its legend badge and its cooking day', async () => {
         const season = [
-            getDefaultCookingTeam(1, 'S1', 1, {id: 1}),
-            getDefaultCookingTeam(1, 'S1', 2, {id: 2, name: 'Holdet uden tal'}),
-            getDefaultCookingTeam(1, 'S1', 3, {id: 3})
+            SeasonFactory.defaultCookingTeamDisplay({id: 1, name: 'Madhold 1 - S1'}),
+            SeasonFactory.defaultCookingTeamDisplay({id: 2, name: 'Holdet uden tal'}),
+            SeasonFactory.defaultCookingTeamDisplay({id: 3, name: 'Madhold 3 - S1'})
         ]
         const renamed = season[1]!
-        const dinner = {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 7, date: new Date('2026-01-15'), cookingTeamId: renamed.id!}
+        const dinner = {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 7, date: new Date('2026-01-15'), cookingTeamId: renamed.id}
 
         const wrapper = await mount([renamed], season, [dinner])
 

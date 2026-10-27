@@ -54,10 +54,10 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
                 batch.map(team => {
                     // CookingTeamUpdate: only id (required) + optional updateable fields (name, seasonId, affinity)
                     const teamForUpdate = {
-                        id: team.id!,
+                        id: team.id,
                         affinity: team.affinity
                     }
-                    return updateTeam(d1Client, team.id!, teamForUpdate)
+                    return updateTeam(d1Client, team.id, teamForUpdate)
                 })
             )
             updatedTeams.push(...batchResults)

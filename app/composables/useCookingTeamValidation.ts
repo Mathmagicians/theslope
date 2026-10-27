@@ -85,6 +85,7 @@ export const useCookingTeamValidation = () => {
      * Includes: assignments (for member count) + cookingDaysCount and jokerSlotCount (aggregates)
      */
     const CookingTeamDisplaySchema = CookingTeamSchema.extend({
+        id: z.number().int().positive(),
         assignments: z.array(CookingTeamAssignmentSchema).default([]),
         cookingDaysCount: z.number().int().min(0).default(0),  // Aggregate counts from DB
         jokerSlotCount: z.number().int().min(0).default(0)

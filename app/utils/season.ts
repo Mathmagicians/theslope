@@ -124,15 +124,15 @@ export const computeAffinitiesForTeams = (teams: CookingTeamDisplay[], cookingDa
     if (teamsWithoutAffinities.length === 0) return teams // all teams already have affinities
 
     const affinitiesForTeams = teams
-        .filter(team => !team.affinity && team.id)
-        .map(team => team.id!)
+        .filter(team => !team.affinity)
+        .map(team => team.id)
         .reduce<Record<number, WeekDay[]>>((acc, teamId, i) => {
             const rotationIndex = rotationStartIndex + i * consecutiveCookingDays
             acc[teamId] = Array.from({length: consecutiveCookingDays}, (_, k) => weekdaysForRotation[(rotationIndex + k) % wdfCount]!)
             return acc
         }, {})
     return teams.map(team => {
-        const computedAffinity = team.id && affinitiesForTeams[team.id] ? createWeekDayMapFromSelection(affinitiesForTeams[team.id]!) : undefined
+        const computedAffinity = affinitiesForTeams[team.id] ? createWeekDayMapFromSelection(affinitiesForTeams[team.id]!) : undefined
         return {
             ...team,
             affinity: team.affinity ?? computedAffinity

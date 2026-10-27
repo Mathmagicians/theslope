@@ -8,6 +8,7 @@ import testHelpers from '../testHelpers'
 import {formatDate} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
 import {addDays} from 'date-fns/addDays'
+import {isSameDay} from 'date-fns'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 
@@ -43,7 +44,8 @@ test.describe('Dinner Page URL Navigation', () => {
         seasonId = season.id!
 
         // Poll for FUTURE dinner events - UI auto-syncs to next future dinner, not past events.
-        // The season's own dinners only: parallel specs add and remove dinners on its free days (createDinnerEventOnFreeDay)
+        // The season's own dinners only: parallel specs add and remove dinners on its free days (createDinnerEventOnFreeDay),
+        // and a chef spec's team cooks on its cooking days; the page shows the first dinner of a day
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         const events = await pollUntil(
@@ -52,6 +54,7 @@ test.describe('Dinner Page URL Navigation', () => {
                 const futureEvents = allEvents
                     .filter(e => new Date(e.date) >= today && season.cookingDays[dateToWeekDay(new Date(e.date))])
                     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                    .filter((e, index, sorted) => index === 0 || !isSameDay(new Date(e.date), new Date(sorted[index - 1]!.date)))
                 return futureEvents.slice(0, 3)
             },
             (events) => events.length >= 3,

@@ -174,12 +174,10 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
         })
 
         // Reconcile teams using pruneAndCreate
-        const getTeamNumber = (item: CookingTeamDisplay | DesiredTeam): number | undefined =>
-            'teamNumber' in item ? item.teamNumber : extractTeamNumber(item.name) ?? undefined
-
         const reconcileTeams = pruneAndCreate<CookingTeamDisplay, DesiredTeam, number>(
-            getTeamNumber,
-            () => true // Same team number = same team (don't update)
+            team => extractTeamNumber(team.name) ?? undefined,
+            () => true, // Same team number = same team (don't update)
+            desired => desired.teamNumber
         )
         const teamReconciliation = reconcileTeams(existingTeams)(desiredTeams)
 
@@ -206,7 +204,7 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
 
             const createdAssignments = await Promise.all(
                 assignmentReconciliation.create.map(a => createTeamAssignment(d1Client, {
-                    cookingTeamId: existingTeam.id!,
+                    cookingTeamId: existingTeam.id,
                     inhabitantId: a.inhabitantId,
                     role: a.role,
                     allocationPercentage: a.allocationPercentage,

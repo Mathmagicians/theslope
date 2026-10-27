@@ -154,7 +154,7 @@ useHead({
   title: `🏠 ${shortname.value}`,
   meta: [
     {
-      name: "Husstand",
+      name: "description",
       content: `Tilmeldinger for husstanden ${shortname.value}`,
     },
   ],

@@ -252,18 +252,6 @@ export class DinnerEventFactory {
         return await this.createDinnerEvent(context, {...dinnerEventData, date: day, seasonId: season.id!})
     }
 
-    /**
-     * The days of the season from tomorrow that hold a dinner, in order. A page that selects among one team's dinners (the
-     * chef page) takes its team's dinner on one of them, so the free days stay with the specs that select across the season.
-     */
-    static readonly takenDaysOf = async (context: BrowserContext, season: Season): Promise<Date[]> => {
-        const dates = (await this.getDinnerEventsForSeason(context, season.id!))
-            .map(dinner => new Date(dinner.date))
-            .filter(date => date >= startOfDay(this.tomorrow))
-            .toSorted((a, b) => a.getTime() - b.getTime())
-        return dates.filter((date, index) => index === 0 || !isSameDay(date, dates[index - 1]!))
-    }
-
     /** The season's dinners on `day` */
     private static readonly dinnersOnDay =async (context: BrowserContext, seasonId: number, day: Date): Promise<DinnerEventDisplay[]> =>
         (await this.getDinnerEventsForSeason(context, seasonId)).filter(dinner => isSameDay(new Date(dinner.date), day))

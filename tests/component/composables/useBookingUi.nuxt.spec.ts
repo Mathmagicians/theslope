@@ -202,15 +202,25 @@ describe('useBookingUi', () => {
     })
 
     describe('lockChip', () => {
+        const dinner = DinnerEventFactory.dinnerEventAt(1, 1)
+
         it.each([
             {desc: 'tickets for sale count up', supply: lockedDinnerSupply({[ADULT]: 2}), chip: {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: '2'}},
-            {desc: 'tickets for sale lead a waiting list', supply: lockedDinnerSupply({[ADULT]: 2}, {[ADULT]: 1}), chip: {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: '2'}},
+            {desc: 'tickets for sale lead a waiting list', supply: lockedDinnerSupply({[CHILD]: 2}, {[ADULT]: 1}), chip: {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: '2'}},
             {desc: 'a waiting list shows the hourglass without a number', supply: lockedDinnerSupply({}, {[ADULT]: 3}), chip: {color: BOOKING_LOCK_STATUS.lockedWithQueue.color, icon: ICONS.waitlist}},
             {desc: 'neither leaves the closed chip without a number or a glyph', supply: lockedDinnerSupply(), chip: {color: BOOKING_LOCK_STATUS.locked.color}},
-            {desc: 'an open dinner has no chip', supply: null, chip: null},
-            {desc: 'a dinner outside the lock map has no chip', supply: undefined, chip: null}
+            {desc: 'an open dinner has no chip', supply: null, chip: null}
         ])('$desc', ({supply, chip}) => {
-            expect(lockChip(supply)).toEqual(chip)
+            expect(lockChip(dinner, new Map([[dinner.id, supply]]))).toEqual(chip)
+        })
+
+        it('a dinner outside the lock map has no chip', () => {
+            expect(lockChip(dinner, new Map())).toBeNull()
+        })
+
+        it('a dinner that has started has no chip, whatever its supply', () => {
+            const started = DinnerEventFactory.dinnerEventAt(2, -1)
+            expect(lockChip(started, new Map([[started.id, lockedDinnerSupply({[ADULT]: 2})]]))).toBeNull()
         })
     })
 

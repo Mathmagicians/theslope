@@ -1264,6 +1264,13 @@ export const COMPONENTS = {
         emptyIcon: 'w-8 h-8'
     },
 
+    householdCreateForm: {
+        // The households already at the chosen address, below the new household's fields
+        prevOwners: 'flex flex-col gap-4 pt-2',
+        // One household at the address: its name over its move-out field on a phone, beside it from md
+        prevOwner: 'grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 md:items-center'
+    },
+
     /**
      * AdminUsers: the card, its header and search row, the table with its loading bar, a user's role badges, and the
      * expanded row's detail in its `expandedPanel`: the expanded row spans every column, so where the table scrolls
@@ -1280,6 +1287,29 @@ export const COMPONENTS = {
         detail: 'p-4',
         // The inset follows the cell padding of `table.adminUsersUi.td` (px-2 md:px-4); the cap, the box less that padding, binds on a phone
         expandedPanel: 'sticky left-2 md:left-4 max-w-[calc(100cqw-1rem)] overflow-x-auto'
+    },
+
+    userProfileCard: {
+        // The header: the user over the action buttons on a phone, beside them from md
+        header: 'flex flex-col md:flex-row md:items-start md:justify-between gap-4',
+        // The role badges under the name and in the role section's view face
+        roleBadges: 'flex flex-wrap gap-2',
+        // The action buttons: they wrap on a phone, one row at the header's end from md
+        actions: 'flex flex-wrap items-center gap-2 md:gap-4 md:flex-nowrap md:shrink-0 md:ml-auto',
+        // The household link in the contact lines
+        householdLink: 'underline hover:no-underline hover:text-primary transition-colors',
+        // The role section's title row with its edit, save and cancel buttons
+        rolesHeader: 'flex items-center justify-between mb-3',
+        // The role section's edit face: the toggle rows over the note
+        roleToggles: 'space-y-3',
+        // A toggle row: the role's icon and label, its switch at the end
+        roleToggle: 'flex items-center justify-between',
+        // The role's icon and label in a toggle row
+        roleLabel: 'flex items-center gap-2',
+        // The icon and label of a role Heynabo owns, whose switch is disabled
+        roleDisabled: 'opacity-40',
+        // The note's list under the toggles
+        roleNotes: 'list-disc list-inside space-y-1 mt-1'
     },
 
     /** InhabitantSelector: the stack of search row and table, the name cell, and the table's empty state */
@@ -1542,7 +1572,8 @@ export const COMPONENTS = {
         eventHeader: 'flex flex-col items-center',
         eventHeaderDisabled: TEXT.muted,
         chipSlot: 'h-6 flex items-center justify-center',
-        lockChip: {size: '3xl', position: 'bottom-left', standalone: true},
+        // Inset: Nuxt UI shifts a chip that is not inset by half its size toward its corner, standalone too; inset it centres in `chipSlot`
+        lockChip: {size: '3xl', standalone: true, inset: true},
         weekBoundary: 'border-l-2 border-primary',
         powerName: 'flex items-center gap-2',
         inhabitantName: 'flex items-center gap-1',

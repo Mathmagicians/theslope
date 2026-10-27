@@ -30,7 +30,7 @@
  * │  (1)w  Venteliste, ingen ledige billetter                   │
  * └─────────────────────────────────────────────────────────────┘
  *
- * Lock chips (SIZES.lockChip), on an upcoming dinner past its booking deadline (`lockChip`):
+ * Lock chips (SIZES.lockChip), on a dinner past its booking deadline until the dinner starts (`lockChip`):
  *   n = yellow, reading the tickets for sale
  *   w = yellow, the hourglass ICONS.waitlist inset in a chip a size up (COMPONENTS.dinnerCalendar.queueChip): a waiting list, nothing for sale
  *   * = peach, no number: closed, nothing for sale and nobody waiting
@@ -104,11 +104,11 @@ const isHoliday = (day: DateValue): boolean => {
   return isCalendarDateInDateList(day, holidayDates.value)
 }
 
-// The lock chip of the day's dinner; null without a lock status or a locked dinner on the day
+// The lock chip of the day's dinner; null without a lock status, a locked dinner on the day, or from the dinner's start
 const getLockChipForDay = (day: DateValue) => {
   if (!props.lockStatus) return null
   const dinner = getDinnerForDay(props.dinnerEvents, day)
-  return dinner ? lockChip(props.lockStatus.get(dinner.id)) : null
+  return dinner ? lockChip(dinner, props.lockStatus) : null
 }
 
 // Day type detection - returns 'next' | 'future' | 'past' | null
@@ -226,9 +226,9 @@ const isSelected = (day: DateValue): boolean => {
                 {{ day.day }}
               </div>
 
-              <!-- Locked dinner with chip (next/future, not past) -->
+              <!-- Locked dinner with chip, until the dinner starts -->
               <UChip
-                v-else-if="getLockChipForDay(day) && getDayType(eventLists) !== 'past'"
+                v-else-if="getLockChipForDay(day)"
                 show
                 :size="SIZES.lockChip"
                 :color="getLockChipForDay(day)!.color"

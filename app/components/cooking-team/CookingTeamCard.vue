@@ -58,7 +58,7 @@
  * - Uses UserListItem for consistent inhabitant display
  */
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
-import type { TeamRole, CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
+import type { TeamRole, CookingTeamAssignment, CookingTeamDisplay } from '~/composables/useCookingTeamValidation'
 import { ROLE_LABELS } from '~/composables/useCookingTeamValidation'
 import type { JokerSlotCreate } from '~/composables/useDutyValidation'
 import { TEAM_WORDS } from '~/config/teamWords'
@@ -79,7 +79,7 @@ interface Props {
   seasonCookingDays?: WeekDayMap | null
   seasonDates?: DateRange
   holidays?: DateRange[]
-  teams?: Array<{ id: number, name: string }>
+  teams?: CookingTeamDisplay[]
 }
 
 const props = withDefaults(defineProps<Props>(), {

@@ -129,7 +129,7 @@ useHead({
   title: '🍽️ Fællesspisning',
   meta: [
     {
-      name: 'Fællesspisning',
+      name: 'description',
       content: 'Tilmelding til dagens fællesspisning'
     }
   ]
