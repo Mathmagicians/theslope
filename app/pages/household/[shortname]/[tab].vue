@@ -12,6 +12,7 @@
  * - Economy tab: Cost breakdown
  * - Settings tab: Settings
  */
+import {HELP_TEXTS} from '~/config/help-texts'
 
 const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR, ALERTS, NOISE } = useTheSlopeDesignSystem()
 
@@ -28,35 +29,35 @@ const HOUSEHOLD_TAB = {
 const tabs = [
   {
     key: HOUSEHOLD_TAB.bookings,
-    label: 'Tilmeldinger',
+    label: HELP_TEXTS.household.bookings.title,
     icon: ICONS.calendar,
     component: 'HouseholdBookings',
     edits: true
   },
   {
     key: HOUSEHOLD_TAB.members,
-    label: 'Præferencer',
+    label: HELP_TEXTS.household.members.title,
     icon: ICONS.preferences,
     component: 'HouseholdCard',
     edits: true
   },
   {
     key: HOUSEHOLD_TAB.allergies,
-    label: 'Allergier',
+    label: HELP_TEXTS.household.allergies.title,
     icon: ICONS.allergy,
     component: 'HouseholdAllergies',
     edits: true
   },
   {
     key: HOUSEHOLD_TAB.economy,
-    label: 'Økonomi',
+    label: HELP_TEXTS.household.economy.title,
     icon: ICONS.economy,
     component: 'HouseholdEconomy',
     edits: false
   },
   {
     key: HOUSEHOLD_TAB.settings,
-    label: 'Indstillinger',
+    label: HELP_TEXTS.household.settings.title,
     icon: ICONS.settings,
     component: 'HouseholdSettings',
     edits: true

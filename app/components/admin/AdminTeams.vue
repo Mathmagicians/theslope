@@ -542,10 +542,10 @@ const columns = [
 
     <template #footer>
       <div v-if="formMode === FORM_MODES.CREATE" :class="COMPONENTS.adminTeams.createFooter">
-        <UButton data-testid="submit-create-teams" :color="COLOR.secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
+        <UButton v-bind="BUTTONS.save" :color="COLOR.secondary" data-testid="submit-create-teams" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
           {{ isActionLoading ? 'Arbejder...' : 'Opret madhold' }}
         </UButton>
-        <UButton :color="COLOR.neutral" :variant="NOISE.quiet" @click="handleCancel">
+        <UButton v-bind="BUTTONS.cancel" @click="handleCancel">
           Annuller
         </UButton>
       </div>

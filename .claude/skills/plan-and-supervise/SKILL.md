@@ -100,7 +100,7 @@ at a time behind an explicit approval. The plan document is the deliverable; the
 
 | Change | Required tests |
 |---|---|
-| New or changed endpoint | Playwright API spec under `tests/e2e/api/` (parallel, or serial when it needs the active season) |
+| New or changed endpoint | Playwright API spec under `tests/e2e/api/`, parallel on rows of its own; serial only on the argument `docs/testing.md` Rule 3 (Serial) asks for, approved by the user before it lands |
 | New or changed UX component / behaviour | a component spec (Vitest, real components and stores, `registerEndpoint` for HTTP); a BDD e2e (GIVEN/WHEN/THEN, Playwright) only for the interaction or integration the component spec cannot prove: a flow across pages, the URL, the server (`docs/testing.md` Rule 0) |
 | Utility / composable | unit spec |
 | Test-id changes | an old → new contract table |

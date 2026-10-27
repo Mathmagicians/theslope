@@ -69,7 +69,7 @@ const props = withDefaults(defineProps<Props>(), {
   preferencesOpen: false
 })
 
-const {TYPOGRAPHY, SIZES, ICONS, IMG, BUTTONS, ALERTS, COLOR, NOISE} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, SIZES, ICONS, IMG, BUTTONS, ALERTS, COLOR, NOISE, LAYOUTS} = useTheSlopeDesignSystem()
 const {roleLabels} = useUserRolesUi()
 const {getUserUrl} = useHeynabo()
 const authStore = useAuthStore()
@@ -282,28 +282,22 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
         </UButton>
 
         <!-- Edit mode: Save/Cancel buttons -->
-        <div v-if="isEditMode" class="flex gap-2">
+        <div v-if="isEditMode" :class="LAYOUTS.formButtonRow">
           <UButton
-            :icon="ICONS.check"
-            :color="COLOR.primary"
-            :variant="NOISE.soft"
-            :size="SIZES.sm"
-            :loading="isSavingRoles"
-            data-testid="save-roles-btn"
-            @click="saveRoles"
-          >
-            Gem
-          </UButton>
-          <UButton
-            :icon="ICONS.xMark"
-            :color="COLOR.neutral"
-            :variant="NOISE.quiet"
-            :size="SIZES.sm"
+            v-bind="BUTTONS.cancel"
             :disabled="isSavingRoles"
             data-testid="cancel-roles-btn"
             @click="cancelEditingRoles"
           >
             Annuller
+          </UButton>
+          <UButton
+            v-bind="BUTTONS.save"
+            :loading="isSavingRoles"
+            data-testid="save-roles-btn"
+            @click="saveRoles"
+          >
+            Gem
           </UButton>
         </div>
       </div>

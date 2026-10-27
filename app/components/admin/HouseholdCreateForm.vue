@@ -226,7 +226,6 @@ const handleCancel = () => emit('cancel')
                 <div :class="LAYOUTS.formButtonRow">
                     <UButton
                         v-bind="BUTTONS.cancel"
-                        :size="SIZES.standard"
                         data-testid="create-household-cancel"
                         @click="handleCancel"
                     >
@@ -234,7 +233,6 @@ const handleCancel = () => emit('cancel')
                     </UButton>
                     <UButton
                         v-bind="BUTTONS.save"
-                        :size="SIZES.standard"
                         :loading="isSaving"
                         data-testid="create-household-submit"
                         @click="formRef?.submit()"

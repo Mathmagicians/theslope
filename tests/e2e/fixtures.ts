@@ -10,6 +10,7 @@ import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {HouseholdDetail, InhabitantDetail, UserDetail} from '~/composables/useCoreValidation'
+import type {CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 import {useBookingValidation, type DailyMaintenanceResult, type DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import type {HeynaboImportResponse} from '~/composables/useHeynaboValidation'
@@ -71,6 +72,8 @@ export type Scene = {
     actor?: Actor
     /** The page a UI step opened in the actor's context */
     page?: Page
+    /** The Vue hydration warnings the page logged while it opened */
+    hydrationWarnings?: string[]
     /** The active season the Background names: the singleton, or the season of its own the dinner step activates */
     activeSeason?: Season
     /** Whether the season the dinner step builds around the dinner's day is activated, as the Background states it */
@@ -83,6 +86,8 @@ export type Scene = {
     signedInUser?: UserDetail
     /** The dinner a GIVEN placed, with its season */
     dinner?: {season: Season, event: DinnerEventDisplay}
+    /** The teams of the user's inhabitant, in the order a GIVEN created them */
+    teams: CookingTeamDetail[]
     /** The people of the dinner by their part; the waiting list's people in queue order */
     people: Partial<Record<Actor, InhabitantDetail>>
     waiting: InhabitantDetail[]
@@ -103,12 +108,12 @@ export type Scene = {
     /** The member's settings as the scenario found them, put back after it */
     memberSettings?: {userId: number, notificationChannels: NotificationChannel[], appearance: Appearance, phone: string | null}
     /** The rows the scenario created, removed after it; the inhabitants are the people it added to the user's household */
-    created: {inhabitantIds: number[], householdIds: number[], userIds: number[], dinnerEventIds: number[], seasonIds: number[]}
+    created: {inhabitantIds: number[], householdIds: number[], userIds: number[], dinnerEventIds: number[], teamIds: number[], seasonIds: number[]}
 }
 
 const emptyScene = (): Scene => ({
-    jobRuns: [], people: {}, waiting: [], households: {}, places: [], billedHouseholds: [],
-    created: {inhabitantIds: [], householdIds: [], userIds: [], dinnerEventIds: [], seasonIds: []}
+    jobRuns: [], people: {}, waiting: [], teams: [], households: {}, places: [], billedHouseholds: [],
+    created: {inhabitantIds: [], householdIds: [], userIds: [], dinnerEventIds: [], teamIds: [], seasonIds: []}
 })
 
 /** The value an earlier step of the scenario put in the scene */
@@ -237,11 +242,13 @@ const cleanUpScene = async (browser: Browser, {memberSettings, created}: Scene):
             }
         })
     }
-    // An inhabitant and a household take their orders and places; the users outlive their people; a season takes its dinners
+    // An inhabitant and a household take their orders and places; the users outlive their people; a team leaves its
+    // dinners, so they go first; a season takes its dinners
     await attempt(() => Promise.all(created.inhabitantIds.map(id => HouseholdFactory.deleteInhabitant(admin, id))))
     await attempt(() => HouseholdFactory.deleteHousehold(admin, created.householdIds))
     await attempt(() => UserFactory.cleanupUsers(admin, created.userIds))
     await attempt(() => Promise.all(created.dinnerEventIds.map(id => DinnerEventFactory.deleteDinnerEvent(admin, id))))
+    await attempt(() => Promise.all(created.teamIds.map(id => SeasonFactory.deleteCookingTeam(admin, id))))
     await attempt(() => SeasonFactory.cleanupSeasons(admin, created.seasonIds))
     await admin.close()
     if (failures.length > 0) throw new AggregateError(failures, 'The scenario\'s cleanup failed')

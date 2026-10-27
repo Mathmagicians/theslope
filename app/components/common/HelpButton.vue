@@ -40,7 +40,7 @@ const requestUrl = useRequestURL()
 const isOpen = ref(false)
 const doClose = () => isOpen.value = false
 
-const { NAVIGATION, ICONS, SIZES, COLOR, TYPOGRAPHY, BUTTONS, NOISE, COMPONENTS } = useTheSlopeDesignSystem()
+const { NAVIGATION, ICONS, SIZES, COLOR, TYPOGRAPHY, BUTTONS, NOISE, COMPONENTS, ORIENTATIONS } = useTheSlopeDesignSystem()
 const { FeedbackTypeSchema } = useFeedbackValidation()
 const Feedback = FeedbackTypeSchema.enum
 
@@ -198,22 +198,17 @@ watch(() => route.path, () => {
                         :rows="3"
                         :class="COMPONENTS.helpButton.description"
                     />
-                    <UFieldGroup orientation="horizontal" :class="COMPONENTS.helpButton.formButtons">
+                    <UFieldGroup :orientation="ORIENTATIONS.horizontal" :class="COMPONENTS.helpButton.formButtons">
                       <UButton
-                          :color="COLOR.neutral"
-                          :variant="NOISE.quiet"
-                          :icon="ICONS.xMark"
-                          :size="SIZES.small"
+                          v-bind="BUTTONS.cancel"
                           @click="cancelFeedback"
                       >
                         Annuller
                       </UButton>
                       <UButton
-                          :color="COLOR.primary"
-                          :variant="NOISE.loud"
+                          v-bind="BUTTONS.save"
                           :icon="ICONS.github"
                           :trailing-icon="ICONS.arrowRight"
-                          :size="SIZES.small"
                           :loading="isSubmitting"
                           :disabled="isSubmitting"
                           data-testid="help-feedback-submit"

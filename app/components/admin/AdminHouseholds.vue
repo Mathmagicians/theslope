@@ -130,7 +130,6 @@ v-if="isHouseholdsErrored"
         <UButton
             v-if="props.canEdit && !isCreateFormOpen"
             v-bind="BUTTONS.save"
-            :size="SIZES.standard"
             data-testid="open-create-household"
             @click="isCreateFormOpen = true"
         >

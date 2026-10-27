@@ -82,10 +82,10 @@ const handleSubmit = ({data: {note, ...slot}}: FormSubmitEvent<JokerSlotCreate>)
     </UFormField>
 
     <div :class="LAYOUTS.formButtonRow">
-      <UButton v-bind="BUTTONS.cancel" :size="SIZES.small" data-testid="joker-slot-cancel" @click="emit('cancel')">
+      <UButton v-bind="BUTTONS.cancel" data-testid="joker-slot-cancel" @click="emit('cancel')">
         Annuller
       </UButton>
-      <UButton v-bind="BUTTONS.save" :size="SIZES.small" data-testid="joker-slot-submit" @click="formRef?.submit()">
+      <UButton v-bind="BUTTONS.save" data-testid="joker-slot-submit" @click="formRef?.submit()">
         Tilføj
       </UButton>
     </div>

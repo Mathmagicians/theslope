@@ -988,8 +988,8 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
                   Annuller
                 </UButton>
                 <UButton
-                  v-bind="row.original.rowType === BookingRow.power ? {} : BUTTONS.save"
-                  :color="row.original.rowType === BookingRow.power ? COMPONENTS.powerMode.color : undefined"
+                  v-bind="BUTTONS.save"
+                  :color="row.original.rowType === BookingRow.power ? COMPONENTS.powerMode.color : BUTTONS.save.color"
                   :loading="isSaving"
                   :disabled="row.original.enabledModes.length === 0"
                   :data-testid="`${row.original.rowType}-${row.original.id}-save`"

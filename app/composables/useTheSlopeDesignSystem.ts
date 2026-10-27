@@ -2397,11 +2397,6 @@ export const createResponsiveSizes = (isMd: Ref<boolean | null>) => ({
         return isMd.value ? 'lg' : 'sm'
     },
 
-    // A card's action UFieldGroup (the household card's preference actions)
-    get cardFieldGroup(): NuxtUISize {
-        return isMd.value ? 'md' : 'sm'
-    },
-
     // Static sizes (for when you need non-responsive)
     xs: 'xs' as const,
     sm: 'sm' as const,

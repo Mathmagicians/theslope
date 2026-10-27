@@ -1122,6 +1122,21 @@ describe('buildDesiredOrder', () => {
         })
     })
 
+    // A new guest, as the guest form and the add-guest row book it: booked by the booker at the picked price
+    describe('buildGuestOrder', () => {
+        const guestOf = (overrides: Partial<DesiredOrder>): DesiredOrder => ({
+            inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, dinnerMode: DinnerMode.DINEIN, ticketPriceId: priceIdOf(TicketType.CHILD),
+            isGuestTicket: true, allergyTypeIds: undefined, state: OrderState.BOOKED, ...overrides
+        })
+
+        it.each([
+            {desc: 'a mode and allergies', dinnerMode: DinnerMode.TAKEAWAY, allergyTypeIds: [4, 7], guest: guestOf({dinnerMode: DinnerMode.TAKEAWAY, allergyTypeIds: [4, 7]})},
+            {desc: 'no mode and no allergies', dinnerMode: undefined, allergyTypeIds: undefined, guest: guestOf({})}
+        ])('GIVEN $desc THEN books the guest on the booker, in Spisesal without a mode', ({dinnerMode, allergyTypeIds, guest}) => {
+            expect(useBooking().buildGuestOrder(inhabitant.id, dinnerEvent.id, priceIdOf(TicketType.CHILD), dinnerMode, allergyTypeIds)).toEqual(guest)
+        })
+    })
+
     describe('buildEntryDesiredOrder', () => {
         it('names a queued guest\'s place at its held price, with the guest flag and the allergies', () => {
             const queued = WaitlistFactory.defaultEntry({id: 28, inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, isGuestTicket: true, ticketPrice: priceRowOf(TicketTypes.CHILD)})

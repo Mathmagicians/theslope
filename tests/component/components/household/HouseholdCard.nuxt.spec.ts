@@ -4,7 +4,8 @@ import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {getQuery, type H3Event} from 'h3'
 import {ref} from 'vue'
-import {mountWithTooltipProvider, clickByTestId, findByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, clickByTestId, findByTestId, findComponentByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
+import type {ButtonProps} from '@nuxt/ui'
 import HouseholdCard from '~/components/household/HouseholdCard.vue'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -68,7 +69,7 @@ describe.each(VIEWPORTS)('HouseholdCard on $viewport', ({isMd}) => {
         resetStores()
     })
 
-    it('the name and ticket type columns bind their column tokens, and an open member row groups its actions at the card field group size', async () => {
+    it('the name and ticket type columns bind their column tokens, and an open member row\'s cancel and save take the save and cancel size', async () => {
         const wrapper = await mountCard(isMd)
         const columns = wrapper.findComponent({name: 'UTable'}).props('columns') as Array<{id: string}>
         const tokens = createTableColumns(ref(isMd))
@@ -76,9 +77,8 @@ describe.each(VIEWPORTS)('HouseholdCard on $viewport', ({isMd}) => {
         expect(columns.find(column => column.id === 'ticketType')).toEqual({id: 'ticketType', ...tokens.householdTicketType})
 
         await clickByTestId(wrapper, `inhabitant-${inhabitant.id}-edit-preferences`)
-        const actions = wrapper.findAllComponents({name: 'UFieldGroup'})
-            .find(group => group.find('[data-testid="cancel-preferences"]').exists())
-        expect(actions?.props('size')).toBe(createResponsiveSizes(ref(isMd)).cardFieldGroup)
+        const actions = ['cancel-preferences', 'save-preferences'].map(testId => findComponentByTestId<ButtonProps>(wrapper, 'UButton', testId))
+        expect(actions.map(button => button.props('size'))).toEqual([createResponsiveSizes(ref(isMd)).large, createResponsiveSizes(ref(isMd)).large])
     })
 
     // The power row's faces set the name column's width: a household's faces past the power row's max fold into the count

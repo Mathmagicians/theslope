@@ -360,11 +360,9 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
               <ActionPreview :days="previewDays" :pending="isPreviewPending" />
 
               <div :class="COMPONENTS.householdCard.actionsRow">
-                <UFieldGroup :size="SIZES.cardFieldGroup">
+                <UFieldGroup>
                   <UButton
-                      :color="COLOR.neutral"
-                      :variant="NOISE.quiet"
-                      :icon="ICONS.xMark"
+                      v-bind="BUTTONS.cancel"
                       data-testid="cancel-preferences"
                       @click="row.toggleExpanded()"
                   >
@@ -372,8 +370,8 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
                   </UButton>
                   <UButton
                       v-if="canEdit"
-                      :color="row.original.isSynthetic ? COMPONENTS.powerMode.color : COLOR.primary"
-                      :variant="NOISE.loud"
+                      v-bind="BUTTONS.save"
+                      :color="row.original.isSynthetic ? COMPONENTS.powerMode.color : BUTTONS.save.color"
                       :loading="isSaving"
                       :disabled="isSaving"
                       :class="COMPONENTS.householdCard.saveButton"
