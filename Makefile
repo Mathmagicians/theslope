@@ -83,14 +83,16 @@ c4: ## Generate the C4 container diagram from the wrangler configs and render do
 c4-check: ## Fail when the C4 container diagram differs from the wrangler configs
 	@$(C4_GENERATE) | diff -u $(C4_CONTAINER) - || { echo "$(C4_CONTAINER) is stale - run make c4"; exit 1; }
 
-# --- GitHub Actions workflows → CodeQL's Actions queries (.output/codeql-actions); pre:all runs the scan when the branch or
-# the working tree changes .github, CI's CodeQL pipeline scans the pushed workflows
+# --- GitHub Actions workflows → their YAML syntax (yaml valid) and CodeQL's Actions queries (.output/codeql-actions); CodeQL
+# reads a workflow GitHub cannot parse without a finding. pre:all runs the lint when the branch or the working tree changes
+# .github, CI's CodeQL pipeline scans the pushed workflows
 .PHONY: lint-gh-actions lint-gh-actions-changed
 
 lint-gh-actions-changed: ## Run lint-gh-actions when the branch or the working tree changes .github (skipped in CI)
 	@[ -n "$$CI" ] || { git diff --quiet $$(git merge-base origin/main HEAD) -- .github && [ -z "$$(git ls-files --others --exclude-standard .github)" ]; } || $(MAKE) --no-print-directory lint-gh-actions
 
-lint-gh-actions: ## Run CodeQL's Actions queries (latest) on the workflows; prints the findings and fails on one
+lint-gh-actions: ## Check the workflows' YAML syntax, then run CodeQL's Actions queries (latest) on them; prints the findings and fails on one
+	@for workflow in .github/workflows/*.yml; do npx --no-install yaml valid < "$$workflow" || { echo "❌ Not valid YAML: $$workflow"; exit 1; }; done
 	@mkdir -p .output
 	@gh codeql set-version latest
 	@gh codeql pack download codeql/actions-queries

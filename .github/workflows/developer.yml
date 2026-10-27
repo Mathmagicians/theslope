@@ -93,7 +93,8 @@ jobs:
         if: env.PUBLISH == 'true'
       - name: Summary
         if: env.PUBLISH == 'true'
-        run: echo "Published run $RUN_ID ($ENV $RELEASE_VERSION): $SITE/environments/$ENV" | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "Published run $RUN_ID ($ENV $RELEASE_VERSION): $SITE/environments/$ENV" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Wait for GitHub Pages to serve the site
         if: env.PUBLISH == 'true'
         # GitHub Pages deploys the gh-pages commit in its own workflow; the site is live once it serves this build's
