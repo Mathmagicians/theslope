@@ -2,7 +2,7 @@ import {useBookingValidation, DinnerMode as DinnerModeEnum, DinnerState as Dinne
 import {useBillingValidation, type TransactionCreateData} from '~/composables/useBillingValidation'
 import {useBilling} from '~/composables/useBilling'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
-import {useHousehold} from '~/composables/useHousehold'
+import {useHousehold, isHouseholdActiveOnDay} from '~/composables/useHousehold'
 import {useTicket, ticketTypeLabel} from '~/composables/useTicket'
 import type {InhabitantDisplay, HouseholdDisplay} from '~/composables/useCoreValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
@@ -411,6 +411,13 @@ const bookingOptionsWith = (isDinnerPast: (date: Date) => boolean) =>
 /** The modes a row may pick: the ones the decision matrix lands as that mode; nothing on a past, cancelled or consumed dinner or outside residency */
 export const getBookingOptions = (row: BookingRow, context: BookingContext): DinnerMode[] =>
     bookingOptionsWith(useSeason().isDinnerPast)(row, context)
+
+/** A household's booking context on each of its dinners; without a household every day counts as in residency */
+export const bookingContextOf = (household: HouseholdDisplay | null, deadlines: SeasonDeadlines, ticketPrices: TicketPrice[]) => {
+    const isHouseholdInResidency = household ? isHouseholdActiveOnDay(household.movedInDate, household.moveOutDate) : () => true
+    const takesNoPortion = useTicket().takesNoPortionOf(ticketPrices)
+    return (event: BookingContext['event']): BookingContext => ({event, deadlines, isHouseholdInResidency, takesNoPortion})
+}
 
 /** The household row: the modes every row may pick */
 export const powerOptions = (rows: DinnerMode[][]): DinnerMode[] =>

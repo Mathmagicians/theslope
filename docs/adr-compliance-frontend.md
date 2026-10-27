@@ -25,16 +25,17 @@ and the component headers hold the detail; a row names a gap in a few words.
 | **Admin** | | | | | | | |
 | `/admin/planning` | `AdminPlanning.vue` | ✅ plan | ✅ full | ✅ `?mode=` `?season=` | ✅ | ✅ | ✅ |
 | `/admin/teams` | `AdminTeams.vue` | ✅ plan | ✅ partial | ✅ `?mode=` `?team=` | ✅ | ⚠️ | ⚠️ partial unit; master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
-| `/admin/households` | `AdminHouseholds.vue` | ✅ households | ❓ | ✅ `?mode=` | ✅ | ⚠️ loading row only | ⚠️ audit needed |
+| `/admin/households` | `AdminHouseholds.vue` | ✅ households | ❓ | ✅ `?mode=` | ✅ | ⚠️ loading row, the open row by id | ⚠️ audit needed |
 | `/admin/allergies` | `AdminAllergies.vue` | ✅ allergies | N/A | ✅ `?allergy=` | ✅ | ✅ | ✅ master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
-| `/admin/users` | `AdminUsers.vue` | ✅ users | N/A | ✅ | ✅ | ⚠️ loading row only | ⚠️ partial unit |
+| `/admin/users` | `AdminUsers.vue` | ✅ users | N/A | ✅ | ✅ | ⚠️ loading row, the open row by id | ⚠️ partial unit |
 | `/admin/economy` | `AdminEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?period=` `?invoice=` | ✅ serial | ⚠️ the URL's selection, the loading rows, the upcoming table's Menu cell | ⚠️ partial unit |
 | `/admin/system` | `AdminSystem.vue` | N/A, `storeAsyncData` (ADR-007 component-local) | N/A | ✅ | ✅ | ✅ | ✅ |
 | `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ allergies, plan | N/A | N/A | ✅ smoke | ✅ | ✅ |
 | **Household** | | | | | | | |
 | `/household/[shortname]` | `household/[shortname]/index.vue` | ✅ households | N/A | ✅ `?pbs=` | ✅ | ⚠️ | ⚠️ review `?pbs` on redirect |
+| `/household/[shortname]/[tab]` | `household/[shortname]/[tab].vue` | ✅ households, auth | N/A | ✅ `?pbs=`, the tab path | ✅ `household` | ✅ `household-tab`: the URL's household, the override per viewer and tab, the edit props on the tabs that edit | ✅ ADR-018 tokens |
 | `/household/[shortname]/bookings` | `HouseholdBookings.vue` | ✅ plan, households, bookings | N/A | ✅ `?pbs=` `?cal=` | ✅ | ✅ | ✅ master-detail on `LAYOUTS.masterDetailPage` while the calendar shows (ADR-018) |
-| `/household/[shortname]/allergies` | `HouseholdAllergies.vue` | ✅ allergies | ❓ | ✅ `?pbs=` | ✅ | ⚠️ loading only | ⚠️ partial unit |
+| `/household/[shortname]/allergies` | `HouseholdAllergies.vue` | ✅ allergies | ❓ | ✅ `?pbs=` | ✅ | ⚠️ loading, the open row by id | ⚠️ partial unit, the open row by id |
 | `/household/[shortname]/settings` | `HouseholdSettings.vue` | ✅ households | N/A | ✅ `?pbs=` | ✅ | ⚠️ the undo's toast and alert | ⚠️ partial unit |
 | `/household/[shortname]/economy` | `HouseholdEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?pbs=` | ❌ | ⚠️ the upcoming table's Menu cell | ⚠️ partial unit |
 | **Other** | | | | | | | |
@@ -67,7 +68,7 @@ Status.
 | Component | Routes | Stores | Component spec | E2E | Status |
 |---|---|---|---|---|---|
 | `AdminTeams.vue` | `/admin/teams` | plan, households | ⚠️ | ✅ | ⚠️ partial unit |
-| `CookingTeamCard.vue` | `/admin/teams`, `/chef`, `/dinner` | plan, households | ✅ | ✅ parent | ✅ |
+| `CookingTeamCard.vue` | `/admin/teams`, `/chef`, `/dinner` | plan, households | ✅ | ✅ parent | ✅; on a visit on /chef the header carries "Ikke dit hold" (`COMPONENTS.visitBadge`, shared with the visiting tab) |
 | `TeamMemberAddForm.vue` | `/admin/teams` | none | ✅ | ✅ parent | ✅ |
 | `TeamRoleFields.vue` | `/admin/teams` | none | ✅ parent | ✅ parent | ✅ |
 | `JokerSlotForm.vue` | `/admin/teams` | none | ✅ | ✅ | ✅ |
@@ -81,7 +82,7 @@ Status.
 
 | Component | Routes | Stores | Component spec | E2E | Status |
 |---|---|---|---|---|---|
-| `AdminHouseholds.vue` | `/admin/households` | households | ⚠️ loading row only | ✅ | ⚠️ partial unit |
+| `AdminHouseholds.vue` | `/admin/households` | households | ⚠️ loading row, the open row by id | ✅ | ⚠️ partial unit |
 | `HouseholdCreateForm.vue` | `/admin/households` | households | ✅ | ✅ parent | ❓ audit needed |
 | `HouseholdEditPanel.vue` | `/admin/households` | none | ✅ | ✅ parent | ✅ |
 | `HouseholdCard.vue` | `/admin/households`, `/household/[shortname]` | households, plan | ✅ | ✅ parent | ⚠️ partial unit |
@@ -101,7 +102,7 @@ Status.
 | `AllergyTypeCard.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | plan | ✅ | ✅ parent | ✅ |
 | `AllergyTypeDisplay.vue` | `/dinner`, `/chef`, `/admin/allergies`, `/household/[shortname]/allergies` | none | ✅ | N/A | ✅ |
 | `AllergyNotes.vue` | `/admin/allergies`, `/admin/allergies/pdf` | none | ✅ | ✅ parent | ✅ |
-| `HouseholdAllergies.vue` | `/household/[shortname]/allergies` | allergies, households | ⚠️ loading only | ✅ | ⚠️ component: loading, `adminBypass` on each change |
+| `HouseholdAllergies.vue` | `/household/[shortname]/allergies` | allergies, households | ⚠️ loading, the open row by id | ✅ | ⚠️ component: loading, `adminBypass` on each change, the open row by id |
 | `AllergyEditor.vue` | `/household/[shortname]/allergies` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `AllergyManagersList.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | users | ❌ | ❌ | ❌ no tests |
 
@@ -149,7 +150,7 @@ Status.
 | `BookingGridView.vue` | `/household/[shortname]/bookings` | bookings | ✅ `BookingGridView.nuxt.spec.ts` | ✅ serial | ✅ each cell's modes, the power cell's and the add-guest chevron's from `useBooking`'s `getBookingOptions` and `powerOptions`; an expected cell and the power cell keep the plan's ghost until the first click adopts it as a draft; a cancelled dinner's header binds `DINNER_STATE_BADGES.CANCELLED` and its cells `cancelled`; the edit footer keeps to the box in view (`bookingGrid.actionPanel`) (ADR-018) |
 | `BookingViewSwitcher.vue` | `/household/[shortname]/bookings` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `ActionPreview.vue` | `/household/[shortname]/bookings`, `/household/[shortname]`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ |
-| `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ parent `DinnerBookingForm.nuxt.spec.ts`, `BookingGridView.nuxt.spec.ts` | ✅ parent | ✅ its modes from `useBooking`'s `getBookingOptions` |
+| `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ parent `DinnerBookingForm.nuxt.spec.ts`, `BookingGridView.nuxt.spec.ts` | ✅ parent | ✅ its modes from `useBooking`'s `getBookingOptions`, over the booking context from its parent (`bookingContextOf`) |
 | `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | allergies, auth, bookings, households, plan | ✅ `DinnerBookingForm.nuxt.spec.ts` | ✅ serial, incl. `Waitlist` | ✅ each row's modes from `useBooking`'s `getBookingOptions`, the power row's from `powerOptions`; an expected row's draft starts on the person's click (ADR-007); a cancelled dinner wears the cancel ribbon (`getRibbonClasses`, `ribbon` false inside ChefMenuCard), its word from `BOOKING_WORDS.cancelledDinner` (ADR-017), and its tickets and the expanded row's selector `cancelled` (ADR-018); no edit on a cancelled dinner, as on a past one |
 | `DinnerModeLegend.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ renders its rows into `CalendarLegend`'s list, its words from `BOOKING_WORDS` (ADR-017) |
 | `DinnerModeSelector.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ✅ `DinnerModeSelector.nuxt.spec.ts` | ✅ parent | ✅ offers the `enabledModes` its parent reads from `getBookingOptions`, in `DINNER_MODE_ORDER` (`useBooking`); a plan's faces bind `COMPONENTS.bookingGrid.expectedBadge` and `dinnerModeSelector.plannedButton`, a wish's `waitlist.ghostBadge`, in edit mode too, a cancelled dinner's view face `dinnerModeSelector.cancelledFace` in every form mode (ADR-018) |
@@ -169,7 +170,7 @@ Status.
 | `ExpenseLines.vue` | `/chef` | none | ✅ | ✅ | ✅ |
 | `VatAmount.vue` | `/chef` | none | ✅ | ✅ parent | ✅ |
 | `CookingRoundSpending.vue` | `/chef` | bookings | ✅ | ❌ | ✅; an arrow (`table.currentMarker`) before the name of the dinner on view; the team's round binds the round's orders loading |
-| `TicketChanges.vue` | `/chef` | bookings | ✅ | ❌ | ✅ |
+| `TicketChanges.vue` | `/chef` | bookings | ✅ | ❌ | ✅; Husstand of a user's line over more than two households folds behind a "+N" link (`ticketChanges.householdsToggle`, `ticketChanges.households`), its words from `BOOKING_WORDS.ticketChange.households` (ADR-017, ADR-018) |
 | `TeamRoleStatus.vue` | `/chef` | none | ✅ | ✅ parent | ✅ the role glyphs from `ROLE_ICONS`, the role and visitor lines from `TEAM_WORDS` (ADR-017, ADR-018) |
 | `ChefDinnerCard.vue` | `/chef` | bookings | ✅ | ✅ parent | ✅ |
 | `DinnerStatusStepper.vue` | `/chef` | bookings | ✅ parent | ✅ parent | ✅ |
@@ -205,7 +206,7 @@ Status.
 | `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `users.ts` | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ no ready flag, no `isEmpty`, `isInitialized` on my teams only; 0.9.1 |
 | `auth.ts` | N/A | ✅ | N/A | ✅ | ✅ |
-| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ✅ spec covers the queue entries, the household places, the dinner's queue, `addExtraPortions`, `isBookingsReloading`, the toasts of the chef's dinner actions, and the GET reads `fetchExpectedBookings` and `previewBookings` |
+| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ✅ spec covers the queue entries, the household places, the dinner's queue, `addExtraPortions`, `isBookingsReloading`, the toasts of the chef's dinner actions, and the GET reads `fetchExpectedBookings` and `previewBookings`; words from `app/config/` (ADR-017) |
 
 ## Composables
 

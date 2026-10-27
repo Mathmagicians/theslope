@@ -30,11 +30,10 @@ describe('InhabitantSelector', () => {
 
     const mount = (overrides: Record<string, unknown> = {}) =>
         mountWithTooltipProvider(InhabitantSelector, {props: {inhabitants, ...overrides}, isMd: true})
-    // The row the slots receive: the inhabitant, and the toggle of its expanded row
     type SlotRow = {original: InhabitantDisplay, toggleExpanded: () => void}
     // Slots go through the root mount alone
-    const mountWithSlots = (slots: Record<string, (props: {row: SlotRow}) => VNodeChild>, props: Record<string, unknown> = {inhabitants}) =>
-        mountSuspended(InhabitantSelector, {props, global: {provide: {isMd: ref(true)}}, slots})
+    const mountWithSlots = (slots: Record<string, (props: {row: SlotRow}) => VNodeChild>, mounted: InhabitantDisplay[] = inhabitants) =>
+        mountSuspended(InhabitantSelector, {props: {inhabitants: mounted}, global: {provide: {isMd: ref(true)}}, slots})
 
     const typeSearch = async (wrapper: Awaited<ReturnType<typeof mount>>, query: string) => {
         await wrapper.find('input').setValue(query)
@@ -129,14 +128,14 @@ describe('InhabitantSelector', () => {
 
     // The parent opens a row through the row its #actions slot receives
     it('GIVEN Bo\'s row open WHEN an inhabitant arrives above it THEN the #expanded slot stays under Bo\'s row', async () => {
-        const [anna, bo, carl] = inhabitants
+        const [anna, bo] = inhabitants
         const wrapper = await mountWithSlots({
             actions: ({row}) => h('button', {'data-testid': `open-${row.original.id}`, onClick: () => row.toggleExpanded()}),
             expanded: ({row}) => `detail-${row.original.id}`
-        }, {inhabitants: [bo, carl]})
+        }, inhabitants.filter(inhabitant => inhabitant !== anna))
         await clickByTestId(wrapper, `open-${bo!.id}`)
 
-        await wrapper.setProps({inhabitants: [anna, bo, carl]})
+        await wrapper.setProps({inhabitants})
 
         const open = findOpenRows(wrapper)
         expect(open.map(({row}) => row.text())).toEqual([expect.stringContaining(`${bo!.name} ${bo!.lastName}`)])

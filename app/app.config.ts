@@ -1,21 +1,9 @@
 import { NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES } from './config/notificationTemplates'
-import { DEFAULT_TICKET_PRICES } from './config/ticketPrices'
+import { SEASON_CONFIG } from './config/season'
 
 export default defineAppConfig({
     theslope: {
-        defaultSeason: {
-            startWeek: 33,
-            endWeek: 26,
-            holidays: [8, 42, 52],
-            cookingDays: ['mandag', 'tirsdag', 'onsdag', 'torsdag'] ,
-            menuIsAnnouncedDaysBefore: 10,
-            ticketIsCancellableDaysBefore: 8,
-            diningModeIsEditableMinutesBefore: 90,
-            ticketPrices: DEFAULT_TICKET_PRICES,
-            consecutiveCookingDays: 2
-        },
-        defaultDinnerStartTime: 18,
-        defaultDinnerDurationMinutes: 60,
+        ...SEASON_CONFIG,
         holidayUrl: 'https://www.lejre.dk/borger/daginstitution-og-skole/skole/ferieplan-og-lukkedage',
         cookingDeadlines: {
             criticalHours: 24,  // Critical urgency: < 24h before dinner event (red)
@@ -33,7 +21,6 @@ export default defineAppConfig({
             dailyMaintenance: { cron: '0 2 * * *', description: 'Dagligt kl. 03:00' },
             monthlyBilling: { cron: '0 3 18 * *', description: 'D. 18. hver måned kl. 04:00 (dagen efter cutoff)' }
         },
-        prebookingWindowDays: 60,  // Rolling window: scaffold pre-bookings for dinners within next N days
         waitlistPlacingLeaseMinutes: 10,  // A run holds a queue entry it grabbed this long; an older grab is recovered
         waitlistBuildupThreshold: 3,  // Queue size at which the dinner's chef is asked to release portions
         notifications: {

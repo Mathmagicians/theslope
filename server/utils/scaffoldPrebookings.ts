@@ -105,13 +105,13 @@ const databaseSupply = (d1Client: D1Database, payerUserId: number, ticketPrices:
 })
 
 const previewSupply = (d1Client: D1Database, ticketPrices: TicketPrice[], ticketsForSale: TicketForSale[]): Supply => {
-    const {previewSale} = useWaitlist()
+    const {previewSale, ticketTypeOfPrice} = useWaitlist()
     const tickets = new Map(ticketsForSale.map(ticket => [ticket.id, ticket]))
     const joined: TicketWaitlistDisplay[] = []
     const left = new Set<number>()
     const requeued = new Map<number, WaitlistOrder>()
     const runStart = new Date()
-    const typeOfPrice = (ticketPriceId: number | null) => ticketPrices.find(price => price.id === ticketPriceId)?.ticketType
+    const typeOfPrice = ticketTypeOfPrice(ticketPrices)
     const onDinner = (dinnerEventId: number) => [...tickets.values()].filter(ticket => ticket.dinnerEventId === dinnerEventId)
     // The type's tickets on a dinner in the order a claim buys them: first released first
     const ofType = (dinnerEventId: number, ticketType: TicketType) => onDinner(dinnerEventId)

@@ -77,6 +77,20 @@ describe('useTicket', () => {
         })
     })
 
+    describe('findTicketPriceById', () => {
+        it('GIVEN a price row id THEN returns that row', () => {
+            const child = TicketFactory.defaultPriceOf(TicketType.CHILD)
+            expect(useTicket().findTicketPriceById(child.id!, ticketPrices)).toEqual(child)
+        })
+
+        it.each([
+            {desc: 'an id the season holds no row for', ticketPriceId: ticketPrices.length + 1},
+            {desc: 'no id', ticketPriceId: null}
+        ])('GIVEN $desc THEN returns undefined', ({ticketPriceId}) => {
+            expect(useTicket().findTicketPriceById(ticketPriceId, ticketPrices)).toBeUndefined()
+        })
+    })
+
     // The priorities (birthDate, priceAtBooking, fallback) are resolveTicketPrice's, below
     describe('resolveTicketType', () => {
         it('GIVEN ticket prices THEN resolves to the type of the resolved price', () => {

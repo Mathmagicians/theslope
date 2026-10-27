@@ -61,6 +61,7 @@ import type { WeekDayMap, DateRange } from '~/types/dateTypes'
 import type { TeamRole, CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
 import { ROLE_LABELS } from '~/composables/useCookingTeamValidation'
 import type { JokerSlotCreate } from '~/composables/useDutyValidation'
+import { TEAM_WORDS } from '~/config/teamWords'
 
 // Design system
 const { SIZES, ICONS, ALERTS, BUTTONS, TYPOGRAPHY, COMPONENTS, ROLE_ICONS, getRainbowBand, getCalendarCountBadge, getRandomEmptyMessage } = useTheSlopeDesignSystem()
@@ -72,6 +73,7 @@ interface Props {
   teamNumber: number       // Logical number 1..N in season (for display/color)
   mode?: DisplayMode       // Display mode
   useShortName?: boolean   // If true, display "Madhold X" instead of full name with season
+  visiting?: boolean       // The viewer is not on the team: the monitor header carries "Ikke dit hold"
   // EDIT mode only props:
   seasonId?: number
   seasonCookingDays?: WeekDayMap | null
@@ -83,6 +85,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   mode: 'regular',
   useShortName: false,
+  visiting: false,
   seasonId: undefined,
   seasonCookingDays: undefined,
   seasonDates: undefined,
@@ -281,6 +284,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
         :cooking-days-count="cookingDaysCount"
         size="large"
       />
+      <UBadge v-if="visiting" v-bind="COMPONENTS.visitBadge" :size="SIZES.small" :label="TEAM_WORDS.visit.badge" data-testid="team-card-visit-badge" />
     </div>
 
     <!-- Members display OR empty state -->

@@ -5,6 +5,8 @@ import {useCookingTeamValidation, type TeamRole} from '~/composables/useCookingT
 
 const Role = useCookingTeamValidation().TeamRoleSchema.enum
 
+const heynaboSyncProblem = 'Din ændring er gemt, men Heynabo havde et problem. Vi har forsøgt at fikse det, tjek om det ser rigtig ud i Heynabo.'
+
 export const TEAM_WORDS = {
     /** A team on view the person is not on: the badge on its tab and the line under the tabs */
     visit: {
@@ -62,6 +64,32 @@ export const TEAM_WORDS = {
         reopened: {
             title: 'Aflysning annulleret',
             description: (dinner: string, date: string) => `${dinner} d. ${date} er genåbnet`
+        },
+        /** A dinner save that landed while the Heynabo sync failed (207); without an event id the chef publishes again */
+        heynaboSync: {
+            title: 'Heynabo-synkronisering',
+            description: (heynaboEventId: number | null) => heynaboEventId
+                ? heynaboSyncProblem
+                : `${heynaboSyncProblem} Tryk på Publicer knappen igen`
+        },
+        /** A save on a dinner without a chef claims the role, and the title names it */
+        menuSaved: {
+            title: (roleClaimed: string | null) => roleClaimed ? `Menu gemt — ${roleClaimed}` : 'Menu gemt',
+            description: (menuTitle: string) => `"${menuTitle}" er nu opdateret`
+        },
+        expenseAdded: {
+            title: 'Indkøb gemt',
+            description: (line: string, amount: string) => `${line}: ${amount} kr`,
+            failed: 'Kunne ikke gemme indkøbet'
+        },
+        expenseRemoved: {
+            title: 'Indkøb slettet',
+            failed: 'Kunne ikke slette indkøbet'
+        },
+        extraPortions: {
+            title: 'Portioner frigivet',
+            description: (assigned: number, waiting: number) => `${assigned} fik billet, ${waiting} står stadig på ventelisten`,
+            failed: 'Kunne ikke frigive portionerne'
         }
     }
 } as const

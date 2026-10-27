@@ -789,7 +789,8 @@ ADR-016 [Unified Booking Through Scaffold], below the decision matrix, gains on 
   0 portions after the deadline the modes it has before the deadline.
 - Unit, the scaffold: a baby who tastes, booked after the deadline, gets an order and no queue entry; cancelled after
   the deadline, the order is deleted and nothing goes for sale.
-- BDD: example rows in the booking features.
+- BDD: `tests/e2e/features/booking/booking.feature`, the rule of 0 portions: past the deadline the baby who tastes
+  books and cancels, the hungry baby joins the waiting list, and no ticket is released.
 
 ### Affected
 
@@ -930,8 +931,10 @@ changes: after a guest save in the day view the add-guest form closes and the qu
 
 ### Affected
 
-`useExpandableRow.ts`, `utils.ts`, `BookingGridView.vue`, `DinnerBookingForm.vue`, `HouseholdCard.vue`,
-`EconomyTable.vue`, `AdminEconomy.vue`, `HouseholdEconomy.vue`.
+`useExpandableRow.ts`, `utils.ts` (`rowIdOf`, `findRowById`), `BookingGridView.vue`, `DinnerBookingForm.vue`,
+`HouseholdCard.vue`, `EconomyTable.vue`, `AdminEconomy.vue`, `HouseholdEconomy.vue`; defect 23: `AdminUsers.vue`,
+`HouseholdAllergies.vue`, `AdminHouseholds.vue`, `InhabitantSelector.vue`, `AllergyCatalogTable.vue`,
+`AdminAllergies.vue`, `AdminTeams.vue`.
 
 ## Chef calendar visit
 
@@ -945,9 +948,10 @@ in the address that is not the person's opens their first team instead.
 - The chef calendar shows the season's dinners: the team on view's in its colours with the deadline chips, the other
   teams' as plain circles. A click on any dinner opens that dinner's team on the chef page at that dinner; a dinner
   without a team has no team page and shows as a plain day.
-- A team the person is not on opens on a visiting tab, after their own teams, with the badge "Ikke dit hold" and the
-  line "Du er ikke på <team>". The dinner card reads as for a member who is not the chef: no menu, allergen, grocery or
-  state edits. The chef's role panel, Kok and Kokkespire are the dinner page's, open to every member; taking a role
+- A team the person is not on opens on a visiting tab, after their own teams, with the badge "Ikke dit hold" after
+  its name on the tab (2026-10-27) and the line "Du er ikke på <team>". On /chef the visit's team card carries the
+  same badge in its header; the team card on /dinner stays as it is (2026-10-27). The dinner card reads as for a member
+  who is not the chef: no menu, allergen, grocery or state edits. The chef's role panel, Kok and Kokkespire are the dinner page's, open to every member; taking a role
   puts the person on the team, and the visiting tab becomes their own tab.
 - The legend adds "Andet madholds fællesspisning".
 - The chef page's words live in `app/config/` (ADR-017); its toasts of the allergen, announce, cancel and undo-cancel
@@ -963,9 +967,8 @@ Desktop puts the master beside the detail; a phone stacks the master above the d
 MASTER (a third of the row)
 +--------------------------------------------------+
 | Mine Madhold                                     |
-|  (team icon)   (team icon)   (team icon)         |
-|  Madhold 2     Madhold 5     [Madhold 3]         |
-|                              [Ikke dit hold]     |  visiting tab, selected, with its badge
+| (team icon)  (team icon)  (team icon)            |
+| Madhold 2  Madhold 5  [Madhold 3] [Ikke dit hold]|  visiting tab, selected, its badge after the name
 | Du er ikke på Madhold 3                          |  role line
 +--------------------------------------------------+
 | NÆSTE MADLAVNING  Madhold 3                      |

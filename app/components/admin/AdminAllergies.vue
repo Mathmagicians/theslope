@@ -218,16 +218,16 @@ const handleSelect = (id: number | number[] | null) => {
 // first-item fallback feeds only the desktop pane). CREATE suppresses it so the
 // panel under the toolbar is the single live mount.
 const expanded = computed({
-  get: (): Record<number, boolean> => {
+  get: (): Record<string, boolean> => {
     if (COMPONENTS.masterDetail.detailAsPane || panelMode.value === FORM_MODES.CREATE || selectedAllergyTypeId.value === null) return {}
-    const index = sortedAllergyTypes.value.findIndex(at => at.id === selectedAllergyTypeId.value)
-    return index === -1 ? {} : {[index]: true}
+    const selected = sortedAllergyTypes.value.find(at => at.id === selectedAllergyTypeId.value)
+    return selected ? {[rowIdOf(selected)]: true} : {}
   },
-  set: (value: Record<number, boolean>) => {
+  set: (value: Record<string, boolean>) => {
     // UTable-initiated collapse deselects; expansion goes through handleSelect
-    const openIndex = Object.keys(value).find(key => value[Number(key)])
-    setAllergyParam(openIndex !== undefined
-        ? sortedAllergyTypes.value[Number(openIndex)]?.id ?? null
+    const openRowId = Object.keys(value).find(key => value[key])
+    setAllergyParam(openRowId !== undefined
+        ? findRowById(sortedAllergyTypes.value, openRowId)?.id ?? null
         : null)
   }
 })

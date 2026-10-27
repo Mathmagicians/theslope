@@ -257,7 +257,7 @@ type Recipient = Pick<ResolvedNotification, 'to' | 'userId' | 'name'> & Pick<Tra
 // The notifications composed from the records of their operation
 const composer = ({dinners, households, inhabitants, users}: NotificationRecords) => {
     const {formatGuestLabel} = useOrder()
-    const {formatPrice} = useTicket()
+    const {formatPrice, findTicketPriceById} = useTicket()
     const dinnerOf = (dinnerEventId: number): DinnerForWaitlist => dinners.get(dinnerEventId)!
     const shortnameOf = (householdId: number | undefined): string => (householdId && households.get(householdId)?.shortName) || `#${householdId}`
     // The member's user hears on its own channels; the notification greets the member
@@ -280,7 +280,7 @@ const composer = ({dinners, households, inhabitants, users}: NotificationRecords
     }
     // The ticket line of the booking page: "Barn · 35 kr · Spisesal · fra AR_1"
     const ticketLine = (ticketPrices: TicketPrice[], ticketPriceId: number | null, dinnerMode?: DinnerMode, seller?: string): string => {
-        const price = ticketPrices.find(candidate => candidate.id === ticketPriceId)
+        const price = findTicketPriceById(ticketPriceId, ticketPrices)
         return [
             price && BOOKING_WORDS.ticketPrice.label(ticketTypeLabel(price.ticketType), formatPrice(price.price)),
             dinnerMode && BOOKING_WORDS.modes[dinnerMode],

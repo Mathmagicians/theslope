@@ -12,6 +12,7 @@ const waitlistPayment = 'Du betaler, når du får en billet fra ventelisten.'
 const releasedPayment = 'Du betaler, medmindre andre køber'
 const releasedWord = 'Frigivet'
 const claimedWord = 'Købt fra anden'
+const guestOf = 'Gæst af'
 
 export const BOOKING_WORDS = {
     /** A dinner's name while the chef has written no menu */
@@ -76,11 +77,18 @@ export const BOOKING_WORDS = {
         [Action.REQUEUE]: 'Opdater',
         [Action.CHANGE_MODE]: 'Opdater'
     } satisfies Record<BookingOutcome, string>,
-    /** The guest form's button, a booker's guests of one ticket type counted in a preview or toast line, and the guests a ticket's badge names */
+    /**
+     * The guest form's button, a booker's guests of one ticket type counted in a preview or toast line, the guests a
+     * ticket's badge names, a guest row's name, and the booker a guest comes with: before the booker's face in the
+     * views (`of`), before the booker's name in a line (`ofBooker`)
+     */
     guests: {
         save: (count: number) => count === 1 ? 'Tilmeld gæst' : 'Tilmeld gæster',
         count: (count: number) => `×${count}`,
-        label: (count: number) => count === 1 ? 'Gæst' : `${count} Gæster`
+        label: (count: number) => count === 1 ? 'Gæst' : `${count} Gæster`,
+        name: 'Gæst',
+        of: guestOf,
+        ofBooker: (booker: string) => `${guestOf} ${booker}`
     },
     /** A ticket's state: CostLine and the order badges */
     orderStates: {
@@ -103,7 +111,8 @@ export const BOOKING_WORDS = {
     /**
      * Billetændringer: its title, toggle, failure and columns; the events beyond the actions' toast words, an admin's
      * correction after its event's word, the household a sale bought from, the system as an actor and as the household
-     * of a line over several; a line's kuverter, the moment Framelding closes and the button to the older changes
+     * of a line over several, the control that opens a user's line over many households; a line's kuverter, the moment
+     * Framelding closes and the button to the older changes
      */
     ticketChange: {
         title: 'Se billetændringer',
@@ -117,6 +126,12 @@ export const BOOKING_WORDS = {
         adminCorrection: (word: string) => `${word}, ADMIN korrektion`,
         seller: (seller: string) => `fra ${seller}`,
         bySystem: 'System',
+        // The control after the first households: the count of the rest while folded, its word while open, its label
+        households: {
+            more: (count: number) => `+${count}`,
+            fewer: 'skjul',
+            toggle: (open: boolean, count: number) => open ? 'Skjul husstande' : `Vis alle ${count} husstande`
+        },
         portions: (portions: string) => `· ${portions} kuverter`,
         deadline: (moment: string) => `Framelding lukker · ${moment}`,
         more: 'Vis fuld historik'
@@ -214,6 +229,24 @@ export const BOOKING_WORDS = {
         booking: 'Booking processeret',
         grid: 'Bookinger processeret',
         powerMode: 'Bookinger opdateret for hele husstanden'
+    },
+    /** A failed read of the orders, the waiting lists or the dinner on view, and a failed save of the bookings */
+    failed: {
+        orders: 'Kunne ikke hente bookinger',
+        waitlist: 'Kunne ikke hente ventelisten',
+        dinner: 'Kunne ikke hente fællesspisning',
+        save: 'Kunne ikke gemme bookinger'
+    },
+    /** What the URL names and is gone: the dinner on view; the admin economy's billing period and invoice, also on a failed read */
+    notFound: {
+        dinner: 'Kan ikke finde middagen',
+        billingPeriod: 'Kan ikke finde faktureringsperioden',
+        invoice: 'Kan ikke finde fakturaen'
+    },
+    /** An admin job's toasts: the job's name and how its run ended */
+    job: {
+        done: (job: string) => `${job} afsluttet`,
+        failed: (job: string) => `${job} fejlede`
     },
     /** The event a dinner is announced as in Heynabo: its name, place and description lines */
     heynaboEvent: {

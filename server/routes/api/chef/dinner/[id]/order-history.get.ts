@@ -9,6 +9,7 @@ import {getSystemUserId} from '~~/server/utils/systemUser'
 import {useBookingValidation, type TicketChangesResponse} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 import {useSeason} from '~/composables/useSeason'
+import {useTicket} from '~/composables/useTicket'
 
 const {throwH3Error} = eventHandlerHelper
 const LOG = '🎟️ > CHEF > ORDER_HISTORY > [GET]'
@@ -27,6 +28,7 @@ export default defineEventHandler(async (event): Promise<TicketChangesResponse> 
     const {TicketChangesResponseSchema, OrderAuditActionSchema, readOrderAudit} = useBookingValidation()
     const {replayTicketChanges} = useBooking()
     const {deadlinesForSeason} = useSeason()
+    const {findTicketPriceById} = useTicket()
 
     let id!: number
     let since: Date | undefined
@@ -53,7 +55,7 @@ export default defineEventHandler(async (event): Promise<TicketChangesResponse> 
         const buyerIds = history.flatMap(row => row.action === OrderAuditActionSchema.enum.USER_CLAIMED && row.inhabitantId !== null ? [row.inhabitantId] : [])
         const households = await fetchHouseholdsByIds(d1Client, unnamedHouseholdIds)
         const buyerHouseholds = await fetchHouseholdsByInhabitantIds(d1Client, buyerIds)
-        const ticketPriceOf = (ticketPriceId: number) => season?.ticketPrices.find(price => price.id === ticketPriceId) ?? null
+        const ticketPriceOf = (ticketPriceId: number) => findTicketPriceById(ticketPriceId, season?.ticketPrices ?? []) ?? null
         const shortNames = new Map(households.map(household => [household.id, household.shortName]))
         const householdShortnameOf = (householdId: number) => shortNames.get(householdId) ?? null
         const householdByInhabitant = new Map(buyerHouseholds.flatMap(household => household.inhabitants.map(inhabitant => [inhabitant.id, household] as const)))

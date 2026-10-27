@@ -23,8 +23,8 @@ The checks with human eyes, as a walk through the app. A check passes with its d
 | 8 | The grid shows the day view's tickets | `/dinner?date=<dinner with a place on the waiting list>`, desktop and phone | The line under the name reads the place in its ticket type's line, e.g. "Baby #1", with the hourglass | |
 | 9 | The grid shows the day view's tickets | `/dinner?date=<dinner with a released ticket>`, light and dark mode | A person's row and a guest row read "Frigivet" in red with the released icon, as on the ticket | 2026-10-27 |
 | 76 | The grid shows the day view's tickets | `/dinner?date=<past its booking deadline, tickets for sale>`: set a person to Spisesal, Køb billet | The person's row reads "fra &lt;seller's household&gt;" in blue with the claim icon, one size larger on desktop | 2026-10-27 |
-| 80 | The grid shows the day view's tickets | `/dinner?date=<a person's first dinner after turning 12>`, without a booking, desktop and phone, light and dark mode | The person's ticket reads Voksen at the adult price; beside the name the neutral badge "Voksen fra &lt;dd/MM&gt;" with the cake icon; Forklaring adds "Ny billetpris fra fødselsdagen". The dinner before reads Barn without the badge | |
-| 81 | The grid shows the day view's tickets | `/household/<S>/bookings`, the week of that dinner, then the week after | The person has a Barn row and a Voksen row; the Voksen row's name cell carries the badge after the ticket badge. The week after: one Voksen row, no badge | |
+| 80 | The grid shows the day view's tickets | `/dinner?date=<a person's first dinner after turning 12>`, without a booking, desktop and phone, light and dark mode | The person's ticket reads Voksen at the adult price; beside the name the neutral badge "Voksen fra &lt;dd/MM&gt;" with the cake icon; Forklaring adds "Ny billetpris fra fødselsdagen". The dinner before reads Barn without the badge | 2026-10-27 |
+| 81 | The grid shows the day view's tickets | `/household/<S>/bookings`, the week of that dinner, then the week after | The person has a Barn row and a Voksen row; the Voksen row's name cell carries the badge after the ticket badge. The week after: one Voksen row, no badge | 2026-10-27 |
 
 ## /household/&lt;S&gt;/economy and /admin/economy (1)
 
@@ -32,21 +32,39 @@ The checks with human eyes, as a walk through the app. A check passes with its d
 |---|---|---|---|---|
 | 77 | Defect 71 | `/household/<S>/economy` Kommende, `/admin/economy` the upcoming orders, a dinner with a menu | The dinner's row reads its menu title under Menu | 2026-10-27 |
 
-## /household/&lt;other S&gt; (4)
+## /household/&lt;S&gt; (2)
 
 | # | Package | State, viewport | What to see | Signed off |
 |---|---|---|---|---|
+| 83 | Defects 54 and 55 | `/household/<S>/bookings`, phone and desktop, light and dark mode | The house icon beside the address; on a phone the tabs show their icons, from md the icon and the label; the card runs edge to edge on a phone and is rounded from md | |
+| 85 | Defects 54 and 55 | `/household/<S>/members`, phone then desktop | The power row shows three faces and "+N" | |
+
+## /household/&lt;other S&gt; (5)
+
+| # | Package | State, viewport | What to see | Signed off |
+|---|---|---|---|---|
+| 84 | Defects 54 and 55 | Admin on `/household/<other S>/economy`, phone then desktop | The banner with the eye icon and Admin røre alligevel with the shield icon; on a phone the Økonomi table scrolls sideways inside its box | |
 | 10 | Household data access and GET previews | A member on another household's allergies tab | Banner "Du besøger nu en anden husstand end din egen"; the allergies read only, without the override button | |
 | 11 | Household data access and GET previews | The allergy manager (admin role off) on that tab: Admin røre alligevel, then Klik igen for at låse op | Banner "Admin rører, men forsigtigt"; an added allergy saves | |
 | 12 | Household data access and GET previews | The allergy manager on that household's bookings tab | The visitor banner without the override button | |
 | 13 | Household data access and GET previews | Admin on another household's bookings tab, override off | The grid shows the expected bookings as ghosts; the page loads without an error toast | |
+
+## /chef (5)
+
+| # | Package | State, viewport | What to see | Signed off |
+|---|---|---|---|---|
+| 88 | Chef calendar visit | `/chef`, calendar open, desktop and phone, light and dark mode | The team on view's dinners in its colours with the deadline chips; the other teams' dinners as grey outlined circles; Forklaring ends with "Andet madholds fællesspisning" | |
+| 89 | Chef calendar visit | Click another team's dinner | One navigation to `?team=<that team>&date=<that dinner>`; the team opens as the last tab with "Ikke dit hold" after its name, and the line "Du er ikke på &lt;team&gt;" under the tabs | |
+| 90 | Chef calendar visit | Same visit, the dinner card | No menu, allergen, grocery or state edits, no Annoncer; Bliv chefkok, Kok and Kokkespire are offered; the allergen, announce, cancel and undo-cancel toasts come once each on the own team | |
+| 91 | Chef calendar visit | The visit's Hvem laver maden?, desktop and phone; then the own team's dinner | On the visit "Ikke dit hold" after the team's badges; on the own team no badge | |
+| 92 | Defect 87 | A dinner with a season-wide run in its history: Budget, Billetændringer, Vis fuld historik; desktop, then phone | A line over many households reads two names and "+N" in the line; a click lists every name wrapped in the Husstand column, ending in "skjul"; on a desktop every column stays in view | |
 
 ## Layout (2)
 
 | # | Package | State, viewport | What to see | Signed off |
 |---|---|---|---|---|
 | 14 | One master-detail layout (#169) | `/dinner`, `/chef`, `/admin/allergies`, `/admin/teams`, `/household/<S>/bookings` at about 800px, then lg | The list takes a third (min 245px), the detail the rest; the calendar has room at md; its day circles step up a size from lg | |
-| 15 | Three faces on a phone (#171) | `/admin/teams` team card and the household list, phone then desktop | 3 faces and "+N" on a phone, 5 from md; each row stays inside its card | |
+| 15 | Three faces on a phone (#171) | `/dinner` the team card, `/admin/teams` the team card and the household list; phone then desktop | 3 faces and "+N" on a phone, 5 from md; the names wrap under the faces, each row stays inside its card, the page does not scroll sideways | |
 
 ## /admin/system (3)
 

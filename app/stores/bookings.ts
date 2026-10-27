@@ -5,6 +5,7 @@ import {useWaitlist} from '~/composables/useWaitlist'
 import type {ReleasedTicketCounts, WaitlistCounts} from '~/composables/useBooking'
 import {useBilling} from '~/composables/useBilling'
 import {TEAM_WORDS} from '~/config/teamWords'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 import {isSameDay} from 'date-fns'
 
 export const useBookingsStore = defineStore("Bookings", () => {
@@ -12,7 +13,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const {storeAsyncData, apiRequest, runJob} = useApiHandler()
     const {OrderDisplaySchema, OrderDetailSchema, OrderStateSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema, TicketChangesResponseSchema, TicketTypeSchema, encodeDesiredOrder} = useBookingValidation()
     const {formatScaffoldResult} = useBooking()
-    const {formatDailyMaintenanceStats} = useMaintenance()
+    const {formatDailyMaintenanceStats, jobTypeLabels} = useMaintenance()
+    const {JobType} = useMaintenanceValidation()
     const DinnerState = DinnerStateSchema.enum
     const toast = useToast()
 
@@ -56,7 +58,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             default: () => [],
             enabled: hasFilters,
             dependsOn: [planStore.selectedSeasonDataset],
-            errorMessage: 'Kunne ikke hente bookinger'
+            errorMessage: BOOKING_WORDS.failed.orders
         }
     )
 
@@ -89,7 +91,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             default: () => [],
             enabled: () => waitlistDinnerIds.value.length > 0,
             dependsOn: [planStore.selectedSeasonDataset],
-            errorMessage: 'Kunne ikke hente ventelisten'
+            errorMessage: BOOKING_WORDS.failed.waitlist
         }
     )
 
@@ -183,7 +185,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             query: since ? {since: since.toISOString()} : {},
             schema: TicketChangesResponseSchema,
             action: 'fetchTicketChanges',
-            errorMessage: 'Kunne ikke hente billetændringer'
+            errorMessage: BOOKING_WORDS.ticketChange.failed
         })
 
     // ========================================
@@ -278,7 +280,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             body: request,
             query: {adminBypass},
             schema: ScaffoldOrdersResponseSchema,
-            action: 'processBookings', errorMessage: 'Kunne ikke gemme bookinger'
+            action: 'processBookings', errorMessage: BOOKING_WORDS.failed.save
         }))
         await refreshSeasonOnClosedDinners(request, result.scaffoldResult)
         console.info(CTX, `${label}: ${formatScaffoldResult(result.scaffoldResult)}`)
@@ -381,13 +383,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
             default: () => null,
             enabled: () => !!selectedDinnerEventId.value,
             dependsOn: [planStore.selectedSeasonDataset],
-            errorMessage: 'Kunne ikke hente fællesspisning',
+            errorMessage: BOOKING_WORDS.failed.dinner,
             notFound: {
                 recover: () => {
                     dinnerDate.value = () => null
                 },
                 retries: 0,
-                toast: 'Kan ikke finde middagen',
+                toast: BOOKING_WORDS.notFound.dinner,
                 message: () => getRandomEmptyMessageText('dinnerGone')
             }
         }
@@ -411,13 +413,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
             body: updates,
             onResponse: ({response}) => {
                 if (response.status === 207) {
-                    const base = 'Din ændring er gemt, men Heynabo havde et problem. Vi har forsøgt at fikse det, tjek om det ser rigtig ud i Heynabo.'
-                    const description = response._data?.heynaboEventId
-                        ? base
-                        : `${base} Tryk på Publicer knappen igen`
                     toast.add({
-                        title: 'Heynabo-synkronisering',
-                        description,
+                        title: TEAM_WORDS.toasts.heynaboSync.title,
+                        description: TEAM_WORDS.toasts.heynaboSync.description(response._data?.heynaboEventId ?? null),
                         color: COLOR.error
                     })
                 }
@@ -455,19 +453,20 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const {formatPrice} = useTicket()
     const expensesUrl = (dinnerEventId: number) => `/api/chef/dinner/${dinnerEventId}/expenses`
     const addExpense = withLoading(async (dinnerEventId: number, line: ExpenseCreate): Promise<Expense> => {
+        const words = TEAM_WORDS.toasts.expenseAdded
         const expense = await apiRequest(expensesUrl(dinnerEventId), {
-            method: 'PUT', body: line, schema: ExpenseSchema, action: 'addExpense', errorMessage: 'Kunne ikke gemme indkøbet'
+            method: 'PUT', body: line, schema: ExpenseSchema, action: 'addExpense', errorMessage: words.failed
         })
         await refreshDinnerIfSelected(dinnerEventId)
-        toast.add({title: 'Indkøb gemt', description: `${expense.description}: ${formatPrice(expense.amount)} kr`, color: COLOR.success})
+        toast.add({title: words.title, description: words.description(expense.description, formatPrice(expense.amount)), color: COLOR.success})
         return expense
     })
     const removeExpense = withLoading(async (dinnerEventId: number, expenseId: number): Promise<Expense> => {
         const removed = await apiRequest(`${expensesUrl(dinnerEventId)}/${expenseId}`, {
-            method: 'DELETE', schema: ExpenseSchema, action: 'removeExpense', errorMessage: 'Kunne ikke slette indkøbet'
+            method: 'DELETE', schema: ExpenseSchema, action: 'removeExpense', errorMessage: TEAM_WORDS.toasts.expenseRemoved.failed
         })
         await refreshDinnerIfSelected(dinnerEventId)
-        toast.add({title: 'Indkøb slettet', description: removed.description, color: COLOR.success})
+        toast.add({title: TEAM_WORDS.toasts.expenseRemoved.title, description: removed.description, color: COLOR.success})
         return removed
     })
 
@@ -518,14 +517,15 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     // The release places the first entries that fit as orders: the dinner's tickets and the queue both change
     const addExtraPortions = withLoading(async (dinnerEventId: number, portions: number): Promise<WaitlistAssignmentResult> => {
+        const words = TEAM_WORDS.toasts.extraPortions
         const result = await writeBookings(() => apiRequest(`/api/chef/dinner/${dinnerEventId}/extra-portions`, {
             method: 'POST', body: {portions}, schema: WaitlistAssignmentResultSchema,
-            action: 'addExtraPortions', errorMessage: 'Kunne ikke frigive portionerne'
+            action: 'addExtraPortions', errorMessage: words.failed
         }))
         console.info(CTX, `Released ${portions} portions on dinner ${dinnerEventId}: ${result.assigned.length} assigned, ${result.waiting} waiting`)
         toast.add({
-            title: 'Portioner frigivet',
-            description: `${result.assigned.length} fik billet, ${result.waiting} står stadig på ventelisten`,
+            title: words.title,
+            description: words.description(result.assigned.length, result.waiting),
             color: COLOR.success,
             icon: ICONS.waitlist
         })
@@ -535,8 +535,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     /**
      * Update dinner menu fields with implicit chef auto-claim.
      * If the dinner has no chef and the caller has an Inhabitant, the chef role is
-     * claimed first; then menu fields are saved. Returns `{dinner, wasAutoClaimed}`
-     * so the caller can adjust toast copy ("Menu gemt — du er nu chefkok…" vs plain "Menu gemt").
+     * claimed first; then menu fields are saved. Returns `{dinner, wasAutoClaimed}`;
+     * the toast names the claimed role.
      */
     const {TeamRoleSchema} = useCookingTeamValidation()
     const {tryAutoClaim, formatRoleClaimedTitle} = useCookingTeam()
@@ -564,10 +564,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         if (dinner === null) return null
 
         toast.add({
-            title: wasAutoClaimed
-                ? `Menu gemt — ${formatRoleClaimedTitle(dinner, TeamRoleSchema.enum.CHEF)}`
-                : 'Menu gemt',
-            description: `"${dinner.menuTitle}" er nu opdateret`,
+            title: TEAM_WORDS.toasts.menuSaved.title(wasAutoClaimed ? formatRoleClaimedTitle(dinner, TeamRoleSchema.enum.CHEF) : null),
+            description: TEAM_WORDS.toasts.menuSaved.description(dinner.menuTitle),
             color: COLOR.success
         })
 
@@ -578,6 +576,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // DAILY MAINTENANCE JOB (ADR-007)
     // ========================================
     const authStore = useAuthStore()
+    const dailyMaintenanceLabel = jobTypeLabels[JobType.DAILY_MAINTENANCE]
 
     const {result: dailyMaintenanceResult, error: dailyMaintenanceError, isRunning: isDailyMaintenanceRunning, run: runDailyMaintenanceJob} = runJob<DailyMaintenanceResult>({
         url: '/api/admin/maintenance/daily',
@@ -585,9 +584,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
         query: () => ({triggeredBy: `ADMIN:${authStore.email}`}),
         schema: DailyMaintenanceResultSchema,
         action: 'runDailyMaintenance',
-        errorMessage: 'Daglig vedligeholdelse fejlede',
+        errorMessage: BOOKING_WORDS.job.failed(dailyMaintenanceLabel),
         formatStats: formatDailyMaintenanceStats,
-        title: 'Daglig vedligeholdelse afsluttet',
+        title: BOOKING_WORDS.job.done(dailyMaintenanceLabel),
         log: `${CTX} Daily maintenance completed:`,
         // Maintenance closes orders and creates transactions server-side
         onSuccess: () => Promise.all([refreshOrders(), refreshCurrentPeriodTransactions()])
@@ -659,13 +658,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
             default: () => null,
             enabled: () => !!selectedBillingPeriodId.value,
             dependsOn: [billingPeriodsDataset],
-            errorMessage: 'Kan ikke finde faktureringsperioden',
+            errorMessage: BOOKING_WORDS.notFound.billingPeriod,
             notFound: {
                 recover: async () => {
                     skipGoneId(billingPeriodChoice, selectedBillingPeriodId.value)
                     await refreshBillingPeriods()
                 },
-                toast: 'Kan ikke finde faktureringsperioden'
+                toast: BOOKING_WORDS.notFound.billingPeriod
             }
         }
     )
@@ -707,13 +706,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
             default: () => [],
             enabled: () => !!selectedInvoiceId.value,
             dependsOn: [selectedBillingPeriodDataset],
-            errorMessage: 'Kan ikke finde fakturaen',
+            errorMessage: BOOKING_WORDS.notFound.invoice,
             notFound: {
                 recover: async () => {
                     skipGoneId(invoiceChoice, selectedInvoiceId.value)
                     await refreshSelectedBillingPeriod()
                 },
-                toast: 'Kan ikke finde fakturaen'
+                toast: BOOKING_WORDS.notFound.invoice
             }
         }
     )
@@ -728,6 +727,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // ========================================
 
     const {formatMonthlyBillingStats} = useMaintenance()
+    const monthlyBillingLabel = jobTypeLabels[JobType.MONTHLY_BILLING]
 
     const {result: monthlyBillingResult, error: monthlyBillingError, isRunning: isMonthlyBillingRunning, run: runMonthlyBillingJob} = runJob<MonthlyBillingResponse>({
         url: '/api/admin/maintenance/monthly',
@@ -735,9 +735,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
         query: () => ({triggeredBy: `ADMIN:${authStore.email}`}),
         schema: MonthlyBillingResponseSchema,
         action: 'runMonthlyBilling',
-        errorMessage: 'Månedlig fakturering fejlede',
+        errorMessage: BOOKING_WORDS.job.failed(monthlyBillingLabel),
         formatStats: formatMonthlyBillingStats,
-        title: 'Månedlig fakturering afsluttet',
+        title: BOOKING_WORDS.job.done(monthlyBillingLabel),
         log: `${CTX} Monthly billing completed:`,
         // Billing moves transactions out of the unbilled current period into invoiced periods
         onSuccess: () => Promise.all([refreshBillingPeriods(), refreshCurrentPeriodTransactions()])

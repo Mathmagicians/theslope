@@ -83,5 +83,3 @@ export const useTicketPriceValidation = () => {
 export type TicketPrice = z.infer<ReturnType<typeof useTicketPriceValidation>['TicketPriceSchema']>
 // The two fields a ticket's portions are looked up by
 export type PortionTicket = Pick<TicketPrice, 'ticketType' | 'price'>
-// A price row's id and the portions a ticket at it weighs
-export type PricePortions = Pick<TicketPrice, 'id' | 'portions'>

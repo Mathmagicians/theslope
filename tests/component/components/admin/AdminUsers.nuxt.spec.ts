@@ -61,7 +61,6 @@ describe('AdminUsers while the users load', () => {
     })
 })
 
-// The open row follows its user when the search brings rows back above it
 describe('AdminUsers open row', () => {
     const second = UserFactory.defaultUserWithInhabitant('admin-users-second', {id: user.id + 1})
     let unregister: () => void = () => {}

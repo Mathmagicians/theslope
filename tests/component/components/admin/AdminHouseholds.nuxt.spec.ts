@@ -52,7 +52,7 @@ describe('AdminHouseholds while the households load', () => {
     })
 })
 
-// The open edit row follows its household when the search brings rows back above it; the list sorts by address
+// The list sorts by address, so the first household's row returns above the second's
 describe('AdminHouseholds open row', () => {
     const [first, second] = ['admin-households-a', 'admin-households-b'].map(testSalt => HouseholdFactory.defaultHouseholdDetail(testSalt))
     const addressOf = (household: HouseholdDetail | undefined) => `household-address-${household!.id}`

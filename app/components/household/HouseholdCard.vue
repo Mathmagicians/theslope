@@ -160,7 +160,7 @@ const isSaving = ref(false)
 
 const { expanded } = useExpandableRow({
   onExpand: (rowId) => {
-    const row = tableData.value.find(candidate => rowIdOf(candidate) === rowId)
+    const row = findRowById(tableData.value, rowId)
     if (row) {
       editingInhabitantId.value = row.id
       draftPreferences.value = row.dinnerPreferences

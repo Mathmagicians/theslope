@@ -15,7 +15,7 @@ const {households, isHouseholdsLoading, isHouseholdsErrored, householdsError} = 
 
 const {COMPONENTS, SIZES, BUTTONS, ICONS, TYPOGRAPHY, TEXT, getResidencyDisplay, NOISE} = useTheSlopeDesignSystem()
 
-// Row expansion for edit panel
+// The open edit panels, keyed by the household's row id
 const expanded = ref<Record<string, boolean>>({})
 
 // Event handlers — store owns API calls, toasts, error handling
@@ -168,6 +168,7 @@ v-if="isHouseholdsErrored"
         ref="table"
         v-model:pagination="pagination"
         v-model:expanded="expanded"
+        :get-row-id="rowIdOf"
         :columns="columns"
         :data="filteredHouseholds"
         :loading="isHouseholdsLoading"

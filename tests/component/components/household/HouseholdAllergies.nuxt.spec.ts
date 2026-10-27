@@ -28,7 +28,12 @@ registerEndpoint(`/api/admin/household/${household.id}`, () => household)
 // The next test's resetStores drops the datasets a still-mounted table reads
 enableAutoUnmount(afterEach)
 
-// The open row follows its inhabitant through a change of the household's inhabitants
+// The open row shows a loader until the catalog lands, the allergy editor after
+const untilAllergiesLanded = () => {
+    const allergies = mountedStore(useAllergiesStore)
+    return untilTrue(() => allergies.isAllergiesInitialized && allergies.isAllergyTypesInitialized)
+}
+
 describe('HouseholdAllergies open row', () => {
     const [arriving, opened] = household.inhabitants
     const toggleOf = (inhabitant: typeof opened) => `inhabitant-${inhabitant!.id}-allergy-toggle`
@@ -41,6 +46,7 @@ describe('HouseholdAllergies open row', () => {
     it('GIVEN an inhabitant\'s row open WHEN the household brings in an inhabitant above it THEN the open row and the allergy editor under it stay with that inhabitant', async () => {
         const props = shallowReactive<Record<string, unknown>>({household: {...household, inhabitants: [opened]}, canEdit: true})
         const wrapper = await mountWithTooltipProvider(HouseholdAllergies, {props, isMd: true})
+        await untilAllergiesLanded()
         await clickByTestId(wrapper, toggleOf(opened))
 
         props.household = {...household, inhabitants: [arriving, opened]}
@@ -144,8 +150,7 @@ describe('HouseholdAllergies and the override', () => {
 
     it.each(changes.flatMap(change => editors.map(editor => ({...change, ...editor}))))('GIVEN $editor WHEN the table $change THEN the $method sends the query $query', async ({method, act, adminBypass, query}) => {
         const wrapper = await mountWithTooltipProvider(HouseholdAllergies, {props: {household, canEdit: true, adminBypass}, isMd: true})
-        const allergies = mountedStore(useAllergiesStore)
-        await untilTrue(() => allergies.isAllergiesInitialized && allergies.isAllergyTypesInitialized)
+        await untilAllergiesLanded()
         await clickByTestId(wrapper, `inhabitant-${anna.id}-allergy-toggle`)
         await vi.waitFor(() => expect(findByTestId(wrapper, 'allergy-editor-select').exists()).toBe(true))
 

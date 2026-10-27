@@ -58,60 +58,25 @@ const filteredUsers = computed(() => {
   return result
 })
 
-const formattedUsers = computed(() => filteredUsers.value?.map((user) => {
-  return {
-    ...user,
-    greeting: user.Inhabitant?.name || 'Ukendt bruger'
-  }
-})) || []
+const formattedUsers = computed(() => filteredUsers.value.map(user => ({
+  ...user,
+  greeting: user.Inhabitant?.name || 'Ukendt bruger'
+})))
 
-// Track expanded rows
-const expanded = ref<Record<number, boolean>>({})
-
-// Type guard to ensure user has required Inhabitant data
 type UserWithInhabitant = typeof users.value[number] & {
   Inhabitant: NonNullable<typeof users.value[number]['Inhabitant']>
 }
 
-function hasInhabitant(user: typeof users.value[number] | null | undefined): user is UserWithInhabitant {
-  return !!user?.Inhabitant
-}
+const hasInhabitant = (user: typeof users.value[number] | undefined): user is UserWithInhabitant => !!user?.Inhabitant
 
-// Track the currently expanded user via ref (set by watcher)
 const expandedUser = ref<UserWithInhabitant | null>(null)
 
-// Watch for row expansion to track expanded user and enforce single expansion
-watch(expanded, (newExpanded, oldExpanded) => {
-  const expandedKeys = Object.keys(newExpanded).filter(key => newExpanded[Number(key)])
-
-  if (expandedKeys.length > 1) {
-    // More than one row expanded - close all except the most recently opened
-    const newlyExpandedKey = expandedKeys.find(key => !oldExpanded[Number(key)])
-    if (newlyExpandedKey) {
-      Object.keys(expanded.value).forEach(key => {
-        if (key !== newlyExpandedKey) {
-          expanded.value[Number(key)] = false
-        }
-      })
-
-      // Set expanded user for the newly expanded row
-      const rowIndex = Number(newlyExpandedKey)
-      const formattedUser = formattedUsers.value[rowIndex]
-      if (formattedUser) {
-        const originalUser = users.value.find(u => u.id === formattedUser.id)
-        expandedUser.value = hasInhabitant(originalUser) ? originalUser : null
-      }
-    }
-  } else if (expandedKeys.length === 1) {
-    // Exactly one row expanded - set expanded user
-    const rowIndex = Number(expandedKeys[0])
-    const formattedUser = formattedUsers.value[rowIndex]
-    if (formattedUser) {
-      const originalUser = users.value.find(u => u.id === formattedUser.id)
-      expandedUser.value = hasInhabitant(originalUser) ? originalUser : null
-    }
-  } else {
-    // No rows expanded - clear expanded user
+const {expanded} = useExpandableRow({
+  onExpand: (rowId) => {
+    const user = findRowById(users.value, rowId)
+    expandedUser.value = hasInhabitant(user) ? user : null
+  },
+  onCollapse: () => {
     expandedUser.value = null
   }
 })
@@ -191,6 +156,7 @@ const pagination = ref({
         ref="table"
         v-model:expanded="expanded"
         v-model:pagination="pagination"
+        :get-row-id="rowIdOf"
         :data="formattedUsers"
         :columns="userColumns"
         :loading="isUsersLoading"

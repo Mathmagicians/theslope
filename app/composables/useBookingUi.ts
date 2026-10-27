@@ -111,6 +111,10 @@ export const ticketTypePresentation = (ticketType: TicketType): TicketTypePresen
     icon: TICKET_TYPE_ICONS[ticketType]
 })
 
+// The presentation of a price row's ticket type; a row the season does not hold shows none
+export const ticketPricePresentation = (ticketPrice: TicketPrice | undefined): TicketTypePresentation | null =>
+    ticketPrice ? ticketTypePresentation(ticketPrice.ticketType) : null
+
 // The presentation of the ticket type a person or an order resolves to (useTicket.resolveTicketType)
 export const resolveTicketTypePresentation = (...args: Parameters<ReturnType<typeof useTicket>['resolveTicketType']>) =>
     ticketTypePresentation(useTicket().resolveTicketType(...args))
@@ -412,9 +416,29 @@ export const ticketEventChipRuns = (event: TicketEvent) => event.change === Tick
     ? []
     : [...(event.from ? [ticketChips(event.from)] : []), ticketChips(event.tickets)]
 
-/** Billetændringer's household: one by its short name; the system's line over several reads System, a user's the short names */
-export const ticketChangeHouseholds = ({households, bySystem}: Pick<TicketChange, 'households' | 'bySystem'>): string =>
-    households.length !== 1 && bySystem ? BOOKING_WORDS.ticketChange.bySystem : households.join(', ')
+/** The households a user's line names before its control folds the rest */
+const HOUSEHOLDS_BEFORE_FOLD = 2
+
+/** Billetændringer's Husstand: what the cell reads, and past the first households the control that opens or folds the rest */
+export type TicketChangeHouseholds = {names: string, toggle?: {label: string, ariaLabel: string}}
+
+/**
+ * Billetændringer's household: one by its short name; the system's line over several reads System; a user's line names
+ * its households in the line's order, past two of them the first two and a control counting the rest until opened
+ */
+export const ticketChangeHouseholds = ({households, bySystem}: TicketChange, open: boolean): TicketChangeHouseholds => {
+    const words = BOOKING_WORDS.ticketChange
+    if (households.length !== 1 && bySystem) return {names: words.bySystem}
+    if (households.length <= HOUSEHOLDS_BEFORE_FOLD) return {names: households.join(', ')}
+    const shown = open ? households : households.slice(0, HOUSEHOLDS_BEFORE_FOLD)
+    return {
+        names: shown.join(', '),
+        toggle: {
+            label: open ? words.households.fewer : words.households.more(households.length - shown.length),
+            ariaLabel: words.households.toggle(open, households.length)
+        }
+    }
+}
 
 const SAVE_WORDS = BOOKING_WORDS.save
 /** The booking form's save button words for each outcome */

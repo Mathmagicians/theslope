@@ -4,20 +4,22 @@
  *
  * Features:
  * - Shows teams user is member of (any role)
- * - A team on view the user is not on rides as the last tab, under the badge "Ikke dit hold"
+ * - A team on view the user is not on rides as the last tab, with the badge "Ikke dit hold" after its name
  * - Uses UTabs with CookingTeamBadges for consistent display
  * - Emits selection changes via v-model
  * - Handles empty state internally: no team of the user's own and no visit
  *
  * Phone (horizontal at any count - the list scrolls when tabs outgrow the row):
- *   +--------------------------------------------------+
- *   |   (team)        (team)         (team)             |
- *   | [Madhold 2]   [Madhold 5]    [Madhold 3]          |
- *   |                              [Ikke dit hold]      |
- *   |  =========                                        |
- *   +--------------------------------------------------+
+ *   +--------------------------------------------------------+
+ *   |   (team)        (team)         (team)                  |
+ *   | [Madhold 2]   [Madhold 5]    [Madhold 3] [Ikke dit hold]|
+ *   |  =========                                             |
+ *   +--------------------------------------------------------+
  *   (team) = ICONS.team above the badge, so the full width serves the name
- * Desktop: icon beside the badges; 3+ tabs, the visit counted, render as a vertical list (sidebar)
+ * Desktop: icon beside the badges; 3+ tabs, the visit counted, render as a vertical list (sidebar):
+ *   (team) [Madhold 2]
+ *   (team) [Madhold 5]
+ * | (team) [Madhold 3] [Ikke dit hold]
  *
  * Visual check: /chef on an own team and on a visiting tab, phone and desktop.
  *
@@ -51,7 +53,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { SIZES, ORIENTATIONS, ICONS, ALERTS, COMPONENTS, COLOR, NOISE } = useTheSlopeDesignSystem()
+const { SIZES, ORIENTATIONS, ICONS, ALERTS, COMPONENTS } = useTheSlopeDesignSystem()
 const { getTeamShortName, getTeamNumber } = useCookingTeam()
 
 const tabTeams = computed(() => props.visitingTeam ? [...props.teams, props.visitingTeam] : props.teams)
@@ -71,6 +73,8 @@ const selectedTeamIndex = computed({
   }
 })
 
+const visitBadge = {...COMPONENTS.visitBadge, size: SIZES.small, label: TEAM_WORDS.visit.badge, 'data-testid': 'my-team-visit-badge'}
+
 // Uses short name for user-facing display (e.g., "Madhold 2" not "Madhold 2 - 08/25-06/26")
 // The team's colour rides on CookingTeamBadges in the tab body, from the team's number
 const teamTabs = computed(() => {
@@ -78,7 +82,8 @@ const teamTabs = computed(() => {
     label: getTeamShortName(team.name),
     value: index,
     teamNumber: getTeamNumber(team, props.seasonTeams),
-    isVisit: team.id === props.visitingTeam?.id
+    // UTabs renders an item's badge on its trigger, after the label
+    ...(team.id === props.visitingTeam?.id && {badge: visitBadge})
   }))
 })
 </script>
@@ -111,24 +116,13 @@ const teamTabs = computed(() => {
       <template #default="{ item }">
         <span :class="COMPONENTS.myTeamSelector.tab">
           <UIcon :name="ICONS.team" :class="COMPONENTS.myTeamSelector.icon" />
-          <span :class="COMPONENTS.myTeamSelector.label">
-            <CookingTeamBadges
-              :team-number="item.teamNumber"
-              :team-name="item.label"
-              :show-counts="false"
-              :show-team-icon="false"
-              size="small"
-            />
-            <UBadge
-              v-if="item.isVisit"
-              :color="COLOR.neutral"
-              :variant="NOISE.subtle"
-              :size="SIZES.small"
-              data-testid="my-team-visit-badge"
-            >
-              {{ TEAM_WORDS.visit.badge }}
-            </UBadge>
-          </span>
+          <CookingTeamBadges
+            :team-number="item.teamNumber"
+            :team-name="item.label"
+            :show-counts="false"
+            :show-team-icon="false"
+            size="small"
+          />
         </span>
       </template>
     </UTabs>

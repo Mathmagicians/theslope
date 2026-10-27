@@ -1088,11 +1088,13 @@ export const COMPONENTS = {
         }
     },
 
-    /** MyTeamSelector tab body: the team icon above the badge on phone, beside it on desktop; a visit's badge under the name */
+    /** "Ikke dit hold" on a team the person is not on, the visiting tab and the visited team's card; its size is the responsive SIZES.small */
+    visitBadge: {color: COLOR.neutral, variant: NOISE.subtle},
+
+    /** MyTeamSelector tab body: the team icon above the badge on phone, beside it on desktop */
     myTeamSelector: {
         tab: 'flex flex-col items-center gap-1 md:flex-row md:gap-2',
-        icon: 'shrink-0',
-        label: 'flex flex-col items-center gap-1'
+        icon: 'shrink-0'
     },
 
     /** TeamCalendarDisplay days: a selectable day rings on hover, the selected dinner's day rings in primary */
@@ -1858,7 +1860,7 @@ export const COMPONENTS = {
      */
     teamCard: {
         monitor: 'py-4 md:py-6',
-        monitorHeader: 'mb-3 md:mb-4 px-3 md:px-4',
+        monitorHeader: 'flex flex-wrap items-center gap-2 mb-3 md:mb-4 px-3 md:px-4',
         stack: 'space-y-4',
         viewHeader: 'p-4 border',
         editHeader: 'flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 py-2 px-0 md:px-4 border-y-2 md:border-2 border-dashed',
@@ -1975,6 +1977,10 @@ export const COMPONENTS = {
         title: 'inline-flex items-center gap-1',
         // A run of chips sits on the middle of the row's text line, beside the plain-text cells
         chips: 'inline-flex flex-wrap items-center gap-1 align-middle',
+        // Husstand wraps inside a capped width, against the history's one-line cells, so an opened list never widens the table
+        households: 'inline-block max-w-56 md:max-w-xs whitespace-normal',
+        // The "+N" control after the first households: a link that reads in the line of names
+        householdsToggle: {color: COLOR.primary, variant: NOISE.link, ui: {base: 'p-0'}},
         moreRow: 'flex justify-center py-2'
     },
 

@@ -154,7 +154,7 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {DeadlineBadgeData, TicketPresentation} from '~/composables/useBookingUi'
-import {EMPTY_RELEASED_TICKET_COUNTS, type BookingContext, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {EMPTY_RELEASED_TICKET_COUNTS, bookingContextOf, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {BookingRowTypeSchema, type BookingRowType} from '~/composables/useBookingView'
 import {FORM_MODES} from '~/types/form'
@@ -246,7 +246,7 @@ const formMode = computed(() => {
 const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, getResidencyDisplay, LAYOUTS, NOISE, TYPOGRAPHY, TABLE_COLUMNS, ORIENTATIONS} = useTheSlopeDesignSystem()
 const emptyStateMessage = getRandomEmptyMessage('household')
 
-const {resolveTicketPrice, resolveTicketPriceOn, ticketTypeChangeOf, formatPrice, takesNoPortionOf} = useTicket()
+const {findTicketPriceById, resolveTicketPrice, resolveTicketPriceOn, ticketTypeChangeOf, formatPrice} = useTicket()
 
 // The season's dinners give a person's first dinner at a new ticket type; the badge shows when that is this dinner
 const planStore = usePlanStore()
@@ -312,25 +312,13 @@ const showRibbon = computed(() => props.ribbon && isCancelled.value)
 // A row opens while the member may change the household and the booking rules give the row a mode (ADR-016)
 const canOpenRow = (row: TableRow): boolean => formMode.value === FORM_MODES.EDIT && row.enabledModes.length > 0
 
-// Without a household every day counts
-const isInResidencyOn = computed((): (date: Date) => boolean => household.value
-  ? isHouseholdActiveOnDay(household.value.movedInDate, household.value.moveOutDate)
-  : () => true)
-const isHouseholdInResidency = computed(() => isInResidencyOn.value(props.dinnerEvent.date))
+const bookingContext = computed(() => bookingContextOf(household.value, props.deadlines, props.ticketPrices)(props.dinnerEvent))
+const isHouseholdInResidency = computed(() => bookingContext.value.isHouseholdInResidency(props.dinnerEvent.date))
 
 const residencyAlert = computed(() => {
   if (isHouseholdInResidency.value || !household.value) return null
   return getResidencyDisplay(household.value.movedInDate, household.value.moveOutDate)
 })
-
-const takesNoPortion = computed(() => takesNoPortionOf(props.ticketPrices))
-
-const bookingContext = computed((): BookingContext => ({
-  event: props.dinnerEvent,
-  deadlines: props.deadlines,
-  isHouseholdInResidency: isInResidencyOn.value,
-  takesNoPortion: takesNoPortion.value
-}))
 
 // ============================================================================
 // ORDER PARTITIONING (uses useBooking helpers)
@@ -413,7 +401,7 @@ const tableData = computed((): TableRow[] => {
       lastName: inhabitant.lastName,
       birthDate: inhabitant.birthDate,
       inhabitant,
-      ticketConfig: ticketPrice ? ticketTypePresentation(ticketPrice.ticketType) : null,
+      ticketConfig: ticketPricePresentation(ticketPrice),
       order,
       waitlistEntry,
       expected: expectedMode !== undefined,
@@ -444,16 +432,16 @@ const tableData = computed((): TableRow[] => {
 
     // A guest has no birthDate: the price the order or the entry holds names the ticket type
     const resolvedTicketPrice = waitlistEntry
-      ? props.ticketPrices.find(price => price.id === waitlistEntry.order.ticketPriceId)
+      ? findTicketPriceById(waitlistEntry.order.ticketPriceId, props.ticketPrices)
       : resolveTicketPrice(null, held.priceAtBooking, props.ticketPrices)
 
     const row = {
       rowType: BookingRow['guest-order'],
       id,
-      name: 'Gæst',
+      name: BOOKING_WORDS.guests.name,
       lastName: '',
       inhabitant: booker,
-      ticketConfig: resolvedTicketPrice ? ticketTypePresentation(resolvedTicketPrice.ticketType) : null,
+      ticketConfig: ticketPricePresentation(resolvedTicketPrice),
       order: firstOrder,
       orders,
       waitlistEntry,
@@ -823,7 +811,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
           <div v-else-if="row.original.rowType === BookingRow['guest-order']">
             <div :class="COMPONENTS.bookingForm.guestOf">
               <UAvatar :icon="ICONS.userPlus" :size="COMPONENTS.avatar.compact.size" :class="COMPONENTS.avatar.compact.fit" />
-              <span :class="COMPONENTS.bookingForm.guestOfLabel">Gæst af</span>
+              <span :class="COMPONENTS.bookingForm.guestOfLabel">{{ BOOKING_WORDS.guests.of }}</span>
               <UserListItem
                 v-if="row.original.inhabitant"
                 :inhabitants="row.original.inhabitant"
@@ -903,7 +891,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
           :released-ticket-counts="releasedTicketCounts"
           :booker-id="bookerInhabitant.id"
           :booker-name="bookerInhabitant.name"
-          :is-household-in-residency="isHouseholdInResidency"
+          :booking-context="bookingContext"
           :admin-bypass="adminBypass"
           @save="handleGuestSave"
           @cancel="handleCancel"

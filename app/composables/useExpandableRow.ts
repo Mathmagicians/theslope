@@ -14,7 +14,7 @@ import { ref, watch } from 'vue'
  * ```ts
  * const { expanded, expandedRowId } = useExpandableRow({
  *   onExpand: (rowId) => {
- *     const entity = tableData.value.find(row => row.id === rowId)
+ *     const entity = findRowById(tableData.value, rowId)
  *     draftState.value = entity?.someField ?? null
  *   },
  *   onCollapse: () => {
@@ -23,7 +23,7 @@ import { ref, watch } from 'vue'
  * })
  *
  * // In template:
- * <UTable v-model:expanded="expanded" :get-row-id="row => String(row.id)" ... />
+ * <UTable v-model:expanded="expanded" :get-row-id="rowIdOf" ... />
  * ```
  */
 export const useExpandableRow = (options?: {

@@ -4,6 +4,7 @@ import {authFiles} from './config'
 import {expectApiError, guardContext} from './apiErrorGuard'
 import {randomUUID} from 'crypto'
 import {getDinnerTimeRange, isBeforeDeadline} from '~/utils/season'
+import {SEASON_CONFIG} from '~/config/season'
 import {PREF_TEST_IDS} from '~~/tests/component/components/user/userPreferencesTestIds'
 
 const headers = {'Content-Type': 'application/json'}
@@ -303,11 +304,11 @@ const isScaffoldSave = isScaffold('POST')
 const isExpectedRead = (response: Response): boolean =>
     isScaffold('GET')(response) && !new URL(response.url()).searchParams.has('orders')
 
-// Hardcoded beside app.config.ts (Nuxt auto-imports not available in Playwright): prebookingWindowDays,
-// defaultDinnerStartTime and defaultSeason.menuIsAnnouncedDaysBefore
-const PREBOOKING_WINDOW_DAYS = 60
-const DINNER_START_HOUR = 18
-const MENU_DEADLINE_DAYS = 10
+const {
+    prebookingWindowDays: PREBOOKING_WINDOW_DAYS,
+    defaultDinnerStartTime: DINNER_START_HOUR,
+    defaultSeason: {menuIsAnnouncedDaysBefore: MENU_DEADLINE_DAYS}
+} = SEASON_CONFIG
 // A day past the prebooking window
 const PAST_THE_SCAFFOLD_WINDOW_DAYS = PREBOOKING_WINDOW_DAYS + 2
 

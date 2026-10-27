@@ -1,6 +1,6 @@
 import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useTicket} from '~/composables/useTicket'
-import {DEFAULT_TICKET_PRICES} from '~/config/ticketPrices'
+import {DEFAULT_TICKET_PRICES} from '~/config/season'
 
 const {createTicketPrice, TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
@@ -12,7 +12,7 @@ const {findTicketPriceByType} = useTicket()
  */
 export class TicketFactory {
     /**
-     * The config's default ticket prices (app/config/ticketPrices.ts): baby, hungry baby, child, adult.
+     * The config's default ticket prices (app/config/season.ts): baby, hungry baby, child, adult.
      * maximumAgeLimit means UNDER that age: BABY ages 0-1, CHILD ages 2-11, ADULT 12+.
      * Get default ticket prices with optional overrides
      * Uses spread pattern for easy customization in tests

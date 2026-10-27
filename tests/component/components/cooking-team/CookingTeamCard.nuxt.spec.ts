@@ -13,6 +13,7 @@ import {useCookingTeamValidation, type CookingTeamDetail} from '~/composables/us
 import type {JokerSlot} from '~/composables/useDutyValidation'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
 import {formatDate} from '~/utils/date'
+import {TEAM_WORDS} from '~/config/teamWords'
 import {JOKER_SLOT_IDS, submitJokerSlotForm} from '~~/tests/component/components/cooking-team/jokerSlotForm'
 
 const {TeamRoleSchema} = useCookingTeamValidation()
@@ -33,7 +34,8 @@ const TEST_IDS = {
     jokerShifts: 'team-joker-slot-shifts',
     memberRow: 'team-member-row',
     memberRemove: (assignmentId: number) => `team-member-remove-${assignmentId}`,
-    jokerAddRow: 'joker-add-row'
+    jokerAddRow: 'joker-add-row',
+    visitBadge: 'team-card-visit-badge'
 } as const
 
 // The season the edit face plans in: Mon/Wed/Fri cooking days
@@ -84,10 +86,10 @@ const TEAM_ID = 1
 
 // The mounting page selects the team in the store the mounted card reads; a store created before the mount
 // registers the dataset key first and would serve the card through its own selection
-const mountCard = async (mode: 'monitor' | 'regular' | 'edit', detail: Partial<CookingTeamDetail> = {}, teamId = TEAM_ID, isMd = true) => {
+const mountCard = async (mode: 'monitor' | 'regular' | 'edit', detail: Partial<CookingTeamDetail> = {}, teamId = TEAM_ID, isMd = true, props: {visiting?: boolean} = {}) => {
     team = SeasonFactory.defaultCookingTeamDetail({id: TEAM_ID, assignments, dinnerEvents, jokerSlots: slots.map(({slot}) => slot), ...detail})
     const wrapper = await mountWithTooltipProvider(CookingTeamCard, {
-        props: {teamId, teamNumber: 1, mode, seasonDates: season.seasonDates, seasonCookingDays: season.cookingDays},
+        props: {teamId, teamNumber: 1, mode, seasonDates: season.seasonDates, seasonCookingDays: season.cookingDays, ...props},
         isMd
     })
     const store = usePlanStore()
@@ -221,6 +223,21 @@ describe('CookingTeamCard', () => {
         it('every group heading carries its role glyph once', async () => {
             const wrapper = await mountCard('monitor')
             ROLES.forEach(role => expectHeadingWithGlyph(wrapper, TEST_IDS.roleHeading(role), ROLE_ICONS[role]))
+        })
+
+        // A team on view the person is not on says so in its header, beside the team badges
+        it.each([
+            {visit: 'visiting', props: {visiting: true}, texts: [TEAM_WORDS.visit.badge]},
+            {visit: 'not visiting', props: {visiting: false}, texts: []},
+            {visit: 'no visiting prop', props: {}, texts: []}
+        ])('the header carries the visit badge: $visit', async ({props, texts}) => {
+            const wrapper = await mountCard('monitor', {}, TEAM_ID, true, props)
+            const badges = wrapper.findAllComponents({name: 'UBadge'})
+                .filter(badge => badge.attributes('data-testid') === TEST_IDS.visitBadge)
+
+            expect(badges.map(badge => badge.text())).toEqual(texts)
+            const header = wrapper.findComponent({name: 'CookingTeamBadges'}).element.parentElement!
+            badges.forEach(badge => expect(header.contains(badge.element)).toBe(true))
         })
     })
 

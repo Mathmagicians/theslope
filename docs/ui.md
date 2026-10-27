@@ -95,7 +95,8 @@ site that adds to a kind's `ui` merges on top of it.
 The empty state renders in the `UTable` `#empty` slot. A table bound to a dataset that reloads binds that dataset's `loading`: UTable's loading bar runs under the column headers while the rows stay. Its `#loading` slot, the spinning sync glyph and a line of text from the table tokens, fills a table that has no rows yet, so the empty state shows only once the data has answered. `COMPONENTS.table.ui` cells wrap between words and keep words, dates
 and e-mails whole; a dense variant per surface sits beside it (`table.catalogUi`, `table.bookingUi`, …). A data table wider
 than a phone scrolls inside its own box; `table.historyUi` keeps each row on one line, so a history scrolls sideways on a
-phone. A column sizes through its `meta.class` (`{th, td}`); `COMPONENTS.masterDetail` holds the master table's
+phone. A history cell that lists many names (Husstand in `TicketChanges.vue`) shows the first two and a link counting
+the rest; opened, the list wraps inside the cell's capped width while the other cells keep their line. A column sizes through its `meta.class` (`{th, td}`); `COMPONENTS.masterDetail` holds the master table's
 `primaryColumn` and `compactColumn`. A row that spans the table, the moment line in `TicketChanges.vue`, sets the first
 column's `meta.colspan.td` to the column count and binds `table.spannedCell` on the other cells. An `#expanded` row
 spans every column: in a table that scrolls sideways, its content keeps to the part of the box in view, sticky at the
@@ -113,7 +114,7 @@ them takes `TYPOGRAPHY.sectionSubheading`.
 A `UTabs` whose triggers render `CookingTeamBadges` binds `COMPONENTS.teamTabs`: the link variant, triggers that keep their
 full label, and a horizontal row that scrolls sideways when more tabs than fit. On a phone the trigger stacks `ICONS.team`
 over the compact badge (`MyTeamSelector`, `COMPONENTS.myTeamSelector`). A team on view the person is not on rides as
-the last tab, a badge under its name, and counts toward the vertical list.
+the last tab, with the tab item's own badge after its name, and counts toward the vertical list.
 
 ### A cancelled dinner
 

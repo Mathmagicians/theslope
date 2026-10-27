@@ -16,6 +16,7 @@ import {useDutyValidation, type JokerSlot, type JokerSlotCreate} from "~/composa
 import {getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
 import type {DateRange} from '~/types/dateTypes'
 import {dateToWeekDay} from '~/utils/season'
+import {SEASON_CONFIG} from '~/config/season'
 import {addDays, nextMonday, startOfDay} from 'date-fns'
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
@@ -55,8 +56,8 @@ export class SeasonFactory {
 
     // Fixed singleton name for parallel-safe active season (shared across all test workers)
     static readonly E2E_SINGLETON_NAME = 'TestSeason-E2E-Singleton'
-    // The booking deadline of a factory season (app.config.ts default); the e2e singleton alone is created open
-    static readonly DEFAULT_BOOKING_DEADLINE_DAYS = 8
+    // The booking deadline of a factory season (the config's default); the e2e singleton alone is created open
+    static readonly DEFAULT_BOOKING_DEADLINE_DAYS = SEASON_CONFIG.defaultSeason.ticketIsCancellableDaysBefore
     // createActiveSeason retries once: the list→activate window races with workers recreating or cleaning the singleton
     static readonly CREATE_ACTIVE_SEASON_RETRIES = 1
     // The two sides of a deadline a spec's dinner lies on
@@ -134,7 +135,7 @@ export class SeasonFactory {
         consecutiveCookingDays: 1,
         ticketPrices: TicketFactory.defaultTicketPrices(),
         ticketIsCancellableDaysBefore: this.DEFAULT_BOOKING_DEADLINE_DAYS,
-        diningModeIsEditableMinutesBefore: 90
+        diningModeIsEditableMinutesBefore: SEASON_CONFIG.defaultSeason.diningModeIsEditableMinutesBefore
     }
 
     // Default cooking team data for unit tests (no HTTP calls)

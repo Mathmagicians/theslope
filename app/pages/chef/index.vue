@@ -15,9 +15,8 @@
  * MASTER (a third of the row)
  * +--------------------------------------------------+
  * | Mine Madhold                                     |
- * |  (team icon)   (team icon)   (team icon)         |
- * |  Madhold 2     Madhold 5     [Madhold 3]         |
- * |                              [Ikke dit hold]     |  visiting tab, selected, with its badge
+ * |  (team icon)  (team icon)  (team icon)           |
+ * |  Madhold 2    Madhold 5    [Madhold 3] [Ikke dit hold] visiting tab, selected, its badge after the name
  * | Du er ikke på Madhold 3                          |  role line
  * +--------------------------------------------------+
  * | NÆSTE MADLAVNING  Madhold 3                      |
@@ -47,7 +46,7 @@
  * | Lasagne, the chef portrait: click opens the chef role panel                |
  * | ALLERGENER, MADBESTILLING, the state stepper with its deadline badges      |  no edits on a visit
  * | Budget                                                                     |
- * | Hvem laver maden?    Madhold 3's team card                                 |
+ * | Hvem laver maden?    Madhold 3's team card, [Ikke dit hold] after its badges |  the visit only
  * |   [(pot) Kok (plus)]  [(sprout) Kokkespire (plus)]  [(team) Byt Tjans]     |
  * | Hvem kommer og spiser?   the kitchen                                       |
  * +----------------------------------------------------------------------------+
@@ -435,6 +434,7 @@ useHead({
                 :team-number="getTeamNumber(dinnerEventDetail.cookingTeam, selectedSeason?.CookingTeams ?? [])"
                 mode="monitor"
                 use-short-name
+                :visiting="dinnerEventDetail.cookingTeamId === visitingTeam?.id"
             />
             <UAlert
                 v-else

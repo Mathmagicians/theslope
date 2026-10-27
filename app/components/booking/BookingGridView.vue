@@ -150,8 +150,9 @@ import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {DeadlineBadgeData, TicketPresentation} from '~/composables/useBookingUi'
 import {compareAsc, isSameDay} from 'date-fns'
 import {BookingViewSchema, BookingRowTypeSchema, type BookingView, type BookingRowType} from '~/composables/useBookingView'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 import type {DateRange} from '~/types/dateTypes'
-import {EMPTY_RELEASED_TICKET_COUNTS, type BookingChanges, type BookingContext, type BookingIntent, type GuestBookingIntent, type ReleasedTicketCounts, type WaitlistEntryIntent} from '~/composables/useBooking'
+import {EMPTY_RELEASED_TICKET_COUNTS, bookingContextOf, type BookingChanges, type BookingContext, type BookingIntent, type GuestBookingIntent, type ReleasedTicketCounts, type WaitlistEntryIntent} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
@@ -226,14 +227,14 @@ const emit = defineEmits<{
 const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, ORDER_STATE_COLORS, DINNER_STATE_BADGES, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
-const {formatPrice, resolveTicketPrice, resolveTicketPriceOn, ticketTypeChangeOf, takesNoPortionOf} = useTicket()
+const {formatPrice, findTicketPriceById, resolveTicketPrice, resolveTicketPriceOn, ticketTypeChangeOf} = useTicket()
 const {getReleasedOrders} = useOrder()
 
 const {groupGuestOrders, getDayBillSummary, getBookingOptions, powerOptions, newGuestRow, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
-const {lockChip, createBirthdayBadge} = useBookingUi()
+const {lockChip, createBirthdayBadge, bookingSaveLabel} = useBookingUi()
 const bookingsStore = useBookingsStore()
 
-const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema, BookingActionSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
 
 // ============================================================================
@@ -490,8 +491,6 @@ const columnPinning = ref({
 // COMPUTED: Table rows (synthetic power row + inhabitants)
 // ============================================================================
 
-const presentationOf = (ticketPrice: TicketPrice | undefined) => ticketPrice ? ticketTypePresentation(ticketPrice.ticketType) : null
-
 // The season's dinners, in date order: a person's first dinner at a new ticket type is found over them, in view or not
 const seasonDinnerDates = computed(() => props.dinnerEvents.map(event => event.date).sort(compareAsc))
 
@@ -517,7 +516,7 @@ const inhabitantRows = computed(() => props.household.inhabitants.flatMap(inhabi
         inhabitant,
         dinnerEventIds,
         price,
-        ticketConfig: presentationOf(ticketPriceOf(events[0]!)),
+        ticketConfig: ticketPricePresentation(ticketPriceOf(events[0]!)),
         birthdayBadge: birthdayBadgeOf(events),
         isSynthetic: false
       } satisfies GridRow,
@@ -535,24 +534,24 @@ const guestRows = computed((): GridRow[] => {
   const placed = Object.entries(groupGuestOrders(props.orders.filter(order => onView.has(order.dinnerEventId)))).map(([key, orders]): GridRow => ({
     rowType: BookingRow['guest-order'],
     id: `guest-group-${key}`,
-    name: 'Gæst',
+    name: BOOKING_WORDS.guests.name,
     inhabitant: bookerOf(orders[0]!.inhabitantId),
     guestOrders: orders,
     dinnerEventId: orders[0]!.dinnerEventId,
     price: orders[0]!.priceAtBooking,
-    ticketConfig: presentationOf(resolveTicketPrice(null, orders[0]!.priceAtBooking, props.ticketPrices)),
+    ticketConfig: ticketPricePresentation(resolveTicketPrice(null, orders[0]!.priceAtBooking, props.ticketPrices)),
     guestCount: orders.length,
     isSynthetic: false
   }))
   const queued = props.waitlistEntries.filter(entry => entry.isGuestTicket && onView.has(entry.dinnerEventId)).map((entry): GridRow => ({
     rowType: BookingRow['guest-order'],
     id: `guest-entry-${entry.id}`,
-    name: 'Gæst',
+    name: BOOKING_WORDS.guests.name,
     inhabitant: bookerOf(entry.inhabitantId),
     waitlistEntry: entry,
     dinnerEventId: entry.dinnerEventId,
     price: entry.order.priceAtBooking,
-    ticketConfig: presentationOf(props.ticketPrices.find(price => price.id === entry.order.ticketPriceId)),
+    ticketConfig: ticketPricePresentation(findTicketPriceById(entry.order.ticketPriceId, props.ticketPrices)),
     guestCount: 1,
     isSynthetic: false
   }))
@@ -629,11 +628,8 @@ const {canModifyOrders} = props.deadlines
 
 const canBookEvent = (event: DinnerEventDisplay): boolean => canModifyOrders(event.date)
 
-const isInResidencyOn = computed(() => isHouseholdActiveOnDay(props.household.movedInDate, props.household.moveOutDate))
-
-const takesNoPortion = computed(() => takesNoPortionOf(props.ticketPrices))
-
-const contextOf = (event: DinnerEventDisplay): BookingContext => ({event, deadlines: props.deadlines, isHouseholdInResidency: isInResidencyOn.value, takesNoPortion: takesNoPortion.value})
+const householdContext = computed(() => bookingContextOf(props.household, props.deadlines, props.ticketPrices))
+const contextOf = (event: DinnerEventDisplay): BookingContext => householdContext.value(event)
 
 // Each candidate is the desired order the save sends for the cell in a mode (buildBookingChanges' builders).
 // The cell slots render inside UTable's render: a fresh array per render makes every selector patch on every click, one array per cell lets Vue skip the untouched ones
@@ -680,7 +676,7 @@ const isCancelledEvent = (event: DinnerEventDisplay): boolean => event.state ===
 
 // Residency alert: shown when any visible event falls outside residency
 const residencyAlert = computed(() => {
-  const hasDisabledByResidency = flatEvents.value.some(e => !isInResidencyOn.value(e.date))
+  const hasDisabledByResidency = flatEvents.value.some(e => !contextOf(e).isHouseholdInResidency(e.date))
   if (!hasDisabledByResidency) return null
   return getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate)
 })
@@ -883,7 +879,7 @@ const getEventSummary = (eventId: number) => {
         <!-- Guest order row - show who invited using UserListItem (same as DinnerBookingForm) -->
         <div v-else-if="row.original.rowType === BookingRow['guest-order']" :class="COMPONENTS.bookingGrid.guestName">
           <UIcon :name="ICONS.userPlus" :class="COMPONENTS.bookingGrid.guestIcon" />
-          <span :class="COMPONENTS.bookingGrid.guestLabel">Gæst af</span>
+          <span :class="COMPONENTS.bookingGrid.guestLabel">{{ BOOKING_WORDS.guests.of }}</span>
           <UserListItem
             v-if="row.original.inhabitant"
             :inhabitants="row.original.inhabitant"
@@ -1031,7 +1027,7 @@ const getEventSummary = (eventId: number) => {
             :booker-id="props.bookerId"
             :booker-name="props.household.inhabitants.find(i => i.id === props.bookerId)?.name ?? 'Ukendt'"
             :released-ticket-counts="props.lockStatus.get(activeGuestEvent.id) ?? EMPTY_RELEASED_TICKET_COUNTS"
-            :is-household-in-residency="isInResidencyOn(activeGuestEvent.date)"
+            :booking-context="contextOf(activeGuestEvent)"
             :admin-bypass="props.adminBypass"
             @save="handleGuestSave"
             @cancel="expanded = {}"
@@ -1066,7 +1062,7 @@ const getEventSummary = (eventId: number) => {
                   data-testid="grid-save"
                   @click="handleSave"
                 >
-                  {{ props.isSaving ? 'Arbejder ...' : 'Opdater' }}
+                  {{ props.isSaving ? 'Arbejder ...' : bookingSaveLabel(BookingActionSchema.enum.CHANGE_MODE) }}
                 </UButton>
               </div>
             </div>

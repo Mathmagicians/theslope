@@ -70,9 +70,6 @@ const {loadAllergiesForHousehold} = allergyStore
 // The household shown is the households store's selection; the store reads its allergies
 loadAllergiesForHousehold()
 
-// Expandable row state - only one at a time
-const expanded = ref<Record<number, boolean>>({})
-
 // Toast notifications
 const toast = useToast()
 const showSuccessToast = (title: string, description?: string) => {
@@ -81,16 +78,6 @@ const showSuccessToast = (title: string, description?: string) => {
 
 // Track which inhabitant's allergies are being edited
 const editingInhabitantId = ref<number | null>(null)
-
-// Set editing inhabitant when row expands
-const onRowExpand = (inhabitantId: number) => {
-  editingInhabitantId.value = inhabitantId
-}
-
-// Clear editing state
-const clearForm = () => {
-  editingInhabitantId.value = null
-}
 
 // Helper to get allergy type name
 const getAllergyTypeName = (allergyTypeId: number): string =>
@@ -182,27 +169,13 @@ const tableData = computed((): TableDataRow[] => {
   })
 })
 
-// Watch for row expansion to track editing inhabitant and enforce single expansion
-watch(expanded, (newExpanded, oldExpanded) => {
-  const expandedKeys = Object.keys(newExpanded).filter(key => newExpanded[Number(key)])
-
-  if (expandedKeys.length > 1) {
-    // More than one row expanded - close all except the most recently opened
-    const newlyExpandedKey = expandedKeys.find(key => !oldExpanded[Number(key)])
-    if (newlyExpandedKey) {
-      Object.keys(expanded.value).forEach(key => {
-        if (key !== newlyExpandedKey) {
-          expanded.value[Number(key)] = false
-        }
-      })
-      const inhabitant = tableData.value[Number(newlyExpandedKey)]
-      if (inhabitant) onRowExpand(inhabitant.id)
-    }
-  } else if (expandedKeys.length === 1) {
-    const inhabitant = tableData.value[Number(expandedKeys[0])]
-    if (inhabitant) onRowExpand(inhabitant.id)
-  } else {
-    clearForm()
+const {expanded} = useExpandableRow({
+  onExpand: (rowId) => {
+    const row = findRowById(tableData.value, rowId)
+    if (row) editingInhabitantId.value = row.id
+  },
+  onCollapse: () => {
+    editingInhabitantId.value = null
   }
 })
 
@@ -235,6 +208,7 @@ const columns = computed(() => [
         <!-- Inhabitants table with expandable allergy editing -->
         <UTable
             v-model:expanded="expanded"
+            :get-row-id="rowIdOf"
             :data="tableData"
             :columns="columns"
             :loading="isAllergiesLoading"

@@ -2,7 +2,8 @@ import {subMinutes} from 'date-fns'
 import {
     PlacementRecovery, type GrabbedWaitlistEntry, type PlacementOrder, type TicketWaitlistDisplay, type WaitlistPlacementOutcomes
 } from '~/composables/useWaitlistValidation'
-import type {PricePortions, TicketPrice} from '~/composables/useTicketPriceValidation'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import {useTicket} from '~/composables/useTicket'
 import {OrderState, type OrderDisplay, type TicketSale, type TicketType, type WaitlistJoined} from '~/composables/useBookingValidation'
 import {groupBy} from '~/utils/batchUtils'
 import {sumBy} from '~/utils/ledger'
@@ -34,15 +35,18 @@ interface WaitlistAssignmentPlan {
  * Imported by the server: explicit imports only (ADR-017).
  */
 export const useWaitlist = () => {
+    const {findTicketPriceById} = useTicket()
+
     // FIFO by join time
     const inQueueOrder = (entries: TicketWaitlistDisplay[]): TicketWaitlistDisplay[] =>
         [...entries].sort(byTimeThenId(entry => entry.createdAt.getTime()))
 
-    const ticketTypeOfPrice = (ticketPrices: Pick<TicketPrice, 'id' | 'ticketType'>[]) => (ticketPriceId: number | null): TicketType | undefined =>
-        ticketPrices.find(price => price.id === ticketPriceId)?.ticketType
+    // The ticket type of the season price an order or an entry holds
+    const ticketTypeOfPrice = (ticketPrices: TicketPrice[]) => (ticketPriceId: number | null): TicketType | undefined =>
+        findTicketPriceById(ticketPriceId, ticketPrices)?.ticketType
 
     // The ticket type an entry waits for: the type of the season price it holds
-    const ticketTypeOfEntry = (ticketPrices: Pick<TicketPrice, 'id' | 'ticketType'>[]): TicketTypeOf => (entry: TicketWaitlistDisplay) =>
+    const ticketTypeOfEntry = (ticketPrices: TicketPrice[]): TicketTypeOf => (entry: TicketWaitlistDisplay) =>
         ticketTypeOfPrice(ticketPrices)(entry.order.ticketPriceId)
 
     // One first-come-first-served line per ticket type, each in join order
@@ -77,7 +81,7 @@ export const useWaitlist = () => {
     // The sale of the tickets for sale to the waiting list, read without writing: each ticket type's line, in join order,
     // takes that type's tickets on its dinner, oldest released first
     const previewSale = (
-        entries: TicketWaitlistDisplay[], releasedOrders: TicketForSale[], ticketPrices: Pick<TicketPrice, 'id' | 'ticketType'>[]
+        entries: TicketWaitlistDisplay[], releasedOrders: TicketForSale[], ticketPrices: TicketPrice[]
     ): Pick<WaitlistPlacementOutcomes, 'waitlistTicketsSold'> => {
         const typeOfPrice = ticketTypeOfPrice(ticketPrices)
         // A release without its moment sorts first, as the database orders a null first
@@ -104,8 +108,8 @@ export const useWaitlist = () => {
     }
 
     // An entry weighs on the kitchen's count what a ticket at the price it holds weighs
-    const portionsOfEntryFor = (ticketPrices: PricePortions[]): PortionsOf => (entry: TicketWaitlistDisplay): number =>
-        ticketPrices.find(price => price.id === entry.order.ticketPriceId)?.portions ?? 0
+    const portionsOfEntryFor = (ticketPrices: TicketPrice[]): PortionsOf => (entry: TicketWaitlistDisplay): number =>
+        findTicketPriceById(entry.order.ticketPriceId, ticketPrices)?.portions ?? 0
 
     const portionNeed = (entries: TicketWaitlistDisplay[], portionsOf: PortionsOf): number =>
         sumBy(entries, portionsOf)
@@ -114,7 +118,7 @@ export const useWaitlist = () => {
     // joined mail and the chef's buildup read on the queue that holds it at its join. One pass, so a dinner's joins cost
     // the length of its queue
     const joinedOf = (
-        line: TicketWaitlistDisplay[], joined: TicketWaitlistDisplay[], ticketPrices: Pick<TicketPrice, 'id' | 'ticketType' | 'portions'>[], bookedByUserId: number
+        line: TicketWaitlistDisplay[], joined: TicketWaitlistDisplay[], ticketPrices: TicketPrice[], bookedByUserId: number
     ): {position: number, joined: WaitlistJoined}[] => {
         const ticketTypeOf = ticketTypeOfEntry(ticketPrices)
         const portionsOf = portionsOfEntryFor(ticketPrices)
@@ -212,7 +216,7 @@ export const useWaitlist = () => {
     }
 
     return {
-        inQueueOrder, ticketTypeOfEntry, waitingLines, placementLines, previewSale, positionOf, portionsOfEntryFor, portionNeed, joinedOf,
+        inQueueOrder, ticketTypeOfPrice, ticketTypeOfEntry, waitingLines, placementLines, previewSale, positionOf, portionsOfEntryFor, portionNeed, joinedOf,
         resolveWaitlistAssignment, placingLease, placingOrderOf, placementRecoveryOf, finishedPlacementOutcomes
     }
 }

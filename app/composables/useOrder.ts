@@ -6,6 +6,7 @@
 import {useBookingValidation, TicketState, type OrderDisplay, type OrderDetail, type TicketType} from '~/composables/useBookingValidation'
 import {ticketStateOf} from '~/composables/useBooking'
 import {sumBy} from '~/utils/ledger'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 /**
  * Statistics for one dining mode in kitchen display
@@ -35,7 +36,7 @@ export const useOrder = () => {
    * @returns "Gæst af {bookerName}" or "Gæst"
    */
   const formatGuestLabel = (bookerName?: string): string =>
-    bookerName ? `Gæst af ${bookerName}` : 'Gæst'
+    bookerName ? BOOKING_WORDS.guests.ofBooker(bookerName) : BOOKING_WORDS.guests.name
 
   /**
    * The orders the kitchen cooks for: every order not released

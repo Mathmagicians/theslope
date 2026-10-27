@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createTicketStateBadge, createBirthdayBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, guestTicketsLabel, ticketBadgeLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createTicketStateBadge, createBirthdayBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, guestTicketsLabel, ticketBadgeLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, ticketPricePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, ticketChangeHouseholds, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, formatPlace} from '~/composables/useBooking'
@@ -368,6 +368,12 @@ describe('ticket type presentation', () => {
         })
     })
 
+    it('a price row shows the presentation of its ticket type; no row shows none', () => {
+        expect(ticketPricePresentation(TicketFactory.defaultPriceOf(TicketTypeSchema.enum.BABY)))
+            .toEqual(ticketTypePresentation(TicketTypeSchema.enum.BABY))
+        expect(ticketPricePresentation(undefined)).toBeNull()
+    })
+
     it('a person shows the presentation of the ticket type they resolve to', () => {
         expect(resolveTicketTypePresentation(new Date('2017-01-01'), prices, new Date('2025-01-15')))
             .toEqual(ticketTypePresentation(TicketTypeSchema.enum.CHILD))
@@ -722,5 +728,25 @@ describe('expectedBookings', () => {
         {desc: 'no reply yet expects nothing', results: null, expected: []}
     ])('$desc', ({results, expected}) => {
         expect([...expectedBookings(results === null ? null : run({results}))]).toEqual(expected)
+    })
+})
+
+// Billetændringer's Husstand: the system's line over several reads System; a user's line over more than two reads the
+// first two and a control that opens the rest
+describe('ticketChangeHouseholds', () => {
+    const WORDS = BOOKING_WORDS.ticketChange
+    const FIVE = ['S_14', 'S_22', 'S_31', 'S_32', 'S_40']
+    it.each([
+        {line: 'the system\'s over several, folded', households: FIVE, bySystem: true, open: false, shown: {names: WORDS.bySystem}},
+        {line: 'the system\'s over several, open', households: FIVE, bySystem: true, open: true, shown: {names: WORDS.bySystem}},
+        {line: 'the system\'s over one', households: ['S_31'], bySystem: true, open: false, shown: {names: 'S_31'}},
+        {line: 'a user\'s over one', households: ['S_14'], bySystem: false, open: false, shown: {names: 'S_14'}},
+        {line: 'a user\'s over two', households: ['S_31', 'S_22'], bySystem: false, open: false, shown: {names: 'S_31, S_22'}},
+        {line: 'a user\'s over five, folded', households: FIVE, bySystem: false, open: false,
+            shown: {names: 'S_14, S_22', toggle: {label: WORDS.households.more(3), ariaLabel: WORDS.households.toggle(false, 5)}}},
+        {line: 'a user\'s over five, open', households: FIVE, bySystem: false, open: true,
+            shown: {names: 'S_14, S_22, S_31, S_32, S_40', toggle: {label: WORDS.households.fewer, ariaLabel: WORDS.households.toggle(true, 5)}}}
+    ])('$line reads "$shown.names"', ({households, bySystem, open, shown}) => {
+        expect(ticketChangeHouseholds(OrderFactory.defaultTicketChange({households, bySystem}), open)).toEqual(shown)
     })
 })

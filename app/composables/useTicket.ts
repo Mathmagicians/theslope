@@ -165,6 +165,10 @@ export const useTicket = () => {
         return ticketPrices.find(tp => tp.ticketType === ticketType)
     }
 
+    // The season's price row an order or a place on the waiting list holds
+    const findTicketPriceById = (ticketPriceId: number | null, ticketPrices: TicketPrice[]): TicketPrice | undefined =>
+        ticketPrices.find(ticketPrice => ticketPrice.id === ticketPriceId)
+
     /**
      * Resolve a TicketPrice using available information in priority order:
      * 1. birthDate → determineTicketType → find cheapest price for that type
@@ -218,7 +222,7 @@ export const useTicket = () => {
         ticketPrices: TicketPrice[],
         dinnerDate: Date
     ): TicketPrice | undefined => order
-        ? ticketPrices.find(ticketPrice => ticketPrice.id === order.ticketPriceId) ?? resolveTicketPrice(null, order.priceAtBooking, ticketPrices)
+        ? findTicketPriceById(order.ticketPriceId, ticketPrices) ?? resolveTicketPrice(null, order.priceAtBooking, ticketPrices)
         : resolveTicketPrice(birthDate, undefined, ticketPrices, dinnerDate)
 
     /** The first of the sorted dinners at another ticket type than the dinner before it: the birthday crosses an age limit */
@@ -248,6 +252,7 @@ export const useTicket = () => {
         resolveTicketType,
         groupInhabitantsByTicketCategory,
         findTicketPriceByType,
+        findTicketPriceById,
         resolveTicketPrice,
         resolveTicketPriceOn,
         ticketTypeChangeOf,

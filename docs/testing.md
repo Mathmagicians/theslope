@@ -90,7 +90,7 @@ const season = await SeasonFactory.createSeason(context, SeasonFactory.defaultSe
 
 **Factories on disk:** `AllergyFactory`, `BillingFactory`, `DinnerEventFactory`, `ExpenseFactory`, `FeedbackFactory`, `HouseholdFactory`, `NotificationFactory`, `OrderFactory`, `SeasonFactory`, `SeasonImportFactory`, `SenderFactory`, `SettingFactory`, `TicketFactory`, `UserFactory`, `WaitlistFactory`; `reconciliationTestData.ts` holds the data for the four reconciliation outcomes of households, inhabitants and users, shared by unit and e2e specs.
 
-**Config values:** a factory reads the app's config from the plain modules in `app/config/`, which `app.config.ts` imports: `TicketFactory` prices at `DEFAULT_TICKET_PRICES` (`ticketPrices.ts`), `NotificationFactory` reads `notificationTemplates.ts`. A spec takes a ticket type's price row from `TicketFactory.defaultPriceOf` (the default rows) or `useTicket().findTicketPriceByType` (a season's rows). Playwright runs without Nuxt, so `app.config.ts` itself stays out of the specs.
+**Config values:** a factory reads the app's config from the plain modules in `app/config/`, which `app.config.ts` imports: `TicketFactory` prices at `DEFAULT_TICKET_PRICES` and `SeasonFactory`, the helpers' deadlines and pre-booking window read `SEASON_CONFIG` (`season.ts`), `NotificationFactory` reads `notificationTemplates.ts`. A spec takes a ticket type's price row from `TicketFactory.defaultPriceOf` (the default rows) or `useTicket().findTicketPriceByType` (a season's rows). Playwright runs without Nuxt, so `app.config.ts` itself stays out of the specs.
 
 **Scenario methods:**
 - `SeasonFactory.createActiveSeason(context)` - the singleton active season `TestSeason-E2E-Singleton`: the `setup-season` project (`tests/e2e/season.setup.ts`) creates and activates it once per run, before the spec workers start; a spec's call returns it, and global teardown deletes it after the run. A spec resolves it in `beforeAll` and a feature in the `BeforeAll` of `fixtures.ts`, so a run without setup-season (`--no-deps`) creates it there, outside a test's timeout. Its dinners are open (`ticketIsCancellableDaysBefore` 0); a case on a closed dinner creates its own season
@@ -237,8 +237,11 @@ step set.
 
 The scene helpers create a scenario's data through the factories and record it for the cleanup:
 `createSceneHousehold`, `createScenePerson` and `createDinnerInThePastMonth`. `activeSeasonOf` reads the season a GIVEN
-activated, else the singleton, which the `BeforeAll` resolves per feature. `personOf` reads an actor's inhabitant,
-`adultPriceIdOf` the season's ADULT price, and `periodOf` the billing period that bills the scenario's households.
+activated, else the singleton, which the `BeforeAll` resolves per feature. A feature that places a dinner by its
+deadline states its season in the Background: `a season of its own is active` or `a season of its own is not active`,
+and the dinner step builds that season around the dinner's day. `personOf` reads an actor's inhabitant,
+`ticketPriceIdOf` the season's ticket price of an actor's part, and `periodOf` the billing period that bills the
+scenario's households.
 After the scenario, the scene puts back the member's settings and deletes the rows it created. Each cleanup step runs,
 and the failed steps fail the scenario together (`AggregateError`).
 
@@ -292,7 +295,8 @@ Feature: Cron jobs
   states the fact. `npx bddgen export --unused-steps` lists the steps no scenario uses.
 - The actor is a parameter type bound to the domain: the user (`User`), the admin (`SystemRoleSchema.enum.ADMIN`), the
   chef, an inhabitant and its roles on a dinner (the seller, the first in line), the user's inhabitant
-  (`Inhabitant.userId`), a visitor without a session. `{actor} saves the setting {setting}` serves each, and the step
+  (`Inhabitant.userId`), the babies of the user's household by their BABY ticket (the baby who tastes on 0 portions,
+  the hungry baby on a share), a visitor without a session. `{actor} saves the setting {setting}` serves each, and the step
   reads the actor's context from `scene`.
 - A domain word is a parameter type (`defineParameterType`) built from its enum schema. A cell and a step text hold the
   enum value as it is: `{job}` reads `DAILY_MAINTENANCE`, `{notification}` reads `WAITLIST_JOINED`, `{mode}` reads
@@ -310,14 +314,24 @@ Feature: Cron jobs
   (`Then the users list is non-empty`).
 - A block of Gherkin comes for review with its reuse table: each step text, its definition, and the lines that use it.
 
-**Commands.**
+**Commands.** The specs are generated with `npm run test:bdd:generate`: it runs `bddgen` and writes
+`.output/bdd/package.json` (`"type": "module"`), by which Node loads the generated specs as ES modules. A
+`nuxt build` empties `.output`; the specs are generated again after a build.
 
 ```bash
-npm run test:bdd:generate                     # generate .output/bdd/ from the features
+npm run test:bdd:generate                     # generate .output/bdd/ from the features, with its package.json
 npx bddgen export                    # the step definitions
 npm run test:e2e:smoke               # generate, then run the smoke suite with its reports
-npm run test:bdd:generate && npx playwright test --project=chromium-smoke --grep "<scenario>" --reporter=line   # one scenario by its title
+npm run test:bdd:generate && npx playwright test --project=<bdd project> --grep "<scenario>" --reporter=line   # one scenario by its title
 ```
+
+| Project | Suite tag |
+|---|---|
+| `chromium-bdd-api` | `@api-parallel` |
+| `chromium-bdd-api-serial` | `@api-serial`; one scenario runs with `--no-deps`, since the project depends on the API suites |
+| `chromium-bdd-ui` | `@e2e-parallel` |
+| `chromium-bdd-ui-serial` | `@e2e-serial`; one scenario runs with `--no-deps`, since the project depends on the UI suites |
+| `chromium-smoke` | `@smoke` |
 
 **Reports.** A BDD suite's npm script sets `BDD_SUITE=<suite>` and passes no `--reporter`, so the reporter list of
 `playwright.config.ts` writes the Playwright html, line and json reports and the Cucumber reports
@@ -441,6 +455,7 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 | `findLoadingRow(wrapper)` / `findAllLoadingRows(wrapper)` | The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows |
 | `isTableLoading(wrapper)` | Whether the UTable under the wrapper binds `loading`: its loading bar runs under the column headers and carries no attribute to find |
 | `tableHeaders(wrapper)` / `cellsByHeader(wrapper, rowIndex = 0)` | A table's rendered column headers, a column without header text (an expand column) as `''`; a body row's cells by the header of their column |
+| `findOpenRows(wrapper)` | The body rows UTable marks open (`data-expanded`), each with the row after it that holds the `#expanded` slot |
 | `iconNamesIn(wrapper)` | The names of the `UIcon`s inside a wrapper. A DOM wrapper's `findAllComponents` returns the components its element contains, so `findByTestId(wrapper, id).findAllComponents(...)` reaches the components of one part; a part typed `BaseWrapper<Node>` keeps VTU's typed overloads, which `DOMWrapper` types `any`. The component whose root is a test-id part is `findComponentByTestId` |
 | `registerScaffoldEndpoint()` | The scaffold's dry run (`GET`) for a component that previews: `answers.preview` answers a read with orders and `answers.expected` one without (`OrderFactory.defaultScaffoldOrdersResponse()` until set); `sent` records each read's request, its orders decoded by `DesiredOrderQuerySchema`, and its other query parameters (`bypassDeadlines`); `hold(kind)` keeps a read pending until released |
 | `holdEndpoint(url, body)` | An endpoint that answers `body` once the test calls `release()`: the window in which a dataset is pending; `unregister()` in `afterEach` hands the url back to the registration before it |

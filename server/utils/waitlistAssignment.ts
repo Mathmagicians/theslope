@@ -256,7 +256,7 @@ const sellToEntry = async (d1Client: D1Database, entry: TicketWaitlistDisplay, t
  * The caller names open dinners only: the scaffold, which reads the dinners' states, drops the closed ones.
  */
 export async function sellTicketsToWaitlist(
-    d1Client: D1Database, dinnerEventIds: number[], ticketPrices: Pick<TicketPrice, 'id' | 'ticketType' | 'portions'>[]
+    d1Client: D1Database, dinnerEventIds: number[], ticketPrices: TicketPrice[]
 ): Promise<WaitlistPlacementOutcomes> {
     const {placementLines, ticketTypeOfEntry, portionsOfEntryFor} = useWaitlist()
     if (dinnerEventIds.length === 0) return {waitlistTicketsSold: [], waitlistPortionsAssigned: []}

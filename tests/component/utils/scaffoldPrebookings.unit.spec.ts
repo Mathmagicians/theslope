@@ -13,6 +13,7 @@ import {
 } from '~~/server/data/waitlistRepository'
 import {useBookingValidation, OrderAuditAction as AuditActions, type DesiredOrder, type DinnerMode, type OrderAuditAction, type OrderDisplay, type ScaffoldResult, type TicketType} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
+import {useWaitlist} from '~/composables/useWaitlist'
 import type {TicketWaitlistCreate, TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {getHouseholdShortName, useCoreValidation} from '~/composables/useCoreValidation'
@@ -145,7 +146,7 @@ const released = (order: OrderDisplay, minutesAgo: number): OrderDisplay => ({..
  * in its line
  */
 const givenSupply = (ticketPrices: TicketPrice[], tickets: TicketOnSale[], entries: TicketWaitlistDisplay[], held: TicketOnSale[] = []) => {
-    const ticketTypeOf = (ticketPriceId: number | null) => ticketPrices.find(price => price.id === ticketPriceId)?.ticketType
+    const ticketTypeOf = useWaitlist().ticketTypeOfPrice(ticketPrices)
     const oldestOfType = (dinnerEventId: number, ticketType: TicketType) => tickets
         .filter(({order}) => order.dinnerEventId === dinnerEventId && ticketTypeOf(order.ticketPriceId) === ticketType)
         .sort((a, b) => a.order.releasedAt!.getTime() - b.order.releasedAt!.getTime())[0]

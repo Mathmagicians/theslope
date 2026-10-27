@@ -16,7 +16,7 @@ import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData,
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import type {BookingContext, ReleasedTicketCounts} from '~/composables/useBooking'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import type {FormSubmitEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
@@ -30,7 +30,7 @@ interface Props {
   releasedTicketCounts: ReleasedTicketCounts
   bookerId: number
   bookerName: string
-  isHouseholdInResidency: boolean
+  bookingContext: BookingContext // The household's booking context on the dinner (bookingContextOf)
   adminBypass?: boolean
 }
 
@@ -52,7 +52,7 @@ const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets')
 
 // Booking logic
 const {getBookingOptions} = useBooking()
-const {takesNoPortionOf, findTicketPriceByType} = useTicket()
+const {findTicketPriceByType} = useTicket()
 const {createBookingBadges, guestSaveLabel} = useBookingUi()
 const bookingsStore = useBookingsStore()
 
@@ -105,8 +105,6 @@ const guestOrdersOf = ({count, ticketPriceId, dinnerMode, allergyTypeIds}: Guest
     state: OrderStateEnum.BOOKED
   }))
 
-const takesNoPortion = computed(() => takesNoPortionOf(props.ticketPrices))
-
 // The modes the guest may take: the guest the save books in each mode, as the decision matrix lands it, at the picked
 // price; while none is picked, the season's first price stands in
 const enabledModes = computed((): DinnerMode[] => {
@@ -115,7 +113,7 @@ const enabledModes = computed((): DinnerMode[] => {
     order: null,
     waitlistEntry: null,
     candidate: dinnerMode => ticketPriceId === undefined ? null : guestOrdersOf({...formState, count: 1, ticketPriceId, dinnerMode})[0] ?? null
-  }, {event: props.dinnerEvent, deadlines: props.deadlines, isHouseholdInResidency: () => props.isHouseholdInResidency, takesNoPortion: takesNoPortion.value})
+  }, props.bookingContext)
 })
 
 // The preview: the server's dry run of the guests a valid draft books

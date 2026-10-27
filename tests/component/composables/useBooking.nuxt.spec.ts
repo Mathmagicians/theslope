@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeAll, beforeEach, afterEach, vi} from 'vitest'
 import {addDays, addHours, addYears} from 'date-fns'
-import {useBooking, type AlarmLevel, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, personTicketCounts, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
+import {useBooking, type AlarmLevel, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, bookingContextOf, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, personTicketCounts, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {dateToWeekDay} from '~/utils/season'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -8,6 +8,7 @@ import {sumBy} from '~/utils/ledger'
 import {useBookingValidation, TicketState, SupplyState, type OrderDisplay, type DinnerMode, type DinnerState, type DesiredOrder, type OrderAuditAction, type OrderAuditChange, type OrderAuditSource, type OrderSnapshot, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {useHousehold} from '~/composables/useHousehold'
+import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -502,7 +503,7 @@ describe('bookingOutcomes', () => {
         OrderFactory.defaultDesiredOrder({ticketPriceId: priceIdOf(ticketType), isGuestTicket: true})
     // The supply the scaffold hands a claim: the ticket type its price names and the dinner's tickets for sale of that type
     const supplyOfClaim = (claim: DesiredOrder) => {
-        const ticketType = SEASON_PRICES.find(price => price.id === claim.ticketPriceId)!.ticketType
+        const ticketType = useTicket().findTicketPriceById(claim.ticketPriceId, SEASON_PRICES)!.ticketType
         return {ticketType, ticketsForSale: forSaleByType[ticketType] ?? 0}
     }
 
@@ -1864,6 +1865,49 @@ describe('getBookingOptions — the rules matrix', () => {
         ${'dinner CONSUMED'}   | ${before.at({state: CONSUMED})}
     `('own ticket BOOKED · $gate → no mode', ({context}) => {
         expect(getBookingOptions(ownBooked.of(context.dinner), context)).toEqual([])
+    })
+})
+
+describe('bookingContextOf — the context the day view, the grid and the guest form hand getBookingOptions', () => {
+    const dinner = DinnerEventFactory.dinnerEventAt(101, 10)
+    const event = {date: dinner.date, state: dinner.state}
+    const movedIn = addDays(today, 10)
+    const movedOut = addDays(today, 20)
+    // The household lives in from its move-in day, through its move-out day when it has one
+    const householdOf: Record<string, () => HouseholdDisplay | null> = {
+        'moving out': () => ({...HouseholdFactory.defaultHouseholdDetail(), movedInDate: movedIn, moveOutDate: movedOut}),
+        'staying': () => ({...HouseholdFactory.defaultHouseholdDetail(), movedInDate: movedIn, moveOutDate: null}),
+        'no household': () => null
+    }
+    const contextOf = (household: HouseholdDisplay | null) => bookingContextOf(household, defaultDeadlines, SEASON_PRICES)(event)
+
+    it.each`
+        household         | day                       | when                         | inResidency
+        ${'moving out'}   | ${addDays(movedIn, -1)}   | ${'before move-in'}          | ${false}
+        ${'moving out'}   | ${addDays(movedIn, 5)}    | ${'between move-in and out'} | ${true}
+        ${'moving out'}   | ${addDays(movedOut, 1)}   | ${'after move-out'}          | ${false}
+        ${'staying'}      | ${addDays(movedIn, -1)}   | ${'before move-in'}          | ${false}
+        ${'staying'}      | ${addDays(movedIn, 5)}    | ${'after move-in'}           | ${true}
+        ${'staying'}      | ${addYears(movedIn, 5)}   | ${'years after move-in'}     | ${true}
+        ${'no household'} | ${addDays(today, -30)}    | ${'a past day'}              | ${true}
+        ${'no household'} | ${addYears(today, 5)}     | ${'years ahead'}             | ${true}
+    `('$household · $when → in residency $inResidency', ({household, day, inResidency}) => {
+        expect(contextOf(householdOf[household]!()).isHouseholdInResidency(day)).toBe(inResidency)
+    })
+
+    it.each`
+        ticket                   | ticketPriceId                   | takesNoPortion
+        ${'the baby who tastes'} | ${TASTING_PRICE_ID}             | ${true}
+        ${'the hungry baby'}     | ${HUNGRY_PRICE_ID}              | ${false}
+        ${'ADULT'}               | ${priceIdOf(TicketTypes.ADULT)} | ${false}
+    `('$ticket · takes no portion $takesNoPortion', ({ticketPriceId, takesNoPortion}) => {
+        expect(contextOf(null).takesNoPortion(ticketPriceId)).toBe(takesNoPortion)
+    })
+
+    it('passes the dinner and the deadlines through', () => {
+        const context = contextOf(householdOf['staying']!())
+        expect(context.event).toBe(event)
+        expect(context.deadlines).toBe(defaultDeadlines)
     })
 })
 
