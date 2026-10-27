@@ -31,6 +31,7 @@
 | SMS channel | `feature-proposal-notification-triggers.md` § SMS delivery | – | specified |
 | Household and member notifications | `feature-proposal-notification-triggers.md` § Household and member events | – | discovery |
 | Booking emails flag removed | `SHOULD_SEND_BOOKING_EMAILS_FLAG` leaves `wrangler.toml`, and its reader `shouldSendBookingEmails` and the gate `notifyBooking` leave the code. | – | specified |
+| The dinner page keeps its form while the season refreshes | § The dinner page keeps its form while the season refreshes | – | discovery |
 
 § Drop `DinnerEvent.totalCost`, § Order snapshot (B6) and § Ticket allergies on the order share one migration:
 `make d1-create-migration name=release-0-9-3`, the rewrites below in the Prisma source, then
@@ -271,6 +272,28 @@ API: the period read. Component: the table on its dataset, its loading and empty
 `server/routes/api/admin/sender/delivery.get.ts`, `server/data/financesRepository.ts` (`fetchDeliveries`),
 `app/components/admin/AdminSystem.vue`, a store dataset, `docs/adr-compliance-frontend.md` and
 `docs/adr-compliance-backend.md` rows.
+
+## The dinner page keeps its form while the season refreshes
+
+### Problem
+
+On /dinner past the deadline, saving a guest that queues refreshes the season. While it refreshes, the season's
+dataset reads not initialized (`useApiHandler.ts:273`), the page shows its loader (`pages/dinner/index.vue:142`) and the
+booking form mounts again.
+
+### Solution
+
+OPEN: a) the store stays ready while it refreshes, `isInitialized` reading loaded data without an error (ADR-007
+compliance 3); b) the page shows its loader until the first load only.
+
+### Browser check
+
+`/dinner?date=<past deadline>`: open Tilføj gæst, save a guest that queues. The add-guest row stays open, the queued
+guest's card stays closed, and the form stays in place.
+
+### Affected areas
+
+`app/composables/useApiHandler.ts`, `app/pages/dinner/index.vue`, `app/components/dinner/DinnerBookingForm.vue`.
 
 ## Decisions
 

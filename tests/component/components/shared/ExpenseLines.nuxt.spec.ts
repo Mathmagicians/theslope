@@ -155,7 +155,7 @@ describe('ExpenseLines', () => {
 
         it('GIVEN the round WHEN open THEN the whole team gets its heading and the same three rows; without one no round block shows', async () => {
             const [first, last] = lines()
-            const label = `Hele Madhold 2, periode ${formatDateRange({start: first!.createdAt, end: last!.createdAt}, DATE_SETTINGS.DAY_MONTH_MASK)}`
+            const label = `Madhold 2, periode ${formatDateRange({start: first!.createdAt, end: last!.createdAt}, DATE_SETTINGS.DAY_MONTH_MASK)}`
             const withRound = await mount({editable: true, round: {label, figures: {budgetGross: 400000, spentGross: 423800}}})
             await open(withRound)
             expect(findByTestId(withRound, 'expense-hint-heading').text()).toBe(label)

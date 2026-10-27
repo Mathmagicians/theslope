@@ -264,6 +264,8 @@ const roundRows = computed<CookingRoundRow[]>(() => roundDinners.value.map(dinne
   budgetGross: calculateBudget(bookingsStore.orders.filter(order => order.dinnerEventId === dinner.id), kitchenConfig?.baseRatePercent ?? 5, kitchenConfig?.vatPercent ?? 25).availableBudget,
   spentGross: dinner.totalCost
 })))
+// The dinner's cooking team's number in the season: its colour on the team card and on the round's badge
+const dinnerTeamNumber = computed(() => dinnerEventDetail.value?.cookingTeam ? getTeamNumber(dinnerEventDetail.value.cookingTeam, seasonTeams.value) : null)
 
 const handleAdvanceState = async (newState: string) => {
   if (!selectedDinnerId.value) return
@@ -401,6 +403,7 @@ useHead({
               :form-mode="chefFormMode"
               :show-state-controls="true"
               :round-rows="roundRows"
+              :team-number="dinnerTeamNumber"
               :expense-note="expenseNote"
               :waitlist="selectedDinnerWaitlist"
               :show-allergens="true"
@@ -426,9 +429,9 @@ useHead({
         <template #team>
           <template v-if="dinnerEventDetail">
             <CookingTeamCard
-                v-if="dinnerEventDetail.cookingTeamId && dinnerEventDetail.cookingTeam"
+                v-if="dinnerEventDetail.cookingTeamId && dinnerTeamNumber !== null"
                 :team-id="dinnerEventDetail.cookingTeamId"
-                :team-number="getTeamNumber(dinnerEventDetail.cookingTeam, selectedSeason?.CookingTeams ?? [])"
+                :team-number="dinnerTeamNumber"
                 mode="monitor"
                 use-short-name
                 :visiting="dinnerEventDetail.cookingTeamId === visitingTeam?.id"

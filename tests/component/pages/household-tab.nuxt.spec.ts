@@ -141,14 +141,16 @@ describe('household/[shortname]/[tab] - the override on another household', () =
         {viewer: 'an admin', roles: [SystemRole.ADMIN], on: 'another household', tab: 'settings', shows: true},
         {viewer: 'the allergy manager', roles: [SystemRole.ALLERGYMANAGER], on: 'another household', tab: 'allergies', shows: true},
         {viewer: 'the allergy manager', roles: [SystemRole.ALLERGYMANAGER], on: 'another household', tab: 'settings', shows: false},
+        {viewer: 'the allergy manager', roles: [SystemRole.ALLERGYMANAGER], on: 'another household', tab: 'bookings', shows: false},
         {viewer: 'a member', roles: [], on: 'another household', tab: 'allergies', shows: false},
         {viewer: 'an admin', roles: [SystemRole.ADMIN], on: 'their own household', tab: 'allergies', shows: false},
         {viewer: 'the allergy manager', roles: [SystemRole.ALLERGYMANAGER], on: 'their own household', tab: 'allergies', shows: false}
-    ] as const)('GIVEN $viewer on the $tab tab of $on THEN the override button shows: $shows', async ({roles, on, tab, shows}) => {
+    ] as const)('GIVEN $viewer on the $tab tab of $on THEN the visitor banner shows on another household, and the override button shows: $shows', async ({roles, on, tab, shows}) => {
         session.user.value = userWith([...roles])
 
         const wrapper = await mountOn(households[on], tab)
 
+        expect(findByTestId(wrapper, 'visitor-banner').exists()).toBe(on === 'another household')
         expect(findByTestId(wrapper, 'admin-override-btn').exists()).toBe(shows)
     })
 

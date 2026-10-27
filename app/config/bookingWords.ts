@@ -8,6 +8,7 @@ const Action = BookingActionSchema.enum
 const TicketChangeKind = TicketChangeKindSchema.enum
 
 const ticketCount = (count: number) => `${count} billet${count === 1 ? '' : 'ter'}`
+const roundPeriod = (range: string) => `periode ${range}`
 const waitlistPayment = 'Du betaler, når du får en billet fra ventelisten.'
 const releasedPayment = 'Du betaler, medmindre andre køber'
 const releasedWord = 'Frigivet'
@@ -17,10 +18,10 @@ const guestOf = 'Gæst af'
 export const BOOKING_WORDS = {
     /** A dinner's name while the chef has written no menu */
     untitledDinner: 'Fællesspisning',
-    /** The heading of a team's cooking round: the team and the dates it cooks */
-    roundHeading: (team: string, range: string) => `${team}, periode ${range}`,
-    /** A team's whole cooking round: the Madbestilling hint's and the round table's total */
-    wholeTeam: (teamShortName: string) => `Hele ${teamShortName}`,
+    /** The dates a team's cooking round spans, after the team's badge in the Budget pane */
+    roundPeriod,
+    /** The heading of a team's cooking round in the Madbestilling hint: the team and the dates it cooks */
+    roundHeading: (team: string, range: string) => `${team}, ${roundPeriod(range)}`,
     /** The figures under a block of spending lines */
     allowance: {budget: 'Rådighedsbeløb', spent: 'Brugt', left: 'Tilbage'},
     /** A ticket price in a select menu: its type with its price, and the age limit beside its description */

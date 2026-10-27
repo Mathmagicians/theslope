@@ -17,7 +17,7 @@
  *   Tilbage                                           +115 /  +143 kr (check)
  *
  *   ──────────────────────────────────────────────────────────────────
- *   Hele Madhold 2, periode 12/04-14/04
+ *   Madhold 2, periode 12/04-14/04
  *   Rådighedsbeløb                                   4.435 / 5.544 kr
  *   Brugt                                            4.245 / 5.307 kr
  *   ──────────────────────────────────────────────────────────────────
@@ -31,7 +31,7 @@
  *
  * Tokens: the folded row and the editor head bind cardSection like the allergen row; the edit button is
  * BUTTONS.secondaryAction, Luk BUTTONS.cancel, Tilføj BUTTONS.save, slet BUTTONS.remove; every amount is a VatAmount
- * in the expenseLines grid; the whole-team heading is the text cookingRoundWords builds, shared with CookingRoundSpending.
+ * in the expenseLines grid; the round's heading is the text cookingRoundWords builds.
  */
 import type {Expense, ExpenseCreate, ExpenseLineForm, VatMode} from '~/composables/useBillingValidation'
 import type {SpendingFigures} from '~/composables/useOrder'

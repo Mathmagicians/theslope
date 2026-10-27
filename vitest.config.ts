@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url'
 // Specs import the e2e factories for their data builders; the factories' eager
 // `expect` import from '@playwright/test' resolves to a stub in every vitest project
 const playwrightStub = fileURLToPath(new URL('./tests/component/playwrightStub.ts', import.meta.url))
+// The unit project runs without the Nuxt runtime; its '#imports' hands back the config accessors the specs stub
+const nuxtImportsStub = fileURLToPath(new URL('./tests/component/nuxtImportsStub.ts', import.meta.url))
 
 export default defineConfig({
     test: {
@@ -21,6 +23,7 @@ export default defineConfig({
                 resolve: {
                     alias: {
                         '@playwright/test': playwrightStub,
+                        '#imports': nuxtImportsStub,
                         '~/': fileURLToPath(new URL('./app/', import.meta.url)),
                         '~~/': fileURLToPath(new URL('./', import.meta.url)),
                     },

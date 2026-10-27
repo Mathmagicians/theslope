@@ -440,7 +440,7 @@ await doScreenshot(page, 'admin/page', true)  // Docs: docs/screenshots/
 | `gotoAllergyCatalog(page)` | Opens `/admin/allergies` and waits for the detail pane's content, the catalog's hydration signal |
 | `openPreferences(page)` | Opens "Mine indstillinger" through the settings button in the profile card header and waits for the card |
 | `savePreferences(page, testIds)` | Rediger, clicks the controls of `testIds`, Gem; returns the response of `POST /api/user/preferences` |
-| `collectHydrationWarnings(page)` | Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation. A countdown one minute apart (`22T 41M` on the server, `22T 40M` on the client) passes |
+| `collectHydrationWarnings(page)` | Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation |
 | `expectHydratedWithoutMismatch(page, url)` | Navigates, waits for hydration and asserts Vue logged no hydration mismatch on the way |
 | `waitForApi(page, path, method, options?)` | The next response to a `method` request whose url contains `path`; attach it before the action that sends the request |
 | `isScaffoldSave`, `isExpectedRead` | Response predicates for `page.waitForResponse`: the save of the household's booking write (the POST), and a booking view's read of the expected bookings (the dry run's GET without orders) |

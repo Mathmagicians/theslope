@@ -35,7 +35,7 @@
  */
 import type { OrderDetail } from '~/composables/useBookingValidation'
 import type { Expense } from '~/composables/useBillingValidation'
-import type { SpendingFragment } from '~/composables/useBookingUi'
+import type { DinnerSpendingFragment, TeamSpendingFragment } from '~/composables/useBookingUi'
 import type {TableColumn} from '@nuxt/ui'
 
 interface Props {
@@ -44,8 +44,8 @@ interface Props {
   expenses?: Expense[]
   dinnerEventId?: number | null
   bookingDeadline?: Date | null
-  dinnerFragment?: SpendingFragment | null
-  teamFragment?: SpendingFragment | null
+  dinnerFragment?: DinnerSpendingFragment | null
+  teamFragment?: TeamSpendingFragment | null
 }
 
 const props = withDefaults(defineProps<Props>(), {

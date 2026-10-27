@@ -13,6 +13,7 @@ import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDate
 import {getEachDayOfIntervalWithSelectedWeekdays, formatDate, calculateDayFromWeekNumber, formatDateRange, DATE_SETTINGS,
     selectWeekNumbersFromListThatFitInsideDateRange, eachDayOfManyIntervals} from "~/utils/date"
 import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
+import {useAppConfig} from '#imports'
 
 /**
  * Deadline urgency levels for dinner events

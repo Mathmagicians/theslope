@@ -3,6 +3,7 @@ import { useCoreValidation } from '~/composables/useCoreValidation'
 import { pruneAndCreate, groupBy, chunkArray, type PruneAndCreateResult, type ReconciliationBucket, ReconciliationBucketSchema } from '~/utils/batchUtils'
 import { buildResolvedHouseholdMap, type InhabitantPlacement } from '~/composables/useHousehold'
 import { isSameDay } from 'date-fns'
+import { useRuntimeConfig } from '#imports'
 
 const { SystemRoleSchema } = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum

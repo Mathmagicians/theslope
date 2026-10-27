@@ -12,8 +12,8 @@ QA with human eyes: [qa.md](qa.md). Review defects: [defects.md](defects.md).
 |---|---|---|---|
 | Workflow checks | The workflows' `run:` scripts read `${{ }}` values through `env` (code scanning alert #10), and `npm run pre:all` runs CodeQL's Actions queries (`make lint-gh-actions`, through `gh codeql`) when the branch or the working tree changes `.github`; in CI the CodeQL pipeline scans the workflows. | – | done 93834f4 |
 | Household data access and GET previews | Every member reads, a household changes its own data, an admin or the allergy manager (allergies) another household's through a logged override (ADR-004 § Access), and previews are GETs. | – | done 52c5d68 |
-| Three faces on a phone (#171) | An avatar group shows three faces below md, five from md. | – | done 0b6d7d0 |
-| One master-detail layout (#169) | `LAYOUTS.masterDetailPage` on /dinner, /chef, /admin/allergies, /admin/teams and the household bookings tab, with the calendar circle a step up at lg. | – | done 0b6d7d0 |
+| Three faces on a phone (#171) | An avatar group shows three faces below md, five from md. | – | • done 0b6d7d0<br>• signed off 2026-10-27 |
+| One master-detail layout (#169) | `LAYOUTS.masterDetailPage` on /dinner, /chef, /admin/allergies, /admin/teams and the household bookings tab, with the calendar circle a step up at lg. | – | • done 0b6d7d0<br>• signed off 2026-10-27 |
 | Tests at the lowest level | The access cases consolidated per `docs/testing.md` Rule 0. | – | done ef54aa6 |
 | Ticket counts per person | `personTicketCounts` in `useBooking` counts a person's tickets, the released among them and the places on the waiting list for the booking grid's name cell, with the day-view component spec at the lowest level. | – | done 4349c92, 8401b44 |
 
@@ -44,12 +44,12 @@ Updated 2026-10-25. Release 0.9 shipped in f5b5205 (#168).
 | Test factory dates at call time | § Test factory dates at call time | – | specified |
 | AdminTeams loading row | § AdminTeams loading row | – | discovery |
 | Avatar ring colours | § Avatar ring colours | – | specified |
-| User saves and deserializers | § User saves and deserializers | – | committed (f7a4b6f) |
-| The job boxes' latest run | § The job boxes' latest run | – | committed (17c3401) |
-| Zero-portion tickets get a place | § Zero-portion tickets get a place | – | committed (17c3401) |
-| Tables keep their columns on a phone | § Tables keep their columns on a phone | – | committed (d159610) |
+| User saves and deserializers | § User saves and deserializers | – | • committed (f7a4b6f)<br>• signed off 2026-10-27 |
+| The job boxes' latest run | § The job boxes' latest run | – | • committed (17c3401)<br>• signed off 2026-10-27 |
+| Zero-portion tickets get a place | § Zero-portion tickets get a place | – | • committed (17c3401)<br>• signed off 2026-10-27 |
+| Tables keep their columns on a phone | § Tables keep their columns on a phone | – | • committed (d159610)<br>• signed off 2026-10-27 |
 | The grid shows the day view's tickets | § The grid shows the day view's tickets | – | specified; guest groups by price, badges and rows by price implemented |
-| Tables key their rows by id | § Tables key their rows by id | – | committed (ea978dd, d159610) |
+| Tables key their rows by id | § Tables key their rows by id | – | • committed (ea978dd, d159610)<br>• signed off 2026-10-27 |
 | One path for the grid and the day view | § One path for the grid and the day view | – | specified |
 | Chef calendar visit | § Chef calendar visit | – | specified |
 

@@ -3,12 +3,14 @@ import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {nextTick} from 'vue'
 import {enableAutoUnmount} from '@vue/test-utils'
 import CookingRoundSpending from '~/components/chef/CookingRoundSpending.vue'
-import {dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow, type SpendingFragment} from '~/composables/useBookingUi'
+import CookingTeamBadges from '~/components/shared/CookingTeamBadges.vue'
+import {cookingRoundWords, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow, type SpendingFragment} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useTicket} from '~/composables/useTicket'
-import {formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
+import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {mountWithTooltipProvider, findByTestId, resetStores, registerEmptyStoreEndpoints, holdEndpoint, isTableLoading, untilTrue} from '~~/tests/component/testHelpers'
 import {useBookingsStore} from '~/stores/bookings'
+import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 
 // Only HTTP is faked (testing.md Rule 6): the bookings store reads the round's orders
 registerEmptyStoreEndpoints()
@@ -20,18 +22,19 @@ beforeEach(() => {
 })
 
 /**
- * CookingRoundSpending: a fragment of the one spending table. The team's round: heading, one row per cooking day with
- * the arrow on the dinner on view, the team's total row. This dinner: its heading, its receipts as rows, its figures
- * in the total row, the table's empty state without receipts.
+ * CookingRoundSpending: a fragment of the one spending table. The team's round: the team's badge as heading, one row
+ * per cooking day with a dot and the bold name on the dinner on view, the team's total row under its badge. This
+ * dinner: its heading, its receipts as rows, its figures in the total row, the table's empty state without receipts.
  */
 const {formatPrice} = useTicket()
+const {COMPONENTS, ICONS} = useTheSlopeDesignSystem()
 
 const rows: CookingRoundRow[] = [
     {dinnerEventId: 1, date: new Date('2026-04-12T18:00:00'), menuTitle: 'Lasagne', isCurrent: false, budgetGross: 178100, spentGross: 192500},
     {dinnerEventId: 2, date: new Date('2026-04-13T18:00:00'), menuTitle: 'Boller i karry', isCurrent: false, budgetGross: 189000, spentGross: 174400},
     {dinnerEventId: 3, date: new Date('2026-04-14T18:00:00'), menuTitle: 'Risotto', isCurrent: true, budgetGross: 187300, spentGross: 163800}
 ]
-const words = {team: 'Hele Madhold 2', heading: `Hele Madhold 2, periode ${formatDateRange({start: rows[0]!.date, end: rows[2]!.date}, DATE_SETTINGS.DAY_MONTH_MASK)}`}
+const words = cookingRoundWords('Madhold 2', 2, rows[0]!.date, rows[2]!.date)
 
 const mount = (props: {fragment: SpendingFragment}) => mountWithTooltipProvider(CookingRoundSpending, {props, isMd: true})
 // The table's body rows without the total row the body-bottom slot adds
@@ -39,17 +42,26 @@ const dataRows = (wrapper: Awaited<ReturnType<typeof mount>>) => wrapper.findAll
 const dayMonth = (date: Date) => formatDate(date, DATE_SETTINGS.DAY_MONTH_MASK)
 
 describe('CookingRoundSpending, the team\'s round', () => {
-    it('renders the heading, one row per dinner in order with date and menu, the arrow on the dinner on view, each row\'s figures, and the team\'s total row', async () => {
+    it('renders the team\'s badge and the period as heading, one row per dinner in order with date and menu, the dot and the bold name on the dinner on view, each row\'s figures, and the team\'s total row', async () => {
         const wrapper = await mount({fragment: teamSpendingFragment(rows, words)})
-        expect(findByTestId(wrapper, 'cooking-round-heading').text()).toBe(words.heading)
+        // The heading is the team's colour badge, its name alone, followed by the period; the total row reads the team as text
+        const heading = findByTestId(wrapper, 'cooking-round-heading')
+        expect(heading.findComponent(CookingTeamBadges).props()).toMatchObject({teamName: 'Madhold 2', teamNumber: 2, showCounts: false})
+        expect(heading.text()).toContain(words.period)
+        expect(wrapper.findAllComponents(CookingTeamBadges)).toHaveLength(1)
         const rendered = dataRows(wrapper)
         expect(rendered).toHaveLength(3)
         rows.forEach((row, index) => {
             expect(rendered[index]!.findAll('td')[0]!.text()).toBe(dayMonth(row.date))
             expect(rendered[index]!.text()).toContain(row.menuTitle)
         })
-        expect(rendered[2]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(true)
+        // The dinner on view reads a dot before its name and the name in bold; the other days read their name alone
+        const marker = rendered[2]!.findAll('td')[1]!.findComponent({name: 'UIcon'})
+        expect(marker.attributes('data-testid')).toBe('cooking-round-marker')
+        expect(marker.props('name')).toBe(ICONS.dot)
+        expect(marker.element.parentElement!.className).toBe(COMPONENTS.table.currentDinnerLabel)
         expect(rendered[0]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(false)
+        expect(rendered[0]!.findAll('td')[1]!.find('span').classes().join(' ')).toBe(COMPONENTS.table.dinnerLabel)
 
         // Each row's allowance, spending and what is left in both units, red with the exclamation icon when over
         const over = dataRows(wrapper)[0]!
@@ -61,7 +73,7 @@ describe('CookingRoundSpending, the team\'s round', () => {
 
         // The round sums into the team's total row
         const total = findByTestId(wrapper, 'cooking-round-total')
-        expect(total.text()).toContain('Hele Madhold 2')
+        expect(total.text()).toContain('Madhold 2')
         expect(total.text()).toContain(`/ ${formatPrice(178100 + 189000 + 187300)} kr`)
         expect(total.text()).toContain(`/ ${formatPrice(192500 + 174400 + 163800)} kr`)
         expect(total.text()).toContain(`/ +${formatPrice(178100 + 189000 + 187300 - 192500 - 174400 - 163800)} kr`)

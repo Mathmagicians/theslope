@@ -147,7 +147,7 @@ Then('{actor} sees the role line of a {teamRole} on team {int}', async ({scene},
 Then('{actor} sees the next cooking day of team {int}', async ({adminContext: admin, scene}, actor: Actor, number: number) => {
     contextOfActor(scene, actor)
     const team = await SeasonFactory.getCookingTeamById(admin, teamOf(scene, number).id!)
-    const {nextDinner} = nextDinnerOf(team!.dinnerEvents)
+    const {nextDinner} = nextDinnerOf(team!.dinnerEvents, new Date())
     expect(nextDinner, `team ${number} has a dinner ahead`).not.toBeNull()
     await expect(fromScene(scene, 'page').getByTestId('chef-next-cooking-countdown')).toContainText(formatDanishWeekdayDate(new Date(nextDinner!.date)))
 })

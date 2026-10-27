@@ -169,7 +169,7 @@ Status.
 | `DinnerBudget.vue` | `/chef` | none | ✅ | ✅ | ✅ |
 | `ExpenseLines.vue` | `/chef` | none | ✅ | ✅ | ✅ |
 | `VatAmount.vue` | `/chef` | none | ✅ | ✅ parent | ✅ |
-| `CookingRoundSpending.vue` | `/chef` | bookings | ✅ | ❌ | ✅; an arrow (`table.currentMarker`) before the name of the dinner on view; the team's round binds the round's orders loading |
+| `CookingRoundSpending.vue` | `/chef` | bookings | ✅ | ❌ | ✅; a dot (`table.currentMarker`) and the bold name (`table.currentDinnerLabel`) on the dinner on view; the team's round heads with the team's badge (`CookingTeamBadges`) and its period and binds the round's orders loading |
 | `TicketChanges.vue` | `/chef` | bookings | ✅ | ❌ | ✅; Husstand of a user's line over more than two households folds behind a "+N" link (`ticketChanges.householdsToggle`, `ticketChanges.households`), its words from `BOOKING_WORDS.ticketChange.households` (ADR-017, ADR-018) |
 | `TeamRoleStatus.vue` | `/chef` | none | ✅ | ✅ parent | ✅ the role glyphs from `ROLE_ICONS`, the role and visitor lines from `TEAM_WORDS` (ADR-017, ADR-018) |
 | `ChefDinnerCard.vue` | `/chef` | bookings | ✅ | ✅ parent | ✅ |

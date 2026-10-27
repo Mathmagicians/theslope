@@ -432,7 +432,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 // Refresh selected detail LAST: on /chef the page watchEffect re-derives the
                 // selected dinner id from myTeams/season, so settle those first or its re-run
                 // reloads stale detail over the fresh fetch.
-                await settleSeason()
+                await refreshTeamAggregates()
                 await useUsersStore().loadMyTeams()
                 await useBookingsStore().refreshSelectedDinnerEventDetail()
                 return updated
@@ -477,7 +477,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 // Refresh selected detail LAST: on /chef the page watchEffect re-derives the
                 // selected dinner id from myTeams/season, so settle those first or its re-run
                 // reloads stale detail over the fresh fetch.
-                await settleSeason()
+                await refreshTeamAggregates()
                 await useUsersStore().loadMyTeams()
                 await useBookingsStore().refreshSelectedDinnerEventDetail()
                 toastSaved('Du har meldt afbud. Tjansen som chefkok er nu ledig.')

@@ -253,14 +253,15 @@ describe('ChefMenuCard — Madbestilling', () => {
         ]
         const wrapper = await mountChefCard({
             dinnerEvent: {...DinnerEventFactory.defaultDinnerEventDetail(), cookingTeam: team, cookingTeamId: team.id},
-            roundRows
+            roundRows,
+            teamNumber: 2
         })
         await clickByTestId(wrapper, 'expense-edit')
         await flushPromises()
         await wrapper.vm.$nextTick()
         expect(findByTestId(wrapper, 'expense-table').text()).toContain('Rådighedsbeløb')
         const [first, last] = roundRows.map(row => formatDate(row.date, DATE_SETTINGS.DAY_MONTH_MASK))
-        expect(findByTestId(wrapper, 'expense-hint-heading').text()).toBe(`Hele ${useCookingTeam().getTeamShortName('Madhold 2')}, periode ${first}-${last}`)
+        expect(findByTestId(wrapper, 'expense-hint-heading').text()).toBe(`${useCookingTeam().getTeamShortName('Madhold 2')}, periode ${first}-${last}`)
         expect(findAllByTestId(wrapper, 'expense-hint-row')).toHaveLength(6)
     })
 })

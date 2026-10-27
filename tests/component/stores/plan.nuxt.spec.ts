@@ -570,7 +570,7 @@ describe('Plan Store - write actions', () => {
         await expect(store.assignTeamAffinitiesAndEvents(season1.id)).rejects.toThrow()
     })
 
-    const TEAM_WRITES = ['updateTeam (affinity)', 'updateTeam (name)', 'addTeamMember', 'updateTeamMember', 'removeTeamMember', 'createJokerSlot', 'deleteJokerSlot']
+    const TEAM_WRITES = ['updateTeam (affinity)', 'updateTeam (name)', 'addTeamMember', 'updateTeamMember', 'removeTeamMember', 'createJokerSlot', 'deleteJokerSlot', 'assignRoleToDinner', 'claimRoleForMe', 'resignRoleForMe']
 
     it.each(writeActions.filter(({action}) => TEAM_WRITES.includes(action)))('$action refreshes the selected team', async ({write}) => {
         const store = await setupStore()

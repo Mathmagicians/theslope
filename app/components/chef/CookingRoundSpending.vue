@@ -9,34 +9,40 @@
  *   14/04  Bo K.                                  298 /   373 kr
  *   Risotto                 1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check)
  *
- * The team's round: its heading, the cooking days as the rows, the team's total row
- *   Hele Madhold 2, periode 12/04-15/04                       ex / inkl. moms
- *   12/04  Lasagne         1.425 / 1.781 kr  1.540 / 1.925 kr  -115 / -144 kr (overdraft)
- *   14/04  (arrow) Risotto  1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check)
- *   15/04  Pasta                0 /     0 kr      0 /     0 kr      0 /     0 kr (waiting)
- *   Hele Madhold 2          2.923 / 3.654 kr  2.850 / 3.563 kr   +73 /  +91 kr (check)
+ * The team's round: the team's badge and the period as its heading, the cooking days as the rows, the team's total row
+ *   [(team) Madhold 2] periode 12/04-15/04                     ex / inkl. moms
+ *   Dato   Middag            Rådighedsbeløb    Brugt             Tilbage
+ *   12/04  Lasagne           1.425 / 1.781 kr  1.540 / 1.925 kr  -115 / -144 kr
+ *   14/04  (dot) **Risotto** 1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr
+ *   15/04  Pasta                 0 /     0 kr      0 /     0 kr      0 /     0 kr
+ *   Madhold 2                2.923 / 3.654 kr  2.850 / 3.563 kr   +73 /  +91 kr
+ * [(team) Madhold 2] is the team's colour badge (CookingTeamBadges, name only). (dot) **Risotto** is the dinner on view.
  *
  * A dinner without a menu title reads Fællesspisning (formatDinnerName) in its heading, its total row and its Middag cell:
  *   Fællesspisning, 10/11                                     ex / inkl. moms
  *   Dato   Middag            Rådighedsbeløb      Brugt         Tilbage
  *   Fællesspisning           1.498 / 1.873 kr       0 /    0 kr  ...
  *
- *   Hele Madhold 2, periode 03/11-10/11                      ex / inkl. moms
- *   Dato   Middag            Rådighedsbeløb      Brugt         Tilbage
+ *   [(team) Madhold 2] periode 03/11-10/11                     ex / inkl. moms
+ *   Dato   Middag            Rådighedsbeløb    Brugt             Tilbage
  *   03/11  Lasagne           1.425 / 1.781 kr  1.540 / 1.925 kr  ...
  *   10/11  Fællesspisning    1.498 / 1.873 kr       0 /    0 kr  ...
- *   Hele Madhold 2           ...
+ *   Madhold 2                  ...
  *
  * While the round's orders load (the bookings store), UTable's loading bar runs under the team's round's column
  * headers and its days and total row stay; this dinner's receipts come from the dinner and carry no bar:
- *   Hele Madhold 2, periode 12/04-15/04                       ex / inkl. moms
- *   Dato  Middag            Rådighedsbeløb      Brugt         Tilbage
+ *   [(team) Madhold 2] periode 12/04-15/04                     ex / inkl. moms
+ *   Dato  Middag           Rådighedsbeløb      Brugt         Tilbage
  *   ==============================================================  <- UTable's loading bar
  *   12/04  Lasagne          1.425 / 1.781 kr  1.540 / 1.925 kr  -115 / -144 kr (overdraft)
  *
- * The arrow marks the dinner on view among the team's days; a figure without tickets waits instead of balancing; a
- * fragment without rows shows the table's own empty state. A UTable on the table token; the fragment comes from
- * dinnerSpendingFragment or teamSpendingFragment and every figure from the useOrder spending helpers.
+ * On a box narrower than the heading line (a phone), the unit words drop below the heading, on the right:
+ *   [(team) Madhold 2] periode 11/11-12/11
+ *                         ex / inkl. moms
+ *
+ * A dot and the bold name mark the dinner on view among the team's days, on one line; a figure without tickets waits
+ * instead of balancing; a fragment without rows shows the table's own empty state. A UTable on the table token; the
+ * fragment comes from dinnerSpendingFragment or teamSpendingFragment and every figure from the useOrder spending helpers.
  */
 import type {TableColumn} from '@nuxt/ui'
 import type {SpendingFragment, SpendingTableRow} from '~/composables/useBookingUi'
@@ -65,17 +71,21 @@ const columns: TableColumn<SpendingTableRow>[] = [
 
 <template>
   <section data-testid="cooking-round">
-    <div :class="COMPONENTS.dinnerBudget.boxLine">
-      <h5 :class="TYPOGRAPHY.sectionSubheading" data-testid="cooking-round-heading">{{ fragment.heading }}</h5>
-      <span :class="COMPONENTS.vatAmount.unitHeader">ex / inkl. moms</span>
+    <div :class="COMPONENTS.dinnerBudget.headingLine">
+      <div v-if="fragment.kind === 'team'" :class="COMPONENTS.dinnerBudget.roundHeading" data-testid="cooking-round-heading">
+        <CookingTeamBadges :team-number="fragment.teamNumber" :team-name="fragment.team" :show-counts="false" />
+        <span :class="TYPOGRAPHY.sectionSubheading">{{ fragment.period }}</span>
+      </div>
+      <h5 v-else :class="TYPOGRAPHY.sectionSubheading" data-testid="cooking-round-heading">{{ fragment.heading }}</h5>
+      <span :class="COMPONENTS.dinnerBudget.headingUnits">ex / inkl. moms</span>
     </div>
     <UTable :data="fragment.rows" :columns="columns" :loading="loading" :ui="COMPONENTS.table.ui">
       <template #date-cell="{ row }">{{ formatDate(row.original.date, DATE_SETTINGS.DAY_MONTH_MASK) }}</template>
       <template #label-cell="{ row }">
-        <template v-if="row.original.kind === 'dinner'">
-          <UIcon v-if="row.original.isCurrent" :name="ICONS.arrowRight" :class="COMPONENTS.table.currentMarker" data-testid="cooking-round-marker" />
+        <span v-if="row.original.kind === 'dinner'" :class="row.original.isCurrent ? COMPONENTS.table.currentDinnerLabel : COMPONENTS.table.dinnerLabel">
+          <UIcon v-if="row.original.isCurrent" :name="ICONS.dot" :class="COMPONENTS.table.currentMarker" data-testid="cooking-round-marker" />
           {{ formatDinnerName(row.original) }}
-        </template>
+        </span>
         <span v-else :class="COMPONENTS.table.receiptLabel">{{ row.original.label }}</span>
       </template>
       <template #allowance-cell="{ row }">

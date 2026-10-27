@@ -153,34 +153,52 @@ export interface CookingRoundRow {
     spentGross: number
 }
 
-/** The words of a team's cooking round, shared by the Madbestilling hint and the Budget pane's round table */
-export interface CookingRoundWords { team: string; heading: string }
-export const cookingRoundWords = (teamShortName: string, first: Date, last: Date): CookingRoundWords => {
-    const team = BOOKING_WORDS.wholeTeam(teamShortName)
-    return {team, heading: BOOKING_WORDS.roundHeading(team, formatDateRange({start: first, end: last}, DATE_SETTINGS.DAY_MONTH_MASK))}
+/**
+ * The words of a team's cooking round: the team's short name and number for its badge and the round's period in the
+ * Budget pane's round table, and the Madbestilling hint's heading
+ */
+export interface CookingRoundWords { team: string; teamNumber: number; period: string; heading: string }
+export const cookingRoundWords = (teamShortName: string, teamNumber: number, first: Date, last: Date): CookingRoundWords => {
+    const range = formatDateRange({start: first, end: last}, DATE_SETTINGS.DAY_MONTH_MASK)
+    return {team: teamShortName, teamNumber, period: BOOKING_WORDS.roundPeriod(range), heading: BOOKING_WORDS.roundHeading(teamShortName, range)}
 }
 
 /**
- * A spending table fragment: a heading, the rows (a team's cooking days, or this dinner's receipts with the note
- * as the label) and a total row carrying the figures the rows add up to
+ * A spending table fragment: the rows (a team's cooking days, or this dinner's receipts with the note as the label)
+ * and a total row carrying its label and the figures the rows add up to. This dinner reads its heading as text; the
+ * team's round heads with its team's badge and its period
  */
 export type SpendingTableRow =
     | ({kind: 'dinner'} & CookingRoundRow)
     | {kind: 'receipt', id: string, date: Date, label: string, amount: number}
-export interface SpendingFragment {
-    heading: string
+interface SpendingFragmentTable {
     rows: SpendingTableRow[]
     total: {label: string, figures: SpendingFigures}
 }
-export const dinnerSpendingFragment = (dinner: CookingRoundRow, receipts: Expense[]): SpendingFragment => ({
+export interface DinnerSpendingFragment extends SpendingFragmentTable {
+    kind: 'dinner'
+    heading: string
+}
+export interface TeamSpendingFragment extends SpendingFragmentTable {
+    kind: 'team'
+    team: string
+    teamNumber: number
+    period: string
+}
+export type SpendingFragment = DinnerSpendingFragment | TeamSpendingFragment
+export const dinnerSpendingFragment = (dinner: CookingRoundRow, receipts: Expense[]): DinnerSpendingFragment => ({
+    kind: 'dinner',
     heading: `${formatDinnerName(dinner)}, ${formatDate(dinner.date, DATE_SETTINGS.DAY_MONTH_MASK)}`,
     rows: receipts.map(receipt => ({kind: 'receipt', id: `receipt-${receipt.id}`, date: receipt.createdAt, label: receipt.description, amount: receipt.amount})),
     total: {label: formatDinnerName(dinner), figures: {budgetGross: dinner.budgetGross, spentGross: dinner.spentGross}}
 })
-export const teamSpendingFragment = (rows: CookingRoundRow[], words: CookingRoundWords): SpendingFragment => ({
-    heading: words.heading,
+export const teamSpendingFragment = (rows: CookingRoundRow[], {team, teamNumber, period}: CookingRoundWords): TeamSpendingFragment => ({
+    kind: 'team',
+    team,
+    teamNumber,
+    period,
     rows: rows.map(row => ({kind: 'dinner', ...row})),
-    total: {label: words.team, figures: useOrder().spendingTotals(rows)}
+    total: {label: team, figures: useOrder().spendingTotals(rows)}
 })
 
 /**

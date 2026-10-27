@@ -8,9 +8,9 @@ import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useOrder} from '~/composables/useOrder'
 import {useTicket, ticketTypeLabel} from '~/composables/useTicket'
 import {useBookingValidation, type OrderDetail, type OrderState, type TicketType} from '~/composables/useBookingValidation'
-import {dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
+import {cookingRoundWords, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, registerEmptyStoreEndpoints, kitchenConfig, resetStores} from '~~/tests/component/testHelpers'
-import {formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
+import {formatDate, DATE_SETTINGS} from '~/utils/date'
 
 /**
  * DinnerBudget: the three boxes in both units, the RÅDIGHEDSBELØB box with start, Brugt and Tilbage, and under the
@@ -40,7 +40,7 @@ const round: CookingRoundRow[] = [
     {dinnerEventId: 8, date: new Date('2026-04-13T18:00:00'), menuTitle: 'Risotto', isCurrent: false, budgetGross: 15000, spentGross: 0}
 ]
 const ownHeading = `Lasagne, ${formatDate(round[0]!.date, DATE_SETTINGS.DAY_MONTH_MASK)}`
-const roundHeading = `Hele Madhold 2, periode ${formatDateRange({start: round[0]!.date, end: round[1]!.date}, DATE_SETTINGS.DAY_MONTH_MASK)}`
+const roundWords = cookingRoundWords('Madhold 2', 2, round[0]!.date, round[1]!.date)
 
 // The ticket changes pane reaches the bookings store; its datasets answer empty here
 registerEmptyStoreEndpoints()
@@ -53,7 +53,7 @@ beforeEach(() => {
 })
 
 const mount = (props: Record<string, unknown> = {}) => mountWithTooltipProvider(DinnerBudget, {
-    props: {orders, mode: 'full', expenses, dinnerEventId: 7, bookingDeadline: new Date('2026-04-03T18:00:00'), dinnerFragment: dinnerSpendingFragment(round[0]!, expenses), teamFragment: teamSpendingFragment(round, {team: 'Hele Madhold 2', heading: roundHeading}), ...props},
+    props: {orders, mode: 'full', expenses, dinnerEventId: 7, bookingDeadline: new Date('2026-04-03T18:00:00'), dinnerFragment: dinnerSpendingFragment(round[0]!, expenses), teamFragment: teamSpendingFragment(round, roundWords), ...props},
     isMd: true
 })
 
@@ -97,7 +97,8 @@ describe('DinnerBudget', () => {
         expect(findByTestId(wrapper, 'cooking-round').exists()).toBe(true)
         // The dinner's figures, then the team's, then the ticket changes last
         expect(wrapper.html().indexOf('data-testid="ticket-changes"')).toBeGreaterThan(wrapper.html().indexOf('data-testid="cooking-round"'))
-        expect(findAllByTestId(wrapper, 'cooking-round-heading')[1]!.text()).toBe(roundHeading)
+        // The team's round: its badge and its period
+        expect(findAllByTestId(wrapper, 'cooking-round-heading')[1]!.text()).toContain(roundWords.period)
     })
 
     it('GIVEN no tickets WHEN opened THEN there are no ticket changes to see', async () => {

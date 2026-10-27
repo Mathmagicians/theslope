@@ -116,6 +116,7 @@ interface Props {
   calendarOpen?: boolean        // Calendar accordion state
   navColor?: NuxtUIColor        // Navigation button color
   roundRows?: CookingRoundRow[] // The team's cooking round around this dinner (chef page)
+  teamNumber?: number | null    // The cooking team's number in the season, its badge's colour in the round (chef page)
   expenseNote?: string          // The words a grocery line's note starts with (expenseNoteWords, built by the page)
   waitlist?: WaitlistQueueSummary | null // The dinner's queue: its size and portion need (chef page)
 }
@@ -133,6 +134,7 @@ const props = withDefaults(defineProps<Props>(), {
   calendarOpen: false,
   navColor: undefined,
   roundRows: () => [],
+  teamNumber: null,
   expenseNote: '',
   waitlist: null
 })
@@ -186,14 +188,14 @@ const {getTeamShortName} = useCookingTeam()
 const roundWords = computed(() => {
   const first = props.roundRows[0]
   const last = props.roundRows.at(-1)
-  if (props.roundRows.length <= 1 || !first || !last || !props.dinnerEvent.cookingTeam) return null
-  return cookingRoundWords(getTeamShortName(props.dinnerEvent.cookingTeam.name), first.date, last.date)
+  if (props.roundRows.length <= 1 || !first || !last || !props.dinnerEvent.cookingTeam || props.teamNumber === null) return null
+  return cookingRoundWords(getTeamShortName(props.dinnerEvent.cookingTeam.name), props.teamNumber, first.date, last.date)
 })
 // The spending fragments, built once: this dinner's receipts and the team's round, for the editor's sums and the Budget pane
 const ownRow = computed(() => props.roundRows.find(row => row.isCurrent) ?? null)
 const dinnerFragment = computed(() => ownRow.value ? dinnerSpendingFragment(ownRow.value, props.dinnerEvent.expenses) : null)
 const teamFragment = computed(() => roundWords.value ? teamSpendingFragment(props.roundRows, roundWords.value) : null)
-const round = computed(() => teamFragment.value ? {label: teamFragment.value.heading, figures: teamFragment.value.total.figures} : null)
+const round = computed(() => roundWords.value && teamFragment.value ? {label: roundWords.value.heading, figures: teamFragment.value.total.figures} : null)
 const bookingDeadline = computed(() => props.deadlines.getBookingDeadlineTime(props.dinnerEvent.date))
 
 // Time logic from useSeason (ADR-001: business logic in composables)

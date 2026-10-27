@@ -1,6 +1,7 @@
 import {useBookingValidation, type TicketType, type OrderDisplay} from '~/composables/useBookingValidation'
 import type {TicketPrice, PortionTicket} from '~/composables/useTicketPriceValidation'
 import {calculateAgeOnDate} from '~/utils/date'
+import {useAppConfig} from '#imports'
 
 const {TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum

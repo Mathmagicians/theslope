@@ -1501,8 +1501,12 @@ export const COMPONENTS = {
         /** The cells of a sum row in the body-bottom slot: a label cell, and an amount cell aligned with the amount column */
         sumCell: TABLE_CELL,
         sumAmountCell: `${TABLE_CELL} text-right`,
-        /** The arrow before the name of the dinner on view */
+        /** The dot before the name of the dinner on view */
         currentMarker: 'inline-block size-4 mr-1 align-middle',
+        /** A dinner's name on one line in a cell that wraps */
+        dinnerLabel: 'whitespace-nowrap',
+        /** The dinner on view: its dot and its name in bold, on one line */
+        currentDinnerLabel: 'whitespace-nowrap font-bold',
         /** A receipt sub-row under a dinner: indented, in the muted ink */
         receiptLabel: `pl-4 ${TEXT.muted}`,
         /** A spacer row between two groups of bottom rows */
@@ -1960,6 +1964,11 @@ export const COMPONENTS = {
         boxUnit: TYPOGRAPHY.finePrintMuted,
         summaryDeduction: `${TYPOGRAPHY.bodyTextMedium} ${TEXT.muted}`,
         boxLine: `flex items-center justify-between gap-2 whitespace-nowrap ${TYPOGRAPHY.bodyTextSmall}`,
+        /** A spending table's heading line: the heading on the left, the unit words on the right, below it on a narrow box */
+        headingLine: `flex flex-wrap items-center justify-between gap-x-2 gap-y-1 whitespace-nowrap ${TYPOGRAPHY.bodyTextSmall}`,
+        headingUnits: `ml-auto ${TYPOGRAPHY.finePrintMuted}`,
+        /** The team's round heading: the team's badge, then the period */
+        roundHeading: 'flex items-center gap-2',
         section: 'border-t p-4 space-y-2'
     },
 
@@ -2221,6 +2230,7 @@ export const ICONS = {
     warning: 'i-heroicons-exclamation-triangle',
     jobFailed: 'i-heroicons-x-circle',
     ellipsis: 'i-heroicons-ellipsis-horizontal',
+    dot: 'i-mdi-circle-medium',
     xMark: 'i-heroicons-x-mark',
     arrowRight: 'i-heroicons-arrow-right',
     arrowLeft: 'i-heroicons-arrow-left',
@@ -3301,11 +3311,11 @@ export const EMPTY_STATE_MESSAGES = {
     noAllergens: [
         { emoji: '🍀', text: 'Allergenerne fik ikke plads på menuen i dag' },
         { emoji: '😋', text: 'Ingen allergener på menuen - spis løs!' },
-        { emoji: '🧑‍🍳', text: 'Kokken har ikke købt noget med allergener i' }
+        { emoji: '🧑‍🍳', text: 'Chefkokken har fundet på noget helt uden allergener i' }
     ],
     seasonGone: [
         { emoji: '📅', text: 'Sæsonen er pakket sammen og sat op på loftet' },
-        { emoji: '🍂', text: 'Denne sæson er måske blæst væk med bladene' },
+        { emoji: '🍂', text: 'Denne sæson er måske blæst væk, med efterårsblæsten og bladene' },
         { emoji: '🗓️', text: 'Kalenderen har vendt bladet, sæsonen er væk' }
     ],
     noTicketsSold: [
@@ -3313,12 +3323,12 @@ export const EMPTY_STATE_MESSAGES = {
         { emoji: '⏳', text: 'Billetterne er på vej, husstandene skal lige vågne' }
     ],
     noReceipts: [
-        { emoji: '🛒', text: 'Indkøbsvognen er tom, kvitteringerne er ikke kommet endnu' },
-        { emoji: '🧾', text: 'Kvitteringerne gemmer sig stadig i jakkelommen' }
+        { emoji: '🛒', text: 'Indkøbsvognen er tom, mon vi skal have noget at spise?' },
+        { emoji: '🧾', text: 'Tænk på madvarer, der drømmer om at blive købt' }
     ],
     noTicketChanges: [
-        { emoji: '🧘', text: 'Billetterne har holdt sig i ro' },
-        { emoji: '📭', text: 'Postkassen er tom, ingen billetter er flyttet' }
+        { emoji: '🧘', text: 'Hmm, her er vist ingen billetter, kig under sengen' },
+        { emoji: '📭', text: 'Postkassen er tom, ingen billetter fundet' }
     ]
 } as const
 
