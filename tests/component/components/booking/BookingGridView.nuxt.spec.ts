@@ -90,6 +90,8 @@ const mountGrid = (dinnerEvents: DinnerEventDisplay[], props: Record<string, unk
 // The ids of the rows the grid hands its table
 const rowIdsOf = (wrapper: Mounted) =>
   (wrapper.findComponent({name: 'UTable'}).props('data') as {id: string | number}[]).map(row => row.id)
+// A person's row by the price its dinners in view hold: inhabitant-<inhabitant>-<price>
+const inhabitantRowId = (inhabitantId: number, price: number = adultPrice.price) => `inhabitant-${inhabitantId}-${price}`
 
 // A grid cell's selector by its name: cell-<inhabitant>-<dinner>, power-<dinner>, guest-<row>-<dinner>
 const selectorNamed = (wrapper: Mounted, name: string) =>
@@ -245,14 +247,42 @@ describe('BookingGridView', () => {
       })
       // The name cell's badges: the tickets, the released among them, the places on the waiting list
       const kinds = ['ticket', 'released', 'waitlist']
-      const countBadge = (kind: string, inhabitantId: number) => findByTestId(wrapper, `inhabitant-${kind}-count-${inhabitantId}`)
-      const waitlistBadge = findComponentByTestId<BadgeProps>(wrapper, 'UBadge', `inhabitant-waitlist-count-${anna.id}`)
+      const countBadge = (kind: string, inhabitantId: number) => findByTestId(wrapper, `${inhabitantRowId(inhabitantId)}-${kind}-count`)
+      const waitlistBadge = findComponentByTestId<BadgeProps>(wrapper, 'UBadge', `${inhabitantRowId(anna.id)}-waitlist-count`)
 
       expect(kinds.map(kind => countBadge(kind, anna.id).text())).toEqual(['1', '1', '1'])
+      expect(rowIdsOf(wrapper)).toContain(inhabitantRowId(lars.id))
       expect(kinds.filter(kind => countBadge(kind, lars.id).exists())).toEqual([])
       expect(waitlistBadge.props('color')).toBe(ORDER_STATE_COLORS[TicketState.queued])
       expect(waitlistBadge.findComponent({name: 'UIcon'}).props('name')).toBe(ICONS.waitlist)
       expect(countBadge('ticket', anna.id).element.parentElement).toBe(waitlistBadge.element.parentElement)
+    })
+
+    // The name cell counts the person's own cells over the dinners in view: a guest's ticket or place is the guest row's,
+    // an order of any state takes its dinner's cell from a place, and another person's cells count on their own row
+    describe('the name cell counts the person\'s own cells', () => {
+      const later = DinnerEventFactory.dinnerEventAt(5, 2)
+      const outside = later.id + 1
+      const place = (id: number, dinnerEventId: number, overrides: Parameters<typeof WaitlistFactory.defaultEntry>[0] = {}) =>
+        WaitlistFactory.defaultEntry({id, inhabitantId: anna.id, dinnerEventId, ...overrides})
+
+      it.each([
+        {desc: 'guest tickets and a guest\'s place', orders: [order(7, anna.id, true, DINEIN), order(8, anna.id, true, DINEIN, RELEASED)], entries: [place(11, later.id, {isGuestTicket: true})], counts: [0, 0, 0]},
+        {desc: 'a released ticket beside a guest ticket', orders: [order(7, anna.id, true, DINEIN), order(42, anna.id, false, DINEIN, RELEASED)], entries: [], counts: [1, 1, 0]},
+        {desc: 'a ticket and a place on the same dinner', orders: [order(42, anna.id, false, DINEIN)], entries: [place(9, event.id)], counts: [1, 0, 0]},
+        {desc: 'a cancelled ticket and a place on the same dinner', orders: [order(42, anna.id, false, DINEIN, OrderStateSchema.enum.CANCELLED)], entries: [place(9, event.id)], counts: [0, 0, 0]},
+        {desc: 'a ticket and a place on a dinner outside the view', orders: [order(42, anna.id, false, DINEIN, BOOKED, outside)], entries: [place(9, outside)], counts: [0, 0, 0]},
+        {desc: 'nothing, while Lars holds a ticket and a place', orders: [order(42, lars.id, false, DINEIN)], entries: [place(9, later.id, {inhabitantId: lars.id})], counts: [0, 0, 0]}
+      ])('GIVEN Anna holds $desc THEN her name cell counts $counts tickets, released and places', async ({orders, entries, counts}) => {
+        const wrapper = await mountGrid([event, later], {orders, waitlistEntries: entries})
+        const countOf = (kind: string) => {
+          const badge = findByTestId(wrapper, `${inhabitantRowId(anna.id)}-${kind}-count`)
+          return badge.exists() ? Number(badge.text()) : 0
+        }
+
+        expect(rowIdsOf(wrapper)).toContain(inhabitantRowId(anna.id))
+        expect(['ticket', 'released', 'waitlist'].map(countOf)).toEqual(counts)
+      })
     })
 
     describe('guest cells in edit mode', () => {
@@ -586,7 +616,7 @@ describe('BookingGridView a person\'s rows by price', () => {
   const mountPrices = (props: Record<string, unknown>) => mountGrid(dinners, {ticketPrices: pricesToday, ...props})
 
   const countIn = (row: TablePart, kind: string) => {
-    const badge = findByTestId(row, `inhabitant-${kind}-count-${anna.id}`)
+    const badge = row.find(`[data-testid$="-${kind}-count"]`)
     return badge.exists() ? badge.text() : null
   }
   // The cell of a dinner on a row: the cells after the name cell follow the dinners
@@ -673,7 +703,7 @@ describe('BookingGridView a person\'s rows by price', () => {
       // A dinner a week after the third: its week holds no dinner where Anna's ticket type changes
       const aWeekAfterTheThird = {...DinnerEventFactory.dinnerEventAt(6, 0), date: addDays(third.date, 7)}
       const seasonDinners = [...dinners, aWeekAfterTheThird]
-      const newPriceRow = `inhabitant-${anna.id}-${adultPrice.price}`
+      const newPriceRow = inhabitantRowId(anna.id)
       // The id of the row whose name cell holds a part
       const rowIdHolding = (wrapper: Mounted, part: BaseWrapper<Node>) =>
         rowIdsOf(wrapper)[wrapper.findAll('tbody tr').findIndex(row => row.find('td').element.contains(part.element))]

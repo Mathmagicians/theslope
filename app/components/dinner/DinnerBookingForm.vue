@@ -285,7 +285,7 @@ const toggleHistory = (orderId: number | null) => {
 
 const {expanded} = useExpandableRow({
   onExpand: (rowId) => {
-    const row = tableData.value.find(candidate => rowIdOf(candidate) === rowId)
+    const row = findRowById(tableData.value, rowId)
     if (row) {
       editingRowId.value = row.id
       // A plan's draft starts on the person's click; a row without a ticket shows Ingen, its draft starts on the first mode it may pick

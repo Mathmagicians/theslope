@@ -71,6 +71,7 @@ export type Scene = {
     actor?: Actor
     /** The page a UI step opened in the actor's context */
     page?: Page
+    /** The active season the Background names: the singleton, or the season of its own the dinner step activates */
     activeSeason?: Season
     /** Whether the season the dinner step builds around the dinner's day is activated, as the Background states it */
     ownSeasonIsActive?: boolean
@@ -154,12 +155,6 @@ export const createScenePerson = async (
     return person
 }
 
-/** The active season a scenario books in: the one a GIVEN activated, else the e2e singleton */
-export const activeSeasonOf = async (admin: BrowserContext, scene: Scene): Promise<Season> => {
-    scene.activeSeason ??= await SeasonFactory.createActiveSeason(admin)
-    return scene.activeSeason
-}
-
 /** The season's ticket price of an actor's part: a BABY ticket of 0 portions, a BABY ticket of a share, else ADULT (the factory persons are adults) */
 const ticketPriceOf = (ticketPrices: TicketPrice[], actor: Actor): TicketPrice | undefined => {
     switch (actor) {
@@ -185,7 +180,7 @@ export const ticketPriceIdOf = async (admin: BrowserContext, seasonId: number, a
  * so the dinner's billing period is closed whatever the day of the run
  */
 export const createDinnerInThePastMonth = async (admin: BrowserContext, scene: Scene): Promise<DinnerEventDisplay> => {
-    const season = await activeSeasonOf(admin, scene)
+    const season = fromScene(scene, 'activeSeason')
     const event = await DinnerEventFactory.createDinnerEventInState(admin, season.id!, DinnerStateSchema.enum.CONSUMED, -35)
     scene.created.dinnerEventIds.push(event.id)
     scene.dinner = {season, event}
@@ -293,7 +288,7 @@ export const test = mergeTests(base, uiTest).extend<{adminContext: BrowserContex
 
 export const {Given, When, Then, BeforeAll} = createBdd(test)
 
-// The singleton active season (`activeSeasonOf`), resolved in each feature's beforeAll as `season.setup.ts` and the
+// The singleton active season (`a season is active`), resolved in each feature's beforeAll as `season.setup.ts` and the
 // specs' beforeAll do: a run without setup-season (--no-deps) creates it there, outside a scenario's own timeout
 BeforeAll({tags: 'not @smoke'}, async ({browser}) => {
     const admin = await validatedBrowserContext(browser)

@@ -61,8 +61,8 @@ const {DinnerModeSchema, OrderStateSchema, GuestBookingFormSchema, TicketTypeSch
 const DinnerModeEnum = DinnerModeSchema.enum
 const OrderStateEnum = OrderStateSchema.enum
 
-// The guests a save books: how many, at which ticket price, how they eat and their allergies
-type GuestDraft = {dinnerMode: DinnerMode, count: number, ticketPriceId: number, allergyTypeIds: number[]}
+// The guests a save books, as the form schema reads them; the mode holds Ingen while the form tries each mode
+type GuestDraft = Omit<GuestBookingFormData, 'dinnerMode'> & {dinnerMode: DinnerMode}
 
 // Form state - reactive object for UForm binding
 const formState = reactive<Omit<GuestDraft, 'ticketPriceId'> & {ticketPriceId: number | undefined}>({

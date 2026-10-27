@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeAll, beforeEach, afterEach, vi} from 'vitest'
 import {addDays, addHours, addYears} from 'date-fns'
-import {useBooking, type AlarmLevel, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, bookingContextOf, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, personTicketCounts, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
+import {useBooking, type AlarmLevel, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, bookingContextOf, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {dateToWeekDay} from '~/utils/season'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -2016,32 +2016,6 @@ describe('order predicates', () => {
         {state: OrderStates.CANCELLED, pending: false}
     ])('GIVEN an order $state THEN it waits for the close: $pending', ({state, pending}) => {
         expect(isPendingOrder(OrderFactory.defaultOrder(undefined, {state}))).toBe(pending)
-    })
-})
-
-// The booking grid's name cell over the dinners in view: the person's own tickets waiting for the close, the released
-// among them, and their own places on the waiting list on a dinner where they hold no ticket
-describe('personTicketCounts', () => {
-    const [ANNA, LARS] = [1, 2]
-    const [first, second, outside] = [201, 202, 203]
-    const ticket = (id: number, dinnerEventId: number, overrides: Partial<OrderDisplay> = {}): OrderDisplay =>
-        OrderFactory.defaultOrder(undefined, {id, inhabitantId: ANNA, dinnerEventId, ...overrides})
-    const place = (id: number, dinnerEventId: number, overrides: Parameters<typeof WaitlistFactory.defaultEntry>[0] = {}) =>
-        WaitlistFactory.defaultEntry({id, inhabitantId: ANNA, dinnerEventId, ...overrides})
-
-    it.each([
-        {desc: 'guest tickets only', orders: [ticket(7, first, {isGuestTicket: true}), ticket(8, first, {isGuestTicket: true, state: OrderStates.RELEASED})], entries: [], counts: {total: 0, released: 0, queued: 0}},
-        {desc: 'a released ticket and guest tickets', orders: [ticket(7, first, {isGuestTicket: true}), ticket(8, first, {isGuestTicket: true, state: OrderStates.RELEASED}), ticket(42, first, {state: OrderStates.RELEASED})], entries: [], counts: {total: 1, released: 1, queued: 0}},
-        {desc: 'tickets the close or a cancellation ended', orders: [ticket(42, first, {state: OrderStates.CLOSED, dinnerMode: DinnerModes.NONE}), ticket(43, second, {state: OrderStates.CANCELLED})], entries: [], counts: {total: 0, released: 0, queued: 0}},
-        {desc: 'places on the waiting list only', orders: [], entries: [place(9, first), place(10, second)], counts: {total: 0, released: 0, queued: 2}},
-        {desc: 'a guest\'s place on the waiting list', orders: [], entries: [place(11, second, {isGuestTicket: true})], counts: {total: 0, released: 0, queued: 0}},
-        {desc: 'a ticket on one dinner and a place on the other', orders: [ticket(42, first)], entries: [place(9, second)], counts: {total: 1, released: 0, queued: 1}},
-        {desc: 'a ticket and a place on the same dinner', orders: [ticket(42, first)], entries: [place(9, first)], counts: {total: 1, released: 0, queued: 0}},
-        {desc: 'an ended ticket and a place on the same dinner, cancelled on one and closed on the other', orders: [ticket(42, first, {state: OrderStates.CANCELLED}), ticket(43, second, {state: OrderStates.CLOSED})], entries: [place(9, first), place(10, second)], counts: {total: 0, released: 0, queued: 0}},
-        {desc: 'a ticket and a place on a dinner outside the view', orders: [ticket(42, outside)], entries: [place(9, outside)], counts: {total: 0, released: 0, queued: 0}},
-        {desc: 'nothing, while Lars holds a ticket and a place', orders: [ticket(42, first, {inhabitantId: LARS})], entries: [place(9, second, {inhabitantId: LARS})], counts: {total: 0, released: 0, queued: 0}}
-    ])('GIVEN Anna holds $desc THEN she counts $counts.total tickets, $counts.released released and $counts.queued places', ({orders, entries, counts}) => {
-        expect(personTicketCounts(ANNA, [first, second], orders, entries)).toEqual(counts)
     })
 })
 

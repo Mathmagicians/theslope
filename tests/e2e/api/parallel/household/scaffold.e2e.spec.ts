@@ -14,7 +14,7 @@ const Action = useBookingValidation().BookingActionSchema.enum
 
 const { validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, salt, getSessionUserInfo, daysFromNow } = testHelpers
 const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema } = useBookingValidation()
-const { findTicketPriceByType } = useTicket()
+const { findTicketPriceByType, findTicketPriceById } = useTicket()
 const DinnerMode = DinnerModeSchema.enum
 
 /**
@@ -525,9 +525,10 @@ test.describe('Household Scaffold API (ADR-016)', () => {
         results: [{ inhabitantId, isGuestTicket: false, ticketType: TicketTypeSchema.enum.ADULT, action: Action.QUEUE }] })
       expect(second).toMatchObject({ totals: { [Action.QUEUE]: 1 }, positions: [{ inhabitantId: member.inhabitantId, position: 2 }] })
       const entries = await WaitlistFactory.entries(context, [dinnerEventId])
+      const adultPrice = findTicketPriceById(testAdultTicketPriceId, testSeason.ticketPrices)!.price
       expect(entries.map(entry => [entry.inhabitantId, entry.order.householdId, entry.order.priceAtBooking])).toEqual([
-        [inhabitantId, testHouseholdId, testSeason.ticketPrices.find(price => price.id === testAdultTicketPriceId)!.price],
-        [member.inhabitantId, member.householdId, testSeason.ticketPrices.find(price => price.id === testAdultTicketPriceId)!.price]
+        [inhabitantId, testHouseholdId, adultPrice],
+        [member.inhabitantId, member.householdId, adultPrice]
       ])
     })
 

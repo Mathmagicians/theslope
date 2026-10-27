@@ -10,7 +10,7 @@ import {TicketTypeSchema} from '../../prisma/generated/zod'
 
 const TicketType = TicketTypeSchema.enum
 
-export const DEFAULT_TICKET_PRICES = [
+const DEFAULT_TICKET_PRICES = [
     {ticketType: TicketType.BABY, description: 'Spiser gratis smagsprøver fra forældrene', price: 0, maximumAgeLimit: 2, portions: 0},
     {ticketType: TicketType.BABY, description: 'Sulten baby - 1/4 kuvert', price: 900, maximumAgeLimit: 2, portions: 0.25},
     {ticketType: TicketType.CHILD, description: 'Barn', price: 1700, maximumAgeLimit: 12, portions: 0.5},

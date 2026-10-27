@@ -228,7 +228,7 @@ const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEm
 const emptyState = getRandomEmptyMessage('noDinners')
 
 const {formatPrice, findTicketPriceById, resolveTicketPrice, resolveTicketPriceOn, ticketTypeChangeOf} = useTicket()
-const {getReleasedOrders} = useOrder()
+const {getReleasedOrders, personTicketCounts} = useOrder()
 
 const {groupGuestOrders, getDayBillSummary, getBookingOptions, powerOptions, newGuestRow, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
 const {lockChip, createBirthdayBadge, bookingSaveLabel} = useBookingUi()
@@ -520,7 +520,10 @@ const inhabitantRows = computed(() => props.household.inhabitants.flatMap(inhabi
         birthdayBadge: birthdayBadgeOf(events),
         isSynthetic: false
       } satisfies GridRow,
-      counts: personTicketCounts(inhabitant.id, dinnerEventIds, props.orders, props.waitlistEntries)
+      counts: personTicketCounts(
+        events.flatMap(event => getOrderForCell(inhabitant.id, event.id) ?? []),
+        events.flatMap(event => getWaitlistEntryForCell(inhabitant.id, event.id) ?? [])
+      )
     }
   })
 }))
@@ -595,11 +598,10 @@ const tableData = computed((): GridRow[] => {
 
 // The name cell's counts over the row's dinners, one entry per inhabitant row
 const countsByRow = computed(() => new Map(inhabitantRows.value.map(({row, counts}) => [row.id, counts])))
-const NO_COUNTS = {total: 0, released: 0, queued: 0}
-const countsOf = (row: GridRow) => countsByRow.value.get(row.id) ?? NO_COUNTS
+const countsOf = (row: GridRow) => countsByRow.value.get(row.id)!
 
 // An inhabitant row's cell on a dinner at another price stays empty
-const holdsDinner = (row: GridRow, eventId: number): boolean => row.dinnerEventIds?.includes(eventId) ?? false
+const holdsDinner = (row: GridRow, eventId: number): boolean => row.dinnerEventIds!.includes(eventId)
 
 // A row's ticket badge reads as the day view's ticket: the type and the price, a guest row's guests
 const rowBadgeLabel = ({ticketConfig, price, guestCount}: GridRow): string | null =>
@@ -644,13 +646,12 @@ const enabledModesByCell = computed(() => {
     }, contextOf(event))
   ] as const))
   const cells = new Map<string, DinnerMode[]>(inhabitantCells)
-  const guestCells = guestRows.value.flatMap(({id, guestOrders, waitlistEntry, dinnerEventId}) => {
-    const event = eventById.get(dinnerEventId!)
-    if (!event) return []
+  const guestCells = guestRows.value.map(({id, guestOrders, waitlistEntry, dinnerEventId}) => {
+    const event = eventById.get(dinnerEventId!)!
     const row = waitlistEntry
       ? {order: null, waitlistEntry, candidate: (dinnerMode: DinnerMode) => buildEntryDesiredOrder({entry: waitlistEntry, dinnerMode}, OrderStateSchema.enum.BOOKED)}
       : {order: guestOrders![0]!, waitlistEntry: null, candidate: (dinnerMode: DinnerMode) => buildGuestDesiredOrders([{guestOrders: guestOrders!, dinnerMode}], props.ticketPrices)[0] ?? null}
-    return [[id, getBookingOptions(row, contextOf(event))] as const]
+    return [id, getBookingOptions(row, contextOf(event))] as const
   })
   const eventCells = flatEvents.value.flatMap(event => [
     [`power-${event.id}`, powerOptions(props.household.inhabitants.map(({id}) => cells.get(expectedBookingKey(id, event.id))!))] as const,
@@ -660,7 +661,7 @@ const enabledModesByCell = computed(() => {
 })
 const getCellModes = (inhabitantId: number, eventId: number): DinnerMode[] =>
   enabledModesByCell.value.get(expectedBookingKey(inhabitantId, eventId))!
-const getGuestModes = (row: GridRow): DinnerMode[] => enabledModesByCell.value.get(row.id) ?? []
+const getGuestModes = (row: GridRow): DinnerMode[] => enabledModesByCell.value.get(row.id)!
 const getPowerModes = (event: DinnerEventDisplay): DinnerMode[] => enabledModesByCell.value.get(`power-${event.id}`)!
 const getNewGuestModes = (event: DinnerEventDisplay): DinnerMode[] => enabledModesByCell.value.get(`guest-add-${event.id}`)!
 
@@ -845,7 +846,7 @@ const getEventSummary = (eventId: number) => {
           <!-- Ticket count badge (only if > 0) -->
           <UBadge
             v-if="countsOf(row.original).total > 0"
-            :data-testid="`inhabitant-ticket-count-${row.original.inhabitant.id}`"
+            :data-testid="`${row.original.id}-ticket-count`"
             :color="COLOR.neutral"
             :variant="NOISE.soft"
             :size="SIZES.xs"
@@ -856,7 +857,7 @@ const getEventSummary = (eventId: number) => {
           <!-- Released badge (only if > 0) -->
           <UBadge
             v-if="countsOf(row.original).released > 0"
-            :data-testid="`inhabitant-released-count-${row.original.inhabitant.id}`"
+            :data-testid="`${row.original.id}-released-count`"
             :color="ORDER_STATE_COLORS[TicketState.released]"
             :variant="NOISE.soft"
             :size="SIZES.xs"
@@ -867,7 +868,7 @@ const getEventSummary = (eventId: number) => {
           <!-- Waiting-list badge (only if > 0) -->
           <UBadge
             v-if="countsOf(row.original).queued > 0"
-            :data-testid="`inhabitant-waitlist-count-${row.original.inhabitant.id}`"
+            :data-testid="`${row.original.id}-waitlist-count`"
             :color="ORDER_STATE_COLORS[TicketState.queued]"
             :variant="NOISE.soft"
             :size="SIZES.xs"

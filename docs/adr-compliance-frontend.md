@@ -242,7 +242,7 @@ Status.
 | `useHeynabo()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
 | `useOrder()` | client | N/A | N/A | ✅ | ✅ | ✅ a ticket's state is `useBooking`'s `ticketStateOf`; `server/` reaches none of `useOrder` |
 | `useAllergy()` | client | N/A | N/A | ✅ | ✅ | ✅ |
-| `useTicket()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
+| `useTicket()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ `findTicketPriceById`, the one price lookup by id; `resolveTicketPriceOn`, a ticket's price row on its dinner date |
 | `useMaintenance()` | client | N/A | N/A | ✅ | ✅ | ✅ |
 | `useUserRoles` (module) | isomorphic | ⚠️ | N/A | ✅ | ✅ | ⚠️ generated-enum import; 0.9.1 |
 | `usePermissions()` | isomorphic | ⚠️ | N/A | N/A | ✅ | ⚠️ generated-enum import; 0.9.1 |

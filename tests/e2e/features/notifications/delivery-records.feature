@@ -4,6 +4,7 @@ Feature: Delivery records
 
   Background:
     Given the admin is signed in
+    And a season is active
 
   Scenario: The user reads the period's delivery records
     Given the past month has unbilled orders

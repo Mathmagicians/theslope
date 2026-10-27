@@ -22,34 +22,31 @@ describe('useExpandableRow', () => {
     }
 
     it('WHEN a row opens THEN it is the open row by its id, and onExpand receives the id', async () => {
-        const {write, openRows, expandedRowId, onExpand} = setup()
+        const {write, openRows, onExpand} = setup()
 
         await write({[ADD_GUEST]: true})
 
         expect(openRows()).toEqual([ADD_GUEST])
-        expect(expandedRowId.value).toBe(ADD_GUEST)
         expect(onExpand).toHaveBeenCalledExactlyOnceWith(ADD_GUEST)
     })
 
     it('GIVEN an open row WHEN a second row opens THEN the first closes and onExpand receives the second', async () => {
-        const {write, openRows, expandedRowId, onExpand} = setup()
+        const {write, openRows, onExpand} = setup()
         await write({[POWER]: true})
 
         await write({[POWER]: true, [ADD_GUEST]: true})
 
         expect(openRows()).toEqual([ADD_GUEST])
-        expect(expandedRowId.value).toBe(ADD_GUEST)
         expect(onExpand).toHaveBeenLastCalledWith(ADD_GUEST)
     })
 
     it('GIVEN an open row WHEN it closes THEN no row is open and onCollapse runs', async () => {
-        const {write, openRows, expandedRowId, onCollapse} = setup()
+        const {write, openRows, onCollapse} = setup()
         await write({[ADD_GUEST]: true})
 
         await write({})
 
         expect(openRows()).toEqual([])
-        expect(expandedRowId.value).toBeNull()
         expect(onCollapse).toHaveBeenCalledOnce()
     })
 })

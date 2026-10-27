@@ -475,7 +475,7 @@ export const scaffoldToastLook = (result: Pick<ScaffoldResult, 'errored'>) => ({
 })
 
 /** A booker's guest tickets of one kind in a preview line or a toast line: "Barn · 17 kr", "Barn · 17 kr ×2"; the count alone when the ticket's type is gone */
-export const guestTicketsLabel = (label: string | undefined, count: number): string =>
+const guestTicketsLabel = (label: string | undefined, count: number): string =>
     [label, count > 1 ? BOOKING_WORDS.guests.count(count) : undefined].filter(Boolean).join(' ')
 
 /** A ticket's badge, in the day view and in the grid: its type and its price, then its guests: "Baby · 0 kr · 2 Gæster" */

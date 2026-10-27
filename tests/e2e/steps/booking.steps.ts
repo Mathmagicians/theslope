@@ -2,7 +2,7 @@ import {expect, type BrowserContext} from '@playwright/test'
 import {defineParameterType} from 'playwright-bdd'
 import {differenceInCalendarDays} from 'date-fns'
 import {
-    Given, When, Then, fromScene, contextOfActor, personOf, createSceneHousehold, createScenePerson, activeSeasonOf,
+    Given, When, Then, fromScene, contextOfActor, personOf, createSceneHousehold, createScenePerson,
     ticketPriceIdOf, createDinnerInThePastMonth, ACTOR, HOUSEHOLD, type Actor, type HouseholdKind, type Scene
 } from '~~/tests/e2e/fixtures'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -337,7 +337,7 @@ Given('an inhabitant without dinner preferences', async ({adminContext: admin, s
 })
 
 Then('{actor}\'s dinner preferences are the dinner mode {mode} on the cooking days', async ({adminContext: admin, scene}, actor: Actor, mode: DinnerMode) => {
-    const {cookingDays} = await SeasonFactory.getSeason(admin, (await activeSeasonOf(admin, scene)).id!)
+    const {cookingDays} = await SeasonFactory.getSeason(admin, fromScene(scene, 'activeSeason').id!)
     const person = await HouseholdFactory.getInhabitantById(admin, personOf(scene, actor).id)
     expect(person?.dinnerPreferences, `${actor} has ${mode} on the active season's cooking days, NONE on the others`)
         .toEqual(Object.fromEntries(WEEKDAYS.map(day => [day, cookingDays[day] ? mode : Mode.NONE])))

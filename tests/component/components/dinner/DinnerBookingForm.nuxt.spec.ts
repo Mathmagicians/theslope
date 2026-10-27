@@ -13,7 +13,7 @@ import UserListItem from '~/components/shared/UserListItem.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {ACTION_WORDS, MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel, createTicketStateBadge, createBirthdayBadge, guestSaveLabel, moreTicketsAlert, formatPreviewLines, previewSaveOutcome, guestTicketsLabel, ticketBadgeLabel, ticketTypePresentation} from '~/composables/useBookingUi'
+import {ACTION_WORDS, MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel, createTicketStateBadge, createBirthdayBadge, guestSaveLabel, moreTicketsAlert, formatPreviewLines, previewSaveOutcome, ticketBadgeLabel, ticketTypePresentation} from '~/composables/useBookingUi'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {DINNER_MODE_ORDER, EMPTY_RELEASED_TICKET_COUNTS, formatPlace} from '~/composables/useBooking'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
@@ -630,7 +630,7 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
       resultOf(action, {isGuestTicket: true, ticketType: adultPrice.ticketType, priceAtBooking: adultPrice.price}))
     // "Gæst af Anna (Voksen · 40 kr ×3)": the booker's guests, the price row's type and price, the count
     const guestLine = (count: number) =>
-      `${useOrder().formatGuestLabel(anna!.name)} (${guestTicketsLabel(ticketBadgeLabel(ticketTypePresentation(adultPrice.ticketType).label, adultPrice.price), count)})`
+      `${useOrder().formatGuestLabel(anna!.name)} (${ticketBadgeLabel(ticketTypePresentation(adultPrice.ticketType).label, adultPrice.price)} ${BOOKING_WORDS.guests.count(count)})`
     scaffold.answers.preview = () => answer(...guests(Action.BUY, 3), ...guests(Action.QUEUE, 7))
     const wrapper = await mountMemberForm(false)
     await clickByTestId(wrapper, 'guest-add-guest-toggle')

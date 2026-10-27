@@ -6,6 +6,7 @@ Feature: Billing notifications
 
   Background:
     Given the admin is signed in
+    And a season is active
     And the past month has unbilled orders
 
   Scenario Outline: The <event> after <runs> MONTHLY_BILLING runs

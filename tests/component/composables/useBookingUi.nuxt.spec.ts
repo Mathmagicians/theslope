@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createTicketStateBadge, createBirthdayBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, guestTicketsLabel, ticketBadgeLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, ticketPricePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, ticketChangeHouseholds, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createTicketStateBadge, createBirthdayBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, ticketBadgeLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, ticketPricePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, ticketChangeHouseholds, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, formatPlace} from '~/composables/useBooking'
@@ -614,6 +614,12 @@ describe('formatPreviewLines', () => {
             days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Voksen · 40 kr) køber en billet til salg', 'Gæst af Anna (Voksen · 40 kr ×2) skrives på ventelisten']}]
         },
         {
+            // A ticket type the result no longer names leaves the guests their count
+            desc: 'a booker\'s guests whose ticket type is gone',
+            results: [...resultsOnDinner(1, {...ANNA, isGuestTicket: true, ticketType: null}, Action.BOOK, Action.BOOK, Action.BOOK), ...resultsAt({...ANNA, isGuestTicket: true, ticketType: null}, Action.BOOK, 2)],
+            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (×3) tilmeldes']}, {dinnerEventId: 2, lines: ['Gæst af Anna tilmeldes']}]
+        },
+        {
             desc: 'a ticket for sale bought',
             results: resultsAt(ANNA, Action.BUY, 1),
             days: [{dinnerEventId: 1, lines: ['Anna køber en billet til salg']}]
@@ -693,17 +699,6 @@ describe('formatPreviewLines', () => {
         const [bought, sold] = day!.lines
         expect(bought).toMatchObject({name: ANNA.inhabitantName, action: Action.BUY, icon: ACTION_WORDS[Action.BUY].icon})
         expect(sold).toMatchObject({action: Action.BUY, icon: bought!.icon, color: bought!.color})
-    })
-})
-
-// A booker's guest tickets of one type, as the preview and the toast name them
-describe('guestTicketsLabel', () => {
-    it.each([
-        {label: 'Barn', count: 1, text: 'Barn'},
-        {label: 'Barn', count: 2, text: 'Barn ×2'},
-        {label: undefined, count: 3, text: '×3'}
-    ])('$count of $label read "$text"', ({label, count, text}) => {
-        expect(guestTicketsLabel(label, count)).toBe(text)
     })
 })
 

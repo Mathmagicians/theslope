@@ -5,6 +5,7 @@ Feature: Monthly billing
 
   Background:
     Given the admin is signed in
+    And a season is active
     And the past month has unbilled orders in 2 households
     And the MONTHLY_BILLING job has run 1 time
 

@@ -90,7 +90,7 @@ const season = await SeasonFactory.createSeason(context, SeasonFactory.defaultSe
 
 **Factories on disk:** `AllergyFactory`, `BillingFactory`, `DinnerEventFactory`, `ExpenseFactory`, `FeedbackFactory`, `HouseholdFactory`, `NotificationFactory`, `OrderFactory`, `SeasonFactory`, `SeasonImportFactory`, `SenderFactory`, `SettingFactory`, `TicketFactory`, `UserFactory`, `WaitlistFactory`; `reconciliationTestData.ts` holds the data for the four reconciliation outcomes of households, inhabitants and users, shared by unit and e2e specs.
 
-**Config values:** a factory reads the app's config from the plain modules in `app/config/`, which `app.config.ts` imports: `TicketFactory` prices at `DEFAULT_TICKET_PRICES` and `SeasonFactory`, the helpers' deadlines and pre-booking window read `SEASON_CONFIG` (`season.ts`), `NotificationFactory` reads `notificationTemplates.ts`. A spec takes a ticket type's price row from `TicketFactory.defaultPriceOf` (the default rows) or `useTicket().findTicketPriceByType` (a season's rows). Playwright runs without Nuxt, so `app.config.ts` itself stays out of the specs.
+**Config values:** a factory reads the app's config from the plain modules in `app/config/`, which `app.config.ts` imports: `TicketFactory` prices at `SEASON_CONFIG.defaultSeason.ticketPrices`, and `SeasonFactory` and the helpers read their deadlines and pre-booking window from `SEASON_CONFIG` (`season.ts`); `NotificationFactory` reads `notificationTemplates.ts`. A spec takes a ticket type's price row from `TicketFactory.defaultPriceOf` (the default rows) or `useTicket().findTicketPriceByType` (a season's rows). Playwright runs without Nuxt, so `app.config.ts` itself stays out of the specs.
 
 **Scenario methods:**
 - `SeasonFactory.createActiveSeason(context)` - the singleton active season `TestSeason-E2E-Singleton`: the `setup-season` project (`tests/e2e/season.setup.ts`) creates and activates it once per run, before the spec workers start; a spec's call returns it, and global teardown deletes it after the run. A spec resolves it in `beforeAll` and a feature in the `BeforeAll` of `fixtures.ts`, so a run without setup-season (`--no-deps`) creates it there, outside a test's timeout. Its dinners are open (`ticketIsCancellableDaysBefore` 0); a case on a closed dinner creates its own season
@@ -236,10 +236,10 @@ each actor. `scene` holds what the steps of one scenario hand each other; `fromS
 step set.
 
 The scene helpers create a scenario's data through the factories and record it for the cleanup:
-`createSceneHousehold`, `createScenePerson` and `createDinnerInThePastMonth`. `activeSeasonOf` reads the season a GIVEN
-activated, else the singleton, which the `BeforeAll` resolves per feature. A feature that places a dinner by its
-deadline states its season in the Background: `a season of its own is active` or `a season of its own is not active`,
-and the dinner step builds that season around the dinner's day. `personOf` reads an actor's inhabitant,
+`createSceneHousehold`, `createScenePerson` and `createDinnerInThePastMonth`. A feature states the season its scenarios
+use in the Background: `a season is active` (the singleton, which the `BeforeAll` resolves per feature),
+`a season of its own is active` or `a season of its own is not active` (the dinner step builds that season around the
+dinner's day); a step reads the active season from `scene.activeSeason`. `personOf` reads an actor's inhabitant,
 `ticketPriceIdOf` the season's ticket price of an actor's part, and `periodOf` the billing period that bills the
 scenario's households.
 After the scenario, the scene puts back the member's settings and deletes the rows it created. Each cleanup step runs,

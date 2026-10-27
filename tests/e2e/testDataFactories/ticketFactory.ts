@@ -1,6 +1,6 @@
 import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useTicket} from '~/composables/useTicket'
-import {DEFAULT_TICKET_PRICES} from '~/config/season'
+import {SEASON_CONFIG} from '~/config/season'
 
 const {createTicketPrice, TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
@@ -45,7 +45,7 @@ export class TicketFactory {
             {price: overrides?.childPrice, maximumAgeLimit: overrides?.childAge},
             {price: overrides?.adultPrice, maximumAgeLimit: undefined}
         ]
-        return DEFAULT_TICKET_PRICES.map((defaultPrice, index) => createTicketPrice({
+        return SEASON_CONFIG.defaultSeason.ticketPrices.map((defaultPrice, index) => createTicketPrice({
             ...defaultPrice, id: index + 1, seasonId: overrides?.seasonId,
             price: overridesOfRow[index]?.price ?? defaultPrice.price,
             maximumAgeLimit: overridesOfRow[index]?.maximumAgeLimit ?? defaultPrice.maximumAgeLimit

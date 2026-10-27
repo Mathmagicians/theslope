@@ -12,7 +12,7 @@ import { ref, watch } from 'vue'
  *
  * @example
  * ```ts
- * const { expanded, expandedRowId } = useExpandableRow({
+ * const { expanded } = useExpandableRow({
  *   onExpand: (rowId) => {
  *     const entity = findRowById(tableData.value, rowId)
  *     draftState.value = entity?.someField ?? null
@@ -31,7 +31,7 @@ export const useExpandableRow = (options?: {
   onCollapse?: () => void
 }) => {
   const expanded = ref<Record<string, boolean>>({})
-  const expandedRowId = ref<string | null>(null)
+  let expandedRowId: string | null = null
 
   watch(expanded, (newExpanded, oldExpanded) => {
     const expandedKeys = Object.keys(newExpanded).filter(key => newExpanded[key])
@@ -45,23 +45,22 @@ export const useExpandableRow = (options?: {
             expanded.value[key] = false
           }
         })
-        expandedRowId.value = newlyExpandedKey
+        expandedRowId = newlyExpandedKey
         options?.onExpand?.(newlyExpandedKey)
       }
     } else if (expandedKeys.length === 1) {
       const rowId = expandedKeys[0]!
-      if (expandedRowId.value !== rowId) {
-        expandedRowId.value = rowId
+      if (expandedRowId !== rowId) {
+        expandedRowId = rowId
         options?.onExpand?.(rowId)
       }
-    } else if (expandedRowId.value !== null) {
-      expandedRowId.value = null
+    } else if (expandedRowId !== null) {
+      expandedRowId = null
       options?.onCollapse?.()
     }
   })
 
   return {
-    expanded,
-    expandedRowId
+    expanded
   }
 }
