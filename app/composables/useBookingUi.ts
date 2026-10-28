@@ -169,41 +169,44 @@ export const cookingRoundWords = (teamShortName: string, teamNumber: number, fir
     return {team: teamShortName, teamNumber, period: BOOKING_WORDS.roundPeriod(range), heading: BOOKING_WORDS.roundHeading(teamShortName, range)}
 }
 
+/** The kinds of the spending table: a fragment is this dinner's or the team's round; a row is a cooking day or a receipt */
+export const SPENDING_KIND = {dinner: 'dinner', receipt: 'receipt', team: 'team'} as const
+
 /**
  * A spending table fragment: the rows (a team's cooking days, or this dinner's receipts with the note as the label)
  * and a total row carrying its label and the figures the rows add up to. This dinner reads its heading as text; the
  * team's round heads with its team's badge and its period
  */
 export type SpendingTableRow =
-    | ({kind: 'dinner'} & CookingRoundRow)
-    | {kind: 'receipt', id: string, date: Date, label: string, amount: number}
+    | ({kind: typeof SPENDING_KIND.dinner} & CookingRoundRow)
+    | {kind: typeof SPENDING_KIND.receipt, id: string, date: Date, label: string, amount: number}
 interface SpendingFragmentTable {
     rows: SpendingTableRow[]
     total: {label: string, figures: SpendingFigures}
 }
 export interface DinnerSpendingFragment extends SpendingFragmentTable {
-    kind: 'dinner'
+    kind: typeof SPENDING_KIND.dinner
     heading: string
 }
 export interface TeamSpendingFragment extends SpendingFragmentTable {
-    kind: 'team'
+    kind: typeof SPENDING_KIND.team
     team: string
     teamNumber: number
     period: string
 }
 export type SpendingFragment = DinnerSpendingFragment | TeamSpendingFragment
 export const dinnerSpendingFragment = (dinner: CookingRoundRow, receipts: Expense[]): DinnerSpendingFragment => ({
-    kind: 'dinner',
+    kind: SPENDING_KIND.dinner,
     heading: `${formatDinnerName(dinner)}, ${formatDate(dinner.date, DATE_SETTINGS.DAY_MONTH_MASK)}`,
-    rows: receipts.map(receipt => ({kind: 'receipt', id: `receipt-${receipt.id}`, date: receipt.createdAt, label: receipt.description, amount: receipt.amount})),
+    rows: receipts.map(receipt => ({kind: SPENDING_KIND.receipt, id: `receipt-${receipt.id}`, date: receipt.createdAt, label: receipt.description, amount: receipt.amount})),
     total: {label: formatDinnerName(dinner), figures: {budgetGross: dinner.budgetGross, spentGross: dinner.spentGross}}
 })
 export const teamSpendingFragment = (rows: CookingRoundRow[], {team, teamNumber, period}: CookingRoundWords): TeamSpendingFragment => ({
-    kind: 'team',
+    kind: SPENDING_KIND.team,
     team,
     teamNumber,
     period,
-    rows: rows.map(row => ({kind: 'dinner', ...row})),
+    rows: rows.map(row => ({kind: SPENDING_KIND.dinner, ...row})),
     total: {label: team, figures: useOrder().spendingTotals(rows)}
 })
 

@@ -52,16 +52,16 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/team/assignment/[id].post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec written, not run |
 | `/api/admin/team/assignment/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deleted id |
 | **Admin - users** | | | | | |
-| `/api/admin/users/index.get.ts` | ✅ | ⚠️ | ✅ | ✅ | ⚠️ raw query read |
+| `/api/admin/users/index.get.ts` | ✅ | ⚠️ | ✅ | ✅ | ⚠️ raw query read; deserializes through the typed schemas |
 | `/api/admin/users/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/users/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/users/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/users/by-role/[role].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/users/by-role/[role].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through the typed schemas |
 | **Admin - households** | | | | | |
-| `/api/admin/household/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/household/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/household/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/household/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/household/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through the typed schemas |
+| `/api/admin/household/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through the typed schemas |
+| `/api/admin/household/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through the typed schemas |
+| `/api/admin/household/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through the typed schemas |
 | `/api/admin/household/inhabitants/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/household/inhabitants/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/household/inhabitants/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |

@@ -45,11 +45,11 @@ const generatedEventDates = computed(() => {
 
 // Transform into event lists for BaseCalendar
 const potentialCookingEventList = computed(() =>
-  createEventList(potentialCookingDays.value, 'potential-cooking', RENDER_STYLE.ring)
+  createEventList(potentialCookingDays.value, 'potential-cooking')
 )
 
 const generatedEventList = computed(() =>
-  createEventList(generatedEventDates.value, 'generated-events', RENDER_STYLE.badge)
+  createEventList(generatedEventDates.value, 'generated-events')
 )
 
 // Combine all event lists

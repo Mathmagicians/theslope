@@ -7,6 +7,9 @@ import {mountWithTooltipProvider, findAllByTestId, resetStores} from '~~/tests/c
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
+import type {DateRange} from '~/types/dateTypes'
+import CalendarLegend from '~/components/calendar/CalendarLegend.vue'
+import {DATE_WORDS} from '~/config/dateWords'
 
 enableAutoUnmount(afterEach)
 
@@ -29,9 +32,9 @@ describe('TeamCalendarDisplay legend', () => {
         resetStores()
     })
 
-    const mount = (shown: CookingTeamDisplay[], seasonTeams: CookingTeamDisplay[] = shown, dinnerEvents = [] as ReturnType<typeof DinnerEventFactory.defaultDinnerEventDisplay>[]) =>
+    const mount = (shown: CookingTeamDisplay[], seasonTeams: CookingTeamDisplay[] = shown, dinnerEvents = [] as ReturnType<typeof DinnerEventFactory.defaultDinnerEventDisplay>[], holidays: DateRange[] = []) =>
         mountWithTooltipProvider(TeamCalendarDisplay, {
-            props: {seasonDates, teams: shown, seasonTeams, dinnerEvents},
+            props: {seasonDates, teams: shown, seasonTeams, dinnerEvents, holidays},
             isMd: true
         })
 
@@ -65,5 +68,13 @@ describe('TeamCalendarDisplay legend', () => {
         expect(findAllByTestId(wrapper, 'calendar-legend-badge')[0]!.classes()).toEqual(expect.arrayContaining(bandOf(2)))
         const day = findAllByTestId(wrapper, 'team-calendar-day')[0]!
         expect(day.classes()).toEqual(expect.arrayContaining(bandOf(2)))
+    })
+
+    it('a season with holidays closes the legend with the holiday, after the teams', async () => {
+        const shown = teams.slice(0, 2)
+        const wrapper = await mount(shown, teams, [], [{start: new Date('2026-01-05'), end: new Date('2026-01-09')}])
+
+        expect(wrapper.findComponent(CalendarLegend).props('items')?.map(item => item.label))
+            .toEqual([...shown.map(team => team.name), DATE_WORDS.calendarLegend.holiday])
     })
 })

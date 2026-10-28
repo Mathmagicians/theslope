@@ -30,13 +30,13 @@ accepts the fix. A signed-off or no-change row moves to § Done.
 
 | # | Defect | Rule | Where | Owner | Decision | Verified | Signed off |
 |---|---|---|---|---|---|---|---|
-| 48 | The allergy store's override flag is optional for one spec's sake | Code rule 1 | `stores/allergies.ts` | orchestrator, test-engineer | fix in 0.9.1, 2026-10-27 | in flight, partly committed 34ff620 | |
-| 49 | The override query has three shapes, one of them sending `adminBypass=false` | DRY | `allergies.ts`, `households.ts`, `bookings.ts` | orchestrator | fix in 0.9.1, 2026-10-27 | in flight, partly committed 34ff620 | |
-| 50 | The partial user serializer lives in the repository; the serialized user schema has no reader | ADR-010 compliance 3 | `prismaRepository.ts`, `useCoreValidation.ts` | orchestrator | fix in 0.9.1, 2026-10-27 | in flight, partly committed 34ff620 | |
-| 51 | The user display carries an appearance its read leaves out, so it reads the default | Code rule 7 | `useCoreValidation.ts` | orchestrator | fix in 0.9.1, 2026-10-27 | in flight, partly committed 34ff620 | |
-| 56 | The preference save takes a string map; its preview takes the typed week map | Domain types | `households.ts` | orchestrator | fix in 0.9.1, 2026-10-27 | in flight, partly committed 34ff620 | |
+| 48 | The allergy store's override flag is optional for one spec's sake | Code rule 1 | `stores/allergies.ts` | orchestrator, test-engineer | fix in 0.9.1, 2026-10-27 | 2026-10-28 (34ff620): each allergy change takes its override flag as a required argument; e2e in the ship run | |
+| 49 | The override query has three shapes, one of them sending `adminBypass=false` | DRY | `allergies.ts`, `households.ts`, `bookings.ts` | orchestrator | fix in 0.9.1, 2026-10-27 | 2026-10-28 (34ff620): a member's move-out date and booking save send no override (`adminBypassQuery`); e2e in the ship run | |
+| 50 | The partial user serializer lives in the repository; the serialized user schema has no reader | ADR-010 compliance 3 | `prismaRepository.ts`, `useCoreValidation.ts` | orchestrator | fix in 0.9.1, 2026-10-27 | 2026-10-28 (34ff620): a user update writes the fields it carries (`serializeUserUpdate`); e2e in the ship run | |
+| 51 | The user display carries an appearance its read leaves out, so it reads the default | Code rule 7 | `useCoreValidation.ts` | orchestrator | fix in 0.9.1, 2026-10-27 | 2026-10-28 (34ff620): the user display read includes appearance (`USER_DISPLAY_SELECT`); e2e in the ship run | |
+| 56 | The preference save takes a string map; its preview takes the typed week map | Domain types | `households.ts` | orchestrator | fix in 0.9.1, 2026-10-27 | 2026-10-28 (34ff620): preference saves take a typed week map; e2e in the ship run | |
 | 147 | The chef page for a person on no team shows "Ingen madhold" in the info alert | ADR-018 | `/chef` (`MyTeamSelector.vue:97`) | orchestrator | fix in 0.9.1, 2026-10-28: it binds the design system's empty state alert, neutral and centred; reopened 2026-10-28 (QA #148: no calendar, nothing to open as a guest): `/chef` for a person on no team opens on the season's next dinner, as a visit to that dinner's team; "Ingen madhold" shows when no dinner is ahead | 2026-10-28: "Ingen madhold" binds `ALERTS.emptyState` (34ff620, 148f965); reopened, in flight | |
-| 130 | The allergy poster's text and its Tilbage button read faint on the poster's white page | ADR-018 | `/admin/allergies/pdf` (`pages/admin/allergies/pdf.vue`) | orchestrator | fix in 0.9.1, 2026-10-28: Tilbage takes the Print button's style (`BUTTONS.primaryAction`); the poster's texts read in contrast on the white page | 2026-10-28: the page renders in light mode (`colorMode: 'light'`, `pdf.vue:13`) on `BG.page` through `COMPONENTS.allergyPoster`; Tilbage binds `BUTTONS.primaryAction` (`pdf.vue:64`); poster spec 4/4. Committed f4bb23f. See QA #132–#135 | |
+| 130 | The allergy poster's text and its Tilbage button read faint on the poster's white page | ADR-018 | `/admin/allergies/pdf` (`pages/admin/allergies/pdf.vue`) | orchestrator | fix in 0.9.1, 2026-10-28: Tilbage takes the Print button's style (`BUTTONS.primaryAction`); the poster's texts read in contrast on the white page | 2026-10-28: the page renders in light mode (`colorMode: 'light'`, `pdf.vue:13`) on `BG.page` through `COMPONENTS.allergyPoster`; Tilbage binds `BUTTONS.primaryAction` (`pdf.vue:64`); poster spec 4/4. Committed f4bb23f. See QA #132–#135; #132–#134 signed off 2026-10-28 | |
 
 ## Tests (1)
 
@@ -86,6 +86,7 @@ accepts the fix. A signed-off or no-change row moves to § Done.
 - #65 The notification step pattern left out the chef deadline notice — `@fixme` off, f4bb23f, closed 2026-10-28
 - #59 The sender specs copied the log spy and the channel-off value; the factory built references by hand — `deliveryReferencePrefix`, 34ff620, closed 2026-10-28
 - #101 On a phone the visiting tab set "Ikke dit hold" beside the team icon — 34ff620, signed off 2026-10-28
+- #150 A failed dinner write toasted the generic status text in place of its `TEAM_WORDS` failure word (since 345b2f5) — 5eb3841, signed off 2026-10-28
 - #52 The job boxes matched stat icons by position — `jobRunStats`, `JobStat`, the bell on Notifikationer, 34ff620, signed off 2026-10-28
 - #53 The column visibility helpers had no caller — removed with the team calendar's selection, 34ff620, 148f965, signed off 2026-10-28
 - #57 The history table's header token repeated the table header's value — `table.historyUi` on `table.ui`, 34ff620, signed off 2026-10-28

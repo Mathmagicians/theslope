@@ -18,16 +18,15 @@ line under § Signed off.
 | 122 | Defect 109 | A dinner's Budget at 375px | "ex / inkl. moms" sits on its own line under the badge and the period, on the right; nothing is cut off | |
 | 148 | Defect 147 | `/chef` for a person on no team, phone and desktop, light and dark mode | "Ingen madhold" centred on a neutral soft surface with the larger title, in place of the violet box | finding: defect 147 reopened |
 
-## /admin/allergies/pdf (3)
+## /admin/allergies/pdf (1)
 
 | # | Package | State, viewport | What to see | Signed off |
 |---|---|---|---|---|
-| 132 | Defect 130 | `/admin/allergies/pdf`, the member in light mode, 1280px | A white sheet, a grey head band, dark text; Tilbage a solid button like Print | |
-| 133 | Defect 130 | The same page, the member in dark mode | As #132: the legend alerts' and the table's text dark on white; the managers' faces ring ocean blue | |
 | 135 | Defect 130 | Print preview from dark mode | White A4, dark text, the QR code beside the table, no Tilbage or Print button | |
 
 ## Signed off 2026-10-28
 
+- #132–#134 The allergy poster: a white sheet with dark text in light and dark mode, Tilbage solid like Print, the member's mode kept
 - #88 Chef calendar visit: the team on view's dinners in colour, the other teams' as grey circles, Forklaring's last line
 - #141–#145 The visiting tab: the team icon above or beside "Madhold N" and "Ikke dit hold" on phone and desktop
 - #123–#126 Avatar ring colours: the Alle row rings orange, inhabitants amber, the allergy managers ocean blue at 768px
@@ -82,4 +81,3 @@ line under § Signed off.
 
 - #110–#113, #115–#118 Booking views and chef page words, toasts and icons: the component tests prove them
 - #119 The pages' meta description: the page source, nothing users see
-- #134 The poster's Tilbage keeps the member's colour mode: Nuxt's colour mode per page

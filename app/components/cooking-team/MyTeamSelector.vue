@@ -21,7 +21,17 @@
  *   (team) [Madhold 5]
  * | (team) [Madhold 3] [Ikke dit hold]
  *
- * Visual check: /chef on an own team and on a visiting tab, phone and desktop.
+ * No team of the user's own: the visit is the one tab, under the page's title and over its role line
+ *   Phone                                  Desktop (one tab, horizontal)
+ *   +----------------------------------+   +--------------------------------------+
+ *   | Mine Madhold                     |   | Mine Madhold                         |
+ *   |   (team)                         |   | (team) [Madhold 3] [Ikke dit hold]   |
+ *   | [Madhold 3] [Ikke dit hold]      |   | ==================================   |
+ *   |  =========                       |   | (team) Du er ikke på Madhold 3       |
+ *   | (team) Du er ikke på Madhold 3   |   +--------------------------------------+
+ *   +----------------------------------+
+ *
+ * Visual check: /chef on an own team, on a visiting tab and for a person on no team, phone and desktop.
  *
  * Used in:
  * - /chef/index.vue (master panel)

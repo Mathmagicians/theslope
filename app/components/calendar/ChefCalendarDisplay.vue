@@ -73,6 +73,7 @@ import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import {LEGEND_KIND, type CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 import {TEAM_WORDS} from '~/config/teamWords'
+import {DATE_WORDS} from '~/config/dateWords'
 import {getPaginationRowModel} from '@tanstack/vue-table'
 
 interface Props {
@@ -131,24 +132,17 @@ const {
 
 // Focus date for calendar navigation (selected dinner → next dinner → first dinner)
 // Must be after useTemporalSplit since it depends on nextDinner
-const focusDate = computed(() => {
-  // Priority: selected dinner > next dinner > first dinner in list
-  if (selectedDinner.value) return new Date(selectedDinner.value.date)
-  if (nextDinner.value) return new Date(nextDinner.value.date)
-  if (props.dinnerEvents.length > 0) return new Date(props.dinnerEvents[0]!.date)
-  return null
-})
+const focusDate = computed(() => selectedDinner.value?.date ?? nextDinner.value?.date ?? props.dinnerEvents[0]?.date ?? null)
 
-// Create event lists with ocean color (professional chef palette); the other teams' dinners carry no temporal state
+// The team's dinners split into past, next and future; the other teams' dinners carry no temporal state
 const OTHER_TEAM_DINNERS = 'other-team-dinners'
 const allEventLists = computed(() => [
   ...createTemporalEventLists(
     pastDinnerDates.value,
     futureDinnerDates.value,
-    nextDinner.value,
-    'ocean'
+    nextDinner.value
   ),
-  createEventList(props.otherTeamDinners.map(dinner => dinner.date), OTHER_TEAM_DINNERS, RENDER_STYLE.badge)
+  createEventList(props.otherTeamDinners.map(dinner => dinner.date), OTHER_TEAM_DINNERS)
 ])
 
 const isOtherTeamDay = (eventLists: DayEventList[]): boolean => eventLists.some(list => list.listId === OTHER_TEAM_DINNERS)
@@ -207,13 +201,21 @@ const getAlarmForDay = (day: DateValue): -1 | 0 | 1 | 2 | 3 => {
   return getChefDeadlineAlarm(dinner, props.deadlines, now.value)
 }
 
+// The day read once per cell, so the template narrows them: its dinner type, and the deadline chip's colour on an
+// upcoming dinner that is not cancelled (null when on track)
+const dayCellOf = (day: DateValue, eventLists: DayEventList[]) => {
+  const type = getDayType(eventLists)
+  const upcoming = type !== null && type !== 'past' && !isCancelledDay(props.dinnerEvents, day)
+  return {type, chipColor: upcoming ? URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)] : null}
+}
+
 // Legend items: the deadline chips wrap a planned-day circle, as the day cells do
 const legendItems = computed((): CalendarLegendItem[] => {
   const chipCircle = dayCircleClasses(CHEF_CALENDAR.day.future)
   const words = TEAM_WORDS.calendarLegend
   return [
     {label: words.next, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CHEF_CALENDAR.day.next)},
-    {label: words.selected, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CHEF_CALENDAR.day.next, CHEF_CALENDAR.selection)},
+    {label: DATE_WORDS.calendarLegend.selected, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CHEF_CALENDAR.day.next, CHEF_CALENDAR.selection)},
     {label: words.planned, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CHEF_CALENDAR.day.future)},
     {label: words.past, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CALENDAR.day.past)},
     {label: words.overdue, kind: LEGEND_KIND.chip, chipColor: URGENCY_TO_CHIP_COLOR[3], circleClass: chipCircle, chipSize: SIZES.md},
@@ -317,48 +319,50 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => emit('tab-click', mode)
         <div v-else :class="COMPONENTS.chefCalendar.calendar" data-testid="chef-calendar-content">
           <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="1" :focus-date="focusDate">
             <template #day="{ day, eventLists }">
-              <!-- Deadline chip for warning/critical (alarm 1, 2, 3) - only for non-past, non-cancelled -->
-              <!-- Chip wraps styled circle (same pattern as DinnerCalendarDisplay) -->
-              <UChip
-                v-if="getDayType(eventLists) && getDayType(eventLists) !== 'past' && !isCancelledDay(dinnerEvents, day) && URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)]"
-                show
-                :size="SIZES.md"
-                :color="URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)]!"
-              >
+              <template v-for="{type, chipColor} in [dayCellOf(day, eventLists)]" :key="day.toString()">
+                <!-- Deadline chip for warning/critical (alarm 1, 2, 3) - only for non-past, non-cancelled -->
+                <!-- Chip wraps styled circle (same pattern as DinnerCalendarDisplay) -->
+                <UChip
+                  v-if="type && chipColor"
+                  show
+                  :size="SIZES.md"
+                  :color="chipColor"
+                >
+                  <div
+                    :data-testid="`calendar-dinner-date-${day.day}`"
+                    :class="dayCircleClasses(getDayColorClass(type), isSelected(day) && CHEF_CALENDAR.selection)"
+                    @click="handleDateClick(day)"
+                  >
+                    {{ day.day }}
+                  </div>
+                </UChip>
+
+                <!-- Regular day circle (on-track, past, or cancelled) -->
                 <div
+                  v-else-if="type"
                   :data-testid="`calendar-dinner-date-${day.day}`"
-                  :class="dayCircleClasses(getDayColorClass(getDayType(eventLists)!), isSelected(day) && CHEF_CALENDAR.selection)"
+                  :class="dayCircleClasses(
+                    isCancelledDay(dinnerEvents, day) ? `${CALENDAR.day.past} ${CALENDAR.day.cancelled}` : getDayColorClass(type),
+                    isSelected(day) && CHEF_CALENDAR.selection
+                  )"
                   @click="handleDateClick(day)"
                 >
                   {{ day.day }}
                 </div>
-              </UChip>
 
-              <!-- Regular day circle (on-track, past, or cancelled) -->
-              <div
-                v-else-if="getDayType(eventLists)"
-                :data-testid="`calendar-dinner-date-${day.day}`"
-                :class="dayCircleClasses(
-                  isCancelledDay(dinnerEvents, day) ? `${CALENDAR.day.past} ${CALENDAR.day.cancelled}` : getDayColorClass(getDayType(eventLists)!),
-                  isSelected(day) && CHEF_CALENDAR.selection
-                )"
-                @click="handleDateClick(day)"
-              >
-                {{ day.day }}
-              </div>
+                <!-- Another team's dinner: a plain circle -->
+                <div
+                  v-else-if="isOtherTeamDay(eventLists)"
+                  :data-testid="`calendar-other-team-dinner-${day.day}`"
+                  :class="dayCircleClasses(CHEF_CALENDAR.day.otherTeam)"
+                  @click="handleDateClick(day)"
+                >
+                  {{ day.day }}
+                </div>
 
-              <!-- Another team's dinner: a plain circle -->
-              <div
-                v-else-if="isOtherTeamDay(eventLists)"
-                :data-testid="`calendar-other-team-dinner-${day.day}`"
-                :class="dayCircleClasses(CHEF_CALENDAR.day.otherTeam)"
-                @click="handleDateClick(day)"
-              >
-                {{ day.day }}
-              </div>
-
-              <!-- Non-dinner day -->
-              <span v-else :class="COMPONENTS.chefCalendar.plainDay">{{ day.day }}</span>
+                <!-- Non-dinner day -->
+                <span v-else :class="COMPONENTS.chefCalendar.plainDay">{{ day.day }}</span>
+              </template>
             </template>
 
             <template #legend>

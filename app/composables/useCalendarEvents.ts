@@ -4,10 +4,6 @@ import {
     formatDate
 } from "~/utils/date"
 
-/** How a calendar paints the days of an event list */
-export const RENDER_STYLE = {badge: 'badge', chip: 'chip', ring: 'ring', background: 'background'} as const
-export type RenderStyle = typeof RENDER_STYLE[keyof typeof RENDER_STYLE]
-
 // display format for the calendar component
 export type CalendarEvent = {
     listId: string
@@ -23,16 +19,12 @@ export type CalendarEventList = {
         label?: string            // Display text (e.g., "Hold 1", "Anna")
         metadata?: unknown        // Domain-specific data
     }>
-    renderStyle: RenderStyle
-    color?: string              // A named colour
     band?: number               // The rainbow band the list's days wear (a team's band index)
 }
 
 // Event list for a specific day (includes list metadata + events for that day)
 export type DayEventList = {
     listId: string
-    renderStyle: RenderStyle
-    color?: string
     band?: number
     events: CalendarEvent[]
 }
@@ -41,10 +33,8 @@ export const useCalendarEvents = () => {
     const createEventList = (
         dates: Date[],
         listId: string,
-        renderStyle: RenderStyle,
         options?: {
             label?: string
-            color?: string
             band?: number
             metadata?: unknown
         }
@@ -56,8 +46,6 @@ export const useCalendarEvents = () => {
                 label: options?.label,
                 metadata: options?.metadata
             })),
-            renderStyle,
-            color: options?.color,
             band: options?.band
         }
     }
@@ -106,17 +94,9 @@ export const useCalendarEvents = () => {
             const sourceList = eventLists.find(list => list.listId === event.listId)
             if (!sourceList) return
 
-            if (!listMap.has(event.listId)) {
-                listMap.set(event.listId, {
-                    listId: sourceList.listId,
-                    renderStyle: sourceList.renderStyle,
-                    color: sourceList.color,
-                    band: sourceList.band,
-                    events: []
-                })
-            }
-
-            listMap.get(event.listId)!.events.push(event)
+            const dayList: DayEventList = listMap.get(event.listId) ?? {listId: sourceList.listId, band: sourceList.band, events: []}
+            dayList.events.push(event)
+            listMap.set(event.listId, dayList)
         })
 
         return Array.from(listMap.values())

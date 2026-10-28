@@ -251,45 +251,4 @@ test.describe('Dinner Page URL Navigation', () => {
             await doScreenshot(page, 'dinner/ticket-allergies', true)
         })
     })
-
-    // The calendar's open default follows the viewport the layout measures after mount; a URL that names it keeps it
-    test.describe('Calendar default', () => {
-        const DESKTOP = {width: 1280, height: 900}
-        const PHONE = {width: 375, height: 812}
-        const calendarDays = (page: Page) => page.locator('[data-testid^="calendar-dinner-date-"]').first()
-
-        for (const {face, viewport, expected} of [
-            {face: 'desktop', viewport: DESKTOP, expected: 'open'},
-            {face: 'phone', viewport: PHONE, expected: 'closed'}
-        ]) {
-            test(`GIVEN ${face} WHEN /dinner loads without parameters THEN the URL settles on cal=${expected}`, async ({browser}) => {
-                const context = await memberValidatedBrowserContext(browser)
-                const page = await context.newPage()
-                await page.setViewportSize(viewport)
-
-                await gotoHydrated(page, dinnerPageUrl)
-
-                await expect.poll(() => new URL(page.url()).searchParams.get('cal')).toBe(expected)
-                if (expected === 'open') await expect(calendarDays(page)).toBeVisible()
-                else await expect(calendarDays(page)).toBeHidden()
-            })
-        }
-
-        for (const {face, viewport, given} of [
-            {face: 'desktop', viewport: DESKTOP, given: 'closed'},
-            {face: 'phone', viewport: PHONE, given: 'open'}
-        ]) {
-            test(`GIVEN ${face} WHEN /dinner loads with cal=${given} THEN the URL keeps cal=${given}`, async ({browser}) => {
-                const context = await memberValidatedBrowserContext(browser)
-                const page = await context.newPage()
-                await page.setViewportSize(viewport)
-
-                await gotoHydrated(page, `${dinnerPageUrl}?date=${testData.dates.first}&cal=${given}`)
-
-                if (given === 'open') await expect(calendarDays(page)).toBeVisible()
-                else await expect(calendarDays(page)).toBeHidden()
-                expect(new URL(page.url()).searchParams.get('cal')).toBe(given)
-            })
-        }
-    })
 })

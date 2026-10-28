@@ -252,7 +252,9 @@ dinner's day); a step reads the active season from `scene.activeSeason`. `person
 scenario's households.
 After the scenario, the scene puts back the member's settings. The rows the scenarios create go into the worker's
 `createdRows`, and the AfterAll deletes them when the worker ends, as the specs' afterAll does. Each cleanup step
-runs, and the failed steps fail their hook together (`AggregateError`).
+runs, and the failed steps fail their hook together (`AggregateError`). A team creation rewrites every team of the
+shared season: `workerTeams` holds the teams a Background sets up with their dinners, and the worker's scenarios share
+one creation (`chef-page.feature`).
 
 ```gherkin
 @smoke

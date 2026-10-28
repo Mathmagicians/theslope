@@ -147,7 +147,7 @@ const sendTest = async () => {
     <!-- VIEW: what is saved right now -->
     <div v-if="!isEditing" class="space-y-3">
       <div class="flex items-start gap-2 flex-wrap">
-        <UIcon :name="ICONS.notification" class="mt-1" />
+        <UIcon :name="ICONS.notification" :class="COMPONENTS.userPreferencesCard.notificationIcon" />
         <span :class="TYPOGRAPHY.sectionSubheading">Notifikationer</span>
         <div class="flex items-center gap-2 flex-wrap">
           <UBadge

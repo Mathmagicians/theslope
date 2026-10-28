@@ -29,10 +29,9 @@ export const TEAM_WORDS = {
             description: (teamShortName: string) => `Du er en sej kokkespire, som hjælper de voksne på ${teamShortName}`
         }
     } satisfies Record<TeamRole, {title: string, description: (teamShortName: string) => string}>,
-    /** The chef calendar's legend */
+    /** The chef calendar's legend; the selected day reads the calendars' shared word (`DATE_WORDS.calendarLegend`) */
     calendarLegend: {
         next: 'Næste madlavning',
-        selected: 'Valgt dato',
         planned: 'Planlagt madlavning',
         past: 'Tidligere madlavning',
         overdue: 'Deadline overskredet',

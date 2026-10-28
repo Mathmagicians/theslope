@@ -21,6 +21,7 @@ import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type{DayEventList} from '~/composables/useCalendarEvents'
 import type {DateValue} from '@internationalized/date'
 import {LEGEND_KIND, type CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
+import {DATE_WORDS} from '~/config/dateWords'
 
 interface Props {
   seasonDates: DateRange
@@ -44,7 +45,7 @@ const teamBandIndex = (team: CookingTeamDisplay) => getTeamNumber(team, props.se
 const legendItems = computed((): CalendarLegendItem[] => [
   ...props.teams.map(team => ({label: team.name, kind: LEGEND_KIND.badge, badgeClass: getRainbowBand(teamBandIndex(team))})),
   ...(props.holidays && props.holidays.length > 0
-    ? [{label: 'Ferie', kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CALENDAR.holiday)}]
+    ? [{label: DATE_WORDS.calendarLegend.holiday, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CALENDAR.holiday)}]
     : [])
 ])
 
@@ -62,7 +63,7 @@ const teamEventLists = computed(() => {
       .filter(event => event.cookingTeamId === team.id)
       .map(event => event.date)
 
-    return createEventList(teamEvents, `team-${team.id}`, RENDER_STYLE.badge, {
+    return createEventList(teamEvents, `team-${team.id}`, {
       label: team.name,
       band: teamBandIndex(team),
       metadata: { teamId: team.id, teamName: team.name }

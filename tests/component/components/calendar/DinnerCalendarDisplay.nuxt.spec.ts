@@ -3,7 +3,10 @@ import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {DOMWrapper, enableAutoUnmount} from '@vue/test-utils'
 import {addDays, addMonths, endOfMonth, startOfMonth} from 'date-fns'
 import DinnerCalendarDisplay from '~/components/calendar/DinnerCalendarDisplay.vue'
-import {EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {DEADLINE_LABELS, EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
+import CalendarLegend from '~/components/calendar/CalendarLegend.vue'
+import {BOOKING_WORDS} from '~/config/bookingWords'
+import {DATE_WORDS} from '~/config/dateWords'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {findAllByTestId, findByTestId, iconNamesIn, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
 import {CALENDAR, ICONS} from '~/composables/useTheSlopeDesignSystem'
@@ -78,9 +81,9 @@ describe('DinnerCalendarDisplay lock chips', () => {
 
     it('the legend explains each chip', async () => {
         const legend = [
-            {label: 'Lukket for framelding', text: '', glyphs: []},
-            {label: 'Billetter til salg', text: '1', glyphs: []},
-            {label: 'Venteliste, ingen billetter til salg', text: '', glyphs: [ICONS.waitlist]}
+            {label: DEADLINE_LABELS.BOOKING_CLOSED.closedText, text: '', glyphs: []},
+            {label: BOOKING_WORDS.calendarLegend.forSale, text: '1', glyphs: []},
+            {label: BOOKING_WORDS.calendarLegend.waitlist, text: '', glyphs: [ICONS.waitlist]}
         ]
         const wrapper = await mountCalendar()
 
@@ -120,10 +123,14 @@ describe('DinnerCalendarDisplay cancelled dinners', () => {
         expect(day.classes()).toEqual(expect.arrayContaining([...CALENDAR.day.past.split(' '), ...CALENDAR.day.cancelled.split(' ')]))
     })
 
-    it('the legend explains a cancelled dinner as "Aflyst fællesspisning"', async () => {
+    it('the legend names each day the calendar draws: the dinner circles, the cancelled dinner and the holiday, then the lock chips', async () => {
+        const words = BOOKING_WORDS.calendarLegend
         const wrapper = await mountCalendar()
 
-        expect(findAllByTestId(wrapper, 'calendar-legend-entry').some(entry => entry.text().includes('Aflyst fællesspisning'))).toBe(true)
+        expect(wrapper.findComponent(CalendarLegend).props('items')?.map(item => item.label)).toEqual([
+            words.next, DATE_WORDS.calendarLegend.selected, words.planned, words.past, BOOKING_WORDS.cancelledDinner.legend,
+            DATE_WORDS.calendarLegend.holiday, DEADLINE_LABELS.BOOKING_CLOSED.closedText, words.forSale, words.waitlist
+        ])
     })
 })
 

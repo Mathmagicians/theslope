@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createTicketStateBadge, createBirthdayBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, personOnDinner, guestItemsOf, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, ticketBadgeLabel, cookingRoundWords, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, ticketPricePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, ticketChangeHouseholds, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createTicketStateBadge, createBirthdayBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, personOnDinner, guestItemsOf, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, ticketBadgeLabel, cookingRoundWords, dinnerSpendingFragment, teamSpendingFragment, SPENDING_KIND, ticketTypePresentation, ticketPricePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, ticketChangeHouseholds, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
@@ -57,10 +57,11 @@ describe('spending fragments', () => {
     it('builds this dinner\'s fragment: heading with title and date, the receipts as rows, its figures in the total', () => {
         const receipts = [ExpenseFactory.defaultExpense({id: 7, amount: 101200, description: '"Ret 2" 12/04/2026, Anna H. bestiller for Madhold 2'})]
         const fragment = dinnerSpendingFragment(dinner(2, true), receipts)
+        expect(fragment.kind).toBe(SPENDING_KIND.dinner)
         expect(fragment.heading).toBe(`Ret 2, ${formatDate(dinner(2, true).date, DATE_SETTINGS.DAY_MONTH_MASK)}`)
         expect(fragment.rows).toHaveLength(1)
         // The receipt row reads the line's note
-        expect(fragment.rows[0]).toMatchObject({kind: 'receipt', label: '"Ret 2" 12/04/2026, Anna H. bestiller for Madhold 2', amount: 101200})
+        expect(fragment.rows[0]).toMatchObject({kind: SPENDING_KIND.receipt, label: '"Ret 2" 12/04/2026, Anna H. bestiller for Madhold 2', amount: 101200})
         expect(fragment.total).toEqual({label: 'Ret 2', figures: {budgetGross: 2000, spentGross: 200}})
     })
 
@@ -77,8 +78,8 @@ describe('spending fragments', () => {
         // The round reads the team's short name and number, its period, and the Madbestilling hint's heading
         expect(words).toEqual({team: 'Madhold 2', teamNumber: 2, period: `periode ${range}`, heading: `Madhold 2, periode ${range}`})
         const fragment = teamSpendingFragment([dinner(1, false), dinner(2, true)], words)
-        expect(fragment).toMatchObject({kind: 'team', team: 'Madhold 2', teamNumber: 2, period: words.period})
-        expect(fragment.rows.map(row => row.kind)).toEqual(['dinner', 'dinner'])
+        expect(fragment).toMatchObject({kind: SPENDING_KIND.team, team: 'Madhold 2', teamNumber: 2, period: words.period})
+        expect(fragment.rows.map(row => row.kind)).toEqual([SPENDING_KIND.dinner, SPENDING_KIND.dinner])
         expect(fragment.total).toEqual({label: 'Madhold 2', figures: {budgetGross: 3000, spentGross: 300}})
     })
 

@@ -69,23 +69,12 @@ export const useTemporalCalendar = () => {
   const createTemporalEventLists = (
     pastDates: Date[],
     futureDates: Date[],
-    nextDinner: DinnerEventDisplay | null,
-    color: string
-  ) => {
-    const pastEventList = createEventList(pastDates, 'past-dinners', RENDER_STYLE.badge, {
-      color: 'mocha'
-    })
-
-    const futureEventList = createEventList(futureDates, 'future-dinners', RENDER_STYLE.badge, {
-      color
-    })
-
-    const nextEventList = nextDinner
-      ? createEventList([nextDinner.date], 'next-dinner', RENDER_STYLE.badge, { color })
-      : createEventList([], 'next-dinner', RENDER_STYLE.badge)
-
-    return [pastEventList, futureEventList, nextEventList]
-  }
+    nextDinner: DinnerEventDisplay | null
+  ) => [
+    createEventList(pastDates, 'past-dinners'),
+    createEventList(futureDates, 'future-dinners'),
+    createEventList(nextDinner ? [nextDinner.date] : [], 'next-dinner')
+  ]
 
   return {
     useTemporalSplit,

@@ -1373,6 +1373,11 @@ export const COMPONENTS = {
         roleNotes: 'list-disc list-inside space-y-1 mt-1'
     },
 
+    userPreferencesCard: {
+        // The view face's notification glyph, level with the heading's line in a row whose items align at the top
+        notificationIcon: 'mt-1'
+    },
+
     /** InhabitantSelector: the stack of search row and table, the name cell, and the table's empty state */
     inhabitantSelector: {
         root: 'space-y-3',

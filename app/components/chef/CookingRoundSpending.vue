@@ -55,7 +55,7 @@ const {COMPONENTS, ICONS, TYPOGRAPHY, ALERTS, getRandomEmptyMessageText} = useTh
 
 // A team's cooking days read their allowance off the round's orders; this dinner's rows are its receipts
 const {isOrdersLoading} = storeToRefs(useBookingsStore())
-const loading = computed(() => isOrdersLoading.value && props.fragment.rows.some(row => row.kind === 'dinner'))
+const loading = computed(() => isOrdersLoading.value && props.fragment.rows.some(row => row.kind === SPENDING_KIND.dinner))
 const now = useClock()
 const noReceipts = getRandomEmptyMessageText('noReceipts', now.value)
 const {spendingLeft, spendingAwaitsTickets} = useOrder()
@@ -72,7 +72,7 @@ const columns: TableColumn<SpendingTableRow>[] = [
 <template>
   <section data-testid="cooking-round">
     <div :class="COMPONENTS.dinnerBudget.headingLine">
-      <div v-if="fragment.kind === 'team'" :class="COMPONENTS.dinnerBudget.roundHeading" data-testid="cooking-round-heading">
+      <div v-if="fragment.kind === SPENDING_KIND.team" :class="COMPONENTS.dinnerBudget.roundHeading" data-testid="cooking-round-heading">
         <CookingTeamBadges :team-number="fragment.teamNumber" :team-name="fragment.team" :show-counts="false" />
         <span :class="TYPOGRAPHY.sectionSubheading">{{ fragment.period }}</span>
       </div>
@@ -82,21 +82,21 @@ const columns: TableColumn<SpendingTableRow>[] = [
     <UTable :data="fragment.rows" :columns="columns" :loading="loading" :ui="COMPONENTS.table.ui">
       <template #date-cell="{ row }">{{ formatDate(row.original.date, DATE_SETTINGS.DAY_MONTH_MASK) }}</template>
       <template #label-cell="{ row }">
-        <span v-if="row.original.kind === 'dinner'" :class="row.original.isCurrent ? COMPONENTS.table.currentDinnerLabel : COMPONENTS.table.dinnerLabel">
+        <span v-if="row.original.kind === SPENDING_KIND.dinner" :class="row.original.isCurrent ? COMPONENTS.table.currentDinnerLabel : COMPONENTS.table.dinnerLabel">
           <UIcon v-if="row.original.isCurrent" :name="ICONS.dot" :class="COMPONENTS.table.currentMarker" data-testid="cooking-round-marker" />
           {{ formatDinnerName(row.original) }}
         </span>
         <span v-else :class="COMPONENTS.table.receiptLabel">{{ row.original.label }}</span>
       </template>
       <template #allowance-cell="{ row }">
-        <VatAmount v-if="row.original.kind === 'dinner'" :gross="row.original.budgetGross" />
+        <VatAmount v-if="row.original.kind === SPENDING_KIND.dinner" :gross="row.original.budgetGross" />
       </template>
       <template #spent-cell="{ row }">
-        <VatAmount v-if="row.original.kind === 'dinner'" :gross="row.original.spentGross" />
+        <VatAmount v-if="row.original.kind === SPENDING_KIND.dinner" :gross="row.original.spentGross" />
         <VatAmount v-else :gross="row.original.amount" />
       </template>
       <template #left-cell="{ row }">
-        <VatAmount v-if="row.original.kind === 'dinner'" :gross="spendingLeft(row.original)" balance :pending="spendingAwaitsTickets(row.original)" />
+        <VatAmount v-if="row.original.kind === SPENDING_KIND.dinner" :gross="spendingLeft(row.original)" balance :pending="spendingAwaitsTickets(row.original)" />
       </template>
       <template #empty>
         <UAlert v-bind="ALERTS.emptyStateCompact" :title="noReceipts" data-testid="cooking-round-empty" />

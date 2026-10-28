@@ -3,7 +3,8 @@
  * Chef Page - Team calendar and dinner management for cooking team members
  *
  * Architecture:
- * - The page shows one of the season's teams: one of the person's own, or a visit to another team
+ * - The page shows one of the season's teams: one of the person's own, or a visit to another team; a person on no team
+ *   lands on a visit to the team of the season's next dinner
  * - Only the team's chef gets edit controls in ChefMenuCard (formMode='EDIT'); a member and a visitor read it
  * - The chef role panel and Kok / Kokkespire are the dinner page's, open to every member; taking a role puts the person
  *   on the team, and the visiting tab becomes their own tab
@@ -52,16 +53,44 @@
  * +----------------------------------------------------------------------------+
  * No menu, allergen, grocery or state edits, no Annoncer and no Flere: those need the team's chef.
  *
- * Visual check: /chef on an own team and on a visiting tab, phone and desktop, light and dark.
+ * /chef, a person on no team with no dinner ahead, or no season: MyTeamSelector's "Ingen madhold" alone, no role line,
+ * an empty calendar slot; the detail is DinnerDetailPanel with no dinner
+ *
+ * Phone: the master over the detail
+ * +--------------------------------------------------+
+ * | Mine Madhold                                     |
+ * | (user group)       Ingen madhold                 |  ALERTS.emptyState
+ * |       Du er ikke medlem af nogen madhold.        |
+ * |  Kontakt en administrator for at blive tildelt   |
+ * |                  et madhold.                     |
+ * +--------------------------------------------------+
+ * | (arrow up)                                       |
+ * | Vælg en fællesspisning                           |
+ * | Vælg en fællesspisning fra kalenderen for at se  |
+ * | detaljer.                                        |
+ * +--------------------------------------------------+
+ *
+ * Desktop: the same master beside the detail, the arrow pointing left
+ * +---------------------------------+  +--------------------------------------------+
+ * | Mine Madhold                    |  | (arrow left)                               |
+ * | (user group)   Ingen madhold    |  | Vælg en fællesspisning                     |
+ * |  Du er ikke medlem af nogen     |  | Vælg en fællesspisning fra kalenderen for  |
+ * |  madhold. Kontakt en            |  | at se detaljer.                            |
+ * |  administrator for at blive     |  +--------------------------------------------+
+ * |  tildelt et madhold.            |
+ * +---------------------------------+
+ *
+ * Visual check: /chef on an own team, on a visiting tab and for a person on no team, phone and desktop, light and dark.
  *
  * Query Parameters:
- * - ?team=3 - The team on view, one of the season's teams; defaults to the person's first team
+ * - ?team=3 - The team on view, one of the season's teams; defaults to the person's first team, else the team of the
+ *   season's next dinner
  * - ?date=04/11/2026 - The team's dinner on view
  * - ?view=calendar:open - The calendar's view and open state
  */
 
 import {FORM_MODES, type FormMode} from '~/types/form'
-import type {DinnerEventDisplay, ChefMenuForm} from '~/composables/useBookingValidation'
+import type {ChefMenuForm} from '~/composables/useBookingValidation'
 import type {ExpenseCreate} from '~/composables/useBillingValidation'
 import type {CookingRoundRow} from '~/composables/useBookingUi'
 
@@ -92,7 +121,7 @@ const {
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
 
 // Permission helpers and date utilities
-const {isChefFor, deadlinesForSeason, getDinnerOnDate} = useSeason()
+const {isChefFor, deadlinesForSeason, getDinnerOnDate, splitDinnerEvents} = useSeason()
 const now = useClock()
 const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value, now.value) : undefined)
 const authStore = useAuthStore()
@@ -102,7 +131,12 @@ const seasonTeams = computed(() => selectedSeason.value?.CookingTeams ?? [])
 const seasonDinners = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 const isSeasonTeam = (id: number | null) => !!id && seasonTeams.value.some(t => t.id === id)
 
-// Team selection via query parameter; with no team of the person's own and no visit the key stays off the URL
+// A dinner without a team has no team page
+const seasonTeamDinners = computed(() => seasonDinners.value.filter(dinner => dinner.cookingTeamId !== null))
+const nextDinnerTeamId = computed(() => splitDinnerEvents(seasonTeamDinners.value, now.value).nextDinner?.cookingTeamId ?? null)
+
+// Team selection via query parameter: a person on no team visits the team of the season's next dinner;
+// with no team of the person's own and no dinner ahead the key stays off the URL
 const {value: selectedTeamId, setValue: setSelectedTeamId} = useQueryParam<number>('team', {
   serialize: (id) => id.toString(),
   deserialize: (s) => {
@@ -111,9 +145,7 @@ const {value: selectedTeamId, setValue: setSelectedTeamId} = useQueryParam<numbe
   },
   validate: isSeasonTeam,
   normalize: (id) => isSeasonTeam(id) ? id : null,
-  defaultValue: () => {
-    return myTeams.value[0]?.id ?? 0
-  },
+  defaultValue: () => myTeams.value[0]?.id ?? nextDinnerTeamId.value ?? 0,
   syncWhen: () => isPageReady.value && seasonTeams.value.length > 0
 })
 
@@ -133,9 +165,7 @@ const teamOnView = computed(() => ownTeam.value ?? visitingTeam.value)
 
 const teamDinnerEvents = computed(() => selectedTeam.value?.dinnerEvents ?? [])
 
-// The other teams' dinners; a dinner without a team has no team page
-const otherTeamDinners = computed(() => seasonDinners.value.filter(dinner =>
-  dinner.cookingTeamId !== null && dinner.cookingTeamId !== selectedTeamId.value))
+const otherTeamDinners = computed(() => seasonTeamDinners.value.filter(dinner => dinner.cookingTeamId !== selectedTeamId.value))
 
 const calendarError = computed(() => isPlanStoreErrored.value ? planStoreError.value : selectedTeamError.value)
 
@@ -163,7 +193,7 @@ const calendarAccordionOpen = computed(() => viewState.value.open)
 // A tab click sets the mode and opens the calendar; the chevron toggles the open state in the current mode
 const handleTabClick = (mode: 'agenda' | 'calendar') => setViewState({ mode, open: true })
 const handleAccordionToggle = (open: boolean) => setViewState({ mode: viewState.value.mode, open })
-const teamDinnerDates = computed(() => teamDinnerEvents.value.map((e: DinnerEventDisplay) => new Date(e.date)))
+const teamDinnerDates = computed(() => teamDinnerEvents.value.map(dinner => dinner.date))
 
 // Date selection via URL query parameter using curried pattern
 const {value: selectedDate, setValue: setSelectedDate} = useDinnerDateParam({
@@ -190,7 +220,7 @@ const handleDinnerSelect = (dinnerId: number) => {
   const dinner = seasonDinners.value.find(e => e.id === dinnerId)
   if (!dinner?.cookingTeamId) return
   setSelectedTeamId(dinner.cookingTeamId)
-  setSelectedDate(new Date(dinner.date))
+  setSelectedDate(dinner.date)
 }
 
 // ChefMenuCard formMode: EDIT for chef, VIEW for team members
@@ -253,7 +283,7 @@ const {getTeamNumber} = useCookingTeam()
 const {calculateBudget} = useOrder()
 const kitchenConfig = useAppConfig().theslope?.kitchen
 const roundDinners = computed(() => selectedDinnerId.value
-  ? consecutiveDinnerRun(teamDinnerEvents.value.map((e: DinnerEventDisplay) => ({...e, date: new Date(e.date)})), selectedDinnerId.value)
+  ? consecutiveDinnerRun(teamDinnerEvents.value, selectedDinnerId.value)
   : [])
 bookingsStore.loadOrdersForDinners(() => ({dinnerEventIds: roundDinners.value.map(dinner => dinner.id), allHouseholds: true}))
 const roundRows = computed<CookingRoundRow[]>(() => roundDinners.value.map(dinner => ({
@@ -351,9 +381,9 @@ useHead({
                 :cause="calendarError"
             />
 
-            <!-- No events for team -->
+            <!-- No events for team; with no team on view the master's "Ingen madhold" stands alone -->
             <UAlert
-                v-else-if="teamDinnerEvents.length === 0"
+                v-else-if="selectedTeam && teamDinnerEvents.length === 0"
                 v-bind="ALERTS.info"
                 :icon="ICONS.calendarDays"
             >
@@ -366,7 +396,7 @@ useHead({
             </UAlert>
 
             <!-- Calendar display -->
-            <div v-else>
+            <div v-else-if="selectedTeam">
               <ChefCalendarDisplay
                   v-if="selectedSeason && selectedTeam && deadlines"
                   :view-mode="calendarViewMode"

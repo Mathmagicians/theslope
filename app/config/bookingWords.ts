@@ -173,6 +173,14 @@ export const BOOKING_WORDS = {
     legend: {modified: 'Ændret', waitlist: 'På venteliste (#n)', birthday: 'Ny billetpris fra fødselsdagen'},
     /** A cancelled dinner: the corner ribbon on the chef's card and the booking form, and the booking calendar's legend entry */
     cancelledDinner: {ribbon: 'AFLYST', legend: 'Aflyst fællesspisning'},
+    /** The booking calendar's legend: the dinners' day circles, and the lock chips of the tickets for sale and of the waiting list */
+    calendarLegend: {
+        next: 'Næste fællesspisning',
+        planned: 'Planlagt fællesspisning',
+        past: 'Tidligere fællesspisning',
+        forSale: 'Billetter til salg',
+        waitlist: 'Venteliste, ingen billetter til salg'
+    },
     /**
      * A dinner's deadline badges and steps, the chef's and the household's. "Framelding", as the preferences sign everybody
      * up and the deadline is the one for cancelling

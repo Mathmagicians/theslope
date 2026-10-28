@@ -78,7 +78,7 @@ const {deadlinesForSeason} = useSeason()
 const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value, now.value) : undefined)
 
 // Date selection via URL query parameter (curried pattern)
-const dinnerDates = computed(() => dinnerEvents.value.map(e => new Date(e.date)))
+const dinnerDates = computed(() => dinnerEvents.value.map(e => e.date))
 const syncWhen = () => isPlanStoreReady.value && dinnerDates.value.length > 0
 
 const {value: selectedDate, setValue: setDate} = useDinnerDateParam({
@@ -181,7 +181,6 @@ useHead({
             :dinner-events="dinnerEvents"
             :lock-status="lockStatus"
             :show-countdown="true"
-            :color="COLOR.peach"
             :selected-date="selectedDate"
             @date-selected="setDate"
           />

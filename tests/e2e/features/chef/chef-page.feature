@@ -5,14 +5,19 @@ Feature: The chef page
 
   Background:
     Given a season is active
+    And the user is on the teams
+      | team | role |
+      | 1    | CHEF |
+      | 2    | CHEF |
+      | 3    | COOK |
+      | 4    | none |
+    And the user is signed in
 
   Rule: The user plans the dinners of their own teams
 
     Background:
-      Given the user is a CHEF on team 1 and on team 2
-      And team 1 cooks a dinner
+      Given team 1 cooks a dinner
       And team 2 cooks a dinner
-      And the user is signed in
 
     Scenario: The chef page renders on the server and hydrates without a mismatch
       When the user opens the chef page of team 1
@@ -44,20 +49,18 @@ Feature: The chef page
   Rule: The user visits a team they are not on
 
     Background:
-      Given the user is a member of team 1 and not of team 2
-      And team 1 cooks a dinner
-      And team 2 cooks the only dinner of its day
-      And the user is signed in
+      Given team 3 cooks a dinner
+      And team 4 cooks the only dinner of its day
 
     Scenario: The user opens the chef page of a team they are not on
-      When the user opens the chef page of team 2
-      Then the user sees the visiting tab and the visitor line of team 2
-      And the user reads the menu card of team 2 without edit controls
+      When the user opens the chef page of team 4
+      Then the user sees the visiting tab and the visitor line of team 4
+      And the user reads the menu card of team 4 without edit controls
       And the user sees the role buttons
 
     Scenario: The user clicks another team's dinner in the chef calendar
-      When the user opens the chef page of team 1
-      And the user clicks the dinner of team 2 in the chef calendar
-      Then the user sees the visiting tab and the visitor line of team 2
-      And the user reads the menu card of team 2 without edit controls
+      When the user opens the chef page of team 3
+      And the user clicks the dinner of team 4 in the chef calendar
+      Then the user sees the visiting tab and the visitor line of team 4
+      And the user reads the menu card of team 4 without edit controls
       And the user sees the role buttons

@@ -69,6 +69,9 @@ type CreatedRows = {inhabitantIds: number[], householdIds: number[], userIds: nu
 
 const noRows = (): CreatedRows => ({inhabitantIds: [], householdIds: [], userIds: [], dinnerEventIds: [], teamIds: [], seasonIds: []})
 
+/** The teams a Background set up in the worker with their dinners, by the user's roles on them */
+export type WorkerTeams = Map<string, {teams: CookingTeamDetail[], teamDinners: DinnerEventDisplay[]}>
+
 /** What the steps of one scenario hand each other */
 export type Scene = {
     /** The browser context of the actor a GIVEN signed in */
@@ -91,7 +94,7 @@ export type Scene = {
     signedInUser?: UserDetail
     /** The dinner a GIVEN placed, with its season */
     dinner?: {season: Season, event: DinnerEventDisplay}
-    /** The teams a GIVEN created, by their number in a feature: team n at index n - 1 */
+    /** The teams a GIVEN set up, by their number in a feature: team n at index n - 1; the worker's scenarios share them */
     teams: CookingTeamDetail[]
     /** The dinner a GIVEN placed for each team, at the index of its team in `teams` */
     teamDinners: DinnerEventDisplay[]
@@ -282,7 +285,7 @@ const deleteCreatedRows = async (browser: Browser, created: CreatedRows, baseURL
  * playwright-bdd's `test` with the UI specs' API error guard (`uiTest.ts`): the pages of a scenario fail it on a 4xx or
  * 5xx from `/api/` it did not declare; the factories' requests are not recorded
  */
-export const test = mergeTests(base, uiTest).extend<{adminContext: BrowserContext, contextOf: (actor: Actor) => Promise<BrowserContext>, scene: Scene}, {createdRows: CreatedRows}>({
+export const test = mergeTests(base, uiTest).extend<{adminContext: BrowserContext, contextOf: (actor: Actor) => Promise<BrowserContext>, scene: Scene}, {createdRows: CreatedRows, workerTeams: WorkerTeams}>({
     adminContext: async ({browser}, use) => {
         const context = await validatedBrowserContext(browser)
         await use(context)
@@ -317,6 +320,15 @@ export const test = mergeTests(base, uiTest).extend<{adminContext: BrowserContex
         // eslint-disable-next-line no-empty-pattern
         async ({}, use) => {
             await use(noRows())
+        },
+        {scope: 'worker'}
+    ],
+    // A team creation rewrites every team of the shared season: the worker's scenarios share one creation, and its teams
+    // and dinners go into `createdRows`
+    workerTeams: [
+        // eslint-disable-next-line no-empty-pattern
+        async ({}, use) => {
+            await use(new Map())
         },
         {scope: 'worker'}
     ],

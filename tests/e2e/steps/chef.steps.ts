@@ -1,6 +1,6 @@
 import {expect, type BrowserContext, type Page} from '@playwright/test'
-import {defineParameterType} from 'playwright-bdd'
-import {Given, When, Then, fromScene, contextOfActor, teamOf, type Actor, type Scene} from '~~/tests/e2e/fixtures'
+import {defineParameterType, type DataTable} from 'playwright-bdd'
+import {Given, When, Then, fromScene, contextOfActor, teamOf, type Actor, type Scene, type WorkerTeams} from '~~/tests/e2e/fixtures'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
@@ -23,20 +23,29 @@ const nextDinnerOf = splitDinnerEvents(SEASON_CONFIG.defaultDinnerStartTime, SEA
 
 defineParameterType({name: 'teamRole', regexp: [...TeamRoleSchema.options]})
 
+/** The role cell of a team the actor is not on */
+const NOT_ON_TEAM = 'none'
+
 /**
- * The teams come in one team creation (it rewrites every team of the shared season), the actor's inhabitant on each in
- * its role, or not on it for a null role; team n lands at index n - 1 of the scene's teams
+ * The teams come in one team creation per worker (it rewrites every team of the shared season), the actor's inhabitant
+ * on each in its role, or not on it for a null role; team n lands at index n - 1 of the scene's teams
  */
-const createTeams = async (admin: BrowserContext, actorContext: BrowserContext, scene: Scene, roleOnTeam: [number, TeamRole | null][]) => {
-    const {inhabitantId} = await getSessionUserInfo(actorContext)
-    const teams = await SeasonFactory.createCookingTeams(admin, fromScene(scene, 'activeSeason'), roleOnTeam.map(([number, role]) => ({
-        teamName: `ChefTeam${number}`,
-        assignments: role ? [SeasonFactory.defaultCookingTeamCreateAssignment({inhabitantId, role})] : []
-    })))
-    teams.forEach((team, index) => {
-        scene.teams[roleOnTeam[index]![0] - 1] = team
-        scene.created.teamIds.push(team.id!)
-    })
+const setUpTeams = async (admin: BrowserContext, actorContext: BrowserContext, scene: Scene, workerTeams: WorkerTeams, actor: Actor, roleOnTeam: [number, TeamRole | null][]) => {
+    const key = `${actor} ${JSON.stringify(roleOnTeam)}`
+    if (!workerTeams.has(key)) {
+        const {inhabitantId} = await getSessionUserInfo(actorContext)
+        const created = await SeasonFactory.createCookingTeams(admin, fromScene(scene, 'activeSeason'), roleOnTeam.map(([number, role]) => ({
+            teamName: `ChefTeam${number}`,
+            assignments: role ? [SeasonFactory.defaultCookingTeamCreateAssignment({inhabitantId, role})] : []
+        })))
+        const teams: CookingTeamDetail[] = []
+        created.forEach((team, index) => {
+            teams[roleOnTeam[index]![0] - 1] = team
+            scene.created.teamIds.push(team.id!)
+        })
+        workerTeams.set(key, {teams, teamDinners: []})
+    }
+    Object.assign(scene, workerTeams.get(key))
 }
 
 /** The fields of team n's dinner: a menu and the team's CHEF as its chef, else none */
@@ -46,7 +55,10 @@ const dinnerOfTeam = (team: CookingTeamDetail, number: number) => ({
     chefId: team.assignments.find(assignment => assignment.role === TeamRoleSchema.enum.CHEF)?.inhabitantId ?? null
 })
 
-const placeTeamDinner = (scene: Scene, number: number, dinner: DinnerEventDisplay) => {
+/** Team n's dinner, placed once: the worker's team keeps it for the scenarios after */
+const placeTeamDinner = async (scene: Scene, number: number, create: () => Promise<DinnerEventDisplay>) => {
+    if (scene.teamDinners[number - 1]) return
+    const dinner = await create()
     scene.teamDinners[number - 1] = dinner
     scene.created.dinnerEventIds.push(dinner.id!)
 }
@@ -63,29 +75,29 @@ const dateInUrl = async (page: Page): Promise<Date> => {
     return parseDate(new URL(page.url()).searchParams.get(DATE_PARAM)!)
 }
 
-Given('{actor} is a {teamRole} on team {int} and on team {int}', async ({adminContext: admin, contextOf, scene}, actor: Actor, role: TeamRole, first: number, second: number) => {
-    await createTeams(admin, await contextOf(actor), scene, [[first, role], [second, role]])
-})
-
-// A member cooks on the team
-Given('{actor} is a member of team {int} and not of team {int}', async ({adminContext: admin, contextOf, scene}, actor: Actor, member: number, other: number) => {
-    await createTeams(admin, await contextOf(actor), scene, [[member, TeamRoleSchema.enum.COOK], [other, null]])
+Given('{actor} is on the teams', async ({adminContext: admin, contextOf, scene, workerTeams}, actor: Actor, table: DataTable) => {
+    const roleOnTeam = table.hashes().map(({team, role}): [number, TeamRole | null] =>
+        [Number(team), role === NOT_ON_TEAM ? null : TeamRoleSchema.parse(role)])
+    await setUpTeams(admin, await contextOf(actor), scene, workerTeams, actor, roleOnTeam)
 })
 
 // Team n cooks on the nth cooking day ahead, beside the season's own dinner: the chef page selects among the team's
 // dinners, so the free days stay with the specs that select across the season
 Given('team {int} cooks a dinner', async ({adminContext: admin, scene}, number: number) => {
-    const season = fromScene(scene, 'activeSeason')
-    const cookingDays = computeCookingDates(season.cookingDays, season.seasonDates, season.holidays).filter(date => date > new Date())
-    expect(cookingDays.length, `season ${season.shortName} has ${number} cooking days ahead`).toBeGreaterThanOrEqual(number)
-    placeTeamDinner(scene, number, await DinnerEventFactory.createDinnerEvent(admin, {
-        ...dinnerOfTeam(teamOf(scene, number), number), date: cookingDays[number - 1], seasonId: season.id!
-    }))
+    await placeTeamDinner(scene, number, () => {
+        const season = fromScene(scene, 'activeSeason')
+        const cookingDays = computeCookingDates(season.cookingDays, season.seasonDates, season.holidays).filter(date => date > new Date())
+        expect(cookingDays.length, `season ${season.shortName} has ${number} cooking days ahead`).toBeGreaterThanOrEqual(number)
+        return DinnerEventFactory.createDinnerEvent(admin, {
+            ...dinnerOfTeam(teamOf(scene, number), number), date: cookingDays[number - 1], seasonId: season.id!
+        })
+    })
 })
 
 // A click on a day opens the team on view's dinner before another team's
 Given('team {int} cooks the only dinner of its day', async ({adminContext: admin, scene}, number: number) => {
-    placeTeamDinner(scene, number, await DinnerEventFactory.createDinnerEventOnFreeDay(admin, fromScene(scene, 'activeSeason'), dinnerOfTeam(teamOf(scene, number), number)))
+    await placeTeamDinner(scene, number, () =>
+        DinnerEventFactory.createDinnerEventOnFreeDay(admin, fromScene(scene, 'activeSeason'), dinnerOfTeam(teamOf(scene, number), number)))
 })
 
 // The hydration warnings are collected from the start
