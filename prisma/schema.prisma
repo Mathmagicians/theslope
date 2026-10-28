@@ -222,6 +222,7 @@ model DinnerEvent {
 
   @@index([seasonId])
   @@index([chefId])
+  @@index([cookingTeamId])
   @@index([date]) // For chronological queries
   @@index([state]) // For filtering by state
 }
@@ -349,6 +350,8 @@ model CookingTeam {
   dutyTemplates DinnerDutyTemplate[]
   jokerSlots    JokerSlot[]
   affinity      String? // JSON stringified map of Weekday to boolean
+
+  @@index([seasonId])
 }
 
 model CookingTeamAssignment {
@@ -391,6 +394,8 @@ model TicketPrice {
   description     String?
   maximumAgeLimit Int?
   orders          Order[]
+
+  @@index([seasonId])
 }
 
 model OrderHistory {
@@ -412,6 +417,7 @@ model OrderHistory {
   @@index([performedByUserId])
   @@index([timestamp])
   @@index([seasonId, inhabitantId, dinnerEventId, action]) // For cancellation lookups by season
+  @@index([dinnerEventId])
 }
 
 model JobRun {
