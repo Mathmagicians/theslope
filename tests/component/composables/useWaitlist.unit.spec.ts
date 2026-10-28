@@ -16,7 +16,6 @@ const Recovery = PlacementRecoverySchema.enum
 
 // The season's default prices carry each price's portions; a ticket type stands for its first price row
 const TICKET_PRICES = TicketFactory.defaultTicketPrices()
-const priceOf = TicketFactory.defaultPriceOf
 const portionsOf = useWaitlist().portionsOfEntryFor(TICKET_PRICES)
 const ticketTypeOf = useWaitlist().ticketTypeOfEntry(TICKET_PRICES)
 
@@ -29,7 +28,7 @@ const {isHeld, isExpired} = useWaitlist().placingLease(NOW, LEASE_MINUTES)
 type EntryOverrides = Partial<Pick<TicketWaitlistDisplay, 'isGuestTicket' | 'placingAt' | 'placingOrderId'>>
 const entry = (id: number, ticketType: keyof typeof TicketType, minute: number, overrides: EntryOverrides = {}): TicketWaitlistDisplay =>
     WaitlistFactory.defaultEntry({
-        id, dinnerEventId: 100, inhabitantId: 40 + id, householdId: 9, ticketPrice: priceOf(ticketType),
+        id, dinnerEventId: 100, inhabitantId: 40 + id, householdId: 9, ticketPrice: TicketFactory.defaultPriceOf(ticketType),
         createdAt: new Date(2026, 9, 1, 12, minute), ...overrides
     })
 
@@ -62,7 +61,7 @@ describe('useWaitlist', () => {
     })
 
     it('weighs an entry at the portions its price carries', () => {
-        expect(portionsOf(entry(1, TicketType.CHILD, 0))).toBe(priceOf(TicketType.CHILD).portions)
+        expect(portionsOf(entry(1, TicketType.CHILD, 0))).toBe(TicketFactory.defaultPriceOf(TicketType.CHILD).portions)
     })
 
     it('weighs an entry whose price is outside the season at nothing', () => {
@@ -97,10 +96,10 @@ describe('useWaitlist', () => {
     describe('previewSale', () => {
         const {previewSale} = useWaitlist()
         const ticket = (id: number, ticketType: keyof typeof TicketType, minute: number, householdId: number, dinnerEventId = 100): TicketForSale =>
-            ({id, dinnerEventId, ticketPriceId: priceOf(ticketType).id!, releasedAt: new Date(2026, 9, 1, 14, minute), inhabitantId: 10 * householdId, householdId})
+            ({id, dinnerEventId, ticketPriceId: TicketFactory.defaultPriceOf(ticketType).id!, releasedAt: new Date(2026, 9, 1, 14, minute), inhabitantId: 10 * householdId, householdId})
         const ticketOfSeller = (sellerHouseholdId: number): number => 65 + sellerHouseholdId
         const sale = (buyer: TicketWaitlistDisplay, ticketType: keyof typeof TicketType, sellerHouseholdId: number) => ({
-            dinnerEventId: buyer.dinnerEventId, ticketPriceId: priceOf(ticketType).id!, orderId: ticketOfSeller(sellerHouseholdId), dinnerMode: buyer.order.dinnerMode,
+            dinnerEventId: buyer.dinnerEventId, ticketPriceId: TicketFactory.defaultPriceOf(ticketType).id!, orderId: ticketOfSeller(sellerHouseholdId), dinnerMode: buyer.order.dinnerMode,
             isGuestTicket: buyer.isGuestTicket, buyerInhabitantId: buyer.inhabitantId,
             buyerHouseholdId: buyer.order.householdId, sellerHouseholdId, sellerInhabitantId: 10 * sellerHouseholdId
         })
@@ -205,7 +204,7 @@ describe('useWaitlist', () => {
         const order = (createdAt: Date, overrides: Partial<PlacementOrder> = {}): PlacementOrder => ({
             ...OrderFactory.defaultOrder(undefined, {
                 id: ORDER_ID, inhabitantId: grabbed(null).inhabitantId, isGuestTicket: false, state: OrderStateSchema.enum.BOOKED,
-                ticketPriceId: priceOf(TicketType.ADULT).id!, createdAt
+                ticketPriceId: TicketFactory.defaultPriceOf(TicketType.ADULT).id!, createdAt
             }),
             sellerHouseholdId: null,
             sellerInhabitantId: null,
@@ -227,7 +226,7 @@ describe('useWaitlist', () => {
         })
 
         describe('finishedPlacementOutcomes', () => {
-            const portionsOfAdult = priceOf(TicketType.ADULT).portions
+            const portionsOfAdult = TicketFactory.defaultPriceOf(TicketType.ADULT).portions
             const {dinnerEventId, id: entryId, inhabitantId, isGuestTicket, order: {householdId, ticketPriceId, dinnerMode}} = grabbed(null)
 
             it.each([
@@ -238,10 +237,10 @@ describe('useWaitlist', () => {
                 },
                 {
                     description: 'the released ticket older than the grab is sold to the entry by the household its claim names',
-                    found: order(releasedBeforeGrab, {ticketPriceId: priceOf(TicketType.CHILD).id!, sellerHouseholdId: 3, sellerInhabitantId: 30}),
+                    found: order(releasedBeforeGrab, {ticketPriceId: TicketFactory.defaultPriceOf(TicketType.CHILD).id!, sellerHouseholdId: 3, sellerInhabitantId: 30}),
                     outcomes: {
                         waitlistTicketsSold: [{
-                            dinnerEventId, ticketPriceId: priceOf(TicketType.CHILD).id!, orderId: ORDER_ID, dinnerMode, isGuestTicket, buyerInhabitantId: inhabitantId,
+                            dinnerEventId, ticketPriceId: TicketFactory.defaultPriceOf(TicketType.CHILD).id!, orderId: ORDER_ID, dinnerMode, isGuestTicket, buyerInhabitantId: inhabitantId,
                             buyerHouseholdId: householdId, sellerHouseholdId: 3, sellerInhabitantId: 30
                         }],
                         waitlistPortionsAssigned: []

@@ -12,7 +12,8 @@ import type {HouseholdDetail, InhabitantDisplay, UserDisplay} from '~/composable
 import {useBookingValidation, TicketState, type BookingOutcomes, type OrderHistoryDisplay, type TicketSale, type WaitlistJoined} from '~/composables/useBookingValidation'
 import {useDeliveryValidation, type Delivery} from '~/composables/useDeliveryValidation'
 import {useUserPreferenceValidation, type NotificationChannel} from '~/composables/useUserPreferenceValidation'
-import {formatPlace} from '~/composables/useBooking'
+import {formatPlace, useBooking} from '~/composables/useBooking'
+import {siteUrl} from '~~/server/utils/sender/compose'
 import {useOrder} from '~/composables/useOrder'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
@@ -46,6 +47,7 @@ const {Kind, mailKindOf} = NotificationFactory
 const Mode = useBookingValidation().DinnerModeSchema.enum
 const {DeliverySubjectSchema, DeliveryKindSchema, SenderEventSchema} = useDeliveryValidation()
 const SenderEvent = SenderEventSchema.enum
+const {buildChefUrl} = useBooking()
 
 // The Delivery rows and the order history D1 holds for the run: the history read answers from the history the case writes
 let recorded: {rows: Delivery[]}
@@ -60,14 +62,17 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 const dinner = {dinnerEventId: 7, date: new Date(2026, 9, 19), menuTitle: 'Lasagne'}
+const TEAM_ID = 3
 const to = 'anna@example.com'
 
 // The emails the queue took, whichever call carried them
 const sentMessages = (queue: FakeSenderQueue): EmailMessage[] => sentBodies<EmailMessage>(queue)
 
-// The dinners of the mails, the dinner above in season 9 unless named, cooked by the chef; each season holds its prices
-const mockDinners = (chefId: number | null, dinners: {id: number, seasonId: number}[] = [{id: dinner.dinnerEventId, seasonId: 9}]) => {
-    const rows = dinners.map(({id, seasonId}) => ({...DinnerEventFactory.defaultDinnerEventDetail(), id, seasonId, chefId}))
+// The dinners of the mails on the date above, the dinner above in season 9 unless named, cooked by the chef of the team
+// unless named; each season holds its prices
+const mockDinners = (chefId: number | null, dinners: {id: number, seasonId: number, cookingTeamId?: number | null}[] = [{id: dinner.dinnerEventId, seasonId: 9}]) => {
+    const rows = dinners.map(({id, seasonId, cookingTeamId = TEAM_ID}) =>
+        ({...DinnerEventFactory.defaultDinnerEventDetail(), id, date: dinner.date, seasonId, chefId, cookingTeamId}))
     vi.mocked(fetchDinnerEventsByIds).mockImplementation(async (_, ids) => rows.filter(row => ids.includes(row.id)))
     vi.mocked(fetchSeason).mockImplementation(async (_, id) => ({...SeasonFactory.defaultSeason(), id, ticketPrices: TicketFactory.defaultTicketPrices({seasonId: id})}))
 }
@@ -345,6 +350,20 @@ describe('the people a run\'s mails name', () => {
         const [message] = mailsOfKind(queue, kind)
         expect(message, `a ${kind} mail`).toBeDefined()
         for (const text of reads) expect(message!.text).toContain(text)
+    })
+
+    // The buildup sends the chef to the chef page on the team's dinner; a dinner without a team by its date alone
+    it.each([
+        {dinner: 'a team\'s dinner', cookingTeamId: TEAM_ID},
+        {dinner: 'a dinner without a team', cookingTeamId: null}
+    ])('GIVEN the line reaching the threshold on $dinner WHEN its buildup mail goes THEN it links the dinner on the chef page', async ({cookingTeamId}) => {
+        mockDinners(chef.id, [{id: dinner.dinnerEventId, seasonId: 9, cookingTeamId}])
+        const queue = fakeQueue()
+
+        await notify(queue, outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}))
+
+        const [message] = mailsOfKind(queue, Kind.WAITLIST_BUILDUP)
+        expect(message!.text).toContain(buildChefUrl(siteUrl(NotificationFactory.config(), ''), cookingTeamId, dinner.date))
     })
 
     // The mails honour the recipient's own channels (Mine indstillinger → Notifikationer): with e-mail off the recipient

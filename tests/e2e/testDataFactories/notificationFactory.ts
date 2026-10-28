@@ -6,11 +6,15 @@ import {templatePlaceholders} from '~/utils/template'
 import type {EmailChannel} from '~~/server/utils/sender/config'
 import type {DesiredOutgoing} from '~~/server/utils/sender/deliveries'
 
-const {DeliveryKindSchema, DeliverySubjectSchema} = useDeliveryValidation()
+const {DeliveryKindSchema, DeliverySubjectSchema, deliveryReferencePrefix} = useDeliveryValidation()
 
 // The masked address a recorded delivery's reference carries: every recipient's masks alike
 const MASKED_ADDRESS = 'a***@e***.com'
 let deliveryId = 0
+
+/** A recorded delivery's reference: the notification, the channel and the user, then the masked address and the message */
+const referenceOf = (notification: NotificationKind, kind: Delivery['kind'], userId: number | null): string =>
+    `${deliveryReferencePrefix(notification, kind, userId)}${MASKED_ADDRESS}:${crypto.randomUUID()}`
 
 /**
  * Notification config for unit tests: the real templates and signature, dev-like addresses (ADR-003 factory).
@@ -54,7 +58,7 @@ export class NotificationFactory {
         subjectId: 601,
         version: 1,
         kind: DeliveryKindSchema.enum.EMAIL,
-        reference: `${NotificationKind.TEST}:${DeliveryKindSchema.enum.EMAIL}:${MASKED_ADDRESS}:${crypto.randomUUID()}`,
+        reference: referenceOf(NotificationKind.TEST, DeliveryKindSchema.enum.EMAIL, null),
         jobRunId: null,
         deliveredAt: new Date(),
         ...overrides
@@ -78,13 +82,8 @@ export class NotificationFactory {
     static readonly recordedDelivery = (
         {subjectType, subjectId, version, notification, userId}: DesiredDelivery,
         kind: Delivery['kind'] = DeliveryKindSchema.enum.EMAIL
-    ): Delivery => {
-        const {deliveryReferencePrefix} = useDeliveryValidation()
-        return NotificationFactory.defaultDelivery({
-            subjectType, subjectId, version, kind,
-            reference: `${deliveryReferencePrefix(notification, kind, userId)}${MASKED_ADDRESS}:${crypto.randomUUID()}`
-        })
-    }
+    ): Delivery =>
+        NotificationFactory.defaultDelivery({subjectType, subjectId, version, kind, reference: referenceOf(notification, kind, userId)})
 
     /**
      * A desired delivery as a sender event hands it to the delivery step: the user's address and channels and the

@@ -54,23 +54,9 @@ export const readByIds = async <T>(ids: number[], read: (batch: number[]) => Pro
 
 /*** USERS ***/
 
-// Get serialization utilities
-const {serializeUserInput, deserializeUserDisplay, deserializeUserDetail} = useCoreValidation()
+const {serializeUserInput, serializeUserUpdate, deserializeUserDisplay, deserializeUserDetail} = useCoreValidation()
 
 const LOG_USER = '🪪 > USER > [SAVE]'
-
-/**
- * Serialize partial user payload for id-keyed update. Uses Prisma.skip per ADR-012:
- * undefined → don't touch the column; null on phone → set to NULL.
- */
-const serializeUserPartial = (user: Partial<UserCreate>) => ({
-    email:        user.email        !== undefined ? user.email                       : Prisma.skip,
-    phone:        user.phone        !== undefined ? (user.phone ?? null)             : Prisma.skip,
-    passwordHash: user.passwordHash !== undefined ? user.passwordHash                : Prisma.skip,
-    systemRoles:  user.systemRoles  !== undefined ? JSON.stringify(user.systemRoles) : Prisma.skip,
-    notificationChannels: user.notificationChannels !== undefined ? JSON.stringify(user.notificationChannels) : Prisma.skip,
-    appearance:           user.appearance           !== undefined ? JSON.stringify(user.appearance)           : Prisma.skip
-})
 
 /**
  * Save user.
@@ -99,7 +85,7 @@ export async function saveUser(
 
     try {
         if (id != null) {
-            const row = await prisma.user.update({where: {id}, data: serializeUserPartial(user)})
+            const row = await prisma.user.update({where: {id}, data: serializeUserUpdate(user, Prisma.skip)})
             console.info(`${LOG_USER} Saved user ${row.email} (id=${row.id}, target=${subject})`)
             return deserializeUserDetail(row)
         }
@@ -115,13 +101,14 @@ export async function saveUser(
 }
 
 
-// Shared select clause for UserDisplay - ADR-009: lightweight relations
+// Shared select clause for UserDisplay - ADR-009: lightweight relations; every column but the Heynabo token
 const USER_DISPLAY_SELECT = {
     id: true,
     email: true,
     phone: true,
     systemRoles: true,
     notificationChannels: true,
+    appearance: true,
     createdAt: true,
     updatedAt: true,
     Inhabitant: {
@@ -596,9 +583,8 @@ export async function deleteInhabitant(d1Client: D1Database, id: number): Promis
 
     try {
 
-        // Delete inhabitant - cascade handles strong associations automatically:
-        // - Strong associations (Allergies, DinnerPreferences, Orders, CookingTeamAssignments) → CASCADE DELETE
-        // TODO check if we need to change prisma setting for cascade and setNull to work properly ?
+        // The schema deletes the inhabitant's allergies, orders, team assignments and waiting-list entries with it, and
+        // nulls its chef and duty references (ADR-005)
         const deletedInhabitant = await prisma.inhabitant.delete({
             where: {id}
         })

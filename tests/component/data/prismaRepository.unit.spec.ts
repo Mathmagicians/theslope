@@ -1,6 +1,6 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {createError} from 'h3'
-import {createUsers, deleteUser, saveUser, updateTeam} from '~~/server/data/prismaRepository'
+import {createUsers, deleteUser, fetchUsers, fetchUsersByIds, fetchUsersByRole, saveUser, updateTeam} from '~~/server/data/prismaRepository'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS, TextScaleSchema} from '~/composables/useUserPreferenceValidation'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
@@ -11,13 +11,13 @@ vi.stubGlobal('createError', createError)
 // The unit runtime has no D1: a client standing for the binding answers each statement from the test
 const {fakePrisma} = await vi.hoisted(async () => ({
     fakePrisma: (await import('~~/tests/component/data/fakePrismaClient')).fakePrismaClient({
-        user: ['update', 'upsert', 'delete', 'createManyAndReturn'],
+        user: ['update', 'upsert', 'delete', 'createManyAndReturn', 'findMany'],
         cookingTeam: ['update']
     })
 }))
 vi.mock('~~/server/utils/database', () => ({getPrismaClientConnection: async () => fakePrisma}))
 
-const {serializeUserInput} = useCoreValidation()
+const {serializeUserInput, SystemRoleSchema} = useCoreValidation()
 const d1Client = {} as D1Database
 
 // A user's own settings: e-mail off, the larger text
@@ -86,6 +86,25 @@ describe('the user a mutation returns', () => {
 
         expect(detail).not.toHaveProperty('passwordHash')
         expect(detail.Inhabitant).toBeNull()
+    })
+})
+
+// The display reads list users for the admin pages: each user as stored, the Heynabo token left out
+describe('the user display reads', () => {
+    // A stored user with settings of its own, and the fake answering a read with the columns its select names, as D1 does
+    const stored = {...serializeUserInput({...importedUser, ...ownSettings}), id: 7, createdAt: new Date(), updatedAt: new Date(), Inhabitant: null}
+    const selected = ({select}: {select: Record<string, unknown>}) => [Object.fromEntries(Object.keys(select).map(column => [column, stored[column as keyof typeof stored]]))]
+
+    it.each([
+        {read: 'every user', fetch: () => fetchUsers(d1Client)},
+        {read: 'the users of a role', fetch: () => fetchUsersByRole(d1Client, SystemRoleSchema.enum.ADMIN)},
+        {read: 'the users by id', fetch: () => fetchUsersByIds(d1Client, [stored.id])}
+    ])('GIVEN a user with settings of its own WHEN $read is read THEN each display carries the stored settings', async ({fetch}) => {
+        fakePrisma.user.findMany.mockImplementation(selected)
+
+        const displays = await fetch()
+
+        expect(displays.map(({notificationChannels, appearance}) => ({notificationChannels, appearance}))).toEqual([ownSettings])
     })
 })
 

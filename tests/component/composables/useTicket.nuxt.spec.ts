@@ -3,7 +3,6 @@ import {TicketFactory} from '../../e2e/testDataFactories/ticketFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {ticketTypeLabel, ticketTypeLetter, ticketTypeCount} from '~/composables/useTicket'
-import appConfig from '~/app.config'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {addDays, addMonths, subYears} from 'date-fns'
 
@@ -187,7 +186,7 @@ describe('useTicket', () => {
     // person's age on the dinner's date, as the save prices it
     describe('resolveTicketPriceOn', () => {
         const dinnerDate = addMonths(new Date(), 1)
-        const [childPrice, adultPrice] = [TicketType.CHILD, TicketType.ADULT].map(type => ticketPrices.find(tp => tp.ticketType === type)!)
+        const [childPrice, adultPrice] = [TicketType.CHILD, TicketType.ADULT].map(TicketFactory.defaultPriceOf)
         const turnsAdultOnTheDinner = subYears(dinnerDate, childPrice!.maximumAgeLimit!)
         const bookedAt = (ticketPriceId: number | null) =>
             OrderFactory.defaultOrder(undefined, {ticketPriceId, ticketType: childPrice!.ticketType, priceAtBooking: childPrice!.price})
@@ -230,21 +229,18 @@ describe('useTicket', () => {
 
     describe('portionsOf', () => {
         // The config's default prices hold the weight of their tickets; a price matches on its type and amount
-        const defaults = appConfig.theslope.defaultSeason.ticketPrices
-        const firstOfType = (ticketType: typeof TicketType[keyof typeof TicketType]) => useTicket().findTicketPriceByType(ticketType, defaults)!
-
         it('a ticket priced as a default weighs the portions of that default', () => {
-            const misses = defaults.filter(({ticketType, price, portions}) => useTicket().portionsOf({ticketType, price}) !== portions)
+            const misses = ticketPrices.filter(({ticketType, price, portions}) => useTicket().portionsOf({ticketType, price}) !== portions)
             expect(misses).toEqual([])
         })
 
         it('a ticket at a price no default names weighs the first default price of its type', () => {
-            const {ticketType, price} = defaults.find(candidate => candidate.ticketType === TicketType.BABY && candidate.portions > 0)!
-            expect(useTicket().portionsOf({ticketType, price: price + 1})).toBe(firstOfType(TicketType.BABY).portions)
+            const {ticketType, price} = ticketPrices.find(candidate => candidate.ticketType === TicketType.BABY && candidate.portions > 0)!
+            expect(useTicket().portionsOf({ticketType, price: price + 1})).toBe(TicketFactory.defaultPriceOf(TicketType.BABY).portions)
         })
 
         it('two prices of one type weigh apart', () => {
-            const babies = defaults.filter(price => price.ticketType === TicketType.BABY)
+            const babies = ticketPrices.filter(price => price.ticketType === TicketType.BABY)
             expect(new Set(babies.map(price => useTicket().portionsOf(price))).size).toBe(babies.length)
         })
     })

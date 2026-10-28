@@ -1,7 +1,8 @@
 // @vitest-environment nuxt
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
-import {mountWithTooltipProvider, findByTestId, findDateSegments, asCalendarDays, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findDateSegments, asCalendarDays, resetStores, iconNamesIn} from '~~/tests/component/testHelpers'
+import {ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import CalendarDateRangeListPicker from '~/components/calendar/CalendarDateRangeListPicker.vue'
 import { nextTick, ref, type ComponentPublicInstance } from 'vue'
@@ -158,8 +159,7 @@ describe('CalendarDateRangeListPicker', () => {
         expect(removeButton.exists()).toBe(false);
 
         // In disabled mode, we should have an icon instead of the remove button
-        const iconElement = wrapper.findComponent({ name: 'UIcon' });
-        expect(iconElement.exists()).toBe(true);
+        expect(iconNamesIn(row)).toContain(ICONS.holiday)
     })
 
     it('should handle async data loading without errors', async () => {

@@ -354,6 +354,14 @@ export const formatDateInTimezone = (date: Date, mask: string = DATE_SETTINGS.DA
     return formatDate(new Date(zoned.year, zoned.month - 1, zoned.day, zoned.hour, zoned.minute, zoned.second), mask)
 }
 
+/** Whether two moments share a day of the app's timezone, whatever the runtime's own zone */
+export const isSameDayInTimezone = (a: Date, b: Date): boolean =>
+    formatDateInTimezone(a, DATE_SETTINGS.DATE_MASK) === formatDateInTimezone(b, DATE_SETTINGS.DATE_MASK)
+
+/** The time from a moment to now in the locale's words: "2 dage siden" */
+export const formatTimeSince = (moment: Date, now: Date): string =>
+    formatDistanceStrict(moment, now, {addSuffix: true, locale: DATE_SETTINGS.locale})
+
 /**
  * Period view for calendar navigation
  */

@@ -1,5 +1,5 @@
 import {beforeAll, describe, expect, it} from 'vitest'
-import {useMaintenance} from '~/composables/useMaintenance'
+import {useMaintenance, type JobStat} from '~/composables/useMaintenance'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {NOTIFICATION_COUNT_WORDS} from '~/config/notificationTemplates'
@@ -10,15 +10,15 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 type Maintenance = ReturnType<typeof useMaintenance>
 let formatMonthlyBillingStats: Maintenance['formatMonthlyBillingStats']
 let formatDailyMaintenanceStats: Maintenance['formatDailyMaintenanceStats']
-let parseResultSummary: Maintenance['parseResultSummary']
+let jobRunStats: Maintenance['jobRunStats']
 let formatResultSummary: Maintenance['formatResultSummary']
 beforeAll(() => {
-    ({formatMonthlyBillingStats, formatDailyMaintenanceStats, parseResultSummary, formatResultSummary} = useMaintenance())
+    ({formatMonthlyBillingStats, formatDailyMaintenanceStats, jobRunStats, formatResultSummary} = useMaintenance())
 })
 const {JobType} = useMaintenanceValidation()
 
 const billed = {billingPeriodSummaryId: 8, billingPeriod: '18/08/2026-17/09/2026', invoiceCount: 3, transactionCount: 12, totalAmount: 41230}
-const stat = (stats: Array<{label: string, value: string}>, label: string) => stats.find(s => s.label === label)?.value
+const stat = (stats: JobStat[] | null, label: string) => stats?.find(s => s.label === label)?.value
 
 describe('formatMonthlyBillingStats', () => {
     it('reports what the run billed and what it did to R2 and the mailbox', () => {
@@ -67,20 +67,38 @@ describe('formatDailyMaintenanceStats', () => {
     })
 })
 
-describe('parseResultSummary for MONTHLY_BILLING', () => {
+describe('jobRunStats for MONTHLY_BILLING', () => {
     it.each([
-        ['a run stored before periods existed', JSON.stringify({results: [billed]}), 0],
-        ['a run with period states', JSON.stringify({results: [billed], periods: [BillingFactory.defaultPeriodSideEffects()]}), 1]
-    ])('parses %s', (_name, stored, periodCount) => {
-        const parsed = parseResultSummary(JobType.MONTHLY_BILLING, stored) as {results: unknown[], periods: unknown[]}
+        ['a run stored before periods existed', JSON.stringify({results: [billed]}), '0'],
+        ['a run with a period still behind', JSON.stringify({results: [billed], periods: [BillingFactory.defaultPeriodSideEffects({csvUploaded: false})]}), '1']
+    ])('reads %s', (_name, stored, pending) => {
+        const stats = jobRunStats(JobType.MONTHLY_BILLING, stored)
 
-        expect(parsed.results).toHaveLength(1)
-        expect(parsed.periods).toHaveLength(periodCount)
+        expect(stat(stats, 'Perioder')).toBe('1')
+        expect(stat(stats, 'Afventer')).toBe(pending)
     })
 
     it('renders the side effects in the job-run line', () => {
         const stored = JSON.stringify({results: [], periods: [BillingFactory.defaultPeriodSideEffects({archive: {key: 'k', filename: 'f', sizeBytes: 1, version: 1, archived: true, degraded: false}})]})
 
         expect(formatResultSummary(JobType.MONTHLY_BILLING, stored)).toContain('CSV uploadet: 1')
+    })
+})
+
+// A run whose result cannot be read shows a dash in the job history; a job without stats shows its stored JSON
+describe('formatResultSummary', () => {
+    it.each([
+        {stored: 'no result', jobType: JobType.DAILY_MAINTENANCE, resultSummary: null},
+        {stored: 'a result that is not JSON', jobType: JobType.HEYNABO_IMPORT, resultSummary: '{'},
+        {stored: 'a result its job\'s schema does not read', jobType: JobType.MONTHLY_BILLING, resultSummary: JSON.stringify({periods: []})},
+        {stored: 'no result on a job without stats', jobType: JobType.MAINTENANCE_EXPORT, resultSummary: null}
+    ])('GIVEN a run with $stored WHEN its result formats THEN it reads a dash', ({jobType, resultSummary}) => {
+        expect(formatResultSummary(jobType, resultSummary)).toBe('-')
+    })
+
+    it('GIVEN a run of a job without stats WHEN its result formats THEN it reads the stored JSON', () => {
+        const stored = JSON.stringify({imported: 3})
+
+        expect(formatResultSummary(JobType.MAINTENANCE_IMPORT, stored)).toBe(stored)
     })
 })

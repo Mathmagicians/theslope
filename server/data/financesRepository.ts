@@ -722,28 +722,26 @@ async function fetchOrdersBatch(
         const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''
         const orderByColumn = sortBy === 'releasedAt' ? 'o.releasedAt' : 'o.createdAt'
 
-        // Raw SQL with proper JOINs - avoids D1 100 variable limit
-        // LEFT JOIN to latest USER_CLAIMED history entry per order (for provenance)
-        // LEFT JOIN to DinnerEvent for context (date, menuTitle) when includeDinnerContext=true
+        // Raw SQL with JOINs, within D1's 100 variable limit. The provenance is the order's latest USER_CLAIMED row, by
+        // time then by row, looked up per order on the history's orderId index; the dinner context (date, menuTitle)
+        // joins DinnerEvent when includeDinnerContext=true
         const sql = `
             SELECT
                 o.id, o.dinnerEventId, o.inhabitantId, o.bookedByUserId, o.ticketPriceId,
                 o.priceAtBooking, o.dinnerMode, o.state, o.isGuestTicket,
                 o.releasedAt, o.closedAt, o.createdAt, o.updatedAt,
                 tp.ticketType,
-                ${includeProvenance ? 'oh.auditData as provenanceData' : 'NULL as provenanceData'},
+                ${includeProvenance ? `(
+                    SELECT oh.auditData FROM OrderHistory oh
+                    WHERE oh.orderId = o.id AND oh.action = '${OrderAuditActionSchema.enum.USER_CLAIMED}'
+                    ORDER BY oh.timestamp DESC, oh.id DESC
+                    LIMIT 1
+                ) as provenanceData` : 'NULL as provenanceData'},
                 ${includeDinnerContext ? 'de.id as dinnerId, de.date as dinnerDate, de.menuTitle as dinnerMenuTitle' : 'NULL as dinnerId, NULL as dinnerDate, NULL as dinnerMenuTitle'}
             FROM "Order" o
             JOIN Inhabitant i ON i.id = o.inhabitantId
             LEFT JOIN TicketPrice tp ON tp.id = o.ticketPriceId
             ${includeDinnerContext ? 'LEFT JOIN DinnerEvent de ON de.id = o.dinnerEventId' : ''}
-            ${includeProvenance ? `
-            LEFT JOIN (
-                SELECT orderId, auditData, ROW_NUMBER() OVER (PARTITION BY orderId ORDER BY timestamp DESC) as rn
-                FROM OrderHistory
-                WHERE action = '${OrderAuditActionSchema.enum.USER_CLAIMED}'
-            ) oh ON oh.orderId = o.id AND oh.rn = 1
-            ` : ''}
             ${whereClause}
             ORDER BY ${orderByColumn} ASC
         `

@@ -8,12 +8,14 @@ release, or the release it moves to) with its date; **Verified** holds the date 
 the code and its specs, its commit, what the fix does and where to see it; **Signed off** holds the date the user
 accepts the fix. A signed-off or no-change row moves to § Done.
 
-## Notification delivery (2)
+## Notification delivery (4)
 
 | # | Defect | Rule | Where | Owner | Decision | Verified | Signed off |
 |---|---|---|---|---|---|---|---|
-| 33 | A dinner's buildup version counts the dinner's deliveries of every notification | § Versions | `waitlist.ts` | orchestrator | fix in 0.9.1, 2026-10-27: a dinner's buildup version counts from its first buildup delivery alone (`WAITLIST_BUILDUP`), so the chef deadlines notice on the same dinner leaves it as it is | 2026-10-28: the buildup version counts the dinner's `WAITLIST_BUILDUP` deliveries alone (`waitlist.ts:148`) | |
-| 131 | A read of a dinner's booking history scans the whole OrderHistory table: `fetchOrderHistoryForDinners` filters on `dinnerEventId`, which no OrderHistory index leads with; the rows are kept for good (ADR-011), so the read slows with every season. Its readers: the DAILY_MAINTENANCE job's notifications, the chef's order history. The order read with provenance (`GET /api/order?includeProvenance=true`) scans every USER_CLAIMED row on each call | ADR-014 | `financesRepository.ts:1692` (readers `waitlist.ts:313`, `:415`, `chef/dinner/[id]/order-history.get.ts:49`); `financesRepository.ts:740-745`; `prisma/schema.prisma` model OrderHistory | orchestrator | fix in 0.9.1, 2026-10-28: one migration of four indexes, no data change: OrderHistory(`dinnerEventId`), DinnerEvent(`cookingTeamId`), CookingTeam(`seasonId`), TicketPrice(`seasonId`); the provenance read in its own round | | |
+| 137 | The chef's waiting-list buildup notice links to the chef page without the chef's dinner | § Chef deadlines (the notice's link) | `waitlist.ts:111` | orchestrator | fix in 0.9.1, 2026-10-28: the link comes from `buildChefUrl` with the dinner's team and date, as the chef deadlines notice builds it; a chef with no team gets the dinner by its date | | |
+| 138 | The chef deadlines notice's red lines say "i dag" ("Publicer menuen i dag", "Middagen er i dag") on a run the evening before the deadline's day | § Chef deadlines | `app/config/notificationTemplates.ts:87`, `:95` | orchestrator | fix in 0.9.1, 2026-10-28: the day word follows the deadline's day against the run's day, "i dag" or "i morgen", through the date utilities | | |
+| 139 | The DAILY_MAINTENANCE job's chef deadlines step reads the active season with its dinners, then the dinners again | ADR-014 | `chef-deadlines.ts:94`, `:100` | orchestrator | fix in 0.9.1, 2026-10-28: the step reads the dinners once | | |
+| 140 | An overdue deadline's line in the chef deadlines notice drops its countdown; the signed line format carries one on every missing deadline | § Chef deadlines (mockup) | `server/utils/sender/events/chef-deadlines.ts` | orchestrator | fix in 0.9.1, 2026-10-28: the line carries the time since its deadline ("2 dage siden") through the date utility | | |
 
 ## Booking views (7)
 
@@ -27,7 +29,7 @@ accepts the fix. A signed-off or no-change row moves to § Done.
 | 74 | 79 `Pick` types in 21 files take parts of a domain type; 16 of them in files this pull request changes (`SavedRow` in `DinnerBookingForm.vue`, 12 in `useBookingUi.ts`, 3 in the waiting-list sender event). `ticketStateOf` takes a `Pick` because it reads both a desired order and a booked one | Domain types | `DinnerBookingForm.vue`, `useBookingUi.ts`, `useBooking.ts`, `server/utils/sender/events/waitlist.ts` | orchestrator | fix in 0.9.1, 2026-10-27 | 2026-10-28: the waiting-list sender event's three are gone; open: `SavedRow`, 11 in `useBookingUi.ts`, 67 in 19 files in all | |
 | 109 | On a phone the budget box's round heading is wider than its box: "ex / inkl. moms" is cut off at the box's edge | ADR-018 | `CookingRoundSpending.vue`, `useTheSlopeDesignSystem.ts` (`COMPONENTS.dinnerBudget.roundHeading`, `boxLine`) | orchestrator | fix in 0.9.1, 2026-10-28: on a phone "ex / inkl. moms" takes its own line under the heading; desktop as it is | 2026-10-28: on a phone "ex / inkl. moms" wraps below the badge and the period, on the right (`COMPONENTS.dinnerBudget.headingLine`, `headingUnits`). See QA #122 | |
 
-## Access, users, admin, layout (15)
+## Access, users, admin, layout (16)
 
 | # | Defect | Rule | Where | Owner | Decision | Verified | Signed off |
 |---|---|---|---|---|---|---|---|
@@ -44,21 +46,16 @@ accepts the fix. A signed-off or no-change row moves to § Done.
 | 82 | The bookings store toasts six titles as literals: Heynabo-synkronisering, Indkøb gemt, Indkøb slettet, Portioner frigivet, Daglig vedligeholdelse afsluttet, Månedlig fakturering afsluttet; the file is touched, so its words move to `app/config/` | ADR-017 compliance 6, 7 | `stores/bookings.ts` | orchestrator | fix in 0.9.1, 2026-10-27 | 2026-10-27 (fba24af): the store reads every toast and error word from `teamWords.ts` and `bookingWords.ts`, word for word as before. See QA #118 | |
 | 86 | The household page names its five tabs as literals: Tilmeldinger, Præferencer, Allergier, Økonomi, Indstillinger; the file is touched, so its words move to `app/config/` | ADR-017 compliance 6, 7 | `pages/household/[shortname]/[tab].vue` | orchestrator | fix in 0.9.1, 2026-10-27 | 2026-10-27 (002c4ae): the five tabs read their names from the household help titles in `help-texts.ts`, the words the page help already holds. See QA #115 | |
 | 96 | Four pages name their head's meta tag by the page (`Husstand`, `Fællesspisning`, `Chef Dashboard`, `Administration`), a name no browser, search engine or link preview reads | Web standard | `pages/household/[shortname]/[tab].vue`, `pages/dinner/index.vue`, `pages/chef/index.vue`, `pages/admin/[tab].vue` | orchestrator | fix in 0.9.1, 2026-10-27: the tags are named `description`; their text stays in the page, as it is not user facing | 2026-10-27 (6a4f22e): the four pages' meta tags are named `description`, their text unchanged. See QA #119 | |
-| 101 | On a phone the visiting tab sets "Ikke dit hold" beside the team icon and the team name stacked, so the badge sits between their lines instead of on the team name's line; on a desktop the three share one line. Found in QA #88 | The signed mockup in `MyTeamSelector.vue` | `MyTeamSelector.vue` (the tab's `badge`, the tab body), `useTheSlopeDesignSystem.ts` (`COMPONENTS.myTeamSelector`) | orchestrator | fix in 0.9.1, 2026-10-27: the phone tab follows its signed mockup, the icon above and "Ikke dit hold" on the team name's line | | |
-| 130 | The allergy poster's text and its Tilbage button read faint on the poster's white page | ADR-018 | `/admin/allergies/pdf` (`pages/admin/allergies/pdf.vue`) | orchestrator | fix in 0.9.1, 2026-10-28: Tilbage takes the Print button's style (`BUTTONS.primaryAction`); the poster's texts read in contrast on the white page | 2026-10-28: the page renders in light mode (`colorMode: 'light'`, `pdf.vue:13`) on `BG.page` through `COMPONENTS.allergyPoster`; Tilbage binds `BUTTONS.primaryAction` (`pdf.vue:64`); poster spec 4/4. See QA #132–#135 | |
+| 101 | On a phone the visiting tab sets "Ikke dit hold" beside the team icon and the team name stacked, so the badge sits between their lines instead of on the team name's line; on a desktop the three share one line. Found in QA #88 | The signed mockup in `MyTeamSelector.vue` | `MyTeamSelector.vue` (the tab's `badge`, the tab body), `useTheSlopeDesignSystem.ts` (`COMPONENTS.myTeamSelector`) | orchestrator | fix in 0.9.1, 2026-10-27: the phone tab follows its signed mockup, the icon above and "Ikke dit hold" on the team name's line | 2026-10-28: on a phone the team icon sits above one line holding the team name and "Ikke dit hold" (`MyTeamSelector.vue`, `COMPONENTS.myTeamSelector.nameLine`, `COMPONENTS.visitBadge`); the desktop renders as before; spec 9/9, architecture 70/70. See QA #141–#145 | |
+| 136 | The order read with provenance (`GET /api/order?includeProvenance=true`) scans every USER_CLAIMED row of OrderHistory on each call (split from defect 131) | ADR-014 | `financesRepository.ts:740-745` | orchestrator | fix in 0.9.1, 2026-10-28: one lookup per order on the order's history index, a query fix | | |
+| 130 | The allergy poster's text and its Tilbage button read faint on the poster's white page | ADR-018 | `/admin/allergies/pdf` (`pages/admin/allergies/pdf.vue`) | orchestrator | fix in 0.9.1, 2026-10-28: Tilbage takes the Print button's style (`BUTTONS.primaryAction`); the poster's texts read in contrast on the white page | 2026-10-28: the page renders in light mode (`colorMode: 'light'`, `pdf.vue:13`) on `BG.page` through `COMPONENTS.allergyPoster`; Tilbage binds `BUTTONS.primaryAction` (`pdf.vue:64`); poster spec 4/4. Committed f4bb23f. See QA #132–#135 | |
 
-## Tests (8)
+## Tests (2)
 
 | # | Defect | Rule | Where | Owner | Decision | Verified | Signed off |
 |---|---|---|---|---|---|---|---|
-| 58 | Three API specs repeat the notification features | testing.md Rule 0 | `waitlistNotifications.e2e`, `sender-event-monthly-billing.e2e`, `sender-delivery.e2e` | test-engineer | fix in 0.9.1, 2026-10-27 | | |
-| 59 | The sender specs copy the log spy and the channel-off value; the notification factory builds the mailbox reference by hand | testing.md Rules 1, 4 | the sender unit specs, `notificationFactory.ts`, `senderFactory.ts` | test-engineer | fix in 0.9.1, 2026-10-27 | | |
-| 60 | The DAILY_MAINTENANCE service spec covers the failed run only | Every code path has a unit case | `dailyMaintenanceService.unit.spec.ts` | test-engineer | fix in 0.9.1, 2026-10-27 | | |
+| 59 | The sender specs copy the log spy and the channel-off value; the notification factory builds the mailbox reference by hand | testing.md Rules 1, 4 | the sender unit specs, `notificationFactory.ts`, `senderFactory.ts` | test-engineer | fix in 0.9.1, 2026-10-27 | 2026-10-28: the log spy and the channel-off value shared; open: `notificationFactory.ts:57` builds the TEST reference by hand | |
 | 61 | Local copies of shared spec helpers: the icon reader three times, the test-id lookup six times, the price fields, rename wrappers of the default price | testing.md Rule 4 | the component specs | test-engineer | fix in 0.9.1, 2026-10-27 | | |
-| 62 | The economy table spec passes the removed row key and leaves out the row id | testing.md Rule 4 | `EconomyTable.nuxt.spec.ts` | test-engineer | fix in 0.9.1, 2026-10-27 | | |
-| 63 | The API error guard keeps a declaration across the cases on one browser context | § UI cases fail on an unexpected API error | `apiErrorGuard.ts` | test-engineer | fix in 0.9.1, 2026-10-27 | | |
-| 64 | `Pick` types in the household factory; a date mask literal; three config values in the e2e helpers | Domain types; config values | `householdFactory.ts`, `AdminSystem.nuxt.spec.ts`, `tests/e2e/testHelpers.ts` | test-engineer | fix in 0.9.1, 2026-10-27 | | |
-| 65 | The notification step pattern leaves out the chef deadline notice; the scenario is `@fixme` (unverified) | BDD | `notification.steps.ts` | test-engineer | fix in 0.9.1, 2026-10-27 | | |
 
 ## Done
 
@@ -92,6 +89,14 @@ accepts the fix. A signed-off or no-change row moves to § Done.
 - #104 The team card showed a taken role only after a reload — 0d0144b, signed off 2026-10-27
 - #120 No case held "a cancelled dinner sends no notification" — 2c32354, signed off 2026-10-28
 - #121 Composables the server imports read `#imports` — 2c32354, signed off 2026-10-28
+- #33 A dinner's buildup version counted the deliveries of every notification — f4bb23f, signed off 2026-10-28
+- #131 A dinner's booking history read scanned the whole OrderHistory table: four indexes, `migrations/0019_indexes.sql`, applied on local, dev and prod — 67568cd, c4d3c44, signed off 2026-10-28
+- #58 Three API specs repeated the notification features — deleted in 002c4ae, closed 2026-10-28
+- #60 The DAILY_MAINTENANCE service spec covered the failed run only — 002c4ae, f4bb23f, closed 2026-10-28
+- #62 The economy table spec passed the removed row key — `rowIdOf`, 002c4ae, closed 2026-10-28
+- #63 The API error guard kept a declaration across cases — `openCase` resets them, 002c4ae, closed 2026-10-28
+- #64 `Pick` types, a date mask literal and config literals in three test files — 002c4ae and later commits, closed 2026-10-28
+- #65 The notification step pattern left out the chef deadline notice — `@fixme` off, f4bb23f, closed 2026-10-28
 - #27 A booking status run read the season, its dinners and their deliveries twice — 39e14a6, 542b274, signed off 2026-10-28
 - #29 A dry run wrote the sent-twice log line — 39e14a6, 542b274, signed off 2026-10-28
 - #30 E-mail off logged a warning outside the `app: not queued` query — 39e14a6, 542b274, signed off 2026-10-28

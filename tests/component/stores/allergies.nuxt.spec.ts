@@ -327,16 +327,16 @@ describe('Allergies Store - cache coherence between allergies and the catalog', 
         {
             mutation: 'createAllergy',
             act: (store: ReturnType<typeof useAllergiesStore>) =>
-                store.createAllergy({inhabitantId: 1, allergyTypeId: 2, inhabitantComment: 'Mild'})
+                store.createAllergy({inhabitantId: 1, allergyTypeId: 2, inhabitantComment: 'Mild'}, false)
         },
         {
             mutation: 'updateAllergy',
             act: (store: ReturnType<typeof useAllergiesStore>) =>
-                store.updateAllergy(1, {allergyTypeId: 2, inhabitantComment: 'Worse'})
+                store.updateAllergy(1, {allergyTypeId: 2, inhabitantComment: 'Worse'}, false)
         },
         {
             mutation: 'deleteAllergy',
-            act: (store: ReturnType<typeof useAllergiesStore>) => store.deleteAllergy(1)
+            act: (store: ReturnType<typeof useAllergiesStore>) => store.deleteAllergy(1, false)
         }
     ])('$mutation refetches the allergy-type catalog', async ({act}) => {
         const store = await setupHouseholdAllergies()

@@ -197,7 +197,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
         'bookings-store-released-counts',
         () => `/api/order?${orderQuery({dinnerEventIds: lockedDinnerIds.value, state: OrderStateSchema.enum.RELEASED, allHouseholds: true})}`,
         {
-            // Group orders by dinnerEventId
             schema: OrderDisplaySchema.array().transform(released => {
                 const grouped = groupBy<OrderDisplay, number>(o => o.dinnerEventId)(released)
                 const counts = new Map<number, Omit<ReleasedTicketCounts, keyof WaitlistCounts>>()
@@ -278,7 +277,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         const result = await writeBookings(() => apiRequest('/api/household/order/scaffold', {
             method: 'POST',
             body: request,
-            query: {adminBypass},
+            query: adminBypassQuery(adminBypass),
             schema: ScaffoldOrdersResponseSchema,
             action: 'processBookings', errorMessage: BOOKING_WORDS.failed.save
         }))
@@ -336,7 +335,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         householdId: number,
         dinnerEventIds: number[],
         orders: DesiredOrder[],
-        adminBypass = false,
+        adminBypass: boolean,
         report?: ScaffoldToast
     ): Promise<ScaffoldOrdersResponse> =>
         processBookings({householdId, dinnerEventIds, orders}, adminBypass, report, 'processMultipleEventsBookings')
@@ -361,7 +360,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     }
 
     // DINNER EVENT ACTIONS
-    type DinnerUpdate = Partial<DinnerEventUpdate> & { allergenIds?: number[], state?: typeof DinnerState[keyof typeof DinnerState] }
+    type DinnerUpdate = Partial<DinnerEventUpdate> & { allergenIds?: number[], state?: DinnerState }
 
     // The page names the date it shows; the dinner on that date resolves from the selected season
     const dinnerDate = shallowRef<() => Date | null>(() => null)

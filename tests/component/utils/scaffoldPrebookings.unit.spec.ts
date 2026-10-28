@@ -79,7 +79,7 @@ const givenSave = () => {
     const season = {...SeasonFactory.defaultSeason(), id: 1, ticketPrices, dinnerEvents: [dinner]}
     const household = HouseholdFactory.defaultHouseholdDetail()
     const [anna, bo] = household.inhabitants
-    const boOrder = OrderFactory.defaultOrder(undefined, {id: 11, inhabitantId: bo!.id, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, priceAtBooking: adultPrice.price})
+    const boOrder = OrderFactory.defaultOrder(undefined, {id: 11, inhabitantId: bo!.id, dinnerEventId: dinner.id, ...OrderFactory.priceFieldsOf(adultPrice)})
     vi.mocked(fetchSeason).mockResolvedValue(season)
     vi.mocked(fetchHouseholds).mockResolvedValue([household])
     vi.mocked(fetchOrders).mockResolvedValue([boOrder])
@@ -115,7 +115,7 @@ const givenPreferenceDraft = () => {
     const draft = preferencesOf(day => day.draft)
     vi.mocked(fetchSeason).mockResolvedValue({...season, dinnerEvents: days.map(day => day.dinner)})
     vi.mocked(fetchOrders).mockResolvedValue(days.filter(day => day.stored !== Mode.NONE).map((day, index) => OrderFactory.defaultOrder(undefined, {
-        id: 41 + index, inhabitantId: anna.id, dinnerEventId: day.dinner.id, ticketPriceId: adultPrice.id, priceAtBooking: adultPrice.price
+        id: 41 + index, inhabitantId: anna.id, dinnerEventId: day.dinner.id, ...OrderFactory.priceFieldsOf(adultPrice)
     })))
     writeUpdates.mockImplementation(async (_d1, updates) => updates.length)
     vi.mocked(updateOrdersBatch).mockReturnValue(writeUpdates)
@@ -206,7 +206,7 @@ const givenSupply = (ticketPrices: TicketPrice[], tickets: TicketOnSale[], entri
  */
 const givenClosedDinner = ({forSale, waiting, annaHolds}: {forSale: boolean, waiting: boolean, annaHolds: boolean}) => {
     const {season, household, anna, bo, dinner, adultPrice} = givenSave()
-    const orderOn = (id: number, inhabitantId: number) => OrderFactory.defaultOrder(undefined, {id, inhabitantId, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, priceAtBooking: adultPrice.price})
+    const orderOn = (id: number, inhabitantId: number) => OrderFactory.defaultOrder(undefined, {id, inhabitantId, dinnerEventId: dinner.id, ...OrderFactory.priceFieldsOf(adultPrice)})
     const householdOrders = annaHolds ? [orderOn(41, anna.id)] : []
     const tickets = forSale ? [{order: released(orderOn(90, OTHER_INHABITANT_ID), 60), householdId: OTHER_HOUSEHOLD_ID}] : []
     const entries: TicketWaitlistDisplay[] = waiting ? [WaitlistFactory.defaultEntry({
@@ -271,13 +271,13 @@ const givenClaims = ({households: people, dinners, forSale = 0, waiting = 0, que
     const sellerPeople = Array.from({length: releasing}, (_, index) => personOf(800 + index, sellers.id, ADULT, Mode.NONE))
     const held = closedDinners.flatMap(dinner => sellerPeople.map((seller, index) => ({
         order: OrderFactory.defaultOrder(undefined, {
-            id: 2000 + 10 * dinner.id + index, inhabitantId: seller.id, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, priceAtBooking: adultPrice.price
+            id: 2000 + 10 * dinner.id + index, inhabitantId: seller.id, dinnerEventId: dinner.id, ...OrderFactory.priceFieldsOf(adultPrice)
         }),
         householdId: sellers.id
     })))
     const tickets = closedDinners.flatMap(dinner => Array.from({length: forSale}, (_, index) => ({
         order: released(OrderFactory.defaultOrder(undefined, {
-            id: 900 + 10 * dinner.id + index, inhabitantId: OTHER_INHABITANT_ID, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, priceAtBooking: adultPrice.price
+            id: 900 + 10 * dinner.id + index, inhabitantId: OTHER_INHABITANT_ID, dinnerEventId: dinner.id, ...OrderFactory.priceFieldsOf(adultPrice)
         }), 60),
         householdId: OTHER_HOUSEHOLD_ID
     })))
@@ -466,7 +466,7 @@ describe('scaffoldPrebookings', () => {
         vi.clearAllMocks()
         const {season, household, anna, bo, boOrder, dinner, adultPrice, takeaway} = givenSave()
         const boGuest = OrderFactory.defaultOrder(undefined, {
-            id: 12, inhabitantId: bo.id, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, priceAtBooking: adultPrice.price, isGuestTicket: true
+            id: 12, inhabitantId: bo.id, dinnerEventId: dinner.id, ...OrderFactory.priceFieldsOf(adultPrice), isGuestTicket: true
         })
         vi.mocked(fetchOrders).mockResolvedValue([boOrder, boGuest])
         vi.mocked(updateOrdersBatch).mockReturnValue(writeUpdates)
@@ -781,7 +781,7 @@ describe('scaffoldPrebookings', () => {
             // The factory lists the baby who tastes first, the hungry baby second
             const [tasting, hungry] = season.ticketPrices.filter(ticketPrice => ticketPrice.ticketType === TicketTypeSchema.enum.BABY)
             const babyPrice = {tasting, hungry}[price]!
-            const annaOrder = OrderFactory.defaultOrder(undefined, {id: 41, inhabitantId: anna.id, dinnerEventId: dinner.id, ticketPriceId: babyPrice.id, priceAtBooking: babyPrice.price})
+            const annaOrder = OrderFactory.defaultOrder(undefined, {id: 41, inhabitantId: anna.id, dinnerEventId: dinner.id, ...OrderFactory.priceFieldsOf(babyPrice)})
             const babyWaiting = WaitlistFactory.defaultEntry({
                 id: 21, inhabitantId: OTHER_INHABITANT_ID, dinnerEventId: dinner.id, ticketPrice: hungry!, householdId: OTHER_HOUSEHOLD_ID, createdAt: subMinutes(new Date(), 60)
             })

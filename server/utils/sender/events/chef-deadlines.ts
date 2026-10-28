@@ -13,14 +13,14 @@ import {bookingEmailsOff, type EmailChannel} from '~~/server/utils/sender/config
 import {deliverDesired, nothingSent, type DeliveryOptions, type DeliveryResult, type DesiredOutgoing, type LoadedDeliveries} from '~~/server/utils/sender/deliveries'
 import {findClosestUserInHousehold, readPeople} from '~~/server/utils/sender/records'
 import type {NotificationConfig} from '~/composables/useNotificationValidation'
-import {DinnerState, type DinnerEventDisplay} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {ALARM_LEVEL, DinnerStepState, useBooking, type AlarmLevel, type ChefDeadline, type ChefDeadlineStep} from '~/composables/useBooking'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
 import {CHEF_DEADLINE_WORDS, NotificationKind, type ChefDeadlineWords} from '~/config/notificationTemplates'
 import {fetchSeason} from '~~/server/data/prismaRepository'
-import {fetchDinnerEvents} from '~~/server/data/financesRepository'
-import {DATE_SETTINGS, formatDate, formatDateInTimezone} from '~/utils/date'
+import {isClosedDinner} from '~~/server/utils/waitlistAssignment'
+import {DATE_SETTINGS, formatDate, formatDateInTimezone, formatTimeSince, isSameDayInTimezone} from '~/utils/date'
 
 const {DeliverySubjectSchema, SenderEventSchema} = useDeliveryValidation()
 const {CHEF_DEADLINES} = SenderEventSchema.enum
@@ -60,12 +60,15 @@ const alarmLineOf = (words: ChefDeadlineWords, alarm: AlarmLevel) => {
 // A moment as the chef reads it in Copenhagen: "10/10/2026 kl. 18:00"
 const momentOf = (moment: Date): string => formatDateInTimezone(moment, DATE_SETTINGS.DATE_AT_TIME_MASK)
 
-// A deadline's lines: check once met; missing, its deadline, the countdown while the deadline is ahead and the line of its alarm level
-const deadlineLines = (chefDeadline: ChefDeadline, booking: string): string => {
+// A deadline's lines: check once met; missing, its deadline, the countdown the chef page shows while the deadline is
+// ahead or the time since it once overdue, and the line of its alarm level
+const deadlineLines = (chefDeadline: ChefDeadline, booking: string, now: Date): string => {
     const words = wordsOf(chefDeadline.step)
     if (chefDeadline.met) return CHEF_DEADLINE_WORDS.met(words.title)
-    const times = {deadline: momentOf(chefDeadline.deadline), booking}
-    const missing = CHEF_DEADLINE_WORDS.missing(words.title, times.deadline, chefDeadline.alarm === ALARM_LEVEL.overdue ? null : chefDeadline.description)
+    const {today, tomorrow} = CHEF_DEADLINE_WORDS.deadlineDay
+    const times = {deadline: momentOf(chefDeadline.deadline), booking, day: isSameDayInTimezone(chefDeadline.deadline, now) ? today : tomorrow}
+    const countdown = chefDeadline.alarm === ALARM_LEVEL.overdue ? formatTimeSince(chefDeadline.deadline, now) : chefDeadline.description
+    const missing = CHEF_DEADLINE_WORDS.missing(words.title, times.deadline, countdown)
     const line = alarmLineOf(words, chefDeadline.alarm)
     return line ? `${missing}\n${CHEF_DEADLINE_WORDS.alarm(line(times))}` : missing
 }
@@ -78,17 +81,18 @@ interface DinnerNotice {
     version: number
 }
 
-// The notice's values: the dinner by its date, its deadlines and the chef page on it
-const valuesOf = ({dinner, chefDeadlines}: DinnerNotice, deadlines: SeasonDeadlines) => (config: NotificationConfig): Record<string, string> => {
+// The notice's values: the dinner by its date, its deadlines as they stand at the run and the chef page on it
+const valuesOf = ({dinner, chefDeadlines}: DinnerNotice, deadlines: SeasonDeadlines, now: Date) => (config: NotificationConfig): Record<string, string> => {
     const booking = momentOf(deadlines.getBookingDeadlineTime(dinner.date))
     return {
         date: formatDate(dinner.date),
-        deadlines: chefDeadlines.map(chefDeadline => deadlineLines(chefDeadline, booking)).join('\n\n'),
+        deadlines: chefDeadlines.map(chefDeadline => deadlineLines(chefDeadline, booking, now)).join('\n\n'),
         chefUrl: useBooking().buildChefUrl(siteUrl(config, ''), dinner.cookingTeamId, dinner.date)
     }
 }
 
-// The notices of the season's dinners with a chef that have not started, eaten and cancelled dinners aside
+// The notices of the season's dinners with a chef that have not started, eaten and cancelled dinners aside; the dinners
+// come with the season
 const notificationsOnSeason = async (d1Client: D1Database, seasonId: number | null): Promise<LoadedDeliveries> => {
     if (seasonId === null) return {desired: []}
     const season = await fetchSeason(d1Client, seasonId)
@@ -97,9 +101,9 @@ const notificationsOnSeason = async (d1Client: D1Database, seasonId: number | nu
     const {deadlinesForSeason, isDinnerPast} = useSeason()
     const {getChefDeadlines} = useBooking()
     const deadlines = deadlinesForSeason(season, now)
-    const notices = (await fetchDinnerEvents(d1Client, {seasonId, excludeStates: [DinnerState.CONSUMED, DinnerState.CANCELLED]}))
+    const notices = (season.dinnerEvents ?? [])
         .flatMap((dinner): DinnerNotice[] => {
-            if (dinner.chefId === null || isDinnerPast(dinner.date, now)) return []
+            if (dinner.chefId === null || isClosedDinner(dinner) || isDinnerPast(dinner.date, now)) return []
             const chefDeadlines = getChefDeadlines(dinner, deadlines, now)
             const version = noticeVersion(chefDeadlines, now)
             return version === null ? [] : [{dinner, chefId: dinner.chefId, chefDeadlines, version}]
@@ -113,7 +117,7 @@ const notificationsOnSeason = async (d1Client: D1Database, seasonId: number | nu
             return [{
                 subjectType: DeliverySubjectSchema.enum.DINNER_EVENT, subjectId: notice.dinner.id, version: notice.version,
                 notification: NotificationKind.CHEF_DINNER_DEADLINES, userId, to, notificationChannels,
-                values: valuesOf(notice, deadlines), correlationId: `dinner ${notice.dinner.id}`
+                values: valuesOf(notice, deadlines, now), correlationId: `dinner ${notice.dinner.id}`
             }]
         })
     }

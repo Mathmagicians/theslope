@@ -50,8 +50,6 @@ beforeEach(() => {
 const ticketPrices = TicketFactory.defaultTicketPrices()
 type TicketPrice = (typeof ticketPrices)[number]
 const adultPrice = TicketFactory.defaultPriceOf(ADULT)
-// An order's price fields from a season's price row: a person's row is the price their order holds
-const priceFieldsOf = (price: TicketPrice) => ({ticketPriceId: price.id, ticketType: price.ticketType, priceAtBooking: price.price})
 // Use real deadlinesForSeason() to stay in sync with SeasonDeadlines interface
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not at module level
 let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
@@ -227,7 +225,7 @@ describe('BookingGridView', () => {
 
     // At the season's adult price, the price of the place a WaitlistFactory entry holds: one row per person
     const order = (id: number, inhabitantId: number, isGuestTicket: boolean, dinnerMode: DinnerMode, state: OrderState = BOOKED, dinnerEventId: number = event.id): OrderDisplay =>
-      OrderFactory.defaultOrder(undefined, {id, inhabitantId, dinnerEventId, ...priceFieldsOf(adultPrice), isGuestTicket, dinnerMode, state})
+      OrderFactory.defaultOrder(undefined, {id, inhabitantId, dinnerEventId, ...OrderFactory.priceFieldsOf(adultPrice), isGuestTicket, dinnerMode, state})
 
     const mountWeek = (orders: OrderDisplay[], dinnerEvent: DinnerEventDisplay = event, formMode: FormMode = FORM_MODES.VIEW) =>
       mountGrid([dinnerEvent], {orders, formMode})
@@ -255,7 +253,7 @@ describe('BookingGridView', () => {
       expect(rowIdsOf(wrapper)).toContain(inhabitantRowId(lars.id))
       expect(kinds.filter(kind => countBadge(kind, lars.id).exists())).toEqual([])
       expect(waitlistBadge.props('color')).toBe(ORDER_STATE_COLORS[TicketState.queued])
-      expect(waitlistBadge.findComponent({name: 'UIcon'}).props('name')).toBe(ICONS.waitlist)
+      expect(iconNamesIn(waitlistBadge)).toEqual([ICONS.waitlist])
       expect(countBadge('ticket', anna.id).element.parentElement).toBe(waitlistBadge.element.parentElement)
     })
 
@@ -425,7 +423,7 @@ describe('BookingGridView', () => {
     const dinner = DinnerEventFactory.dinnerEventAt(1, 1)
     // The factory lists the baby who tastes first, the hungry baby second
     const guestBabies = ticketPrices.filter(price => price.ticketType === BABY).map((price, index) => OrderFactory.defaultOrder(undefined, {
-      id: 71 + index, inhabitantId: anna.id, dinnerEventId: dinner.id, ...priceFieldsOf(price), isGuestTicket: true
+      id: 71 + index, inhabitantId: anna.id, dinnerEventId: dinner.id, ...OrderFactory.priceFieldsOf(price), isGuestTicket: true
     }))
     const wrapper = await mountGrid([dinner], {orders: guestBabies})
 
@@ -540,7 +538,7 @@ describe('BookingGridView', () => {
     const closedDinner = DinnerEventFactory.dinnerEventAt(1, 1)
     // A ticket of Anna's, or of her guest, at the season's adult price, as a place on the waiting list holds it
     const annasTicket = (state: OrderState, isGuestTicket = false) => OrderFactory.defaultOrder(undefined, {
-      id: 42, inhabitantId: anna.id, dinnerEventId: closedDinner.id, ...priceFieldsOf(adultPrice),
+      id: 42, inhabitantId: anna.id, dinnerEventId: closedDinner.id, ...OrderFactory.priceFieldsOf(adultPrice),
       dinnerMode: state === RELEASED ? NONE : DINEIN, state, isGuestTicket
     })
     const annasCell = () => cellOf(anna.id, closedDinner.id)
@@ -578,7 +576,7 @@ describe('BookingGridView ticket badges in the name cells', () => {
 
   const babyLars = {...lars, birthDate: addDays(new Date(), -180)}
   const annasGuest = (id: number, price: TicketPrice) =>
-    OrderFactory.defaultOrder(undefined, {id, inhabitantId: anna.id, dinnerEventId: dinner.id, ...priceFieldsOf(price), isGuestTicket: true})
+    OrderFactory.defaultOrder(undefined, {id, inhabitantId: anna.id, dinnerEventId: dinner.id, ...OrderFactory.priceFieldsOf(price), isGuestTicket: true})
   const queuedHungryBaby = WaitlistFactory.defaultEntry({id: 51, inhabitantId: anna.id, dinnerEventId: dinner.id, isGuestTicket: true, ticketPrice: hungry})
 
   const rowWhere = (isRow: (id: RowId) => boolean) => (wrapper: Mounted) => wrapper.findAll('tbody tr')[rowIdsOf(wrapper).findIndex(isRow)]
@@ -612,7 +610,7 @@ describe('BookingGridView a person\'s rows by price', () => {
   const dinners = [1, 2, 3, 4, 5].map(day => DinnerEventFactory.dinnerEventAt(day, 60 + day))
   const [first, second, third, fourth, fifth] = dinners as [DinnerEventDisplay, DinnerEventDisplay, DinnerEventDisplay, DinnerEventDisplay, DinnerEventDisplay]
   const annaBooked = (id: number, dinner: DinnerEventDisplay, priceAtBooking: number, state: OrderState = BOOKED) =>
-    OrderFactory.defaultOrder(undefined, {id, inhabitantId: anna.id, dinnerEventId: dinner.id, ...priceFieldsOf(adultToday), priceAtBooking, dinnerMode: DINEIN, state})
+    OrderFactory.defaultOrder(undefined, {id, inhabitantId: anna.id, dinnerEventId: dinner.id, ...OrderFactory.priceFieldsOf(adultToday), priceAtBooking, dinnerMode: DINEIN, state})
   // Anna booked the first and the third dinner before the adult price rose; she holds nothing on the other three
   const bookedBeforeTheRise = [annaBooked(81, first, PRICE_BEFORE_THE_RISE), annaBooked(82, third, PRICE_BEFORE_THE_RISE)]
   const mountPrices = (props: Record<string, unknown>) => mountGrid(dinners, {ticketPrices: pricesToday, ...props})
@@ -690,7 +688,7 @@ describe('BookingGridView a person\'s rows by price', () => {
       {given: 'Anna, a child today, turns 12 on the first dinner, with no order', inhabitant: annaGrowingUpOn(first), orders: [],
         rows: () => [rowAt(adultPrice, dinners)]},
       {given: 'Anna, an adult, booked on the second dinner at the CHILD price row', inhabitant: anna,
-        orders: [OrderFactory.defaultOrder(undefined, {id: 91, inhabitantId: anna.id, dinnerEventId: second.id, ...priceFieldsOf(childPrice), dinnerMode: DINEIN})],
+        orders: [OrderFactory.defaultOrder(undefined, {id: 91, inhabitantId: anna.id, dinnerEventId: second.id, ...OrderFactory.priceFieldsOf(childPrice), dinnerMode: DINEIN})],
         rows: () => [rowAt(childPrice, [second]), rowAt(adultPrice, [first, third, fourth, fifth])]}
     ])('GIVEN $given THEN each of her rows reads its price row\'s type and price and holds the dinners at that price', async ({inhabitant, orders, rows}) => {
       const wrapper = await mountGrid(dinners, {household: {...household, inhabitants: [inhabitant, lars]}, orders})

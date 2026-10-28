@@ -8,8 +8,7 @@ import {useWeekDayMapValidation} from './useWeekDayMapValidation'
 /**
  * Core Domain Validation - User, Inhabitant, Household
  *
- * Merges useUserValidation + useHouseholdValidation using fragment pattern
- * to eliminate circular dependencies (ADR-001)
+ * Built on the fragments of domainFragments.ts, so the validation composables import each other without cycles (ADR-001)
  *
  * Fragment Pattern:
  * - Import minimal fragments from domainFragments.ts
@@ -29,11 +28,16 @@ export const idParams = <const K extends string>(...names: K[]) =>
     z.object(Object.fromEntries(names.map(name => [name, RouteIdSchema])) as Record<K, typeof RouteIdSchema>)
 
 // A flag in a url's query: only the literal "true" sets it, as z.coerce.boolean() reads the string "false" as true
-export const QueryFlagSchema = z.enum(['true', 'false']).optional().transform(flag => flag === 'true')
+const QueryFlagValueSchema = z.enum(['true', 'false'])
+export const QueryFlagSchema = QueryFlagValueSchema.optional().transform(flag => flag === QueryFlagValueSchema.enum.true)
 
 export const AdminBypassQuerySchema = z.object({
     adminBypass: QueryFlagSchema
 })
+
+/** The query of a change to a household's data: an override carries `adminBypass=true`, the household's own change nothing (ADR-004) */
+export const adminBypassQuery = (adminBypass: boolean): z.input<typeof AdminBypassQuerySchema> =>
+    adminBypass ? {adminBypass: QueryFlagValueSchema.enum.true} : {}
 
 /**
  * Generate shortName from household address
@@ -81,7 +85,6 @@ export const getHouseholdShortName = (address: string): string => {
 }
 
 export const useCoreValidation = () => {
-    // Get WeekDayMap schema for dinnerPreferences
     const DinnerMode = DinnerModeSchema.enum
     const {
         WeekDayMapSchemaOptional,
@@ -177,7 +180,7 @@ export const useCoreValidation = () => {
 
     // User schema for updates
     const UserUpdateSchema = BaseUserSchema.partial().extend({
-        id: z.number().int().positive() // ID is required for updates
+        id: z.number().int().positive()
     })
 
     // ========================================================================
@@ -186,11 +189,9 @@ export const useCoreValidation = () => {
 
     // Base Inhabitant schema for API operations (extends fragment)
     const BaseInhabitantSchema = InhabitantFragmentSchema.extend({
-        // Override with more specific validation
         name: z.string().min(1, "Navn skal være mindst 1 karakter").max(100, "Navn må ikke være længere end 100 karakterer"),
         lastName: z.string().min(1, "Efternavn skal være mindst 1 karakter").max(100, "Efternavn må ikke være længere end 100 karakterer"),
         pictureUrl: z.url().optional().nullable(),
-        // Add domain-specific field
         dinnerPreferences: WeekDayMapSchemaOptional.optional().nullable()
     })
 
@@ -217,7 +218,6 @@ export const useCoreValidation = () => {
     })
 
     // Minimal inhabitant info for frontend display (team assignments, etc.)
-    // Reuses fragment + adds dinnerPreferences
     const InhabitantDisplaySchema = InhabitantFragmentSchema.extend({
         dinnerPreferences: WeekDayMapSchemaOptional.optional().nullable()
     })
@@ -227,7 +227,7 @@ export const useCoreValidation = () => {
     const UserDisplaySchema = BaseUserSchema.omit({
         passwordHash: true
     }).extend({
-        id: z.number().int().positive(), // Make id required
+        id: z.number().int().positive(),
         Inhabitant: InhabitantDisplaySchema.extend({
             userId: z.number().int().positive().nullable().optional()
         }).nullable().optional()
@@ -375,6 +375,8 @@ export const useCoreValidation = () => {
 
     // Internal types (not exported)
     type SerializedUserInput = z.infer<typeof SerializedUserInputSchema>
+    // A User row as the database returns it; the reads that include its Inhabitant carry that row too
+    type SerializedUser = z.infer<typeof SerializedUserSchema> & {Inhabitant?: Record<string, unknown> | null}
     type _Inhabitant = z.infer<typeof BaseInhabitantSchema>
     type _Household = z.infer<typeof BaseHouseholdSchema>
 
@@ -397,6 +399,26 @@ export const useCoreValidation = () => {
             appearance: JSON.stringify(user.appearance ?? DEFAULT_APPEARANCE)
         })
     }
+
+    /**
+     * Serialize the columns a partial update by id writes (ADR-012): a field the update leaves out carries `skip`, the
+     * repository's Prisma.skip, and its column stays as stored; a null phone clears the phone
+     */
+    const serializeUserUpdate = <Skip>(user: Partial<UserCreate>, skip: Skip) => ({
+        email: user.email !== undefined ? user.email : skip,
+        phone: user.phone !== undefined ? user.phone : skip,
+        passwordHash: user.passwordHash !== undefined ? user.passwordHash : skip,
+        systemRoles: user.systemRoles !== undefined ? JSON.stringify(user.systemRoles) : skip,
+        notificationChannels: user.notificationChannels !== undefined ? JSON.stringify(user.notificationChannels) : skip,
+        appearance: user.appearance !== undefined ? JSON.stringify(user.appearance) : skip
+    })
+
+    // The JSON columns of a User row as domain values
+    const deserializeUserColumns = (serializedUser: Omit<SerializedUser, 'passwordHash'>) => ({
+        systemRoles: JSON.parse(serializedUser.systemRoles),
+        notificationChannels: JSON.parse(serializedUser.notificationChannels),
+        appearance: JSON.parse(serializedUser.appearance)
+    })
 
     /**
      * ADR-010: Deserialize InhabitantDisplay from database format to domain format
@@ -429,26 +451,23 @@ export const useCoreValidation = () => {
         return InhabitantDetailSchema.parse(deserialized)
     }
 
-    const deserializeUserDisplay = (serializedUser: Record<string, unknown>): z.infer<typeof UserDisplaySchema> => UserDisplaySchema.parse({
+    // The display read leaves the Heynabo token (passwordHash) out
+    const deserializeUserDisplay = (serializedUser: Omit<SerializedUser, 'passwordHash'>): z.infer<typeof UserDisplaySchema> => UserDisplaySchema.parse({
         ...serializedUser,
-        systemRoles: JSON.parse(serializedUser.systemRoles as string),
-        notificationChannels: JSON.parse(serializedUser.notificationChannels as string)
+        ...deserializeUserColumns(serializedUser)
     })
 
     /**
      * Deserialize UserDetail from database output with Date objects
      * Handles nested inhabitant with household and computes household.shortName
      */
-    const deserializeUserDetail = (serializedUser: Record<string, unknown>): z.infer<typeof UserDetailSchema> => {
-        const {deserializeInhabitantDisplay} = useCoreValidation()
-        const inhabitant = serializedUser.Inhabitant as Record<string, unknown> | null
+    const deserializeUserDetail = (serializedUser: SerializedUser): z.infer<typeof UserDetailSchema> => {
+        const inhabitant = serializedUser.Inhabitant
         const household = inhabitant?.household as Record<string, unknown> | null
 
         return UserDetailSchema.parse({
             ...serializedUser,
-            systemRoles: JSON.parse(serializedUser.systemRoles as string),
-            notificationChannels: JSON.parse(serializedUser.notificationChannels as string),
-            appearance: JSON.parse(serializedUser.appearance as string),
+            ...deserializeUserColumns(serializedUser),
             Inhabitant: inhabitant ? {
                 ...deserializeInhabitantDisplay(inhabitant),
                 household: household ? {
@@ -521,6 +540,7 @@ export const useCoreValidation = () => {
         HouseholdDetailSchema,
         // Functions - User
         serializeUserInput,
+        serializeUserUpdate,
         deserializeUserDisplay,
         deserializeUserDetail,
         // Functions - Inhabitant

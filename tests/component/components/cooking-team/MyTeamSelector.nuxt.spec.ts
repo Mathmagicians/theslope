@@ -1,13 +1,13 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
-import {enableAutoUnmount} from '@vue/test-utils'
+import {enableAutoUnmount, type BaseWrapper} from '@vue/test-utils'
 import {nextTick} from 'vue'
 import MyTeamSelector from '~/components/cooking-team/MyTeamSelector.vue'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import {useCookingTeam} from '~/composables/useCookingTeam'
-import {getRainbowBand} from '~/composables/useTheSlopeDesignSystem'
+import {getRainbowBand, ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {TEAM_WORDS} from '~/config/teamWords'
-import {mountWithTooltipProvider, findAllByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 
 enableAutoUnmount(afterEach)
@@ -56,12 +56,18 @@ describe('MyTeamSelector visiting team', () => {
         ({getTeamShortName} = useCookingTeam())
     })
 
-    const mountWithVisit = (teams: CookingTeamDisplay[]) => mountWithTooltipProvider(MyTeamSelector, {
+    const mountWithVisit = (teams: CookingTeamDisplay[], isMd = true) => mountWithTooltipProvider(MyTeamSelector, {
         props: {teams, seasonTeams, visitingTeam: visiting, modelValue: teams[0]?.id ?? null},
-        isMd: true
+        isMd
     })
     type Mounted = Awaited<ReturnType<typeof mountWithVisit>>
     const tabsOf = (wrapper: Mounted) => wrapper.findAll('[role="tab"]')
+    // The innermost element that holds both: the line two elements share
+    const lineOf = (element: Element, other: Element) => {
+        let line = element.parentElement
+        while (line && !line.contains(other)) line = line.parentElement
+        return line!
+    }
 
     it.each([
         {own: 2, where: 'after the own teams'},
@@ -78,6 +84,17 @@ describe('MyTeamSelector visiting team', () => {
         expect(badges[0]!.text()).toBe(TEAM_WORDS.visit.badge)
         expect(visitTab.element.contains(badges[0]!.element), 'the badge sits on the visiting tab').toBe(true)
         expect(wrapper.text()).not.toContain('Ingen madhold')
+    })
+
+    it.each(VIEWPORTS)('"Ikke dit hold" shares the team name\'s line and the team icon leads the tab outside it ($viewport)', async ({isMd}) => {
+        const wrapper = await mountWithVisit(ownTeams(1), isMd)
+
+        const visitTab: BaseWrapper<Node> = tabsOf(wrapper).at(-1)!
+        const name = findByTestId(visitTab, 'team-badge-name').element
+        const icon = visitTab.findAllComponents({name: 'UIcon'}).find(component => component.props('name') === ICONS.team)!.element
+        const line = lineOf(name, findByTestId(visitTab, VISIT_BADGE).element)
+        expect(line.contains(icon), 'the team icon stands outside the name\'s line').toBe(false)
+        expect(line.parentElement!.firstElementChild, 'the icon leads the tab body, the name\'s line follows it').toBe(icon)
     })
 
     it('choosing the visiting tab asks for the visiting team', async () => {

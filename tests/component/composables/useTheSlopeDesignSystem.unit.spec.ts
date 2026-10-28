@@ -1,6 +1,6 @@
 import {describe, it, expect, afterEach} from 'vitest'
 import {ref} from 'vue'
-import {getRandomEmptyMessage, EMPTY_STATE_MESSAGES, createResponsiveAlerts, createColumnVisibility, createBreakpoint, createMasterDetail, ORDER_STATE_COLORS, COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
+import {getRandomEmptyMessage, EMPTY_STATE_MESSAGES, createResponsiveAlerts, createBreakpoint, createMasterDetail, ORDER_STATE_COLORS, COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
 
 const contexts = Object.keys(EMPTY_STATE_MESSAGES) as Array<keyof typeof EMPTY_STATE_MESSAGES>
 
@@ -36,31 +36,6 @@ describe('createResponsiveAlerts', () => {
     it.each([[false, 'vertical'], [true, 'horizontal']] as const)('withActions: isMd=%s → actions %s', (md, orientation) => {
         isMd.value = md
         expect(ALERTS.withActions.orientation).toBe(orientation)
-    })
-})
-
-describe('createColumnVisibility', () => {
-    const isMd = ref(false)
-    const columnVisibility = createColumnVisibility(isMd)
-
-    afterEach(() => {
-        isMd.value = false
-    })
-
-    it.each([
-        [false, {id: false, phone: false}],
-        [true, {}]
-    ] as const)('isMd=%s → UTable column visibility %j', (md, visibility) => {
-        isMd.value = md
-        expect(columnVisibility(['id', 'phone'])).toEqual(visibility)
-    })
-
-    it.each([
-        [false, {durationMs: false}],
-        [true, {expand: false}]
-    ] as const)('isMd=%s with an expand column hidden from md → %j', (md, visibility) => {
-        isMd.value = md
-        expect(columnVisibility(['durationMs'], ['expand'])).toEqual(visibility)
     })
 })
 

@@ -1149,10 +1149,15 @@ export const COMPONENTS = {
     /** "Ikke dit hold" on a team the person is not on, the visiting tab and the visited team's card; its size is the responsive SIZES.small */
     visitBadge: {color: COLOR.neutral, variant: NOISE.subtle},
 
-    /** MyTeamSelector tab body: the team icon above the badge on phone, beside it on desktop */
+    /**
+     * MyTeamSelector tab body: the team icon above the name's line on phone, beside it on desktop. The line holds
+     * the team badge and, on a visit, "Ikke dit hold" after it
+     */
     myTeamSelector: {
         tab: 'flex flex-col items-center gap-1 md:flex-row md:gap-2',
-        icon: 'shrink-0'
+        icon: 'shrink-0',
+        nameLine: 'flex items-center gap-2',
+        visitBadge: 'shrink-0'
     },
 
     /** TeamCalendarDisplay days: a selectable day rings on hover, the selected dinner's day rings in primary */
@@ -1583,7 +1588,7 @@ export const COMPONENTS = {
         /** The users table: `ui`'s cells; on a phone the scroll box is the size container `adminUsers.expandedPanel` measures its width against */
         adminUsersUi: {...TABLE_UI, root: '@container md:@container-normal'},
         /** A history table (Billetændringer): `ui`'s padding, every row on one line, so on a phone the table scrolls sideways */
-        historyUi: {th: 'px-2 md:px-4', td: `${TABLE_CELL_PADDING} whitespace-nowrap`},
+        historyUi: {...TABLE_UI, td: `${TABLE_CELL_PADDING} whitespace-nowrap`},
         /** A cell a row's spanning cell covers (a column's `meta.class.td`): out of the row's layout */
         spannedCell: 'hidden',
         /** The household allergies: the dense cells, an expanded inhabitant row tinted */
@@ -3084,17 +3089,6 @@ export const CALENDAR = {
 
 export type CalendarPickerSelection = keyof typeof CALENDAR.picker
 
-/**
- * UTable column visibility by breakpoint: `hiddenOnPhone` columns hide on a phone, `hiddenFromMd` columns hide from md.
- * The content of a column hidden on a phone lives in the row's expanded panel; its expand column is `hiddenFromMd`
- * when every column fits from md.
- * @example <UTable :column-visibility="columnVisibility(['id', 'phone'])" />
- * @example <UTable :column-visibility="columnVisibility(['durationMs'], ['expand'])" />
- */
-export const createColumnVisibility = (isMd: Ref<boolean | null>) =>
-    (hiddenOnPhone: readonly string[], hiddenFromMd: readonly string[] = []): Record<string, boolean> =>
-        Object.fromEntries((isMd.value ? hiddenFromMd : hiddenOnPhone).map(column => [column, false]))
-
 // A column whose header and cells render from md: a column carries it in its `meta`, which UTable reads
 const TABLE_COLUMN_FROM_MD = {class: {th: 'hidden md:table-cell', td: 'hidden md:table-cell'}}
 
@@ -3416,7 +3410,6 @@ export const SEASON_STATUS_GLYPHS: Record<SeasonStatusValue, BadgeProps & {class
 export const useTheSlopeDesignSystem = () => {
     // Inject responsive breakpoint from layout
     const isMd = inject<Ref<boolean | null>>('isMd', ref(null))
-    const columnVisibility = createColumnVisibility(isMd)
 
     return {
         // The layout's breakpoint, for behaviour that needs the ref; a rendered value binds a responsive token
@@ -3432,7 +3425,6 @@ export const useTheSlopeDesignSystem = () => {
         CALENDAR,
         calendarPickerProps,
         dayCircleClasses,
-        columnVisibility,
         CHEF_CALENDAR,
         DINNER_CALENDAR,
         PLANNING_CALENDAR,

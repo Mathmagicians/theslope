@@ -15,6 +15,7 @@ import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFa
 import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
 import { TicketFactory } from '~~/tests/e2e/testDataFactories/ticketFactory'
 import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
+import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 
 const { headers, salt, temporaryAndRandom, getSessionUserInfo } = testHelpers
 
@@ -58,6 +59,9 @@ export class OrderFactory {
     const year = 5025 + randomYearOffset
     return new Date(year, randomMonth, randomDay)
   }
+
+  /** An order's price fields from a season's price row: a person's row is the price their order holds */
+  static readonly priceFieldsOf = (price: TicketPrice) => ({ticketPriceId: price.id, ticketType: price.ticketType, priceAtBooking: price.price})
 
   static readonly defaultOrder = (_testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderDisplay>): OrderDisplay => ({
     id: 1,

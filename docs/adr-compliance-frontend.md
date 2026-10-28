@@ -72,7 +72,7 @@ Status.
 | `TeamMemberAddForm.vue` | `/admin/teams` | none | ✅ | ✅ parent | ✅ |
 | `TeamRoleFields.vue` | `/admin/teams` | none | ✅ parent | ✅ parent | ✅ |
 | `JokerSlotForm.vue` | `/admin/teams` | none | ✅ | ✅ | ✅ |
-| `MyTeamSelector.vue` | `/chef` | none | ✅ | ✅ parent | ✅ the visiting tab last, its badge word from `TEAM_WORDS` (ADR-017) |
+| `MyTeamSelector.vue` | `/chef` | none | ✅ | ✅ parent | ✅ the visiting tab last, "Ikke dit hold" on the team name's line (`COMPONENTS.myTeamSelector.nameLine`, `COMPONENTS.visitBadge`), its word from `TEAM_WORDS` (ADR-017, ADR-018) |
 | `WorkAssignment.vue` | `/dinner`, `/chef` | plan, auth | ❌ | ✅ parent | ⚠️ missing unit |
 | `InhabitantSelector.vue` | `/admin/teams` | none | ✅ | ✅ parent | ✅ |
 | `CookingTeamBadges.vue` | `/admin/teams`, `/chef`, `/dinner` | none | ✅ | ✅ parent | ✅ |

@@ -35,7 +35,8 @@ const TEST_IDS = {
     memberRow: 'team-member-row',
     memberRemove: (assignmentId: number) => `team-member-remove-${assignmentId}`,
     jokerAddRow: 'joker-add-row',
-    visitBadge: 'team-card-visit-badge'
+    visitBadge: 'team-card-visit-badge',
+    nameInput: 'team-name-input'
 } as const
 
 // The season the edit face plans in: Mon/Wed/Fri cooking days
@@ -261,11 +262,9 @@ describe('CookingTeamCard', () => {
     })
 
     describe('edit face, Holdnavn', () => {
-        const nameInput = (wrapper: VueWrapper) => wrapper.find('[data-testid="team-name-input"]')
-
         it('shows the resolved team name, and emits the trimmed draft once on blur after a focus seeds it', async () => {
             const wrapper = await mountCard('edit', {name: 'Team Alpha'})
-            const input = nameInput(wrapper)
+            const input = findByTestId(wrapper, TEST_IDS.nameInput)
             expect((input.element as HTMLInputElement).value).toBe('Team Alpha')
             await input.trigger('focus')
             await input.setValue(' Team Alpha Q ')
@@ -275,14 +274,14 @@ describe('CookingTeamCard', () => {
 
         it('emits nothing for an unchanged or empty draft and shows the live name again', async () => {
             const wrapper = await mountCard('edit', {name: 'Team Alpha'})
-            const input = nameInput(wrapper)
+            const input = findByTestId(wrapper, TEST_IDS.nameInput)
             await input.trigger('focus')
             await input.trigger('blur')
             await input.trigger('focus')
             await input.setValue('   ')
             await input.trigger('blur')
             expect(wrapper.emitted('update:teamName')).toBeUndefined()
-            expect((nameInput(wrapper).element as HTMLInputElement).value).toBe('Team Alpha')
+            expect((findByTestId(wrapper, TEST_IDS.nameInput).element as HTMLInputElement).value).toBe('Team Alpha')
         })
     })
 })

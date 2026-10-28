@@ -133,8 +133,8 @@ describe('AdminTeams master table', () => {
 
         const wrapper = await mountTeams()
 
-        expect(wrapper.find(`[data-testid="team-row-${withJokers.id}"] [data-testid="team-badge-jokers"]`).exists()).toBe(true)
-        expect(wrapper.find(`[data-testid="team-row-${withoutJokers.id}"] [data-testid="team-badge-jokers"]`).exists()).toBe(false)
+        expect(findByTestId(findByTestId(wrapper, `team-row-${withJokers.id}`), 'team-badge-jokers').exists()).toBe(true)
+        expect(findByTestId(findByTestId(wrapper, `team-row-${withoutJokers.id}`), 'team-badge-jokers').exists()).toBe(false)
 
         // The Madhold column takes the row's slack, so the badges stay on one line while the weekdays fit their letters
         const columns = wrapper.findComponent({name: 'UTable'}).props('columns') as Array<{header?: string, meta?: {class?: unknown}}>
@@ -146,18 +146,18 @@ describe('AdminTeams master table', () => {
     it('GIVEN a season without teams WHEN it reloads THEN the loading row stands where the empty state was, until the season lands', async () => {
         seasonByIdEndpoint.mockReturnValue(season)
         const wrapper = await mountTeams()
-        expect(wrapper.find('[data-testid="teams-empty-state"]').exists()).toBe(true)
+        expect(findByTestId(wrapper, 'teams-empty-state').exists()).toBe(true)
         const held = holdEndpoint('/api/admin/season/1', season)
 
         try {
             void usePlanStore().selectedSeasonDataset.refresh()
 
             await vi.waitFor(() => expect(findLoadingRow(wrapper).text()).toContain('Henter madhold...'))
-            expect(wrapper.find('[data-testid="teams-empty-state"]').exists()).toBe(false)
+            expect(findByTestId(wrapper, 'teams-empty-state').exists()).toBe(false)
 
             held.release()
 
-            await vi.waitFor(() => expect(wrapper.find('[data-testid="teams-empty-state"]').exists()).toBe(true))
+            await vi.waitFor(() => expect(findByTestId(wrapper, 'teams-empty-state').exists()).toBe(true))
         } finally {
             held.release()
             held.unregister()
@@ -272,11 +272,11 @@ describe('AdminTeams team colours', () => {
 
     it.each(numbered)('the row of "$name" wears the stop of number $number, and selecting it accents the row with that stop', async ({id, number}) => {
         const wrapper = await mountTeams()
-        const badge = wrapper.find(`[data-testid="team-row-${id}"] [data-testid="team-badge-name"]`)
+        const badge = findByTestId(findByTestId(wrapper, `team-row-${id}`), 'team-badge-name')
         expect(badge.classes()).toEqual(expect.arrayContaining(getRainbowBand(number - 1).split(' ')))
 
         await clickByTestId(wrapper, `team-row-${id}`)
-        await vi.waitFor(() => expect(wrapper.find(`[data-testid="team-row-${id}"]`).classes())
+        await vi.waitFor(() => expect(findByTestId(wrapper, `team-row-${id}`).classes())
             .toEqual(expect.arrayContaining(getRainbowAccent(number - 1).split(' '))))
     })
 })

@@ -1,11 +1,11 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
-import {enableAutoUnmount} from '@vue/test-utils'
+import {DOMWrapper, enableAutoUnmount} from '@vue/test-utils'
 import {addDays, addMonths, endOfMonth, startOfMonth} from 'date-fns'
 import DinnerCalendarDisplay from '~/components/calendar/DinnerCalendarDisplay.vue'
 import {EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
-import {findAllByTestId, findByTestId, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
+import {findAllByTestId, findByTestId, iconNamesIn, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
 import {CALENDAR, ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {DinnerState} from '~/composables/useBookingValidation'
 import {WAITLIST_TEST_IDS} from '~~/tests/component/components/dinner/waitlistTestIds'
@@ -55,8 +55,6 @@ describe('DinnerCalendarDisplay lock chips', () => {
     // UChip hands its attributes to the day circle, so the chip's indicator sits beside the circle
     const chipOf = (wrapper: Mounted, date: Date): Element | null =>
         findByTestId(wrapper, `calendar-dinner-date-${date.getDate()}`).element.parentElement?.querySelector('[data-slot="base"]') ?? null
-    const glyphsIn = (wrapper: Mounted, element: Element | null): string[] =>
-        wrapper.findAllComponents({name: 'UIcon'}).filter(icon => element?.contains(icon.element)).map(icon => icon.props('name') as string)
 
     it('each dinner past its deadline wears the chip of its supply, and a dinner open for booking wears none', async () => {
         const chips = [
@@ -69,7 +67,7 @@ describe('DinnerCalendarDisplay lock chips', () => {
         chips.forEach(({desc, dinner, text, glyphs}) => {
             const chip = chipOf(wrapper, dinner.date)
             expect(chip?.textContent?.trim(), desc).toBe(text)
-            expect(glyphsIn(wrapper, chip), desc).toEqual(glyphs)
+            expect(iconNamesIn(new DOMWrapper(chip!)), desc).toEqual(glyphs)
         })
         expect(chipOf(wrapper, OPEN.date)).toBeNull()
 
@@ -90,7 +88,7 @@ describe('DinnerCalendarDisplay lock chips', () => {
             const entry = findAllByTestId(wrapper, 'calendar-legend-entry').find(candidate => candidate.text().includes(label))
             const chip = entry?.find('[data-slot="base"]').element ?? null
             expect(chip?.textContent?.trim(), label).toBe(text)
-            expect(glyphsIn(wrapper, chip), label).toEqual(glyphs)
+            expect(iconNamesIn(new DOMWrapper(chip!)), label).toEqual(glyphs)
         })
     })
 })

@@ -4,9 +4,10 @@ import { flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { registerEndpoint, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import { getQuery, type H3Event } from 'h3'
+import { getQuery, readBody, type H3Event } from 'h3'
 import {
   useCoreValidation,
+  adminBypassQuery,
   type HouseholdDisplay,
   type HouseholdDetail
 } from '~/composables/useCoreValidation'
@@ -31,6 +32,8 @@ session.loggedIn.value = true
 // Schema for validating mock responses
 const { InhabitantUpdateResponseSchema } = useBookingValidation()
 const { createDefaultWeekdayMap, serializeWeekDayMap } = useCoreValidation()
+// The draft a preference save sends: every weekday dines in
+const weekMap = createDefaultWeekdayMap(DinnerMode.DINEIN)
 
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
@@ -206,7 +209,7 @@ describe('Households Store', () => {
       const mockResponse = createMockInhabitantUpdateResponse()
       preferencesEndpoint1.mockReturnValue(mockResponse)
 
-      const result = await store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN, TUESDAY: DinnerMode.TAKEAWAY })
+      const result = await store.updateInhabitantPreferences(1, weekMap, false)
 
       expect(preferencesEndpoint1).toHaveBeenCalled()
       expect(result).toEqual(mockResponse.scaffoldResult)
@@ -223,7 +226,7 @@ describe('Households Store', () => {
       // Clear previous calls
       householdByIdEndpoint.mockClear()
 
-      await store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
+      await store.updateInhabitantPreferences(1, weekMap, false)
 
       // Verify refresh was called
       expect(householdByIdEndpoint).toHaveBeenCalled()
@@ -239,7 +242,7 @@ describe('Households Store', () => {
       })
 
       await expect(
-        store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
+        store.updateInhabitantPreferences(1, weekMap, false)
       ).rejects.toThrow()
     })
   })
@@ -262,7 +265,7 @@ describe('Households Store', () => {
         scaffoldResult: OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 2, [Action.CANCEL]: 1, [Action.RELEASE]: 1, [Action.CHANGE_PRICE]: 1}, unchanged: 1})
       }))
 
-      await store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
+      await store.updateAllInhabitantPreferences(1, weekMap, false)
 
       // Verify aggregated result (includes all ScaffoldResult fields)
       expect(store.lastPreferenceResult).toEqual(OrderFactory.defaultScaffoldResult({
@@ -289,7 +292,7 @@ describe('Households Store', () => {
         return createMockInhabitantUpdateResponse()
       })
 
-      await store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
+      await store.updateAllInhabitantPreferences(1, weekMap, false)
 
       // Verify sequential execution (order preserved)
       expect(callOrder).toEqual([1, 2])
@@ -304,7 +307,7 @@ describe('Households Store', () => {
       // Clear previous calls from loadHousehold
       householdByIdEndpoint.mockClear()
 
-      await store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
+      await store.updateAllInhabitantPreferences(1, weekMap, false)
 
       // Should be called exactly once after all updates
       expect(householdByIdEndpoint).toHaveBeenCalledTimes(1)
@@ -314,7 +317,7 @@ describe('Households Store', () => {
       const store = await setupStore()
 
       await expect(
-        store.updateAllInhabitantPreferences(999, { MONDAY: DinnerMode.DINEIN })
+        store.updateAllInhabitantPreferences(999, weekMap, false)
       ).rejects.toThrow('Household 999 not found')
     })
 
@@ -334,7 +337,7 @@ describe('Households Store', () => {
       })
 
       await expect(
-        store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
+        store.updateAllInhabitantPreferences(1, weekMap, false)
       ).rejects.toThrow()
     })
   })
@@ -459,9 +462,9 @@ describe('Households Store', () => {
   // A write that changes bookings goes through the bookings store's one write, which re-reads what a booking touches
   describe('booking writes', () => {
     it.each([
-      {write: 'a preference change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })},
-      {write: 'a power mode change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })},
-      {write: 'a move-out date', run: (store: ReturnType<typeof useHouseholdsStore>) => store.setMoveOutDate(1, new Date())},
+      {write: 'a preference change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateInhabitantPreferences(1, weekMap, false)},
+      {write: 'a power mode change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateAllInhabitantPreferences(1, weekMap, false)},
+      {write: 'a move-out date', run: (store: ReturnType<typeof useHouseholdsStore>) => store.setMoveOutDate(1, new Date(), false)},
       {write: 'a move to another household', run: (store: ReturnType<typeof useHouseholdsStore>) => store.moveInhabitant(1, 2)}
     ])('$write goes through the one booking write', async ({run}) => {
       moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult: OrderFactory.defaultScaffoldResult() })
@@ -482,7 +485,7 @@ describe('Households Store', () => {
       moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult })
       const store = await setupStore()
 
-      const result = await store.setMoveOutDate(1, new Date())
+      const result = await store.setMoveOutDate(1, new Date(), false)
 
       expect(result).toEqual(scaffoldResult)
       expect(store.lastMoveOutResult).toEqual(scaffoldResult)
@@ -494,7 +497,41 @@ describe('Households Store', () => {
       })
       const store = await setupStore()
 
-      await expect(store.setMoveOutDate(1, null)).rejects.toThrow()
+      await expect(store.setMoveOutDate(1, null, false)).rejects.toThrow()
+    })
+  })
+
+  // An admin's change of a household carries the override; the household's own change carries no parameter (ADR-004)
+  describe('the override on a write', () => {
+    type Store = ReturnType<typeof useHouseholdsStore>
+    const writes = [
+      {write: 'a preference change', endpoints: [preferencesEndpoint1], run: (store: Store, adminBypass: boolean) => store.updateInhabitantPreferences(1, weekMap, adminBypass)},
+      {write: 'a power mode change', endpoints: [preferencesEndpoint1, preferencesEndpoint2], run: (store: Store, adminBypass: boolean) => store.updateAllInhabitantPreferences(1, weekMap, adminBypass)},
+      {write: 'a move-out date', endpoints: [moveOutEndpoint], run: (store: Store, adminBypass: boolean) => store.setMoveOutDate(1, new Date(), adminBypass)}
+    ]
+
+    it.each(writes.flatMap(write => [false, true].map(adminBypass => ({...write, adminBypass}))))(
+      'GIVEN $write with adminBypass $adminBypass WHEN saved THEN each request carries the override query of its role', async ({endpoints, run, adminBypass}) => {
+        moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult: OrderFactory.defaultScaffoldResult() })
+        const store = await setupStore()
+
+        await run(store, adminBypass)
+
+        expect(endpoints.map(endpoint => getQuery(endpoint.mock.calls[0]![0] as H3Event))).toEqual(endpoints.map(() => adminBypassQuery(adminBypass)))
+      })
+
+    it('GIVEN a week map draft WHEN saved THEN the body carries the week map as it is, for the server to serialize', async () => {
+      const draft = {...weekMap, tirsdag: DinnerMode.TAKEAWAY}
+      const bodies: unknown[] = []
+      preferencesEndpoint1.mockImplementation(async (event: H3Event) => {
+        bodies.push(await readBody(event))
+        return createMockInhabitantUpdateResponse()
+      })
+      const store = await setupStore()
+
+      await store.updateInhabitantPreferences(1, draft, false)
+
+      expect(bodies).toEqual([{dinnerPreferences: draft}])
     })
   })
 

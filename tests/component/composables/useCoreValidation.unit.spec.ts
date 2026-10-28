@@ -5,10 +5,10 @@
  */
 
 import {describe, it, expect} from 'vitest'
-import {useCoreValidation, getHouseholdShortName} from '~/composables/useCoreValidation'
+import {useCoreValidation, getHouseholdShortName, adminBypassQuery, AdminBypassQuerySchema} from '~/composables/useCoreValidation'
 import type {UserCreate} from '~/composables/useCoreValidation'
 import {useBookingValidation, type DinnerMode as DinnerModeType} from '~/composables/useBookingValidation'
-import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS, useUserPreferenceValidation} from '~/composables/useUserPreferenceValidation'
+import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS, useUserPreferenceValidation, type UserPreferencesUpdate} from '~/composables/useUserPreferenceValidation'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
@@ -23,6 +23,20 @@ const serializedUserColumns = (user: UserCreate) => ({
     systemRoles: JSON.stringify(user.systemRoles),
     notificationChannels: JSON.stringify(user.notificationChannels),
     appearance: JSON.stringify(user.appearance)
+})
+
+// ============================================================================
+// THE OVERRIDE QUERY (ADR-004)
+// ============================================================================
+
+describe('adminBypassQuery', () => {
+    it('GIVEN the household\'s own change THEN the query carries no parameter', () => {
+        expect(adminBypassQuery(false)).toStrictEqual({})
+    })
+
+    it.each([false, true])('GIVEN adminBypass %s THEN the endpoints\' query schema reads it back', (adminBypass) => {
+        expect(AdminBypassQuerySchema.parse(adminBypassQuery(adminBypass))).toEqual({adminBypass})
+    })
 })
 
 // ============================================================================
@@ -788,12 +802,14 @@ describe('useCoreValidation - User preference columns', () => {
         BaseUserSchema,
         UserDetailSchema,
         UserSessionSchema,
+        SerializedUserInputSchema,
         serializeUserInput,
+        serializeUserUpdate,
         deserializeUserDisplay,
         deserializeUserDetail
     } = useCoreValidation()
 
-    const preferences: Pick<UserCreate, 'notificationChannels' | 'appearance'> = {
+    const preferences: UserPreferencesUpdate = {
         notificationChannels: [NotificationChannelSchema.enum.EMAIL, NotificationChannelSchema.enum.SMS],
         appearance: {palette: PaletteSchema.enum['high-contrast'], textScale: TextScaleSchema.enum.large}
     }
@@ -813,19 +829,33 @@ describe('useCoreValidation - User preference columns', () => {
         expect(serializeUserInput(user)).toMatchObject(serializedUserColumns(user))
     })
 
+    // A partial update by id writes the columns it carries; every other column carries the store's skip (ADR-012)
+    describe('serializeUserUpdate', () => {
+        // Stands for Prisma.skip, which the validation layer does not import
+        const SKIP = Symbol('skip')
+        const skipped = Object.fromEntries(Object.keys(SerializedUserInputSchema.shape).map(column => [column, SKIP]))
+
+        it.each([
+            {update: 'the user\'s own channels and appearance', delta: preferences,
+                written: {notificationChannels: JSON.stringify(preferences.notificationChannels), appearance: JSON.stringify(preferences.appearance)}},
+            {update: 'an admin clearing the phone', delta: {phone: null}, written: {phone: null}},
+            {update: 'the import\'s login and roles', delta: {email: user.email, passwordHash: user.passwordHash, systemRoles: user.systemRoles},
+                written: {email: user.email, passwordHash: user.passwordHash, systemRoles: JSON.stringify(user.systemRoles)}}
+        ])('GIVEN $update WHEN serialized THEN those columns are written as stored and the others skipped', ({delta, written}) => {
+            expect(serializeUserUpdate(delta, SKIP)).toEqual({...skipped, ...written})
+        })
+    })
+
     // A User row as the database returns it: the JSON columns as strings, the Heynabo token in passwordHash (ADR-010)
     describe('a User row', () => {
         const row = {...serializeUserInput(user), id: 1, createdAt: new Date(), updatedAt: new Date(), Inhabitant: null}
-        // The display read selects no appearance column
-        const {appearance: _appearance, ...displayRow} = row
+        const parsed = {systemRoles: user.systemRoles, notificationChannels: user.notificationChannels, appearance: user.appearance}
         const deserialized = [
-            {as: 'a Display', deserialize: () => deserializeUserDisplay(displayRow),
-                parsed: {systemRoles: user.systemRoles, notificationChannels: user.notificationChannels}},
-            {as: 'a Detail', deserialize: () => deserializeUserDetail(row),
-                parsed: {systemRoles: user.systemRoles, notificationChannels: user.notificationChannels, appearance: user.appearance}}
+            {as: 'a Display', deserialize: () => deserializeUserDisplay(row)},
+            {as: 'a Detail', deserialize: () => deserializeUserDetail(row)}
         ]
 
-        it.each(deserialized)('GIVEN a row WHEN deserialized as $as THEN its JSON columns parse back to domain values', ({deserialize, parsed}) => {
+        it.each(deserialized)('GIVEN a row WHEN deserialized as $as THEN its JSON columns parse back to domain values', ({deserialize}) => {
             expect(deserialize()).toMatchObject(parsed)
         })
 

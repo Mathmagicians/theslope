@@ -114,7 +114,7 @@ them takes `TYPOGRAPHY.sectionSubheading`.
 A `UTabs` whose triggers render `CookingTeamBadges` binds `COMPONENTS.teamTabs`: the link variant, triggers that keep their
 full label, and a horizontal row that scrolls sideways when more tabs than fit. On a phone the trigger stacks `ICONS.team`
 over the compact badge (`MyTeamSelector`, `COMPONENTS.myTeamSelector`). A team on view the person is not on rides as
-the last tab, with the tab item's own badge after its name, and counts toward the vertical list.
+the last tab, with "Ikke dit hold" on its name's line (`COMPONENTS.visitBadge`), and counts toward the vertical list.
 
 ### A cancelled dinner
 

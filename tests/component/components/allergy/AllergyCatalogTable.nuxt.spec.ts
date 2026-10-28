@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, resetStores, findLoadingRow, findOpenRows} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, findLoadingRow, findOpenRows} from '~~/tests/component/testHelpers'
 import {nextTick, h, defineComponent, shallowReactive} from 'vue'
 import AllergyCatalogTable from '~/components/allergy/AllergyCatalogTable.vue'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
@@ -9,6 +9,7 @@ import {rowIdOf} from '~/utils/utils'
 import {ALLERGY_TEST_IDS} from './allergyTestIds'
 
 const mockAllergyTypes = AllergyFactory.createMockAllergyTypesWithInhabitants()
+const [milk, peanuts, gluten] = mockAllergyTypes
 
 enableAutoUnmount(afterEach)
 
@@ -38,13 +39,6 @@ const mountTable = async (props: Record<string, unknown> = {}, slots: Record<str
     return wrapper
 }
 
-type Wrapper = Awaited<ReturnType<typeof mountTable>>
-
-const clickName = async (wrapper: Wrapper, name: string) => {
-    const cell = wrapper.findAll('[data-testid^="allergy-row-"]').find(c => c.text().includes(name))
-    await cell!.trigger('click')
-    await nextTick()
-}
 
 describe('AllergyCatalogTable', () => {
     describe.each(['single', 'multi'] as const)('%s mode', (mode) => {
@@ -68,7 +62,7 @@ describe('AllergyCatalogTable', () => {
             const wrapper = await mountTable({mode: 'single'})
             expect(wrapper.find('[role="checkbox"]').exists()).toBe(false)
 
-            await clickName(wrapper, 'Jordnødder')
+            await clickByTestId(wrapper, ALLERGY_TEST_IDS.row(peanuts!.id))
 
             const table = wrapper.findComponent(AllergyCatalogTable)
             const emitted = table.emitted('update:modelValue')
@@ -89,7 +83,7 @@ describe('AllergyCatalogTable', () => {
             const wrapper = await mountTable({mode: 'multi', modelValue: [1]})
             expect(wrapper.findAll('[role="checkbox"]')).toHaveLength(mockAllergyTypes.length)
 
-            await clickName(wrapper, 'Gluten')
+            await clickByTestId(wrapper, ALLERGY_TEST_IDS.row(gluten!.id))
 
             const table = wrapper.findComponent(AllergyCatalogTable)
             const emitted = table.emitted('update:modelValue')
@@ -99,7 +93,7 @@ describe('AllergyCatalogTable', () => {
         it('emits the toggled id removed from the selection', async () => {
             const wrapper = await mountTable({mode: 'multi', modelValue: [1, 3]})
 
-            await clickName(wrapper, 'Gluten')
+            await clickByTestId(wrapper, ALLERGY_TEST_IDS.row(gluten!.id))
 
             const table = wrapper.findComponent(AllergyCatalogTable)
             const emitted = table.emitted('update:modelValue')
@@ -109,7 +103,7 @@ describe('AllergyCatalogTable', () => {
         it('emits nothing when readonly', async () => {
             const wrapper = await mountTable({mode: 'multi', modelValue: [], readonly: true})
 
-            await clickName(wrapper, 'Gluten')
+            await clickByTestId(wrapper, ALLERGY_TEST_IDS.row(gluten!.id))
 
             const table = wrapper.findComponent(AllergyCatalogTable)
             expect(table.emitted('update:modelValue')).toBeFalsy()
@@ -117,8 +111,6 @@ describe('AllergyCatalogTable', () => {
     })
 
     describe('expanded slot forwarding', () => {
-        const [milk, peanuts, gluten] = mockAllergyTypes
-
         // The expanded model is keyed by the row's id (rowIdOf); Jordnødder's id differs from its row's position
         it.each([
             {when: 'as mounted', mounted: mockAllergyTypes},

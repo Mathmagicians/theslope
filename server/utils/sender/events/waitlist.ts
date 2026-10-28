@@ -50,10 +50,12 @@ const {BOOKING_STATUS} = SenderEventSchema.enum
 
 const LOG = `📮 > SENDER > [EVENT ${BOOKING_STATUS}]`
 
+/** The dinner a booking notification is about; the buildup links its team's dinner on the chef page */
 export interface WaitlistDinnerContext {
     dinnerEventId: number
     date: Date
     menuTitle: string
+    cookingTeamId: number | null
 }
 
 // The notification names the dinner by its date and menu
@@ -94,8 +96,9 @@ const pending = <Notification extends ResolvedNotification>(kind: NotificationKi
 
 // The composables build once per batch, not once per notification
 const pendingOf = <Tracked extends object>(notifications: BookingNotifications<Tracked>): Pending<ResolvedNotification & Tracked>[] => {
-    const {buildDinnerUrl} = useBooking()
+    const {buildDinnerUrl, buildChefUrl} = useBooking()
     const bookingUrl = (config: NotificationConfig, {date}: WaitlistDinnerContext): string => buildDinnerUrl(siteUrl(config, ''), date)
+    const chefUrl = (config: NotificationConfig, {cookingTeamId, date}: WaitlistDinnerContext): string => buildChefUrl(siteUrl(config, ''), cookingTeamId, date)
     // The inhabitant's ticket in the words of the booking toast: "Emil: 1 købt"
     const ticketValues = (action: BookingAction) => (notification: TicketNotification, config: NotificationConfig): Record<string, string> => ({
         name: notification.name, person: notification.person, dinner: dinnerLabel(notification.dinner), action: BOOKING_WORDS.actions[action].toast,
@@ -108,7 +111,7 @@ const pendingOf = <Tracked extends object>(notifications: BookingNotifications<T
         }))),
         ...notifications.buildups.map(pending<BookingNotifications['buildups'][number]>(NotificationKind.WAITLIST_BUILDUP, (notification, config) => ({
             name: notification.name, dinner: dinnerLabel(notification.dinner), queued: BOOKING_WORDS.supply.queued(notification.queued),
-            portions: formatPortions(notification.portions), ask: BOOKING_WORDS.supply.chefAsk(notification.entries), dinnerUrl: siteUrl(config, '/chef')
+            portions: formatPortions(notification.portions), ask: BOOKING_WORDS.supply.chefAsk(notification.entries), dinnerUrl: chefUrl(config, notification.dinner)
         }))),
         ...notifications.sold.map(pending<BookingNotifications['sold'][number]>(NotificationKind.TICKET_SOLD, (notification, config) => ({
             name: notification.name, dinner: dinnerLabel(notification.dinner), tickets: BOOKING_WORDS.ticketCount(1), buyer: notification.buyer,

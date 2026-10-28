@@ -73,8 +73,6 @@ const selectedTeamIndex = computed({
   }
 })
 
-const visitBadge = {...COMPONENTS.visitBadge, size: SIZES.small, label: TEAM_WORDS.visit.badge, 'data-testid': 'my-team-visit-badge'}
-
 // Uses short name for user-facing display (e.g., "Madhold 2" not "Madhold 2 - 08/25-06/26")
 // The team's colour rides on CookingTeamBadges in the tab body, from the team's number
 const teamTabs = computed(() => {
@@ -82,14 +80,13 @@ const teamTabs = computed(() => {
     label: getTeamShortName(team.name),
     value: index,
     teamNumber: getTeamNumber(team, props.seasonTeams),
-    // UTabs renders an item's badge on its trigger, after the label
-    ...(team.id === props.visitingTeam?.id && {badge: visitBadge})
+    visiting: team.id === props.visitingTeam?.id
   }))
 })
 </script>
 
 <template>
-  <div name="my-team-selector" data-testid="my-team-selector">
+  <div data-testid="my-team-selector">
     <!-- Empty state -->
     <UAlert
       v-if="tabTeams.length === 0"
@@ -116,13 +113,23 @@ const teamTabs = computed(() => {
       <template #default="{ item }">
         <span :class="COMPONENTS.myTeamSelector.tab">
           <UIcon :name="ICONS.team" :class="COMPONENTS.myTeamSelector.icon" />
-          <CookingTeamBadges
-            :team-number="item.teamNumber"
-            :team-name="item.label"
-            :show-counts="false"
-            :show-team-icon="false"
-            size="small"
-          />
+          <span :class="COMPONENTS.myTeamSelector.nameLine">
+            <CookingTeamBadges
+              :team-number="item.teamNumber"
+              :team-name="item.label"
+              :show-counts="false"
+              :show-team-icon="false"
+              size="small"
+            />
+            <UBadge
+              v-if="item.visiting"
+              v-bind="COMPONENTS.visitBadge"
+              :size="SIZES.small"
+              :label="TEAM_WORDS.visit.badge"
+              :class="COMPONENTS.myTeamSelector.visitBadge"
+              data-testid="my-team-visit-badge"
+            />
+          </span>
         </span>
       </template>
     </UTabs>

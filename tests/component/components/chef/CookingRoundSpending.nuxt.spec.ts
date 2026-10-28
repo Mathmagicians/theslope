@@ -60,7 +60,7 @@ describe('CookingRoundSpending, the team\'s round', () => {
         expect(marker.attributes('data-testid')).toBe('cooking-round-marker')
         expect(marker.props('name')).toBe(ICONS.dot)
         expect(marker.element.parentElement!.className).toBe(COMPONENTS.table.currentDinnerLabel)
-        expect(rendered[0]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(false)
+        expect(findByTestId(rendered[0]!, 'cooking-round-marker').exists()).toBe(false)
         expect(rendered[0]!.findAll('td')[1]!.find('span').classes().join(' ')).toBe(COMPONENTS.table.dinnerLabel)
 
         // Each row's allowance, spending and what is left in both units, red with the exclamation icon when over
@@ -68,8 +68,8 @@ describe('CookingRoundSpending, the team\'s round', () => {
         expect(over.text()).toContain(`/ ${formatPrice(178100)} kr`)
         expect(over.text()).toContain(`/ ${formatPrice(192500)} kr`)
         expect(over.text()).toContain(`/ -${formatPrice(14400)} kr`)
-        expect(over.find('[data-testid="vat-amount-over"]').exists()).toBe(true)
-        expect(dataRows(wrapper)[1]!.find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
+        expect(findByTestId(over, 'vat-amount-over').exists()).toBe(true)
+        expect(findByTestId(dataRows(wrapper)[1]!, 'vat-amount-ok').exists()).toBe(true)
 
         // The round sums into the team's total row
         const total = findByTestId(wrapper, 'cooking-round-total')
@@ -77,15 +77,15 @@ describe('CookingRoundSpending, the team\'s round', () => {
         expect(total.text()).toContain(`/ ${formatPrice(178100 + 189000 + 187300)} kr`)
         expect(total.text()).toContain(`/ ${formatPrice(192500 + 174400 + 163800)} kr`)
         expect(total.text()).toContain(`/ +${formatPrice(178100 + 189000 + 187300 - 192500 - 174400 - 163800)} kr`)
-        expect(total.find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
+        expect(findByTestId(total, 'vat-amount-ok').exists()).toBe(true)
     })
 
     it('GIVEN a dinner without tickets yet WHEN rendering THEN its Tilbage carries the waiting glyph, not the check', async () => {
         const empty: CookingRoundRow = {dinnerEventId: 4, date: new Date('2026-04-15T18:00:00'), menuTitle: 'Pasta', isCurrent: false, budgetGross: 0, spentGross: 0}
         const wrapper = await mount({fragment: teamSpendingFragment([...rows, empty], words)})
         const last = dataRows(wrapper)[3]!
-        expect(last.find('[data-testid="vat-amount-pending"]').exists()).toBe(true)
-        expect(last.find('[data-testid="vat-amount-ok"]').exists()).toBe(false)
+        expect(findByTestId(last, 'vat-amount-pending').exists()).toBe(true)
+        expect(findByTestId(last, 'vat-amount-ok').exists()).toBe(false)
     })
 
     it('GIVEN a dinner without a menu title WHEN rendering THEN its Middag cell reads Fællesspisning', async () => {
@@ -108,7 +108,7 @@ describe('CookingRoundSpending, this dinner', () => {
         expect(rendered[0]!.findAll('td')[0]!.text()).toBe(dayMonth(receipt.createdAt))
         expect(rendered[0]!.text()).toContain(NOTE)
         expect(rendered[0]!.text()).toContain(`/ ${formatPrice(126500)} kr`)
-        expect(rendered[0]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(false)
+        expect(findByTestId(rendered[0]!, 'cooking-round-marker').exists()).toBe(false)
         const total = findByTestId(wrapper, 'cooking-round-total')
         expect(total.text()).toContain('Risotto')
         expect(total.text()).toContain(`/ ${formatPrice(187300)} kr`)

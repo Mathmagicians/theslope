@@ -5,8 +5,11 @@ import {DOMWrapper, enableAutoUnmount} from '@vue/test-utils'
 import {shallowReactive} from 'vue'
 import {createError, getQuery, type H3Event} from 'h3'
 import {addDays} from 'date-fns'
-import {mountWithTooltipProvider, findByTestId, resetStores, registerEmptyStoreEndpoints, untilTrue, findLoadingRow, tableHeaders, cellsByHeader, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, iconNamesIn, resetStores, registerEmptyStoreEndpoints, untilTrue, findLoadingRow, tableHeaders, cellsByHeader, VIEWPORTS} from '~~/tests/component/testHelpers'
 import AdminSystem from '~/components/admin/AdminSystem.vue'
+import {ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {formatJobStat} from '~/composables/useMaintenance'
+import {NOTIFICATION_COUNT_WORDS} from '~/config/notificationTemplates'
 import {DATE_SETTINGS, formatDate} from '~/utils/date'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
@@ -129,8 +132,11 @@ describe('AdminSystem job history while it loads', () => {
 
 // A box is the card around its job's button
 const boxOf = (wrapper: SystemWrapper, jobType: Job) =>
-    new DOMWrapper(wrapper.find(`button[name="trigger-${jobType.toLowerCase()}"]`).element.closest('[data-slot="root"]'))
+    new DOMWrapper(findByTestId(wrapper, `trigger-${jobType.toLowerCase()}`).element.closest('[data-slot="root"]'))
 const isLoading = (box: DOMWrapper<Element>) => box.findAll('[aria-busy="true"]').length > 0
+// A box's run lines: its start, its status and its stats, each with the icon before its text
+const runLinesOf = (box: DOMWrapper<Element>) =>
+    findAllByTestId(box, 'job-run-line').map(line => ({icon: iconNamesIn(line)[0], text: line.text()}))
 // UAlert's root, told from the card's by its orientation
 const alertOf = (box: DOMWrapper<Element>) => box.find('[data-slot="root"][data-orientation]')
 const startOf = (run: JobRunDisplay) => formatDate(run.startedAt, DATE_SETTINGS.DATE_TIME_MASK)
@@ -147,18 +153,30 @@ describe('AdminSystem job boxes', () => {
         expect(isLoading(boxOf(wrapper, jobType))).toBe(false)
     })
 
-    it.each(BOX_JOBS)('GIVEN a list without $jobType and its own read with a run WHEN the box loads THEN it shows the run\'s start, its status and its stat lines', async ({jobType, summary, stats}) => {
+    it.each(BOX_JOBS)('GIVEN a list without $jobType and its own read with a run WHEN the box loads THEN it shows the run\'s start, its status and its stat lines, each with its stat\'s icon', async ({jobType, summary, stats}) => {
         const run = runOf(jobType, summary)
         jobRuns.list = BOX_JOBS.filter(other => other.jobType !== jobType).map(other => runOf(other.jobType, other.summary))
         jobRuns.latest = {[jobType]: run}
         const wrapper = await mountSystem(true)
 
         await vi.waitFor(() => expect(boxOf(wrapper, jobType).text()).toContain(startOf(run)))
-        const text = boxOf(wrapper, jobType).text()
-        expect(text).toContain(maintenance.jobStatusLabels[JobStatus.SUCCESS])
-        for (const {label, value} of stats()) {
-            expect(text).toContain(`${label}: ${value}`)
-        }
+        const box = boxOf(wrapper, jobType)
+        expect(box.text()).toContain(maintenance.jobStatusLabels[JobStatus.SUCCESS])
+        expect(runLinesOf(box)).toEqual(expect.arrayContaining(stats().map(stat => ({icon: stat.icon, text: formatJobStat(stat)}))))
+    })
+
+    // The notifications line follows the steps a run reports, the scaffold step among them
+    it.each([
+        {steps: 'with its scaffold step', summary: OrderFactory.defaultDailyMaintenanceResult({scaffold: OrderFactory.defaultScaffoldResult()})},
+        {steps: 'without its scaffold step', summary: OrderFactory.defaultDailyMaintenanceResult()}
+    ])('GIVEN the latest daily run $steps WHEN the box loads THEN its notifications line wears the notification icon', async ({summary}) => {
+        const run = runOf(JobType.DAILY_MAINTENANCE, summary)
+        jobRuns.latest = {[JobType.DAILY_MAINTENANCE]: run}
+        const wrapper = await mountSystem(true)
+
+        await vi.waitFor(() => expect(boxOf(wrapper, JobType.DAILY_MAINTENANCE).text()).toContain(startOf(run)))
+        const notificationsLine = runLinesOf(boxOf(wrapper, JobType.DAILY_MAINTENANCE)).find(line => line.text.startsWith(NOTIFICATION_COUNT_WORDS.label))
+        expect(notificationsLine?.icon).toBe(ICONS.notification)
     })
 
     it.each(BOX_JOBS)('GIVEN the latest $jobType run failed without a summary WHEN the box loads THEN it shows the run\'s start and its failed status', async ({jobType}) => {

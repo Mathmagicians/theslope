@@ -2,6 +2,7 @@ import type {AsyncData, AsyncDataOptions, NuxtApp, NuxtError} from '#app'
 import type {NitroFetchOptions, NitroFetchRequest} from 'nitropack/types'
 import type {ZodType} from 'zod'
 import type {Router} from 'vue-router'
+import type {JobStat} from '~/composables/useMaintenance'
 
 type ApiError = { message?: string; statusCode?: number; statusMessage?: string; data?: unknown }
 
@@ -15,8 +16,6 @@ export type DatasetFlags = {
 }
 
 export type StoreDataset<T> = AsyncData<T, NuxtError | undefined> & DatasetFlags
-
-type JobStat = { label: string; value: string }
 
 type JobOptions<T> = {
     url: string
@@ -341,7 +340,7 @@ export const useApiHandler = () => {
             } finally {
                 isRunning.value = false
             }
-            const description = formatStats(response).map(s => `${s.label}: ${s.value}`).join(', ')
+            const description = formatJobStats(formatStats(response))
             console.info(`${log} ${description}`)
             await onSuccess?.()
             toastSaved(title, description)

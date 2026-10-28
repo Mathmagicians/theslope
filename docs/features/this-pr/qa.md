@@ -21,16 +21,21 @@ line under § Signed off.
 |---|---|---|---|---|
 | 115 | Defect 86 | `/household/<S>` | The tabs read Tilmeldinger, Præferencer, Allergier, Økonomi, Indstillinger | |
 
-## /chef (6)
+## /chef (11)
 
 | # | Package | State, viewport | What to see | Signed off |
 |---|---|---|---|---|
-| 88 | Chef calendar visit | `/chef`, calendar open, desktop and phone, light and dark mode | The team on view's dinners in its colours with the deadline chips; the other teams' dinners as grey outlined circles; Forklaring ends with "Andet madholds fællesspisning" | finding: defect 101 |
+| 88 | Chef calendar visit | `/chef`, calendar open, desktop and phone, light and dark mode | The team on view's dinners in its colours with the deadline chips; the other teams' dinners as grey outlined circles; Forklaring ends with "Andet madholds fællesspisning" | re-check with #141–#145 (defect 101 in test) |
 | 116 | Defect 78 | Save allergens, Annoncer, Aflys and undo the cancel | Each toasts once | |
 | 117 | Defect 79 | As a cook, then as a kokkespire | The role line shows the role's icon | |
 | 118 | Defect 82 | Save a menu, add and remove a purchase; `/admin/system` Kør a job | Each toast reads as before | |
 | 119 | Defect 96 | The page source of `/dinner`, `/chef`, `/admin`, `/household/<S>` | `<meta name="description" …>` | |
 | 122 | Defect 109 | A dinner's Budget at 375px | "ex / inkl. moms" sits on its own line under the badge and the period, on the right; nothing is cut off | |
+| 141 | Defect 101 | `/chef?team=<a team the person is not on>`, one own team plus the visit, 375px, light and dark mode | The team icon centred above one line: the coloured "Madhold N" with "Ikke dit hold" to its right on one baseline | |
+| 142 | Defect 101 | As #141 at 1280px | Icon, "Madhold N" and "Ikke dit hold" on one line, spaced as before | |
+| 143 | Defect 101 | Two own teams plus the visit, 375px | The row scrolls sideways when the tabs outgrow it; the visiting tab last, laid out as #141 | |
+| 144 | Defect 101 | As #143 at 1280px | A vertical list with the visiting tab last, nothing clipped | |
+| 145 | Defect 101 | `/chef` on an own team, no visit, 375px and 1280px | The icon above the name on a phone, beside it on desktop; no "Ikke dit hold" | |
 
 ## /admin/allergies/pdf (4)
 

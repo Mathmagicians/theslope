@@ -125,7 +125,7 @@ describe('ChefMenuCard', () => {
             const label = findByTestId(wrapper, ALLERGEN_LABEL)
             expect(label.text()).toBe('Allergener')
             expect(label.element.firstElementChild).toBe(label.findComponent({name: 'UIcon'}).element)
-            expect(label.findComponent({name: 'UIcon'}).props('name')).toBe(ICONS.allergy)
+            expect(iconNamesIn(label)).toEqual([ICONS.allergy])
             expect(iconNamesIn(overview)).not.toContain(ICONS.allergy)
         })
 

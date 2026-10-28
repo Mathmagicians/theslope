@@ -73,10 +73,7 @@ const {
     formatDuration,
     formatTriggeredBy,
     formatResultSummary,
-    parseResultSummary,
-    formatHeynaboStats,
-    formatDailyMaintenanceStats,
-    formatMonthlyBillingStats
+    jobRunStats
 } = useMaintenance()
 const {JobRunDisplaySchema, JobType} = useMaintenanceValidation()
 
@@ -191,34 +188,16 @@ const CONFIG_TREE_EXPANDED = ['defaultSeason', 'cookingDeadlines', 'kitchen', 'b
 // JOB BOXES
 // ============================================================================
 
-const jobIconsMap = {
-  [JobType.DAILY_MAINTENANCE]: [ICONS.checkCircle, ICONS.ticket, ICONS.shoppingCart, ICONS.waitlist, ICONS.edit, ICONS.ticket],
-  [JobType.MONTHLY_BILLING]: [ICONS.calendar, ICONS.ticket, ICONS.shoppingCart, ICONS.economy],
-  [JobType.HEYNABO_IMPORT]: [ICONS.household, ICONS.users, ICONS.user]
-} as const
-
-// A run's lines: when it started, how it ended, then its result
-const formatRunLines = (run: JobRunDisplay, stats: { label: string; value: string }[], icons: readonly string[]) => [
-  { icon: ICONS.clock, text: formatDate(run.startedAt, DATE_SETTINGS.DATE_TIME_MASK) },
-  { icon: getJobStatusIcon(run.status), text: jobStatusLabels[run.status] },
-  ...stats.map((stat, i) => ({ icon: icons[i] ?? ICONS.info, text: `${stat.label}: ${stat.value}` }))
-]
-
-// The box shows its job's latest run; a run without a result shows when and how it ended
+// The box shows its job's latest run: when it started, how it ended, then its stats, each with its own icon;
+// a run without a result shows when and how it ended
 const latestRunLines = (jobType: SystemJobType): { icon: string; text: string }[] => {
   const run = latestJobRun(jobType)
   if (!run) return []
-  const parsed = parseResultSummary(run.jobType, run.resultSummary)
-  if (!parsed) return formatRunLines(run, [], [])
-
-  switch (jobType) {
-    case JobType.DAILY_MAINTENANCE:
-      return formatRunLines(run, formatDailyMaintenanceStats(parsed as Parameters<typeof formatDailyMaintenanceStats>[0]), jobIconsMap[jobType])
-    case JobType.MONTHLY_BILLING:
-      return formatRunLines(run, formatMonthlyBillingStats(parsed as Parameters<typeof formatMonthlyBillingStats>[0]), jobIconsMap[jobType])
-    case JobType.HEYNABO_IMPORT:
-      return formatRunLines(run, formatHeynaboStats(parsed as Parameters<typeof formatHeynaboStats>[0]), jobIconsMap[jobType])
-  }
+  return [
+    { icon: ICONS.clock, text: formatDate(run.startedAt, DATE_SETTINGS.DATE_TIME_MASK) },
+    { icon: getJobStatusIcon(run.status), text: jobStatusLabels[run.status] },
+    ...(jobRunStats(run.jobType, run.resultSummary) ?? []).map(stat => ({ icon: stat.icon, text: formatJobStat(stat) }))
+  ]
 }
 
 const systemJobs = appConfig.theslope.systemJobs
@@ -324,6 +303,7 @@ const jobDefinitions = computed(() => [
               v-for="(stat, index) in job.stats"
               :key="index"
               :class="COMPONENTS.adminSystem.stat"
+              data-testid="job-run-line"
             >
               <UIcon :name="stat.icon" :class="COMPONENTS.adminSystem.statIcon" />
               <span :class="TYPOGRAPHY.bodyTextSmall">{{ stat.text }}</span>
@@ -344,7 +324,7 @@ const jobDefinitions = computed(() => [
             :trailing-icon="ICONS.arrowRight"
             :loading="job.isRunning"
             :disabled="job.isRunning || !props.canEdit"
-            :name="`trigger-${job.key.toLowerCase()}`"
+            :data-testid="`trigger-${job.key.toLowerCase()}`"
             block
             @click="job.trigger"
           >

@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {enableAutoUnmount, flushPromises, type BaseWrapper} from '@vue/test-utils'
+import {config, enableAutoUnmount, flushPromises, type BaseWrapper} from '@vue/test-utils'
 import {shallowReactive} from 'vue'
 import type {AlertProps} from '@nuxt/ui'
 import {mountWithTooltipProvider, findByTestId, findComponentByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, registerScaffoldEndpoint, VIEWPORTS, lockedDinnerSupply, isTableLoading, untilTrue, mountedStore} from '~~/tests/component/testHelpers'
@@ -54,8 +54,6 @@ const baseProps = {
   // Getter: baseDeadlines is assigned in beforeAll, read when a test mounts with baseProps
   get deadlines() { return baseDeadlines }
 }
-// The season's ticket price of a ticket type
-const priceOf = TicketFactory.defaultPriceOf
 const householdWithInhabitants = HouseholdFactory.defaultHouseholdDetail('test')
 const strangerHousehold = HouseholdFactory.defaultHouseholdDetail('stranger')
 // The household a bought ticket was bought from
@@ -115,8 +113,12 @@ const ticketsOf = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, inhabit
   return wrapper.findAllComponents(DinnerTicket).filter(ticket => row.contains(ticket.element))
 }
 
+// Registered before the unmount, so it runs after it: the stores' reaction to the unmount logs inside the case
+afterEach(() => flushPromises())
 // The next test's resetStores drops the datasets a still-mounted form reads
 enableAutoUnmount(afterEach)
+// UIcon keeps its name and renders no icon: an icon load still queued at the file's end logs during the teardown
+config.global.stubs = {...config.global.stubs, NuxtIcon: true}
 
 beforeEach(() => {
   resetStores()
@@ -164,16 +166,14 @@ describe('DinnerBookingForm', () => {
   describe('guest orders', () => {
     const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
-    const adultPrice = priceOf(TicketTypeSchema.enum.ADULT)
+    const adultPrice = TicketFactory.defaultPriceOf(TicketTypeSchema.enum.ADULT)
     const booker = householdWithInhabitants.inhabitants[0]!
     const dinnerEventId = baseProps.dinnerEvent.id
     const adultOrder = (id: number, inhabitantId: number, dinnerMode: DinnerMode, isGuestTicket: boolean) => OrderFactory.defaultOrder('guest', {
       id,
       inhabitantId,
       dinnerEventId,
-      ticketPriceId: adultPrice.id,
-      ticketType: adultPrice.ticketType,
-      priceAtBooking: adultPrice.price,
+      ...OrderFactory.priceFieldsOf(adultPrice),
       dinnerMode,
       isGuestTicket
     })
@@ -353,7 +353,7 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
   const {DinnerModeSchema, TicketTypeSchema, OrderStateSchema} = useBookingValidation()
   const DinnerMode = DinnerModeSchema.enum
   const {ADULT, CHILD} = TicketTypeSchema.enum
-  const [adultPrice, childPrice] = [priceOf(ADULT), priceOf(CHILD)]
+  const [adultPrice, childPrice] = [TicketFactory.defaultPriceOf(ADULT), TicketFactory.defaultPriceOf(CHILD)]
   const [anna, bo] = householdWithInhabitants.inhabitants
   const dinnerEventId = baseProps.dinnerEvent.id
   const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY, ticketPrice: adultPrice})
@@ -397,7 +397,7 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
   })
 
   it('GIVEN a member holding a ticket THEN the row shows no queue position', async () => {
-    const order = OrderFactory.defaultOrder('ticket-holder', {inhabitantId: anna!.id, dinnerEventId, ticketPriceId: adultPrice.id, priceAtBooking: adultPrice.price, state: OrderStateSchema.enum.BOOKED})
+    const order = OrderFactory.defaultOrder('ticket-holder', {inhabitantId: anna!.id, dinnerEventId, ...OrderFactory.priceFieldsOf(adultPrice), state: OrderStateSchema.enum.BOOKED})
     const wrapper = await mountClosed({orders: [order], waitlistEntries: [{...boQueued, inhabitantId: anna!.id}]})
 
     expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(anna!.id)).exists()).toBe(false)
@@ -426,7 +426,7 @@ describe('DinnerBookingForm guest rows by price on a closed dinner', () => {
   const booker = householdWithInhabitants.inhabitants[0]!
   const dinnerEventId = baseProps.dinnerEvent.id
   const guestBaby = (id: number, price: TicketPrice) => OrderFactory.defaultOrder('guest-baby', {
-    id, inhabitantId: booker.id, dinnerEventId, ticketPriceId: price.id, ticketType: price.ticketType, priceAtBooking: price.price, isGuestTicket: true
+    id, inhabitantId: booker.id, dinnerEventId, ...OrderFactory.priceFieldsOf(price), isGuestTicket: true
   })
   const queuedHungryBaby = WaitlistFactory.defaultEntry({id: 51, inhabitantId: booker.id, dinnerEventId, isGuestTicket: true, ticketPrice: hungry})
   const placed = (price: TicketPrice, guestCount: number) => ({price: price.price, guestCount, ticketState: TicketState.normal})
@@ -477,13 +477,13 @@ describe('DinnerBookingForm guest rows by price on a closed dinner', () => {
 // keeps its booked price and its own ticket type, whatever the person's age
 describe('DinnerBookingForm a person\'s price on the dinner\'s date', () => {
   const {ADULT, CHILD} = useActionValidation().TicketTypeSchema.enum
-  const [adultPrice, childPrice] = [priceOf(ADULT), priceOf(CHILD)]
+  const [adultPrice, childPrice] = [TicketFactory.defaultPriceOf(ADULT), TicketFactory.defaultPriceOf(CHILD)]
   const [anna, bo] = householdWithInhabitants.inhabitants
   const {dinnerEvent} = baseProps
   // Anna turns the CHILD price's age limit on the dinner: a child today, an adult on the dinner's date
   const annaGrowingUp = {...anna!, birthDate: subYears(dinnerEvent.date, childPrice.maximumAgeLimit!)}
   const bookedAtTheChildPrice = OrderFactory.defaultOrder('child-price', {
-    inhabitantId: anna!.id, dinnerEventId: dinnerEvent.id, ticketPriceId: childPrice.id, ticketType: childPrice.ticketType, priceAtBooking: childPrice.price
+    inhabitantId: anna!.id, dinnerEventId: dinnerEvent.id, ...OrderFactory.priceFieldsOf(childPrice)
   })
 
   it.each([
@@ -502,11 +502,11 @@ describe('DinnerBookingForm a person\'s price on the dinner\'s date', () => {
 describe('DinnerBookingForm power mode on a closed dinner where the household waits', () => {
   const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
   const DinnerMode = DinnerModeSchema.enum
-  const [adultPrice, childPrice] = [TicketTypeSchema.enum.ADULT, TicketTypeSchema.enum.CHILD].map(priceOf)
+  const [adultPrice, childPrice] = [TicketTypeSchema.enum.ADULT, TicketTypeSchema.enum.CHILD].map(TicketFactory.defaultPriceOf)
   const [anna, bo] = householdWithInhabitants.inhabitants
   const dinnerEventId = baseProps.dinnerEvent.id
   const annaTicket = OrderFactory.defaultOrder('power', {
-    id: 201, inhabitantId: anna!.id, dinnerEventId, ticketPriceId: adultPrice!.id, ticketType: adultPrice!.ticketType, priceAtBooking: adultPrice!.price, dinnerMode: DinnerMode.TAKEAWAY
+    id: 201, inhabitantId: anna!.id, dinnerEventId, ...OrderFactory.priceFieldsOf(adultPrice!), dinnerMode: DinnerMode.TAKEAWAY
   })
   const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY, ticketPrice: adultPrice!})
   const guestQueued = (dinnerMode: DinnerMode) => {
@@ -547,7 +547,7 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
   const [anna, bo] = householdWithInhabitants.inhabitants
   const {dinnerEvent} = baseProps
   const householdOrder = householdWithInhabitants.inhabitants.map(({id}) => id)
-  const adultPrice = priceOf(TicketTypeSchema.enum.ADULT)
+  const adultPrice = TicketFactory.defaultPriceOf(TicketTypeSchema.enum.ADULT)
   const resultOf = (action: BookingAction, overrides: Partial<BookingResult> = {}): BookingResult => OrderFactory.defaultBookingResult({
     inhabitantId: anna!.id, inhabitantName: anna!.name, dinnerEventId: dinnerEvent.id, action, ...overrides
   })
@@ -905,7 +905,7 @@ describe('DinnerBookingForm the birthday badge on a person\'s first dinner at a 
   const [first, second, third] = [1, 2, 3].map(id => DinnerEventFactory.dinnerEventAt(id, 7 * id)) as [DinnerEventDisplay, DinnerEventDisplay, DinnerEventDisplay]
   const season = {...SeasonFactory.defaultSeason('birthday'), id: 7, dinnerEvents: [first, second, third]}
   // Anna turns 12 between the first and the second dinner: the second is her first at the ADULT price
-  const annaGrowingUp = {...anna!, birthDate: subYears(addDays(first.date, 3), priceOf(CHILD).maximumAgeLimit!)}
+  const annaGrowingUp = {...anna!, birthDate: subYears(addDays(first.date, 3), TicketFactory.defaultPriceOf(CHILD).maximumAgeLimit!)}
   const birthdayTestId = `inhabitant-${anna!.id}-birthday`
   const unregister: Array<() => void> = []
 

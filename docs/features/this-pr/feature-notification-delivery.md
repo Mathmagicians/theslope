@@ -13,7 +13,7 @@ Priority high, issue #170. The rules: ADR-015 (Notifications), ADR-016 complianc
 | Booking status | The waiting list, the sales and the buildup off the dinners past their deadline | done 8fa59aa, 39e14a6 |
 | Monthly billing | The accountant's mail with the period's CSV, through the same step | done 8fa59aa, 39e14a6 |
 | Booking emails flag | `SHOULD_SEND_BOOKING_EMAILS_FLAG`, off on dev | done 39e14a6, 16586f1, signed off 2026-10-27 |
-| Chef deadlines | § Chef deadlines | • approved 2026-10-25<br>• brief signed 2026-10-28 |
+| Chef deadlines | § Chef deadlines | • approved 2026-10-25<br>• brief signed 2026-10-28<br>• partly committed (f4bb23f); open: defects 138, 139, 140 |
 
 ## Chef deadlines
 
@@ -48,11 +48,15 @@ Emne: Skråningen: Din middag d. 20/10/2026 mangler noget fra din side
     overdue:  Fristen var 10/10/2026 kl. 18:00. Skrånerne venter på at se, hvad de skal spise. Publicer menuen,
               så snart du kan.
 
+  Past its deadline the line counts the time since it and carries the overdue line:
+  Menu publiceret – mangler, senest 10/10/2026 kl. 18:00, 2 dage siden
+    Fristen var 10/10/2026 kl. 18:00. Skrånerne venter på at se, hvad de skal spise. Publicer menuen, så snart du kan.
+
   Indkøb – mangler, senest 20/10/2026 kl. 18:00, om 2 dage
     yellow:   Bestil madvarerne i god tid, så køkkenholdet har det hele på dagen.
     red:      Middagen er i dag. Husk madvarerne, så køkkenholdet har det hele.
 
-  Se din middag: https://skraaningen.dk/chef?team=3&date=20/10/26
+  Se din middag: https://skraaningen.dk/chef?team=3&date=20/10/2026
 ```
 
 ### TDD

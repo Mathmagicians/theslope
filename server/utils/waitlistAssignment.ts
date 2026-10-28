@@ -36,15 +36,13 @@ const MOVE_ON = {stop: false, placed: null} as const
 const placingLease = () => useWaitlist().placingLease(new Date(), useAppConfig().theslope.waitlistPlacingLeaseMinutes)
 
 /** The dinner, its season's ticket prices and the label the mails use; a dinner outside a season it was read with has none */
-export const dinnerForWaitlist = (
-    dinner: Pick<DinnerEventDisplay, 'id' | 'date' | 'menuTitle' | 'chefId' | 'state' | 'seasonId'>, season: Pick<Season, 'id' | 'ticketPrices'> | null | undefined
-): DinnerForWaitlist => {
+export const dinnerForWaitlist = (dinner: DinnerEventDisplay, season: Season | null | undefined): DinnerForWaitlist => {
     if (!dinner.seasonId || season?.id !== dinner.seasonId) throw new Error(`${LOG} Season ${dinner.seasonId} of dinner ${dinner.id} not found`)
     return {
-        context: {dinnerEventId: dinner.id, date: dinner.date, menuTitle: dinner.menuTitle},
+        context: {dinnerEventId: dinner.id, date: dinner.date, menuTitle: dinner.menuTitle, cookingTeamId: dinner.cookingTeamId},
         seasonId: season.id,
         ticketPrices: season.ticketPrices,
-        chefId: dinner.chefId ?? null,
+        chefId: dinner.chefId,
         state: dinner.state
     }
 }

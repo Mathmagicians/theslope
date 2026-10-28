@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {enableAutoUnmount, type BaseWrapper} from '@vue/test-utils'
+import {DOMWrapper, enableAutoUnmount, type BaseWrapper} from '@vue/test-utils'
 import {findByTestId, iconNamesIn, resetStores} from '~~/tests/component/testHelpers'
 import DinnerModeLegend from '~/components/dinner/DinnerModeLegend.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
@@ -62,7 +62,7 @@ describe('DinnerModeLegend', () => {
             expect(row.children).toHaveLength(2)
             expect(Array.from(row.classList)).toEqual(COMPONENTS.legend.entry.split(' '))
             expect(Array.from(sample!.classList)).toEqual(COMPONENTS.legend.sample.split(' '))
-            expect(sample!.querySelector('[data-testid="dinner-mode-selector"]')).not.toBeNull()
+            expect(findByTestId(new DOMWrapper(sample!), 'dinner-mode-selector').exists()).toBe(true)
             expect(sample!.textContent?.trim()).toBe('')
             expect(Array.from(explanation!.classList)).toEqual(expect.arrayContaining(TYPOGRAPHY.finePrint.split(' ')))
         }
@@ -76,18 +76,18 @@ describe('DinnerModeLegend', () => {
             props: {showModified: true, hint: GRID_HINT}
         })
 
-        expect(grid.find('[data-testid="dinner-mode-legend-modified"]').exists()).toBe(true)
+        expect(findByTestId(grid, 'dinner-mode-legend-modified').exists()).toBe(true)
         expect(grid.text()).toContain(GRID_HINT)
-        expect(plain.find('[data-testid="dinner-mode-legend-modified"]').exists()).toBe(false)
+        expect(findByTestId(plain, 'dinner-mode-legend-modified').exists()).toBe(false)
     })
 
     it('explains the queue marker only where the surface shows queued cells', async () => {
         const plain = await mountSuspended(DinnerModeLegend)
         const grid = await mountSuspended(DinnerModeLegend, {props: {showWaitlist: true}})
 
-        expect(grid.find('[data-testid="dinner-mode-legend-waitlist"]').text()).toContain(BOOKING_WORDS.legend.waitlist)
+        expect(findByTestId(grid, 'dinner-mode-legend-waitlist').text()).toContain(BOOKING_WORDS.legend.waitlist)
         expect(grid.findAllComponents(DinnerModeSelector).some(selector => selector.props('ghost'))).toBe(true)
-        expect(plain.find('[data-testid="dinner-mode-legend-waitlist"]').exists()).toBe(false)
+        expect(findByTestId(plain, 'dinner-mode-legend-waitlist').exists()).toBe(false)
     })
 
     // The birthday badge on a person's first dinner at a new ticket type: its glyph beside the legend's words

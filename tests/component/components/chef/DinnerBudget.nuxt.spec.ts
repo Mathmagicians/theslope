@@ -70,9 +70,9 @@ describe('DinnerBudget', () => {
         // Brugt and Tilbage with its icon; both carry the icon slot, so their kr line up
         expect(findByTestId(wrapper, 'budget-spent').text()).toContain(`/ ${formatPrice(4000)} kr`)
         expect(findByTestId(wrapper, 'budget-left').text()).toContain(`/ +${formatPrice(budget.availableBudget - 4000)} kr`)
-        expect(findByTestId(wrapper, 'budget-left').find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
-        expect(findByTestId(wrapper, 'budget-spent').find('[data-testid="vat-amount-slot"]').exists()).toBe(true)
-        expect(findByTestId(wrapper, 'budget-left').find('[data-testid="vat-amount-slot"]').exists()).toBe(true)
+        expect(findByTestId(findByTestId(wrapper, 'budget-left'), 'vat-amount-ok').exists()).toBe(true)
+        expect(findByTestId(findByTestId(wrapper, 'budget-spent'), 'vat-amount-slot').exists()).toBe(true)
+        expect(findByTestId(findByTestId(wrapper, 'budget-left'), 'vat-amount-slot').exists()).toBe(true)
 
         expect(findByTestId(wrapper, 'budget-details').exists()).toBe(false)
     })
@@ -89,10 +89,10 @@ describe('DinnerBudget', () => {
         expect(findAllByTestId(wrapper, 'cooking-round')).toHaveLength(2)
         // This dinner: its heading, its one receipt as a row, its figures in the total row; the arrow only in the team's
         const own = findAllByTestId(wrapper, 'cooking-round')[0]!
-        expect(own.find('[data-testid="cooking-round-heading"]').text()).toBe(ownHeading)
+        expect(findByTestId(own, 'cooking-round-heading').text()).toBe(ownHeading)
         expect(own.text()).toContain(`/ ${formatPrice(4000)} kr`)
-        expect(own.find('[data-testid="cooking-round-marker"]').exists()).toBe(false)
-        expect(findAllByTestId(wrapper, 'cooking-round')[1]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(true)
+        expect(findByTestId(own, 'cooking-round-marker').exists()).toBe(false)
+        expect(findByTestId(findAllByTestId(wrapper, 'cooking-round')[1]!, 'cooking-round-marker').exists()).toBe(true)
         expect(findByTestId(wrapper, 'ticket-changes').exists()).toBe(true)
         expect(findByTestId(wrapper, 'cooking-round').exists()).toBe(true)
         // The dinner's figures, then the team's, then the ticket changes last

@@ -1,5 +1,8 @@
-import {beforeEach, describe, expect, it, vi} from 'vitest'
+import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
 import {createError} from 'h3'
+import {DatabaseSync, type SQLInputValue} from 'node:sqlite'
+import {readdirSync, readFileSync} from 'node:fs'
+import {join} from 'node:path'
 import {
     countReleasedTicketsByType, createOrders, deleteOrder, fetchDinnerEventsByIds, fetchOrders, recordDeliveries, updateOrdersBatch
 } from '~~/server/data/financesRepository'
@@ -150,6 +153,67 @@ describe.each([
 
         expect(statement.mock.calls.map(call => idsOf(call as never).length)).toEqual([90, 10])
         expect(reads.peak).toBe(1)
+    })
+})
+
+// D1 is SQLite: the read's raw statement runs on an in-memory SQLite built from the migrations, whose plan shows how
+// the statement reaches the order history
+describe('fetchOrders with provenance', () => {
+    const {createOrderAuditData} = useBookingValidation()
+    const {USER_BOOKED, USER_CANCELLED, USER_CLAIMED} = OrderAuditAction
+    const DINNER_ID = 5
+    const MIGRATIONS_DIR = join(process.cwd(), 'migrations')
+    const at = (hour: number): string => new Date(Date.UTC(2026, 9, 1, hour)).toISOString()
+    // An order's history row naming the household its snapshot keeps
+    const historyRow = (id: number, orderId: number, action: OrderAuditAction, householdShortname: string, hour: number) => ({
+        id, orderId, action, timestamp: at(hour),
+        auditData: createOrderAuditData(action === USER_CLAIMED ? OrderAuditChangeSchema.enum.BUY : OrderAuditChangeSchema.enum.RELEASE,
+            OrderFactory.defaultOrderSnapshot({id: orderId, dinnerEventId: DINNER_ID, householdShortname}))
+    })
+    // Order 1 is claimed twice and released after; order 2 is claimed twice at one moment; order 3 is booked, never claimed
+    const history = [
+        historyRow(1, 1, USER_CLAIMED, 'AR_1', 10), historyRow(2, 1, USER_CLAIMED, 'AR_2', 11), historyRow(3, 1, USER_CANCELLED, 'AR_9', 12),
+        historyRow(4, 2, USER_CLAIMED, 'AR_3', 10), historyRow(5, 2, USER_CLAIMED, 'AR_4', 10),
+        historyRow(6, 3, USER_BOOKED, 'AR_5', 10)
+    ]
+    let db: DatabaseSync
+    beforeAll(() => {
+        db = new DatabaseSync(':memory:')
+        readdirSync(MIGRATIONS_DIR).filter(name => /^\d{4}_.*\.sql$/.test(name)).sort()
+            .forEach(name => db.exec(readFileSync(join(MIGRATIONS_DIR, name), 'utf8')))
+        // The rows stand alone: the dinner, the household and the users they name are left out
+        db.exec('PRAGMA foreign_keys = OFF')
+        // One regular order per inhabitant and dinner: order n is inhabitant n's
+        const insertInhabitant = db.prepare('INSERT INTO Inhabitant (id, heynaboId, householdId, name, lastName) VALUES (?, ?, 1, ?, ?)')
+        const insertOrder = db.prepare(`INSERT INTO "Order" (id, dinnerEventId, inhabitantId, priceAtBooking, dinnerMode, state, isGuestTicket, createdAt, updatedAt)
+            VALUES (?, ${DINNER_ID}, ?, 4000, ?, ?, 0, ?, ?)`)
+        for (const orderId of [1, 2, 3]) {
+            insertInhabitant.run(orderId, orderId, `Anna ${orderId}`, 'Hansen')
+            insertOrder.run(orderId, orderId, DinnerModeSchema.enum.DINEIN, OrderStateSchema.enum.BOOKED, at(orderId), at(orderId))
+        }
+        const insertHistory = db.prepare('INSERT INTO OrderHistory (id, orderId, action, auditData, timestamp) VALUES (?, ?, ?, ?, ?)')
+        for (const row of history) insertHistory.run(row.id, row.orderId, row.action, row.auditData, row.timestamp)
+    })
+    beforeEach(() => {
+        rawQuery.mockImplementation(async (sql: string, ...params: SQLInputValue[]) => db.prepare(sql).all(...params))
+    })
+
+    const readWithProvenance = () => fetchOrders(d1Client, [DINNER_ID], undefined, undefined, 'createdAt', true)
+
+    it('GIVEN orders with their history WHEN read with their provenance THEN each order\'s history is searched on the order\'s id, never scanned', async () => {
+        await readWithProvenance()
+
+        const [[sql, ...params]] = rawQuery.mock.calls
+        const plan = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params).map(({detail}) => String(detail))
+        expect(plan.filter(step => step.includes('OrderHistory'))).toEqual([expect.stringMatching(/^SEARCH \w+ USING INDEX OrderHistory_orderId_idx \(orderId=\?\)$/)])
+    })
+
+    it('GIVEN orders claimed twice, claimed twice at one moment and never claimed WHEN read with their provenance THEN each claimed order names the household of its latest claim, by time then by row', async () => {
+        const orders = await readWithProvenance()
+
+        expect(orders.map(({id, provenanceHousehold}) => ({id, provenanceHousehold}))).toEqual([
+            {id: 1, provenanceHousehold: 'AR_2'}, {id: 2, provenanceHousehold: 'AR_4'}, {id: 3, provenanceHousehold: undefined}
+        ])
     })
 })
 

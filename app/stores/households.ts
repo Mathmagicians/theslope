@@ -148,9 +148,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const fetchCalendarFeed = (): Promise<string | null> =>
         apiRequest<string>('/api/calendar/feed', {action: 'fetchCalendarFeed'}).catch(() => null)
 
-    const preferencesUrl = (inhabitantId: number, adminBypass: boolean) => adminBypass
-        ? `/api/household/inhabitants/${inhabitantId}/preferences?adminBypass=true`
-        : `/api/household/inhabitants/${inhabitantId}/preferences`
+    const preferencesUrl = (inhabitantId: number) => `/api/household/inhabitants/${inhabitantId}/preferences`
 
     /**
      * Update inhabitant dinner preferences
@@ -158,21 +156,21 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param inhabitantId - ID of the inhabitant to update
      * @param preferences - WeekDayMap of DinnerMode preferences
      */
-    const updateInhabitantPreferences = async (inhabitantId: number, preferences: Record<string, string>, adminBypass = false) => {
+    const updateInhabitantPreferences = async (inhabitantId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean) => {
         console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}${adminBypass ? ' (admin bypass)' : ''}`)
 
-        const result = await useBookingsStore().writeBookings(() => apiRequest(preferencesUrl(inhabitantId, adminBypass), {
+        // The week map travels as it is; the endpoint serializes it (ADR-010)
+        const result = await useBookingsStore().writeBookings(() => apiRequest(preferencesUrl(inhabitantId), {
             method: 'POST',
-            body: { dinnerPreferences: preferences },
+            body: {dinnerPreferences: preferences},
+            query: adminBypassQuery(adminBypass),
             schema: InhabitantUpdateResponseSchema,
             action: 'updateInhabitantPreferences'
         }))
 
-        // Store result for persistent UI display
         lastPreferenceResult.value = result.scaffoldResult
         console.info(`🏠 > HOUSEHOLDS_STORE > Preferences updated for inhabitant ${inhabitantId}: ${formatScaffoldResult(result.scaffoldResult)}`)
 
-        // Refresh the selected household to get updated data
         if (selectedHouseholdId.value) {
             await refreshSelectedHousehold()
         }
@@ -186,8 +184,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param householdId - ID of the household
      * @param preferences - WeekDayMap of DinnerMode preferences to apply to all inhabitants
      */
-    const updateAllInhabitantPreferences = async (householdId: number, preferences: Record<string, string>, adminBypass = false) => {
-        // Get the household to access inhabitants
+    const updateAllInhabitantPreferences = async (householdId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean) => {
         const household = households.value.find(h => h.id === householdId)
         if (!household) throw new Error(`Household ${householdId} not found`)
 
@@ -199,9 +196,10 @@ export const useHouseholdsStore = defineStore("Households", () => {
         const results = await useBookingsStore().writeBookings(async () => {
             const responses = []
             for (const inhabitant of household.inhabitants) {
-                responses.push(await apiRequest(preferencesUrl(inhabitant.id, adminBypass), {
+                responses.push(await apiRequest(preferencesUrl(inhabitant.id), {
                     method: 'POST',
-                    body: { dinnerPreferences: preferences },
+                    body: {dinnerPreferences: preferences},
+                    query: adminBypassQuery(adminBypass),
                     schema: InhabitantUpdateResponseSchema,
                     action: 'updateAllInhabitantPreferences'
                 }))
@@ -217,7 +215,6 @@ export const useHouseholdsStore = defineStore("Households", () => {
         // Power mode updates a single household
         const aggregatedResult = {...sumScaffoldResults(results.map(r => r.scaffoldResult)), households: 1}
 
-        // Store result for persistent UI display
         lastPreferenceResult.value = aggregatedResult
         console.info(`🏠 > HOUSEHOLDS_STORE > Power mode complete: ${household.inhabitants.length} inhabitants, scaffold: ${formatScaffoldResult(aggregatedResult)}`)
 
@@ -231,7 +228,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const previewPreferences = async (inhabitantIds: number[], preferences: WeekDayMap<DinnerMode>): Promise<ScaffoldResult> => {
         console.info(`🏠 > HOUSEHOLDS_STORE > Previewing preferences for inhabitants ${inhabitantIds.join(', ')}`)
         // A preview writes nothing, so the previews run side by side where the saves run one after another
-        const responses = await Promise.all(inhabitantIds.map(inhabitantId => apiRequest(`/api/household/inhabitants/${inhabitantId}/preferences`, {
+        const responses = await Promise.all(inhabitantIds.map(inhabitantId => apiRequest(preferencesUrl(inhabitantId), {
             query: {dinnerPreferences: serializeWeekDayMap(preferences)},
             schema: InhabitantUpdateResponseSchema,
             action: 'previewPreferences'
@@ -250,26 +247,24 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     /**
      * Set or clear move-out date for a household
-     * Uses admin household update endpoint (POST /api/admin/household/:id)
+     * Uses the household update endpoint (POST /api/household/:id/update)
      * Triggers re-scaffolding of prebookings when moveOutDate changes (server-side)
      * @param householdId - ID of the household
      * @param moveOutDate - Date to set, or null to clear
      */
-    const setMoveOutDate = async (householdId: number, moveOutDate: Date | null, adminBypass = false) => {
+    const setMoveOutDate = async (householdId: number, moveOutDate: Date | null, adminBypass: boolean) => {
         console.info(`🏠 > HOUSEHOLDS_STORE > Setting moveOutDate for household ${householdId}: ${moveOutDate?.toISOString() ?? 'null'}`)
         const result = await useBookingsStore().writeBookings(() => apiRequest(`/api/household/${householdId}/update`, {
             method: 'POST',
             body: { moveOutDate },
-            query: {adminBypass},
+            query: adminBypassQuery(adminBypass),
             schema: HouseholdUpdateResponseSchema,
             action: 'setMoveOutDate'
         }))
 
-        // Store scaffold result for persistent UI display
         lastMoveOutResult.value = result.scaffoldResult
         console.info(`🏠 > HOUSEHOLDS_STORE > moveOutDate updated for household ${householdId}: ${formatScaffoldResult(result.scaffoldResult)}`)
 
-        // Refresh selected household to get updated data
         if (selectedHouseholdId.value === householdId) {
             await refreshSelectedHousehold()
         }

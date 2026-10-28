@@ -65,10 +65,15 @@ export const NOTIFICATION_TEMPLATES = {
     }
 }
 
-/** The moments a chef deadline's lines name, as the chef reads them: "10/10/2026 kl. 18:00" */
+/**
+ * The moments a chef deadline's lines name, as the chef reads them: "10/10/2026 kl. 18:00"; and the deadline's day on
+ * the run's day, which the red lines name: a red alarm starts 24 hours before its deadline, so the deadline falls on
+ * the run's day or the day after
+ */
 export interface ChefDeadlineTimes {
     deadline: string
     booking: string
+    day: string
 }
 
 type ChefDeadlineLine = (times: ChefDeadlineTimes) => string
@@ -84,7 +89,7 @@ export interface ChefDeadlineWords {
 const MENU_DEADLINE: ChefDeadlineWords = {
     title: 'Menu publiceret',
     yellow: ({booking}) => `Skrånerne kan framelde sig indtil ${booking}, så de skal kunne se menuen inden.`,
-    red: () => 'Fristen er tæt på. Publicer menuen i dag, så skrånerne når at se den, før de ikke længere kan framelde sig.',
+    red: ({day}) => `Fristen er tæt på. Publicer menuen ${day}, så skrånerne når at se den, før de ikke længere kan framelde sig.`,
     overdue: ({deadline}) => `Fristen var ${deadline}. Skrånerne venter på at se, hvad de skal spise. Publicer menuen, så snart du kan.`
 }
 
@@ -92,18 +97,19 @@ const MENU_DEADLINE: ChefDeadlineWords = {
 const GROCERIES_DEADLINE: ChefDeadlineWords = {
     title: 'Indkøb',
     yellow: () => 'Bestil madvarerne i god tid, så køkkenholdet har det hele på dagen.',
-    red: () => 'Middagen er i dag. Husk madvarerne, så køkkenholdet har det hele.'
+    red: ({day}) => `Middagen er ${day}. Husk madvarerne, så køkkenholdet har det hele.`
 }
 
 /**
  * The chef deadlines notice's line per deadline, by its dinner step: a met deadline reads check; a missing one names its
- * deadline, the countdown while the deadline is ahead, and under it the line of its alarm level
+ * deadline, the countdown while the deadline is ahead or the time since it once overdue, and under it the line of its
+ * alarm level
  */
 export const CHEF_DEADLINE_WORDS = {
     met: (title: string): string => `${title} – check`,
-    missing: (title: string, deadline: string, countdown: string | null): string =>
-        countdown === null ? `${title} – mangler, senest ${deadline}` : `${title} – mangler, senest ${deadline}, ${countdown}`,
+    missing: (title: string, deadline: string, countdown: string): string => `${title} – mangler, senest ${deadline}, ${countdown}`,
     alarm: (line: string): string => `  ${line}`,
+    deadlineDay: {today: 'i dag', tomorrow: 'i morgen'},
     ANNOUNCED: MENU_DEADLINE,
     GROCERIES_DONE: GROCERIES_DEADLINE
 }

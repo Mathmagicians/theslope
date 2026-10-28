@@ -12,7 +12,7 @@ import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
 import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {TicketState} from '~/composables/useBookingValidation'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
-import {findByTestId, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
+import {findByTestId, iconNamesIn, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
 
 const ALLERGY_TYPES = AllergyFactory.createMockAllergyTypes()
 const TICKET_TYPES = useBookingValidation().TicketTypeSchema.options
@@ -39,14 +39,7 @@ const mountTicket = (props: Record<string, unknown> = {}, isMd = true) =>
 
 type Mounted = Awaited<ReturnType<typeof mountTicket>>
 
-const icons = (wrapper: Mounted) => wrapper.findAllComponents({name: 'UIcon'})
-const iconNames = (wrapper: Mounted) => icons(wrapper).map(icon => icon.props('name') as string)
-// The glyphs inside one part of the card, found by its test id
-const iconNamesIn = (wrapper: Mounted, testId: string) => {
-    const part = findByTestId(wrapper, testId).element
-    return icons(wrapper).filter(icon => part.contains(icon.element)).map(icon => icon.props('name') as string)
-}
-const iconNamed = (wrapper: Mounted, name: string) => icons(wrapper).find(icon => icon.props('name') === name)!
+const iconNamed = (wrapper: Mounted, name: string) => wrapper.findAllComponents({name: 'UIcon'}).find(icon => icon.props('name') === name)!
 const bindsToken = (wrapper: Mounted, name: string, token: string) =>
     expect(iconNamed(wrapper, name).classes()).toEqual(expect.arrayContaining(token.split(' ')))
 
@@ -73,8 +66,8 @@ describe('DinnerTicket', () => {
         ])('GIVEN $desc THEN the guest cell shows its glyph: $guest, the allergy cell: $allergy', async ({props, guest, allergy}) => {
             const wrapper = await mountTicket(props)
 
-            expect(iconNamesIn(wrapper, 'ticket-guest-cell').includes(ICONS.userPlus)).toBe(guest)
-            expect(iconNamesIn(wrapper, 'ticket-allergy-cell').includes(ICONS.allergy)).toBe(allergy)
+            expect(iconNamesIn(findByTestId(wrapper, 'ticket-guest-cell')).includes(ICONS.userPlus)).toBe(guest)
+            expect(iconNamesIn(findByTestId(wrapper, 'ticket-allergy-cell')).includes(ICONS.allergy)).toBe(allergy)
             expect(findByTestId(wrapper, 'ticket-allergy-icon').exists()).toBe(allergy)
         })
 
@@ -100,7 +93,7 @@ describe('DinnerTicket', () => {
         it('GIVEN a claimed allergic guest ticket THEN the how-you-eat slot carries none of the special glyphs', async () => {
             const wrapper = await mountTicket({ticketState: TicketState.claimed, guestCount: 1, allergies: ALLERGY_TYPES})
 
-            const modeSlotIcons = iconNamesIn(wrapper, 'ticket-mode-slot')
+            const modeSlotIcons = iconNamesIn(findByTestId(wrapper, 'ticket-mode-slot'))
             const specialGlyphs = [ICONS.released, ICONS.claim, ICONS.userPlus, ICONS.allergy]
             specialGlyphs.forEach(glyph => expect(modeSlotIcons).not.toContain(glyph))
         })
@@ -110,7 +103,7 @@ describe('DinnerTicket', () => {
         it('GIVEN a normal ticket THEN no state glyph shows', async () => {
             const wrapper = await mountTicket()
 
-            const names = iconNames(wrapper)
+            const names = iconNamesIn(wrapper)
             const stateIcons = [ICONS.released, ICONS.claim, ICONS.userPlus]
             stateIcons.forEach(icon => expect(names).not.toContain(icon))
         })
@@ -136,7 +129,7 @@ describe('DinnerTicket on the waiting list', () => {
     it('GIVEN a queued ticket THEN the hourglass sits in the state cell and the card wears the queued face, apart from the normal one', async () => {
         const wrapper = await mountTicket({ticketState: TicketState.queued})
 
-        expect(iconNamesIn(wrapper, 'ticket-state-cell')).toEqual([ICONS.waitlist])
+        expect(iconNamesIn(findByTestId(wrapper, 'ticket-state-cell'))).toEqual([ICONS.waitlist])
         expect(wrapper.classes()).toEqual(COMPONENTS.ticket.face.queued.split(' '))
         expect(wrapper.classes()).not.toEqual(COMPONENTS.ticket.face.normal.split(' '))
     })
@@ -160,7 +153,7 @@ describe('DinnerTicket for an expected booking', () => {
     ])('GIVEN $desc expected THEN the sliders sit in the state cell, the card wears the expected face and the mode reads expected', async ({props}) => {
         const wrapper = await mountTicket({...props, expected: true})
 
-        expect(iconNamesIn(wrapper, 'ticket-state-cell')).toEqual([ICONS.preferences])
+        expect(iconNamesIn(findByTestId(wrapper, 'ticket-state-cell'))).toEqual([ICONS.preferences])
         bindsToken(wrapper, ICONS.preferences, COMPONENTS.ticket.stateIcon.expected)
         expect(wrapper.classes()).toEqual(COMPONENTS.ticket.face.expected.split(' '))
         expect(wrapper.findComponent({name: 'DinnerModeSelector'}).props()).toMatchObject({modelValue: baseProps.dinnerMode, expected: true, ghost: false})
@@ -181,8 +174,8 @@ describe('DinnerTicket for a queued guest', () => {
     it('GIVEN a queued guest THEN the state cell carries the hourglass and the guest cell the guest glyph', async () => {
         const wrapper = await mountTicket({ticketState: TicketState.queued, guestCount: 1})
 
-        expect(iconNamesIn(wrapper, 'ticket-state-cell')).toEqual([ICONS.waitlist])
-        expect(iconNamesIn(wrapper, 'ticket-guest-cell')).toEqual([ICONS.userPlus])
+        expect(iconNamesIn(findByTestId(wrapper, 'ticket-state-cell'))).toEqual([ICONS.waitlist])
+        expect(iconNamesIn(findByTestId(wrapper, 'ticket-guest-cell'))).toEqual([ICONS.userPlus])
     })
 })
 
@@ -195,7 +188,7 @@ describe('DinnerTicket for a ticket price', () => {
         })
 
         expect(wrapper.text()).toContain('Under 12 år · Barn')
-        expect(findByTestId(wrapper, 'ticket-mode-slot').find('[data-testid="ticket-end"]').exists()).toBe(true)
+        expect(findByTestId(findByTestId(wrapper, 'ticket-mode-slot'), 'ticket-end').exists()).toBe(true)
         expect(wrapper.findComponent({name: 'DinnerModeSelector'}).exists()).toBe(false)
     })
 })

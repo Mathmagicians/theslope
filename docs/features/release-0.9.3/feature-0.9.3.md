@@ -40,6 +40,8 @@
 | Dates | § Dates | – | specified |
 | Hand-written types in the design system | § Hand-written types in the design system | – | specified |
 | AdminTeams loading row | § AdminTeams loading row | – | discovery |
+| Dinner page remounts on claim | § Dinner page remounts on claim | – | specified |
+| DRY improvements | § DRY improvements | – | specified |
 
 § Drop `DinnerEvent.totalCost`, § Order snapshot (B6) and § Ticket allergies on the order share one migration:
 `make d1-create-migration name=release-0-9-3`, the rewrites below in the Prisma source, then
@@ -516,6 +518,64 @@ Moved from release 0.9.1 on 2026-10-28; not designed. After a season switch the 
 loading bar; with the loading row, a team save's re-read closes the team detail docked under its row on a phone.
 Where: `app/components/admin/AdminTeams.vue:396`, ADR-018 § Table loading. **OPEN:** the loading row with the docked
 detail closing, or a docked detail that survives the re-read.
+
+## Dinner page remounts on claim
+
+Moved from release 0.9.1 on 2026-10-28; not built.
+
+### Problem
+
+A refresh of a dataset sets it pending, so its store reads not ready and the page swaps to the loader. Claiming a role
+on the dinner page (`assignRoleToDinner` in `app/stores/plan.ts` awaits `refreshSelectedSeason()`) and saving a
+preference on the household page both remount the page.
+
+### Solution
+
+The API handler keeps a dataset initialized while it refreshes the url it answered, through a new `isRefreshing` flag.
+The loader shows on the first load and on a new selection; a refresh keeps the mounted page.
+
+**OPEN:** ADR-007 compliance 3, proposed: "`isInitialized` MUST check data exists (not just status='success'); a refresh
+of the url the dataset answered keeps it true and sets `isRefreshing`, so a store's loader shows on the first load and
+on a new selection, never on a refresh".
+
+### TDD
+
+`plan.nuxt`: a refresh after initialization keeps `isPlanStoreReady` true. `Chef.e2e` or `Dinner.e2e`: claiming a role
+keeps the page mounted (the calendar keeps its open state, no loader).
+
+### Affected
+
+`app/composables/useApiHandler.ts`, `app/stores/plan.ts`, `app/pages/dinner/index.vue`, the household page.
+
+Related: § AdminTeams loading row, the season-loading spinners on admin planning, household bookings and admin teams on
+a refresh; § The dinner page keeps its form while the season refreshes, the same cause.
+
+## DRY improvements
+
+Moved from release 0.9.1 on 2026-10-28; not built.
+
+### Route and composable leftovers
+
+#### Problem
+
+Six routes still spell a coerced id in a query schema (`order/index.get.ts`, `admin/dinner-event/index.get.ts`,
+`admin/team/index.get.ts`, `household/allergy/index.get.ts`, `billing/index.get.ts`, `admin/household/inhabitants/[id].post.ts`
+`seasonId`) beside `RouteIdSchema`. `useQueryParam.ts` repeats the normalize-or-default block three times. 
+`app/stores/users.ts` exposes no `isEmpty` and `isStoreReady` (ADR-007 r2); `usePermissions.ts` and
+`useUserRoles.ts` import `SystemRoleSchema` from the generated layer where ADR-001 routes it through `useCoreValidation`.
+`chef/dinner/[id]/order-history.get.ts`, `expenses/index.get.ts` and `expenses/[expenseId].delete.ts` log no success line
+(ADR-004).
+
+#### Solution
+
+`RouteIdSchema` / `RouteIdSchema.optional()` in the six query schemas; one `fallback(invalid)` in `useQueryParam`.
+The users store gains the two flags with a case each; the two composables import the enum from `useCoreValidation`;
+the three chef routes log one `console.info` on success.
+
+#### Affected
+
+The six query routes, the three chef routes, `app/composables/useQueryParam.ts`, `usePermissions.ts`, `useUserRoles.ts`,
+`app/stores/users.ts` and its spec, `docs/adr-compliance-backend.md` rows.
 
 ## Decisions
 

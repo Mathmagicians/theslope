@@ -12,7 +12,7 @@ import {DinnerStepState, useBooking} from '~/composables/useBooking'
 import {useSeason} from '~/composables/useSeason'
 import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {CHEF_DEADLINE_WORDS, type ChefDeadlineWords} from '~/config/notificationTemplates'
-import {DATE_SETTINGS, formatDate, formatDateInTimezone} from '~/utils/date'
+import {DATE_SETTINGS, formatDate, formatDateInTimezone, formatTimeSince} from '~/utils/date'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -73,7 +73,7 @@ const dinnerOf = (overrides: Partial<DinnerEventDisplay> = {}): DinnerEventDispl
     ...DinnerEventFactory.defaultDinnerEventDisplay(), id: 7, date: dinnerDate, seasonId: SEASON_ID, chefId: chef.id, cookingTeamId: TEAM_ID, ...overrides
 })
 
-// D1 holds the season's dinners as the case writes them; the read leaves out the states it excludes
+// D1 holds the season's dinners as the case writes them; the season's read carries every one
 const store: {dinners: DinnerEventDisplay[]} = {dinners: []}
 let recorded: ReturnType<typeof fakeDeliveries>
 const logs = spyOnLogs()
@@ -83,8 +83,7 @@ beforeEach(() => {
     Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
     recorded = fakeDeliveries()
     store.dinners = [dinnerOf(bothOpen)]
-    vi.mocked(fetchSeason).mockImplementation(async (_, id) => id === SEASON_ID ? season : null)
-    vi.mocked(fetchDinnerEvents).mockImplementation(async (_, {excludeStates} = {}) => store.dinners.filter(({state}) => !excludeStates?.includes(state)))
+    vi.mocked(fetchSeason).mockImplementation(async (_, id) => id === SEASON_ID ? {...season, dinnerEvents: store.dinners} : null)
     vi.mocked(fetchHouseholdsByIds).mockImplementation(async (_, ids) => households.filter(household => ids.includes(household.id)))
     vi.mocked(fetchInhabitantsByIds).mockImplementation(async (_, ids) => people.filter(inhabitant => ids.includes(inhabitant.id)))
     vi.mocked(fetchUsersByIds).mockImplementation(async (_, ids) => logins.filter(user => ids.includes(user.id)))
@@ -143,16 +142,19 @@ describe('the chef deadlines notices of the DAILY_MAINTENANCE job', () => {
     })
 
     // A deadline reads check once met; a missing one its deadline, the countdown the chef page shows while the deadline
-    // is ahead, and the line of its own alarm level, the menu before the groceries
+    // is ahead or the time since it once overdue, and the line of its own alarm level, the menu before the groceries
     describe('the deadlines a notice lists', () => {
         type Level = 'met' | 'green' | 'yellow' | 'red' | 'overdue'
         const at = (moment: Date): string => formatDateInTimezone(moment, DATE_SETTINGS.DATE_AT_TIME_MASK)
         const booking = at(deadlines.getBookingDeadlineTime(dinnerDate))
-        // A deadline's lines at its level, the countdown as the chef page shows it
-        const linesOf = (words: ChefDeadlineWords, due: Date, level: Level, countdown: string): string => {
-            const times = {deadline: at(due), booking}
+        const {today, tomorrow} = CHEF_DEADLINE_WORDS.deadlineDay
+        // A deadline's lines at its level at the moment, the countdown as the chef page shows it while the deadline is
+        // ahead and the time since the deadline once overdue; the red rows below run on the evening before their
+        // deadline's day
+        const linesOf = (words: ChefDeadlineWords, due: Date, level: Level, countdown: string, now: Date): string => {
+            const times = {deadline: at(due), booking, day: tomorrow}
             if (level === 'met') return CHEF_DEADLINE_WORDS.met(words.title)
-            const missing = CHEF_DEADLINE_WORDS.missing(words.title, times.deadline, level === 'overdue' ? null : countdown)
+            const missing = CHEF_DEADLINE_WORDS.missing(words.title, times.deadline, level === 'overdue' ? formatTimeSince(due, now) : countdown)
             const line = level === 'green' ? undefined : words[level]
             return line ? `${missing}\n${CHEF_DEADLINE_WORDS.alarm(line(times))}` : missing
         }
@@ -170,9 +172,26 @@ describe('the chef deadlines notices of the DAILY_MAINTENANCE job', () => {
 
             expect(menuDeadline!.step).toBe(DinnerStepState.ANNOUNCED)
             expect(message!.text).toContain([
-                linesOf(CHEF_DEADLINE_WORDS.ANNOUNCED, deadlines.getMenuDeadlineTime(dinnerDate), menu, menuDeadline!.description),
-                linesOf(CHEF_DEADLINE_WORDS.GROCERIES_DONE, deadlines.getDinnerStartTime(dinnerDate), groceries, groceriesDeadline!.description)
+                linesOf(CHEF_DEADLINE_WORDS.ANNOUNCED, deadlines.getMenuDeadlineTime(dinnerDate), menu, menuDeadline!.description, now),
+                linesOf(CHEF_DEADLINE_WORDS.GROCERIES_DONE, deadlines.getDinnerStartTime(dinnerDate), groceries, groceriesDeadline!.description, now)
             ].join('\n\n'))
+        })
+
+        // A red alarm starts 24 hours before its deadline: its line names the deadline's day as the chef reads it on the
+        // run's day in Copenhagen
+        it.each([
+            {deadline: 'the menu', clock: 'on the evening before its deadline\'s day', now: menuAt(-(critical - 1)), dinner: menuOpen, day: tomorrow, other: today},
+            {deadline: 'the menu', clock: 'on its deadline\'s day', now: menuAt(-1), dinner: menuOpen, day: today, other: tomorrow},
+            {deadline: 'the groceries', clock: 'on the evening before the dinner', now: dinnerAt(-(critical - 1)), dinner: groceriesOpen, day: tomorrow, other: today},
+            {deadline: 'the groceries', clock: 'on the dinner\'s day', now: dinnerAt(-1), dinner: groceriesOpen, day: today, other: tomorrow}
+        ])('GIVEN $deadline inside its critical hours $clock WHEN the notice goes THEN its red line names the deadline\'s day: $day', async ({now, dinner, day, other}) => {
+            store.dinners = [dinnerOf(dinner)]
+
+            const [message] = sentMessages(await runAt(now))
+
+            const alarmLines = message!.text.split('\n').filter(line => line.startsWith(CHEF_DEADLINE_WORDS.alarm('')))
+            expect(alarmLines).toEqual([expect.stringContaining(` ${day}`)])
+            expect(alarmLines[0]).not.toContain(` ${other}`)
         })
     })
 
@@ -206,19 +225,22 @@ describe('the chef deadlines notices of the DAILY_MAINTENANCE job', () => {
         expect(sentMessages(await runAt(menuAt(-(warning - 1))))).toEqual([])
     })
 
-    // Three dinners past their menu deadline, two cooked by one chef: one read of each kind serves the notices
-    it('GIVEN three dinners with missing deadlines WHEN the job runs THEN it reads the season, the dinners, the chefs and their delivery records once', async () => {
+    // Three dinners past their menu deadline, two cooked by one chef: one read of each kind serves the notices, and the
+    // dinners come with the season
+    it('GIVEN three dinners with missing deadlines WHEN the job runs THEN it reads the season with its dinners, the chefs and their delivery records once', async () => {
         store.dinners = [0, 1, 2].map(day => dinnerOf({...bothOpen, id: 7 + day, date: addDays(dinnerDate, day), chefId: day < 2 ? chef.id : chefWithoutOwnLogin.id}))
         const reads = {fetchSeason, fetchDinnerEvents, fetchInhabitantsByIds, fetchHouseholdsByIds, fetchUsersByIds, fetchDeliveries}
 
         const queue = await runAt(menuAt(1, addDays(dinnerDate, 2)))
 
         expect(sentMessages(queue)).toHaveLength(3)
-        expect(Object.fromEntries(Object.entries(reads).map(([name, read]) => [name, vi.mocked(read).mock.calls.length])))
-            .toEqual(Object.fromEntries(Object.keys(reads).map(name => [name, 1])))
+        expect(Object.fromEntries(Object.entries(reads).map(([name, read]) => [name, vi.mocked(read).mock.calls.length]))).toEqual({
+            fetchSeason: 1, fetchDinnerEvents: 0, fetchInhabitantsByIds: 1, fetchHouseholdsByIds: 1, fetchUsersByIds: 1, fetchDeliveries: 1
+        })
     })
 
-    // With the booking emails flag off the sender event loads nothing; without an active season no dinner has a chef to tell
+    // With the booking emails flag off the sender event loads nothing; without an active season no dinner has a chef to
+    // tell. The dinners come with the season
     it.each([
         {given: 'the booking emails flag off', flag: 'false', seasonId: SEASON_ID},
         {given: 'no active season', flag: 'true', seasonId: null}
@@ -227,7 +249,7 @@ describe('the chef deadlines notices of the DAILY_MAINTENANCE job', () => {
 
         const queue = await runAt(menuAt(-(warning - 1)), seasonId)
 
-        expect(fetchDinnerEvents).not.toHaveBeenCalled()
+        expect(fetchSeason).not.toHaveBeenCalled()
         expect(sentMessages(queue)).toEqual([])
         expect(recorded.rows).toEqual([])
     })

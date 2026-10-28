@@ -100,7 +100,7 @@ describe('AdminAllergies', () => {
                 await openDetail(wrapper)
 
                 expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.edit)).toHaveLength(1)
-                expect(wrapper.find(`tbody [data-testid="${ALLERGY_TEST_IDS.edit}"]`).exists()).toBe(!isMd)
+                expect(findByTestId(wrapper.find('tbody'), ALLERGY_TEST_IDS.edit).exists()).toBe(!isMd)
                 expect(findByTestId(wrapper, ALLERGY_TEST_IDS.form).exists()).toBe(false)
 
                 await clickByTestId(wrapper, ALLERGY_TEST_IDS.edit)

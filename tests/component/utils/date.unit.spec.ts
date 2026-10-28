@@ -20,6 +20,8 @@ import {
     calculateCountdown,
     createDateInTimezone,
     formatDateInTimezone,
+    isSameDayInTimezone,
+    formatTimeSince,
     areSameWeek,
     getPeriodBoundary,
     type PeriodView,
@@ -661,6 +663,30 @@ describe('formatDateInTimezone', () => {
         {moment: 'midnight in winter, the evening before in UTC', date: new Date(2030, 0, 15), hour: 0, expected: '15/01/2030 kl. 00:00'}
     ])('GIVEN $moment in Copenhagen WHEN formatted with the date and time mask THEN it reads $expected', ({date, hour, expected}) => {
         expect(formatDateInTimezone(createDateInTimezone(date, hour), DATE_SETTINGS.DATE_AT_TIME_MASK)).toBe(expected)
+    })
+})
+
+// Two moments share a day as Copenhagen's calendar reads it, in a runtime of any zone: the server runs in UTC
+describe('isSameDayInTimezone', () => {
+    const day = new Date(2030, 0, 15)
+    const nextDay = new Date(2030, 0, 16)
+    it.each([
+        {moments: '00:30 and 23:30 of one Copenhagen day, two days in UTC', a: createDateInTimezone(day, 0, 30), b: createDateInTimezone(day, 23, 30), same: true},
+        {moments: '23:30 and 00:30 of the next Copenhagen day, one day in UTC', a: createDateInTimezone(day, 23, 30), b: createDateInTimezone(nextDay, 0, 30), same: false}
+    ])('GIVEN $moments WHEN compared THEN they share a day: $same', ({a, b, same}) => {
+        expect(isSameDayInTimezone(a, b)).toBe(same)
+    })
+})
+
+// The time since a moment in the words of the Danish locale
+describe('formatTimeSince', () => {
+    const now = new Date(2030, 0, 15, 18, 0)
+    it.each([
+        {since: 'two days', moment: new Date(2030, 0, 13, 18, 0), expected: '2 dage siden'},
+        {since: 'a day', moment: new Date(2030, 0, 14, 18, 0), expected: '1 dag siden'},
+        {since: 'five hours', moment: new Date(2030, 0, 15, 13, 0), expected: '5 timer siden'}
+    ])('GIVEN a moment $since before now WHEN formatted THEN it reads $expected', ({moment, expected}) => {
+        expect(formatTimeSince(moment, now)).toBe(expected)
     })
 })
 

@@ -3,7 +3,7 @@ import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import type {Ref} from 'vue'
-import {mountWithTooltipProvider, resetStores, VIEWPORTS, holdEndpoint, isTableLoading, expectMasterDetail, registerScaffoldEndpoint, untilTrue} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores,VIEWPORTS, holdEndpoint, isTableLoading, expectMasterDetail, registerScaffoldEndpoint, untilTrue} from '~~/tests/component/testHelpers'
 import HouseholdBookings from '~/components/household/HouseholdBookings.vue'
 import DinnerCalendarDisplay from '~/components/calendar/DinnerCalendarDisplay.vue'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
@@ -57,7 +57,7 @@ const household = HouseholdFactory.defaultHouseholdDetail('household-bookings')
 
 const mountBookings = async (isMd: boolean | null | Ref<boolean | null>, props: {canEdit?: boolean, adminBypass?: boolean} = {}) => {
     const wrapper = await mountWithTooltipProvider(HouseholdBookings, {props: {household, ...props}, isMd})
-    await vi.waitFor(() => expect(wrapper.find('[data-testid="household-bookings"]').exists()).toBe(true), {timeout: 10_000})
+    await vi.waitFor(() => expect(findByTestId(wrapper, 'household-bookings').exists()).toBe(true), {timeout: 10_000})
     await flushPromises()
     return wrapper
 }
@@ -84,7 +84,7 @@ describe('HouseholdBookings calendar in ?cal=', () => {
 
 describe('HouseholdBookings master-detail layout', () => {
     const panelOf = (wrapper: Awaited<ReturnType<typeof mountBookings>>) =>
-        wrapper.find('[data-testid="booking-grid-view"]').element.parentElement!
+        findByTestId(wrapper, 'booking-grid-view').element.parentElement!
 
     beforeEach(() => {
         resetStores()
@@ -112,7 +112,7 @@ describe('HouseholdBookings master-detail layout', () => {
         mockRoute.query = query
         const wrapper = await mountBookings(true)
 
-        await vi.waitFor(() => expect(wrapper.find('[data-testid="booking-grid-view"]').exists()).toBe(true))
+        await vi.waitFor(() => expect(findByTestId(wrapper, 'booking-grid-view').exists()).toBe(true))
         expect(wrapper.findComponent(DinnerCalendarDisplay).exists()).toBe(false)
         const row = panelOf(wrapper).parentElement!
         expect(row.children).toHaveLength(1)
@@ -126,8 +126,6 @@ describe('HouseholdBookings date arrows', () => {
     const firstDinner = {...dinnerEvent, id: 11, date: new Date(2030, 0, 7)}
     const lastDinner = {...dinnerEvent, id: 12, date: new Date(2030, 1, 4)}
     const seasonShape = {dinnerEvents: season.dinnerEvents, seasonDates: season.seasonDates}
-    const arrow = (wrapper: Awaited<ReturnType<typeof mountBookings>>, direction: 'prev' | 'next') =>
-        wrapper.find(`[data-testid="date-nav-${direction}"]`)
 
     beforeEach(() => {
         resetStores()
@@ -149,12 +147,12 @@ describe('HouseholdBookings date arrows', () => {
         mockRoute.query = {view, date: formatDate(firstDinner.date)}
         const wrapper = await mountBookings(true)
 
-        await vi.waitFor(() => expect(arrow(wrapper, 'next').exists()).toBe(true))
-        await arrow(wrapper, 'next').trigger('click')
+        await vi.waitFor(() => expect(findByTestId(wrapper, 'date-nav-next').exists()).toBe(true))
+        await clickByTestId(wrapper, 'date-nav-next')
         await vi.waitFor(() => expect(mockRoute.query.date).toBe(formatDate(lastDinner.date)))
 
-        await vi.waitFor(() => expect(arrow(wrapper, 'prev').exists()).toBe(true))
-        await arrow(wrapper, 'prev').trigger('click')
+        await vi.waitFor(() => expect(findByTestId(wrapper, 'date-nav-prev').exists()).toBe(true))
+        await clickByTestId(wrapper, 'date-nav-prev')
         await vi.waitFor(() => expect(mockRoute.query.date).toBe(formatDate(firstDinner.date)))
     })
 
@@ -162,8 +160,8 @@ describe('HouseholdBookings date arrows', () => {
         mockRoute.query = {view: BookingViewSchema.enum.week, date: formatDate(lastDinner.date)}
         const wrapper = await mountBookings(true)
 
-        await vi.waitFor(() => expect(arrow(wrapper, 'prev').exists()).toBe(true))
-        expect(arrow(wrapper, 'next').exists()).toBe(false)
+        await vi.waitFor(() => expect(findByTestId(wrapper, 'date-nav-prev').exists()).toBe(true))
+        expect(findByTestId(wrapper, 'date-nav-next').exists()).toBe(false)
     })
 })
 

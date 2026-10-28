@@ -22,6 +22,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import {useBookingValidation, DinnerState} from '~/composables/useBookingValidation'
+import {adminBypassQuery} from '~/composables/useCoreValidation'
 import {TEAM_WORDS} from '~/config/teamWords'
 import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {addDays} from 'date-fns'
@@ -312,7 +313,7 @@ describe('Bookings store — scaffold bookings', () => {
     it('shows no toast when none is given', async () => {
         const store = useBookingsStore()
 
-        await store.processMultipleEventsBookings(1, [DINNER_ID], [])
+        await store.processMultipleEventsBookings(1, [DINNER_ID], [], false)
 
         expect(useToast().toasts.value).toHaveLength(0)
     })
@@ -349,8 +350,22 @@ describe('Bookings store — scaffold bookings', () => {
 
         const result = await store.processAdminCorrection(7, DINNER_ID, [regular, guest], 3)
 
-        expect(sent).toEqual([{query: {adminBypass: 'true'}, body: {householdId: 7, dinnerEventIds: [DINNER_ID], orders: [regular, {...guest, inhabitantId: 3}]}}])
+        expect(sent).toEqual([{query: adminBypassQuery(true), body: {householdId: 7, dinnerEventIds: [DINNER_ID], orders: [regular, {...guest, inhabitantId: 3}]}}])
         expect(result.totals[Action.CANCEL]).toBe(1)
+    })
+
+    // An admin's save on a household carries the override; the household's own save carries no parameter (ADR-004)
+    it.each([
+        {save: 'a member\'s day view save', adminBypass: false, run: (store: ReturnType<typeof useBookingsStore>) => store.processSingleEventBookings(1, DINNER_ID, [])},
+        {save: 'a member\'s grid save', adminBypass: false, run: (store: ReturnType<typeof useBookingsStore>) => store.processMultipleEventsBookings(1, [DINNER_ID], [], false)},
+        {save: 'an admin\'s day view save', adminBypass: true, run: (store: ReturnType<typeof useBookingsStore>) => store.processSingleEventBookings(1, DINNER_ID, [], true)},
+        {save: 'an admin\'s grid save', adminBypass: true, run: (store: ReturnType<typeof useBookingsStore>) => store.processMultipleEventsBookings(1, [DINNER_ID], [], true)}
+    ])('GIVEN $save WHEN saved THEN the scaffold receives the override query of its role', async ({adminBypass, run}) => {
+        const store = useBookingsStore()
+
+        await run(store)
+
+        expect(scaffoldEndpoint.mock.calls.map(([event]) => getQuery(event as H3Event))).toEqual([adminBypassQuery(adminBypass)])
     })
 
     // The scaffold's dry run is a read (ADR-004): the request travels in the query of a GET, each desired order encoded,
@@ -387,7 +402,7 @@ describe('Bookings store — scaffold bookings', () => {
         scaffoldEndpoint.mockImplementation(failure)
         const store = useBookingsStore()
 
-        await expect(store.processMultipleEventsBookings(1, [DINNER_ID], [])).rejects.toBeTruthy()
+        await expect(store.processMultipleEventsBookings(1, [DINNER_ID], [], false)).rejects.toBeTruthy()
         expect(store.isProcessingBookings).toBe(false)
     })
 })

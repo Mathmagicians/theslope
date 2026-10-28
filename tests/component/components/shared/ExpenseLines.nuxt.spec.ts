@@ -71,7 +71,7 @@ const clickAdd = async (wrapper: Wrapper) => {
     await nextTick()
 }
 // The lines are the table's plain body rows; the sum rows carry test ids
-const lineRows = (wrapper: Wrapper) => wrapper.findAll('tbody tr').filter(tr => tr.attributes('data-testid') === undefined && !tr.find('[data-testid="expense-table-empty"]').exists())
+const lineRows = (wrapper: Wrapper) => wrapper.findAll('tbody tr').filter(tr => tr.attributes('data-testid') === undefined && !findByTestId(tr, 'expense-table-empty').exists())
 const hintRow = (wrapper: Wrapper, label: string) => findAllByTestId(wrapper, 'expense-hint-row').find(row => row.text().startsWith(label))
 
 describe('ExpenseLines', () => {
@@ -129,8 +129,8 @@ describe('ExpenseLines', () => {
             expect(rows).toHaveLength(2)
             lines().forEach((line, index) => {
                 expect(rows[index]!.findAll('td')[0]!.text()).toBe(formatDate(line.createdAt, DATE_SETTINGS.DAY_MONTH_MASK))
-                expect(rows[index]!.find('[data-testid="expense-payer"]').text()).toBe(line.paidBy.name!)
-                expect(rows[index]!.find('[data-testid="expense-note"]').text()).toBe(line.description)
+                expect(findByTestId(rows[index]!, 'expense-payer').text()).toBe(line.paidBy.name!)
+                expect(findByTestId(rows[index]!, 'expense-note').text()).toBe(line.description)
                 expect(rows[index]!.text()).toContain(formatPrice(exOf(line.amount)))
                 expect(rows[index]!.text()).toContain(`/ ${formatPrice(line.amount)} kr`)
             })
@@ -141,7 +141,7 @@ describe('ExpenseLines', () => {
             expect(hintRow(wrapper, 'Brugt')!.text()).toContain(`/ ${formatPrice(spent)} kr`)
             const left = hintRow(wrapper, 'Tilbage')!
             expect(left.text()).toContain(`/ +${formatPrice(BUDGET - spent)} kr`)
-            expect(left.find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
+            expect(findByTestId(left, 'vat-amount-ok').exists()).toBe(true)
             expect(findByTestId(wrapper, 'expense-spent').exists()).toBe(false)
         })
 
@@ -150,7 +150,7 @@ describe('ExpenseLines', () => {
             await open(wrapper)
             const left = hintRow(wrapper, 'Tilbage')!
             expect(left.text()).toContain(`/ -${formatPrice(spentOf(lines()) - 1000)} kr`)
-            expect(left.find('[data-testid="vat-amount-over"]').exists()).toBe(true)
+            expect(findByTestId(left, 'vat-amount-over').exists()).toBe(true)
         })
 
         it('GIVEN the round WHEN open THEN the whole team gets its heading and the same three rows; without one no round block shows', async () => {
@@ -167,7 +167,7 @@ describe('ExpenseLines', () => {
             expect(rows[4]!.text()).toContain(`/ ${formatPrice(423800)} kr`)
             expect(rows[5]!.text()).toContain('Tilbage')
             expect(rows[5]!.text()).toContain(`/ -${formatPrice(23800)} kr`)
-            expect(rows[5]!.find('[data-testid="vat-amount-over"]').exists()).toBe(true)
+            expect(findByTestId(rows[5]!, 'vat-amount-over').exists()).toBe(true)
 
             const without = await mount({editable: true})
             await open(without)
@@ -178,7 +178,7 @@ describe('ExpenseLines', () => {
         it('GIVEN a budget of nothing yet WHEN open THEN Tilbage carries the waiting glyph', async () => {
             const wrapper = await mount({editable: true, budgetGross: 0, expenses: []})
             await open(wrapper)
-            expect(hintRow(wrapper, 'Tilbage')!.find('[data-testid="vat-amount-pending"]').exists()).toBe(true)
+            expect(findByTestId(hintRow(wrapper, 'Tilbage')!, 'vat-amount-pending').exists()).toBe(true)
         })
 
         it('GIVEN no budget WHEN open THEN the hint carries Brugt alone', async () => {
