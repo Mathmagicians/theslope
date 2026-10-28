@@ -5,14 +5,14 @@
  */
 
 import {describe, it, expect} from 'vitest'
-import {useCoreValidation, getHouseholdShortName, adminBypassQuery, AdminBypassQuerySchema} from '~/composables/useCoreValidation'
+import {parseQuery, stringifyQuery} from 'ufo'
+import {useCoreValidation, getHouseholdShortName, adminBypassQuery, AdminBypassQuerySchema, queryFlag, QueryFlagSchema} from '~/composables/useCoreValidation'
 import type {UserCreate} from '~/composables/useCoreValidation'
-import {useBookingValidation, type DinnerMode as DinnerModeType} from '~/composables/useBookingValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS, useUserPreferenceValidation, type UserPreferencesUpdate} from '~/composables/useUserPreferenceValidation'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
-import type {WeekDayMap} from '~/types/dateTypes'
 
 const DinnerMode = useBookingValidation().DinnerModeSchema.enum
 const SystemRole = useCoreValidation().SystemRoleSchema.enum
@@ -26,16 +26,26 @@ const serializedUserColumns = (user: UserCreate) => ({
 })
 
 // ============================================================================
-// THE OVERRIDE QUERY (ADR-004)
+// QUERY FLAGS AND THE OVERRIDE QUERY (ADR-004)
 // ============================================================================
 
-describe('adminBypassQuery', () => {
-    it('GIVEN the household\'s own change THEN the query carries no parameter', () => {
-        expect(adminBypassQuery(false)).toStrictEqual({})
+describe('queryFlag', () => {
+    it('GIVEN an unset flag THEN the url carries no parameter', () => {
+        expect(stringifyQuery({includeProvenance: queryFlag(false)})).toBe('')
     })
 
-    it.each([false, true])('GIVEN adminBypass %s THEN the endpoints\' query schema reads it back', (adminBypass) => {
-        expect(AdminBypassQuerySchema.parse(adminBypassQuery(adminBypass))).toEqual({adminBypass})
+    it.each([false, true])('GIVEN the flag %s THEN the endpoints\' flag schema reads it back from the url', (isSet) => {
+        expect(QueryFlagSchema.parse(parseQuery(stringifyQuery({includeProvenance: queryFlag(isSet)})).includeProvenance)).toBe(isSet)
+    })
+})
+
+describe('adminBypassQuery', () => {
+    it('GIVEN the household\'s own change THEN the url carries no parameter', () => {
+        expect(stringifyQuery(adminBypassQuery(false))).toBe('')
+    })
+
+    it.each([false, true])('GIVEN adminBypass %s THEN the endpoints\' query schema reads it back from the url', (adminBypass) => {
+        expect(AdminBypassQuerySchema.parse(parseQuery(stringifyQuery(adminBypassQuery(adminBypass))))).toEqual({adminBypass})
     })
 })
 
@@ -123,11 +133,12 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
         })
     })
 
+    // An Inhabitant row as the database returns it: dates as dates, the preferences as JSON (ADR-010)
     describe('deserializeInhabitantDetail', () => {
         it.each([
             {
                 testCase: 'with birthDate',
-                birthDate: '1990-01-01',
+                birthDate: new Date('1990-01-01'),
                 dinnerPreferences: null,
                 expectBirthDate: true,
                 expectDinnerPrefs: false
@@ -194,7 +205,7 @@ describe('useCoreValidation - Household Schemas', () => {
             const serialized = {
                 ...HouseholdFactory.defaultHouseholdData(),
                 id: 1,
-                movedInDate: '2020-01-01',
+                movedInDate: new Date('2020-01-01'),
                 moveOutDate: null,
                 inhabitants: []
             }
@@ -208,14 +219,14 @@ describe('useCoreValidation - Household Schemas', () => {
 
         it.each([
             {moveOutDate: null, description: 'null moveOutDate'},
-            {moveOutDate: '2024-12-31', description: 'with moveOutDate'}
+            {moveOutDate: new Date('2024-12-31'), description: 'with moveOutDate'}
         ])('should handle $description', ({moveOutDate}) => {
             const householdData = HouseholdFactory.defaultHouseholdData()
 
             const serialized = {
                 ...householdData,
                 id: 1,
-                movedInDate: '2020-01-01',
+                movedInDate: new Date('2020-01-01'),
                 moveOutDate,
                 inhabitants: []
             }
@@ -235,7 +246,7 @@ describe('useCoreValidation - Household Schemas', () => {
             const serialized = {
                 ...HouseholdFactory.defaultHouseholdData(),
                 id: 1,
-                movedInDate: '2020-01-01',
+                movedInDate: new Date('2020-01-01'),
                 moveOutDate: null,
                 shortName: 'A_123',
                 inhabitants: [
@@ -243,8 +254,9 @@ describe('useCoreValidation - Household Schemas', () => {
                         ...HouseholdFactory.defaultInhabitantData(),
                         id: 1,
                         householdId: 1,
-                        birthDate: '1990-01-01',
-                        dinnerPreferences: null
+                        birthDate: new Date('1990-01-01'),
+                        dinnerPreferences: null,
+                        allergies: []
                     }
                 ]
             }
@@ -258,7 +270,7 @@ describe('useCoreValidation - Household Schemas', () => {
         const householdRowWithAllergies = () => ({
             ...HouseholdFactory.defaultHouseholdData(),
             id: 1,
-            movedInDate: '2020-01-01',
+            movedInDate: new Date('2020-01-01'),
             moveOutDate: null,
             inhabitants: [
                 {...HouseholdFactory.defaultInhabitantData(), id: 1, householdId: 1, birthDate: null, dinnerPreferences: null, allergies: AllergyFactory.serializedAllergies(2, 1)},
@@ -354,7 +366,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
                 id: 1,
                 userId: 1,
                 householdId: 1,
-                birthDate: '1990-01-01',
+                birthDate: new Date('1990-01-01'),
                 dinnerPreferences: serializeWeekDayMap(defaultPrefs),
                 household: {
                     ...HouseholdFactory.defaultHouseholdData(),
@@ -672,20 +684,23 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
         createDefaultWeekdayMap
     } = useCoreValidation()
 
-    // Type aliases for roundtrip test data
-    type SerializeFn = (data: Record<string, unknown>) => Record<string, unknown>
-    type CheckFieldsFn = (original: Record<string, unknown>, deserialized: Record<string, unknown>) => void
-
-    interface RoundtripTestCase {
+    // A case per row: the domain value, the row the database returns for it, and the fields its deserializer brings back
+    const roundtrip = <Domain, Row, Deserialized>(testCase: {
         type: string
-        getData: () => Record<string, unknown>
-        serialize: SerializeFn
-        deserialize: (data: Record<string, unknown>) => Record<string, unknown>
-        checkFields: CheckFieldsFn
-    }
+        getData: () => Domain
+        serialize: (data: Domain) => Row
+        deserialize: (row: Row) => Deserialized
+        checkFields: (original: Domain, deserialized: Deserialized) => void
+    }) => ({
+        type: testCase.type,
+        run: () => {
+            const original = testCase.getData()
+            testCase.checkFields(original, testCase.deserialize(testCase.serialize(original)))
+        }
+    })
 
-    const testCases: RoundtripTestCase[] = [
-        {
+    const testCases = [
+        roundtrip({
             type: 'inhabitant',
             getData: () => ({
                 ...HouseholdFactory.defaultInhabitantData(),
@@ -694,19 +709,20 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                 birthDate: new Date('1990-01-15'),
                 dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
             }),
+            // The display deserializer also reads a row whose dates arrive as strings
             serialize: (data) => ({
                 ...data,
-                birthDate: (data.birthDate as Date).toISOString(),
-                dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences as WeekDayMap<DinnerModeType>)
+                birthDate: data.birthDate.toISOString(),
+                dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences)
             }),
             deserialize: deserializeInhabitantDisplay,
             checkFields: (original, deserialized) => {
                 expect(deserialized.birthDate).toBeInstanceOf(Date)
-                expect((deserialized.birthDate as Date).getTime()).toBe((original.birthDate as Date).getTime())
+                expect(deserialized.birthDate!.getTime()).toBe(original.birthDate.getTime())
                 expect(deserialized.dinnerPreferences).toEqual(original.dinnerPreferences)
             }
-        },
-        {
+        }),
+        roundtrip({
             type: 'household summary',
             getData: () => ({
                 ...HouseholdFactory.defaultHouseholdData(),
@@ -724,27 +740,21 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
             }),
             serialize: (data) => ({
                 ...data,
-                movedInDate: (data.movedInDate as Date).toISOString(),
-                moveOutDate: (data.moveOutDate as Date | null)?.toISOString(),
-                inhabitants: (data.inhabitants as Record<string, unknown>[]).map((i) => ({
-                    ...i,
-                    birthDate: (i.birthDate as Date | null)?.toISOString(),
-                    dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as WeekDayMap<DinnerModeType>) : null
-                }))
+                inhabitants: data.inhabitants.map((i) => ({...i, dinnerPreferences: serializeWeekDayMap(i.dinnerPreferences)}))
             }),
             deserialize: deserializeHouseholdDisplay,
             checkFields: (original, deserialized) => {
                 expect(deserialized.movedInDate).toBeInstanceOf(Date)
-                expect((deserialized.movedInDate as Date).getTime()).toBe((original.movedInDate as Date).getTime())
-                expect(deserialized.shortName).toBe(getHouseholdShortName(original.address as string))
-                const [originalInhabitant] = original.inhabitants as Record<string, unknown>[]
-                const [deserializedInhabitant] = deserialized.inhabitants as Record<string, unknown>[]
+                expect(deserialized.movedInDate.getTime()).toBe(original.movedInDate.getTime())
+                expect(deserialized.shortName).toBe(getHouseholdShortName(original.address))
+                const [originalInhabitant] = original.inhabitants
+                const [deserializedInhabitant] = deserialized.inhabitants
                 expect(deserializedInhabitant).toBeDefined()
                 expect(deserializedInhabitant!.birthDate).toBeInstanceOf(Date)
                 expect(deserializedInhabitant!.dinnerPreferences).toEqual(originalInhabitant!.dinnerPreferences)
             }
-        },
-        {
+        }),
+        roundtrip({
             type: 'household with inhabitants',
             getData: () => ({
                 ...HouseholdFactory.defaultHouseholdData(),
@@ -761,35 +771,27 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                     }
                 ]
             }),
+            // The detail read loads each inhabitant's allergies
             serialize: (data) => ({
                 ...data,
-                movedInDate: (data.movedInDate as Date).toISOString(),
-                inhabitants: (data.inhabitants as Record<string, unknown>[]).map((i) => ({
-                    ...i,
-                    birthDate: (i.birthDate as Date | null)?.toISOString(),
-                    dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as WeekDayMap<DinnerModeType>) : null
-                }))
+                inhabitants: data.inhabitants.map((i) => ({...i, dinnerPreferences: serializeWeekDayMap(i.dinnerPreferences), allergies: []}))
             }),
             deserialize: deserializeHouseholdDetail,
             checkFields: (original, deserialized) => {
-                expect(deserialized.shortName).toBe(getHouseholdShortName(original.address as string))
+                expect(deserialized.shortName).toBe(getHouseholdShortName(original.address))
                 expect(deserialized.movedInDate).toBeInstanceOf(Date)
-                const [originalInhabitant] = original.inhabitants as Record<string, unknown>[]
-                const [deserializedInhabitant] = deserialized.inhabitants as Record<string, unknown>[]
+                const [originalInhabitant] = original.inhabitants
+                const [deserializedInhabitant] = deserialized.inhabitants
                 expect(deserializedInhabitant).toBeDefined()
                 expect(deserializedInhabitant!.birthDate).toBeInstanceOf(Date)
-                expect((deserializedInhabitant!.birthDate as Date).getTime()).toBe((originalInhabitant!.birthDate as Date).getTime())
+                expect(deserializedInhabitant!.birthDate!.getTime()).toBe(originalInhabitant!.birthDate.getTime())
                 expect(deserializedInhabitant!.dinnerPreferences).toEqual(originalInhabitant!.dinnerPreferences)
             }
-        }
+        })
     ]
 
-    it.each(testCases)('should roundtrip $type', ({getData, serialize, deserialize, checkFields}) => {
-        const original = getData()
-        const serialized = serialize(original)
-        const deserialized = deserialize(serialized)
-
-        checkFields(original, deserialized)
+    it.each(testCases)('should roundtrip $type', ({run}) => {
+        run()
     })
 })
 

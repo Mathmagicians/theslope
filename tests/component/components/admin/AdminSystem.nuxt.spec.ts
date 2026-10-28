@@ -10,6 +10,7 @@ import AdminSystem from '~/components/admin/AdminSystem.vue'
 import {ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {formatJobStat} from '~/composables/useMaintenance'
 import {NOTIFICATION_COUNT_WORDS} from '~/config/notificationTemplates'
+import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
 import {DATE_SETTINGS, formatDate} from '~/utils/date'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
@@ -108,7 +109,7 @@ describe('AdminSystem job history', () => {
         expect(tableHeaders(wrapper)).toEqual(HEADERS)
         expect(cellsByHeader(wrapper)).toMatchObject({
             Varighed: maintenance.formatDuration(jobRun.durationMs),
-            Kilde: maintenance.formatTriggeredBy(jobRun.triggeredBy),
+            Kilde: jobRun.triggeredBy,
             Resultat: maintenance.formatResultSummary(jobRun.jobType, jobRun.resultSummary)
         })
         expect(findByTestId(wrapper, `job-history-expand-${jobRun.id}`).exists()).toBe(false)
@@ -145,6 +146,16 @@ const runOf = (jobType: Job, summary: unknown, overrides: Partial<JobRunDisplay>
 
 // Each box shows its job's latest run, read on its own: the history list holds the last runs of every job
 describe('AdminSystem job boxes', () => {
+    it.each(BOX_JOBS)('GIVEN the $jobType box WHEN the page loads THEN it reads the job\'s title, what the job does and its run button', async ({jobType}) => {
+        const {title, description, buttonLabel} = MAINTENANCE_WORDS.boxes[jobType]
+        const wrapper = await mountSystem(true)
+
+        const box = boxOf(wrapper, jobType)
+        expect(box.text()).toContain(title)
+        expect(box.text()).toContain(description)
+        expect(box.find('button').text()).toBe(buttonLabel)
+    })
+
     it.each(BOX_JOBS)('GIVEN no run of $jobType WHEN the box loads THEN it says so, with no loading state', async ({jobType}) => {
         jobRuns.list = []
         const wrapper = await mountSystem(true)

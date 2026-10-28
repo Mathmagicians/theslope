@@ -103,7 +103,7 @@ const notificationsOnSeason = async (d1Client: D1Database, seasonId: number | nu
     const deadlines = deadlinesForSeason(season, now)
     const notices = (season.dinnerEvents ?? [])
         .flatMap((dinner): DinnerNotice[] => {
-            if (dinner.chefId === null || isClosedDinner(dinner) || isDinnerPast(dinner.date, now)) return []
+            if (dinner.chefId === null || isClosedDinner(dinner.state) || isDinnerPast(dinner.date, now)) return []
             const chefDeadlines = getChefDeadlines(dinner, deadlines, now)
             const version = noticeVersion(chefDeadlines, now)
             return version === null ? [] : [{dinner, chefId: dinner.chefId, chefDeadlines, version}]

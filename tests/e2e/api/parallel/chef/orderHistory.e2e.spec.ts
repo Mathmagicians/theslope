@@ -13,7 +13,8 @@ import testHelpers from '~~/tests/e2e/testHelpers'
  * The member's household books an adult and a guest child, releases the child after the booking deadline and the
  * admin's household buys it: the tickets, kuverter and revenue paid for stand still through the release and the sale,
  * and each line carries its actor and its ticket events; `since` keeps the changes from a moment and counts the older
- * ones. The setup books through the admin's bypass, so its bookings read as the admin's correction.
+ * ones. `GET /api/order?includeProvenance=true` names the household the bought ticket came from. The setup books through
+ * the admin's bypass, so its bookings read as the admin's correction.
  */
 const {validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, getSessionUserInfo, daysFromNow} = testHelpers
 const {TicketChangeKindSchema, OrderStateSchema, DinnerModeSchema, OrderAuditSourceSchema} = useBookingValidation()
@@ -111,6 +112,11 @@ test.describe('Chef dinner order history', () => {
         expect(lineOf(Kind.BUY).households).toContain(admin.householdShortname)
         // The sale names the household it bought from
         expect(lineOf(Kind.BUY).events.find(event => event.change === Kind.BUY)!.seller).toBe(member.householdShortname)
+        // The order read with its provenance names it too, on the bought ticket alone
+        const provenanceOf = new Map((await OrderFactory.getOrders(adminContext, {dinnerEventIds: dinnerEventId, allHouseholds: true, includeProvenance: true}))
+            .map(order => [order.id, order.provenanceHousehold]))
+        expect(provenanceOf.get(childOrderId), 'the bought ticket came from the seller').toBe(member.householdShortname)
+        expect(provenanceOf.get(orderIds[0]!), 'the adult ticket was never sold').toBeUndefined()
 
         const release = lineOf(Kind.RELEASE)
         const sinceRelease = (await OrderFactory.getTicketChanges(memberContext, dinnerEventId, release.timestamp))!

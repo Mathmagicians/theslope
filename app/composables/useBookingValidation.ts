@@ -28,6 +28,8 @@ const TicketStateSchema = z.enum(['released', 'claimed', 'queued', 'normal'])
 const SupplyStateSchema = z.enum(['FOR_SALE_AND_WAITLIST', 'FOR_SALE', 'WAITLIST', 'NONE'])
 // Why an order of a booking failed: it conflicts with the state it meets, a place on the waiting list a run is assigning
 const BookingFailureSchema = z.enum(['CONFLICT'])
+// The order a read lists orders in: by booking time, or by release time, the claim queue's first come first served
+const OrderSortBySchema = z.enum(['createdAt', 'releasedAt'])
 
 export const DinnerMode = DinnerModeSchema.enum
 export const DinnerState = DinnerStateSchema.enum
@@ -36,6 +38,10 @@ export const OrderAuditAction = OrderAuditActionSchema.enum
 export const TicketState = TicketStateSchema.enum
 export const SupplyState = SupplyStateSchema.enum
 export const BookingFailure = BookingFailureSchema.enum
+export const OrderSortBy = OrderSortBySchema.enum
+
+/** The states of a dinner that takes no booking: no order, no place on its waiting list, no sale */
+export const CLOSED_DINNER_STATES: DinnerState[] = [DinnerState.CONSUMED, DinnerState.CANCELLED]
 
 /**
  * Validation schemas for Bookings domain (DinnerEvent + Order)
@@ -294,12 +300,8 @@ export const useBookingValidation = () => {
     // inhabitantId optional, defaults to caller. Reuses AssignRoleSchema (DRY).
     const RemoveRoleRequestSchema = AssignRoleSchema.partial({inhabitantId: true})
 
-    /**
-     * Order snapshot for audit data - captures order state at deletion/release time
-     * Derived from OrderDisplaySchema, picking essential fields + provenance data
-     * Provenance enables "🔄 fra AR_1" display on claimed tickets
-     */
-    const OrderSnapshotSchema = OrderDisplaySchema.pick({
+    // The order an audit snapshot keeps: its essential fields
+    const SnapshotOrderSchema = OrderDisplaySchema.pick({
         id: true,
         inhabitantId: true,
         dinnerEventId: true,
@@ -309,7 +311,15 @@ export const useBookingValidation = () => {
         state: true,
         isGuestTicket: true
     }).extend({
-        id: IdSchema.nullable(),                          // Null for a row without an order: a waiting entry's, or a cancellation of nothing booked
+        id: IdSchema.nullable()                           // Null for a row without an order: a waiting entry's, or a cancellation of nothing booked
+    })
+
+    /**
+     * Order snapshot for audit data - captures order state at deletion/release time
+     * The snapshot's order + provenance data
+     * Provenance enables "🔄 fra AR_1" display on claimed tickets
+     */
+    const OrderSnapshotSchema = SnapshotOrderSchema.extend({
         // Provenance fields for ticket claim feature (pre-formatted for immutable audit trail)
         inhabitantNameWithInitials: z.string(),           // "Anna B.H." - colloquial format
         householdShortname: z.string(),                   // "AR_1" - for "fra AR_1" display
@@ -597,8 +607,9 @@ export const useBookingValidation = () => {
     })
 
     // The row's action and audit data, and the ids the row keeps once its order is deleted
-    type OrderAuditRow = Pick<z.infer<typeof OrderHistoryDisplaySchema>, 'action' | 'auditData'>
-        & Partial<Pick<z.infer<typeof OrderHistoryDisplaySchema>, 'orderId' | 'inhabitantId' | 'dinnerEventId'>>
+    const OrderAuditRowSchema = OrderHistoryDisplaySchema
+        .pick({action: true, auditData: true, orderId: true, inhabitantId: true, dinnerEventId: true})
+        .partial({orderId: true, inhabitantId: true, dinnerEventId: true})
 
     const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 
@@ -633,7 +644,7 @@ export const useBookingValidation = () => {
      * with the row's ids where the shape holds none. A null order id is a row of no order (a place on the waiting list, a
      * cancellation of nothing booked) or a legacy row whose order is deleted. Audit data holding no object reads null.
      */
-    const readOrderAudit = (row: OrderAuditRow): z.infer<typeof OrderAuditSchema> | null => {
+    const readOrderAudit = (row: z.infer<typeof OrderAuditRowSchema>): z.infer<typeof OrderAuditSchema> | null => {
         let parsed: unknown
         try {
             parsed = JSON.parse(row.auditData)
@@ -987,6 +998,7 @@ export const useBookingValidation = () => {
 
         // Order
         OrderDisplaySchema,
+        OrderSortBySchema,
         OrderDetailSchema,
         OrderCreateSchema,
         AssignRoleSchema,
@@ -995,7 +1007,9 @@ export const useBookingValidation = () => {
 
         // OrderHistory
         OrderHistoryDisplaySchema,
+        SnapshotOrderSchema,
         OrderSnapshotSchema,
+        OrderAuditRowSchema,
         OrderAuditChangeSchema,
         OrderAuditDataSchema,
         OrderAuditSchema,
@@ -1092,11 +1106,14 @@ export type ChefMenuForm = z.infer<ReturnType<typeof useBookingValidation>['Chef
 
 // Order
 export type OrderDisplay = z.infer<ReturnType<typeof useBookingValidation>['OrderDisplaySchema']>
+export type OrderSortBy = z.infer<ReturnType<typeof useBookingValidation>['OrderSortBySchema']>
 export type OrderDetail = z.infer<ReturnType<typeof useBookingValidation>['OrderDetailSchema']>
 export type AssignRole = z.infer<ReturnType<typeof useBookingValidation>['AssignRoleSchema']>
 export type MenuSwapStrategy = z.infer<ReturnType<typeof useBookingValidation>['MenuSwapStrategySchema']>
 export type OrderHistoryDisplay = z.infer<ReturnType<typeof useBookingValidation>['OrderHistoryDisplaySchema']>
+export type SnapshotOrder = z.infer<ReturnType<typeof useBookingValidation>['SnapshotOrderSchema']>
 export type OrderSnapshot = z.infer<ReturnType<typeof useBookingValidation>['OrderSnapshotSchema']>
+export type OrderAuditRow = z.infer<ReturnType<typeof useBookingValidation>['OrderAuditRowSchema']>
 export type OrderAuditChange = z.infer<ReturnType<typeof useBookingValidation>['OrderAuditChangeSchema']>
 export type OrderAudit = z.infer<ReturnType<typeof useBookingValidation>['OrderAuditSchema']>
 

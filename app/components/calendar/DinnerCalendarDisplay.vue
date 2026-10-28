@@ -52,7 +52,7 @@ import type {DateRange} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
-import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
+import {LEGEND_KIND, type CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {isSameDay} from 'date-fns'
 import {isCalendarDateInDateList, toDate} from '~/utils/date'
@@ -130,20 +130,20 @@ const getDayColorClass = (type: DayType): string => {
 // Legend items: the lock chips wrap a planned-day circle at the lock chip's size, as the day cells do
 const legendItems = computed((): CalendarLegendItem[] => {
   const items: CalendarLegendItem[] = [
-    { label: 'Næste fællesspisning', kind: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.next) },
-    { label: 'Valgt dato', kind: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.next, DINNER_CALENDAR.selection) },
-    { label: 'Planlagt fællesspisning', kind: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.future) },
-    { label: 'Tidligere fællesspisning', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past) },
-    { label: BOOKING_WORDS.cancelledDinner.legend, kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past, CALENDAR.day.cancelled) },
-    { label: 'Ferie', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.holiday) }
+    { label: 'Næste fællesspisning', kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(DINNER_CALENDAR.day.next) },
+    { label: 'Valgt dato', kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(DINNER_CALENDAR.day.next, DINNER_CALENDAR.selection) },
+    { label: 'Planlagt fællesspisning', kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(DINNER_CALENDAR.day.future) },
+    { label: 'Tidligere fællesspisning', kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CALENDAR.day.past) },
+    { label: BOOKING_WORDS.cancelledDinner.legend, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CALENDAR.day.past, CALENDAR.day.cancelled) },
+    { label: 'Ferie', kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CALENDAR.holiday) }
   ]
 
   if (props.lockStatus) {
     const chipCircle = dayCircleClasses(DINNER_CALENDAR.day.future)
     items.push(
-      { label: DEADLINE_LABELS.BOOKING_CLOSED.closedText, kind: 'chip', chipColor: BOOKING_LOCK_STATUS.locked.color, circleClass: chipCircle, chipSize: SIZES.lockChip },
-      { label: 'Billetter til salg', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color, circleClass: chipCircle, chipSize: SIZES.lockChip, count: '1' },
-      { label: 'Venteliste, ingen billetter til salg', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithQueue.color, circleClass: chipCircle, chipSize: SIZES.lockChip, icon: BOOKING_LOCK_STATUS.lockedWithQueue.icon }
+      { label: DEADLINE_LABELS.BOOKING_CLOSED.closedText, kind: LEGEND_KIND.chip, chipColor: BOOKING_LOCK_STATUS.locked.color, circleClass: chipCircle, chipSize: SIZES.lockChip },
+      { label: 'Billetter til salg', kind: LEGEND_KIND.chip, chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color, circleClass: chipCircle, chipSize: SIZES.lockChip, count: '1' },
+      { label: 'Venteliste, ingen billetter til salg', kind: LEGEND_KIND.chip, chipColor: BOOKING_LOCK_STATUS.lockedWithQueue.color, circleClass: chipCircle, chipSize: SIZES.lockChip, icon: BOOKING_LOCK_STATUS.lockedWithQueue.icon }
     )
   }
 

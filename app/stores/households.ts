@@ -1,10 +1,12 @@
 import type {
     HouseholdDisplay,
-    HouseholdDetail
+    HouseholdDetail,
+    HouseholdCreate
 } from '~/composables/useCoreValidation'
 import {useBookingValidation, type ScaffoldResult, type DinnerMode} from '~/composables/useBookingValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
 import {useBooking, countTotals} from '~/composables/useBooking'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 /**
  * Household store - manages household data and API operations
@@ -38,7 +40,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         schema: HouseholdDisplaySchema.array(),
         default: () => [],
         enabled: () => loggedIn.value,
-        errorMessage: 'Kunne ikke hente husstande'
+        errorMessage: HOUSEHOLD_WORDS.failed.households
     })
     const {
         data: households,
@@ -81,7 +83,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
             default: () => null,
             enabled: () => !!selectedHouseholdId.value,
             dependsOn: [householdsDataset],
-            errorMessage: 'Kunne ikke hente husstand',
+            errorMessage: HOUSEHOLD_WORDS.failed.household,
             // The page's getter keeps driving the choice; the gone household re-derives to my household
             notFound: {
                 recover: async () => {
@@ -89,7 +91,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
                     await refreshHouseholds()
                 },
                 retries: 1,
-                toast: notFoundToast(households, selectedHouseholdId, 'husstanden'),
+                toast: notFoundToast(households, selectedHouseholdId, HOUSEHOLD_WORDS.notFound),
                 message: () => getRandomEmptyMessageText('household', now.value)
             }
         }
@@ -140,7 +142,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         return apiRequest(`/api/admin/household/${householdId}`, {
             schema: HouseholdDetailSchema,
             action: 'fetchHouseholdDetail',
-            errorMessage: `Kunne ikke hente husstand ${householdId}`
+            errorMessage: HOUSEHOLD_WORDS.failed.householdDetail(householdId)
         })
     }
 
@@ -301,13 +303,14 @@ export const useHouseholdsStore = defineStore("Households", () => {
         await refreshHouseholds()
 
         const targetHousehold = households.value.find(h => h.id === targetHouseholdId)
-        const targetLabel = targetHousehold ? `${targetHousehold.shortName} (PBS ${targetHousehold.pbsId})` : `husstand ${targetHouseholdId}`
+        const movedWords = HOUSEHOLD_WORDS.toasts.moved
+        const targetLabel = targetHousehold ? movedWords.household(targetHousehold.shortName, targetHousehold.pbsId) : movedWords.goneHousehold(targetHouseholdId)
         const scaffoldSummary = formatResultLines(result.scaffoldResult, targetHousehold?.inhabitants.map(({id}) => id))
         const {BookingActionSchema} = useBookingValidation()
         const Action = BookingActionSchema.enum
         const hasOrderChanges = [Action.BOOK, Action.CANCEL, Action.RELEASE].some(action => result.scaffoldResult.totals[action] > 0)
 
-        toastSaved(`${result.inhabitant.name} ${result.inhabitant.lastName} flyttet til ${targetLabel}`, hasOrderChanges ? scaffoldSummary : undefined,
+        toastSaved(movedWords.title(result.inhabitant.name, result.inhabitant.lastName, targetLabel), hasOrderChanges ? scaffoldSummary : undefined,
             scaffoldToastLook(result.scaffoldResult).ui)
 
         return result
@@ -329,7 +332,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
         skipGoneId(householdChoice, householdId, resolveHouseholdId)
         await refreshHouseholds()
 
-        toastSaved('Husstand slettet', deleted ? `${deleted.shortName} · PBS ${deleted.pbsId}` : undefined)
+        const words = HOUSEHOLD_WORDS.toasts.deleted
+        toastSaved(words.title, deleted ? words.description(deleted.shortName, deleted.pbsId) : undefined)
     }
 
     /**
@@ -337,20 +341,15 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * move-out updates to prev owners at the same address (reuses setMoveOutDate).
      * Resolves null when a request fails; the request has already toasted it.
      */
-    const createHousehold = async (payload: {
-        pbsId: number
-        address: string
-        movedInDate: Date
-        heynaboId: number
-        name: string
-        prevOwnerMoveOutUpdates?: {id: number, moveOutDate: Date}[]
-    }): Promise<HouseholdDetail | null> => {
-        const {prevOwnerMoveOutUpdates = [], ...createBody} = payload
+    const createHousehold = async (
+        household: HouseholdCreate,
+        prevOwnerMoveOutUpdates: {id: number, moveOutDate: Date}[]
+    ): Promise<HouseholdDetail | null> => {
         try {
-            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Creating household at ${payload.address} (PBS ${payload.pbsId})`)
+            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Creating household at ${household.address} (PBS ${household.pbsId})`)
             const created = await apiRequest<HouseholdDetail>('/api/admin/household', {
                 method: 'PUT',
-                body: createBody,
+                body: household,
                 action: 'createHousehold'
             })
             console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Created household ${created.id} at ${created.address}`)
@@ -360,7 +359,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
             }
 
             await refreshHouseholds()
-            toastSaved('Husstand oprettet', `${created.shortName} · PBS ${created.pbsId}`)
+            const words = HOUSEHOLD_WORDS.toasts.created
+            toastSaved(words.title, words.description(created.shortName, created.pbsId))
             return created
         } catch {
             return null

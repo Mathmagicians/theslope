@@ -16,7 +16,7 @@ import {
 import {findClosestUserInHousehold, idsOf, readNamed, readPeople, type PeopleRecords} from '~~/server/utils/sender/records'
 import type {NotificationConfig} from '~/composables/useNotificationValidation'
 import {
-    useBookingValidation, DinnerState, OrderState, TicketState, type BookingAction, type BookingOutcomes, type DinnerEventDisplay,
+    useBookingValidation, OrderState, TicketState, type BookingAction, type BookingOutcomes, type DinnerEventDisplay,
     type DinnerMode, type OrderAudit, type OrderDisplay, type OrderHistoryDisplay, type TicketSale, type WaitlistJoined
 } from '~/composables/useBookingValidation'
 import type {TicketWaitlistDisplay, WaitlistAssignmentResult} from '~/composables/useWaitlistValidation'
@@ -33,9 +33,9 @@ import {TICKET_COUNTS} from '~/composables/useBilling'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {NotificationKind, WAITLIST_BUYER} from '~/config/notificationTemplates'
 import {fetchSeason} from '~~/server/data/prismaRepository'
-import {fetchDinnerEvents, fetchDinnerEventsByIds, fetchOrderHistoryForDinners, fetchOrders} from '~~/server/data/financesRepository'
+import {fetchDinnerEventsByIds, fetchOrderHistoryForDinners, fetchOrders} from '~~/server/data/financesRepository'
 import {fetchWaitlistForDinners} from '~~/server/data/waitlistRepository'
-import {dinnerForWaitlist, type DinnerForWaitlist} from '~~/server/utils/waitlistAssignment'
+import {dinnerForWaitlist, isClosedDinner, type DinnerForWaitlist} from '~~/server/utils/waitlistAssignment'
 import {formatDate} from '~/utils/date'
 import {formatPortions} from '~/utils/utils'
 import {groupBy} from '~/utils/batchUtils'
@@ -404,14 +404,14 @@ const notificationsOnDinners = (queue: TicketWaitlistDisplay[], history: OrderHi
     return notified
 }
 
-// The season's dinners still to come and past their booking deadline, where the waiting list and the sales live
+// The season's dinners still to come and past their booking deadline, where the waiting list and the sales live; the
+// dinners come with the season
 const notificationsOnSeason = async (d1Client: D1Database, seasonId: number | null): Promise<LoadedDeliveries> => {
     if (seasonId === null) return {desired: []}
     const season = await fetchSeason(d1Client, seasonId)
     if (!season) return {desired: []}
     const {canModifyOrders} = useSeason().deadlinesForSeason(season, new Date())
-    const dinners = (await fetchDinnerEvents(d1Client, {seasonId, excludeStates: [DinnerState.CONSUMED, DinnerState.CANCELLED]}))
-        .filter(dinner => !canModifyOrders(dinner.date))
+    const dinners = (season.dinnerEvents ?? []).filter(dinner => !isClosedDinner(dinner.state) && !canModifyOrders(dinner.date))
     if (dinners.length === 0) return {desired: []}
     const dinnerEventIds = dinners.map(dinner => dinner.id)
     const queue = await fetchWaitlistForDinners(d1Client, dinnerEventIds)

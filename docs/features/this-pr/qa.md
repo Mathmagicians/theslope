@@ -2,52 +2,34 @@
 
 **Date:** 2026-10-28 | **Specs:** [chores-0.9.1.md](chores-0.9.1.md), [feature-notification-delivery.md](feature-notification-delivery.md)
 
-The checks with human eyes, as a walk through the app. A check passes with its date in **Signed off** and becomes one
+The checks with human eyes of what users see and the tests leave unproven, as a walk through the app. A check passes with its date in **Signed off** and becomes one
 line under § Signed off.
 
-## /dinner and /household/&lt;S&gt;/bookings (5)
+## /dinner (1)
 
 | # | Package | State, viewport | What to see | Signed off |
 |---|---|---|---|---|
-| 110 | Defect 38 | `/household/<S>/bookings`: day, week and month view; the add-guest row | Each view and the add-guest row work as before | |
-| 111 | Defect 39 | The guest rows on `/dinner` and in the week grid; the grid's save button | "Gæst", "Gæst af" and the save button read as before | |
-| 112 | Defect 40 | `/dinner` and the week grid | The modes offered and the add-guest choices are as before | |
-| 113 | Defect 72 | `/household/<S>/bookings`, week view: switch to a household that moved in or out within the week | Its columns and the residency alert follow the household | |
 | 114 | Defect 73 | `/dinner` | The deadline badges look as before | |
 
-## /household/&lt;S&gt; (1)
+## /chef (2)
 
 | # | Package | State, viewport | What to see | Signed off |
 |---|---|---|---|---|
-| 115 | Defect 86 | `/household/<S>` | The tabs read Tilmeldinger, Præferencer, Allergier, Økonomi, Indstillinger | |
-
-## /chef (11)
-
-| # | Package | State, viewport | What to see | Signed off |
-|---|---|---|---|---|
-| 88 | Chef calendar visit | `/chef`, calendar open, desktop and phone, light and dark mode | The team on view's dinners in its colours with the deadline chips; the other teams' dinners as grey outlined circles; Forklaring ends with "Andet madholds fællesspisning" | re-check with #141–#145 (defect 101 in test) |
-| 116 | Defect 78 | Save allergens, Annoncer, Aflys and undo the cancel | Each toasts once | |
-| 117 | Defect 79 | As a cook, then as a kokkespire | The role line shows the role's icon | |
-| 118 | Defect 82 | Save a menu, add and remove a purchase; `/admin/system` Kør a job | Each toast reads as before | |
-| 119 | Defect 96 | The page source of `/dinner`, `/chef`, `/admin`, `/household/<S>` | `<meta name="description" …>` | |
 | 122 | Defect 109 | A dinner's Budget at 375px | "ex / inkl. moms" sits on its own line under the badge and the period, on the right; nothing is cut off | |
-| 141 | Defect 101 | `/chef?team=<a team the person is not on>`, one own team plus the visit, 375px, light and dark mode | The team icon centred above one line: the coloured "Madhold N" with "Ikke dit hold" to its right on one baseline | |
-| 142 | Defect 101 | As #141 at 1280px | Icon, "Madhold N" and "Ikke dit hold" on one line, spaced as before | |
-| 143 | Defect 101 | Two own teams plus the visit, 375px | The row scrolls sideways when the tabs outgrow it; the visiting tab last, laid out as #141 | |
-| 144 | Defect 101 | As #143 at 1280px | A vertical list with the visiting tab last, nothing clipped | |
-| 145 | Defect 101 | `/chef` on an own team, no visit, 375px and 1280px | The icon above the name on a phone, beside it on desktop; no "Ikke dit hold" | |
+| 148 | Defect 147 | `/chef` for a person on no team, phone and desktop, light and dark mode | "Ingen madhold" centred on a neutral soft surface with the larger title, in place of the violet box | finding: defect 147 reopened |
 
-## /admin/allergies/pdf (4)
+## /admin/allergies/pdf (3)
 
 | # | Package | State, viewport | What to see | Signed off |
 |---|---|---|---|---|
 | 132 | Defect 130 | `/admin/allergies/pdf`, the member in light mode, 1280px | A white sheet, a grey head band, dark text; Tilbage a solid button like Print | |
 | 133 | Defect 130 | The same page, the member in dark mode | As #132: the legend alerts' and the table's text dark on white; the managers' faces ring ocean blue | |
-| 134 | Defect 130 | Tilbage from #133 | `/admin/allergies` in dark mode again; the member's mode kept | |
 | 135 | Defect 130 | Print preview from dark mode | White A4, dark text, the QR code beside the table, no Tilbage or Print button | |
 
 ## Signed off 2026-10-28
 
+- #88 Chef calendar visit: the team on view's dinners in colour, the other teams' as grey circles, Forklaring's last line
+- #141–#145 The visiting tab: the team icon above or beside "Madhold N" and "Ikke dit hold" on phone and desktop
 - #123–#126 Avatar ring colours: the Alle row rings orange, inhabitants amber, the allergy managers ocean blue at 768px
 - #127 Avatar ring colours: the managers' faces ring blue on the poster
 - #128 Avatar ring colours: no ring and the managers below the message at 375px
@@ -95,3 +77,9 @@ line under § Signed off.
 
 - #12 The allergy manager on another household's bookings tab: the visitor banner, no override button (`household-tab.nuxt.spec.ts`)
 - #13 Admin on another household's bookings tab, override off: expected bookings as ghosts, no toast (`HouseholdBookings.nuxt.spec.ts`)
+
+## Closed without a browser check (2026-10-28)
+
+- #110–#113, #115–#118 Booking views and chef page words, toasts and icons: the component tests prove them
+- #119 The pages' meta description: the page source, nothing users see
+- #134 The poster's Tilbage keeps the member's colour mode: Nuxt's colour mode per page

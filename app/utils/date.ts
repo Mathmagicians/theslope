@@ -8,6 +8,7 @@ import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
 import {capitalize} from "~/utils/utils"
+import {DATE_WORDS} from "~/config/dateWords"
 import {CalendarDate, type DateValue, toZoned, toCalendarDateTime, Time, fromDate} from '@internationalized/date'
 
 export const DATE_SETTINGS =
@@ -280,7 +281,7 @@ export function formatMonthYear(date: Date): string {
  */
 export function formatWeekRange(start: Date, end: Date): string {
     const weekNum = getISOWeek(start)
-    return `Uge ${weekNum}: ${formatDate(start, DATE_SETTINGS.DAY_MONTH_MASK)}-${formatDate(end, DATE_SETTINGS.DAY_MONTH_MASK)}`
+    return `${DATE_WORDS.week} ${weekNum}: ${formatDate(start, DATE_SETTINGS.DAY_MONTH_MASK)}-${formatDate(end, DATE_SETTINGS.DAY_MONTH_MASK)}`
 }
 
 /**
@@ -295,7 +296,7 @@ export function calculateCountdown(
     currentDate: Date
 ): { hours: number; minutes: number; formatted: string } {
     if (targetDate <= currentDate) {
-        return { hours: 0, minutes: 0, formatted: 'Overskredet' }
+        return { hours: 0, minutes: 0, formatted: DATE_WORDS.overdue }
     }
 
     const totalHours = differenceInHours(targetDate, currentDate)
@@ -318,7 +319,7 @@ export function calculateCountdown(
 
     const hours = duration.hours ?? 0
     const minutes = duration.minutes ?? 0
-    const formatted = hours > 0 ? `${hours}T ${minutes}M` : `${minutes}M`
+    const formatted = hours > 0 ? `${hours}${DATE_WORDS.hour} ${minutes}${DATE_WORDS.minute}` : `${minutes}${DATE_WORDS.minute}`
 
     return { hours, minutes, formatted }
 }

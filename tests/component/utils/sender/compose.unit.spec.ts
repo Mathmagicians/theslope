@@ -6,14 +6,15 @@ import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFa
 import {NOTIFICATION_SENDER_NAME, NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES, senderAddress, senderDisplayName} from '~/config/notificationTemplates'
 import {maskEmail} from '~~/workers/common/mask'
 
-const {NotificationMessageSchema} = useNotificationValidation()
+const {NotificationMessageSchema, EnvironmentSchema} = useNotificationValidation()
+const Environment = EnvironmentSchema.enum
 const {deliveryReferencePrefix, DeliveryKindSchema} = useDeliveryValidation()
 const config = NotificationFactory.config()
 const toAnna = {kind: NotificationFactory.Kind.TEST, to: 'anna@example.com', values: {}} as const
 
 describe('senderDisplayName', () => {
     it('derives the sender line for an environment', () => {
-        expect(senderDisplayName('dev')).toBe('Skråningen dev')
+        expect(senderDisplayName(Environment.dev)).toBe('Skråningen dev')
     })
 })
 
@@ -32,8 +33,8 @@ describe('templates name the sender through {{senderName}}', () => {
 
 describe('senderAddress', () => {
     it.each([
-        ['dev', 'no-reply.dev@skraaningen.dk'],
-        ['prod', 'no-reply@skraaningen.dk']
+        [Environment.dev, 'no-reply.dev@skraaningen.dk'],
+        [Environment.prod, 'no-reply@skraaningen.dk']
     ])('derives the sender address for %s as %s', (environment, expected) => {
         expect(senderAddress(environment)).toBe(expected)
     })

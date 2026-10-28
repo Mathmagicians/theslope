@@ -6,16 +6,19 @@
  * to every text. Plain module (not app.config itself) so unit tests can import the real templates.
  */
 import type {SenderEvent} from '~/composables/useDeliveryValidation'
+import {useNotificationValidation, type NotificationEnvironment} from '~/composables/useNotificationValidation'
+
+const {EnvironmentSchema} = useNotificationValidation()
 
 export const NOTIFICATION_SENDER_NAME = 'Skråningen'
 export const NOTIFICATION_SENDER_DOMAIN = 'skraaningen.dk'
 
 /** Sender address per environment — pinned by the sender binding's allowed_sender_addresses: `no-reply@` on prod, `no-reply.<environment>@` elsewhere */
-export const senderAddress = (environment: string): string =>
-    environment === 'prod' ? `no-reply@${NOTIFICATION_SENDER_DOMAIN}` : `no-reply.${environment}@${NOTIFICATION_SENDER_DOMAIN}`
+export const senderAddress = (environment: NotificationEnvironment): string =>
+    environment === EnvironmentSchema.enum.prod ? `no-reply@${NOTIFICATION_SENDER_DOMAIN}` : `no-reply.${environment}@${NOTIFICATION_SENDER_DOMAIN}`
 
 /** Display name next to the sender address: `Skråningen <environment>` — the sender line tells the environments apart */
-export const senderDisplayName = (environment: string): string => `${NOTIFICATION_SENDER_NAME} ${environment}`
+export const senderDisplayName = (environment: NotificationEnvironment): string => `${NOTIFICATION_SENDER_NAME} ${environment}`
 
 export const NOTIFICATION_SIGNATURE = 'De bedste hilsner fra — {{senderName}} · {{site}}'
 

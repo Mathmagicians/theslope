@@ -546,7 +546,7 @@ describe('Households Store', () => {
       const store = await setupStore()
       householdIndexEndpoint.mockClear()
 
-      const created = await store.createHousehold(payload())
+      const created = await store.createHousehold(payload(), [])
 
       expect(created?.id).toBe(createMockHouseholdDetail().id)
       expect(householdIndexEndpoint).toHaveBeenCalled()
@@ -558,7 +558,28 @@ describe('Households Store', () => {
       })
       const store = await setupStore()
 
-      await expect(store.createHousehold(payload())).resolves.toBeNull()
+      await expect(store.createHousehold(payload(), [])).resolves.toBeNull()
+    })
+
+    it('GIVEN a prev owner at the address WHEN created THEN the create carries the household alone and the prev owner moves out by override', async () => {
+      const created: unknown[] = []
+      createHouseholdEndpoint.mockImplementation(async (event: H3Event) => {
+        created.push(await readBody(event))
+        return createMockHouseholdDetail()
+      })
+      const movedOut: {query: unknown, body: unknown}[] = []
+      moveOutEndpoint.mockImplementation(async (event: H3Event) => {
+        movedOut.push({query: getQuery(event), body: await readBody(event)})
+        return { household: createMockHouseholdDetail(), scaffoldResult: OrderFactory.defaultScaffoldResult() }
+      })
+      const store = await setupStore()
+      const household = payload()
+      const moveOutDate = new Date('2026-11-01T00:00:00Z')
+
+      await store.createHousehold(household, [{id: 1, moveOutDate}])
+
+      expect(created).toEqual([JSON.parse(JSON.stringify(household))])
+      expect(movedOut).toEqual([{query: adminBypassQuery(true), body: {moveOutDate: moveOutDate.toISOString()}}])
     })
   })
 })

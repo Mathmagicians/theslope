@@ -72,17 +72,17 @@ export const useTemporalCalendar = () => {
     nextDinner: DinnerEventDisplay | null,
     color: string
   ) => {
-    const pastEventList = createEventList(pastDates, 'past-dinners', 'badge', {
+    const pastEventList = createEventList(pastDates, 'past-dinners', RENDER_STYLE.badge, {
       color: 'mocha'
     })
 
-    const futureEventList = createEventList(futureDates, 'future-dinners', 'badge', {
+    const futureEventList = createEventList(futureDates, 'future-dinners', RENDER_STYLE.badge, {
       color
     })
 
     const nextEventList = nextDinner
-      ? createEventList([nextDinner.date], 'next-dinner', 'badge', { color })
-      : createEventList([], 'next-dinner', 'badge')
+      ? createEventList([nextDinner.date], 'next-dinner', RENDER_STYLE.badge, { color })
+      : createEventList([], 'next-dinner', RENDER_STYLE.badge)
 
     return [pastEventList, futureEventList, nextEventList]
   }

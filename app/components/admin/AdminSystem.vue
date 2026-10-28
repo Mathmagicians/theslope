@@ -56,7 +56,9 @@ Visual check: /admin/system, each box after a run (the daily box with and withou
 -->
 
 <script setup lang="ts">
+import type {TreeItem} from '@nuxt/ui'
 import type {JobRunDisplay} from '~/composables/useMaintenanceValidation'
+import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
 
 // The parent decides who may run a job
 interface Props {
@@ -74,7 +76,6 @@ const {
     getJobStatusColor,
     getJobStatusIcon,
     formatDuration,
-    formatTriggeredBy,
     formatResultSummary,
     jobRunStats
 } = useMaintenance()
@@ -160,7 +161,7 @@ const jobHistoryRows = computed(() => {
     statusIcon: getJobStatusIcon(jr.status),
     statusLabel: jobStatusLabels[jr.status],
     duration: formatDuration(jr.durationMs),
-    triggeredBy: formatTriggeredBy(jr.triggeredBy),
+    triggeredBy: jr.triggeredBy,
     resultSummary: formatResultSummary(jr.jobType, jr.resultSummary)
   }))
 })
@@ -171,12 +172,14 @@ const jobHistoryRows = computed(() => {
 
 const appConfig = useAppConfig()
 
-const objectToTreeItems = (obj: Record<string, unknown>): { label: string; children?: { label: string }[] }[] => {
-  return Object.entries(obj).map(([key, value]) => {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
+const isConfigBranch = (value: unknown): value is object => typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const objectToTreeItems = (branch: object): TreeItem[] => {
+  return Object.entries(branch).map(([key, value]: [string, unknown]) => {
+    if (isConfigBranch(value)) {
       return {
         label: key,
-        children: objectToTreeItems(value as Record<string, unknown>)
+        children: objectToTreeItems(value)
       }
     }
     const displayValue = Array.isArray(value) ? `[${value.length} items]` : String(value)
@@ -184,7 +187,7 @@ const objectToTreeItems = (obj: Record<string, unknown>): { label: string; child
   })
 }
 
-const configTreeItems = computed(() => objectToTreeItems(appConfig.theslope as Record<string, unknown>))
+const configTreeItems = computed(() => objectToTreeItems(appConfig.theslope))
 const CONFIG_TREE_EXPANDED = ['defaultSeason', 'cookingDeadlines', 'kitchen', 'billing'] satisfies (keyof typeof appConfig.theslope)[]
 
 // ============================================================================
@@ -208,9 +211,7 @@ const systemJobs = appConfig.theslope.systemJobs
 const jobDefinitions = computed(() => [
   {
     key: JobType.HEYNABO_IMPORT,
-    title: 'Heynabo Import',
-    buttonLabel: 'Kør import',
-    description: 'Synkroniser husstande og beboere fra Heynabo',
+    ...MAINTENANCE_WORDS.boxes[JobType.HEYNABO_IMPORT],
     schedule: systemJobs.heynaboImport.description,
     color: COLOR.ocean,
     headerBg: getRainbowBand(2),
@@ -223,9 +224,7 @@ const jobDefinitions = computed(() => [
   },
   {
     key: JobType.DAILY_MAINTENANCE,
-    title: 'Daglig Vedligeholdelse',
-    buttonLabel: 'Kør daglig vedligeholdelse',
-    description: 'Markér middage som afholdt, luk ordrer, opret transaktioner, opret automatiske bookinger',
+    ...MAINTENANCE_WORDS.boxes[JobType.DAILY_MAINTENANCE],
     schedule: systemJobs.dailyMaintenance.description,
     color: COLOR.peach,
     headerBg: getRainbowBand(4),
@@ -238,9 +237,7 @@ const jobDefinitions = computed(() => [
   },
   {
     key: JobType.MONTHLY_BILLING,
-    title: 'Månedlig Fakturering',
-    buttonLabel: 'Kør fakturering',
-    description: 'Generer fakturaer for foregående måned',
+    ...MAINTENANCE_WORDS.boxes[JobType.MONTHLY_BILLING],
     schedule: systemJobs.monthlyBilling.description,
     color: COLOR.secondary,
     headerBg: getRainbowBand(0),
@@ -331,7 +328,7 @@ const jobDefinitions = computed(() => [
             block
             @click="job.trigger"
           >
-            {{ job.isRunning ? 'Kører...' : job.buttonLabel }}
+            {{ job.isRunning ? MAINTENANCE_WORDS.running : job.buttonLabel }}
           </UButton>
         </template>
       </UCard>

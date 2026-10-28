@@ -13,7 +13,7 @@ Priority high, issue #170. The rules: ADR-015 (Notifications), ADR-016 complianc
 | Booking status | The waiting list, the sales and the buildup off the dinners past their deadline | done 8fa59aa, 39e14a6 |
 | Monthly billing | The accountant's mail with the period's CSV, through the same step | done 8fa59aa, 39e14a6 |
 | Booking emails flag | `SHOULD_SEND_BOOKING_EMAILS_FLAG`, off on dev | done 39e14a6, 16586f1, signed off 2026-10-27 |
-| Chef deadlines | The chef's missed deadlines, one notice a dinner a night (`sendChefDeadlines`); mockup in § Chef deadlines | partly committed (f4bb23f, 34ff620); open: defects 138, 139, 140, agent finishing |
+| Chef deadlines | The chef's missed deadlines, one notice a dinner a night (`sendChefDeadlines`); mockup in § Chef deadlines | partly committed (f4bb23f, 34ff620); open: the ship's e2e run (defects 138–140) |
 
 ## Chef deadlines
 

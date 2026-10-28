@@ -120,7 +120,7 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
   const toastTitle = isGuestBooking ? BOOKING_TOAST_TITLES.guest : BOOKING_TOAST_TITLES.booking
 
   try {
-    const response = await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders)
+    const response = await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders, false)
     toast.add(scaffoldToast(toastTitle, response.scaffoldResult, selectedHousehold.value?.inhabitants.map(({id}) => id)))
   } catch {
     // The request has toasted the failure

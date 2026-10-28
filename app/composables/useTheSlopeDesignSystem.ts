@@ -2323,9 +2323,9 @@ export const ICONS = {
     mail: 'i-guidance-mail',
     phone: 'i-guidance-phone',
     identification: 'i-heroicons-identification',
+    notification: 'i-heroicons-bell',
 
     // Own settings (Mine indstillinger)
-    notification: 'i-heroicons-bell',
     palette: 'i-lucide-palette',
     textScale: 'i-lucide-a-large-small',
 

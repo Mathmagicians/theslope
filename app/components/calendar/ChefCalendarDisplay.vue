@@ -71,7 +71,7 @@ import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
+import {LEGEND_KIND, type CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 import {TEAM_WORDS} from '~/config/teamWords'
 import {getPaginationRowModel} from '@tanstack/vue-table'
 
@@ -148,7 +148,7 @@ const allEventLists = computed(() => [
     nextDinner.value,
     'ocean'
   ),
-  createEventList(props.otherTeamDinners.map(dinner => dinner.date), OTHER_TEAM_DINNERS, 'badge')
+  createEventList(props.otherTeamDinners.map(dinner => dinner.date), OTHER_TEAM_DINNERS, RENDER_STYLE.badge)
 ])
 
 const isOtherTeamDay = (eventLists: DayEventList[]): boolean => eventLists.some(list => list.listId === OTHER_TEAM_DINNERS)
@@ -212,15 +212,15 @@ const legendItems = computed((): CalendarLegendItem[] => {
   const chipCircle = dayCircleClasses(CHEF_CALENDAR.day.future)
   const words = TEAM_WORDS.calendarLegend
   return [
-    {label: words.next, kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.next)},
-    {label: words.selected, kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.next, CHEF_CALENDAR.selection)},
-    {label: words.planned, kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.future)},
-    {label: words.past, kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past)},
-    {label: words.overdue, kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[3], circleClass: chipCircle, chipSize: SIZES.md},
-    {label: words.critical, kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[2], circleClass: chipCircle, chipSize: SIZES.md},
-    {label: words.soon, kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[1], circleClass: chipCircle, chipSize: SIZES.md},
-    {label: words.cancelled, kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past, CALENDAR.day.cancelled)},
-    {label: words.otherTeam, kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.otherTeam)}
+    {label: words.next, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CHEF_CALENDAR.day.next)},
+    {label: words.selected, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CHEF_CALENDAR.day.next, CHEF_CALENDAR.selection)},
+    {label: words.planned, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CHEF_CALENDAR.day.future)},
+    {label: words.past, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CALENDAR.day.past)},
+    {label: words.overdue, kind: LEGEND_KIND.chip, chipColor: URGENCY_TO_CHIP_COLOR[3], circleClass: chipCircle, chipSize: SIZES.md},
+    {label: words.critical, kind: LEGEND_KIND.chip, chipColor: URGENCY_TO_CHIP_COLOR[2], circleClass: chipCircle, chipSize: SIZES.md},
+    {label: words.soon, kind: LEGEND_KIND.chip, chipColor: URGENCY_TO_CHIP_COLOR[1], circleClass: chipCircle, chipSize: SIZES.md},
+    {label: words.cancelled, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CALENDAR.day.past, CALENDAR.day.cancelled)},
+    {label: words.otherTeam, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CHEF_CALENDAR.day.otherTeam)}
   ]
 })
 

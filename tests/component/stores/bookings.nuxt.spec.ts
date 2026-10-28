@@ -279,7 +279,7 @@ describe('Bookings store — scaffold bookings', () => {
     it('returns the scaffold response and clears the processing flag', async () => {
         const store = useBookingsStore()
 
-        const promise = store.processSingleEventBookings(1, DINNER_ID, [OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID})])
+        const promise = store.processSingleEventBookings(1, DINNER_ID, [OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID})], false)
         expect(store.isProcessingBookings).toBe(true)
         const response = await promise
 
@@ -356,7 +356,7 @@ describe('Bookings store — scaffold bookings', () => {
 
     // An admin's save on a household carries the override; the household's own save carries no parameter (ADR-004)
     it.each([
-        {save: 'a member\'s day view save', adminBypass: false, run: (store: ReturnType<typeof useBookingsStore>) => store.processSingleEventBookings(1, DINNER_ID, [])},
+        {save: 'a member\'s day view save', adminBypass: false, run: (store: ReturnType<typeof useBookingsStore>) => store.processSingleEventBookings(1, DINNER_ID, [], false)},
         {save: 'a member\'s grid save', adminBypass: false, run: (store: ReturnType<typeof useBookingsStore>) => store.processMultipleEventsBookings(1, [DINNER_ID], [], false)},
         {save: 'an admin\'s day view save', adminBypass: true, run: (store: ReturnType<typeof useBookingsStore>) => store.processSingleEventBookings(1, DINNER_ID, [], true)},
         {save: 'an admin\'s grid save', adminBypass: true, run: (store: ReturnType<typeof useBookingsStore>) => store.processMultipleEventsBookings(1, [DINNER_ID], [], true)}
@@ -436,7 +436,7 @@ describe('Bookings store — one booking write', () => {
         waitlistEntriesEndpoint.mockClear()
         dinnerEventDetailEndpoint.mockClear()
 
-        await expect(store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, []))[outcome].toBeTruthy()
+        await expect(store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [], false))[outcome].toBeTruthy()
 
         expect(store.isProcessingBookings).toBe(false)
         expect(queries(ordersEndpoint)).toEqual(expect.arrayContaining([
@@ -457,7 +457,7 @@ describe('Bookings store — one booking write', () => {
         {when: 'a booking save\'s re-read of the orders', before: async (store: Store) => {
             loadDinner(store)
             await vi.waitFor(() => expect(asyncDataStatus('bookings-store-orders')).toBe('success'))
-        }, read: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [])}
+        }, read: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [], false)}
     ])('WHEN $when are on the way THEN the bookings read as reloading, until they land', async ({before, read}) => {
         const store = useBookingsStore()
         await before(store)
@@ -524,7 +524,7 @@ describe('Bookings store — a cancelled dinner', () => {
 
     const vias = [
         {via: 'a read of the expected bookings', run: (store: Store) => store.fetchExpectedBookings(MY_HOUSEHOLD_ID, [dinner.id])},
-        {via: 'a save', run: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [])}
+        {via: 'a save', run: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [], false)}
     ]
     const replies = [
         {reply: 'leaves the asked dinner out', dinners: [], reads: 1},
@@ -981,6 +981,21 @@ describe('Bookings store — the chef\'s dinner actions', () => {
         {desc: 'cancel', act: cancel, endpoint: updateDinnerEndpoint, title: Toasts.cancelled.title},
         {desc: 'undo of a cancel', act: undoCancel, endpoint: updateDinnerEndpoint, title: Toasts.reopened.title}
     ])('resolves null without a success toast when the $desc fails', expectFailedWithoutSuccessToast)
+
+    it.each([
+        {desc: 'save of allergens', act: saveAllergens([1]), failed: Toasts.allergensSaved.failed},
+        {desc: 'announce', act: announce, failed: Toasts.announced.failed},
+        {desc: 'cancel', act: cancel, failed: Toasts.cancelled.failed},
+        {desc: 'undo of a cancel', act: undoCancel, failed: Toasts.reopened.failed},
+        {desc: 'save of the menu', act: (store: Store) => store.updateDinnerEventField(DINNER_ID, {menuTitle: 'X'}, ME), failed: Toasts.menuSaved.failed}
+    ])('WHEN the $desc fails THEN the failure toast names the action', async ({act, failed}) => {
+        updateDinnerEndpoint.mockImplementation(failure)
+        const store = useBookingsStore()
+
+        await act(store)
+
+        expect(useToast().toasts.value.map(toast => toast.description)).toContain(failed)
+    })
 })
 
 // ---- Ticket changes (the chef's Billetændringer) ----

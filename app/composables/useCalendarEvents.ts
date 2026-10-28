@@ -4,6 +4,10 @@ import {
     formatDate
 } from "~/utils/date"
 
+/** How a calendar paints the days of an event list */
+export const RENDER_STYLE = {badge: 'badge', chip: 'chip', ring: 'ring', background: 'background'} as const
+export type RenderStyle = typeof RENDER_STYLE[keyof typeof RENDER_STYLE]
+
 // display format for the calendar component
 export type CalendarEvent = {
     listId: string
@@ -19,15 +23,17 @@ export type CalendarEventList = {
         label?: string            // Display text (e.g., "Hold 1", "Anna")
         metadata?: unknown        // Domain-specific data
     }>
-    renderStyle: 'badge' | 'chip' | 'ring' | 'background'
-    color?: string | number     // Business knowledge (team colorIndex)
+    renderStyle: RenderStyle
+    color?: string              // A named colour
+    band?: number               // The rainbow band the list's days wear (a team's band index)
 }
 
 // Event list for a specific day (includes list metadata + events for that day)
 export type DayEventList = {
     listId: string
-    renderStyle: 'badge' | 'chip' | 'ring' | 'background'
-    color?: string | number
+    renderStyle: RenderStyle
+    color?: string
+    band?: number
     events: CalendarEvent[]
 }
 
@@ -35,10 +41,11 @@ export const useCalendarEvents = () => {
     const createEventList = (
         dates: Date[],
         listId: string,
-        renderStyle: 'badge' | 'chip' | 'ring' | 'background',
+        renderStyle: RenderStyle,
         options?: {
             label?: string
-            color?: string | number
+            color?: string
+            band?: number
             metadata?: unknown
         }
     ): CalendarEventList => {
@@ -50,7 +57,8 @@ export const useCalendarEvents = () => {
                 metadata: options?.metadata
             })),
             renderStyle,
-            color: options?.color
+            color: options?.color,
+            band: options?.band
         }
     }
 
@@ -103,6 +111,7 @@ export const useCalendarEvents = () => {
                     listId: sourceList.listId,
                     renderStyle: sourceList.renderStyle,
                     color: sourceList.color,
+                    band: sourceList.band,
                     events: []
                 })
             }

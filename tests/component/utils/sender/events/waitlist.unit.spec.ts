@@ -514,7 +514,7 @@ describe('the people a run\'s mails name', () => {
         const {OrderAuditActionSchema, OrderAuditChangeSchema, OrderAuditSourceSchema, DinnerStateSchema, createOrderAuditData} = useBookingValidation()
         const DinnerState = DinnerStateSchema.enum
         const SEASON_ID = 9
-        // D1 holds the dinner in this state; the read leaves out the states it excludes
+        // D1 holds the dinner in this state; the season comes with its dinners
         let dinnerState: typeof DinnerState[keyof typeof DinnerState]
         // The run's clock, the day before the dinner and past its booking deadline
         const at = (minute: number) => new Date(2026, 9, 18, 12, minute)
@@ -522,9 +522,10 @@ describe('the people a run\'s mails name', () => {
             vi.useFakeTimers({toFake: ['Date']})
             vi.setSystemTime(at(30))
             dinnerState = DinnerState.SCHEDULED
-            vi.mocked(fetchDinnerEvents).mockImplementation(async (_, {excludeStates} = {}) =>
-                [{...DinnerEventFactory.defaultDinnerEventDisplay(), id: dinner.dinnerEventId, date: dinner.date, seasonId: SEASON_ID, state: dinnerState}]
-                    .filter(({state}) => !excludeStates?.includes(state)))
+            vi.mocked(fetchSeason).mockImplementation(async (_, id) => ({
+                ...SeasonFactory.defaultSeason(), id, ticketPrices: TicketFactory.defaultTicketPrices({seasonId: id}),
+                dinnerEvents: [{...DinnerEventFactory.defaultDinnerEventDisplay(), id: dinner.dinnerEventId, date: dinner.date, seasonId: SEASON_ID, state: dinnerState}]
+            }))
         })
         afterEach(() => vi.useRealTimers())
 
@@ -598,7 +599,7 @@ describe('the people a run\'s mails name', () => {
             await send(fakeQueue())
 
             expect(fetchSeason).toHaveBeenCalledOnce()
-            expect(fetchDinnerEvents).toHaveBeenCalledOnce()
+            expect(fetchDinnerEvents).not.toHaveBeenCalled()
             expect(fetchDinnerEventsByIds).not.toHaveBeenCalled()
             expect(vi.mocked(dinnerReads.fetchDeliveries).mock.calls.map(([, subjectType]) => subjectType)).toEqual([DeliverySubjectSchema.enum.ORDER])
         })
@@ -612,7 +613,7 @@ describe('the people a run\'s mails name', () => {
             const sender = fakeQueue()
 
             expect(await send(sender, options, null)).toEqual(result)
-            expect(fetchDinnerEvents).not.toHaveBeenCalled()
+            expect(fetchSeason).not.toHaveBeenCalled()
             expect(sentMessages(sender)).toEqual([])
         })
     })

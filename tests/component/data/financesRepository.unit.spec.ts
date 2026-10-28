@@ -7,7 +7,7 @@ import {
     countReleasedTicketsByType, createOrders, deleteOrder, fetchDinnerEventsByIds, fetchOrders, recordDeliveries, updateOrdersBatch
 } from '~~/server/data/financesRepository'
 import {useDeliveryValidation, type DeliveryCreate} from '~/composables/useDeliveryValidation'
-import {useBookingValidation, OrderAuditAction} from '~/composables/useBookingValidation'
+import {useBookingValidation, OrderAuditAction, OrderSortBy} from '~/composables/useBookingValidation'
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import {callsInFlight, statementsInCallOrder} from '~~/tests/component/data/fakePrismaClient'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
@@ -198,13 +198,14 @@ describe('fetchOrders with provenance', () => {
         rawQuery.mockImplementation(async (sql: string, ...params: SQLInputValue[]) => db.prepare(sql).all(...params))
     })
 
-    const readWithProvenance = () => fetchOrders(d1Client, [DINNER_ID], undefined, undefined, 'createdAt', true)
+    const readWithProvenance = () => fetchOrders(d1Client, [DINNER_ID], undefined, undefined, OrderSortBy.createdAt, true)
 
     it('GIVEN orders with their history WHEN read with their provenance THEN each order\'s history is searched on the order\'s id, never scanned', async () => {
         await readWithProvenance()
 
-        const [sql, ...params] = rawQuery.mock.calls[0]!
-        const plan = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params).map(({detail}) => String(detail))
+        const plan = rawQuery.mock.calls
+            .flatMap(([sql, ...params]) => db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params))
+            .map(({detail}) => String(detail))
         expect(plan.filter(step => step.includes('OrderHistory'))).toEqual([expect.stringMatching(/^SEARCH \w+ USING INDEX OrderHistory_orderId_idx \(orderId=\?\)$/)])
     })
 

@@ -797,6 +797,21 @@ registerEndpoint('/api/admin/season/1', { handler: () => mockObject })  // Never
 
 ---
 
+## Repository Testing
+
+`tests/component/data/*.unit.spec.ts` run the repository functions in the unit runtime, which has no D1. The spec mocks
+`getPrismaClientConnection` (`~~/server/utils/database`) and hands the repository a client of its own.
+
+| Statement | Runs on |
+|---|---|
+| A Prisma call | `fakePrismaClient(models)` (`tests/component/data/fakePrismaClient.ts`): one `vi.fn()` per model method the spec names, answered by the case. `statementsInCallOrder` reads the order of the calls, `callsInFlight` the most calls in flight at once |
+| A raw statement (`$queryRawUnsafe`, ADR-014) | An in-memory SQLite (`node:sqlite`) built from `migrations/*.sql` in a `beforeAll`: the case inserts its rows, the mock runs the statement on it, and the case reads the result and the statement's `EXPLAIN QUERY PLAN` |
+
+A raw statement's case asserts its result, and for a read on a table that grows, a plan that reaches the table through
+an index (`SEARCH … USING INDEX`). Reference: `fetchOrders with provenance` in `financesRepository.unit.spec.ts`.
+
+---
+
 ## E2E Testing (Playwright)
 
 ### Strategy: Setup → Interact → Verify

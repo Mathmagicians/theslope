@@ -526,9 +526,7 @@ describe('useBooking', () => {
 
 // The season's default prices: an order at a ticket type holds that type's price
 const SEASON_PRICES = TicketFactory.defaultTicketPrices()
-// The first price row of a ticket type: the baby who tastes for BABY
-const priceRowOf = TicketFactory.defaultPriceOf
-const priceIdOf = (ticketType: typeof TicketTypes[keyof typeof TicketTypes]) => priceRowOf(ticketType).id!
+const priceIdOf = (ticketType: typeof TicketTypes[keyof typeof TicketTypes]) => TicketFactory.defaultPriceOf(ticketType).id!
 // The factory lists the baby who tastes first, the hungry baby second; the season's prices weigh the first 0 portions
 const BABY_PRICES = SEASON_PRICES.filter(price => price.ticketType === TicketTypes.BABY)
 const [TASTING_PRICE, HUNGRY_PRICE] = [BABY_PRICES[0]!, BABY_PRICES[1]!]
@@ -860,7 +858,7 @@ describe('decideOrderAction', () => {
     })
 
     describe('queue entry rows', () => {
-        const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 101, dinnerMode: DinnerMode.DINEIN, ticketPrice: priceRowOf(TicketTypes.BABY)})
+        const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 101, dinnerMode: DinnerMode.DINEIN, ticketPrice: TicketFactory.defaultPriceOf(TicketTypes.BABY)})
 
         it.each([
             {desc: 'NONE on an entry → leave', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.NONE}), canEditMode: true, expectedBucket: Bucket.leave, expectedMode: DinnerMode.NONE},
@@ -1001,7 +999,7 @@ describe('resolveDesiredOrdersToBuckets', () => {
         const cannotModify = () => false
         const cannotEdit = () => false
 
-        const regularEntry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 201, ticketPrice: priceRowOf(TicketTypes.BABY)})
+        const regularEntry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 201, ticketPrice: TicketFactory.defaultPriceOf(TicketTypes.BABY)})
 
         it.each([
             {
@@ -1165,7 +1163,7 @@ describe('buildDesiredOrder', () => {
         })
 
         it('prices a group whose ticket price is gone by its price at booking', () => {
-            const adultPrice = priceRowOf(TicketType.ADULT).price
+            const adultPrice = TicketFactory.defaultPriceOf(TicketType.ADULT).price
             const orphaned = guestOrders.map(o => ({...o, ticketPriceId: null, priceAtBooking: adultPrice}))
             expect(buildGuest(orphaned).map(o => o.ticketPriceId)).toEqual(guestOrders.map(() => priceIdOf(TicketType.ADULT)))
         })
@@ -1195,7 +1193,7 @@ describe('buildDesiredOrder', () => {
 
     describe('buildEntryDesiredOrder', () => {
         it('names a queued guest\'s place at its held price, with the guest flag and the allergies', () => {
-            const queued = WaitlistFactory.defaultEntry({id: 28, inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, isGuestTicket: true, ticketPrice: priceRowOf(TicketTypes.CHILD)})
+            const queued = WaitlistFactory.defaultEntry({id: 28, inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, isGuestTicket: true, ticketPrice: TicketFactory.defaultPriceOf(TicketTypes.CHILD)})
             const entry = {...queued, order: {...queued.order, allergyTypeIds: [3]}}
 
             expect(buildEntryDesiredOrder({entry, dinnerMode: DinnerMode.NONE}, OrderState.BOOKED)).toEqual({
@@ -1596,7 +1594,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         const allDaysPrefs = dinnerModeMap(DinnerMode.DINEIN)
         const noDaysPrefs = dinnerModeMap(DinnerMode.NONE)
         // The inhabitant's place on the dinner's waiting list, held for a dine-in at the adult price
-        const queued = WaitlistFactory.defaultEntry({id: 21, inhabitantId: 1, dinnerEventId: tomorrowDinner.id, ticketPrice: priceRowOf(TicketTypes.ADULT)})
+        const queued = WaitlistFactory.defaultEntry({id: 21, inhabitantId: 1, dinnerEventId: tomorrowDinner.id, ticketPrice: TicketFactory.defaultPriceOf(TicketTypes.ADULT)})
 
         // A preference decides like a member's change: with no order it buys or queues, on a place it leaves or requeues
         it.each([
@@ -1826,7 +1824,7 @@ describe('getBookingOptions — the rules matrix', () => {
         candidate: dinnerMode => buildDesiredOrder({inhabitantId: person.id, dinnerEventId: dinner.id, dinnerMode}, order ? [order] : [], [person], [dinner], resolver, BOOKED)
     })
     const entryRow = (dinner: Dinner, wish: DinnerMode): BookingRow => {
-        const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, dinnerMode: wish, ticketPrice: priceRowOf(TicketTypes.ADULT)})
+        const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: inhabitant.id, dinnerEventId: dinner.id, dinnerMode: wish, ticketPrice: TicketFactory.defaultPriceOf(TicketTypes.ADULT)})
         return {order: null, waitlistEntry: entry, candidate: dinnerMode => buildEntryDesiredOrder({entry, dinnerMode}, BOOKED)}
     }
     const guestRow = (dinner: Dinner, held: DinnerMode): BookingRow => {

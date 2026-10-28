@@ -18,6 +18,7 @@ import {
     isCalendarDateInDateList,
     toDate,
     calculateCountdown,
+    formatWeekRange,
     createDateInTimezone,
     formatDateInTimezone,
     isSameDayInTimezone,
@@ -610,6 +611,12 @@ describe('calculateCountdown', () => {
             expect(result.minutes).toBe(expectedMinutes)
             expect(result.formatted).toBe(expectedFormatted)
         })
+    })
+})
+
+describe('formatWeekRange', () => {
+    it('GIVEN a week WHEN formatted THEN it reads its ISO week number and its first and last day', () => {
+        expect(formatWeekRange(new Date(2026, 0, 12), new Date(2026, 0, 18))).toBe('Uge 3: 12/01-18/01')
     })
 })
 

@@ -475,12 +475,14 @@ Moved from release 0.9.1 on 2026-10-28, where 542b274 holds the first part (ADR-
 ### Problem
 
 - `CountdownTimer.vue:142` writes the hour by hand (`padStart`); `useBilling.ts:169` reads the day of the month.
-- 19 files in `app/` and `server/` import `date-fns` directly.
+- 23 files in `app/` and `server/` import `date-fns` directly, among them `chef-deadlines.ts:10` (`differenceInDays`).
 - The specs build their dates by hand: 64 calls to `getDate`, `setDate` or `setHours`.
 - `formatDate` takes a pattern string (`app/utils/date.ts:50`); the masks stand in `DATE_SETTINGS`
-  (`date.ts:15-22`), and 10 calls pass a pattern of their own (`date.ts:244`, `:253`, `:262`, `:271`,
+  (`date.ts:15-23`), and 10 calls pass a pattern of their own (`date.ts:244`, `:253`, `:262`, `:271`,
   `useBookingUi.ts:586`, `BookingGridView.vue:782`, `:783`, `AdminEconomy.vue:717`, `pages/admin/allergies/pdf.vue:22`,
   `pages/public/billing/[token].vue:88`).
+- `formatDateInTimezone` (`date.ts:352`) takes a pattern string too; `chef-deadlines.ts:61` passes it the mask
+  `DATE_AT_TIME_MASK` (`date.ts:18`).
 - A dinner date is stored at the midnight of the clock that wrote it: the workers and the season import write UTC
   midnight, a Copenhagen machine 22:00Z of the day before.
 - `dinnerEventFactory.ts:21` and `seasonFactory.ts:49` compute their dates when the file loads.

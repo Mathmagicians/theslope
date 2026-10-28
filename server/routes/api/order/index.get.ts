@@ -23,9 +23,9 @@ import type { OrderDisplay } from '~/composables/useBookingValidation'
 import type { UserDetail } from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
-const {OrderStateSchema, IdOrIdsSchema} = useBookingValidation()
+const {OrderStateSchema, OrderSortBySchema, IdOrIdsSchema} = useBookingValidation()
 
-const sortBySchema = z.enum(['createdAt', 'releasedAt']).default('createdAt')
+const sortBySchema = OrderSortBySchema.default(OrderSortBySchema.enum.createdAt)
 
 const querySchema = z.object({
     dinnerEventIds: IdOrIdsSchema,

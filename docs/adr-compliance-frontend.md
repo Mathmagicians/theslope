@@ -29,7 +29,7 @@ and the component headers hold the detail; a row names a gap in a few words.
 | `/admin/allergies` | `AdminAllergies.vue` | ✅ allergies | N/A | ✅ `?allergy=` | ✅ | ✅ | ✅ master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
 | `/admin/users` | `AdminUsers.vue` | ✅ users | N/A | ✅ | ✅ | ⚠️ loading row, the open row by id | ⚠️ partial unit |
 | `/admin/economy` | `AdminEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?period=` `?invoice=` | ✅ serial | ⚠️ the URL's selection, the loading rows, the upcoming table's Menu cell | ⚠️ partial unit |
-| `/admin/system` | `AdminSystem.vue` | N/A, `storeAsyncData` (ADR-007 component-local) | N/A | ✅ | ✅ | ✅ | ✅ |
+| `/admin/system` | `AdminSystem.vue` | N/A, `storeAsyncData` (ADR-007 component-local) | N/A | ✅ | ✅ | ✅ | ✅ a box's stat lines wear their own stats' icons (`JobStat` from `jobRunStats`), no cast; trigger buttons by `data-testid` (ADR-018) |
 | `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ allergies, plan | N/A | N/A | ✅ smoke | ✅ colour mode, button style | ✅ light mode by page meta; layout from `COMPONENTS.allergyPoster` on `BG.page` (ADR-018) |
 | **Household** | | | | | | | |
 | `/household/[shortname]` | `household/[shortname]/index.vue` | ✅ households | N/A | ✅ `?pbs=` | ✅ | ⚠️ | ⚠️ review `?pbs` on redirect |
@@ -72,11 +72,11 @@ Status.
 | `TeamMemberAddForm.vue` | `/admin/teams` | none | ✅ | ✅ parent | ✅ |
 | `TeamRoleFields.vue` | `/admin/teams` | none | ✅ parent | ✅ parent | ✅ |
 | `JokerSlotForm.vue` | `/admin/teams` | none | ✅ | ✅ | ✅ |
-| `MyTeamSelector.vue` | `/chef` | none | ✅ | ✅ parent | ✅ the visiting tab last, "Ikke dit hold" on the team name's line (`COMPONENTS.myTeamSelector.nameLine`, `COMPONENTS.visitBadge`), its word from `TEAM_WORDS` (ADR-017, ADR-018) |
+| `MyTeamSelector.vue` | `/chef` | none | ✅ | ✅ parent | ✅ the visiting tab last, "Ikke dit hold" on the team name's line (`COMPONENTS.myTeamSelector.nameLine`, `COMPONENTS.visitBadge`), its word from `TEAM_WORDS` (ADR-017, ADR-018); "Ingen madhold" on `ALERTS.emptyState` |
 | `WorkAssignment.vue` | `/dinner`, `/chef` | plan, auth | ❌ | ✅ parent | ⚠️ missing unit |
 | `InhabitantSelector.vue` | `/admin/teams` | none | ✅ | ✅ parent | ✅ |
 | `CookingTeamBadges.vue` | `/admin/teams`, `/chef`, `/dinner` | none | ✅ | ✅ parent | ✅ |
-| `TeamCalendarDisplay.vue` | `/admin/teams` | none | ✅ | ❌ | ✅ the dinner on a day from `useTemporalCalendar`'s `getDinnerForDay` |
+| `TeamCalendarDisplay.vue` | `/admin/teams` | none | ✅ | ❌ | ✅ each team's dinners on its rainbow stop, holidays ringed; no selection |
 
 ### Admin households
 
@@ -243,7 +243,7 @@ Status.
 | `useOrder()` | client | N/A | N/A | ✅ | ✅ | ✅ a ticket's state is `useBooking`'s `ticketStateOf`; `server/` reaches none of `useOrder` |
 | `useAllergy()` | client | N/A | N/A | ✅ | ✅ | ✅ |
 | `useTicket()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ `findTicketPriceById`, the one price lookup by id; `resolveTicketPriceOn`, a ticket's price row on its dinner date |
-| `useMaintenance()` | client | N/A | N/A | ✅ | ✅ | ✅ |
+| `useMaintenance()` | client | N/A | N/A | ✅ | ✅ | ✅ `jobRunStats` reads a run's stats with its job's schema, each stat with its icon (`JobStat`); `formatJobStat`, `formatJobStats` give the one stat line for the boxes, the job history and the job toast |
 | `useUserRoles` (module) | isomorphic | ⚠️ | N/A | ✅ | ✅ | ⚠️ generated-enum import; 0.9.1 |
 | `usePermissions()` | isomorphic | ⚠️ | N/A | N/A | ✅ | ⚠️ generated-enum import; 0.9.1 |
 | **UI and navigation** | | | | | | |
@@ -253,15 +253,15 @@ Status.
 | `useSeasonSelector()` | client | N/A | N/A | N/A | ✅ | ✅ |
 | `useQueryParam()` | client | N/A | N/A | N/A | ✅ | ✅ |
 | `useUrlQueryWriter()` | client | N/A | N/A | N/A | ✅ | ✅ |
-| `useApiHandler()` | client | N/A | N/A | N/A | ✅ | ✅ |
+| `useApiHandler()` | client | N/A | N/A | N/A | ✅ | ✅ `runJob` toasts its stats through `formatJobStats` |
 | `useBookingUi()` | pure UI | N/A | N/A | ✅ | ✅ | ✅ a failed order's conflict reads in the result lines (`CONFLICT_WORDS`); `createChefBadges` reads `getChefDeadlines` |
 | `app/utils/date.ts` | isomorphic | N/A | N/A | N/A | ✅ | ⚠️ `formatDateInTimezone` writes a moment as the clock in the timezone shows it (the server runs in UTC); masks and pattern strings: `features/release-0.9.3/feature-0.9.3.md` § Dates |
 | `useUserRolesUi()` | pure UI | N/A | N/A | N/A | ✅ | ✅ |
 | `useInstallPrompt()` | pure UI | N/A | N/A | N/A | ✅ | ✅ |
-| `useTemporalCalendar()` | client | N/A | N/A | ✅ | ✅ parent | ✅ the dinner on a calendar day and a cancelled day (`getDinnerForDay`, `isCancelledDay`), for the three calendars |
+| `useTemporalCalendar()` | client | N/A | N/A | ✅ | ✅ parent | ✅ the dinner on a calendar day and a cancelled day (`getDinnerForDay`, `isCancelledDay`), for the dinner and chef calendars |
 | `useCalendarEvents()` | client | N/A | N/A | N/A | ✅ | ✅ |
 | `useExpandableRow()` | client | N/A | N/A | N/A | ✅ | ✅ |
-| `useTheSlopeDesignSystem()` | design system (ADR-018) | N/A | N/A | N/A | ✅ architecture specs, unit | ✅ `RING.warning`, `RING.primary`, `RING.ocean`, `COMPONENTS.userListItem.ring` and its key type `UserListItemRing`, `COMPONENTS.allergyManagersList` |
+| `useTheSlopeDesignSystem()` | design system (ADR-018) | N/A | N/A | N/A | ✅ architecture specs, unit | ✅ `RING.warning`, `RING.primary`, `RING.ocean`, `COMPONENTS.userListItem.ring` and its key type `UserListItemRing`, `COMPONENTS.allergyManagersList`, `table.historyUi` on `table.ui` with its own cells |
 
 ## Checklist
 

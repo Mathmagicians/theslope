@@ -26,7 +26,7 @@ QA with human eyes: [qa.md](qa.md). Review defects: [defects.md](defects.md).
 | Tables keep their columns on a phone | Job history and users scroll sideways | – | done d159610, signed off 2026-10-27 |
 | Tables key their rows by id | `getRowId`, `useExpandableRow` | – | done ea978dd, d159610, 6a4f22e, 542b274, signed off 2026-10-27 |
 | The grid shows the day view's tickets | `BookingGridView.vue` header | – | done ea978dd, aa1e6e3, 002c4ae, 6a4f22e, signed off 2026-10-27 |
-| Chef calendar visit | A member opens another team's dinners from the chef calendar; mockups in `pages/chef/index.vue`, `MyTeamSelector.vue` | – | done 002c4ae, fba24af; open: defect 101 |
+| Chef calendar visit | A member opens another team's dinners from the chef calendar; mockups in `pages/chef/index.vue`, `MyTeamSelector.vue` | – | done 002c4ae, fba24af, 34ff620, signed off 2026-10-28 |
 | One path for the grid and the day view | ADR-016 compliance 13; `personOnDinner`, `guestItemsOf`, `useExpectedBookings`, `isDinnerCancelled` | – | done 9e75cef, fba24af, a7f6285, 2c32354 |
 | Scaffold: a save naming an order bought by another household | The save lists it in `failed` and the rest lands; unit case `scaffoldPrebookings.unit.spec.ts:314` | – | done f5b5205 |
 | Minimal test seasons | A season spans the dinners its cases prove (`docs/testing.md` § Strategy: Control the Season, Control the Deadline): `AdminEconomy`, `HouseholdBookingsCrossHousehold`, `HouseholdScaffolding`, `seasonLiveEdit`, `waitlistAssignment` | – | done 2c32354 |
@@ -40,7 +40,7 @@ Updated 2026-10-28. Release 0.9 shipped in f5b5205 (#168).
 
 | Delivery | Description or spec | Gherkin | Status |
 |---|---|---|---|
-| Notification delivery | [feature-notification-delivery.md](feature-notification-delivery.md) | `booking-notifications.feature`, `billing-notifications.feature`, `chef-deadline-notifications.feature`, `delivery-records.feature`, `test-message.feature` (16586f1) | partly committed (8fa59aa, 39e14a6, 16586f1, 542b274, f4bb23f, 34ff620); open: defects 136–140, agent finishing |
+| Notification delivery | [feature-notification-delivery.md](feature-notification-delivery.md) | `booking-notifications.feature`, `billing-notifications.feature`, `chef-deadline-notifications.feature`, `delivery-records.feature`, `test-message.feature` (16586f1) | partly committed (8fa59aa, 39e14a6, 16586f1, 542b274, f4bb23f, 34ff620); open: the ship's e2e run (defects 136–140) |
 
 ## Notification delivery
 

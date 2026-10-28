@@ -3,6 +3,7 @@ import {useMaintenance, type JobStat} from '~/composables/useMaintenance'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {NOTIFICATION_COUNT_WORDS} from '~/config/notificationTemplates'
+import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 
@@ -16,6 +17,7 @@ beforeAll(() => {
     ({formatMonthlyBillingStats, formatDailyMaintenanceStats, jobRunStats, formatResultSummary} = useMaintenance())
 })
 const {JobType} = useMaintenanceValidation()
+const billingLabel = MAINTENANCE_WORDS.stats[JobType.MONTHLY_BILLING]
 
 const billed = {billingPeriodSummaryId: 8, billingPeriod: '18/08/2026-17/09/2026', invoiceCount: 3, transactionCount: 12, totalAmount: 41230}
 const stat = (stats: JobStat[] | null, label: string) => stats?.find(s => s.label === label)?.value
@@ -31,10 +33,10 @@ describe('formatMonthlyBillingStats', () => {
             ]
         })
 
-        expect(stat(stats, 'Perioder')).toBe('1')
-        expect(stat(stats, 'CSV uploadet')).toBe('2')
-        expect(stat(stats, 'Mails sendt')).toBe('1')
-        expect(stat(stats, 'Afventer')).toBe('0')
+        expect(stat(stats, billingLabel.periods)).toBe('1')
+        expect(stat(stats, billingLabel.csvUploaded)).toBe('2')
+        expect(stat(stats, billingLabel.mailsSent)).toBe('1')
+        expect(stat(stats, billingLabel.pending)).toBe('0')
     })
 
     it('counts a period whose CSV or mail is still behind as pending', () => {
@@ -44,7 +46,7 @@ describe('formatMonthlyBillingStats', () => {
             BillingFactory.defaultPeriodSideEffects({billingPeriodSummaryId: 3})
         ]})
 
-        expect(stat(stats, 'Afventer')).toBe('2')
+        expect(stat(stats, billingLabel.pending)).toBe('2')
     })
 })
 
@@ -74,14 +76,14 @@ describe('jobRunStats for MONTHLY_BILLING', () => {
     ])('reads %s', (_name, stored, pending) => {
         const stats = jobRunStats(JobType.MONTHLY_BILLING, stored)
 
-        expect(stat(stats, 'Perioder')).toBe('1')
-        expect(stat(stats, 'Afventer')).toBe(pending)
+        expect(stat(stats, billingLabel.periods)).toBe('1')
+        expect(stat(stats, billingLabel.pending)).toBe(pending)
     })
 
     it('renders the side effects in the job-run line', () => {
         const stored = JSON.stringify({results: [], periods: [BillingFactory.defaultPeriodSideEffects({archive: {key: 'k', filename: 'f', sizeBytes: 1, version: 1, archived: true, degraded: false}})]})
 
-        expect(formatResultSummary(JobType.MONTHLY_BILLING, stored)).toContain('CSV uploadet: 1')
+        expect(formatResultSummary(JobType.MONTHLY_BILLING, stored)).toContain(`${billingLabel.csvUploaded}: 1`)
     })
 })
 

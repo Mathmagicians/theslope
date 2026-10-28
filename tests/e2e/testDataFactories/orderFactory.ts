@@ -445,6 +445,7 @@ export class OrderFactory {
       state?: string
       sortBy?: 'createdAt' | 'releasedAt'
       includeDinnerContext?: boolean
+      includeProvenance?: boolean
     } = {},
     expectedStatus: number = 200
   ): Promise<OrderDisplay[]> => {
@@ -461,6 +462,7 @@ export class OrderFactory {
     if (options.state) params.append('state', options.state)
     if (options.sortBy) params.append('sortBy', options.sortBy)
     if (options.includeDinnerContext) params.append('includeDinnerContext', 'true')
+    if (options.includeProvenance) params.append('includeProvenance', 'true')
 
     const response = await context.request.get(`${ORDER_ENDPOINT}?${params.toString()}`, { headers })
 

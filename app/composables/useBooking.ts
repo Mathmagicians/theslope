@@ -1,4 +1,4 @@
-import {useBookingValidation, DinnerMode as DinnerModeEnum, DinnerState as DinnerStateEnum, OrderState as OrderStateEnum, TicketState as TicketStateEnum, SupplyState as SupplyStateEnum, type TicketState, type SupplyState, type TicketType, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketEvent, type TicketCounts, type OrderAudit} from '~/composables/useBookingValidation'
+import {useBookingValidation, CLOSED_DINNER_STATES, DinnerMode as DinnerModeEnum, DinnerState as DinnerStateEnum, OrderState as OrderStateEnum, TicketState as TicketStateEnum, SupplyState as SupplyStateEnum, type TicketState, type SupplyState, type TicketType, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketEvent, type TicketCounts, type OrderAudit} from '~/composables/useBookingValidation'
 import {useBillingValidation, type TransactionCreateData} from '~/composables/useBillingValidation'
 import {useBilling} from '~/composables/useBilling'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
@@ -380,8 +380,6 @@ export const buildEntryDesiredOrder = ({entry, dinnerMode}: WaitlistEntryIntent,
 /** The modes in the order the app shows and cycles them */
 export const DINNER_MODE_ORDER: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
 
-const CLOSED_DINNER_STATES = new Set<DinnerState>([DinnerStateEnum.CANCELLED, DinnerStateEnum.CONSUMED])
-
 /** A cancelled dinner: nothing lands on it */
 export const isDinnerCancelled = (dinner: DinnerEventDisplay): boolean => dinner.state === DinnerStateEnum.CANCELLED
 
@@ -403,7 +401,7 @@ export type BookingContext = {
 // useSeason builds its schemas on every call and a grid asks once per cell: useBooking() binds its own past check once
 const bookingOptionsWith = (isDinnerPast: (date: Date, now: Date) => boolean) =>
     ({order, waitlistEntry, candidate}: BookingRow, {event, deadlines, isHouseholdInResidency, takesNoPortion, now}: BookingContext): DinnerMode[] => {
-        if (isDinnerPast(event.date, now) || !isHouseholdInResidency(event.date) || CLOSED_DINNER_STATES.has(event.state)) return []
+        if (isDinnerPast(event.date, now) || !isHouseholdInResidency(event.date) || CLOSED_DINNER_STATES.includes(event.state)) return []
         const input = {existing: order, existingEntry: waitlistEntry, beforeCancellationDeadline: deadlines.canModifyOrders(event.date), canEditMode: deadlines.canEditDiningMode(event.date), takesNoPortion}
         return DINNER_MODE_ORDER.filter(dinnerMode => {
             const desired = candidate(dinnerMode)
@@ -775,7 +773,7 @@ export const useBooking = () => {
      * - Cannot cancel already CANCELLED dinners
      */
     const canCancelDinner = (dinnerEvent: Pick<DinnerEventDisplay, 'state'>): boolean => {
-        return dinnerEvent.state !== DinnerState.CANCELLED && dinnerEvent.state !== DinnerState.CONSUMED
+        return !CLOSED_DINNER_STATES.includes(dinnerEvent.state)
     }
 
     /**

@@ -6,6 +6,7 @@ import type {
     AllergyCreate,
     AllergyUpdate
 } from '~/composables/useAllergyValidation'
+import {ALLERGY_WORDS} from '~/config/allergyWords'
 
 /** The one Setting row the allergy surfaces read */
 const POSTER_NOTES_KEY = 'allergy-poster-notes'
@@ -33,7 +34,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     const allergyTypesDataset = storeAsyncData('allergy-store-types', '/api/admin/allergy-type', {
         schema: AllergyTypeDetailSchema.array(),
         default: () => [],
-        errorMessage: 'Kunne ikke hente allergi katalog'
+        errorMessage: ALLERGY_WORDS.failed.allergyTypes
     })
     const {
         data: allergyTypes,
@@ -67,13 +68,13 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             default: () => null,
             enabled: () => isAllergyTypeSelected.value,
             dependsOn: [allergyTypesDataset],
-            errorMessage: 'Kan ikke finde allergitypen',
+            errorMessage: ALLERGY_WORDS.notFound.allergyType,
             notFound: {
                 recover: async () => {
                     skipGoneId(allergyTypeChoice, selectedAllergyTypeId.value)
                     await refreshAllergyTypes()
                 },
-                toast: 'Kan ikke finde allergitypen'
+                toast: ALLERGY_WORDS.notFound.allergyType
             }
         }
     )
@@ -84,7 +85,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     const posterNotesDataset = storeAsyncData('allergy-store-poster-notes', POSTER_NOTES_ENDPOINT, {
         schema: SettingDetailSchema.nullable(),
         default: () => null,
-        errorMessage: 'Kunne ikke hente bemærkninger'
+        errorMessage: ALLERGY_WORDS.failed.posterNotes
     })
     const {
         data: posterNotesSetting,
@@ -114,7 +115,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             default: () => [],
             enabled: () => isHouseholdAllergiesEnabled.value,
             dependsOn: [householdsStore.selectedHouseholdDataset],
-            errorMessage: 'Kunne ikke hente allergier'
+            errorMessage: ALLERGY_WORDS.failed.allergies
         }
     )
 

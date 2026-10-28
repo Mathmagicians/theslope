@@ -1,8 +1,9 @@
 import type {AsyncData, AsyncDataOptions, NuxtApp, NuxtError} from '#app'
 import type {NitroFetchOptions, NitroFetchRequest} from 'nitropack/types'
-import type {ZodType} from 'zod'
+import {z, type ZodType} from 'zod'
 import type {Router} from 'vue-router'
 import type {JobStat} from '~/composables/useMaintenance'
+import {API_ERROR_WORDS} from '~/config/apiErrorWords'
 
 type ApiError = { message?: string; statusCode?: number; statusMessage?: string; data?: unknown }
 
@@ -59,8 +60,6 @@ type NotFound = {
     message?: Text
 }
 
-const NOT_FOUND_TEXT = 'Kan ikke finde det, du leder efter'
-
 const resolveText = (text: Text | undefined) => typeof text === 'function' ? text() : text
 
 // Internal API routes only: the typed fetch pins baseURL to '' for them, so the option is not offered
@@ -72,15 +71,19 @@ type ApiRequestOptions<T> = Omit<NitroFetchOptions<NitroFetchRequest>, 'baseURL'
 
 const gateClosed = () => new DOMException('The dataset gate closed', 'AbortError')
 
-const isApiError = (error: unknown): error is ApiError => {
-    if (typeof error !== 'object' || error === null) return false
-    return 'statusCode' in error || 'status' in error
-}
+// The key counts, its value may be undefined: a FetchError without a response still carries both status getters
+const ResponseStatusSchema = z.union([z.number(), z.undefined()])
 
-// FetchError may use 'status' instead of 'statusCode'
-const statusCodeOf = (error: unknown): number | undefined => isApiError(error)
-    ? error.statusCode ?? (error as Record<string, unknown>).status as number | undefined
-    : undefined
+// An API error carries its status as statusCode (H3, NuxtError, FetchError) or as status (FetchError)
+const ApiErrorStatusSchema = z.union([
+    z.object({statusCode: ResponseStatusSchema, status: ResponseStatusSchema.optional()})
+        .transform(({statusCode, status}) => statusCode ?? status),
+    z.object({status: ResponseStatusSchema}).transform(({status}) => status)
+])
+
+const isApiError = (error: unknown): error is ApiError => ApiErrorStatusSchema.safeParse(error).success
+
+const statusCodeOf = (error: unknown): number | undefined => ApiErrorStatusSchema.safeParse(error).data
 
 type ApiErrorHandler = () => void
 
@@ -140,15 +143,15 @@ export const useApiHandler = () => {
         const message = customMessage || (() => {
             switch (err.statusCode) {
                 case 400:
-                    return 'Ugyldig forespørgsel. Tjek venligst dine data'
+                    return API_ERROR_WORDS.status.badRequest
                 case 401:
-                    return 'Du er ikke autoriseret til at udføre denne handling'
+                    return API_ERROR_WORDS.status.unauthorized
                 case 404:
-                    return NOT_FOUND_TEXT
+                    return API_ERROR_WORDS.notFound
                 case 500:
-                    return 'Vi har desværre en intern server fejl'
+                    return API_ERROR_WORDS.status.serverError
                 default:
-                    return 'Der opstod en uventet fejl'
+                    return API_ERROR_WORDS.status.unexpected
             }
         })()
 
@@ -156,7 +159,7 @@ export const useApiHandler = () => {
         const statusInfo = err.statusCode ? `${err.statusCode}` : 'unknown'
         console.error(`❌ > API_ERROR > [${action}] ${statusInfo}: ${err.message || err.statusMessage || message}`)
 
-        warnToast(`${err.statusCode ?? 500}: Uh, åh, fejl kan ske`, message)
+        warnToast(API_ERROR_WORDS.toastTitle(err.statusCode ?? 500), message)
     }
 
     const actionsFor = (action: string, customMessage?: string): ApiErrorActions => ({
@@ -211,11 +214,11 @@ export const useApiHandler = () => {
             if (consecutiveNotFound >= retries) {
                 consecutiveNotFound = 0
                 if (retries === 0) await recover()
-                throw showError({statusCode: 404, message: resolveText(message) ?? resolveText(toastText) ?? NOT_FOUND_TEXT})
+                throw showError({statusCode: 404, message: resolveText(message) ?? resolveText(toastText) ?? API_ERROR_WORDS.notFound})
             }
             consecutiveNotFound++
             console.warn(`🔎 > API_NOT_FOUND > [${toValue(key)}] ${requestUrl}: recovering (${consecutiveNotFound}/${retries})`)
-            warnToast(resolveText(toastText) ?? NOT_FOUND_TEXT)
+            warnToast(resolveText(toastText) ?? API_ERROR_WORDS.notFound)
             await recover()
             // The url watch has already issued the re-derived request
             if (signal.aborted) throw gateClosed()
@@ -274,10 +277,7 @@ export const useApiHandler = () => {
     }
 
     /** A store's load action: refreshes the dataset, rethrows its error, logs `loaded` (read after the refresh) */
-    const loadOrThrow = async (
-        {refresh, error}: Pick<AsyncData<unknown, unknown>, 'refresh' | 'error'>,
-        loaded: Text
-    ): Promise<void> => {
+    const loadOrThrow = async <T>({refresh, error}: StoreDataset<T>, loaded: Text): Promise<void> => {
         await refresh()
         if (error.value) throw error.value
         console.info(resolveText(loaded))
@@ -314,7 +314,7 @@ export const useApiHandler = () => {
         noun: string
     ) => () => {
         const goneId = toValue(id)
-        return `Kan ikke finde ${noun} ${toValue(list).find(item => item.id === goneId)?.shortName ?? goneId}`
+        return API_ERROR_WORDS.notFoundOf(noun, String(toValue(list).find(item => item.id === goneId)?.shortName ?? goneId))
     }
 
     /**

@@ -6,6 +6,7 @@ import type {ReleasedTicketCounts, WaitlistCounts} from '~/composables/useBookin
 import {useBilling} from '~/composables/useBilling'
 import {TEAM_WORDS} from '~/config/teamWords'
 import {BOOKING_WORDS} from '~/config/bookingWords'
+import {stringifyQuery} from 'ufo'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
@@ -33,15 +34,14 @@ export const useBookingsStore = defineStore("Bookings", () => {
     type OrdersFilter = {dinnerEventIds: number[], householdId?: number | null, includeProvenance?: boolean, allHouseholds?: boolean}
     const ordersFilter = shallowRef<() => OrdersFilter>(() => ({dinnerEventIds: []}))
 
-    const orderQuery = ({dinnerEventIds, householdId, state, includeProvenance, allHouseholds}: OrdersFilter & {state?: OrderState}) => {
-        const params = new URLSearchParams()
-        dinnerEventIds.forEach(id => params.append('dinnerEventIds', String(id)))
-        if (householdId) params.append('householdId', String(householdId))
-        if (state) params.append('state', state)
-        if (includeProvenance) params.append('includeProvenance', 'true')
-        if (allHouseholds) params.append('allHouseholds', 'true')
-        return params.toString()
-    }
+    // stringifyQuery leaves an undefined parameter out of the url: no household, no state, an unset flag
+    const orderQuery = ({dinnerEventIds, householdId, state, includeProvenance, allHouseholds}: OrdersFilter & {state?: OrderState}) => stringifyQuery({
+        dinnerEventIds,
+        householdId: householdId || undefined,
+        state,
+        includeProvenance: queryFlag(includeProvenance),
+        allHouseholds: queryFlag(allHouseholds)
+    })
     const ordersQuery = computed(() => orderQuery(ordersFilter.value()))
 
     // An unfiltered request returns every order of the household
@@ -151,12 +151,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
     } = storeAsyncData(
         'bookings-store-upcoming-orders',
         () => {
-            const params = new URLSearchParams()
-            params.append('upcomingForSeason', String(planStore.selectedSeasonId))
-            if (upcomingOrdersForAllHouseholds.value) params.append('allHouseholds', 'true')
-            else params.append('householdId', String(householdsStore.selectedHouseholdId))
-            params.append('includeDinnerContext', 'true')
-            return `/api/order?${params.toString()}`
+            const allHouseholds = upcomingOrdersForAllHouseholds.value === true
+            return `/api/order?${stringifyQuery({
+                upcomingForSeason: planStore.selectedSeasonId,
+                allHouseholds: queryFlag(allHouseholds),
+                householdId: allHouseholds ? undefined : householdsStore.selectedHouseholdId,
+                includeDinnerContext: queryFlag(true)
+            })}`
         },
         {
             schema: OrderDisplaySchema.array(),
@@ -301,7 +302,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 seasonId: request.seasonId,
                 dinnerEventIds: request.dinnerEventIds,
                 orders: request.orders.map(encodeDesiredOrder),
-                ...(bypassDeadlines ? {bypassDeadlines} : {})
+                bypassDeadlines: queryFlag(bypassDeadlines)
             },
             schema: ScaffoldOrdersResponseSchema,
             action: 'previewBookings'
@@ -322,7 +323,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         householdId: number,
         dinnerEventId: number,
         orders: DesiredOrder[],
-        adminBypass = false,
+        adminBypass: boolean,
         report?: ScaffoldToast
     ): Promise<ScaffoldOrdersResponse> =>
         processBookings({householdId, dinnerEventIds: [dinnerEventId], orders}, adminBypass, report, 'processSingleEventBookings')
@@ -406,7 +407,10 @@ export const useBookingsStore = defineStore("Bookings", () => {
         if (selectedDinnerEventId.value === dinnerEventId) await refreshSelectedDinnerEventDetail()
     }
 
-    const updateDinner = async (id: number, updates: DinnerUpdate, action: string): Promise<DinnerEventDetail> => {
+    // A dinner write names its action for the log and its word for a failure's toast, as apiRequest takes them
+    type DinnerWrite = {action: string, errorMessage: string}
+
+    const updateDinner = async (id: number, updates: DinnerUpdate, {action, errorMessage}: DinnerWrite): Promise<DinnerEventDetail> => {
         const parsed = await apiRequest(`/api/chef/dinner/${id}`, {
             method: 'POST',
             body: updates,
@@ -420,7 +424,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 }
             },
             schema: DinnerEventDetailSchema,
-            action
+            action,
+            errorMessage
         })
         console.info(`${CTX} Updated dinner ${id}: ${Object.keys(updates).join(', ')} → state: ${parsed.state}`)
         await refreshDinnerIfSelected(id)
@@ -437,8 +442,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
 
     const updateDinnerEventAllergens = withLoading(async (id: number, allergenIds: number[]) => {
-        const updated = await updateDinner(id, {allergenIds}, 'Kunne ikke gemme allergeninformation')
         const words = TEAM_WORDS.toasts.allergensSaved
+        const updated = await updateDinner(id, {allergenIds}, {action: 'updateDinnerEventAllergens', errorMessage: words.failed})
         toast.add({
             title: words.title,
             description: allergenIds.length > 0 ? words.withAllergens : words.withoutAllergens,
@@ -472,7 +477,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // An announce of a dinner on view that is already announced republishes its menu; read before the write re-reads the detail
     const announceDinner = withLoading(async (id: number) => {
         const isRepublish = selectedDinnerEventDetail.value?.id === id && selectedDinnerEventDetail.value.state === DinnerState.ANNOUNCED
-        const announced = await updateDinner(id, {state: DinnerState.ANNOUNCED}, 'Kunne ikke annoncere fællesspisningen')
+        const announced = await updateDinner(id, {state: DinnerState.ANNOUNCED}, {action: 'announceDinner', errorMessage: TEAM_WORDS.toasts.announced.failed})
         toast.add({
             title: TEAM_WORDS.toasts.announced.title(isRepublish),
             description: TEAM_WORDS.toasts.announced.description(announced.heynaboEventId),
@@ -482,15 +487,15 @@ export const useBookingsStore = defineStore("Bookings", () => {
         return announced
     })
     // A cancel and its undo change what the booking views offer on the dinner: the season they read it off is read again
-    const updateDinnerState = async (id: number, state: DinnerState, action: string): Promise<DinnerEventDetail> => {
-        const updated = await updateDinner(id, {state}, action)
+    const updateDinnerState = async (id: number, state: DinnerState, write: DinnerWrite): Promise<DinnerEventDetail> => {
+        const updated = await updateDinner(id, {state}, write)
         await refreshSelectedSeason()
         return updated
     }
     const dinnerWords = (dinner: DinnerEventDetail) =>
         [dinner.menuTitle || TEAM_WORDS.toasts.untitledDinner, formatDate(dinner.date)] as const
     const cancelDinner = withLoading(async (id: number) => {
-        const cancelled = await updateDinnerState(id, DinnerState.CANCELLED, 'Kunne ikke aflyse fællesspisningen')
+        const cancelled = await updateDinnerState(id, DinnerState.CANCELLED, {action: 'cancelDinner', errorMessage: TEAM_WORDS.toasts.cancelled.failed})
         toast.add({
             title: TEAM_WORDS.toasts.cancelled.title,
             description: TEAM_WORDS.toasts.cancelled.description(...dinnerWords(cancelled)),
@@ -500,7 +505,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         return cancelled
     })
     const undoCancelDinner = withLoading(async (id: number, targetState: DinnerState = DinnerState.SCHEDULED) => {
-        const reopened = await updateDinnerState(id, targetState, 'Kunne ikke annullere aflysningen')
+        const reopened = await updateDinnerState(id, targetState, {action: 'undoCancelDinner', errorMessage: TEAM_WORDS.toasts.reopened.failed})
         toast.add({
             title: TEAM_WORDS.toasts.reopened.title,
             description: TEAM_WORDS.toasts.reopened.description(...dinnerWords(reopened)),
@@ -549,7 +554,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     )
 
     const saveMenuFields = withLoading(
-        (id: number, updates: Partial<DinnerEventUpdate>) => updateDinner(id, updates, 'Kunne ikke gemme ændringer til menuen')
+        (id: number, updates: Partial<DinnerEventUpdate>) =>
+            updateDinner(id, updates, {action: 'updateDinnerEventField', errorMessage: TEAM_WORDS.toasts.menuSaved.failed})
     )
 
     const updateDinnerEventField = async (

@@ -112,7 +112,7 @@ describe('joinWaitlist', () => {
     const audit = {action: OrderAuditAction.USER_BOOKED, performedByUserId: 7, seasonId: SEASON_ID}
 
     it('decides by the dinner it is handed and writes the entries and their QUEUE rows once each, reading neither a holder, the dinner nor its season; the entries come back in join order', async () => {
-        const entries = await joinWaitlist(d1Client, joins, {state: DinnerState.SCHEDULED}, audit)
+        const entries = await joinWaitlist(d1Client, joins, DinnerState.SCHEDULED, audit)
 
         expect(fakePrisma.ticketWaitlist.createManyAndReturn).toHaveBeenCalledTimes(1)
         expect(fakePrisma.ticketWaitlist.createManyAndReturn).toHaveBeenCalledWith({data: joins.map(({entry}) => serializeTicketWaitlist(entry))})
@@ -126,7 +126,7 @@ describe('joinWaitlist', () => {
     })
 
     it.each([DinnerState.CONSUMED, DinnerState.CANCELLED])('refuses a %s dinner and writes nothing', async (state) => {
-        await expect(joinWaitlist(d1Client, joins, {state}, audit)).rejects.toMatchObject({statusCode: 400})
+        await expect(joinWaitlist(d1Client, joins, state, audit)).rejects.toMatchObject({statusCode: 400})
         expect(fakePrisma.ticketWaitlist.createManyAndReturn).not.toHaveBeenCalled()
         expect(fakePrisma.orderHistory.createMany).not.toHaveBeenCalled()
     })

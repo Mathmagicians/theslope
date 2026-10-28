@@ -20,7 +20,7 @@ import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type{DayEventList} from '~/composables/useCalendarEvents'
 import type {DateValue} from '@internationalized/date'
-import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
+import {LEGEND_KIND, type CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 
 interface Props {
   seasonDates: DateRange
@@ -42,9 +42,9 @@ const teamBandIndex = (team: CookingTeamDisplay) => getTeamNumber(team, props.se
 
 // Legend: each team wears the rainbow stop of its number, then the holiday ring when the season has holidays
 const legendItems = computed((): CalendarLegendItem[] => [
-  ...props.teams.map(team => ({label: team.name, kind: 'badge' as const, badgeClass: getRainbowBand(teamBandIndex(team))})),
+  ...props.teams.map(team => ({label: team.name, kind: LEGEND_KIND.badge, badgeClass: getRainbowBand(teamBandIndex(team))})),
   ...(props.holidays && props.holidays.length > 0
-    ? [{label: 'Ferie', kind: 'circle' as const, circleClass: dayCircleClasses(CALENDAR.holiday)}]
+    ? [{label: 'Ferie', kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CALENDAR.holiday)}]
     : [])
 ])
 
@@ -62,30 +62,30 @@ const teamEventLists = computed(() => {
       .filter(event => event.cookingTeamId === team.id)
       .map(event => event.date)
 
-    return createEventList(teamEvents, `team-${team.id}`, 'badge', {
+    return createEventList(teamEvents, `team-${team.id}`, RENDER_STYLE.badge, {
       label: team.name,
-      color: teamBandIndex(team),
+      band: teamBandIndex(team),
       metadata: { teamId: team.id, teamName: team.name }
     })
   })
 })
-
-// Combine all event lists
-const allEventLists = computed(() => teamEventLists.value)
 
 // Check if a day is a holiday using isCalendarDateInDateList
 const isHoliday = (day: DateValue): boolean => {
   return isCalendarDateInDateList(day, holidayDates.value)
 }
 
-// Helper to find team event list for a day (for rendering logic)
-const getTeamEventList = (eventLists: DayEventList[]) => {
-  return eventLists.find(list => list.listId.startsWith('team-'))
+// The day's team list: the tooltip names the team, the badge wears its band
+const getTeamEventList = (eventLists: DayEventList[]) => eventLists.find(list => list.listId.startsWith('team-'))
+
+const teamBandOf = (eventLists: DayEventList[]) => {
+  const band = getTeamEventList(eventLists)?.band
+  return band === undefined ? undefined : getRainbowBand(band)
 }
 </script>
 
 <template>
-  <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists">
+  <BaseCalendar :season-dates="seasonDates" :event-lists="teamEventLists">
         <template #day="{ day, eventLists }">
           <!-- Holiday takes precedence (green ring) -->
           <div
@@ -98,12 +98,12 @@ const getTeamEventList = (eventLists: DayEventList[]) => {
           <!-- Team cooking day with tooltip -->
           <UTooltip
             v-else-if="getTeamEventList(eventLists)"
-            :text="getTeamEventList(eventLists)!.events[0]?.label"
+            :text="getTeamEventList(eventLists)?.events[0]?.label"
           >
             <UBadge
               :size="SIZES.md"
               data-testid="team-calendar-day"
-              :class="getRainbowBand(getTeamEventList(eventLists)!.color as number)"
+              :class="teamBandOf(eventLists)"
             >
               {{ day.day }}
             </UBadge>

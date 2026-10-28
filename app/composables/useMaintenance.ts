@@ -5,6 +5,7 @@ import {useBillingValidation, type MonthlyBillingJobResult} from '~/composables/
 import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {useBooking} from '~/composables/useBooking'
 import {NOTIFICATION_COUNT_WORDS} from '~/config/notificationTemplates'
+import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
 import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {COLOR, ICONS} from '~/composables/useTheSlopeDesignSystem'
 import type {ZodType} from 'zod'
@@ -30,27 +31,6 @@ export const useMaintenance = () => {
     const {HeynaboImportResponseSchema} = useHeynaboValidation()
     const {MonthlyBillingJobResultSchema} = useBillingValidation()
     const {SenderEventSchema} = useDeliveryValidation()
-
-    /**
-     * Human-readable labels for job types (Danish)
-     */
-    const jobTypeLabels: Record<JobType, string> = {
-        [JobType.DAILY_MAINTENANCE]: 'Daglig vedligeholdelse',
-        [JobType.MONTHLY_BILLING]: 'Månedlig fakturering',
-        [JobType.HEYNABO_IMPORT]: 'Heynabo import',
-        [JobType.MAINTENANCE_IMPORT]: 'Data import',
-        [JobType.MAINTENANCE_EXPORT]: 'Data eksport'
-    }
-
-    /**
-     * Human-readable labels for job statuses (Danish)
-     */
-    const jobStatusLabels: Record<JobStatus, string> = {
-        [JobStatus.RUNNING]: 'Kører',
-        [JobStatus.SUCCESS]: 'Gennemført',
-        [JobStatus.PARTIAL]: 'Delvis gennemført',
-        [JobStatus.FAILED]: 'Fejlet'
-    }
 
     /**
      * Get UI color for job status
@@ -85,13 +65,6 @@ export const useMaintenance = () => {
         return `${(durationMs / 1000).toFixed(1)}s`
     }
 
-    /**
-     * Format triggeredBy field for display
-     */
-    const formatTriggeredBy = (triggeredBy: string): string => {
-        return triggeredBy
-    }
-
     /** A stored result as JSON; null for none and for text that is not JSON */
     const readStoredResult = (resultSummary: string | null): unknown => {
         if (!resultSummary) return null
@@ -112,33 +85,36 @@ export const useMaintenance = () => {
      * Format heynabo import result as stats array for action cards
      * Shows all 4 reconciliation outcomes: created, updated, idempotent, deleted
      */
-    const formatHeynaboStats = (result: HeynaboImportResponse): JobStat[] => [
-        {
-            icon: ICONS.household,
-            label: 'Husstande',
-            value: `+${result.householdsCreated} ~${result.householdsUpdated ?? 0} =${result.householdsIdempotent ?? 0} -${result.householdsDeleted}`
-        },
-        {
-            icon: ICONS.users,
-            label: 'Beboere',
-            value: `+${result.inhabitantsCreated} ~${result.inhabitantsUpdated ?? 0} =${result.inhabitantsIdempotent ?? 0} -${result.inhabitantsDeleted}`
-        },
-        {
-            icon: ICONS.user,
-            label: 'Brugere',
-            value: `+${result.usersCreated} ~${result.usersUpdated ?? 0} =${result.usersIdempotent ?? 0} -${result.usersDeleted}`
-        },
-        {
-            icon: ICONS.info,
-            label: 'Linked',
-            value: `${result.usersLinked}`
-        },
-        {
-            icon: ICONS.info,
-            label: 'Admins',
-            value: `+${result.adminsAdded ?? 0} -${result.adminsRemoved ?? 0}`
-        }
-    ]
+    const formatHeynaboStats = (result: HeynaboImportResponse): JobStat[] => {
+        const label = MAINTENANCE_WORDS.stats[JobType.HEYNABO_IMPORT]
+        return [
+            {
+                icon: ICONS.household,
+                label: label.households,
+                value: `+${result.householdsCreated} ~${result.householdsUpdated ?? 0} =${result.householdsIdempotent ?? 0} -${result.householdsDeleted}`
+            },
+            {
+                icon: ICONS.users,
+                label: label.inhabitants,
+                value: `+${result.inhabitantsCreated} ~${result.inhabitantsUpdated ?? 0} =${result.inhabitantsIdempotent ?? 0} -${result.inhabitantsDeleted}`
+            },
+            {
+                icon: ICONS.user,
+                label: label.users,
+                value: `+${result.usersCreated} ~${result.usersUpdated ?? 0} =${result.usersIdempotent ?? 0} -${result.usersDeleted}`
+            },
+            {
+                icon: ICONS.info,
+                label: label.linked,
+                value: `${result.usersLinked}`
+            },
+            {
+                icon: ICONS.info,
+                label: label.admins,
+                value: `+${result.adminsAdded ?? 0} -${result.adminsRemoved ?? 0}`
+            }
+        ]
+    }
 
     /** The scaffold's compact symbols per dinner: the date and `-n` entries removed */
     const formatClearedWaitlists = ({dinners}: DailyMaintenanceResult['clearWaitlist']): string =>
@@ -155,15 +131,18 @@ export const useMaintenance = () => {
     }
 
     /** Format daily maintenance result as stats array for action cards; the bookings line only for a run that scaffolded */
-    const formatDailyMaintenanceStats = (result: DailyMaintenanceResult): JobStat[] => [
-        { icon: ICONS.checkCircle, label: 'Middage afholdt', value: `${result.consume.consumed}` },
-        { icon: ICONS.ticket, label: 'Ordrer lukket', value: `${result.close.closed}` },
-        { icon: ICONS.shoppingCart, label: 'Transaktioner', value: `${result.transact.created}` },
-        { icon: ICONS.waitlist, label: 'Ventelister', value: formatClearedWaitlists(result.clearWaitlist) },
-        { icon: ICONS.edit, label: 'Præferencer klippet', value: `${result.initPrefs.initialized}` },
-        ...(result.scaffold ? [{ icon: ICONS.ticket, label: 'Bookinger', value: formatScaffoldResult(result.scaffold) }] : []),
-        { icon: ICONS.notification, label: NOTIFICATION_COUNT_WORDS.label, value: formatNotificationCounts(result.notifications) }
-    ]
+    const formatDailyMaintenanceStats = (result: DailyMaintenanceResult): JobStat[] => {
+        const label = MAINTENANCE_WORDS.stats[JobType.DAILY_MAINTENANCE]
+        return [
+            { icon: ICONS.checkCircle, label: label.consumed, value: `${result.consume.consumed}` },
+            { icon: ICONS.ticket, label: label.closed, value: `${result.close.closed}` },
+            { icon: ICONS.shoppingCart, label: label.transactions, value: `${result.transact.created}` },
+            { icon: ICONS.waitlist, label: label.waitlists, value: formatClearedWaitlists(result.clearWaitlist) },
+            { icon: ICONS.edit, label: label.preferences, value: `${result.initPrefs.initialized}` },
+            ...(result.scaffold ? [{ icon: ICONS.ticket, label: label.bookings, value: formatScaffoldResult(result.scaffold) }] : []),
+            { icon: ICONS.notification, label: NOTIFICATION_COUNT_WORDS.label, value: formatNotificationCounts(result.notifications) }
+        ]
+    }
 
     /**
      * Format monthly billing results as stats array for action cards
@@ -178,14 +157,15 @@ export const useMaintenance = () => {
         const csvUploaded = periods.filter(p => p.archive?.archived).length
         const mailsSent = periods.filter(p => p.notification?.queued).length
         const pending = periods.filter(p => !p.csvUploaded || !p.emailSent).length
+        const label = MAINTENANCE_WORDS.stats[JobType.MONTHLY_BILLING]
         return [
-            { icon: ICONS.calendar, label: 'Perioder', value: `${results.length}` },
-            { icon: ICONS.ticket, label: 'PBS Fakturaer', value: `${totalInvoices}` },
-            { icon: ICONS.shoppingCart, label: 'Transaktioner', value: `${totalTransactions}` },
-            { icon: ICONS.economy, label: 'Total', value: `${formatPrice(totalAmount)} kr` },
-            { icon: ICONS.info, label: 'CSV uploadet', value: `${csvUploaded}` },
-            { icon: ICONS.info, label: 'Mails sendt', value: `${mailsSent}` },
-            { icon: ICONS.info, label: 'Afventer', value: `${pending}` }
+            { icon: ICONS.calendar, label: label.periods, value: `${results.length}` },
+            { icon: ICONS.ticket, label: label.invoices, value: `${totalInvoices}` },
+            { icon: ICONS.shoppingCart, label: label.transactions, value: `${totalTransactions}` },
+            { icon: ICONS.economy, label: label.total, value: `${formatPrice(totalAmount)} kr` },
+            { icon: ICONS.info, label: label.csvUploaded, value: `${csvUploaded}` },
+            { icon: ICONS.info, label: label.mailsSent, value: `${mailsSent}` },
+            { icon: ICONS.info, label: label.pending, value: `${pending}` }
         ]
     }
 
@@ -224,14 +204,13 @@ export const useMaintenance = () => {
 
     return {
         // Labels
-        jobTypeLabels,
-        jobStatusLabels,
+        jobTypeLabels: MAINTENANCE_WORDS.jobTypes,
+        jobStatusLabels: MAINTENANCE_WORDS.jobStatuses,
 
         // UI helpers
         getJobStatusColor,
         getJobStatusIcon,
         formatDuration,
-        formatTriggeredBy,
         jobRunStats,
         formatResultSummary,
         formatHeynaboStats,

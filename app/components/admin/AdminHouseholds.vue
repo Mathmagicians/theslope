@@ -31,7 +31,7 @@ const handleDeleteHousehold = async (householdId: number) => {
 
 const isCreateFormOpen = ref(false)
 
-const handleCreateHousehold = async (payload: {
+const handleCreateHousehold = async ({prevOwnerMoveOutUpdates, ...household}: {
   pbsId: number
   address: string
   movedInDate: Date
@@ -39,7 +39,7 @@ const handleCreateHousehold = async (payload: {
   name: string
   prevOwnerMoveOutUpdates: {id: number, moveOutDate: Date}[]
 }) => {
-  const created = await householdsStore.createHousehold(payload)
+  const created = await householdsStore.createHousehold(household, prevOwnerMoveOutUpdates)
   if (created) isCreateFormOpen.value = false
 }
 

@@ -41,13 +41,17 @@ export const TEAM_WORDS = {
         cancelled: 'Aflyst madlavning',
         otherTeam: 'Andet madholds fællesspisning'
     },
-    /** The toasts of the chef's dinner actions; a dinner without a menu title is named `untitledDinner` */
+    /**
+     * The toasts of the chef's dinner actions, and the words of a failed one; a dinner without a menu title is named
+     * `untitledDinner`
+     */
     toasts: {
         untitledDinner: 'Fællesspisningen',
         allergensSaved: {
             title: 'Allergeninformation gemt',
             withAllergens: 'Beboerne kan nu se allergenerne i menuen',
-            withoutAllergens: 'Menuen er markeret uden allergener'
+            withoutAllergens: 'Menuen er markeret uden allergener',
+            failed: 'Kunne ikke gemme allergeninformation'
         },
         announced: {
             title: (isRepublish: boolean) => isRepublish
@@ -55,15 +59,18 @@ export const TEAM_WORDS = {
                 : 'Du har publiceret din menu på Heynabo',
             description: (heynaboEventId: number | null) => heynaboEventId
                 ? `Heynabo event ID: ${heynaboEventId}`
-                : 'Ingen Heynabo ID returneret'
+                : 'Ingen Heynabo ID returneret',
+            failed: 'Kunne ikke annoncere fællesspisningen'
         },
         cancelled: {
             title: 'Middag aflyst',
-            description: (dinner: string, date: string) => `${dinner} d. ${date} er blevet aflyst`
+            description: (dinner: string, date: string) => `${dinner} d. ${date} er blevet aflyst`,
+            failed: 'Kunne ikke aflyse fællesspisningen'
         },
         reopened: {
             title: 'Aflysning annulleret',
-            description: (dinner: string, date: string) => `${dinner} d. ${date} er genåbnet`
+            description: (dinner: string, date: string) => `${dinner} d. ${date} er genåbnet`,
+            failed: 'Kunne ikke annullere aflysningen'
         },
         /** A dinner save that landed while the Heynabo sync failed (207); without an event id the chef publishes again */
         heynaboSync: {
@@ -75,7 +82,8 @@ export const TEAM_WORDS = {
         /** A save on a dinner without a chef claims the role, and the title names it */
         menuSaved: {
             title: (roleClaimed: string | null) => roleClaimed ? `Menu gemt — ${roleClaimed}` : 'Menu gemt',
-            description: (menuTitle: string) => `"${menuTitle}" er nu opdateret`
+            description: (menuTitle: string) => `"${menuTitle}" er nu opdateret`,
+            failed: 'Kunne ikke gemme ændringer til menuen'
         },
         expenseAdded: {
             title: 'Indkøb gemt',

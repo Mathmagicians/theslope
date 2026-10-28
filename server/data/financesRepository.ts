@@ -23,9 +23,10 @@ import type {
     OrderAuditChange,
     OrderAuditSource,
     OrderSnapshot,
+    SnapshotOrder,
     TicketType
 } from '~/composables/useBookingValidation'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, OrderSortBy} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import {useBooking} from '~/composables/useBooking'
 import {byTimeThenId} from '~/composables/useWaitlist'
@@ -130,7 +131,6 @@ export const snapshotInhabitantSelect = {
 } satisfies Prisma.InhabitantSelect
 
 type SnapshotInhabitant = Prisma.InhabitantGetPayload<{select: typeof snapshotInhabitantSelect}>
-type SnapshotOrder = Pick<OrderSnapshot, 'id' | 'inhabitantId' | 'dinnerEventId' | 'ticketPriceId' | 'priceAtBooking' | 'dinnerMode' | 'state' | 'isGuestTicket'>
 
 /** An order as its history row keeps it, with its holder's name and household (ADR-011) */
 export const orderSnapshotOf = (order: SnapshotOrder, inhabitant: SnapshotInhabitant): OrderSnapshot => ({
@@ -633,8 +633,8 @@ export async function deleteOrder(
  * Sort comparator for OrderDisplay by sortBy field.
  * Extracted for unit testing (ADR-003).
  */
-export const getOrderSortComparator = (sortBy: 'createdAt' | 'releasedAt') =>
-    byTimeThenId<OrderDisplay>(sortBy === 'releasedAt' ? order => order.releasedAt?.getTime() ?? 0 : order => order.createdAt.getTime())
+export const getOrderSortComparator = (sortBy: OrderSortBy) =>
+    byTimeThenId<OrderDisplay>(sortBy === OrderSortBy.releasedAt ? order => order.releasedAt?.getTime() ?? 0 : order => order.createdAt.getTime())
 
 /**
  * Fetch orders, optionally filtered by dinner event ID(s) and/or household.
@@ -655,7 +655,7 @@ export const getOrderSortComparator = (sortBy: 'createdAt' | 'releasedAt') =>
  * @param dinnerEventIds - Single ID, array of IDs, or undefined for all events
  * @param householdId - Optional household filter (required for user-facing endpoints)
  * @param state - Optional state filter (e.g., RELEASED for claim queue)
- * @param sortBy - Sort field: 'createdAt' (default) or 'releasedAt' (FIFO claim queue)
+ * @param sortBy - Sort field: createdAt (default) or releasedAt (FIFO claim queue)
  * @param includeProvenance - Include provenance for claimed tickets (default: false)
  * @param includeDinnerContext - Include dinner event context (date, menuTitle) for economy views (default: false)
  */
@@ -664,7 +664,7 @@ export async function fetchOrders(
     dinnerEventIds?: number | number[],
     householdId?: number,
     state?: OrderState,
-    sortBy: 'createdAt' | 'releasedAt' = 'createdAt',
+    sortBy: OrderSortBy = OrderSortBy.createdAt,
     includeProvenance: boolean = false,
     includeDinnerContext: boolean = false
 ): Promise<OrderDisplay[]> {
@@ -694,7 +694,7 @@ async function fetchOrdersBatch(
     dinnerEventIds: number[] | undefined,
     householdId: number | undefined,
     state: OrderState | undefined,
-    sortBy: 'createdAt' | 'releasedAt',
+    sortBy: OrderSortBy,
     includeProvenance: boolean,
     includeDinnerContext: boolean
 ): Promise<OrderDisplay[]> {
@@ -720,7 +720,7 @@ async function fetchOrdersBatch(
         }
 
         const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''
-        const orderByColumn = sortBy === 'releasedAt' ? 'o.releasedAt' : 'o.createdAt'
+        const orderByColumn = sortBy === OrderSortBy.releasedAt ? 'o.releasedAt' : 'o.createdAt'
 
         // Raw SQL with JOINs, within D1's 100 variable limit. The provenance is the order's latest USER_CLAIMED row, by
         // time then by row, looked up per order on the history's orderId index; the dinner context (date, menuTitle)
