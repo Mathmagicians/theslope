@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reconcileHouseholds, reconcileUsers, mergeHouseholdForUpdate, resolveInhabitantImportPlan } from '~/composables/useHeynabo'
+import { reconcileHouseholds, reconcileUsers, mergeHouseholdForUpdate, resolveInhabitantImportPlan, getUserUrl, getEventUrl } from '~/composables/useHeynabo'
 import type { HouseholdDisplay, InhabitantCreate, InhabitantDisplay } from '~/composables/useCoreValidation'
 import {
     householdReconciliationTestData,
@@ -86,6 +86,19 @@ describe('useHeynabo', () => {
             expect(placements(plan.update), 'update bucket').toEqual(expectedPlacements(expected.update))
             expect(placements(plan.idempotent), 'idempotent bucket').toEqual(expectedPlacements(expected.idempotent))
             expect(deletedHeynaboIds(plan.delete), 'delete bucket').toEqual(new Set(expected.delete))
+        })
+    })
+
+    // The links into Heynabo replace the API address's /api with the page's path
+    describe('links into Heynabo', () => {
+        const API_URL = 'https://skraaningeni.spaces.heynabo.com/api'
+
+        it('getUserUrl links a resident\'s profile', () => {
+            expect(getUserUrl(API_URL)(48)).toBe('https://skraaningeni.spaces.heynabo.com/desktop/users/residents/48')
+        })
+
+        it('getEventUrl links an event\'s page', () => {
+            expect(getEventUrl(API_URL)(123)).toBe('https://skraaningeni.spaces.heynabo.com/desktop/calendar/detail/123/info')
         })
     })
 })

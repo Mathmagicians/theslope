@@ -112,7 +112,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 
 ## ADR-016: Unified Booking Through Scaffold
 
-**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-26
+**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-28
 
 ### Context
 
@@ -224,7 +224,7 @@ the season's deadlines. The endpoint hands the scaffolder its deadlines: the sea
 6. Generators MUST receive dinner events filtered by `isHouseholdActiveOnDay`
 7. Booking-relevant field changes MUST trigger immediate re-scaffold via `rescaffoldOnFieldChange`
 8. UI MUST include `waitlistEntryId` from the household's queue entries to leave or requeue
-9. The scaffold and the waiting-list steps send no notification: they return their outcomes (joined, sold, sold to the waiting list, the chef's extra portions), and the caller hands them to the notification service after the action (`notifyBookingOutcomes`, `notifyExtraPortions`)
+9. The scaffold and the waiting-list steps send no notification: they return their outcomes (joined, sold, sold to the waiting list, the chef's extra portions), and the caller hands them to the notification service after the action (`notifyBookingOutcomes`, `notifyExtraPortions`); the notifications go in the background after the response, and the DAILY_MAINTENANCE job sends what a background run did not finish
 10. A failed write batch is retried order by order; the reply counts the orders that landed per action (`totals`), lists them per person for a run scoped to one household (`results`) and lists the orders that failed (`failed`)
 11. A claim buys a released ticket of its type only while nobody waits in that type's line; every run ends with `sellTicketsToWaitlist` on its dinners
 12. Every write to a waiting entry writes its `OrderHistory` row (`orderId` null) with the run's audit context
@@ -254,7 +254,7 @@ the season's deadlines. The endpoint hands the scaffolder its deadlines: the sea
 
 ## ADR-015: Idempotent Automated Jobs with Rolling Window
 
-**Status:** Accepted | **Date:** 2025-12-12 | **Updated:** 2026-10-18
+**Status:** Accepted | **Date:** 2025-12-12 | **Updated:** 2026-10-28
 
 ### Context
 
@@ -285,6 +285,7 @@ Daily maintenance consumes past dinners (SCHEDULED/ANNOUNCED → CONSUMED), clos
 | **createTransactions** | Only creates for orders with `Transaction: null` (existing transaction = skipped) |
 | **generateDinnerEvents** | Uses `pruneAndCreate` to reconcile by date key |
 | **sellTicketsToWaitlist** | A placed entry leaves its line; a line without a ticket of its type for sale stops at its first miss; a grabbed entry finishes or returns to its place at the first run after the lease |
+| **Notifications** | A delivery record covers a sent notification: a re-run sends nothing, and an admin's override sends it again |
 
 ### Configuration
 

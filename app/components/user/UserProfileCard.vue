@@ -71,7 +71,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const {TYPOGRAPHY, SIZES, ICONS, IMG, BUTTONS, ALERTS, COLOR, NOISE, LAYOUTS, COMPONENTS} = useTheSlopeDesignSystem()
 const {roleLabels} = useUserRolesUi()
-const {getUserUrl} = useHeynabo()
+const heynaboUserUrl = getUserUrl(useRuntimeConfig().public.HEY_NABO_API)
 const authStore = useAuthStore()
 
 // Type guard to check if user has full detail with household
@@ -86,7 +86,7 @@ const systemRoles = computed(() => props.user.systemRoles || [])
 const householdShortName = computed(() => hasHousehold(props.user) ? props.user.Inhabitant!.household.shortName : null)
 const householdPbsId = computed(() => hasHousehold(props.user) ? props.user.Inhabitant!.household.pbsId : null)
 const householdAddress = computed(() => hasHousehold(props.user) ? props.user.Inhabitant!.household.address : null)
-const heynaboProfileUrl = computed(() => inhabitant.value ? getUserUrl(inhabitant.value.heynaboId) : null)
+const heynaboProfileUrl = computed(() => inhabitant.value ? heynaboUserUrl(inhabitant.value.heynaboId) : null)
 
 // Get visible roles using roleLabels from composable
 const visibleRoles = computed(() =>

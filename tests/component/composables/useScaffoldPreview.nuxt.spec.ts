@@ -8,10 +8,12 @@ import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
 import {defineComponent, h, shallowRef} from 'vue'
-import {useScaffoldPreview} from '~/composables/useBookingUi'
-import type {ScaffoldOrdersRequest} from '~/composables/useBookingValidation'
+import {useScaffoldPreview, useExpectedBookings, expectedBookingKey} from '~/composables/useBookingUi'
+import {useBookingValidation, type DinnerEventDisplay, type OrderDisplay, type ScaffoldOrdersRequest} from '~/composables/useBookingValidation'
+import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {registerEmptyStoreEndpoints, registerScaffoldEndpoint, resetStores, untilTrue} from '~~/tests/component/testHelpers'
 
 enableAutoUnmount(afterEach)
@@ -101,5 +103,58 @@ describe('useScaffoldPreview', () => {
 
         expect(sentRequests()).toEqual([])
         expect({result: preview.result.value, pending: preview.pending.value}).toEqual({result: null, pending: false})
+    })
+})
+
+// The planned bookings: the dry run with no orders on the household's dinners that have not started, read again once
+// the orders change
+describe('useExpectedBookings', () => {
+    const {DINEIN} = useBookingValidation().DinnerModeSchema.enum
+    const household = HouseholdFactory.defaultHouseholdDetail('expected')
+    const started = DinnerEventFactory.dinnerEventAt(11, -1)
+    const coming = DinnerEventFactory.dinnerEventAt(12, 3)
+    const later = DinnerEventFactory.dinnerEventAt(13, 10)
+    type Expected = ReturnType<typeof useExpectedBookings>
+
+    const mountExpected = async (householdOf: () => HouseholdDetail | null, dinners: () => DinnerEventDisplay[], orders: () => OrderDisplay[] = () => []): Promise<Expected> => {
+        let expected: Expected | undefined
+        await mountSuspended(defineComponent({
+            setup() {
+                expected = useExpectedBookings(householdOf, dinners, orders)
+                return () => h('div')
+            }
+        }))
+        return expected!
+    }
+
+    it.each([
+        {given: 'no household', householdOf: () => null, dinners: [coming], read: []},
+        {given: 'only a dinner that has started', householdOf: () => household, dinners: [started], read: []},
+        {given: 'a dinner that has started and two to come', householdOf: () => household, dinners: [started, coming, later], read: [{householdId: household.id, dinnerEventIds: [coming.id, later.id], orders: []}]}
+    ])('GIVEN $given THEN the dry run asks about the dinners that have not started', async ({householdOf, dinners, read}) => {
+        await mountExpected(householdOf, () => dinners)
+        await flushPromises()
+
+        expect(sentRequests()).toEqual(read)
+    })
+
+    it('GIVEN a reply THEN each person\'s planned mode is keyed by their own cell, and nothing is pending', async () => {
+        scaffold.answers.expected = () => OrderFactory.defaultScaffoldOrdersResponse({results: [OrderFactory.defaultBookingResult({inhabitantId: 7, dinnerEventId: coming.id, dinnerMode: DINEIN})]})
+        const expected = await mountExpected(() => household, () => [coming])
+
+        await untilTrue(() => expected.expectedModes.value.size > 0)
+        expect([...expected.expectedModes.value]).toEqual([[expectedBookingKey(7, coming.id), DINEIN]])
+        expect(expected.isExpectedPending.value).toBe(false)
+    })
+
+    it('WHEN the orders change THEN the dry run is read again', async () => {
+        const orders = shallowRef<OrderDisplay[]>([])
+        await mountExpected(() => household, () => [coming], () => orders.value)
+        await untilTrue(() => scaffold.sent.length === 1)
+
+        orders.value = [OrderFactory.defaultOrder('expected', {dinnerEventId: coming.id})]
+
+        await untilTrue(() => scaffold.sent.length === 2)
+        expect(sentRequests()).toEqual([1, 2].map(() => ({householdId: household.id, dinnerEventIds: [coming.id], orders: []})))
     })
 })

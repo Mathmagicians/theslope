@@ -382,6 +382,9 @@ export const DINNER_MODE_ORDER: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerMod
 
 const CLOSED_DINNER_STATES = new Set<DinnerState>([DinnerStateEnum.CANCELLED, DinnerStateEnum.CONSUMED])
 
+/** A cancelled dinner: nothing lands on it */
+export const isDinnerCancelled = (dinner: DinnerEventDisplay): boolean => dinner.state === DinnerStateEnum.CANCELLED
+
 /** A row of a booking view: its order, its place in the line, and the desired order the save would send for a mode */
 export type BookingRow = {
     order: OrderDisplay | null

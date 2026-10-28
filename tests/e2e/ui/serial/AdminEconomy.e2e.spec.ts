@@ -51,8 +51,9 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         testInhabitantId = person.id
         await HouseholdFactory.updateInhabitant(adminContext, testInhabitantId, {dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)})
 
-        // The spec's own season, open at activation: its cases correct an upcoming order and read no deadline
-        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 14, deadline: 0})
+        // The spec's own season, open at activation: its cases correct an upcoming order and read no deadline, so its one
+        // dinner is tomorrow's
+        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 0, deadline: 0, cookingDays: 'all'})
         createdSeasonIds.push(testSeason.season.id!)
 
         expect(testSeason.dinnerEvents.length, 'Test season should have dinner events').toBeGreaterThan(0)

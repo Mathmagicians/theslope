@@ -10,6 +10,8 @@
  * Domain logic (step machine, deadlines, bucket resolution) stays in useBooking.
  */
 import {
+    useBooking,
+    findRegularOrder,
     formatPlace,
     formatDinnerName,
     DINNER_STEP_MAP,
@@ -28,6 +30,8 @@ import type {Expense} from '~/composables/useBillingValidation'
 import {useBookingValidation, DinnerMode as DinnerModeEnum, OrderState as OrderStateEnum, OrderAuditAction as OrderAuditActionEnum, TicketState as TicketStateEnum, SupplyState as SupplyStateEnum, BookingFailure as BookingFailureEnum, type OrderState, type SupplyState, type TicketState, type DinnerMode, type DinnerEventDisplay, type OrderDisplay, type OrderAuditAction, type BookingAction, type BookingOutcome, type BookingResult, type QueuePosition, type ScaffoldResult, type TicketChange, type TicketChangeKind, type TicketCounts, type TicketEvent, type TicketSale, type TicketType} from '~/composables/useBookingValidation'
 import {useTicket, ticketTypeLabel} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import type {TicketWaitlistDetail, WaitlistOrder} from '~/composables/useWaitlistValidation'
+import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 import {ICONS, COLOR, COMPONENTS, ALARM_TO_BADGE, BOOKING_LOCK_STATUS, ORDER_STATE_COLORS, TICKET_TYPE_COLORS, TICKET_TYPE_ICONS, type NuxtUIColor, type TicketTypeColor} from '~/composables/useTheSlopeDesignSystem'
 import {calculateCountdown, formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
 import {BOOKING_WORDS} from '~/config/bookingWords'
@@ -818,6 +822,88 @@ export const useScaffoldPreview = <Request>(
         result: computed(() => isAnswered.value && status.value === 'success' ? data.value : null),
         pending: computed(() => requested.value !== null && (!isAnswered.value || status.value === 'pending'))
     }
+}
+
+/**
+ * The bookings the scaffold will make on a household's dinners that have not started: its dry run with no orders, read
+ * again once the orders change. Every viewer reads them, on the season's deadlines
+ */
+export const useExpectedBookings = (household: () => HouseholdDisplay | null | undefined, dinners: () => DinnerEventDisplay[], orders: () => OrderDisplay[]) => {
+    const now = useClock()
+    const {isDinnerPast} = useSeason()
+    const bookingsStore = useBookingsStore()
+    const request = computed(() => {
+        const householdId = household()?.id
+        const dinnerEventIds = dinners().filter(dinner => !isDinnerPast(dinner.date, now.value)).map(dinner => dinner.id)
+        return householdId !== undefined && dinnerEventIds.length > 0 ? {householdId, dinnerEventIds} : null
+    })
+    const {result, pending} = useScaffoldPreview(
+        () => request.value,
+        ({householdId, dinnerEventIds}) => bookingsStore.fetchExpectedBookings(householdId, dinnerEventIds),
+        {refreshOn: [orders]}
+    )
+    return {
+        expectedModes: computed(() => expectedBookings(result.value)),
+        isExpectedPending: pending
+    }
+}
+
+/** What a person holds on a dinner: the order, else the place on the waiting list; the plan shows while they hold neither */
+export type PersonOnDinner = {
+    order: OrderDisplay | null
+    waitlistEntry: TicketWaitlistDetail | undefined
+    expectedMode: DinnerMode | undefined
+    heldMode: DinnerMode
+    shownMode: DinnerMode
+}
+
+/**
+ * A person's ticket, place and plan on a dinner, from the household's orders, its places and the planned bookings.
+ * An order supersedes a place: the placement deletes the entry it served
+ */
+export const personOnDinner = (orders: OrderDisplay[], waitlistEntries: TicketWaitlistDetail[], expectedModes: Map<string, DinnerMode>) =>
+    (inhabitantId: number, dinnerEventId: number): PersonOnDinner => {
+        const order = findRegularOrder(orders, inhabitantId, dinnerEventId) ?? null
+        const waitlistEntry = order ? undefined : findRegularOrder(waitlistEntries, inhabitantId, dinnerEventId)
+        const expectedMode = order || waitlistEntry ? undefined : expectedModes.get(expectedBookingKey(inhabitantId, dinnerEventId))
+        const heldMode = order?.dinnerMode ?? waitlistEntry?.order.dinnerMode ?? DinnerModeEnum.NONE
+        return {order, waitlistEntry, expectedMode, heldMode, shownMode: expectedMode ?? heldMode}
+    }
+
+/** A guest row's tickets: a placed group's orders, or one queued guest's place; `held` is the first order or the place's order */
+export type GuestItem = {
+    id: string
+    orders: OrderDisplay[]
+    waitlistEntry: TicketWaitlistDetail | undefined
+    held: OrderDisplay | WaitlistOrder
+    ticketPrice: TicketPrice | undefined
+}
+
+/**
+ * The guest rows of the given orders and places: a placed group (booker, ticket type, price, dinner), then one row per
+ * queued guest. A guest has no birth date, so the price the orders or the place hold names the ticket type
+ */
+export const guestItemsOf = (orders: OrderDisplay[], waitlistEntries: TicketWaitlistDetail[], ticketPrices: TicketPrice[]): GuestItem[] => {
+    const {findTicketPriceById, resolveTicketPrice} = useTicket()
+    const placed = Object.entries(useBooking().groupGuestOrders(orders))
+        .filter(([, group]) => group.length > 0)
+        .map(([key, group]): GuestItem => ({
+            id: `guest-group-${key}`,
+            orders: group,
+            waitlistEntry: undefined,
+            held: group[0]!,
+            ticketPrice: resolveTicketPrice(null, group[0]!.priceAtBooking, ticketPrices)
+        }))
+    const queued = waitlistEntries
+        .filter(entry => entry.isGuestTicket)
+        .map((entry): GuestItem => ({
+            id: `guest-entry-${entry.id}`,
+            orders: [],
+            waitlistEntry: entry,
+            held: entry.order,
+            ticketPrice: findTicketPriceById(entry.order.ticketPriceId, ticketPrices)
+        }))
+    return [...placed, ...queued]
 }
 
 export const useBookingUi = () => {

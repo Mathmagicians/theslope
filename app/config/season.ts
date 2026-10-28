@@ -1,9 +1,10 @@
 /**
  * The defaults of a season and its dinners — theslope's config (app.config `theslope.defaultSeason`, the dinner's start
- * and length, the pre-booking window).
+ * and length, the pre-booking window, the cooking deadline thresholds, the billing cutoff).
  *
  * A ticket weighs the portions of the default price with its type and price, else of its type's first default price.
- * Plain module (not app.config itself) so the test factories and helpers read the real defaults.
+ * Plain module (not app.config itself) so useSeason and useTicket, which the server imports, and the test factories and
+ * helpers read the real defaults.
  */
 // Relative path: app.config.ts imports this module, and the node project that typechecks it has no ~~ alias
 import {TicketTypeSchema} from '../../prisma/generated/zod'
@@ -31,5 +32,12 @@ export const SEASON_CONFIG = {
     },
     defaultDinnerStartTime: 18,
     defaultDinnerDurationMinutes: 60,
-    prebookingWindowDays: 60  // Rolling window: scaffold pre-bookings for dinners within next N days
+    prebookingWindowDays: 60,  // Rolling window: scaffold pre-bookings for dinners within next N days
+    cookingDeadlines: {
+        criticalHours: 24,  // Critical urgency: < 24h before dinner event (red)
+        warningHours: 72    // Warning urgency: 24-72h before dinner event (yellow)
+    },
+    billing: {
+        cutoffDay: 17  // Day of month (1-31) when billing period closes for order imports
+    }
 }

@@ -37,10 +37,10 @@ const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
 // Heynabo link
-const {getEventUrl} = useHeynabo()
+const eventUrlOf = getEventUrl(useRuntimeConfig().public.HEY_NABO_API)
 const heynaboEventUrl = computed(() => {
   if (!props.dinnerEvent.heynaboEventId) return null
-  return getEventUrl(props.dinnerEvent.heynaboEventId)
+  return eventUrlOf(props.dinnerEvent.heynaboEventId)
 })
 
 // Formatted date

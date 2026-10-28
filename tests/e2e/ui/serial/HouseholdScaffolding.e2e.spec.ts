@@ -76,8 +76,8 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
 
         // Create dedicated season for scaffolding tests:
         // - ALL days cooking (Mon-Sun) for predictable event count regardless of day-of-week
-        // - 2-day deadline: tomorrow is always AFTER deadline (deadline was yesterday)
-        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 10, deadline: 2, cookingDays: 'all'})
+        // - 2-day deadline: tomorrow is always AFTER deadline (deadline was yesterday), the third day always before it
+        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 2, deadline: 2, cookingDays: 'all'})
         createdSeasonIds.push(testSeason.season.id!)
     })
 

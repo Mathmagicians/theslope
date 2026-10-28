@@ -226,7 +226,7 @@ const stateBadge = computed(() => {
 
 // Dinner step (from useBooking business logic)
 const _currentStep = computed(() => getStepConfig(props.dinnerEvent, props.deadlines).step)
-const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
+const isCancelled = computed(() => isDinnerCancelled(props.dinnerEvent))
 
 // Menu display
 const hasMenuTitle = computed(() => !!props.dinnerEvent.menuTitle?.trim())

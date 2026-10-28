@@ -62,7 +62,7 @@ const currentStepConfig = computed(() => getStepConfig(props.dinnerEvent, props.
 const currentStep = computed(() => currentStepConfig.value.step)
 
 // Is cancelled?
-const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
+const isCancelled = computed(() => isDinnerCancelled(props.dinnerEvent))
 
 // Is past/consumed event? (only show overdue badges for past events - user actions that were never completed)
 const isPastEvent = computed(() => props.dinnerEvent.state === DinnerState.CONSUMED)

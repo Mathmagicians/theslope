@@ -64,6 +64,11 @@ export type JobRun =
     | {job: JobTypes['DAILY_MAINTENANCE'], result: DailyMaintenanceResult}
     | {job: JobTypes['MONTHLY_BILLING'], result: MonthlyBillingResponse | null}
 
+/** The rows a feature's scenarios created in one worker; the inhabitants are the people they added to the user's household */
+type CreatedRows = {inhabitantIds: number[], householdIds: number[], userIds: number[], dinnerEventIds: number[], teamIds: number[], seasonIds: number[]}
+
+const noRows = (): CreatedRows => ({inhabitantIds: [], householdIds: [], userIds: [], dinnerEventIds: [], teamIds: [], seasonIds: []})
+
 /** What the steps of one scenario hand each other */
 export type Scene = {
     /** The browser context of the actor a GIVEN signed in */
@@ -109,13 +114,13 @@ export type Scene = {
     before?: {textSize: number, palette: string | null}
     /** The member's settings as the scenario found them, put back after it */
     memberSettings?: {userId: number, notificationChannels: NotificationChannel[], appearance: Appearance, phone: string | null}
-    /** The rows the scenario created, removed after it; the inhabitants are the people it added to the user's household */
-    created: {inhabitantIds: number[], householdIds: number[], userIds: number[], dinnerEventIds: number[], teamIds: number[], seasonIds: number[]}
+    /** Where the scenario records the rows it creates: the feature's rows, removed after the feature (AfterAll) */
+    created: CreatedRows
 }
 
-const emptyScene = (): Scene => ({
+const emptyScene = (created: CreatedRows): Scene => ({
     jobRuns: [], people: {}, waiting: [], teams: [], teamDinners: [], households: {}, places: [], billedHouseholds: [],
-    created: {inhabitantIds: [], householdIds: [], userIds: [], dinnerEventIds: [], teamIds: [], seasonIds: []}
+    created
 })
 
 /** The value an earlier step of the scenario put in the scene */
@@ -145,7 +150,7 @@ export const teamOf = (scene: Scene, number: number): CookingTeamDetail => {
     return team
 }
 
-/** A household of the scenario, removed after it */
+/** A household of the scenario, removed after the feature */
 export const createSceneHousehold = async (
     admin: BrowserContext,
     scene: Scene,
@@ -156,7 +161,7 @@ export const createSceneHousehold = async (
     return household
 }
 
-/** A person of a scenario household, its part in `lastName`, with a login when `withLogin`: the login outlives the person and is removed after the scenario */
+/** A person of a scenario household, its part in `lastName`, with a login when `withLogin`: the login outlives the person and is removed after the feature */
 export const createScenePerson = async (
     admin: BrowserContext,
     scene: Scene,
@@ -223,51 +228,61 @@ export const periodOf = async (admin: BrowserContext, scene: Scene): Promise<num
     throw new Error(`No monthly run of the scenario billed household ${billed.id}`)
 }
 
-/**
- * Puts back the member's settings and removes the rows the scenario created; every step is tried, and the steps that
- * fail fail the scenario
- */
-const cleanUpScene = async (browser: Browser, {memberSettings, created}: Scene): Promise<void> => {
-    if (!memberSettings && Object.values(created).every(ids => ids.length === 0)) return
-    const admin = await validatedBrowserContext(browser)
+/** Runs every cleanup step; the steps that fail fail the hook */
+const attemptAll = async (what: string, steps: (() => Promise<unknown>)[]): Promise<void> => {
     const failures: unknown[] = []
-    const attempt = async (cleanUp: () => Promise<unknown>) => {
+    for (const step of steps) {
         try {
-            await cleanUp()
+            await step()
         } catch (error) {
             failures.push(error)
         }
     }
-    if (memberSettings) {
-        const {userId, phone, ...preferences} = memberSettings
-        await attempt(() => UserFactory.setPhone(admin, userId, phone))
+    if (failures.length > 0) throw new AggregateError(failures, `${what} failed`)
+}
+
+/** Puts back the member's settings the scenario changed: the next scenario reads them */
+const putBackMemberSettings = async (browser: Browser, {memberSettings}: Scene): Promise<void> => {
+    if (!memberSettings) return
+    const {userId, phone, ...preferences} = memberSettings
+    const admin = await validatedBrowserContext(browser)
+    await attemptAll('Putting back the member\'s settings', [
+        () => UserFactory.setPhone(admin, userId, phone),
         // The preference write changes the session user alone
-        await attempt(async () => {
+        async () => {
             const member = await memberValidatedBrowserContext(browser)
             try {
                 await UserFactory.updateMyPreferences(member, preferences)
             } finally {
                 await member.close()
             }
-        })
-    }
+        }
+    ]).finally(() => admin.close())
+}
+
+/** Removes the rows the feature's scenarios created in the worker, and empties the record for the worker's next feature */
+const deleteCreatedRows = async (browser: Browser, created: CreatedRows): Promise<void> => {
+    if (Object.values(created).every(ids => ids.length === 0)) return
+    const admin = await validatedBrowserContext(browser)
+    const {inhabitantIds, householdIds, userIds, dinnerEventIds, teamIds, seasonIds} = created
+    Object.assign(created, noRows())
     // An inhabitant and a household take their orders and places; the users outlive their people; a team leaves its
     // dinners, so they go first; a season takes its dinners
-    await attempt(() => Promise.all(created.inhabitantIds.map(id => HouseholdFactory.deleteInhabitant(admin, id))))
-    await attempt(() => HouseholdFactory.deleteHousehold(admin, created.householdIds))
-    await attempt(() => UserFactory.cleanupUsers(admin, created.userIds))
-    await attempt(() => Promise.all(created.dinnerEventIds.map(id => DinnerEventFactory.deleteDinnerEvent(admin, id))))
-    await attempt(() => Promise.all(created.teamIds.map(id => SeasonFactory.deleteCookingTeam(admin, id))))
-    await attempt(() => SeasonFactory.cleanupSeasons(admin, created.seasonIds))
-    await admin.close()
-    if (failures.length > 0) throw new AggregateError(failures, 'The scenario\'s cleanup failed')
+    await attemptAll('The feature\'s cleanup', [
+        () => Promise.all(inhabitantIds.map(id => HouseholdFactory.deleteInhabitant(admin, id))),
+        () => HouseholdFactory.deleteHousehold(admin, householdIds),
+        () => UserFactory.cleanupUsers(admin, userIds),
+        () => Promise.all(dinnerEventIds.map(id => DinnerEventFactory.deleteDinnerEvent(admin, id))),
+        () => Promise.all(teamIds.map(id => SeasonFactory.deleteCookingTeam(admin, id))),
+        () => SeasonFactory.cleanupSeasons(admin, seasonIds)
+    ]).finally(() => admin.close())
 }
 
 /**
  * playwright-bdd's `test` with the UI specs' API error guard (`uiTest.ts`): the pages of a scenario fail it on a 4xx or
  * 5xx from `/api/` it did not declare; the factories' requests are not recorded
  */
-export const test = mergeTests(base, uiTest).extend<{adminContext: BrowserContext, contextOf: (actor: Actor) => Promise<BrowserContext>, scene: Scene}>({
+export const test = mergeTests(base, uiTest).extend<{adminContext: BrowserContext, contextOf: (actor: Actor) => Promise<BrowserContext>, scene: Scene}, {createdRows: CreatedRows}>({
     adminContext: async ({browser}, use) => {
         const context = await validatedBrowserContext(browser)
         await use(context)
@@ -295,14 +310,24 @@ export const test = mergeTests(base, uiTest).extend<{adminContext: BrowserContex
         })
         for (const context of opened.values()) await context.close()
     },
-    scene: async ({browser}, use) => {
-        const scene = emptyScene()
+    // The worker's record of the rows its scenarios create, removed by the AfterAll of each feature: a delete while a
+    // parallel scenario's request is in flight fails that request
+    createdRows: [
+        // Playwright reads a fixture's dependencies from its first parameter's destructuring; the record has none
+        // eslint-disable-next-line no-empty-pattern
+        async ({}, use) => {
+            await use(noRows())
+        },
+        {scope: 'worker'}
+    ],
+    scene: async ({browser, createdRows}, use) => {
+        const scene = emptyScene(createdRows)
         await use(scene)
-        await cleanUpScene(browser, scene)
+        await putBackMemberSettings(browser, scene)
     }
 })
 
-export const {Given, When, Then, BeforeAll} = createBdd(test)
+export const {Given, When, Then, BeforeAll, AfterAll} = createBdd(test)
 
 // The singleton active season (`a season is active`), resolved in each feature's beforeAll as `season.setup.ts` and the
 // specs' beforeAll do: a run without setup-season (--no-deps) creates it there, outside a scenario's own timeout
@@ -310,4 +335,9 @@ BeforeAll({tags: 'not @smoke'}, async ({browser}) => {
     const admin = await validatedBrowserContext(browser)
     await SeasonFactory.createActiveSeason(admin)
     await admin.close()
+})
+
+// The guaranteed cleanup of the feature's rows, as the specs' afterAll: it runs in each worker that ran the feature
+AfterAll(async ({browser, createdRows}) => {
+    await deleteCreatedRows(browser, createdRows)
 })

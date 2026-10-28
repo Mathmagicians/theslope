@@ -80,9 +80,7 @@ const menuTitle = computed(() => props.dinnerEvent.menuTitle || 'Ingen menu endn
 const isMenuAnnounced = computed(() => !!props.dinnerEvent.menuTitle)
 
 // Check if dinner is cancelled
-const {DinnerStateSchema} = useBookingValidation()
-const DinnerState = DinnerStateSchema.enum
-const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
+const isCancelled = computed(() => isDinnerCancelled(props.dinnerEvent))
 
 // Handle card click
 const handleClick = () => {

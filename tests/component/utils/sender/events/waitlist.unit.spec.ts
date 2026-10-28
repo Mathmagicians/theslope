@@ -480,14 +480,20 @@ describe('the people a run\'s mails name', () => {
     // A maintenance run reads the booking notifications off the dinners past their booking deadline as they stand and
     // sends those without a delivery record: two runs have the effects of one
     describe('the booking notifications a maintenance run sends', () => {
-        const {OrderAuditActionSchema, OrderAuditChangeSchema, OrderAuditSourceSchema, createOrderAuditData} = useBookingValidation()
+        const {OrderAuditActionSchema, OrderAuditChangeSchema, OrderAuditSourceSchema, DinnerStateSchema, createOrderAuditData} = useBookingValidation()
+        const DinnerState = DinnerStateSchema.enum
         const SEASON_ID = 9
+        // D1 holds the dinner in this state; the read leaves out the states it excludes
+        let dinnerState: typeof DinnerState[keyof typeof DinnerState]
         // The run's clock, the day before the dinner and past its booking deadline
         const at = (minute: number) => new Date(2026, 9, 18, 12, minute)
         beforeEach(() => {
             vi.useFakeTimers({toFake: ['Date']})
             vi.setSystemTime(at(30))
-            vi.mocked(fetchDinnerEvents).mockResolvedValue([{...DinnerEventFactory.defaultDinnerEventDisplay(), id: dinner.dinnerEventId, date: dinner.date, seasonId: SEASON_ID}])
+            dinnerState = DinnerState.SCHEDULED
+            vi.mocked(fetchDinnerEvents).mockImplementation(async (_, {excludeStates} = {}) =>
+                [{...DinnerEventFactory.defaultDinnerEventDisplay(), id: dinner.dinnerEventId, date: dinner.date, seasonId: SEASON_ID, state: dinnerState}]
+                    .filter(({state}) => !excludeStates?.includes(state)))
         })
         afterEach(() => vi.useRealTimers())
 
@@ -520,12 +526,14 @@ describe('the people a run\'s mails name', () => {
             sendNotifications({} as D1Database, NotificationFactory.channel(sender), seasonId, options)
 
         const states = [
-            {given: 'no delivery records', flag: 'true', runBefore: async () => undefined, sent: true},
-            {given: 'the delivery records of the maintenance run before', flag: 'true', runBefore: () => send(fakeQueue()), sent: false},
-            {given: 'no delivery records and the booking emails flag off', flag: 'false', runBefore: async () => undefined, sent: false}
+            {given: 'no delivery records', flag: 'true', dinnerIs: DinnerState.SCHEDULED, runBefore: async () => undefined, sent: true},
+            {given: 'the delivery records of the maintenance run before', flag: 'true', dinnerIs: DinnerState.SCHEDULED, runBefore: () => send(fakeQueue()), sent: false},
+            {given: 'no delivery records and the booking emails flag off', flag: 'false', dinnerIs: DinnerState.SCHEDULED, runBefore: async () => undefined, sent: false},
+            {given: 'the dinner cancelled', flag: 'true', dinnerIs: DinnerState.CANCELLED, runBefore: async () => undefined, sent: false}
         ]
 
-        it.each(notifications.flatMap(notification => states.map(state => ({...notification, ...state}))))('GIVEN a dinner with $outcome and $given WHEN a maintenance run sends the booking notifications THEN its emails go: $sent', async ({kinds, written, flag, runBefore, sent}) => {
+        it.each(notifications.flatMap(notification => states.map(state => ({...notification, ...state}))))('GIVEN a dinner with $outcome and $given WHEN a maintenance run sends the booking notifications THEN its emails go: $sent', async ({kinds, written, flag, dinnerIs, runBefore, sent}) => {
+            dinnerState = dinnerIs
             holdDinner(written(), flag)
             await runBefore()
             const sender = fakeQueue()

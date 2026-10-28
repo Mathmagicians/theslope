@@ -5,6 +5,9 @@ import {expectApiError, guardContext} from './apiErrorGuard'
 import {randomUUID} from 'crypto'
 import {getDinnerTimeRange, isBeforeDeadline} from '~/utils/season'
 import {SEASON_CONFIG} from '~/config/season'
+import {formatMonthYear} from '~/utils/date'
+import {da} from '@nuxt/ui/locale'
+import {addMonths, differenceInCalendarMonths} from 'date-fns'
 import {PREF_TEST_IDS} from '~~/tests/component/components/user/userPreferencesTestIds'
 
 const headers = {'Content-Type': 'application/json'}
@@ -295,6 +298,16 @@ const expectHydratedWithoutMismatch = async (page: Page, url: string): Promise<v
 const waitForApi = (page: Page, path: string, method: string, options?: {timeout?: number}): Promise<Response> =>
     page.waitForResponse(response => response.url().includes(path) && response.request().method() === method, options)
 
+/** Pages a calendar from the month it shows to the month of `date` with Nuxt UI's month buttons, one click and one heading a month */
+const pageCalendarToMonth = async (scope: Page | Locator, shown: Date, date: Date): Promise<void> => {
+    const months = differenceInCalendarMonths(date, shown)
+    const pager = scope.getByRole('button', {name: months > 0 ? da.messages.calendar.nextMonth : da.messages.calendar.prevMonth})
+    for (let month = 1; month <= Math.abs(months); month++) {
+        await pager.click()
+        await expect(scope.locator('[data-slot="heading"]')).toHaveText(new RegExp(`^${formatMonthYear(addMonths(shown, Math.sign(months) * month))}$`, 'i'))
+    }
+}
+
 /** A response of the household's scaffold: the booking write (POST) or its dry run (GET) */
 const isScaffold = (method: string) => (response: Response): boolean =>
     response.url().includes('/api/household/order/scaffold') && response.request().method() === method
@@ -389,6 +402,7 @@ const testHelpers = {
     collectHydrationWarnings,
     expectHydratedWithoutMismatch,
     waitForApi,
+    pageCalendarToMonth,
     isScaffoldSave,
     isExpectedRead,
     PREBOOKING_WINDOW_DAYS,

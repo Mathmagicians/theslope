@@ -1,7 +1,5 @@
 import {expect, type BrowserContext, type Page} from '@playwright/test'
 import {defineParameterType} from 'playwright-bdd'
-import {da} from '@nuxt/ui/locale'
-import {addMonths, differenceInCalendarMonths, isSameDay} from 'date-fns'
 import {Given, When, Then, fromScene, contextOfActor, teamOf, type Actor, type Scene} from '~~/tests/e2e/fixtures'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -11,10 +9,10 @@ import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {useCookingTeam} from '~/composables/useCookingTeam'
 import {TEAM_WORDS} from '~/config/teamWords'
 import {SEASON_CONFIG} from '~/config/season'
-import {computeCookingDates, splitDinnerEvents} from '~/utils/season'
-import {formatDanishWeekdayDate, formatDate, formatMonthYear, parseDate} from '~/utils/date'
+import {computeCookingDates, getDinnerOnDate, splitDinnerEvents} from '~/utils/season'
+import {formatDanishWeekdayDate, formatDate, parseDate} from '~/utils/date'
 
-const {getSessionUserInfo, gotoHydrated, collectHydrationWarnings, salt} = testHelpers
+const {getSessionUserInfo, gotoHydrated, collectHydrationWarnings, salt, pageCalendarToMonth} = testHelpers
 const {TeamRoleSchema} = useCookingTeamValidation()
 const {getTeamShortName} = useCookingTeam()
 
@@ -114,13 +112,7 @@ When('{actor} clicks the dinner of team {int} in the chef calendar', async ({sce
     const dinnerDate = new Date(teamDinnerOf(scene, number).date)
     const page = fromScene(scene, 'page')
     const calendar = page.getByTestId('chef-calendar-content')
-    const shown = await dateInUrl(page)
-    const months = differenceInCalendarMonths(dinnerDate, shown)
-    const pager = calendar.getByRole('button', {name: months > 0 ? da.messages.calendar.nextMonth : da.messages.calendar.prevMonth})
-    for (let month = 1; month <= Math.abs(months); month++) {
-        await pager.click()
-        await expect(calendar.locator('[data-slot="heading"]')).toHaveText(new RegExp(`^${formatMonthYear(addMonths(shown, Math.sign(months) * month))}$`, 'i'))
-    }
+    await pageCalendarToMonth(calendar, await dateInUrl(page), dinnerDate)
     // The read-only calendar marks its cells disabled; the dinner's circle inside takes the click
     await calendar.getByTestId(`calendar-other-team-dinner-${dinnerDate.getDate()}`).click({force: true})
     await page.waitForURL(url => url.searchParams.get('team') === String(team.id))
@@ -149,7 +141,7 @@ Then('{actor} sees the next cooking day of team {int}', async ({adminContext: ad
     const team = await SeasonFactory.getCookingTeamById(admin, teamOf(scene, number).id!)
     const {nextDinner} = nextDinnerOf(team!.dinnerEvents, new Date())
     expect(nextDinner, `team ${number} has a dinner ahead`).not.toBeNull()
-    await expect(fromScene(scene, 'page').getByTestId('chef-next-cooking-countdown')).toContainText(formatDanishWeekdayDate(new Date(nextDinner!.date)))
+    await expect(fromScene(scene, 'page').getByTestId('chef-next-cooking-countdown')).toContainText(formatDanishWeekdayDate(nextDinner!.date))
 })
 
 Then('{actor} sees the visiting tab and the visitor line of team {int}', async ({scene}, actor: Actor, number: number) => {
@@ -168,7 +160,7 @@ Then('{actor} reads the menu card of team {int} without edit controls', async ({
     const page = fromScene(scene, 'page')
     const team = await SeasonFactory.getCookingTeamById(admin, teamOf(scene, number).id!)
     const date = await dateInUrl(page)
-    expect(team!.dinnerEvents.some(dinner => isSameDay(new Date(dinner.date), date)), `team ${number} cooks on ${formatDate(date)}`).toBe(true)
+    expect(getDinnerOnDate(team!.dinnerEvents)(date), `team ${number} cooks on ${formatDate(date)}`).toBeDefined()
     await expect(page.getByTestId('chef-menu-title')).toBeVisible()
     await expect(page.getByTestId('edit-menu')).toHaveCount(0)
 })

@@ -1,6 +1,6 @@
 # Feature Proposal: Breakdown alerts
 
-**Status:** Discovery | **Date:** 2026-10-25 | **Builds on:** `../this-pr/feature-notification-delivery.md` § Diagnostics
+**Status:** Discovery | **Date:** 2026-10-25 | **Builds on:** `../../ops-runbook.md` § Dashboards
 
 ## Problem
 

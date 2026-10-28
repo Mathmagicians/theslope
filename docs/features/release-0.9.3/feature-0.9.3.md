@@ -32,6 +32,11 @@
 | Household and member notifications | `feature-proposal-notification-triggers.md` § Household and member events | – | discovery |
 | Booking emails flag removed | `SHOULD_SEND_BOOKING_EMAILS_FLAG` leaves `wrangler.toml`, and its reader `shouldSendBookingEmails` and the gate `notifyBooking` leave the code. | – | specified |
 | The dinner page keeps its form while the season refreshes | § The dinner page keeps its form while the season refreshes | – | discovery |
+| Raw utility classes | § Raw utility classes | – | specified |
+| Unit formatting | § Unit formatting | – | specified |
+| Spread row primitive | § Spread row primitive | – | specified |
+| Chef card atoms | § Chef card atoms | – | specified |
+| Server payload of the shared stores | § Server payload of the shared stores | – | specified |
 
 § Drop `DinnerEvent.totalCost`, § Order snapshot (B6) and § Ticket allergies on the order share one migration:
 `make d1-create-migration name=release-0-9-3`, the rewrites below in the Prisma source, then
@@ -294,6 +299,169 @@ guest's card stays closed, and the form stays in place.
 ### Affected areas
 
 `app/composables/useApiHandler.ts`, `app/pages/dinner/index.vue`, `app/components/dinner/DinnerBookingForm.vue`.
+
+## Raw utility classes
+
+### Problem
+
+The architecture rule fails a raw palette shade only, so about 560 raw utilities sit in the static `class`
+attributes of sixty-three `.vue` files (`AdminEconomy.vue` 68, `UserProfileCard.vue` 52, `UserPreferencesCard.vue` 50,
+`HouseholdSettings.vue` 46, `AllergyTypeCard.vue` 43, the public billing page 34, `HelpButton.vue` 32,
+`HouseholdEconomy.vue` 30, `AllergyDetailPanel.vue` 30, …). Per-site `:ui` patches and literal props sit beside them:
+`TicketPriceListEditor.vue` (three), `HelpButton.vue` (`variant="outline"` on a `UCard`), the page tabs of
+`pages/admin/[tab].vue`, `pages/household/[shortname]/[tab].vue` and `PageHeader.vue` (`label: 'hidden md:inline'`),
+`HouseholdListItem.vue:19` (a raw row), and the avatar groups of `UserListItem.vue:152`, `CookingTeamCard.vue:339` and
+`HouseholdListItem.vue:20` (`:ui="{base: avatar.compact.fit}"`).
+
+Motion utilities are the same class, 14 hits in 8 files: `animate-spin` beside `MOTION_SPIN` in `OrderHistoryDisplay.vue:59` and
+`AdminEconomy.vue:541`; hover interactions in `UserListItem.vue:158,199` (`hover:scale-110 hover:rotate-3 transition-transform duration-200`),
+`CountdownTimer.vue:122` (`hover:ring-2 … transition-all`), `ChefDinnerCard.vue:96` (`transition-shadow duration-200 hover:shadow-lg`),
+`UserProfileCard.vue:253` (`transition-colors` with a hover colour inside); the six `rotate-*` tilts by error code in
+`ViewError.vue:20-35`; `Ticker.vue:19` returning `animate-marquee` from a function. Inside the design system, `pulse`, `dot`
+and the power-mode fireworks carry `animate-pulse` without `motion-reduce`.
+
+### Solution
+
+A `COMPONENTS.<surface>` token per file, swept file by file, the touched files first (the `ds-deviations-fixed-on-sight`
+rule); `COMPONENTS.pageTabs` and `COMPONENTS.pageCard` for the pages; `COMPONENTS.avatar.regular/compact` carry their
+`ui` so a group spreads the token. A `MOTION` group holds the primitives (spin, the two hover kinds, the colour fade,
+the marquee) and `COMPONENTS.viewError.tilt` maps the error code to its turn; one token per distinct original value,
+named by its site, proof a before/after class-set comparison per template; a raw class met in a touched file is fixed
+on sight.
+
+**OPEN** — `motion-reduce:animate-none` on the infinite animations the design system still runs without it (pulse,
+marquee, fireworks): a rendered-class change, decided with the sweep.
+
+### Affected
+
+The sixty-one components, `app/composables/useTheSlopeDesignSystem.ts`.
+
+## Unit formatting
+
+### Problem
+
+Six sites append `kuv.` or `kuverter` to `formatPortions(x)` by hand (`KitchenPreparation.vue` two,
+`AllergenMultiSelector.vue`, `AllergyOverviewLine.vue`, `DinnerBudget.vue`, `TicketChanges.vue`); thirty-six sites in
+twelve files append ` kr` to `formatPrice(x)`, `VatAmount.vue` among them.
+
+### Solution
+
+`formatKuverter(portions, long?)` in `app/utils/utils.ts` and `formatKr(ore)` in `useTicket`, swept at every site in one
+change.
+
+### Affected
+
+The twelve files with a ` kr` site (`AdminEconomy.vue` 14, `DinnerBudget.vue` 5, `HouseholdEconomy.vue` 5, the
+public billing page 3, `ControlBadge.vue` 2, `CostLine.vue`, `DinnerBookingForm.vue`, `DinnerTicket.vue`, `ChefMenuCard.vue`,
+`TicketChanges.vue`, `BookingGridView.vue`, `VatAmount.vue`), the five with a portions site, `app/utils/utils.ts`, `app/composables/useTicket.ts`, the utils unit spec.
+
+## Spread row primitive
+
+### Problem
+
+Fourteen design-system tokens spell a "something left, something right" row (`flex items-center justify-between …`). Six of
+them are the same base with nothing or a trifle added: `collapsible.headerRow` and `chefCalendar.header` (one constant,
+`COLLAPSIBLE_HEADER_ROW`), `adminTeams.detailHeaderRow`, `chefCalendar.agendaHeader`, `householdBookings.panelHeader`,
+`teamCard.jokerAddRow` and `dinnerBudget.boxLine`. The spending tables (`CookingRoundSpending.vue`) head themselves with a
+row bound to the budget box's `boxLine` and the amount's `vatAmount.unitHeader`, an alias of `TYPOGRAPHY.finePrintMuted`;
+the editor's folded row (`ExpenseLines.vue`) binds the same alias. The design system holds one-off variants where it
+holds a layout.
+
+### Solution
+
+A spread row is a layout, so `LAYOUTS` gets the primitive beside its responsive cousin:
+
+```ts
+cardHeaderRow: 'flex flex-col md:flex-row md:items-center md:justify-between gap-2',   // as today
+spreadRow: 'flex items-center justify-between gap-2'
+```
+
+Tokens that add a value compose it and keep their names: `boxLine` (nowrap, small text), `jokerAddRow` (gap, padding),
+`panelHeader` (margin). Tokens that add nothing go, and their sites bind `LAYOUTS.spreadRow`: `collapsible.headerRow`
+(the Budget pane, Se billetændringer), `chefCalendar.header` and `agendaHeader` (the chef calendar), `adminTeams.detailHeaderRow`.
+
+A spending table's heading is the table's caption: the `UTable` `#caption` slot holds the spread row with the heading
+and the unit words, `table.ui` gains `caption: 'text-left pb-2'` so the caption shows (Nuxt UI hides it by default), and
+every table on `table.ui` can carry one. The unit words bind `TYPOGRAPHY.finePrintMuted`; `vatAmount.unitHeader` goes.
+
+Value-preserving: every site renders the classes it rendered before; the spending tables' heading sits in a `<caption>`
+element, read with its table by a screen reader.
+
+### TDD
+
+The architecture suite (`designSystemUsage`, contrast) stays green; the component specs of the chef tables, the editor,
+the chef calendar and the admin teams assert the heading test ids and behaviour as today. No e2e slot: a rendering-only
+package.
+
+### Affected
+
+`app/composables/useTheSlopeDesignSystem.ts` (`LAYOUTS.spreadRow`, `table.ui.caption`, the composed and deleted tokens),
+`app/components/chef/DinnerBudget.vue`, `TicketChanges.vue`, `CookingRoundSpending.vue`, `app/components/shared/ExpenseLines.vue`,
+`app/components/calendar/ChefCalendarDisplay.vue`, `app/components/admin/AdminTeams.vue`, `docs/ui.md` (the spread row
+under Component layouts, the caption under Tables).
+
+## Chef card atoms
+
+### Problem
+
+`ChefMenuCard.vue` and `ExpenseLines.vue` each render the card section shell (`cardSection.row/label/glyph/line`, the
+secondary edit action, `cardSection.editor/editorHead/editorTitle`, `LAYOUTS.formButtonRow`). The total rows of
+`ExpenseLines.vue`, `CookingRoundSpending.vue` and `DinnerBudget.vue` spell the same `<tr>` with a label cell and a
+`VatAmount` cell twelve times. The unit words "ex / inkl. moms" are a literal at five template sites (`DinnerBudget.vue` two,
+`CookingRoundSpending.vue`, `ExpenseLines.vue` two, one a column header) on three tokens of one value
+(`dinnerBudget.boxUnit`, `vatAmount.unitHeader`, `expenseLines.alternative`). `TicketChanges.vue` repeats its chip loop twice, and the
+design system spells `ticket.face.normal/released/claimed` and `stateIcon` as triplets that differ in one accent.
+
+### Solution
+
+A `CardSection` atom (props: glyph, title, edit label, editing; slots: line, editor, actions) renders the shell for both
+cards. An `AmountTotalRow` atom (label, gross, balance, pending, colspan) renders every total row; `ExpenseLines`
+iterates `[{label, figures}]`. One constant holds the unit words and one `TYPOGRAPHY` token styles them; the other two tokens go. One `#chips` fragment in
+`TicketChanges`. The ticket face is a base plus an accent map keyed by ticket state.
+
+### Affected
+
+`app/components/chef/ChefMenuCard.vue`, `DinnerBudget.vue`, `TicketChanges.vue`, `CookingRoundSpending.vue`,
+`app/components/shared/ExpenseLines.vue`, `app/composables/useTheSlopeDesignSystem.ts`, their component specs.
+
+## Server payload of the shared stores
+
+### Problem
+
+Nuxt reports the server payload per page (`NUXT_E8006`, above 100 kB). A store that several pages share requests
+every ungated dataset it holds on init, and every page that opens the store pays for all of them. The member pages
+(`/dinner`, `/chef`, `/household/[shortname]/*`) carry datasets one admin tab reads: `users`, `allergyManagers` and
+`my-teams` in the users store (`app/stores/users.ts`), opened by the dinner page and the profile card for a write
+only; the households list with every inhabitant's preferences; the dinner Detail's tickets, each carrying the parent
+dinner again. The economy datasets are gated in release 0.9 (`loadBillingOverview`, ADR-007 rule 9).
+
+### Solution
+
+1. A dataset one tab or page reads is gated on the setter that page flips at setup (ADR-007 rule 9,
+   `loadHouseholdBilling`): `users` and `allergyManagers` behind `loadUsers()` and `loadAllergyManagers()`, flipped by
+   `AdminUsers` and `AllergyManagersList`; `my-teams` behind the existing `loadMyTeams()`, flipped by the chef page.
+2. The tickets on a dinner Detail take the shape their readers render (the grid, the kitchen box, the allergen
+   overview): the order's scalars, the inhabitant with allergies, the ticket price. The parent dinner is the Detail
+   itself.
+3. `HouseholdDisplay` carries what its readers render (`households.ts`, the household pickers, `CookingTeamCard`);
+   the fields only the household card edits ride on the household Detail.
+4. The payload line for `/chef`, `/household/[shortname]/bookings` and `/dinner` stays under 100 kB on a copy of dev.
+
+### TDD
+
+- Store specs: a gated row per dataset in `users.nuxt.spec.ts` (idle until the setter, fetched after), as
+  `bookings.nuxt.spec.ts` § gated reads.
+- Dinner Detail: the API spec asserts the ticket shape; the component specs of the grid, the kitchen box and the
+  allergen overview pass on it.
+- E2E: the dev log shows no `NUXT_E8006` for the three pages above.
+
+### Affected
+
+`app/stores/users.ts`, `app/stores/households.ts`, `app/components/admin/AdminUsers.vue`,
+`app/components/allergy/AllergyManagersList.vue`, `app/pages/chef/index.vue`,
+`app/composables/useBookingValidation.ts` (`DinnerEventDetailSchema.tickets`), `app/composables/useHouseholdValidation.ts`
+(`HouseholdDisplaySchema`), `server/data/prismaRepository.ts` (the dinner Detail and household index includes),
+`tests/component/stores/*.nuxt.spec.ts`, `docs/adr-compliance-frontend.md` (store rows).
 
 ## Decisions
 

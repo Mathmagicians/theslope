@@ -1,7 +1,7 @@
 import {useBookingValidation, type TicketType, type OrderDisplay} from '~/composables/useBookingValidation'
 import type {TicketPrice, PortionTicket} from '~/composables/useTicketPriceValidation'
 import {calculateAgeOnDate} from '~/utils/date'
-import {useAppConfig} from '#imports'
+import {SEASON_CONFIG} from '~/config/season'
 
 const {TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
@@ -34,13 +34,10 @@ export const ticketTypeCount = (type: TicketType, count: number): string =>
  */
 export const useTicket = () => {
     /**
-     * Get default ticket prices from app config
+     * The season config's default ticket prices
      * Used as fallback when no season ticket prices are available
      */
-    const getDefaultTicketPrices = (): TicketPrice[] => {
-        const appConfig = useAppConfig()
-        return appConfig.theslope?.defaultSeason?.ticketPrices ?? []
-    }
+    const getDefaultTicketPrices = (): TicketPrice[] => SEASON_CONFIG.defaultSeason.ticketPrices
 
     // The default price with the ticket's type and price names its portions, else its type's first default price
     const portionsOf = ({ticketType, price}: PortionTicket): number => {

@@ -5,16 +5,9 @@ export default defineAppConfig({
     theslope: {
         ...SEASON_CONFIG,
         holidayUrl: 'https://www.lejre.dk/borger/daginstitution-og-skole/skole/ferieplan-og-lukkedage',
-        cookingDeadlines: {
-            criticalHours: 24,  // Critical urgency: < 24h before dinner event (red)
-            warningHours: 72    // Warning urgency: 24-72h before dinner event (yellow)
-        },
         kitchen: {
             baseRatePercent: 5,  // Kitchen contribution: 5% of ticket revenue goes to common kitchen fund
             vatPercent: 25       // VAT rate: Used to calculate ex-VAT budget for grocery shopping
-        },
-        billing: {
-            cutoffDay: 17  // Day of month (1-31) when billing period closes for order imports
         },
         systemJobs: {
             heynaboImport: { cron: '0 1 * * *', description: 'Dagligt kl. 02:00' },

@@ -1,9 +1,10 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createTicketStateBadge, createBirthdayBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, ticketBadgeLabel, cookingRoundWords, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, ticketPricePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, ticketChangeHouseholds, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createTicketStateBadge, createBirthdayBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, personOnDinner, guestItemsOf, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, ticketBadgeLabel, cookingRoundWords, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, ticketPricePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, ticketChangeHouseholds, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, formatPlace} from '~/composables/useBooking'
 import {useBookingValidation, TicketState, type BookingAction, type BookingResult, type QueuePosition} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
@@ -736,6 +737,52 @@ describe('expectedBookings', () => {
         {desc: 'no reply yet expects nothing', results: null, expected: []}
     ])('$desc', ({results, expected}) => {
         expect([...expectedBookings(results === null ? null : run({results}))]).toEqual(expected)
+    })
+})
+
+// What a person holds on a dinner: an order supersedes a place on the waiting list, a place supersedes the plan, and a
+// guest ticket booked on the person is none of theirs
+describe('personOnDinner', () => {
+    const {DINEIN, DINEINLATE, TAKEAWAY, NONE} = DinnerModeSchema.enum
+    const DINNER = 4
+    const annaOrder = OrderFactory.defaultOrder('anna', {inhabitantId: ANNA.inhabitantId, dinnerEventId: DINNER, dinnerMode: TAKEAWAY})
+    const annaGuest = OrderFactory.defaultOrder('anna-guest', {id: 2, inhabitantId: ANNA.inhabitantId, dinnerEventId: DINNER, isGuestTicket: true})
+    const annaEntry = WaitlistFactory.defaultEntry({inhabitantId: ANNA.inhabitantId, dinnerEventId: DINNER, dinnerMode: DINEINLATE})
+    const annaPlan = new Map([[expectedBookingKey(ANNA.inhabitantId, DINNER), DINEIN]])
+    it.each([
+        {holds: 'a ticket', orders: [annaOrder], entries: [annaEntry], plan: annaPlan,
+            person: {order: annaOrder, waitlistEntry: undefined, expectedMode: undefined, heldMode: TAKEAWAY, shownMode: TAKEAWAY}},
+        {holds: 'a place on the waiting list', orders: [], entries: [annaEntry], plan: annaPlan,
+            person: {order: null, waitlistEntry: annaEntry, expectedMode: undefined, heldMode: DINEINLATE, shownMode: DINEINLATE}},
+        {holds: 'a plan', orders: [], entries: [], plan: annaPlan,
+            person: {order: null, waitlistEntry: undefined, expectedMode: DINEIN, heldMode: NONE, shownMode: DINEIN}},
+        {holds: 'a guest ticket and a plan', orders: [annaGuest], entries: [], plan: annaPlan,
+            person: {order: null, waitlistEntry: undefined, expectedMode: DINEIN, heldMode: NONE, shownMode: DINEIN}},
+        {holds: 'nothing', orders: [], entries: [], plan: new Map(),
+            person: {order: null, waitlistEntry: undefined, expectedMode: undefined, heldMode: NONE, shownMode: NONE}}
+    ])('GIVEN Anna holds $holds THEN she shows $person.shownMode', ({orders, entries, plan, person}) => {
+        expect(personOnDinner(orders, entries, plan)(ANNA.inhabitantId, DINNER)).toEqual(person)
+    })
+})
+
+// The guest rows: a placed group per booker, ticket type, price and dinner, then one row per queued guest; a guest has
+// no birth date, so the orders' price or the place's price row names the ticket type
+describe('guestItemsOf', () => {
+    const PRICES = TicketFactory.defaultTicketPrices()
+    const guestOrder = (id: number) => OrderFactory.defaultOrder(`guest-${id}`, {id, inhabitantId: ANNA.inhabitantId, isGuestTicket: true, ticketType: CHILD, priceAtBooking: CHILD_TICKET.price, ticketPriceId: CHILD_TICKET.id!})
+    const [firstGuest, secondGuest] = [guestOrder(21), guestOrder(22)]
+    const ownOrder = OrderFactory.defaultOrder('own', {id: 23, inhabitantId: ANNA.inhabitantId})
+    const queuedGuest = WaitlistFactory.defaultEntry({id: 31, inhabitantId: ANNA.inhabitantId, isGuestTicket: true, ticketPrice: HUNGRY_TICKET})
+    const ownEntry = WaitlistFactory.defaultEntry({id: 32, inhabitantId: ANNA.inhabitantId})
+    const placed = {id: expect.stringMatching(/^guest-group-/), orders: [firstGuest, secondGuest], waitlistEntry: undefined, held: firstGuest, ticketPrice: CHILD_TICKET}
+    const queued = {id: `guest-entry-${queuedGuest.id}`, orders: [], waitlistEntry: queuedGuest, held: queuedGuest.order, ticketPrice: HUNGRY_TICKET}
+    it.each([
+        {given: 'two guest tickets of one group and the booker\'s own', orders: [firstGuest, ownOrder, secondGuest], entries: [], items: [placed]},
+        {given: 'a queued guest and the booker\'s own place', orders: [], entries: [ownEntry, queuedGuest], items: [queued]},
+        {given: 'a queued guest and a placed group', orders: [firstGuest, secondGuest], entries: [queuedGuest], items: [placed, queued]},
+        {given: 'only the booker\'s own ticket and place', orders: [ownOrder], entries: [ownEntry], items: []}
+    ])('GIVEN $given THEN the guest rows are the placed groups, then the queued guests', ({orders, entries, items}) => {
+        expect(guestItemsOf(orders, entries, PRICES)).toEqual(items)
     })
 })
 

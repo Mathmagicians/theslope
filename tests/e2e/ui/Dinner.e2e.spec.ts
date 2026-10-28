@@ -12,7 +12,7 @@ import {isSameDay} from 'date-fns'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, expectHydratedWithoutMismatch, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom, waitForApi} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, expectHydratedWithoutMismatch, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom, waitForApi, pageCalendarToMonth} = testHelpers
 const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
 const {findTicketPriceByType} = useTicket()
 
@@ -159,7 +159,8 @@ test.describe('Dinner Page URL Navigation', () => {
         const currentUrl = page.url()
         expect(new URL(currentUrl).searchParams.get('date'), "Should initially show first date").toBe(testData.dates.first)
 
-        // WHEN: Click on second event's date in the calendar (calculate day from date)
+        // WHEN: Click on second event's date in the calendar, a month on when the two dinners straddle a month's end
+        await pageCalendarToMonth(page, testData.events[0]!.date, event2.date)
         const event2Day = event2.date.getDate()
         const day2Button = page.getByTestId(`calendar-dinner-date-${event2Day}`)
         // The panel fills from the selected dinner's detail, fetched on the click

@@ -44,7 +44,7 @@ test.describe('Cross-Household Bookings - Serial UI Tests', () => {
         targetPbsId = targetHousehold.pbsId
         createdHouseholdIds.push(targetHouseholdId)
 
-        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 10, deadline: 2, cookingDays: 'all', startInDays: 5})
+        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 0, deadline: 2, cookingDays: 'all', startInDays: 5})
         createdSeasonIds.push(testSeason.season.id!)
 
         // The preference writes scaffold each household's orders on the active test season

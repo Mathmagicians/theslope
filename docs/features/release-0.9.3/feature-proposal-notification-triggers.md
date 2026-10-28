@@ -22,8 +22,7 @@ the Delivery rows) and the duty roster (`feature-proposal-duty-roster.md`)
 
 ## Team assignments
 
-`TEAM_ASSIGNMENTS` is a sender event of the delivery step (`deliverDesired`, `../this-pr/feature-notification-delivery.md`
-§ Desired deliveries), with one template per kind in `app/config/notificationTemplates.ts`.
+`TEAM_ASSIGNMENTS` is a sender event of the delivery step (`deliverDesired`, `../this-pr/feature-notification-delivery.md`), with one template per kind in `app/config/notificationTemplates.ts`.
 
 | Kind | Recipients | When |
 |---|---|---|

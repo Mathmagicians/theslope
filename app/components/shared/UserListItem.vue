@@ -151,7 +151,7 @@ const avatarSize = computed(() => {
 const avatarClass = computed(() => [avatarSize.value.fit, props.ringColor ? userListItem.ring(props.ringColor) : ''])
 
 // Heynabo integration
-const {getUserUrl} = useHeynabo()
+const heynaboUserUrl = getUserUrl(useRuntimeConfig().public.HEY_NABO_API)
 </script>
 
 <template>
@@ -167,7 +167,7 @@ const {getUserUrl} = useHeynabo()
         <template v-for="inhabitant in inhabitantsList" :key="inhabitant.heynaboId">
           <ULink
             v-if="linkToProfile"
-            :to="getUserUrl(inhabitant.heynaboId)"
+            :to="heynaboUserUrl(inhabitant.heynaboId)"
             target="_blank"
             :class="userListItem.link"
           >
@@ -208,7 +208,7 @@ const {getUserUrl} = useHeynabo()
     <!-- Avatar -->
     <ULink
       v-if="linkToProfile"
-      :to="getUserUrl(singleInhabitant.heynaboId)"
+      :to="heynaboUserUrl(singleInhabitant.heynaboId)"
       target="_blank"
       :class="userListItem.singleLink"
     >

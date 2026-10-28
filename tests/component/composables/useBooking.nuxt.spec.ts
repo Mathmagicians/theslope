@@ -1,6 +1,6 @@
-import {describe, it, expect, beforeAll, beforeEach, afterEach, vi} from 'vitest'
+import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addHours, addYears} from 'date-fns'
-import {useBooking, type AlarmLevel, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, bookingContextOf, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
+import {useBooking, type AlarmLevel, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, bookingContextOf, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, isDinnerCancelled, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {dateToWeekDay, isBeforeDeadline} from '~/utils/season'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -270,6 +270,17 @@ describe('useBooking', () => {
         ])('$description', ({state, expected}) => {
             const dinnerEvent = {state: state as keyof typeof DinnerState}
             expect(canCancelDinner(dinnerEvent)).toBe(expected)
+        })
+    })
+
+    describe('isDinnerCancelled', () => {
+        it.each([
+            {state: DinnerStates.SCHEDULED, cancelled: false},
+            {state: DinnerStates.ANNOUNCED, cancelled: false},
+            {state: DinnerStates.CANCELLED, cancelled: true},
+            {state: DinnerStates.CONSUMED, cancelled: false}
+        ])('GIVEN a $state dinner THEN it is cancelled: $cancelled', ({state, cancelled}) => {
+            expect(isDinnerCancelled({...DinnerEventFactory.defaultDinnerEventDisplay(), state})).toBe(cancelled)
         })
     })
 

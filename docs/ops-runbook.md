@@ -172,7 +172,19 @@ Same for prod with `-prod`. A mail from dev is recognisable twice over: sender `
 
 ### Dashboards
 
-The breakdowns of notification delivery (`features/this-pr/feature-notification-delivery.md` § Diagnostics) show in
+A notification the DAILY_MAINTENANCE job sends again heals by itself. What stays broken shows here:
+
+| Breakdown | Where the admin sees it |
+|---|---|
+| The sender fails a send: retries used up, or a failure retrying cannot fix | the sender's error line on the Cloudflare dashboard; its dedupe key names the notification and the user, and the admin contacts the inhabitant's household |
+| A background run fails | the delivery step's error line, naming the sender event and the reason, on the dashboard |
+| A background run is cut off 30 seconds after the response, and an email it queued may go twice | Cloudflare's warning that the background tasks were cancelled, on the dashboard |
+| Two runs on one dinner send the same notification | the delivery step's sent-twice line, naming the notification, the subject, the version and the user, at the next run on that dinner |
+| The app cannot hand a notification to the queue (no sender binding, no mailbox) | the app's error line on the dashboard |
+| The sender stops taking messages off the queue | the queue's backlog on the dashboard |
+| The DAILY_MAINTENANCE job fails | the job runs page |
+
+These breakdowns show in
 saved queries of Workers Observability, one set per environment. Saved queries live at account level and reopen from
 the **Queries** tab of the Observability page. Workers Logs keeps 7 days.
 

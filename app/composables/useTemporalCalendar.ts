@@ -17,13 +17,16 @@
  */
 import {toValue, type MaybeRefOrGetter} from 'vue'
 import type {DateValue} from '@internationalized/date'
-import {DinnerState, type DinnerEventDisplay} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
+import {isDinnerCancelled} from '~/composables/useBooking'
 
 const getDinnerForDay = <T extends { date: Date }>(dinnerEvents: T[], day: DateValue): T | undefined =>
   getDinnerOnDate(dinnerEvents)(toDate(day))
 
-const isCancelledDay = (dinnerEvents: DinnerEventDisplay[], day: DateValue): boolean =>
-  getDinnerForDay(dinnerEvents, day)?.state === DinnerState.CANCELLED
+const isCancelledDay = (dinnerEvents: DinnerEventDisplay[], day: DateValue): boolean => {
+  const dinner = getDinnerForDay(dinnerEvents, day)
+  return dinner !== undefined && isDinnerCancelled(dinner)
+}
 
 export const useTemporalCalendar = () => {
   const {

@@ -247,7 +247,7 @@ const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, 
 const now = useClock()
 const emptyStateMessage = getRandomEmptyMessage('household', now.value)
 
-const {findTicketPriceById, resolveTicketPrice, resolveTicketPriceOn, ticketTypeChangeOf, formatPrice} = useTicket()
+const {resolveTicketPriceOn, ticketTypeChangeOf, formatPrice} = useTicket()
 
 // The season's dinners give a person's first dinner at a new ticket type; the badge shows when that is this dinner
 const planStore = usePlanStore()
@@ -258,9 +258,7 @@ const birthdayBadgeOf = (inhabitant: InhabitantDisplay): DeadlineBadgeData | nul
 }
 const {getReleasedOrders} = useOrder()
 
-const {isDinnerPast} = useSeason()
-
-const {DinnerModeSchema, OrderStateSchema, BookingActionSchema, DinnerStateSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, BookingActionSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
 const OrderStateEnum = OrderStateSchema.enum
 
@@ -304,9 +302,8 @@ const {expanded} = useExpandableRow({
 // ============================================================================
 
 const canBook = computed(() => props.deadlines.canModifyOrders(props.dinnerEvent.date))
-const dinnerHasPassed = computed(() => isDinnerPast(props.dinnerEvent.date, now.value))
 // Nothing lands on a cancelled dinner: the form wears the corner ribbon, and every ticket the cancelled face
-const isCancelled = computed(() => props.dinnerEvent.state === DinnerStateSchema.enum.CANCELLED)
+const isCancelled = computed(() => isDinnerCancelled(props.dinnerEvent))
 const showRibbon = computed(() => props.ribbon && isCancelled.value)
 // Edit allowed if: permission-based formMode is EDIT AND the dinner has neither passed nor been cancelled
 // A row opens while the member may change the household and the booking rules give the row a mode (ADR-016)
@@ -329,24 +326,12 @@ const eventOrders = computed(() =>
 )
 const eventWaitlistEntries = computed(() => props.waitlistEntries.filter(entry => entry.dinnerEventId === props.dinnerEvent.id))
 
-// The bookings the scaffold will make on this dinner: its dry run with no orders, read again once the orders change
+// The bookings the scaffold will make on this dinner
 const bookingsStore = useBookingsStore()
 const householdOrder = computed(() => household.value?.inhabitants.map(({id}) => id) ?? [])
-// Every viewer reads them, on the season's deadlines
-const expectedRequest = computed(() => household.value && !dinnerHasPassed.value
-  ? {householdId: household.value.id, dinnerEventIds: [props.dinnerEvent.id]}
-  : null)
-const {result: expectedRun, pending: isExpectedPending} = useScaffoldPreview(
-  () => expectedRequest.value,
-  ({householdId, dinnerEventIds}) => bookingsStore.fetchExpectedBookings(householdId, dinnerEventIds),
-  {refreshOn: [() => props.orders]}
-)
-const expectedModes = computed(() => expectedBookings(expectedRun.value))
-// A row without an order or a queue entry shows the booking the preferences give it
-const expectedModeOf = (inhabitantId: number): DinnerMode | undefined =>
-  findRegularOrder(eventOrders.value, inhabitantId, props.dinnerEvent.id) || findRegularOrder(eventWaitlistEntries.value, inhabitantId, props.dinnerEvent.id)
-    ? undefined
-    : expectedModes.value.get(expectedBookingKey(inhabitantId, props.dinnerEvent.id))
+const {expectedModes, isExpectedPending} = useExpectedBookings(() => household.value, () => [props.dinnerEvent], () => props.orders)
+// What a person holds on this dinner: the order, else the place, else the plan
+const personOn = computed(() => personOnDinner(eventOrders.value, eventWaitlistEntries.value, expectedModes.value))
 
 // The household's own notes on a closed dinner: the tickets it released and its places on the waiting list
 const householdReleasedTickets = computed(() => getReleasedOrders(eventOrders.value))
@@ -387,10 +372,7 @@ const tableData = computed((): TableRow[] => {
   const allInhabitants = household.value.inhabitants
 
   const inhabitantRows: TableRow[] = allInhabitants.map(inhabitant => {
-    const order = findRegularOrder(eventOrders.value, inhabitant.id, props.dinnerEvent.id) ?? null
-    // An order supersedes a queue entry: the assignment deletes the entry it placed
-    const waitlistEntry = order ? undefined : findRegularOrder(eventWaitlistEntries.value, inhabitant.id, props.dinnerEvent.id)
-    const expectedMode = expectedModeOf(inhabitant.id)
+    const {order, waitlistEntry, expectedMode, shownMode} = personOn.value(inhabitant.id, props.dinnerEvent.id)
 
     const ticketPrice = resolveTicketPriceOn(inhabitant.birthDate ?? null, order, props.ticketPrices, props.dinnerEvent.date)
 
@@ -405,7 +387,7 @@ const tableData = computed((): TableRow[] => {
       order,
       waitlistEntry,
       expected: expectedMode !== undefined,
-      dinnerMode: order?.dinnerMode ?? waitlistEntry?.order.dinnerMode ?? expectedMode ?? DinnerModeEnum.NONE,
+      dinnerMode: shownMode,
       price: order?.priceAtBooking ?? ticketPrice?.price ?? 0,
       ticketPriceId: order?.ticketPriceId ?? ticketPrice?.id ?? null,
       provenanceHousehold: order?.provenanceHousehold,
@@ -416,24 +398,10 @@ const tableData = computed((): TableRow[] => {
     return {...row, enabledModes: enabledModesOf(row)}
   })
 
-  // A guest row is a placed group (booker, ticket type, price, dinner) or one queued guest: the same row, booked or queued
-  type GuestItem = {id: string, orders: OrderDisplay[], waitlistEntry?: TicketWaitlistDetail}
-  const placedGuests: GuestItem[] = Object.entries(groupGuestOrders(eventOrders.value))
-    .filter(([, orders]) => orders.length > 0)
-    .map(([key, orders]) => ({id: `guest-group-${key}`, orders}))
-  const queuedGuests: GuestItem[] = eventWaitlistEntries.value
-    .filter(entry => entry.isGuestTicket)
-    .map(waitlistEntry => ({id: `guest-entry-${waitlistEntry.id}`, orders: [], waitlistEntry}))
-
-  const guestOrderRows: TableRow[] = [...placedGuests, ...queuedGuests].map(({id, orders, waitlistEntry}) => {
+  // A guest row is a placed group or one queued guest: the same row, booked or queued (guestItemsOf)
+  const guestOrderRows: TableRow[] = guestItemsOf(eventOrders.value, eventWaitlistEntries.value, props.ticketPrices).map(({id, orders, waitlistEntry, held, ticketPrice: resolvedTicketPrice}) => {
     const firstOrder = orders[0] ?? null
-    const held = firstOrder ?? waitlistEntry!.order
     const booker = allInhabitants.find(i => i.id === held.inhabitantId)
-
-    // A guest has no birthDate: the price the order or the entry holds names the ticket type
-    const resolvedTicketPrice = waitlistEntry
-      ? findTicketPriceById(waitlistEntry.order.ticketPriceId, props.ticketPrices)
-      : resolveTicketPrice(null, held.priceAtBooking, props.ticketPrices)
 
     const row = {
       rowType: BookingRow['guest-order'],
@@ -459,7 +427,7 @@ const tableData = computed((): TableRow[] => {
 
   // The consensus of the modes the rows show: an expected row counts its expected mode
   const {value: consensusMode, consensus: hasConsensus} = getPowerConsensus(allInhabitants.map(i => i.id), eventOrders.value, eventWaitlistEntries.value, props.dinnerEvent.id, {
-    inhabitant: expectedModeOf
+    inhabitant: inhabitantId => personOn.value(inhabitantId, props.dinnerEvent.id).expectedMode
   })
 
   // Default synthetic row template
@@ -571,7 +539,7 @@ const draftOrdersOf = (row: TableRow): DesiredOrder[] => {
   if (row.rowType !== BookingRow.power || !row.expected || dinnerMode !== row.dinnerMode) return buildDesiredOrdersForRow(row, dinnerMode)
   const inhabitants = household.value?.inhabitants ?? []
   const plans = inhabitants.flatMap(({id}) => {
-    const plan = expectedModeOf(id)
+    const plan = personOn.value(id, props.dinnerEvent.id).expectedMode
     return plan ? [{inhabitantId: id, dinnerEventId: props.dinnerEvent.id, dinnerMode: plan}] : []
   })
   return buildDesiredOrders(plans, eventOrders.value, inhabitants, [props.dinnerEvent], props.ticketPrices)
@@ -624,7 +592,7 @@ const handleGuestSave = (orders: DesiredOrder[]) => completeBooking(orders)
 // HELPER TEXT
 // ============================================================================
 
-const {groupGuestOrders, getBookingOptions, powerOptions, newGuestRow, getDayBillSummary, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
+const {getBookingOptions, powerOptions, newGuestRow, getDayBillSummary, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
 const {createBookingBadges, createTicketStateBadge, createBirthdayBadge, bookingSaveLabel} = useBookingUi()
 
 // A queue entry's place names the line of the ticket type its price holds

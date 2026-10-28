@@ -248,15 +248,14 @@ const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEm
 const now = useClock()
 const emptyState = getRandomEmptyMessage('noDinners', now.value)
 
-const {formatPrice, findTicketPriceById, resolveTicketPrice, resolveTicketPriceOn, ticketTypeChangeOf} = useTicket()
+const {formatPrice, resolveTicketPriceOn, ticketTypeChangeOf} = useTicket()
 const {personTicketCounts} = useOrder()
 
-const {groupGuestOrders, getDayBillSummary, getBookingOptions, powerOptions, newGuestRow, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
+const {getDayBillSummary, getBookingOptions, powerOptions, newGuestRow, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
 const {lockChip, createBirthdayBadge, bookingSaveLabel} = useBookingUi()
 const bookingsStore = useBookingsStore()
 
-const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema, BookingActionSchema} = useBookingValidation()
-const DinnerModeEnum = DinnerModeSchema.enum
+const {OrderStateSchema, BookingActionSchema} = useBookingValidation()
 
 // ============================================================================
 // DRAFT STATE (ADR-016)
@@ -272,7 +271,7 @@ const hasPendingChanges = computed(() => draftChanges.value.size + guestDraftCha
 
 // A cell's change as the save sends it: a queued cell's names the person's place
 const cellIntent = (inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode): BookingIntent =>
-  ({inhabitantId, dinnerEventId, dinnerMode, waitlistEntryId: getWaitlistEntryForCell(inhabitantId, dinnerEventId)?.id})
+  ({inhabitantId, dinnerEventId, dinnerMode, waitlistEntryId: personOn.value(inhabitantId, dinnerEventId).waitlistEntry?.id})
 
 const draftBookingChanges = (): BookingChanges => ({
   intents: Array.from(draftChanges.value.entries()).map(([key, dinnerMode]) => {
@@ -292,45 +291,28 @@ const clearDrafts = () => {
 // Effective form mode - VIEW when saving to prevent cell edits
 const effectiveFormMode = computed(() => props.isSaving ? FORM_MODES.VIEW : props.formMode)
 
-const getOrderForCell = (inhabitantId: number, eventId: number): OrderDisplay | undefined =>
-  findRegularOrder(props.orders, inhabitantId, eventId)
-
 // A released ticket, a person's or a guest's, carries the released icon in its cell's corner, as the day view's ticket
-const isReleased = (order: OrderDisplay | undefined): boolean => ticketStateOf(order ?? null) === TicketState.released
+const isReleased = (order: OrderDisplay | null | undefined): boolean => ticketStateOf(order ?? null) === TicketState.released
 
-// A cell without a ticket may hold a queue entry; an order supersedes it
-const getWaitlistEntryForCell = (inhabitantId: number, eventId: number): TicketWaitlistDetail | undefined =>
-  getOrderForCell(inhabitantId, eventId) ? undefined : findRegularOrder(props.waitlistEntries, inhabitantId, eventId)
+// What a person holds on a dinner: the order, else the place, else the plan
+const personOn = computed(() => personOnDinner(props.orders, props.waitlistEntries, expectedModes.value))
 
-// A cell without an order or a queue entry shows the booking the preferences give it
-const getExpectedMode = (inhabitantId: number, eventId: number): DinnerMode | undefined =>
-  getOrderForCell(inhabitantId, eventId) || getWaitlistEntryForCell(inhabitantId, eventId)
-    ? undefined
-    : expectedModes.value.get(expectedBookingKey(inhabitantId, eventId))
-
-// What the cell holds: its order, else its place's wish, else Ingen
-const getHeldMode = (inhabitantId: number, eventId: number): DinnerMode =>
-  getOrderForCell(inhabitantId, eventId)?.dinnerMode
-    ?? getWaitlistEntryForCell(inhabitantId, eventId)?.order.dinnerMode
-    ?? DinnerModeEnum.NONE
-
-// A draft, else the plan of a cell that holds nothing, else what the cell holds
+// A draft, else what the person on the dinner shows
 const getCellMode = (inhabitantId: number, eventId: number): DinnerMode =>
-  draftChanges.value.get(expectedBookingKey(inhabitantId, eventId))
-    ?? getExpectedMode(inhabitantId, eventId)
-    ?? getHeldMode(inhabitantId, eventId)
+  draftChanges.value.get(expectedBookingKey(inhabitantId, eventId)) ?? personOn.value(inhabitantId, eventId).shownMode
 
 const isCellModified = (inhabitantId: number, eventId: number): boolean =>
   draftChanges.value.has(expectedBookingKey(inhabitantId, eventId))
 
 // A cell shows its expected booking ghosted until a draft takes its place
 const isCellExpected = (inhabitantId: number, eventId: number): boolean =>
-  !isCellModified(inhabitantId, eventId) && getExpectedMode(inhabitantId, eventId) !== undefined
+  !isCellModified(inhabitantId, eventId) && personOn.value(inhabitantId, eventId).expectedMode !== undefined
 
 // A draft equal to what the cell holds is no change; a plan holds nothing, so on it every mode is the person's intent
 const handleCellUpdate = (inhabitantId: number, eventId: number, newMode: DinnerMode) => {
   const key = expectedBookingKey(inhabitantId, eventId)
-  if (getExpectedMode(inhabitantId, eventId) === undefined && newMode === getHeldMode(inhabitantId, eventId)) {
+  const {expectedMode, heldMode} = personOn.value(inhabitantId, eventId)
+  if (expectedMode === undefined && newMode === heldMode) {
     draftChanges.value.delete(key)
   } else {
     draftChanges.value.set(key, newMode)
@@ -446,17 +428,12 @@ const flatEvents = computed(() => eventsByWeek.value.flat())
 // THE SERVER'S DRY RUN: the expected bookings and the preview of the draft
 // ============================================================================
 
-// The bookings the scaffold will make on the dinners on view: its dry run with no orders, read again once the orders change.
-// Every viewer reads them, on the season's deadlines
-const expectedRequest = computed(() => props.view !== View.day && flatEvents.value.length > 0
-  ? {householdId: props.household.id, dinnerEventIds: flatEvents.value.map(e => e.id)}
-  : null)
-const {result: expectedRun, pending: isExpectedPending} = useScaffoldPreview(
-  () => expectedRequest.value,
-  ({householdId, dinnerEventIds}) => bookingsStore.fetchExpectedBookings(householdId, dinnerEventIds),
-  {refreshOn: [() => props.orders]}
+// The bookings the scaffold will make on the dinners on view
+const {expectedModes, isExpectedPending} = useExpectedBookings(
+  () => props.household,
+  () => props.view !== View.day ? flatEvents.value : [],
+  () => props.orders
 )
-const expectedModes = computed(() => expectedBookings(expectedRun.value))
 
 // What saving the draft does: the dinners it changes, as the save sends them
 const previewRequest = computed((): ScaffoldOrdersRequest | null => {
@@ -522,9 +499,10 @@ const seasonDinnerDates = computed(() => props.dinnerEvents.map(event => event.d
 // their age on the dinner's date; a place on the waiting list holds no order. Each row counts its own dinners in the name
 // cell; the row holding the person's first dinner at a new ticket type, at that type, carries the birthday badge
 const inhabitantRows = computed(() => props.household.inhabitants.flatMap(inhabitant => {
+  const orderOn = (event: DinnerEventDisplay) => personOn.value(inhabitant.id, event.id).order
   const ticketPriceOf = (event: DinnerEventDisplay) =>
-    resolveTicketPriceOn(inhabitant.birthDate ?? null, getOrderForCell(inhabitant.id, event.id), props.ticketPrices, event.date)
-  const priceOf = (event: DinnerEventDisplay) => getOrderForCell(inhabitant.id, event.id)?.priceAtBooking ?? ticketPriceOf(event)?.price ?? 0
+    resolveTicketPriceOn(inhabitant.birthDate ?? null, orderOn(event), props.ticketPrices, event.date)
+  const priceOf = (event: DinnerEventDisplay) => orderOn(event)?.priceAtBooking ?? ticketPriceOf(event)?.price ?? 0
   const change = ticketTypeChangeOf(inhabitant.birthDate, props.ticketPrices)(seasonDinnerDates.value)
   const birthdayBadgeOf = (events: DinnerEventDisplay[]): DeadlineBadgeData | null => {
     const changeEvent = change && events.find(event => isSameDay(event.date, change.date))
@@ -545,44 +523,35 @@ const inhabitantRows = computed(() => props.household.inhabitants.flatMap(inhabi
         isSynthetic: false
       } satisfies GridRow,
       counts: personTicketCounts(
-        events.flatMap(event => getOrderForCell(inhabitant.id, event.id) ?? []),
-        events.flatMap(event => getWaitlistEntryForCell(inhabitant.id, event.id) ?? [])
+        events.flatMap(event => orderOn(event) ?? []),
+        events.flatMap(event => personOn.value(inhabitant.id, event.id).waitlistEntry ?? [])
       )
     }
   })
 }))
 
-// The guest rows, as the day view builds them: a placed group (booker, ticket type, price, dinner), then one row per queued
-// guest; a guest has no birth date, so the price the orders or the place hold names the ticket type
+// The guest rows, as the day view builds them (guestItemsOf)
 const guestRows = computed((): GridRow[] => {
   // The orders and the waiting list reach past the range (the season's locked dinners): a row needs its dinner's column
   const onView = new Set(flatEvents.value.map(event => event.id))
   const bookerOf = (inhabitantId: number) => props.household.inhabitants.find(i => i.id === inhabitantId)
-  const placed = Object.entries(groupGuestOrders(props.orders.filter(order => onView.has(order.dinnerEventId)))).map(([key, orders]): GridRow => ({
+  return guestItemsOf(
+    props.orders.filter(order => onView.has(order.dinnerEventId)),
+    props.waitlistEntries.filter(entry => onView.has(entry.dinnerEventId)),
+    props.ticketPrices
+  ).map(({id, orders, waitlistEntry, held, ticketPrice}): GridRow => ({
     rowType: BookingRow['guest-order'],
-    id: `guest-group-${key}`,
+    id,
     name: BOOKING_WORDS.guests.name,
-    inhabitant: bookerOf(orders[0]!.inhabitantId),
-    guestOrders: orders,
-    dinnerEventId: orders[0]!.dinnerEventId,
-    price: orders[0]!.priceAtBooking,
-    ticketConfig: ticketPricePresentation(resolveTicketPrice(null, orders[0]!.priceAtBooking, props.ticketPrices)),
-    guestCount: orders.length,
+    inhabitant: bookerOf(held.inhabitantId),
+    guestOrders: waitlistEntry ? undefined : orders,
+    waitlistEntry,
+    dinnerEventId: held.dinnerEventId,
+    price: held.priceAtBooking,
+    ticketConfig: ticketPricePresentation(ticketPrice),
+    guestCount: Math.max(orders.length, 1),
     isSynthetic: false
   }))
-  const queued = props.waitlistEntries.filter(entry => entry.isGuestTicket && onView.has(entry.dinnerEventId)).map((entry): GridRow => ({
-    rowType: BookingRow['guest-order'],
-    id: `guest-entry-${entry.id}`,
-    name: BOOKING_WORDS.guests.name,
-    inhabitant: bookerOf(entry.inhabitantId),
-    waitlistEntry: entry,
-    dinnerEventId: entry.dinnerEventId,
-    price: entry.order.priceAtBooking,
-    ticketConfig: ticketPricePresentation(findTicketPriceById(entry.order.ticketPriceId, props.ticketPrices)),
-    guestCount: 1,
-    isSynthetic: false
-  }))
-  return [...placed, ...queued]
 })
 
 const tableData = computed((): GridRow[] => {
@@ -634,7 +603,7 @@ const rowBadgeLabel = ({ticketConfig, price, guestCount}: GridRow): string | nul
 // The consensus of the modes the cells show: a draft, else an expected cell's expected mode; a place counts its wish
 const getEventConsensus = (eventId: number): { value: DinnerMode, consensus: boolean } =>
   getPowerConsensus(householdInhabitantIds.value, props.orders, props.waitlistEntries, eventId, {
-    inhabitant: inhabitantId => draftChanges.value.get(expectedBookingKey(inhabitantId, eventId)) ?? getExpectedMode(inhabitantId, eventId),
+    inhabitant: inhabitantId => draftChanges.value.get(expectedBookingKey(inhabitantId, eventId)) ?? personOn.value(inhabitantId, eventId).expectedMode,
     guestGroup: guestOrders => guestDraftChanges.value.get(guestDraftKey(guestOrders))?.dinnerMode,
     entry: entry => entryDraftChanges.value.get(entry.id)?.dinnerMode
   })
@@ -661,8 +630,8 @@ const enabledModesByCell = computed(() => {
   const inhabitantCells = flatEvents.value.flatMap(event => props.household.inhabitants.map(({id}) => [
     expectedBookingKey(id, event.id),
     getBookingOptions({
-      order: getOrderForCell(id, event.id) ?? null,
-      waitlistEntry: getWaitlistEntryForCell(id, event.id) ?? null,
+      order: personOn.value(id, event.id).order,
+      waitlistEntry: personOn.value(id, event.id).waitlistEntry ?? null,
       candidate: dinnerMode => buildDesiredOrders([cellIntent(id, event.id, dinnerMode)], props.orders, props.household.inhabitants, props.dinnerEvents, props.ticketPrices)[0] ?? null
     }, contextOf(event))
   ] as const))
@@ -693,8 +662,6 @@ const cellInteraction = (modes: DinnerMode[]) => cellFormMode(modes) === FORM_MO
 // A column the household cannot book: no mode in its power cell (past, outside residency, cancelled or consumed)
 const isEventDisabled = (event: DinnerEventDisplay): boolean => getPowerModes(event).length === 0
 
-// Nothing lands on a cancelled dinner: its header shows the state badge, its cells their tickets on the cancelled face
-const isCancelledEvent = (event: DinnerEventDisplay): boolean => event.state === DinnerStateSchema.enum.CANCELLED
 
 // Residency alert: shown when any visible event falls outside residency
 const residencyAlert = computed(() => {
@@ -817,7 +784,7 @@ const getEventSummary = (eventId: number) => {
           <!-- Fixed height slot for chip: 🟠=locked, 🟡N=locked with N tickets; a cancelled dinner's state badge in its place -->
           <div :class="COMPONENTS.bookingGrid.chipSlot">
             <UBadge
-              v-if="isCancelledEvent(event)"
+              v-if="isDinnerCancelled(event)"
               :color="DINNER_STATE_BADGES.CANCELLED.color"
               :icon="DINNER_STATE_BADGES.CANCELLED.icon"
               :variant="NOISE.subtle"
@@ -944,14 +911,14 @@ const getEventSummary = (eventId: number) => {
           :enabled-modes="getPowerModes(event)"
           :consensus="getEventConsensus(event.id).consensus"
           :expected="isPowerExpected(event.id)"
-          :cancelled="isCancelledEvent(event)"
+          :cancelled="isDinnerCancelled(event)"
           :size="SIZES.standard"
           :name="`power-${event.id}`"
           @update:model-value="(mode: DinnerMode) => handlePowerUpdate(event.id, mode)"
         />
         <!-- Inhabitant row, queued: the wish ghosted under the hourglass until a draft takes its place -->
         <UChip
-          v-else-if="row.original.rowType === BookingRow.inhabitant && row.original.inhabitant && holdsDinner(row.original, event.id) && getWaitlistEntryForCell(row.original.inhabitant.id, event.id)"
+          v-else-if="row.original.rowType === BookingRow.inhabitant && row.original.inhabitant && holdsDinner(row.original, event.id) && personOn(row.original.inhabitant.id, event.id).waitlistEntry"
           v-bind="COMPONENTS.waitlist.chip"
           :data-testid="`grid-waitlist-${row.original.inhabitant.id}-${event.id}`"
         >
@@ -960,7 +927,7 @@ const getEventSummary = (eventId: number) => {
             :form-mode="cellFormMode(getCellModes(row.original.inhabitant.id, event.id))"
             :interaction="cellInteraction(getCellModes(row.original.inhabitant.id, event.id))"
             :enabled-modes="getCellModes(row.original.inhabitant.id, event.id)"
-            :cancelled="isCancelledEvent(event)"
+            :cancelled="isDinnerCancelled(event)"
             :size="SIZES.standard"
             :name="`cell-${row.original.inhabitant.id}-${event.id}`"
             :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
@@ -976,14 +943,14 @@ const getEventSummary = (eventId: number) => {
           v-else-if="row.original.rowType === BookingRow.inhabitant && row.original.inhabitant && holdsDinner(row.original, event.id)"
           v-bind="COMPONENTS.waitlist.chip"
           :color="ORDER_STATE_COLORS[TicketState.released]"
-          :show="isReleased(getOrderForCell(row.original.inhabitant.id, event.id))"
+          :show="isReleased(personOn(row.original.inhabitant.id, event.id).order)"
         >
           <DinnerModeSelector
             :model-value="getCellMode(row.original.inhabitant.id, event.id)"
             :form-mode="cellFormMode(getCellModes(row.original.inhabitant.id, event.id))"
             :interaction="cellInteraction(getCellModes(row.original.inhabitant.id, event.id))"
             :enabled-modes="getCellModes(row.original.inhabitant.id, event.id)"
-            :cancelled="isCancelledEvent(event)"
+            :cancelled="isDinnerCancelled(event)"
             :size="SIZES.standard"
             :name="`cell-${row.original.inhabitant.id}-${event.id}`"
             :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
@@ -1005,7 +972,7 @@ const getEventSummary = (eventId: number) => {
             :form-mode="cellFormMode(getGuestModes(row.original))"
             :interaction="cellInteraction(getGuestModes(row.original))"
             :enabled-modes="getGuestModes(row.original)"
-            :cancelled="isCancelledEvent(event)"
+            :cancelled="isDinnerCancelled(event)"
             :size="SIZES.standard"
             :name="`guest-${row.original.id}-${event.id}`"
             :is-modified="isEntryCellModified(row.original.waitlistEntry)"
@@ -1028,7 +995,7 @@ const getEventSummary = (eventId: number) => {
             :form-mode="cellFormMode(getGuestModes(row.original))"
             :interaction="cellInteraction(getGuestModes(row.original))"
             :enabled-modes="getGuestModes(row.original)"
-            :cancelled="isCancelledEvent(event)"
+            :cancelled="isDinnerCancelled(event)"
             :size="SIZES.standard"
             :name="`guest-${row.original.id}-${event.id}`"
             :is-modified="isGuestCellModified(row.original.guestOrders)"

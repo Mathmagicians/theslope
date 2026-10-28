@@ -13,7 +13,7 @@ import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDate
 import {getEachDayOfIntervalWithSelectedWeekdays, formatDate, calculateDayFromWeekNumber, formatDateRange, DATE_SETTINGS,
     selectWeekNumbersFromListThatFitInsideDateRange, eachDayOfManyIntervals} from "~/utils/date"
 import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
-import {useAppConfig} from '#imports'
+import {SEASON_CONFIG} from '~/config/season'
 
 /**
  * Deadline urgency levels for dinner events
@@ -77,9 +77,8 @@ export const useSeason = () => {
     const {DinnerStateSchema} = useBookingValidation()
     const DinnerState = DinnerStateSchema.enum
 
-    // Get app configuration
-    const appConfig = useAppConfig()
-    const {theslope} = appConfig
+    // The season config app.config spreads into theslope: a plain module both bundles and the plain-node runners read
+    const theslope = SEASON_CONFIG
     const {createTicketPrice} = useTicketPriceValidation()
 
     /**
@@ -333,7 +332,7 @@ export const useSeason = () => {
     const getMenuAnnouncementDeadlineDays = (): number =>
         theslope.defaultSeason?.menuIsAnnouncedDaysBefore ?? 10
 
-    // Pre-configured with defaults from appConfig
+    // Pre-configured with the season config's defaults
     const configuredSplitDinnerEvents = splitDinnerEvents(getDefaultDinnerStartTime(), getDefaultDinnerDuration())
     const configuredGetNextDinnerDate = getNextDinnerDate(getDefaultDinnerStartTime(), getDefaultDinnerDuration())
     const configuredGetAdjacentDinner = getAdjacentDinner(getDefaultDinnerStartTime(), getDefaultDinnerDuration())
