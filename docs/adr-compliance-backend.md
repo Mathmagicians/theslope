@@ -27,9 +27,11 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/order/waitlist.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `server/utils/waitlistAssignment.ts` | ✅ | N/A | ✅ | ✅ serial; recovery unit | ✅ `joinWaitlist` joins a household's claims on a dinner as one batch, idempotent on a later run; a placement grabs, writes, records and removes; the recovery settles a grab past `waitlistPlacingLeaseMinutes` and reports the sale or extra portion it finishes |
-| `server/utils/sender/events/waitlist.ts` | ✅ | N/A | ✅ | ✅ serial; unit | ✅ the booking status sender event: a notification about an inhabitant goes to the closest user (`findClosestUserInHousehold`), the buildup to the closest user of the dinner's chef; `sendNotifications` sends the notifications of the dinners past their booking deadline as they stand, through `deliverDesired`; the dinners, people, households and logins read once per kind |
+| `server/utils/sender/events/waitlist.ts` | ✅ | N/A | ✅ | ✅ serial; unit | ✅ the booking status sender event: a notification about an inhabitant goes to the closest user (`findClosestUserInHousehold`, `records.ts`), the buildup to the closest user of the dinner's chef; `sendNotifications` sends the notifications of the dinners past their booking deadline as they stand, through `deliverDesired`; the dinners, people, households and logins read once per kind |
 | `server/utils/sender/deliveries.ts` | ✅ | N/A | ✅ | unit | ✅ `deliverDesired`, the delivery step every sender event shares: the recorded rows read once per subject type (ADR-014), one emit, one write of the Delivery rows; a delivery goes to a user or to a configured mailbox; `deliverInBackground` runs a sender event after the response |
 | `server/utils/sender/events/monthly-billing.ts` | ✅ | N/A | ✅ | unit | ✅ the monthly billing sender event: `notificationsForAccountant`, a period's current version to the accountant's mailbox, cc the admin mailbox, the CSV attached; a missing accountant mailbox is an error line; sent through `deliverDesired` by the monthly run and the re-send |
+| `server/utils/sender/events/chef-deadlines.ts` | ✅ | N/A | ✅ | unit | ✅ the chef deadlines sender event (`sendChefDeadlines`): one notice a dinner a night to the chef's closest user while an alarm of the chef page (`getChefDeadlines`) is yellow, red or overdue, through `deliverDesired`; the active season's dinners and chefs read once |
+| `server/utils/sender/records.ts` | ✅ | N/A | ✅ | unit, through the sender events | ✅ the people reads every sender event shares (`readPeople`, `readNamed`) and `findClosestUserInHousehold` |
 | `server/data/waitlistRepository.ts` | ✅ | N/A | ✅ | ✅ | ✅ a leave or a change of an entry a run holds or has placed answers 409; `createWaitlistEntries` writes the entries and their QUEUE rows in two bulk writes |
 | **Admin - dinner events** | | | | | |
 | `/api/admin/dinner-event/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -48,7 +50,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/team/assignment/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/team/assignment/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/team/assignment/[id].post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec written, not run |
-| `/api/admin/team/assignment/[id].delete.ts` | ⚠️ | ✅ | ✅ | ✅ | ⚠️ returns the deleted count for a single delete (ADR-009 r7: the id) |
+| `/api/admin/team/assignment/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deleted id |
 | **Admin - users** | | | | | |
 | `/api/admin/users/index.get.ts` | ✅ | ⚠️ | ✅ | ✅ | ⚠️ raw query read |
 | `/api/admin/users/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -97,7 +99,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/billing/periods/[id].get.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed |
 | `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec skipped, import replaced |
 | **Admin - maintenance and jobs** | | | | | |
-| `/api/admin/maintenance/daily.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial | ⚠️ raw body read; the scaffold step drops cancelled and consumed dinners; the run sends the notifications of the dinners (`sendNotifications`), counted per sender event in `notifications` |
+| `/api/admin/maintenance/daily.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial | ⚠️ raw body read; the scaffold step drops cancelled and consumed dinners; the run sends the notifications of the dinners (`sendNotifications`) and then the chef deadlines (`sendChefDeadlines`), counted per sender event in `notifications` (`BOOKING_STATUS`, `CHEF_DEADLINES`) |
 | `/api/admin/maintenance/monthly.post.ts` | ✅ | ⚠️ | ✅ | ✅ serial | ⚠️ raw body read |
 | `/api/admin/maintenance/job-run/index.get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/maintenance/job-run/[id].get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
@@ -111,7 +113,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/household/inhabitants/[id]/preferences.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the save's dry run on the draft in `dinnerPreferences=` (`serializeWeekDayMap`); any member reads any household's (ADR-004) |
 | `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save runs on the weekdays its draft changes, its dry run is the GET; past the deadline the path buys or queues (One intent path); `preferences.e2e` green in CI 2026-10-19 (8ed7e42) |
 | `/api/household/order/scaffold.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the save's dry run on the draft in `orders=` (`DesiredOrderQuerySchema`, a month's draft under 16 KB); no orders answers the household's next run on the season's deadlines (One intent path); `bypassDeadlines=true` lifts the deadlines for an admin only; any member reads any household's (ADR-004) |
-| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save naming an order since bought by another household lists it in `failed`; that case's e2e is in 0.9.1 (`features/chores-0.9.1.md` § Scaffold: a save naming an order bought by another household). Its dry run is the GET; `?adminBypass=true` from an admin writes the run's history rows with the source `admin-correction`; the run drops cancelled and consumed dinners; `scaffold.e2e` green in CI 2026-10-19 (8ed7e42); a ticket of 0 portions past the deadline: `features/booking/booking.feature` |
+| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ✅ a save naming an order since bought by another household lists it in `failed` (`scaffoldPrebookings.unit.spec.ts:314`). Its dry run is the GET; `?adminBypass=true` from an admin writes the run's history rows with the source `admin-correction`; the run drops cancelled and consumed dinners; `scaffold.e2e` green in CI 2026-10-19 (8ed7e42); a ticket of 0 portions past the deadline: `features/booking/booking.feature` |
 | `/api/household/allergy/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/allergy/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the inhabitant's household changes it; `?adminBypass=true` from an admin or the allergy manager (`requireHouseholdAccess`, ADR-004) |
 | `/api/household/allergy/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |

@@ -114,7 +114,7 @@ export type Scene = {
     before?: {textSize: number, palette: string | null}
     /** The member's settings as the scenario found them, put back after it */
     memberSettings?: {userId: number, notificationChannels: NotificationChannel[], appearance: Appearance, phone: string | null}
-    /** Where the scenario records the rows it creates: the feature's rows, removed after the feature (AfterAll) */
+    /** Where the scenario records the rows it creates: the worker's rows, removed when the worker ends (AfterAll) */
     created: CreatedRows
 }
 
@@ -150,7 +150,7 @@ export const teamOf = (scene: Scene, number: number): CookingTeamDetail => {
     return team
 }
 
-/** A household of the scenario, removed after the feature */
+/** A household of the scenario, removed when the worker ends */
 export const createSceneHousehold = async (
     admin: BrowserContext,
     scene: Scene,
@@ -161,7 +161,7 @@ export const createSceneHousehold = async (
     return household
 }
 
-/** A person of a scenario household, its part in `lastName`, with a login when `withLogin`: the login outlives the person and is removed after the feature */
+/** A person of a scenario household, its part in `lastName`, with a login when `withLogin`: the login outlives the person and is removed when the worker ends */
 export const createScenePerson = async (
     admin: BrowserContext,
     scene: Scene,
@@ -261,9 +261,9 @@ const putBackMemberSettings = async (browser: Browser, {memberSettings}: Scene):
 }
 
 /** Removes the rows the feature's scenarios created in the worker, and empties the record for the worker's next feature */
-const deleteCreatedRows = async (browser: Browser, created: CreatedRows): Promise<void> => {
+const deleteCreatedRows = async (browser: Browser, created: CreatedRows, baseURL?: string): Promise<void> => {
     if (Object.values(created).every(ids => ids.length === 0)) return
-    const admin = await validatedBrowserContext(browser)
+    const admin = await validatedBrowserContext(browser, baseURL)
     const {inhabitantIds, householdIds, userIds, dinnerEventIds, teamIds, seasonIds} = created
     Object.assign(created, noRows())
     // An inhabitant and a household take their orders and places; the users outlive their people; a team leaves its
@@ -310,8 +310,8 @@ export const test = mergeTests(base, uiTest).extend<{adminContext: BrowserContex
         })
         for (const context of opened.values()) await context.close()
     },
-    // The worker's record of the rows its scenarios create, removed by the AfterAll of each feature: a delete while a
-    // parallel scenario's request is in flight fails that request
+    // The worker's record of the rows its scenarios create, removed by the AfterAll when the worker ends: a delete while
+    // a parallel scenario's request is in flight fails that request
     createdRows: [
         // Playwright reads a fixture's dependencies from its first parameter's destructuring; the record has none
         // eslint-disable-next-line no-empty-pattern
@@ -337,7 +337,8 @@ BeforeAll({tags: 'not @smoke'}, async ({browser}) => {
     await admin.close()
 })
 
-// The guaranteed cleanup of the feature's rows, as the specs' afterAll: it runs in each worker that ran the feature
-AfterAll(async ({browser, createdRows}) => {
-    await deleteCreatedRows(browser, createdRows)
+// The guaranteed cleanup of the worker's rows, as the specs' afterAll: playwright-bdd runs the AfterAll hooks once, in
+// the worker's teardown, where no test runs (`test.info()` throws) and a new context lacks the project's options
+AfterAll(async ({browser, createdRows, $workerInfo}) => {
+    await deleteCreatedRows(browser, createdRows, $workerInfo.project.use.baseURL)
 })

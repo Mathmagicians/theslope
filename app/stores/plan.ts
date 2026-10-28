@@ -88,7 +88,7 @@ export const usePlanStore = defineStore("Plan", () => {
         } = selectedSeasonDataset
 
         const {CookingTeamDetailSchema, CreateTeamsResponseSchema, AssignTeamAffinitiesResponseSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
-        const {DeletedCountSchema, IdSchema} = useCoreValidation()
+        const {IdSchema} = useCoreValidation()
         const {DinnerEventDetailSchema, AssignCookingTeamsResponseSchema} = useBookingValidation()
         const {JokerSlotSchema} = useDutyValidation()
         const {formatRoleClaimedTitle} = useCookingTeam()
@@ -381,15 +381,15 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         const removeTeamMember = async (assignmentId: number): Promise<number> => {
-            const deleted = await apiRequest(`/api/admin/team/assignment/${assignmentId}`, {
+            const deletedId = await apiRequest(`/api/admin/team/assignment/${assignmentId}`, {
                 method: 'DELETE',
-                schema: DeletedCountSchema,
+                schema: IdSchema,
                 action: 'removeTeamMember'
             })
             console.info(`👥🔗 > PLAN_STORE > Removed team member assignment ${assignmentId}`)
             await refreshTeamAggregates()
             toastSaved('Medlem fjernet fra hold')
-            return deleted
+            return deletedId
         }
 
         const createJokerSlot = async (teamId: number, slot: JokerSlotCreate): Promise<JokerSlot> => {

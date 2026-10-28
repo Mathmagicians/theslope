@@ -100,6 +100,10 @@ const coveringDeliveries = (recorded: Delivery[], desired: DesiredDelivery, chan
         && row.version === desired.version && row.kind === channel && ofRecipient(row.reference))
 }
 
+/** Whether a recorded row delivered the notification, on its channel and to whomever it went */
+const isDeliveryOf = (notification: NotificationKind) => (row: Delivery): boolean =>
+    row.reference.startsWith(deliveryReferencePrefix(notification, row.kind, null))
+
 /** A delivery is sent when no recorded row covers it; an admin's override sends it again */
 const shouldSend = (covering: number, adminOverride: boolean): boolean => adminOverride || covering === 0
 
@@ -125,6 +129,7 @@ export const useDeliveryValidation = () => ({
     DeliveryCountsSchema,
     DeliveryDryRunSchema,
     deliveryReferencePrefix,
+    isDeliveryOf,
     coveringDeliveries,
     shouldSend
 })

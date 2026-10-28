@@ -616,9 +616,25 @@ export enum DinnerStepState {
  */
 export type AlarmLevel = -1 | 0 | 1 | 2 | 3
 
+/** The alarm levels by name */
+export const ALARM_LEVEL = {neutral: -1, green: 0, yellow: 1, red: 2, overdue: 3} as const satisfies Record<string, AlarmLevel>
+
 export interface StepDeadlineResult {
     description: string
     alarm: AlarmLevel
+}
+
+/** The dinner steps the chef meets by a deadline: the menu published, the groceries ordered */
+export type ChefDeadlineStep = DinnerStepState.ANNOUNCED | DinnerStepState.GROCERIES_DONE
+
+/**
+ * One of the chef's deadlines on a dinner: its step and time, whether the chef has met it, and while it is open its
+ * alarm and the countdown the chef page shows
+ */
+export interface ChefDeadline extends StepDeadlineResult {
+    step: ChefDeadlineStep
+    deadline: Date
+    met: boolean
 }
 
 export interface StepConfig {
@@ -630,19 +646,19 @@ export interface StepConfig {
 
 // Deadline helpers - calculate alarm level based on countdown and thresholds
 const getAlarmLevel = (countdown: { hours: number }, thresholds: { warning: number; critical: number }): AlarmLevel => {
-    if (countdown.hours <= 0) return 3 // overdue
-    if (countdown.hours < thresholds.critical) return 2 // critical/red
-    if (countdown.hours < thresholds.warning) return 1 // warning/yellow
-    return 0 // success/green
+    if (countdown.hours <= 0) return ALARM_LEVEL.overdue
+    if (countdown.hours < thresholds.critical) return ALARM_LEVEL.red
+    if (countdown.hours < thresholds.warning) return ALARM_LEVEL.yellow
+    return ALARM_LEVEL.green
 }
 
 // No deadline - always neutral
-const noDeadline = (): StepConfig['getDeadline'] => () => ({ description: '', alarm: -1 })
+const noDeadline = (): StepConfig['getDeadline'] => () => ({ description: '', alarm: ALARM_LEVEL.neutral })
 
 // User action deadline: g/y/r/💀 (overdue when countdown.hours <= 0)
 const userActionDeadline = (prefix: string): StepConfig['getDeadline'] =>
     (countdown, thresholds) => {
-        if (countdown.hours <= 0) return { description: BOOKING_WORDS.stepOverdue, alarm: 3 }
+        if (countdown.hours <= 0) return { description: BOOKING_WORDS.stepOverdue, alarm: ALARM_LEVEL.overdue }
         const alarm = getAlarmLevel(countdown, thresholds)
         return { description: prefix ? `${prefix} ${countdown.formatted.toLowerCase()}` : '', alarm }
     }
@@ -651,15 +667,15 @@ const userActionDeadline = (prefix: string): StepConfig['getDeadline'] =>
 const systemDeadline = (prefix: string): StepConfig['getDeadline'] =>
     (countdown, thresholds) => {
         const alarm = getAlarmLevel(countdown, thresholds)
-        if (alarm === 3) return { description: '', alarm: -1 }
+        if (alarm === ALARM_LEVEL.overdue) return { description: '', alarm: ALARM_LEVEL.neutral }
         return { description: `${prefix} ${countdown.formatted.toLowerCase()}`, alarm }
     }
 
 // Countdown only: green before, neutral after (no warning/critical)
 const countdownOnly = (prefix: string): StepConfig['getDeadline'] =>
     (countdown) => {
-        if (countdown.hours <= 0) return { description: '', alarm: -1 }
-        return { description: `${prefix} ${countdown.formatted.toLowerCase()}`, alarm: 0 }
+        if (countdown.hours <= 0) return { description: '', alarm: ALARM_LEVEL.neutral }
+        return { description: `${prefix} ${countdown.formatted.toLowerCase()}`, alarm: ALARM_LEVEL.green }
     }
 
 export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
@@ -703,7 +719,7 @@ export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
  */
 export const useBooking = () => {
     // Import configured utilities from useSeason (DRY)
-    const {getDefaultDinnerStartTime, getDefaultDinnerDuration, getDinnerTimeRange, splitDinnerEvents, isDinnerPast} = useSeason()
+    const {getDefaultDinnerStartTime, getDefaultDinnerDuration, getDinnerTimeRange, splitDinnerEvents, isDinnerPast, getCookingDeadlineThresholds} = useSeason()
     const {DinnerStateSchema} = useBookingValidation()
     const {formatNameWithInitials, computeConsensus} = useHousehold()
     const {resolveTicketPrice} = useTicket()
@@ -763,39 +779,27 @@ export const useBooking = () => {
     }
 
     /**
-     * Get max alarm level for chef tasks (menu + groceries) - for calendar chips.
-     * Each badge uses countdown to its specific deadline.
-     *
-     * @returns AlarmLevel: -1 (all done), 0 (on track), 1 (warning), 2 (critical), 3 (overdue)
+     * The chef's deadlines on a dinner, the menu before the groceries: the menu published by the menu deadline, the
+     * groceries ordered by the dinner. Each counts down to its own deadline from `now`; a met deadline raises no alarm,
+     * and an open one stays overdue after the dinner, as the calendar shows it. The calendar reads the menu of an eaten
+     * dinner as published by its Heynabo event
      */
-    const getChefDeadlineAlarm = (
-        dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost' | 'heynaboEventId'>,
-        deadlines: Pick<SeasonDeadlines, 'getMenuDeadlineTime' | 'getDinnerStartTime'>,
-        now: Date
-    ): AlarmLevel => {
-        const {getCookingDeadlineThresholds} = useSeason()
+    const getChefDeadlines = (dinnerEvent: DinnerEventDisplay, deadlines: SeasonDeadlines, now: Date): [menu: ChefDeadline, groceries: ChefDeadline] => {
         const thresholds = getCookingDeadlineThresholds()
-
-        const menuCountdown = calculateCountdown(deadlines.getMenuDeadlineTime(dinnerEvent.date), now)
-        const dinnerCountdown = calculateCountdown(deadlines.getDinnerStartTime(dinnerEvent.date), now)
-
-        const alarms: AlarmLevel[] = []
-
-        // Menu badge - overdue when menuCountdown.hours <= 0
-        const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
-                        (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
-        if (!menuDone) {
-            alarms.push(DINNER_STEP_MAP[DinnerStepState.ANNOUNCED].getDeadline(menuCountdown, thresholds).alarm)
-        }
-
-        // Groceries badge - overdue when dinnerCountdown.hours <= 0
-        const groceriesDone = dinnerEvent.totalCost > 0
-        if (!groceriesDone) {
-            alarms.push(DINNER_STEP_MAP[DinnerStepState.GROCERIES_DONE].getDeadline(dinnerCountdown, thresholds).alarm)
-        }
-
-        return alarms.length === 0 ? -1 : Math.max(...alarms) as AlarmLevel
+        const chefDeadline = (step: ChefDeadlineStep, deadline: Date, met: boolean): ChefDeadline => met
+            ? {step, deadline, met, description: '', alarm: ALARM_LEVEL.neutral}
+            : {step, deadline, met, ...DINNER_STEP_MAP[step].getDeadline(calculateCountdown(deadline, now), thresholds)}
+        const menuPublished = dinnerEvent.state === DinnerState.ANNOUNCED ||
+            (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
+        return [
+            chefDeadline(DinnerStepState.ANNOUNCED, deadlines.getMenuDeadlineTime(dinnerEvent.date), menuPublished),
+            chefDeadline(DinnerStepState.GROCERIES_DONE, deadlines.getDinnerStartTime(dinnerEvent.date), dinnerEvent.totalCost > 0)
+        ]
     }
+
+    /** The highest alarm of the chef's deadlines on a dinner, for the calendar chips: neutral with every deadline met */
+    const getChefDeadlineAlarm = (dinnerEvent: DinnerEventDisplay, deadlines: SeasonDeadlines, now: Date): AlarmLevel =>
+        Math.max(...getChefDeadlines(dinnerEvent, deadlines, now).map(({alarm}) => alarm)) as AlarmLevel
 
     /**
      * Event description template for Heynabo sync (HTML formatted)
@@ -805,6 +809,10 @@ export const useBooking = () => {
 
     /** The dinner page of a date, its ?date= in the format the page reads (useBookingView) */
     const buildDinnerUrl = (baseUrl: string, dinnerDate: Date): string => `${baseUrl}/dinner?date=${formatDate(dinnerDate)}`
+
+    /** The chef page on a team's dinner, its ?date= as the page reads it (useDinnerDateParam); without a team, the date alone */
+    const buildChefUrl = (baseUrl: string, teamId: number | null, dinnerDate: Date): string =>
+        teamId === null ? `${baseUrl}/chef?date=${formatDate(dinnerDate)}` : `${baseUrl}/chef?team=${teamId}&date=${formatDate(dinnerDate)}`
 
     /**
      * Transform a DinnerEvent to Heynabo event payload (ADR-013)
@@ -1418,7 +1426,7 @@ export const useBooking = () => {
     }
 
     /** A moment as the chef reads it: the date mask and the hour */
-    const formatMoment = (date: Date): string => formatDate(date, `${DATE_SETTINGS.DATE_MASK} HH:mm`)
+    const formatMoment = (date: Date): string => formatDate(date, DATE_SETTINGS.DATE_TIME_MASK)
     /**
      * Who wrote a history row, named as the booking page names a person; the system account, which holds no inhabitant,
      * and a user since deleted read System
@@ -1468,9 +1476,11 @@ export const useBooking = () => {
         // Dinner Step State
         getDinnerStepState,
         getStepConfig,
+        getChefDeadlines,
         getChefDeadlineAlarm,
         canCancelDinner,
         buildDinnerUrl,
+        buildChefUrl,
         createHeynaboEventPayload,
         HEYNABO_EVENT_TEMPLATE,
         chunkDinnerIds,

@@ -62,7 +62,7 @@ const createdJokerSlot = {...jokerSlot, id: JOKER_SLOT_ID, cookingTeamId: TEAM_I
 // The response leaves the allocation to the schema default, so the result shows the parse
 const {allocationPercentage: _allocation, ...assignmentResponse} = assignment
 const addTeamMemberEndpoint = vi.fn(() => assignmentResponse)
-const removeTeamMemberEndpoint = vi.fn(() => 1)
+const removeTeamMemberEndpoint = vi.fn(() => ASSIGNMENT_ID)
 const updatedAssignment = {...assignment, role: useCookingTeamValidation().TeamRoleSchema.enum.COOK, allocationPercentage: 50}
 const updateTeamMemberEndpoint = vi.fn(() => updatedAssignment)
 const createJokerSlotEndpoint = vi.fn(() => createdJokerSlot)
@@ -497,7 +497,7 @@ describe('Plan Store - write actions', () => {
             action: 'removeTeamMember',
             endpoint: removeTeamMemberEndpoint,
             write: (store: PlanStore) => store.removeTeamMember(ASSIGNMENT_ID),
-            parsed: 1,
+            parsed: ASSIGNMENT_ID,
             refreshes: 'the selected season',
             refreshed: seasonByIdEndpoint,
             toast: {title: 'Medlem fjernet fra hold'}

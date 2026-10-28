@@ -69,3 +69,4 @@ The deadlines and the alarms come from the chef page's deadline rules, proven in
 | The chef gets one notice per dinner a night: the night an alarm turns yellow or red, every night an alarm is overdue, none after the dinner date | `tests/component/utils/sender/events/chef-deadlines.unit.spec.ts` |
 | The notice lists each deadline with its state and the line of its alarm level | `chef-deadlines.unit.spec.ts` |
 
+| The DAILY_MAINTENANCE job sends the WAITLIST_JOINED email once the household has a user: the scenario counts the dinner's WAITLIST_JOINED delivery records, beside the chef deadlines notice the same run sends (2026-10-28) | `booking-notifications.feature` |

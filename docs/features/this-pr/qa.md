@@ -32,6 +32,22 @@ line under § Signed off.
 | 119 | Defect 96 | The page source of `/dinner`, `/chef`, `/admin`, `/household/<S>` | `<meta name="description" …>` | |
 | 122 | Defect 109 | A dinner's Budget at 375px | "ex / inkl. moms" sits on its own line under the badge and the period, on the right; nothing is cut off | |
 
+## /admin/allergies/pdf (4)
+
+| # | Package | State, viewport | What to see | Signed off |
+|---|---|---|---|---|
+| 132 | Defect 130 | `/admin/allergies/pdf`, the member in light mode, 1280px | A white sheet, a grey head band, dark text; Tilbage a solid button like Print | |
+| 133 | Defect 130 | The same page, the member in dark mode | As #132: the legend alerts' and the table's text dark on white; the managers' faces ring ocean blue | |
+| 134 | Defect 130 | Tilbage from #133 | `/admin/allergies` in dark mode again; the member's mode kept | |
+| 135 | Defect 130 | Print preview from dark mode | White A4, dark text, the QR code beside the table, no Tilbage or Print button | |
+
+## Signed off 2026-10-28
+
+- #123–#126 Avatar ring colours: the Alle row rings orange, inhabitants amber, the allergy managers ocean blue at 768px
+- #127 Avatar ring colours: the managers' faces ring blue on the poster
+- #128 Avatar ring colours: no ring and the managers below the message at 375px
+- #129 Avatar ring colours: the dark-mode rings read in dark mode, Høj kontrast and Til farveblinde
+
 ## Signed off 2026-10-27
 
 - #1 Mine indstillinger: Rediger, Gem; the choice holds after a reload

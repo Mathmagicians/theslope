@@ -58,7 +58,54 @@ export const NOTIFICATION_TEMPLATES = {
     TICKET_SOLD: {
         subject: '{{senderName}}: {{tickets}} til {{dinner}} er solgt',
         text: 'Kære {{name}},\n\n{{dinner}}\n{{tickets}} solgt til {{buyer}}\n{{ticket}}\nI betaler ikke længere for den.\n\nSe bookingen: {{bookingUrl}}'
+    },
+    CHEF_DINNER_DEADLINES: {
+        subject: '{{senderName}}: Din middag d. {{date}} mangler noget fra din side',
+        text: 'Kære chefkok,\n\nDu er chefkok på fællesspisningen d. {{date}}, og din middag mangler noget fra din side:\n\n{{deadlines}}\n\nSe din middag: {{chefUrl}}'
     }
+}
+
+/** The moments a chef deadline's lines name, as the chef reads them: "10/10/2026 kl. 18:00" */
+export interface ChefDeadlineTimes {
+    deadline: string
+    booking: string
+}
+
+type ChefDeadlineLine = (times: ChefDeadlineTimes) => string
+
+/** A chef deadline's words: its title and the line of each alarm level it reads while missing */
+export interface ChefDeadlineWords {
+    title: string
+    yellow: ChefDeadlineLine
+    red: ChefDeadlineLine
+    overdue?: ChefDeadlineLine
+}
+
+const MENU_DEADLINE: ChefDeadlineWords = {
+    title: 'Menu publiceret',
+    yellow: ({booking}) => `Skrånerne kan framelde sig indtil ${booking}, så de skal kunne se menuen inden.`,
+    red: () => 'Fristen er tæt på. Publicer menuen i dag, så skrånerne når at se den, før de ikke længere kan framelde sig.',
+    overdue: ({deadline}) => `Fristen var ${deadline}. Skrånerne venter på at se, hvad de skal spise. Publicer menuen, så snart du kan.`
+}
+
+// A dinner that has started sends no notice, so the groceries are never overdue in one
+const GROCERIES_DEADLINE: ChefDeadlineWords = {
+    title: 'Indkøb',
+    yellow: () => 'Bestil madvarerne i god tid, så køkkenholdet har det hele på dagen.',
+    red: () => 'Middagen er i dag. Husk madvarerne, så køkkenholdet har det hele.'
+}
+
+/**
+ * The chef deadlines notice's line per deadline, by its dinner step: a met deadline reads check; a missing one names its
+ * deadline, the countdown while the deadline is ahead, and under it the line of its alarm level
+ */
+export const CHEF_DEADLINE_WORDS = {
+    met: (title: string): string => `${title} – check`,
+    missing: (title: string, deadline: string, countdown: string | null): string =>
+        countdown === null ? `${title} – mangler, senest ${deadline}` : `${title} – mangler, senest ${deadline}, ${countdown}`,
+    alarm: (line: string): string => `  ${line}`,
+    ANNOUNCED: MENU_DEADLINE,
+    GROCERIES_DONE: GROCERIES_DEADLINE
 }
 
 /** The job runs page's line of the notifications a run sent: a symbol per sender event */

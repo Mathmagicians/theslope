@@ -65,6 +65,7 @@ html[data-palette="high-contrast"] {
 
 html.dark[data-palette="high-contrast"] {
     --color-amber-300: #fff3e8;
+    --color-amber-400: #ae8a71;
     --color-amber-500: #663e2c;
     --color-amber-600: #b48375;
     --color-blue-300: #d9fcff;

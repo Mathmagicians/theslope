@@ -289,14 +289,14 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
                 compact
                 :show-names="false"
                 :max="COMPONENTS.avatar.powerRowMax"
-                :ring-color="COLOR.warning"
+                ring="household"
                 label="beboere"
             />
             <UserListItem
                 v-else
                 :inhabitants="household.inhabitants.find(i => i.id === row.original.id) ?? household.inhabitants[0]!"
                 compact
-                :ring-color="COLOR.primary"
+                ring="inhabitant"
             />
             <UBadge
                 :class="COMPONENTS.householdCard.ticketPhone"

@@ -8,13 +8,14 @@ import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
 import {capitalize} from "~/utils/utils"
-import {CalendarDate, type DateValue, toZoned, toCalendarDateTime, Time} from '@internationalized/date'
+import {CalendarDate, type DateValue, toZoned, toCalendarDateTime, Time, fromDate} from '@internationalized/date'
 
 export const DATE_SETTINGS =
     {
         DATE_MASK: 'dd/MM/yyyy',
         DAY_MONTH_MASK: 'dd/MM',
         DATE_TIME_MASK: 'dd/MM/yyyy HH:mm',
+        DATE_AT_TIME_MASK: "dd/MM/yyyy 'kl.' HH:mm",
         ISO_MONTH_MASK: 'yyyy-MM',
         locale: da,
         localeString: 'da-DK',
@@ -342,6 +343,15 @@ export function createDateInTimezone(
     const calendarDate = toCalendarDate(date)!
     const calendarDateTime = toCalendarDateTime(calendarDate, new Time(hour, minute, 0, 0))
     return toZoned(calendarDateTime, timezone).toDate()
+}
+
+/**
+ * Format a moment as the clock in the timezone shows it, whatever the runtime's own zone: the server runs in UTC.
+ * The local date of the zone's wall-clock fields carries them to the mask.
+ */
+export const formatDateInTimezone = (date: Date, mask: string = DATE_SETTINGS.DATE_MASK, timezone: string = DATE_SETTINGS.timezone): string => {
+    const zoned = fromDate(date, timezone)
+    return formatDate(new Date(zoned.year, zoned.month - 1, zoned.day, zoned.hour, zoned.minute, zoned.second), mask)
 }
 
 /**

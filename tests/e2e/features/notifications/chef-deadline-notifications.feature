@@ -8,12 +8,11 @@ Feature: Chef deadline notifications
     Given the admin is signed in
     And a season of its own is active
 
-  @fixme
   Scenario: The DAILY_MAINTENANCE job emails the chef's missed deadlines once
     Given a dinner past its ANNOUNCED deadline
     And the dinner is in the state SCHEDULED
     And the dinner has 0 expenses
     And the DAILY_MAINTENANCE job has run 1 time
     When the DAILY_MAINTENANCE job runs
-    Then 1 delivery record is in the database for the dinner
+    Then 1 CHEF_DINNER_DEADLINES delivery record is in the database for the dinner
     And 1 CHEF_DINNER_DEADLINES email is sent to the closest user of the chef

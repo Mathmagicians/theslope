@@ -39,7 +39,7 @@ Feature: Booking notifications
 
     Scenario: The DAILY_MAINTENANCE job sends the WAITLIST_JOINED email once the household has a user
       When the DAILY_MAINTENANCE job runs
-      Then 1 delivery record is in the database for the dinner
+      Then 1 WAITLIST_JOINED delivery record is in the database for the dinner
       And 1 WAITLIST_JOINED email is sent to the closest user of the inhabitant
 
     Scenario: The delivery dry run counts what the DAILY_MAINTENANCE job sends

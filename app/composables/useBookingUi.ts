@@ -17,7 +17,9 @@ import {
     DINNER_STEP_MAP,
     DinnerStepState,
     DEADLINE_LABELS,
+    ALARM_LEVEL,
     type AlarmLevel,
+    type StepDeadlineResult,
     EMPTY_RELEASED_TICKET_COUNTS,
     ticketStateOf,
     supplyStateOf,
@@ -911,6 +913,7 @@ export const useBookingUi = () => {
     const DinnerState = DinnerStateSchema.enum
     const {formatGuestLabel} = useOrder()
     const {getCookingDeadlineThresholds} = useSeason()
+    const {getChefDeadlines} = useBooking()
 
     type FormattableOrder = Pick<OrderDisplay, 'state' | 'dinnerMode' | 'provenanceHousehold' | 'isGuestTicket'>
     // A ticket that is neither released nor bought reads its order's own state
@@ -954,23 +957,18 @@ export const useBookingUi = () => {
         const thresholds = getCookingDeadlineThresholds()
 
         // Each badge counts to its specific deadline
-        const menuCountdown = calculateCountdown(deadlines.getMenuDeadlineTime(dinnerEvent.date), now)
         const bookingCountdown = calculateCountdown(deadlines.getBookingDeadlineTime(dinnerEvent.date), now)
         const dinnerCountdown = calculateCountdown(deadlines.getDinnerStartTime(dinnerEvent.date), now)
-
-        const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
-            (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
+        const [menu, groceries] = getChefDeadlines(dinnerEvent, deadlines, now)
 
         const badge = (
             step: number,
             key: keyof typeof DEADLINE_LABELS,
-            state: DinnerStepState,
             done: boolean,
-            countdown: { hours: number; formatted: string }
+            result: StepDeadlineResult
         ): DeadlineBadgeData => {
             const labels = DEADLINE_LABELS[key]
-            const result = DINNER_STEP_MAP[state].getDeadline(countdown, thresholds)
-            const alarm = done ? -1 : result.alarm
+            const alarm = done ? ALARM_LEVEL.neutral : result.alarm
             const b = ALARM_TO_BADGE[alarm]
             const text = done ? labels.closedText : labels.openText
             return {
@@ -991,15 +989,16 @@ export const useBookingUi = () => {
         const bookingBadge: DeadlineBadgeData = {
             ...baseBadge,
             step: 2,
-            alarm: bookingOpen ? bookingResult.alarm : -1,
+            alarm: bookingOpen ? bookingResult.alarm : ALARM_LEVEL.neutral,
             value: bookingOpen ? bookingResult.description : baseBadge.value
         }
 
         return new Map([
-            [1, badge(1, 'ANNOUNCED', DinnerStepState.ANNOUNCED, menuDone, menuCountdown)],
+            [1, badge(1, 'ANNOUNCED', menu.met, menu)],
             [2, bookingBadge],
-            [3, badge(3, 'GROCERIES_DONE', DinnerStepState.GROCERIES_DONE, dinnerEvent.totalCost > 0, dinnerCountdown)],
-            [4, badge(4, 'CONSUMED', DinnerStepState.CONSUMED, dinnerEvent.state === DinnerState.CONSUMED, dinnerCountdown)]
+            [3, badge(3, 'GROCERIES_DONE', groceries.met, groceries)],
+            [4, badge(4, 'CONSUMED', dinnerEvent.state === DinnerState.CONSUMED,
+                DINNER_STEP_MAP[DinnerStepState.CONSUMED].getDeadline(dinnerCountdown, thresholds))]
         ])
     }
 

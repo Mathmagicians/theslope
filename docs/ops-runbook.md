@@ -100,11 +100,12 @@ One e-mail template per notification kind in `app/config/notificationTemplates.t
 | `BILLING_PERIOD_CLOSED` | monthly billing (cron / `POST /api/admin/maintenance/monthly`) closes a period (v1); re-send `make theslope-sender-event-monthly-billing-<env> bpid=<billingPeriodSummaryId>` | `NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL`, cc `NUXT_NOTIFICATIONS_ADMIN_EMAIL`; the period CSV attached (`…-v1.csv`) |
 | `BILLING_PERIOD_UPDATED` | a later version of a period (catch-up billing changed it) — subject `opdatering v<n>`, replaces the earlier mail | same, CSV `…-v<n>.csv` |
 | `WAITLIST_JOINED`, `TICKET_SOLD`, `TICKET_BOUGHT`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_EXTRA_PORTION`, `WAITLIST_BUILDUP` | the booking status sender event: a booking, a season change or the chef's extra portions, sent in the background after the response; the DAILY_MAINTENANCE job sends the notifications of the dinners past their booking deadline that have no delivery record | the closest user of the inhabitant (`findClosestUserInHousehold`); the buildup, the closest user of the dinner's chef |
+| `CHEF_DINNER_DEADLINES` | the chef deadlines sender event: the DAILY_MAINTENANCE job, the night an alarm of the chef page turns yellow or red and every night one is overdue, until the dinner starts; one notice a dinner listing its deadlines | the closest user of the dinner's chef |
 
 ### Booking emails flag
 
-`SHOULD_SEND_BOOKING_EMAILS_FLAG` gates the booking status sender event. Off, it sends and records nothing; the other
-sender events send.
+`SHOULD_SEND_BOOKING_EMAILS_FLAG` gates the booking status and the chef deadlines sender events. Off, they send and
+record nothing; the other sender events send.
 
 | Where | Value |
 |---|---|
@@ -201,7 +202,7 @@ One saved query per row and environment (`<env>` is `dev` or `prod`):
 | `<env> delivery: failed` | `theslope-<env>` | Includes `📬 > DELIVERY >`, and Includes `] failed:` |
 | `<env> delivery: sent twice` | `theslope-<env>` | Includes `[SENT TWICE]` |
 | `<env> app: background cancelled` | `theslope-<env>` | Includes `waitUntil() tasks did not complete` |
-| `<env> app: not queued` | `theslope-<env>` | Regex `\[EMIT\] (e-mail is off\|message rejected\|SENDER binding missing\|queue batch failed)\|not set — mail not sent` |
+| `<env> app: not queued` | `theslope-<env>` | Regex `e-mail is off\|\[EMIT\] (message rejected\|SENDER binding missing\|queue batch failed)\|not set — mail not sent` |
 
 The dev sender delivers to the dev test mailbox alone: `dev sender: failed sends` adds the filter `reason` Does not
 equal `E_RECIPIENT_NOT_ALLOWED`.

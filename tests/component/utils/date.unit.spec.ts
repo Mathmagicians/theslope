@@ -19,6 +19,7 @@ import {
     toDate,
     calculateCountdown,
     createDateInTimezone,
+    formatDateInTimezone,
     areSameWeek,
     getPeriodBoundary,
     type PeriodView,
@@ -649,6 +650,17 @@ describe('createDateInTimezone', () => {
 
         expect(result.getUTCHours()).toBe(17)
         expect(result.getUTCMinutes()).toBe(30)
+    })
+})
+
+// A moment reads as Copenhagen's clock shows it, in a runtime of any zone: the server runs in UTC
+describe('formatDateInTimezone', () => {
+    it.each([
+        {moment: '18:00 in winter (CET)', date: new Date(2030, 0, 15), hour: 18, expected: '15/01/2030 kl. 18:00'},
+        {moment: '18:00 in summer (CEST)', date: new Date(2030, 6, 15), hour: 18, expected: '15/07/2030 kl. 18:00'},
+        {moment: 'midnight in winter, the evening before in UTC', date: new Date(2030, 0, 15), hour: 0, expected: '15/01/2030 kl. 00:00'}
+    ])('GIVEN $moment in Copenhagen WHEN formatted with the date and time mask THEN it reads $expected', ({date, hour, expected}) => {
+        expect(formatDateInTimezone(createDateInTimezone(date, hour), DATE_SETTINGS.DATE_AT_TIME_MASK)).toBe(expected)
     })
 })
 

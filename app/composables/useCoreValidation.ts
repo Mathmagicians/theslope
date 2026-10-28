@@ -35,9 +35,6 @@ export const AdminBypassQuerySchema = z.object({
     adminBypass: QueryFlagSchema
 })
 
-// Response of a delete whose entity no caller renders (ADR-009)
-export const DeletedCountSchema = z.number().int().min(0)
-
 /**
  * Generate shortName from household address
  * Business rule: First letter of each word (uppercase) + underscore + numeric/alphanumeric suffix
@@ -495,7 +492,6 @@ export const useCoreValidation = () => {
     return {
         // Shared building blocks
         IdSchema,
-        DeletedCountSchema,
         // Schemas - Role Ownership
         RoleOwnerSchema,
         ReconcileResultSchema,

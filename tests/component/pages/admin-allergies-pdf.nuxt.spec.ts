@@ -1,12 +1,14 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
-import {registerEndpoint} from '@nuxt/test-utils/runtime'
+import {describe, it, expect, vi, beforeEach, afterEach, onTestFinished} from 'vitest'
+import {registerEndpoint, mountSuspended} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import AllergyPosterPage from '~/pages/admin/allergies/pdf.vue'
 import {useAllergiesStore} from '~/stores/allergies'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from '../components/allergy/allergyTestIds'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
+import {withTooltipProvider, findByTestId, findAllByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
+
+const POSTER_ROUTE = '/admin/allergies/pdf'
 
 // The poster prints the same Setting row the catalog footer edits
 const POSTER_NOTES_ENDPOINT = '/api/admin/setting/allergy-poster-notes'
@@ -27,14 +29,22 @@ enableAutoUnmount(afterEach)
 
 // Fetching is the store's concern; explicit load repopulates after resetStores.
 // The poster has no layout (no UApp), so the real AllergyManagersList gets its
-// tooltip provider from the mount helper.
+// tooltip provider from the wrapper. The page mounts on its own route, where the
+// router hands its page meta to the colour-mode module.
 const mountPage = async () => {
     const store = useAllergiesStore()
     await store.loadAllergyTypes()
     await store.loadPosterNotes()
-    const wrapper = await mountWithTooltipProvider(AllergyPosterPage)
+    const root = await mountSuspended(withTooltipProvider(AllergyPosterPage), {route: POSTER_ROUTE})
     await flushPromises()
-    return wrapper
+    return root.findComponent(AllergyPosterPage)
+}
+
+/** The variant and colour of the UButton labelled `label` */
+const buttonFace = (wrapper: Awaited<ReturnType<typeof mountPage>>, label: string) => {
+    const button = wrapper.findAllComponents({name: 'UButton'}).find(candidate => candidate.text() === label)
+    expect(button, `a UButton labelled ${label}`).toBeDefined()
+    return {variant: button!.props('variant'), color: button!.props('color')}
 }
 
 describe('admin/allergies/pdf (allergy poster)', () => {
@@ -69,6 +79,28 @@ describe('admin/allergies/pdf (allergy poster)', () => {
         const qr = findByTestId(wrapper, ALLERGY_TEST_IDS.qr)
 
         expect(qr.exists()).toBe(true)
-        expect(qr.attributes('aria-label')).toContain('/admin/allergies/pdf')
+        expect(qr.attributes('aria-label')).toContain(POSTER_ROUTE)
+    })
+
+    // The sheet is printed on white paper, where every dark-mode face reads pale
+    it('renders in light mode for a member who reads the app in dark mode, and leaves the member\'s preference dark', async () => {
+        const colorMode = useColorMode()
+        colorMode.preference = 'dark'
+        onTestFinished(() => {
+            colorMode.preference = 'light'
+        })
+        await useRouter().replace('/')
+        expect(colorMode.value).toBe('dark')
+
+        await mountPage()
+
+        expect(colorMode.value).toBe('light')
+        expect(colorMode.preference).toBe('dark')
+    })
+
+    it('dresses Tilbage as the Print button', async () => {
+        const wrapper = await mountPage()
+
+        expect(buttonFace(wrapper, 'Tilbage')).toEqual(buttonFace(wrapper, 'Print'))
     })
 })

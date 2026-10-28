@@ -201,6 +201,8 @@ export const BG = {
     // Surface depth - how deep a surface sits under the card it belongs to. One token carries
     // exactly one rendered value (light and dark), so a surface that has always drawn its own
     // pair keeps its own token rather than being folded into a neighbour.
+    /** The page: white in light, Nuxt UI's `--ui-bg` in dark; the `page` surface of the contrast gate */
+    page: 'bg-default',
     /** Recessed: an expanded table row and the detail panel under it */
     panel: 'bg-neutral-50 dark:bg-neutral-900',
     /** One step up: a block that has to read above a panel (the economy tree's nested breakdown) */
@@ -395,7 +397,15 @@ export const RING = {
     },
     orange: {
         200: 'ring-orange-200'     // Selected item in a segmented control
-    }
+    },
+
+    // A face's ring in a semantic colour, on the light/dark pair TEXT.success and TEXT.error use
+    /** The household's faces on the power row */
+    warning: 'ring-warning-700 dark:ring-warning-400',
+    /** An inhabitant's face */
+    primary: 'ring-primary-700 dark:ring-primary-400',
+    /** The allergy managers' faces */
+    ocean: 'ring-ocean-700 dark:ring-ocean-400'
 } as const
 
 // ============================================================================
@@ -658,6 +668,8 @@ const TABLE_CELL_WRAP = 'whitespace-normal'
 const TABLE_CELL_PADDING = 'px-2 py-1 md:px-4 md:py-2'
 /** A data table's cell, the one `table.ui` gives every td and a sum row binds through `table.sumCell` */
 const TABLE_CELL = `${TABLE_CELL_PADDING} ${TABLE_CELL_WRAP}`
+/** The allergy poster's column head: a bold label on the grey band, framed like the body cells */
+const POSTER_HEAD_CELL = `border-2 p-3 text-left font-bold ${BORDER.gray[700]} ${BG.gray[100]}`
 /** A data table's cells: `table.ui`, and the tables that add to it */
 const TABLE_UI = {th: 'px-2 md:px-4', td: TABLE_CELL} as const
 
@@ -878,6 +890,37 @@ export const COMPONENTS = {
         stickyDetail: 'flex justify-center items-start md:sticky md:top-4 self-start'
     },
 
+    /**
+     * The allergy poster (`/admin/allergies/pdf`): the sheet on the page surface, the controls and the title block, the
+     * row that sets the allergy table beside the QR code with its caption, the table's head and body cells and their
+     * lines, and the gaps above the notes and the managers. The page renders in light mode, so the sheet prints white
+     */
+    allergyPoster: {
+        sheet: `min-h-screen ${BG.page}`,
+        frame: 'max-w-5xl mx-auto p-8',
+        controls: 'mb-6 flex justify-between items-center',
+        header: 'mb-6',
+        title: `${TYPOGRAPHY.sectionTitle} mb-2`,
+        row: 'flex flex-col md:flex-row gap-6 mb-6',
+        tableColumn: 'flex-1',
+        table: 'w-full border-collapse',
+        headCell: {
+            allergen: `w-1/3 ${POSTER_HEAD_CELL}`,
+            person: `w-2/3 ${POSTER_HEAD_CELL}`
+        },
+        bodyCell: `border-2 p-3 align-top ${BORDER.gray[700]}`,
+        allergyName: `${TYPOGRAPHY.cardTitle} mb-2`,
+        description: `${TYPOGRAPHY.bodyTextMuted} whitespace-pre-line`,
+        members: 'space-y-2',
+        comment: `${TYPOGRAPHY.finePrint} ${TEXT.toned}`,
+        counts: `${TYPOGRAPHY.bodyTextMedium} mt-2`,
+        qrColumn: 'shrink-0',
+        qrFrame: `border-2 ${BORDER.gray[300]}`,
+        qrCaption: `${TYPOGRAPHY.caption} ${TEXT.toned} mt-2 text-center`,
+        notes: 'mt-4',
+        managers: 'mt-6'
+    },
+
     // The admin economy page (AdminEconomy): its sections, the admin's correction under a dinner, the invoice breakdown
     adminEconomy: {
         page: 'space-y-6',
@@ -1006,8 +1049,8 @@ export const COMPONENTS = {
     /**
      * UserListItem: the `group` stack and its `groupRow` of faces beside the names or the count, the `single` row and
      * its `nameStack`, a face's profile `link` (`singleLink` keeps the single face from shrinking), the regular `name`,
-     * and a face's `ring` from md in the caller's colour. The group shrinks with the grid or flex cell that holds it and
-     * its row wraps the names under the faces, so a long list never widens the page.
+     * and a face's `ring` from md, one per surface the faces sit on. The group shrinks with the grid or flex cell that
+     * holds it and its row wraps the names under the faces, so a long list never widens the page.
      */
     userListItem: {
         group: 'flex flex-col gap-1 min-w-0',
@@ -1017,7 +1060,22 @@ export const COMPONENTS = {
         single: 'flex items-start gap-3',
         nameStack: 'flex flex-col gap-1',
         name: 'font-semibold',
-        ring: (color: string) => `md:ring-2 md:ring-${color}`
+        // The width alone starts at md; the colour stays unprefixed, where the contrast gate measures it
+        ring: {
+            household: `md:ring-2 ${RING.warning}`,
+            inhabitant: `md:ring-2 ${RING.primary}`,
+            allergyManager: `md:ring-2 ${RING.ocean}`
+        }
+    },
+
+    /**
+     * AllergyManagersList: the alert's description sets the `message` beside the managers from md and above them on a
+     * phone. `alertUi` lays that row over the kind's own `ui`, since a bare `:ui` replaces the kind's wrap classes
+     */
+    allergyManagersList: {
+        message: 'text-sm md:flex-1',
+        alertUi: (kindUi: AlertUi): AlertUi =>
+            ({...kindUi, description: `${kindUi.description} flex flex-col md:flex-row md:items-center gap-3`})
     },
 
     // The selected item in a segmented control (form mode, booking view) - a ring, not a fill,
@@ -2132,6 +2190,9 @@ export function getKitchenPanelClasses(
     return COMPONENTS.kitchenPanel[mode]
 }
 
+/** The surface a UserListItem's faces sit on, which picks their ring */
+export type UserListItemRing = keyof typeof COMPONENTS.userListItem.ring
+
 /** Get combined ribbon classes for a ribbon type */
 export type RibbonType = keyof typeof COMPONENTS.ribbon.colors
 export const getRibbonClasses = (type: RibbonType): string =>
@@ -3013,14 +3074,10 @@ export const CALENDAR = {
      * selected and range fill out of the way (variant names from `.nuxt/ui/calendar.ts`).
      */
     pickerCell: 'data-[selected]:bg-transparent data-[selected]:text-default data-[highlighted]:bg-transparent data-[highlighted]:text-default',
-    // Base selection behaviour - combine with palette-specific color
     selection: {
-        base: 'ring-2 md:ring-4',
         // Card behaviors for selectable items (agenda, list views)
         card: {
-            base: 'cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg',
-            // Helper to generate selected state with color
-            selected: (ringColor: string) => `ring-2 md:ring-4 ${ringColor}`
+            base: 'cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg'
         }
     }
 } as const

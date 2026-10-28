@@ -411,7 +411,8 @@ export async function createInhabitants(
  *
  * @param d1Client - D1 database client
  * @param heynaboIds - Array of inhabitant Heynabo IDs
- * @returns Number of deleted users
+ * @returns Number of deleted users, counted from the ids read before the delete: D1's deleteMany count includes the
+ * rows its foreign key actions change
  */
 export async function deleteUsersByInhabitantHeynaboId(
     d1Client: D1Database,
@@ -436,12 +437,12 @@ export async function deleteUsersByInhabitantHeynaboId(
             return 0
         }
 
-        const result = await prisma.user.deleteMany({
+        await prisma.user.deleteMany({
             where: { id: { in: userIds } }
         })
 
-        console.info(`🪪 > USER > [BATCH DELETE] Deleted ${result.count} users`)
-        return result.count
+        console.info(`🪪 > USER > [BATCH DELETE] Deleted ${userIds.length} users`)
+        return userIds.length
     } catch (error) {
         return throwH3Error(`🪪 > USER > [BATCH DELETE]: Error deleting users`, error)
     }
@@ -453,7 +454,7 @@ export async function deleteUsersByInhabitantHeynaboId(
  *
  * @param d1Client - D1 database client
  * @param heynaboIds - Array of Heynabo IDs to delete
- * @returns Number of deleted inhabitants
+ * @returns Number of deleted inhabitants, read before the delete: D1's deleteMany count includes the cascaded rows
  */
 export async function deleteInhabitantsByHeynaboId(
     d1Client: D1Database,
@@ -463,12 +464,12 @@ export async function deleteInhabitantsByHeynaboId(
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const result = await prisma.inhabitant.deleteMany({
-            where: { heynaboId: { in: heynaboIds } }
-        })
+        const where = { heynaboId: { in: heynaboIds } }
+        const deleting = await prisma.inhabitant.findMany({ where, select: { id: true } })
+        await prisma.inhabitant.deleteMany({ where })
 
-        console.info(`👩‍🏠 > INHABITANT > [BATCH DELETE] Deleted ${result.count} inhabitants`)
-        return result.count
+        console.info(`👩‍🏠 > INHABITANT > [BATCH DELETE] Deleted ${deleting.length} inhabitants`)
+        return deleting.length
     } catch (error) {
         return throwH3Error(`👩‍🏠 > INHABITANT > [BATCH DELETE]: Error deleting inhabitants`, error)
     }
@@ -740,7 +741,7 @@ export async function createHouseholds(
  *
  * @param d1Client - D1 database client
  * @param heynaboIds - Array of Heynabo IDs to delete
- * @returns Number of deleted households
+ * @returns Number of deleted households, read before the delete: D1's deleteMany count includes the cascaded rows
  */
 export async function deleteHouseholdsByHeynaboId(
     d1Client: D1Database,
@@ -750,12 +751,12 @@ export async function deleteHouseholdsByHeynaboId(
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const result = await prisma.household.deleteMany({
-            where: { heynaboId: { in: heynaboIds } }
-        })
+        const where = { heynaboId: { in: heynaboIds } }
+        const deleting = await prisma.household.findMany({ where, select: { id: true } })
+        await prisma.household.deleteMany({ where })
 
-        console.info(`🏠 > HOUSEHOLD > [BATCH DELETE] Deleted ${result.count} households`)
-        return result.count
+        console.info(`🏠 > HOUSEHOLD > [BATCH DELETE] Deleted ${deleting.length} households`)
+        return deleting.length
     } catch (error) {
         return throwH3Error(`🏠 > HOUSEHOLD > [BATCH DELETE]: Error deleting households`, error)
     }
@@ -1429,24 +1430,17 @@ export async function updateTeamAssignment(
     }
 }
 
-export async function deleteCookingTeamAssignments(d1Client: D1Database, assignmentIds: number[]): Promise<number> {
-    if (assignmentIds.length === 0) {
-        console.info(`👥🔗 > ASSIGNMENT > [DELETE] No assignments to delete`)
-        return 0
-    }
-
-    console.info(`👥🔗 > ASSIGNMENT > [DELETE] Deleting ${assignmentIds.length} team assignments`)
+/** Returns the deleted assignment's id */
+export async function deleteCookingTeamAssignment(d1Client: D1Database, id: number): Promise<number> {
+    console.info(`👥🔗 > ASSIGNMENT > [DELETE] Deleting team assignment ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const result = await prisma.cookingTeamAssignment.deleteMany({
-            where: {id: {in: assignmentIds}}
-        })
-
-        console.info(`👥🔗 > ASSIGNMENT > [DELETE] Successfully deleted ${result.count} team assignments`)
-        return result.count
+        const deleted = await prisma.cookingTeamAssignment.delete({where: {id}, select: {id: true}})
+        console.info(`👥🔗 > ASSIGNMENT > [DELETE] Deleted team assignment ${deleted.id}`)
+        return deleted.id
     } catch (error) {
-        return throwH3Error('👥🔗 > ASSIGNMENT > [DELETE]: Error deleting team assignments: ', error)
+        return throwH3Error(`👥🔗 > ASSIGNMENT > [DELETE] > Error deleting team assignment ${id}`, error)
     }
 }
 

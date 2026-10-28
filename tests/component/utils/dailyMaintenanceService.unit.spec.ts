@@ -6,6 +6,7 @@ import {createTransactions} from '~~/server/utils/createTransactions'
 import {clipPreferences} from '~~/server/utils/initializePreferences'
 import {scaffoldPrebookings} from '~~/server/utils/scaffoldPrebookings'
 import {sendNotifications} from '~~/server/utils/sender/events/waitlist'
+import {sendChefDeadlines} from '~~/server/utils/sender/events/chef-deadlines'
 import {fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import {completeJobRun, createJobRun} from '~~/server/data/maintenanceRepository'
 import {deleteWaitlistForConsumedDinners} from '~~/server/data/waitlistRepository'
@@ -23,6 +24,7 @@ vi.mock('~~/server/utils/createTransactions', () => ({createTransactions: vi.fn(
 vi.mock('~~/server/utils/initializePreferences', () => ({clipPreferences: vi.fn()}))
 vi.mock('~~/server/utils/scaffoldPrebookings', () => ({scaffoldPrebookings: vi.fn()}))
 vi.mock('~~/server/utils/sender/events/waitlist', () => ({sendNotifications: vi.fn()}))
+vi.mock('~~/server/utils/sender/events/chef-deadlines', () => ({sendChefDeadlines: vi.fn()}))
 vi.mock('~~/server/data/prismaRepository', () => ({fetchActiveSeasonId: vi.fn()}))
 vi.mock('~~/server/data/maintenanceRepository', () => ({createJobRun: vi.fn(), completeJobRun: vi.fn()}))
 vi.mock('~~/server/data/waitlistRepository', () => ({deleteWaitlistForConsumedDinners: vi.fn()}))
@@ -30,7 +32,7 @@ vi.mock('~~/server/data/waitlistRepository', () => ({deleteWaitlistForConsumedDi
 await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).stubAppConfig())
 
 const {JobStatus} = useMaintenanceValidation()
-const {BOOKING_STATUS} = useDeliveryValidation().SenderEventSchema.enum
+const {BOOKING_STATUS, CHEF_DEADLINES} = useDeliveryValidation().SenderEventSchema.enum
 const d1Client = {} as D1Database
 
 beforeEach(() => {
@@ -47,6 +49,7 @@ describe('runDailyMaintenance', () => {
     })
     const scaffold = OrderFactory.defaultScaffoldResult()
     const counts = {sent: 6}
+    const chefCounts = {sent: 7}
     const answerSteps = (activeSeasonId: number | null) => {
         vi.mocked(createJobRun).mockResolvedValue(jobRun)
         vi.mocked(consumeDinners).mockResolvedValue(steps.consume)
@@ -57,11 +60,12 @@ describe('runDailyMaintenance', () => {
         vi.mocked(clipPreferences).mockResolvedValue(steps.initPrefs)
         vi.mocked(scaffoldPrebookings).mockResolvedValue(scaffold)
         vi.mocked(sendNotifications).mockResolvedValue({counts})
+        vi.mocked(sendChefDeadlines).mockResolvedValue({counts: chefCounts})
     }
 
     // Without an active season the run ends after the waiting list: the season's steps report nothing
     it.each([
-        {given: 'an active season', activeSeasonId: ACTIVE_SEASON_ID, result: {...steps, scaffold, notifications: {[BOOKING_STATUS]: counts}}, seasonsRun: [ACTIVE_SEASON_ID]},
+        {given: 'an active season', activeSeasonId: ACTIVE_SEASON_ID, result: {...steps, scaffold, notifications: {[BOOKING_STATUS]: counts, [CHEF_DEADLINES]: chefCounts}}, seasonsRun: [ACTIVE_SEASON_ID]},
         {given: 'no active season', activeSeasonId: null, result: {...steps, initPrefs: {initialized: 0}, scaffold: null, notifications: {}}, seasonsRun: []}
     ])('GIVEN $given WHEN the daily maintenance runs THEN the job run completes SUCCESS with the result of each step it ran', async ({activeSeasonId, result, seasonsRun}) => {
         answerSteps(activeSeasonId)
@@ -73,6 +77,7 @@ describe('runDailyMaintenance', () => {
         expect(vi.mocked(clipPreferences).mock.calls).toEqual(seasonsRun.map(seasonId => [d1Client, seasonId]))
         expect(vi.mocked(scaffoldPrebookings).mock.calls).toEqual(seasonsRun.map(seasonId => [d1Client, {seasonId}]))
         expect(vi.mocked(sendNotifications).mock.calls).toEqual(seasonsRun.map(seasonId => [d1Client, email, seasonId, {jobRunId: jobRun.id}]))
+        expect(vi.mocked(sendChefDeadlines).mock.calls).toEqual(seasonsRun.map(seasonId => [d1Client, email, seasonId, {jobRunId: jobRun.id}]))
     })
 
     // A step's failure is the run's: the job run records it, and the caller hears it

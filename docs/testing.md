@@ -250,8 +250,9 @@ use in the Background: `a season is active` (the singleton, which the `BeforeAll
 dinner's day); a step reads the active season from `scene.activeSeason`. `personOf` reads an actor's inhabitant,
 `ticketPriceIdOf` the season's ticket price of an actor's part, and `periodOf` the billing period that bills the
 scenario's households.
-After the scenario, the scene puts back the member's settings and deletes the rows it created. Each cleanup step runs,
-and the failed steps fail the scenario together (`AggregateError`).
+After the scenario, the scene puts back the member's settings. The rows the scenarios create go into the worker's
+`createdRows`, and the AfterAll deletes them when the worker ends, as the specs' afterAll does. Each cleanup step
+runs, and the failed steps fail their hook together (`AggregateError`).
 
 ```gherkin
 @smoke

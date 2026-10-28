@@ -60,6 +60,21 @@ describe('coveringDeliveries and shouldSend', () => {
     })
 })
 
+// A recorded row delivered the notification its reference leads with, on whichever channel and to whomever it went
+describe('isDeliveryOf', () => {
+    const {isDeliveryOf} = useDeliveryValidation()
+    const buildup = NotificationFactory.defaultDesiredDelivery({notification: Kind.WAITLIST_BUILDUP})
+
+    it.each([
+        {recorded: 'a user\'s row of the notification', row: () => NotificationFactory.recordedDelivery(buildup), of: true},
+        {recorded: 'a mailbox\'s row of the notification', row: () => NotificationFactory.recordedDelivery({...buildup, userId: null}), of: true},
+        {recorded: 'a row of the notification on another channel', row: () => NotificationFactory.recordedDelivery(buildup, SMS), of: true},
+        {recorded: 'a row of another notification on the same subject', row: () => NotificationFactory.recordedDelivery({...buildup, notification: Kind.CHEF_DINNER_DEADLINES}), of: false}
+    ])('GIVEN $recorded WHEN asked THEN it is a delivery of the notification: $of', ({row, of}) => {
+        expect(isDeliveryOf(Kind.WAITLIST_BUILDUP)(row())).toBe(of)
+    })
+})
+
 // The delivery read's query (GET /api/admin/sender/delivery): the recorded deliveries of one subject type and its
 // subjects' ids, one or repeated; or the dry run of the booking status sender event's desired deliveries. Each names
 // its read

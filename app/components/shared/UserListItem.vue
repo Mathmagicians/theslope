@@ -21,7 +21,9 @@
 │  inhabitants    - Single or array of InhabitantDisplay          │
 │  compact        - Smaller avatars (default: false)              │
 │  size           - Override avatar size                          │
-│  ringColor      - Avatar ring color                             │
+│  ring           - The surface the faces sit on, which picks the │
+│                   ring from md: household, inhabitant,          │
+│                   allergyManager (default: none)                │
 │  showNames      - Display names (default: true)                 │
 │  useFullName    - Full name vs first name (default: false)      │
 │  label          - Group mode label, e.g., "bofæller"            │
@@ -38,18 +40,18 @@
 Visual check: at 375px and desktop, a group of seven or more: the /dinner team card's monitor face and the allergy
 managers box (/admin/allergies) show three faces and the overflow count on a phone, five from md; the
 /household/<S>/members power row shows three on both; a long names list wraps under the faces and the page does not
-scroll sideways.
+scroll sideways. From md the faces ring: orange on the Præferencer power row, amber on each inhabitant there, blue on
+the allergy managers; on a phone no face rings.
 -->
 <script setup lang="ts">
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
-import type {NuxtUISize} from '~/composables/useTheSlopeDesignSystem'
+import type {NuxtUISize, UserListItemRing} from '~/composables/useTheSlopeDesignSystem'
 
 interface Props {
   inhabitants: InhabitantDisplay | InhabitantDisplay[]
   compact?: boolean
   size?: NuxtUISize
-  ringColor?: string
-  avatarWrapperClass?: string
+  ring?: UserListItemRing
   showNames?: boolean
   useFullName?: boolean
   nameFormatter?: (inhabitant: InhabitantDisplay) => string
@@ -66,8 +68,7 @@ const {ICONS, COLOR, TYPOGRAPHY, TEXT, COMPONENTS, SIZES} = useTheSlopeDesignSys
 const props = withDefaults(defineProps<Props>(), {
   compact: false,
   size: undefined,
-  ringColor: undefined,
-  avatarWrapperClass: undefined,
+  ring: undefined,
   showNames: true,
   useFullName: false,
   nameFormatter: undefined,
@@ -148,7 +149,7 @@ const avatarSize = computed(() => {
   if (props.size) return {size: props.size, fit: '', group: {size: props.size}}
   return props.compact ? COMPONENTS.avatar.compact : COMPONENTS.avatar.regular
 })
-const avatarClass = computed(() => [avatarSize.value.fit, props.ringColor ? userListItem.ring(props.ringColor) : ''])
+const avatarClass = computed(() => [avatarSize.value.fit, props.ring ? userListItem.ring[props.ring] : ''])
 
 // Heynabo integration
 const heynaboUserUrl = getUserUrl(useRuntimeConfig().public.HEY_NABO_API)

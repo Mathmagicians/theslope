@@ -342,7 +342,8 @@ test.describe('Admin Teams API', () => {
             // Remove one assignment to test member removal
             const firstAssignmentId = createdTeam.assignments[0]!.id!
             expect(createdTeam.id).toBeDefined()
-            await SeasonFactory.removeMemberFromTeam(context, createdTeam.id!, firstAssignmentId)
+            const deletedId = await SeasonFactory.removeMemberFromTeam(context, createdTeam.id!, firstAssignmentId)
+            expect(deletedId).toBe(firstAssignmentId)
 
             // Verify the assignment was removed
             await SeasonFactory.getCookingTeamAssignment(context, firstAssignmentId, 404)

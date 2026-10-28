@@ -131,6 +131,17 @@ md the master takes a third of the row, never narrower than a week of the calend
 rest, never wider. The calendar's day circle steps up a size at lg. A master table whose detail docks under its row on a
 phone mounts the detail through `COMPONENTS.masterDetail`.
 
+### Faces
+
+A face in `UserListItem` rings from md in a colour already on the surface its faces sit on: the caller passes the
+surface's key in `COMPONENTS.userListItem.ring`, built on the `RING` family. On a phone no face rings.
+
+### A printed page
+
+A page made to print renders in light mode whatever the member's mode, through `colorMode: 'light'` in its page meta,
+and sits on `BG.page`, the page surface the contrast gate measures. The allergy poster
+(`app/pages/admin/allergies/pdf.vue`, `COMPONENTS.allergyPoster`) is the reference.
+
 ### Component layouts
 
 A layout one component owns is drawn in that component's header and bound through the `COMPONENTS` key that carries its

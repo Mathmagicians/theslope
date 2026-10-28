@@ -8,11 +8,12 @@
  */
 import type {H3Event} from 'h3'
 import {siteUrl} from '~~/server/utils/sender/compose'
-import {emailChannel, shouldSendBookingEmails, type EmailChannel} from '~~/server/utils/sender/config'
+import {bookingEmailsOff, emailChannel, type EmailChannel} from '~~/server/utils/sender/config'
 import {
     deliverDesired, deliverInBackground, nothingSent, readRecorded, type DeliveryOptions, type DeliveryResult, type LoadedDeliveries,
     type NotificationSubject
 } from '~~/server/utils/sender/deliveries'
+import {findClosestUserInHousehold, idsOf, readNamed, readPeople, type PeopleRecords} from '~~/server/utils/sender/records'
 import type {NotificationConfig} from '~/composables/useNotificationValidation'
 import {
     useBookingValidation, DinnerState, OrderState, TicketState, type BookingAction, type BookingOutcomes, type DinnerEventDisplay,
@@ -20,7 +21,6 @@ import {
 } from '~/composables/useBookingValidation'
 import type {TicketWaitlistDisplay, WaitlistAssignmentResult} from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
-import type {HouseholdDisplay, InhabitantDisplay, UserDisplay} from '~/composables/useCoreValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import {useDeliveryValidation, type Delivery} from '~/composables/useDeliveryValidation'
 import type {NotificationChannel} from '~/composables/useUserPreferenceValidation'
@@ -32,7 +32,7 @@ import {ticketTypeLabel, useTicket} from '~/composables/useTicket'
 import {TICKET_COUNTS} from '~/composables/useBilling'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {NotificationKind, WAITLIST_BUYER} from '~/config/notificationTemplates'
-import {fetchHouseholdsByIds, fetchInhabitantsByIds, fetchSeason, fetchUsersByIds} from '~~/server/data/prismaRepository'
+import {fetchSeason} from '~~/server/data/prismaRepository'
 import {fetchDinnerEvents, fetchDinnerEventsByIds, fetchOrderHistoryForDinners, fetchOrders} from '~~/server/data/financesRepository'
 import {fetchWaitlistForDinners} from '~~/server/data/waitlistRepository'
 import {dinnerForWaitlist, type DinnerForWaitlist} from '~~/server/utils/waitlistAssignment'
@@ -41,7 +41,7 @@ import {formatPortions} from '~/utils/utils'
 import {groupBy} from '~/utils/batchUtils'
 
 const {BookingActionSchema, OrderAuditChangeSchema, OrderAuditSourceSchema, readOrderAudit} = useBookingValidation()
-const {DeliverySubjectSchema, SenderEventSchema} = useDeliveryValidation()
+const {DeliverySubjectSchema, SenderEventSchema, isDeliveryOf} = useDeliveryValidation()
 const Action = BookingActionSchema.enum
 const Change = OrderAuditChangeSchema.enum
 const Source = OrderAuditSourceSchema.enum
@@ -49,13 +49,6 @@ const Subject = DeliverySubjectSchema.enum
 const {BOOKING_STATUS} = SenderEventSchema.enum
 
 const LOG = `📮 > SENDER > [EVENT ${BOOKING_STATUS}]`
-
-// The booking emails flag off, a run sends and records nothing; a delivery dry run counts on
-const bookingEmailsOff = (dryRun?: boolean): boolean => {
-    if (dryRun || shouldSendBookingEmails()) return false
-    console.info(`${LOG} SHOULD_SEND_BOOKING_EMAILS_FLAG is off: no booking notifications sent`)
-    return true
-}
 
 export interface WaitlistDinnerContext {
     dinnerEventId: number
@@ -141,8 +134,8 @@ const auditedRows = (history: OrderHistoryDisplay[]): {row: OrderHistoryDisplay,
 
 /**
  * A subject's version counts up from 1, one step per history row that sends it a notification: a place its join, an
- * order the extra portion that created it and each sale, a dinner its first buildup and each extra portion after that
- * buildup
+ * order the extra portion that created it and each sale, a dinner its first buildup delivery and each extra portion
+ * after it; the dinner's other notices count no buildup
  */
 const versionsOf = (history: OrderHistoryDisplay[], deliveries: Delivery[]) => {
     const audited = auditedRows(history)
@@ -152,7 +145,7 @@ const versionsOf = (history: OrderHistoryDisplay[], deliveries: Delivery[]) => {
         if (orderId !== null && notifiesOrder(audit)) orderSteps.set(orderId, (orderSteps.get(orderId) ?? 0) + 1)
     }
     const firstBuildup = new Map<number, number>()
-    for (const row of deliveries.filter(delivery => delivery.subjectType === Subject.DINNER_EVENT)) {
+    for (const row of deliveries.filter(delivery => delivery.subjectType === Subject.DINNER_EVENT && isDeliveryOf(NotificationKind.WAITLIST_BUILDUP)(delivery))) {
         firstBuildup.set(row.subjectId, Math.min(firstBuildup.get(row.subjectId) ?? Infinity, row.deliveredAt.getTime()))
     }
     const extraPortionsSince = (dinnerEventId: number, since: number): number => audited
@@ -170,9 +163,6 @@ const versionsOf = (history: OrderHistoryDisplay[], deliveries: Delivery[]) => {
         }
     }
 }
-
-// The ids named, once each
-const idsOf = (ids: (number | null | undefined)[]): number[] => [...new Set(ids.filter((id): id is number => !!id))]
 
 /** A place on a dinner's waiting list, as its join notification reads it */
 type NotifiedJoin = Omit<WaitlistJoined, 'bookedByUserId' | 'queueSize' | 'portionNeed' | 'queuedByType'>
@@ -200,19 +190,8 @@ interface NotifiedOutcomes {
 }
 
 /** Every dinner, household, inhabitant and user the notifications of one operation name, by id */
-interface NotificationRecords {
+interface NotificationRecords extends PeopleRecords {
     dinners: Map<number, DinnerForWaitlist>
-    households: Map<number, HouseholdDisplay>
-    inhabitants: Map<number, InhabitantDisplay>
-    users: Map<number, UserDisplay>
-}
-
-// The rows of the ids named, in one read; a kind no notification names is not read
-const readNamed = async <T extends {id: number}>(
-    d1Client: D1Database, ids: (number | null | undefined)[], read: (d1Client: D1Database, ids: number[]) => Promise<T[]>
-): Promise<Map<number, T>> => {
-    const named = idsOf(ids)
-    return new Map((named.length === 0 ? [] : await read(d1Client, named)).map(row => [row.id, row]))
 }
 
 /** What the run that raises the notifications read already: they read it no second time */
@@ -244,44 +223,23 @@ const loadDinners = async (
 const load = async (d1Client: D1Database, notified: NotifiedOutcomes, readAlready: ReadAlready): Promise<NotificationRecords> => {
     const sales = [...notified.ticketsSold, ...notified.waitlistTicketsSold]
     const dinners = await loadDinners(d1Client, [...notified.joined, ...notified.buildups, ...sales, ...notified.waitlistPortionsAssigned].map(outcome => outcome.dinnerEventId), readAlready)
-    const inhabitants = await readNamed(d1Client, [
+    const people = await readPeople(d1Client, [
         ...notified.joined.map(event => event.inhabitantId),
         ...sales.flatMap(sale => [sale.buyerInhabitantId, sale.sellerInhabitantId]),
         ...notified.waitlistPortionsAssigned.map(portion => portion.inhabitantId),
         ...notified.buildups.map(buildup => dinners.get(buildup.dinnerEventId)?.chefId)
-    ], fetchInhabitantsByIds)
-    const households = await readNamed(d1Client, [
-        ...[...inhabitants.values()].map(inhabitant => inhabitant.householdId),
-        ...sales.map(sale => sale.sellerHouseholdId)
-    ], fetchHouseholdsByIds)
-    const users = await readNamed(d1Client, [
-        ...[...inhabitants.values(), ...[...households.values()].flatMap(household => household.inhabitants)].map(inhabitant => inhabitant.userId)
-    ], fetchUsersByIds)
-    return {dinners, households, inhabitants, users}
+    ], sales.map(sale => sale.sellerHouseholdId))
+    return {dinners, ...people}
 }
 
-type Recipient = Pick<ResolvedNotification, 'to' | 'userId' | 'name'> & Pick<Tracked, 'notificationChannels'>
-
 // The notifications composed from the records of their operation
-const composer = ({dinners, households, inhabitants, users}: NotificationRecords) => {
+const composer = (records: NotificationRecords) => {
+    const {dinners, households, inhabitants} = records
     const {formatGuestLabel} = useOrder()
     const {formatPrice, findTicketPriceById} = useTicket()
+    const closestUser = findClosestUserInHousehold(records)
     const dinnerOf = (dinnerEventId: number): DinnerForWaitlist => dinners.get(dinnerEventId)!
     const shortnameOf = (householdId: number | undefined): string => (householdId && households.get(householdId)?.shortName) || `#${householdId}`
-    // The member's user hears on its own channels; the notification greets the member
-    const recipientOf = (member: Pick<InhabitantDisplay, 'name' | 'userId'> | undefined): Recipient => {
-        const user = member?.userId ? users.get(member.userId) : undefined
-        return {to: user?.email ?? null, userId: user?.id ?? null, name: member?.name ?? '', notificationChannels: user?.notificationChannels ?? []}
-    }
-    // A household's first user: its member of the lowest id with a user, whatever order the read lists them in
-    const firstUserOf = (householdId: number | undefined) => householdId === undefined ? undefined : (households.get(householdId)?.inhabitants ?? [])
-        .filter(member => member.userId)
-        .sort((a, b) => a.id - b.id)[0]
-    /** An inhabitant's closest user: the inhabitant's own user, else the first user of the inhabitant's household */
-    const findClosestUserInHousehold = (inhabitantId: number | null, householdId?: number): Recipient => {
-        const inhabitant = inhabitantId === null ? undefined : inhabitants.get(inhabitantId)
-        return recipientOf(inhabitant?.userId ? inhabitant : firstUserOf(inhabitant?.householdId ?? householdId))
-    }
     const personOf = (inhabitantId: number, isGuestTicket: boolean): string => {
         const name = inhabitants.get(inhabitantId)?.name ?? ''
         return isGuestTicket ? formatGuestLabel(name) : name
@@ -300,7 +258,7 @@ const composer = ({dinners, households, inhabitants, users}: NotificationRecords
     const joinedNotification = (event: NotifiedJoin): BookingNotifications<Tracked>['joined'][number] => {
         const {context, ticketPrices} = dinnerOf(event.dinnerEventId)
         return {
-            ...findClosestUserInHousehold(event.inhabitantId), dinner: context, person: personOf(event.inhabitantId, event.isGuestTicket),
+            ...closestUser(event.inhabitantId), dinner: context, person: personOf(event.inhabitantId, event.isGuestTicket),
             place: formatPlace(event.position, event.ticketType), ticket: ticketLine(ticketPrices, event.ticketPriceId, event.dinnerMode),
             subject: {subjectType: Subject.TICKET_WAITLIST, subjectId: event.entryId}
         }
@@ -309,7 +267,7 @@ const composer = ({dinners, households, inhabitants, users}: NotificationRecords
         const {chefId, context} = dinnerOf(buildup.dinnerEventId)
         if (!chefId) return []
         return [{
-            ...findClosestUserInHousehold(chefId), dinner: context, queued: TICKET_COUNTS.compact.text(buildup.queuedByType), entries: buildup.entries,
+            ...closestUser(chefId), dinner: context, queued: TICKET_COUNTS.compact.text(buildup.queuedByType), entries: buildup.entries,
             portions: buildup.portions, subject: {subjectType: Subject.DINNER_EVENT, subjectId: buildup.dinnerEventId}
         }]
     }
@@ -317,21 +275,21 @@ const composer = ({dinners, households, inhabitants, users}: NotificationRecords
     const soldNotification = (buyer: (sale: NotifiedSale) => string) => (sale: NotifiedSale): BookingNotifications<Tracked>['sold'][number] => {
         const {context, ticketPrices} = dinnerOf(sale.dinnerEventId)
         return {
-            ...findClosestUserInHousehold(sale.sellerInhabitantId, sale.sellerHouseholdId), dinner: context, buyer: buyer(sale),
+            ...closestUser(sale.sellerInhabitantId, sale.sellerHouseholdId), dinner: context, buyer: buyer(sale),
             ticket: ticketLine(ticketPrices, sale.ticketPriceId), subject: orderSubject(sale.orderId)
         }
     }
     const ticketNotification = (sale: NotifiedSale): BookingNotifications<Tracked>['assigned'][number] => {
         const {context, ticketPrices} = dinnerOf(sale.dinnerEventId)
         return {
-            ...findClosestUserInHousehold(sale.buyerInhabitantId), dinner: context, person: personOf(sale.buyerInhabitantId, sale.isGuestTicket),
+            ...closestUser(sale.buyerInhabitantId), dinner: context, person: personOf(sale.buyerInhabitantId, sale.isGuestTicket),
             ticket: ticketLine(ticketPrices, sale.ticketPriceId, sale.dinnerMode, shortnameOf(sale.sellerHouseholdId)), subject: orderSubject(sale.orderId)
         }
     }
     const extraPortionNotification = (portion: NotifiedPortion): BookingNotifications<Tracked>['extraPortions'][number] => {
         const {context, ticketPrices} = dinnerOf(portion.dinnerEventId)
         return {
-            ...findClosestUserInHousehold(portion.inhabitantId), dinner: context, person: personOf(portion.inhabitantId, portion.isGuestTicket),
+            ...closestUser(portion.inhabitantId), dinner: context, person: personOf(portion.inhabitantId, portion.isGuestTicket),
             ticket: ticketLine(ticketPrices, portion.ticketPriceId, portion.dinnerMode), subject: orderSubject(portion.orderId)
         }
     }
@@ -386,7 +344,7 @@ const notifiedOf = (outcomes: BookingOutcomes): NotifiedOutcomes => {
  * first in a ticket type's line, and the extra portions it finished for a stopped run
  */
 export const notifyBookingOutcomes = async (d1Client: D1Database, channel: EmailChannel, outcomes: BookingOutcomes): Promise<DeliveryResult> =>
-    bookingEmailsOff() ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, notifiedOf(outcomes)))
+    bookingEmailsOff(BOOKING_STATUS) ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, notifiedOf(outcomes)))
 
 /** A route's booking notifications, sent after its response on the e-mail channel of its environment */
 export const notifyBookingOutcomesInBackground = (event: H3Event, outcomes: BookingOutcomes): void => {
@@ -399,7 +357,7 @@ export const notifyBookingOutcomesInBackground = (event: H3Event, outcomes: Book
  * sale the release finished notifies as a sale to the first in a ticket type's line
  */
 export const notifyExtraPortions = async (d1Client: D1Database, channel: EmailChannel, result: WaitlistAssignmentResult): Promise<DeliveryResult> =>
-    bookingEmailsOff() ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, notifiedOf({
+    bookingEmailsOff(BOOKING_STATUS) ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => desiredOf(d1Client, notifiedOf({
         joined: [], ticketsSold: [], waitlistTicketsSold: result.waitlistTicketsSold,
         waitlistPortionsAssigned: result.assigned.map(entry => ({...entry, dinnerEventId: result.dinnerEventId}))
     })))
@@ -471,4 +429,4 @@ const notificationsOnSeason = async (d1Client: D1Database, seasonId: number | nu
 export const sendNotifications = async (
     d1Client: D1Database, channel: EmailChannel, seasonId: number | null, options: DeliveryOptions = {}
 ): Promise<DeliveryResult> =>
-    bookingEmailsOff(options.dryRun) ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => notificationsOnSeason(d1Client, seasonId), options)
+    bookingEmailsOff(BOOKING_STATUS, options.dryRun) ? nothingSent() : deliverDesired(d1Client, channel, BOOKING_STATUS, () => notificationsOnSeason(d1Client, seasonId), options)

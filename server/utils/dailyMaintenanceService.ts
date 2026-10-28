@@ -21,9 +21,10 @@ import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {useBooking} from '~/composables/useBooking'
 import type {EmailChannel} from '~~/server/utils/sender/config'
 import {sendNotifications} from '~~/server/utils/sender/events/waitlist'
+import {sendChefDeadlines} from '~~/server/utils/sender/events/chef-deadlines'
 
 const LOG = '🔧 > DAILY > [MAINTENANCE]'
-const {BOOKING_STATUS} = useDeliveryValidation().SenderEventSchema.enum
+const {BOOKING_STATUS, CHEF_DEADLINES} = useDeliveryValidation().SenderEventSchema.enum
 
 export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: string, email: EmailChannel): Promise<DailyMaintenanceResult> {
     const {JobType, JobStatus} = useMaintenanceValidation()
@@ -68,8 +69,12 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
 
             // The dinners as they stand after the scaffold send the notifications of its outcomes too
             const {counts} = await sendNotifications(d1Client, email, activeSeasonId, {jobRunId: jobRun.id})
-            notifications = {[BOOKING_STATUS]: counts}
             console.info(`${LOG} notifications: ${BOOKING_STATUS} sent ${counts.sent}`)
+
+            // The chef hears the deadlines as the scaffold left the dinners
+            const {counts: chefCounts} = await sendChefDeadlines(d1Client, email, activeSeasonId, {jobRunId: jobRun.id})
+            console.info(`${LOG} notifications: ${CHEF_DEADLINES} sent ${chefCounts.sent}`)
+            notifications = {[BOOKING_STATUS]: counts, [CHEF_DEADLINES]: chefCounts}
         } else {
             console.info(`${LOG} initPrefs/scaffold/notifications skipped: no active season`)
         }

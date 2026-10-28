@@ -30,7 +30,7 @@ and the component headers hold the detail; a row names a gap in a few words.
 | `/admin/users` | `AdminUsers.vue` | ✅ users | N/A | ✅ | ✅ | ⚠️ loading row, the open row by id | ⚠️ partial unit |
 | `/admin/economy` | `AdminEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?period=` `?invoice=` | ✅ serial | ⚠️ the URL's selection, the loading rows, the upcoming table's Menu cell | ⚠️ partial unit |
 | `/admin/system` | `AdminSystem.vue` | N/A, `storeAsyncData` (ADR-007 component-local) | N/A | ✅ | ✅ | ✅ | ✅ |
-| `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ allergies, plan | N/A | N/A | ✅ smoke | ✅ | ✅ |
+| `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ allergies, plan | N/A | N/A | ✅ smoke | ✅ colour mode, button style | ✅ light mode by page meta; layout from `COMPONENTS.allergyPoster` on `BG.page` (ADR-018) |
 | **Household** | | | | | | | |
 | `/household/[shortname]` | `household/[shortname]/index.vue` | ✅ households | N/A | ✅ `?pbs=` | ✅ | ⚠️ | ⚠️ review `?pbs` on redirect |
 | `/household/[shortname]/[tab]` | `household/[shortname]/[tab].vue` | ✅ households, auth | N/A | ✅ `?pbs=`, the tab path | ✅ `household` | ✅ `household-tab`: the URL's household, the override per viewer and tab, the edit props on the tabs that edit | ✅ ADR-018 tokens |
@@ -85,7 +85,7 @@ Status.
 | `AdminHouseholds.vue` | `/admin/households` | households | ⚠️ loading row, the open row by id | ✅ | ⚠️ partial unit |
 | `HouseholdCreateForm.vue` | `/admin/households` | households | ✅ | ✅ parent | ❓ audit needed |
 | `HouseholdEditPanel.vue` | `/admin/households` | none | ✅ | ✅ parent | ✅ |
-| `HouseholdCard.vue` | `/admin/households`, `/household/[shortname]` | households, plan | ✅ | ✅ parent | ⚠️ partial unit |
+| `HouseholdCard.vue` | `/admin/households`, `/household/[shortname]` | households, plan | ✅ | ✅ parent | ⚠️ partial unit; passes the ring keys `household` and `inhabitant` |
 | `InhabitantCard.vue` | `/admin/households`, `/household/[shortname]` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `HouseholdListItem.vue` | `/admin/households` | none | ❌ | N/A | ⚠️ missing unit |
 | `HouseholdSettings.vue` | `/household/[shortname]/settings` | households | ⚠️ the undo's toast and alert | ✅ | ⚠️ partial unit |
@@ -104,7 +104,7 @@ Status.
 | `AllergyNotes.vue` | `/admin/allergies`, `/admin/allergies/pdf` | none | ✅ | ✅ parent | ✅ |
 | `HouseholdAllergies.vue` | `/household/[shortname]/allergies` | allergies, households | ⚠️ loading, the open row by id | ✅ | ⚠️ component: loading, `adminBypass` on each change, the open row by id |
 | `AllergyEditor.vue` | `/household/[shortname]/allergies` | none | ❌ | ✅ parent | ⚠️ missing unit |
-| `AllergyManagersList.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | users | ❌ | ❌ | ❌ no tests |
+| `AllergyManagersList.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | users | ⚠️ rendered by the `AdminAllergies`, `HouseholdAllergies` and `admin-allergies-pdf` specs | ❌ | ⚠️ layout from `COMPONENTS.allergyManagersList`; mockup and visual check in its header; a spec of its own is open |
 
 ### Shared
 
@@ -114,7 +114,7 @@ Status.
 | `UserPreferencesCard.vue` | `/login` | auth | ✅ | ✅ | ✅ |
 | `UserProfileCard.vue` | `/login`, `/admin/users` | auth, users | ✅ | ✅ | ✅ |
 | `UserView.vue` | every route | auth | ❌ | ❌ | ❌ no tests |
-| `UserListItem.vue` | `/admin/users`, `/admin/allergies`, `/household/[shortname]` | none | ✅ | ✅ parent | ⚠️ `label` props declared, not rendered |
+| `UserListItem.vue` | `/admin/users`, `/admin/allergies`, `/household/[shortname]` | none | ✅ each ring key and the ring-less face, group and single mode | ✅ parent | ⚠️ `label` props declared, not rendered; `ring` typed `UserListItemRing` |
 | `DangerButton.vue` | `/household/[shortname]/settings`, `/admin/economy`, `/chef` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `QrCode.vue` | `/admin/allergies/pdf` | none | ✅ | ✅ parent | ✅ |
 | `InstallPrompt.vue` | `/login` | none | ✅ | ✅ | ✅ |
@@ -225,7 +225,7 @@ Status.
 | `useBillingValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `useHeynaboValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ |
 | `useMaintenanceValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ |
-| `useDeliveryValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ operation result types (ADR-009): `DeliveryCountsSchema`, a sender event's notifications sent; `DeliveryDryRunSchema`, the delivery dry run per user |
+| `useDeliveryValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ operation result types (ADR-009): `DeliveryCountsSchema`, a sender event's notifications sent; `DeliveryDryRunSchema`, the delivery dry run per user; `isDeliveryOf`, the delivery rows of one notification kind |
 | `useNotificationValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ parent | ✅ |
 | `useSettingValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ |
 | `useUserPreferenceValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -233,7 +233,7 @@ Status.
 | `useFeedbackValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ parent | ✅ |
 | `fragments/domainFragments.ts` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ `server/` reaches it through the validation composables |
 | **Business logic** | | | | | | |
-| `useBooking()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
+| `useBooking()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ the chef's deadlines and their alarms (`getChefDeadlines`, `ALARM_LEVEL`) and the chef page link (`buildChefUrl`), read by the chef page and the chef deadlines sender event |
 | `useWaitlist()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ `placingLease` tells a held grab from an expired one, `placementLines` stop at an entry another run holds, `placingOrderOf` finds the order that serves a grab, `placementRecoveryOf` finishes or releases a stopped run's grab, `finishedPlacementOutcomes` reports a finished placement for its mails |
 | `useHousehold()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
 | `useSeason()` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ |
@@ -254,13 +254,14 @@ Status.
 | `useQueryParam()` | client | N/A | N/A | N/A | ✅ | ✅ |
 | `useUrlQueryWriter()` | client | N/A | N/A | N/A | ✅ | ✅ |
 | `useApiHandler()` | client | N/A | N/A | N/A | ✅ | ✅ |
-| `useBookingUi()` | pure UI | N/A | N/A | ✅ | ✅ | ✅ a failed order's conflict reads in the result lines (`CONFLICT_WORDS`) |
+| `useBookingUi()` | pure UI | N/A | N/A | ✅ | ✅ | ✅ a failed order's conflict reads in the result lines (`CONFLICT_WORDS`); `createChefBadges` reads `getChefDeadlines` |
+| `app/utils/date.ts` | isomorphic | N/A | N/A | N/A | ✅ | ⚠️ `formatDateInTimezone` writes a moment as the clock in the timezone shows it (the server runs in UTC); masks and pattern strings: `features/release-0.9.3/feature-0.9.3.md` § Dates |
 | `useUserRolesUi()` | pure UI | N/A | N/A | N/A | ✅ | ✅ |
 | `useInstallPrompt()` | pure UI | N/A | N/A | N/A | ✅ | ✅ |
 | `useTemporalCalendar()` | client | N/A | N/A | ✅ | ✅ parent | ✅ the dinner on a calendar day and a cancelled day (`getDinnerForDay`, `isCancelledDay`), for the three calendars |
 | `useCalendarEvents()` | client | N/A | N/A | N/A | ✅ | ✅ |
 | `useExpandableRow()` | client | N/A | N/A | N/A | ✅ | ✅ |
-| `useTheSlopeDesignSystem()` | design system (ADR-018) | N/A | N/A | N/A | ✅ architecture specs, unit | ✅ |
+| `useTheSlopeDesignSystem()` | design system (ADR-018) | N/A | N/A | N/A | ✅ architecture specs, unit | ✅ `RING.warning`, `RING.primary`, `RING.ocean`, `COMPONENTS.userListItem.ring` and its key type `UserListItemRing`, `COMPONENTS.allergyManagersList` |
 
 ## Checklist
 

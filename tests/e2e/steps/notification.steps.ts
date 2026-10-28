@@ -11,7 +11,7 @@ import {useDeliveryValidation, type Delivery, type SenderEvent} from '~/composab
 import type {NotificationKind} from '~/config/notificationTemplates'
 
 const {pollUntil} = testHelpers
-const {DeliverySubjectSchema, DeliveryKindSchema, NotificationKindSchema, SenderEventSchema, deliveryReferencePrefix, coveringDeliveries} = useDeliveryValidation()
+const {DeliverySubjectSchema, DeliveryKindSchema, NotificationKindSchema, SenderEventSchema, deliveryReferencePrefix, isDeliveryOf, coveringDeliveries} = useDeliveryValidation()
 const {DINNER_EVENT, ORDER, TICKET_WAITLIST, BILLING_PERIOD} = DeliverySubjectSchema.enum
 const {ARCHIVE, EMAIL} = DeliveryKindSchema.enum
 const Notification = NotificationKindSchema.enum
@@ -79,6 +79,11 @@ const closestUserIdOf = async (admin: BrowserContext, scene: Scene, actor: Actor
 Then('{int} delivery record(s) is/are in the database for {subject}', async ({adminContext: admin, scene}, count: number, subject: Subject) => {
     const references = await recordsWhen(() => recordsOf(admin, scene, subject), rows => rows, count)
     expect(references, `${count} delivery records for ${subject}`).toHaveLength(count)
+})
+
+Then('{int} {notification} delivery record(s) is/are in the database for {subject}', async ({adminContext: admin, scene}, count: number, notification: NotificationKind, subject: Subject) => {
+    const references = await recordsWhen(() => recordsOf(admin, scene, subject), rows => rows.filter(isDeliveryOf(notification)), count)
+    expect(references, `${count} ${notification} delivery records for ${subject}`).toHaveLength(count)
 })
 
 Then('{int} CSV archive(s) is/are uploaded for {subject}', async ({adminContext: admin, scene}, count: number, subject: Subject) => {

@@ -6,6 +6,7 @@
  * Sender address and display name derive from the environment; the mailboxes come from runtimeConfig.notifications.
  */
 import {deploymentFromUrl, useNotificationValidation, type NotificationConfig} from '~/composables/useNotificationValidation'
+import type {SenderEvent} from '~/composables/useDeliveryValidation'
 import {senderAddress, senderDisplayName} from '~/config/notificationTemplates'
 
 const {NotificationConfigSchema} = useNotificationValidation()
@@ -27,6 +28,13 @@ const notificationConfig = (deployUrl: string): NotificationConfig => {
 
 /** The booking emails go while the SHOULD_SEND_BOOKING_EMAILS_FLAG var (wrangler.toml [vars] per environment) is true */
 export const shouldSendBookingEmails = (): boolean => process.env.SHOULD_SEND_BOOKING_EMAILS_FLAG === 'true'
+
+/** With the booking emails flag off a sender event's run sends and records nothing; a delivery dry run counts on */
+export const bookingEmailsOff = (senderEvent: SenderEvent, dryRun?: boolean): boolean => {
+    if (dryRun || shouldSendBookingEmails()) return false
+    console.info(`📮 > SENDER > [EVENT ${senderEvent}] SHOULD_SEND_BOOKING_EMAILS_FLAG is off: nothing sent`)
+    return true
+}
 
 export const emailChannel = (env: {SENDER?: Queue}): EmailChannel => {
     const deployUrl = process.env.DEPLOY_URL

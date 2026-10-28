@@ -1,7 +1,7 @@
 import {useSeasonValidation, type Season, type SeasonUpdateResponse} from "~/composables/useSeasonValidation"
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
-import {DeletedCountSchema, IdSchema} from "~/composables/useCoreValidation"
+import {IdSchema} from "~/composables/useCoreValidation"
 import type {
     CookingTeamDisplay,
     CookingTeamDetail,
@@ -1117,7 +1117,7 @@ export class SeasonFactory {
         expect(status, 'Unexpected status').toBe(expectedStatus)
 
         if (expectedStatus === 200) {
-            return DeletedCountSchema.parse(await response.json())
+            return IdSchema.parse(await response.json())
         }
         return null
     }

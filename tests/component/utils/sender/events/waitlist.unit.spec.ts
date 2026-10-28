@@ -404,6 +404,13 @@ describe('the people a run\'s mails name', () => {
             historyRow(orderId, OrderAuditActionSchema.enum.USER_CLAIMED, createOrderAuditData(OrderAuditChangeSchema.enum.BUY, snapshotOf(orderId)), minute)
         const extraPortion = (orderId: number, minute = -10) => historyRow(orderId, OrderAuditActionSchema.enum.SYSTEM_CREATED,
             createOrderAuditData(OrderAuditChangeSchema.enum.BOOK, snapshotOf(orderId), OrderAuditSourceSchema.enum['waitlist-assignment']), minute)
+        // The record of a chef deadlines notice the chef got on the dinner at the minute
+        const chefDeadlinesNotice = (minute: number): Delivery => ({
+            ...NotificationFactory.recordedDelivery(NotificationFactory.defaultDesiredDelivery({
+                subjectType: DINNER_EVENT, subjectId: dinner.dinnerEventId, notification: Kind.CHEF_DINNER_DEADLINES, userId: chef.userId
+            })),
+            deliveredAt: at(minute)
+        })
         // The records of the emails of a notification, by the notification their reference leads with
         const rowsOfKind = (kind: string) => recorded.rows.filter(row => mailKindOf(row.reference) === kind)
         // A subject's records, each by its notification and version, by version and then notification
@@ -430,9 +437,14 @@ describe('the people a run\'s mails name', () => {
             // The chef's extra portions before the first buildup tell the chef nothing
             {email: 'waitlist buildup for the chef after the chef\'s earlier extra portions', kind: Kind.WAITLIST_BUILDUP,
                 outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}), history: [extraPortion(88), extraPortion(89)],
+                subject: {subjectType: DINNER_EVENT, subjectId: dinner.dinnerEventId, version: 1}},
+            // The dinner's other notices count no buildup: a chef deadlines notice before the extra portion leaves it the first
+            {email: 'waitlist buildup for the chef after a chef deadlines notice on the dinner and the chef\'s extra portion', kind: Kind.WAITLIST_BUILDUP,
+                outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}), history: [extraPortion(88)], delivered: [chefDeadlinesNotice(-20)],
                 subject: {subjectType: DINNER_EVENT, subjectId: dinner.dinnerEventId, version: 1}}
-        ])('GIVEN $email WHEN it is sent THEN one delivery record of its subject and version is written', async ({kind, outcomes, history, subject}) => {
+        ])('GIVEN $email WHEN it is sent THEN one delivery record of its subject and version is written', async ({kind, outcomes, history, delivered = [], subject}) => {
             store.history = history
+            recorded.rows.push(...delivered)
             const queue = fakeQueue()
 
             await notify(queue, outcomes)

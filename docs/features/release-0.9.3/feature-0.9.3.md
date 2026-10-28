@@ -37,6 +37,9 @@
 | Spread row primitive | § Spread row primitive | – | specified |
 | Chef card atoms | § Chef card atoms | – | specified |
 | Server payload of the shared stores | § Server payload of the shared stores | – | specified |
+| Dates | § Dates | – | specified |
+| Hand-written types in the design system | § Hand-written types in the design system | – | specified |
+| AdminTeams loading row | § AdminTeams loading row | – | discovery |
 
 § Drop `DinnerEvent.totalCost`, § Order snapshot (B6) and § Ticket allergies on the order share one migration:
 `make d1-create-migration name=release-0-9-3`, the rewrites below in the Prisma source, then
@@ -462,6 +465,57 @@ dinner again. The economy datasets are gated in release 0.9 (`loadBillingOvervie
 `app/composables/useBookingValidation.ts` (`DinnerEventDetailSchema.tickets`), `app/composables/useHouseholdValidation.ts`
 (`HouseholdDisplaySchema`), `server/data/prismaRepository.ts` (the dinner Detail and household index includes),
 `tests/component/stores/*.nuxt.spec.ts`, `docs/adr-compliance-frontend.md` (store rows).
+
+## Dates
+
+Moved from release 0.9.1 on 2026-10-28, where 542b274 holds the first part (ADR-017 compliance 8).
+
+### Problem
+
+- `CountdownTimer.vue:142` writes the hour by hand (`padStart`); `useBilling.ts:169` reads the day of the month.
+- 19 files in `app/` and `server/` import `date-fns` directly.
+- The specs build their dates by hand: 64 calls to `getDate`, `setDate` or `setHours`.
+- `formatDate` takes a pattern string (`app/utils/date.ts:50`); the masks stand in `DATE_SETTINGS`
+  (`date.ts:15-22`), and 10 calls pass a pattern of their own (`date.ts:244`, `:253`, `:262`, `:271`,
+  `useBookingUi.ts:586`, `BookingGridView.vue:782`, `:783`, `AdminEconomy.vue:717`, `pages/admin/allergies/pdf.vue:22`,
+  `pages/public/billing/[token].vue:88`).
+- A dinner date is stored at the midnight of the clock that wrote it: the workers and the season import write UTC
+  midnight, a Copenhagen machine 22:00Z of the day before.
+- `dinnerEventFactory.ts:21` and `seasonFactory.ts:49` compute their dates when the file loads.
+
+### Solution
+
+Every date operation goes through the season helpers and `app/utils/date.ts`; `formatDate` takes a named format; the
+repository writes a dinner date as the UTC midnight of its calendar day, in one serializer next to the season one;
+a factory computes its dates per call.
+
+## Hand-written types in the design system
+
+### Problem
+
+`useTheSlopeDesignSystem.ts` still spells types by hand: `ResidencyAlertKind` extracts a hand-written union of alert
+kinds, `RESIDENCY_CONFIG` declares an inline shape naming the domain fields `'movedInDate' | 'moveOutDate'`, and
+`AlertUi` / `AlertKindConfig` restate Nuxt UI's alert props. The sentences of a closed dinner's supply live in two
+homes: `DEADLINE_LABELS.BOOKING_CLOSED.availableText` in `useBooking.ts` and `SUPPLY_WORDS` in `useBookingUi.ts`; the
+"ledig / ledige" plural rule is written in `createBookingBadge` and in `GuestBookingForm.vue`.
+
+### Solution
+
+A key type derives from its token (`keyof typeof`), a domain field name from the validation composable's schema
+(`HouseholdSchema.keyof()`), a Nuxt UI shape from the library's prop types (`AlertProps`). The supply sentences and
+the plural rule live once, in `useBookingUi`, and both badges and the guest form read them.
+
+### Affected
+
+`app/composables/useTheSlopeDesignSystem.ts`, `app/composables/useBookingUi.ts`, `app/composables/useBooking.ts`
+(`DEADLINE_LABELS`), `app/components/booking/GuestBookingForm.vue`, their specs.
+
+## AdminTeams loading row
+
+Moved from release 0.9.1 on 2026-10-28; not designed. After a season switch the table shows the previous season's teams under the
+loading bar; with the loading row, a team save's re-read closes the team detail docked under its row on a phone.
+Where: `app/components/admin/AdminTeams.vue:396`, ADR-018 § Table loading. **OPEN:** the loading row with the docked
+detail closing, or a docked detail that survives the re-read.
 
 ## Decisions
 

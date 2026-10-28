@@ -4,7 +4,7 @@ import {enableAutoUnmount} from '@vue/test-utils'
 import UserListItem from '~/components/shared/UserListItem.vue'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
-import {COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, type UserListItemRing} from '~/composables/useTheSlopeDesignSystem'
 
 enableAutoUnmount(afterEach)
 
@@ -45,5 +45,32 @@ describe('UserListItem', () => {
 
         expect(wrapper.findAll('span[data-slot="root"]')).toHaveLength(shown)
         expect(wrapper.find('[data-slot="fallback"]').text()).toBe(`+${inhabitants.length - shown}`)
+    })
+
+    describe.each([
+        {mode: 'group', inhabitants: fewInhabitants},
+        {mode: 'single', inhabitants: inhabitants[0]}
+    ])('$mode', ({inhabitants: shownInhabitants}) => {
+        const RINGS = COMPONENTS.userListItem.ring
+        const ringKeys = Object.keys(RINGS) as UserListItemRing[]
+        const faceClasses = async (ring?: UserListItemRing) => {
+            const wrapper = await mountItem({inhabitants: shownInhabitants, ring}, true)
+            return wrapper.findAll('span[data-slot="root"]').map(face => face.classes())
+        }
+
+        it.each(ringKeys)('the %s ring puts its token on every face', async ring => {
+            const faces = await faceClasses(ring)
+
+            expect(faces.length).toBeGreaterThan(0)
+            faces.forEach(classes => expect(classes).toEqual(expect.arrayContaining(RINGS[ring].split(' '))))
+        })
+
+        it('no ring puts no ring token on a face', async () => {
+            const ringClasses = new Set(ringKeys.flatMap(key => RINGS[key].split(' ')))
+            const faces = await faceClasses()
+
+            expect(faces.length).toBeGreaterThan(0)
+            faces.forEach(classes => expect(classes.filter(name => ringClasses.has(name))).toEqual([]))
+        })
     })
 })
