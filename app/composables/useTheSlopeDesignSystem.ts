@@ -1160,10 +1160,8 @@ export const COMPONENTS = {
         visitBadge: 'shrink-0'
     },
 
-    /** TeamCalendarDisplay days: a selectable day rings on hover, the selected dinner's day rings in primary */
+    /** TeamCalendarDisplay days: a day without a team's dinner */
     teamCalendar: {
-        selectableDay: 'cursor-pointer hover:ring-2 hover:ring-offset-1',
-        selectedDay: 'ring-2 ring-primary ring-offset-1',
         plainDay: 'text-sm'
     },
 

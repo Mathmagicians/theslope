@@ -203,7 +203,7 @@ describe('fetchOrders with provenance', () => {
     it('GIVEN orders with their history WHEN read with their provenance THEN each order\'s history is searched on the order\'s id, never scanned', async () => {
         await readWithProvenance()
 
-        const [[sql, ...params]] = rawQuery.mock.calls
+        const [sql, ...params] = rawQuery.mock.calls[0]!
         const plan = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params).map(({detail}) => String(detail))
         expect(plan.filter(step => step.includes('OrderHistory'))).toEqual([expect.stringMatching(/^SEARCH \w+ USING INDEX OrderHistory_orderId_idx \(orderId=\?\)$/)])
     })

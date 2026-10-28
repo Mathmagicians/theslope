@@ -4,15 +4,16 @@
  *
  * Features:
  * - Calendar view: Shows team assignments on calendar with colored badges
- * - Selection support: Click to select dinner event (optional via emit)
  * - Multi-team support: a team wears the rainbow stop of its number (`getTeamNumber` over the season's teams, `getRainbowBand`); the stops repeat after the last
  * - Holiday awareness: Displays holidays as green rings
  *
  * Uses BaseCalendar for consistent calendar structure.
  *
  * Used in:
- * - /admin/teams (all-teams overview - no selection)
- * - CookingTeamCard (the team's own calendar, on /admin/teams)
+ * - /admin/teams (all-teams overview)
+ * - CookingTeamCard (the team's own calendar in its regular and edit modes, on /admin/teams)
+ *
+ * Visual check: /admin/teams, the all-teams calendar and a team's card calendar, phone and desktop.
  */
 import type {DateRange} from '~/types/dateTypes'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
@@ -27,22 +28,13 @@ interface Props {
   seasonTeams: CookingTeamDisplay[] // The season's full team list: the number fallback for a team whose name carries none
   dinnerEvents: DinnerEventDisplay[]
   holidays?: DateRange[]
-  selectedDinnerId?: number | null // For chef page selection
-  showSelection?: boolean // Enable selection mode
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  holidays: () => [],
-  selectedDinnerId: null,
-  showSelection: false
+  holidays: () => []
 })
 
-const emit = defineEmits<{
-  select: [dinnerId: number]
-}>()
-
 const {createEventList} = useCalendarEvents()
-const {getDinnerForDay} = useTemporalCalendar()
 const {getHolidayDatesFromDateRangeList} = useSeason()
 const {CALENDAR, COMPONENTS, dayCircleClasses, getRainbowBand, SIZES} = useTheSlopeDesignSystem()
 const {getTeamNumber} = useCookingTeam()
@@ -90,24 +82,6 @@ const isHoliday = (day: DateValue): boolean => {
 const getTeamEventList = (eventLists: DayEventList[]) => {
   return eventLists.find(list => list.listId.startsWith('team-'))
 }
-
-// Calendar selection support - match agenda view behavior
-const handleCalendarDayClick = (day: DateValue) => {
-  if (!props.showSelection) return
-  const dinner = getDinnerForDay(props.dinnerEvents, day)
-  if (dinner) emit('select', dinner.id)
-}
-
-const isCalendarDaySelected = (day: DateValue): boolean => {
-  if (!props.selectedDinnerId || !props.showSelection) return false
-  const dinner = getDinnerForDay(props.dinnerEvents, day)
-  return dinner?.id === props.selectedDinnerId
-}
-
-const getCalendarDayClasses = (day: DateValue) => [
-  props.showSelection ? COMPONENTS.teamCalendar.selectableDay : '',
-  isCalendarDaySelected(day) ? COMPONENTS.teamCalendar.selectedDay : ''
-]
 </script>
 
 <template>
@@ -121,7 +95,7 @@ const getCalendarDayClasses = (day: DateValue) => [
             {{ day.day }}
           </div>
 
-          <!-- Team cooking day with tooltip and selection -->
+          <!-- Team cooking day with tooltip -->
           <UTooltip
             v-else-if="getTeamEventList(eventLists)"
             :text="getTeamEventList(eventLists)!.events[0]?.label"
@@ -129,8 +103,7 @@ const getCalendarDayClasses = (day: DateValue) => [
             <UBadge
               :size="SIZES.md"
               data-testid="team-calendar-day"
-              :class="[getRainbowBand(getTeamEventList(eventLists)!.color as number), ...getCalendarDayClasses(day)]"
-              @click="handleCalendarDayClick(day)"
+              :class="getRainbowBand(getTeamEventList(eventLists)!.color as number)"
             >
               {{ day.day }}
             </UBadge>

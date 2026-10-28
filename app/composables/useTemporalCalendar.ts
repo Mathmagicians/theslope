@@ -10,7 +10,6 @@
  * Used by:
  * - DinnerCalendarDisplay (household booking view)
  * - ChefCalendarDisplay (chef cooking schedule)
- * - TeamCalendarDisplay (the dinner on a day)
  *
  * Note: Components must handle their own countdown timers with lifecycle hooks.
  * This composable provides the calculation logic only.

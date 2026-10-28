@@ -40,9 +40,8 @@ Updated 2026-10-28. Release 0.9 shipped in f5b5205 (#168).
 
 | Delivery | Description or spec | Gherkin | Status |
 |---|---|---|---|
-| Notification delivery | [feature-notification-delivery.md](feature-notification-delivery.md) | `booking-notifications.feature`, `billing-notifications.feature`, `chef-deadline-notifications.feature`, `delivery-records.feature`, `test-message.feature` (16586f1) | partly committed (8fa59aa, 39e14a6, 16586f1, 542b274, f4bb23f); open: defects 136–140 |
+| Notification delivery | [feature-notification-delivery.md](feature-notification-delivery.md) | `booking-notifications.feature`, `billing-notifications.feature`, `chef-deadline-notifications.feature`, `delivery-records.feature`, `test-message.feature` (16586f1) | partly committed (8fa59aa, 39e14a6, 16586f1, 542b274, f4bb23f, 34ff620); open: defects 136–140, agent finishing |
 
 ## Notification delivery
 
 Priority: high, issue #170. Spec: [feature-notification-delivery.md](feature-notification-delivery.md).
-

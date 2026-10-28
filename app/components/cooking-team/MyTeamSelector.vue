@@ -90,7 +90,7 @@ const teamTabs = computed(() => {
     <!-- Empty state -->
     <UAlert
       v-if="tabTeams.length === 0"
-      v-bind="ALERTS.info"
+      v-bind="ALERTS.emptyState"
       :icon="ICONS.userGroup"
     >
       <template #title>

@@ -50,6 +50,9 @@ A box after a failed run:
 │ [ Kør import ]                  │
 └─────────────────────────────────┘
 A box whose job never ran: the same card with the line "Ingen kørsler endnu" in place of the run lines. A box shows the skeleton while its job runs or its latest run is read.
+Each stat line wears the icon of its own stat.
+
+Visual check: /admin/system, each box after a run (the daily box with and without the scaffold step), phone and desktop.
 -->
 
 <script setup lang="ts">

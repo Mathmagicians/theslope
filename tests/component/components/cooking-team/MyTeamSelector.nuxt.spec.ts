@@ -1,11 +1,11 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
 import {enableAutoUnmount, type BaseWrapper} from '@vue/test-utils'
-import {nextTick} from 'vue'
+import {nextTick, ref} from 'vue'
 import MyTeamSelector from '~/components/cooking-team/MyTeamSelector.vue'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import {useCookingTeam} from '~/composables/useCookingTeam'
-import {getRainbowBand, ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {getRainbowBand, ICONS, createResponsiveAlerts} from '~/composables/useTheSlopeDesignSystem'
 import {TEAM_WORDS} from '~/config/teamWords'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -113,5 +113,17 @@ describe('MyTeamSelector visiting team', () => {
         const wrapper = await mountWithVisit(ownTeams(own))
 
         expect(wrapper.find('[role="tablist"]').attributes('data-orientation')).toBe(orientation)
+    })
+})
+
+// A person on no team and with no visit reads the empty state, centred and quiet like every empty state
+describe('MyTeamSelector empty state', () => {
+    it('GIVEN no team of their own and no visit WHEN the selector renders THEN "Ingen madhold" is the empty state kind with the team group icon', async () => {
+        const wrapper = await mountWithTooltipProvider(MyTeamSelector, {props: {teams: [], seasonTeams}, isMd: true})
+
+        const {color, variant, ui} = createResponsiveAlerts(ref(true)).emptyState
+        const alert = wrapper.findComponent({name: 'UAlert'})
+        expect(alert.text()).toContain('Ingen madhold')
+        expect(alert.props()).toMatchObject({color, variant, ui, icon: ICONS.userGroup})
     })
 })
