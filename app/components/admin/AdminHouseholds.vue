@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { getPaginationRowModel } from '@tanstack/vue-table'
-import type {HouseholdDisplay} from '~/composables/useCoreValidation'
+import type {HouseholdDisplay, HouseholdCreate, HouseholdMoveOut} from '~/composables/useCoreValidation'
 
 interface Props {
   canEdit?: boolean
@@ -31,14 +31,7 @@ const handleDeleteHousehold = async (householdId: number) => {
 
 const isCreateFormOpen = ref(false)
 
-const handleCreateHousehold = async ({prevOwnerMoveOutUpdates, ...household}: {
-  pbsId: number
-  address: string
-  movedInDate: Date
-  heynaboId: number
-  name: string
-  prevOwnerMoveOutUpdates: {id: number, moveOutDate: Date}[]
-}) => {
+const handleCreateHousehold = async (household: HouseholdCreate, prevOwnerMoveOutUpdates: HouseholdMoveOut[]) => {
   const created = await householdsStore.createHousehold(household, prevOwnerMoveOutUpdates)
   if (created) isCreateFormOpen.value = false
 }

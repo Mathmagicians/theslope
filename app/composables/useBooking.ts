@@ -1,13 +1,14 @@
-import {useBookingValidation, CLOSED_DINNER_STATES, DinnerMode as DinnerModeEnum, DinnerState as DinnerStateEnum, OrderState as OrderStateEnum, TicketState as TicketStateEnum, SupplyState as SupplyStateEnum, type TicketState, type SupplyState, type TicketType, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketEvent, type TicketCounts, type OrderAudit} from '~/composables/useBookingValidation'
+import {useBookingValidation, CLOSED_DINNER_STATES, DinnerMode as DinnerModeEnum, DinnerState as DinnerStateEnum, OrderState as OrderStateEnum, TicketState as TicketStateEnum, SupplyState as SupplyStateEnum, type TicketState, type SupplyState, type TicketType, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventDate, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDisplay, type TicketOrder, type DinnerMode, type DesiredOrder, type BookingIntent, type OrderState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketEvent, type TicketCounts, type ForSaleCounts, type WaitlistCounts, type OrderAudit} from '~/composables/useBookingValidation'
 import {useBillingValidation, type TransactionCreateData} from '~/composables/useBillingValidation'
 import {useBilling} from '~/composables/useBilling'
-import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
+import {useSeason, type BookingDeadlines, type SeasonDeadlines} from '~/composables/useSeason'
 import {useHousehold, isHouseholdActiveOnDay} from '~/composables/useHousehold'
 import {useTicket, ticketTypeLabel} from '~/composables/useTicket'
 import type {InhabitantDisplay, HouseholdDisplay} from '~/composables/useCoreValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
+import type {DinnerEventDisplayInline} from '~/composables/useCookingTeamValidation'
 import {byTimeThenId} from '~/composables/useWaitlist'
 import {calculateCountdown, formatDate, DATE_SETTINGS} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
@@ -15,6 +16,7 @@ import {chunkArray, groupBy, linesBy, partition} from '~/utils/batchUtils'
 import {sumBy} from '~/utils/ledger'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {differenceInCalendarDays, isAfter} from 'date-fns'
+
 
 const {OrderBucketSchema, BookingActionSchema} = useBookingValidation()
 const Bucket = OrderBucketSchema.enum
@@ -24,7 +26,7 @@ const Action = BookingActionSchema.enum
  * What a ticket is now. Released wins over bought, as the ticket card shows it: a released ticket is for sale until the
  * dinner and the close keeps it with the eating mode Ingen. A person on the waiting list holds no order.
  */
-export const ticketStateOf = (order: Pick<OrderDisplay, 'state' | 'dinnerMode' | 'provenanceHousehold'> | null, queued = false): TicketState => {
+export const ticketStateOf = (order: TicketOrder | null, queued = false): TicketState => {
     switch (true) {
         case order !== null && (order.state === OrderStateEnum.RELEASED || (order.state === OrderStateEnum.CLOSED && order.dinnerMode === DinnerModeEnum.NONE)): return TicketStateEnum.released
         case order !== null && !!order.provenanceHousehold: return TicketStateEnum.claimed
@@ -130,8 +132,8 @@ export const formatPlace = (position: number, ticketType?: TicketType | null): s
     `${ticketType ? `${ticketTypeLabel(ticketType)} ` : ''}#${position}`
 
 /** A dinner's name: its menu title, else the untitled dinner's word while the chef has written no menu */
-export const formatDinnerName = (dinner: Pick<DinnerEventDisplay, 'menuTitle'>): string =>
-    dinner.menuTitle.trim() || BOOKING_WORDS.untitledDinner
+export const formatDinnerName = (menuTitle: string): string =>
+    menuTitle.trim() || BOOKING_WORDS.untitledDinner
 
 /** The orders of a run per action, every action present */
 export const countTotals = (items: readonly BookingResult[]): BookingTotals =>
@@ -245,7 +247,7 @@ export const decideOrderAction = (
 export const resolveDesiredOrdersToBuckets = (
     desiredOrders: DesiredOrder[],
     existingOrders: OrderDisplay[],
-    dinnerEventById: Map<number, { date: Date }>,
+    dinnerEventById: Map<number, DinnerEventDisplay>,
     canModifyOrders: (date: Date) => boolean,
     canEditDiningMode: (date: Date) => boolean,
     takesNoPortion: (ticketPriceId: number) => boolean,
@@ -292,9 +294,6 @@ export const resolveDesiredOrdersToBuckets = (
     return result
 }
 
-/** A user's booking change for one inhabitant at one dinner; a queued inhabitant's names the person's place */
-export type BookingIntent = Pick<DesiredOrder, 'inhabitantId' | 'dinnerEventId' | 'dinnerMode' | 'waitlistEntryId'>
-
 /** `useTicket().resolveTicketPrice` bound to the season's ticket prices */
 export type TicketPriceResolver = (
     birthDate: Date | null,
@@ -303,7 +302,7 @@ export type TicketPriceResolver = (
 ) => TicketPrice | undefined
 
 /** The inhabitant's own order for a dinner, or own queue entry; guest tickets they booked are never it */
-export const findRegularOrder = <T extends Pick<OrderDisplay, 'inhabitantId' | 'dinnerEventId' | 'isGuestTicket'>>(
+export const findRegularOrder = <T extends OrderDisplay | TicketWaitlistDisplay>(
     orders: T[],
     inhabitantId: number,
     dinnerEventId: number
@@ -319,8 +318,8 @@ export const findRegularOrder = <T extends Pick<OrderDisplay, 'inhabitantId' | '
 export const buildDesiredOrder = (
     intent: BookingIntent,
     existingOrders: OrderDisplay[],
-    inhabitants: Pick<InhabitantDisplay, 'id' | 'birthDate'>[],
-    dinnerEvents: Pick<DinnerEventDisplay, 'id' | 'date'>[],
+    inhabitants: InhabitantDisplay[],
+    dinnerEvents: DinnerEventDisplay[],
     resolveTicketPrice: TicketPriceResolver,
     BOOKED: OrderState
 ): DesiredOrder | null => {
@@ -391,8 +390,8 @@ export type BookingRow = {
 }
 
 export type BookingContext = {
-    event: Pick<DinnerEventDisplay, 'date' | 'state'>
-    deadlines: {canModifyOrders: (date: Date) => boolean, canEditDiningMode: (date: Date) => boolean}
+    event: DinnerEventDisplay
+    deadlines: BookingDeadlines
     isHouseholdInResidency: (date: Date) => boolean
     takesNoPortion: (ticketPriceId: number) => boolean
     now: Date
@@ -546,23 +545,13 @@ export const DEADLINE_LABELS = BOOKING_WORDS.deadlineLabels
  * A locked dinner's supply: the released tickets and the waiting list, each with its pre-formatted breakdown
  * ("2V 1B") for the deadline badges and the booking form's bar
  */
-export interface ReleasedTicketCounts {
-    total: number
-    formatted: string  // Pre-computed by formatTicketCounts, e.g., "2V 1B"
-    byType: Partial<Record<TicketType, number>>  // A claim buys from its own ticket type
-    queued: number
-    queuedFormatted: string  // The waiting list by ticket type, in the style of formatted
-    queuedByType: Partial<Record<TicketType, number>>  // The waiting list per ticket type
-}
-
-/** A locked dinner's waiting list: its size and its breakdown by ticket type */
-export type WaitlistCounts = Pick<ReleasedTicketCounts, 'queued' | 'queuedFormatted' | 'queuedByType'>
+export type ReleasedTicketCounts = ForSaleCounts & WaitlistCounts
 
 /** A locked dinner with nothing for sale and nobody on its waiting list */
 export const EMPTY_RELEASED_TICKET_COUNTS: ReleasedTicketCounts = {total: 0, formatted: '-', byType: {}, queued: 0, queuedFormatted: '-', queuedByType: {}}
 
 /** A locked dinner's supply: its tickets for sale, its waiting list, both or neither */
-export const supplyStateOf = (counts: Pick<ReleasedTicketCounts, 'total' | 'queued'>): SupplyState => {
+export const supplyStateOf = (counts: ReleasedTicketCounts): SupplyState => {
     switch (true) {
         case counts.total > 0 && counts.queued > 0: return SupplyStateEnum.FOR_SALE_AND_WAITLIST
         case counts.total > 0: return SupplyStateEnum.FOR_SALE
@@ -590,7 +579,7 @@ export const CONSUMABLE_DINNER_STATES = [DinnerStateEnum.SCHEDULED, DinnerStateE
 export const CLOSABLE_ORDER_STATES = [OrderStateEnum.BOOKED, OrderStateEnum.RELEASED] as const
 
 /** Booked or released: the order waits for the close */
-export const isPendingOrder = (order: Pick<OrderDisplay, 'state'>): boolean =>
+export const isPendingOrder = (order: OrderDisplay): boolean =>
     CLOSABLE_ORDER_STATES.some(state => state === order.state)
 
 /**
@@ -737,8 +726,8 @@ export const useBooking = () => {
      * - SCHEDULED: Default
      */
     const getDinnerStepState = (
-        dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost'>,
-        deadlines: { canModifyOrders: (date: Date) => boolean }
+        dinnerEvent: DinnerEventDisplay,
+        deadlines: BookingDeadlines
     ): DinnerStepState => {
         const isAnnounced = dinnerEvent.state === DinnerState.ANNOUNCED
         const isConsumed = dinnerEvent.state === DinnerState.CONSUMED
@@ -757,8 +746,8 @@ export const useBooking = () => {
      * Use .step for the step number, DINNER_STEP_MAP for all steps
      */
     const getStepConfig = (
-        dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost'>,
-        deadlines: { canModifyOrders: (date: Date) => boolean }
+        dinnerEvent: DinnerEventDisplay,
+        deadlines: BookingDeadlines
     ): StepConfig => {
         return DINNER_STEP_MAP[getDinnerStepState(dinnerEvent, deadlines)]
     }
@@ -772,7 +761,7 @@ export const useBooking = () => {
      * - Cannot cancel CONSUMED dinners (already happened)
      * - Cannot cancel already CANCELLED dinners
      */
-    const canCancelDinner = (dinnerEvent: Pick<DinnerEventDisplay, 'state'>): boolean => {
+    const canCancelDinner = (dinnerEvent: DinnerEventDisplay): boolean => {
         return !CLOSED_DINNER_STATES.includes(dinnerEvent.state)
     }
 
@@ -797,7 +786,7 @@ export const useBooking = () => {
 
     /** The highest alarm of the chef's deadlines on a dinner, for the calendar chips: neutral with every deadline met */
     const getChefDeadlineAlarm = (dinnerEvent: DinnerEventDisplay, deadlines: SeasonDeadlines, now: Date): AlarmLevel =>
-        Math.max(...getChefDeadlines(dinnerEvent, deadlines, now).map(({alarm}) => alarm)) as AlarmLevel
+        getChefDeadlines(dinnerEvent, deadlines, now).reduce<AlarmLevel>((highest, {alarm}) => alarm > highest ? alarm : highest, ALARM_LEVEL.neutral)
 
     /**
      * Event description template for Heynabo sync (HTML formatted)
@@ -906,7 +895,7 @@ export const useBooking = () => {
      * Extract IDs of past dinners from a list of pending dinners.
      * Uses splitDinnerEvents to determine "past" based on dinner time.
      */
-    const getPastDinnerIds = (pendingDinners: {id: number, date: Date}[], now: Date): number[] => {
+    const getPastDinnerIds = (pendingDinners: DinnerEventDate[], now: Date): number[] => {
         if (pendingDinners.length === 0) return []
         const {pastDinners} = splitDinnerEvents(pendingDinners, now)
         return pastDinners.map(d => d.id)
@@ -1072,8 +1061,8 @@ export const useBooking = () => {
     const buildDesiredOrders = (
         intents: BookingIntent[],
         existingOrders: OrderDisplay[],
-        inhabitants: Pick<InhabitantDisplay, 'id' | 'birthDate'>[],
-        dinnerEvents: Pick<DinnerEventDisplay, 'id' | 'date'>[],
+        inhabitants: InhabitantDisplay[],
+        dinnerEvents: DinnerEventDisplay[],
         ticketPrices: TicketPrice[]
     ): DesiredOrder[] => {
         const resolveSeasonTicketPrice: TicketPriceResolver = (birthDate, priceAtBooking, referenceDate) =>
@@ -1097,8 +1086,8 @@ export const useBooking = () => {
     const buildBookingChanges = (
         changes: BookingChanges,
         existingOrders: OrderDisplay[],
-        inhabitants: Pick<InhabitantDisplay, 'id' | 'birthDate'>[],
-        dinnerEvents: Pick<DinnerEventDisplay, 'id' | 'date'>[],
+        inhabitants: InhabitantDisplay[],
+        dinnerEvents: DinnerEventDisplay[],
         ticketPrices: TicketPrice[]
     ): DesiredOrder[] => [
         ...buildDesiredOrders(changes.intents, existingOrders, inhabitants, dinnerEvents, ticketPrices),
@@ -1187,12 +1176,12 @@ export const useBooking = () => {
      * Get IDs of locked future dinners from split result
      * Takes [nextDinner, ...futureDinners], reduces until first non-locked
      */
-    const getLockedFutureDinnerIds = <T extends { id: number; date: Date }>(
-        nextDinner: T | null,
-        futureDinners: T[],
-        deadlines: { canModifyOrders: (date: Date) => boolean }
+    const getLockedFutureDinnerIds = (
+        nextDinner: DinnerEventDisplay | null,
+        futureDinners: DinnerEventDisplay[],
+        deadlines: BookingDeadlines
     ): number[] => [nextDinner, ...futureDinners]
-        .filter((e): e is T => e !== null)
+        .filter((e): e is DinnerEventDisplay => e !== null)
         .reduce<{ ids: number[]; done: boolean }>(
             (acc, event) => {
                 if (acc.done) return acc
@@ -1213,9 +1202,9 @@ export const useBooking = () => {
      * nothing for sale and nobody waiting)
      */
     const computeLockStatus = (
-        dinnerEvents: Array<{ id: number; date: Date }>,
-        deadlines: { canModifyOrders: (date: Date) => boolean },
-        releasedCountsByDinnerId?: Map<number, Omit<ReleasedTicketCounts, keyof WaitlistCounts>>,
+        dinnerEvents: DinnerEventDisplay[],
+        deadlines: BookingDeadlines,
+        releasedCountsByDinnerId?: Map<number, ForSaleCounts>,
         waitlistByDinnerId?: Map<number, WaitlistCounts>
     ): Map<number, ReleasedTicketCounts | null> => {
         const result = new Map<number, ReleasedTicketCounts | null>()
@@ -1290,10 +1279,10 @@ export const useBooking = () => {
      */
     const replayTicketChanges = (
         history: OrderHistoryDisplay[],
-        ticketPriceOf: (ticketPriceId: number) => Pick<TicketPrice, 'ticketType' | 'portions'> | null,
+        ticketPriceOf: (ticketPriceId: number) => TicketPrice | null,
         systemUserId: number,
         householdShortnameOf: (householdId: number) => string | null = () => null,
-        householdOfInhabitant: (inhabitantId: number) => Pick<HouseholdDisplay, 'id' | 'shortName'> | null = () => null,
+        householdOfInhabitant: (inhabitantId: number) => HouseholdDisplay | null = () => null,
         bookingDeadline?: Date
     ): TicketChange[] => {
         const {readOrderAudit, OrderAuditActionSchema, OrderAuditSourceSchema, OrderStateSchema} = useBookingValidation()
@@ -1458,7 +1447,7 @@ export const useBooking = () => {
     }), byTime)
 
     // The team's dinners on consecutive calendar days around one dinner; a day without a team dinner ends the run
-    const consecutiveDinnerRun = <T extends {id: number, date: Date}>(dinners: T[], aroundId: number): T[] => {
+    const consecutiveDinnerRun = (dinners: DinnerEventDisplayInline[], aroundId: number): DinnerEventDisplayInline[] => {
         const sorted = [...dinners].sort((a, b) => a.date.getTime() - b.date.getTime())
         const index = sorted.findIndex(dinner => dinner.id === aroundId)
         if (index < 0) return []

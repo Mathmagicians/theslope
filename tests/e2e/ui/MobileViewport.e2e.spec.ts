@@ -60,7 +60,7 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
     const householdTab = (tab: string, query = '') =>
         `${getHouseholdUrl(ownHousehold.shortName, ownHousehold.pbsId, tab)}${query}`
     const publicBillingPath = () => {
-        if (!publicBillingToken) throw new Error('No billing period with a share token - run maintenance.e2e.spec.ts first')
+        if (!publicBillingToken) throw new Error('No billing period with a share token - run monthly-billing.feature first')
         return `/public/billing/${publicBillingToken}`
     }
 

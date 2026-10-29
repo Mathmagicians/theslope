@@ -3,7 +3,7 @@ import type {WeekDay} from '~/types/dateTypes'
 import type {AlertProps, AvatarProps, ButtonProps, BadgeProps, ChipProps} from '@nuxt/ui'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import type {TicketState} from '~/composables/useBookingValidation'
-import type {SeasonStatusValue} from '~/utils/season'
+import {TEMPORAL_CATEGORY, type SeasonStatusValue, type TemporalCategory} from '~/utils/season'
 
 // NuxtUI size types extracted from component props
 export type NuxtUISize = NonNullable<ButtonProps['size']>
@@ -1291,6 +1291,8 @@ export const COMPONENTS = {
         jobHeader: 'rounded-t-lg -mx-4 -mt-4 px-4 py-6 md:py-8 flex flex-col items-center justify-center gap-2',
         jobIcon: 'text-5xl md:text-6xl opacity-80',
         jobIconRunning: MOTION_SPIN,
+        // A service's logo in place of the job icon, at the icon's size: 3xl is size-12 (text-5xl), md:size-15 is text-6xl
+        jobLogo: {size: '3xl', class: 'md:size-15'},
         jobTitle: `${TYPOGRAPHY.cardTitle} mb-2`,
         // A fixed height keeps the cards' footers level
         jobDescription: `${TYPOGRAPHY.bodyTextMuted} mb-4 min-h-[3rem]`,
@@ -1373,9 +1375,30 @@ export const COMPONENTS = {
         roleNotes: 'list-disc list-inside space-y-1 mt-1'
     },
 
+    /**
+     * UserPreferencesCard: the header row, the view face's setting lines and its send-test row, the edit face's
+     * sections with their headings, the channel switches' rows and the SMS hint under them
+     */
     userPreferencesCard: {
+        header: 'flex items-center justify-between gap-2',
+        view: 'space-y-3',
+        // The notification line aligns at the top, so the badges that wrap start under the heading's line
+        notificationRow: 'flex items-start gap-2 flex-wrap',
         // The view face's notification glyph, level with the heading's line in a row whose items align at the top
-        notificationIcon: 'mt-1'
+        notificationIcon: 'mt-1',
+        // A setting's line and a line of badges: glyph, heading, value and badges, wrapping on a narrow card
+        line: 'flex items-center gap-2 flex-wrap',
+        badgeIcon: 'mr-1',
+        sendTestRow: 'flex md:justify-end',
+        edit: 'space-y-5',
+        section: 'space-y-2',
+        sectionHeading: 'flex items-center gap-2',
+        channelRow: 'flex items-center justify-between gap-3',
+        // The channel's glyph, name and address; the address gives way first on a narrow card
+        channelLabel: 'flex items-center gap-2 min-w-0',
+        channelTarget: `${TYPOGRAPHY.bodyTextMuted} truncate`,
+        // Indented under the channel names, past the glyph column
+        smsHint: `${TYPOGRAPHY.finePrint} pl-6`
     },
 
     /** InhabitantSelector: the stack of search row and table, the name cell, and the table's empty state */
@@ -2030,8 +2053,13 @@ export const COMPONENTS = {
         boxUnit: TYPOGRAPHY.finePrintMuted,
         summaryDeduction: `${TYPOGRAPHY.bodyTextMedium} ${TEXT.muted}`,
         boxLine: `flex items-center justify-between gap-2 whitespace-nowrap ${TYPOGRAPHY.bodyTextSmall}`,
-        /** A spending table's heading line: the heading on the left, the unit words on the right, below it on a narrow box */
-        headingLine: `flex flex-wrap items-center justify-between gap-x-2 gap-y-1 whitespace-nowrap ${TYPOGRAPHY.bodyTextSmall}`,
+        /**
+         * The team's round heading line: the badge and the period on the left, kept on one line, the unit words on the
+         * right, below them on a narrow box
+         */
+        roundHeadingLine: `flex flex-wrap items-center justify-between gap-x-2 gap-y-1 whitespace-nowrap ${TYPOGRAPHY.bodyTextSmall}`,
+        /** This dinner's heading line: a title longer than the box wraps, the unit words on a line of their own on the right */
+        dinnerHeadingLine: `flex flex-wrap items-center justify-between gap-x-2 gap-y-1 ${TYPOGRAPHY.bodyTextSmall}`,
         headingUnits: `ml-auto ${TYPOGRAPHY.finePrintMuted}`,
         /** The team's round heading: the team's badge, then the period */
         roundHeading: 'flex items-center gap-2',
@@ -3141,6 +3169,10 @@ export const createBreakpoint = (isMd: Ref<boolean | null>) => ({
 export const dayCircleClasses = (...variants: (string | false | null | undefined)[]): string[] =>
     [CALENDAR.day.size, CALENDAR.day.shape, ...variants.filter((variant): variant is string => Boolean(variant))]
 
+/** A dinner day's colour by its temporal category: next and future from the calendar's palette, the past shared */
+export const dayColorClass = (palette: typeof CHEF_CALENDAR | typeof DINNER_CALENDAR, category: TemporalCategory): string =>
+    category === TEMPORAL_CATEGORY.past ? CALENDAR.day.past : palette.day[category]
+
 /**
  * Props for a date picker's UCalendar: the shared grid token with the cell-fill
  * neutralisation, so the `#day` slot owns how a selected day reads.
@@ -3428,6 +3460,7 @@ export const useTheSlopeDesignSystem = () => {
         CALENDAR,
         calendarPickerProps,
         dayCircleClasses,
+        dayColorClass,
         CHEF_CALENDAR,
         DINNER_CALENDAR,
         PLANNING_CALENDAR,

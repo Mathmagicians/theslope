@@ -1,5 +1,6 @@
 import {describe, it, expect} from 'vitest'
 import {useSeasonValidation, type Season} from '~/composables/useSeasonValidation'
+import {SEASON_STATUS} from '~/config/seasonWords'
 import {createDateRange, formatDate} from '~/utils/date'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useTicketPriceValidation, type PortionTicket} from '~/composables/useTicketPriceValidation'
@@ -21,11 +22,16 @@ describe('useSeasonValidation', () => {
   const {
     holidaysSchema,
     SeasonSchema,
+    SeasonStatusSchema,
     serializeSeason,
     deserializeSeason
   } = useSeasonValidation()
 
   describe('schemas', () => {
+    it('should take its season statuses from the season words, in their order', () => {
+      expect(SeasonStatusSchema.options).toEqual(Object.values(SEASON_STATUS))
+    })
+
     it('should accept valid season data', () => {
       const validSeason = SeasonFactory.defaultSeason()
 
@@ -129,46 +135,36 @@ describe('useSeasonValidation', () => {
       expect(deserialized.seasonDates.end.getTime()).toBe(originalSeason.seasonDates.end.getTime())
     })
 
-    it('should correctly serialize and deserialize a Season with relations', () => {
-      const dinnerEvent1 = {
-        ...DinnerEventFactory.defaultDinnerEventDisplay(),
-        id: 1,
-        date: new Date(2025, 0, 6),
-        menuTitle: 'Pasta Night',
-        chefId: 1,
-        cookingTeamId: 1
-      }
-
-      const dinnerEvent2 = {
-        ...DinnerEventFactory.defaultDinnerEventDisplay(),
-        id: 2,
-        date: new Date(2025, 0, 13),
-        menuTitle: 'Taco Tuesday',
-        chefId: null,
-        cookingTeamId: 2
-      }
+    it('should serialize a Season with relations and deserialize its row with the dinner, team and price rows', () => {
+      const dinnerRows = [
+        DinnerEventFactory.serializedDinnerEvent({id: 1, date: new Date(2025, 0, 6), menuTitle: 'Pasta Night', chefId: 1, cookingTeamId: 1}),
+        DinnerEventFactory.serializedDinnerEvent({id: 2, date: new Date(2025, 0, 13), menuTitle: 'Taco Tuesday', chefId: null, cookingTeamId: 2})
+      ]
+      const teamRow = {...DinnerEventFactory.serializedCookingTeam(), name: 'Team A', _count: {dinners: 3, jokerSlots: 2}}
 
       const seasonWithRelations: Season = {
         ...testSeason,
         id: 1,
-        dinnerEvents: [dinnerEvent1, dinnerEvent2],
+        dinnerEvents: [DinnerEventFactory.defaultDinnerEventDisplay()],
         CookingTeams: [{id: 1, name: 'Team A', seasonId: 1, assignments: [], cookingDaysCount: 3, jokerSlotCount: 2}],
         ticketPrices: [{id: 1, seasonId: testSeason.id!, ticketType: TicketType.ADULT, price: 4000, portions: 1}]
       }
 
-      // Serialize
+      // Serialize: the dinners and the teams are read-only relations the write leaves out
       const serialized = serializeSeason(seasonWithRelations)
 
       // Verify base properties are serialized
       expect(typeof serialized.cookingDays).toBe('string')
       expect(typeof serialized.holidays).toBe('string')
       expect(typeof serialized.seasonDates).toBe('string')
+      expect(serialized).not.toHaveProperty('dinnerEvents')
+      expect(serialized).not.toHaveProperty('CookingTeams')
 
-      // Deserialize
+      // Deserialize the row a detail read loads
       const deserialized = deserializeSeason({
         ...serialized,
-        dinnerEvents: seasonWithRelations.dinnerEvents,
-        CookingTeams: seasonWithRelations.CookingTeams,
+        dinnerEvents: dinnerRows,
+        CookingTeams: [teamRow],
         ticketPrices: seasonWithRelations.ticketPrices
       }, withPortions)
 
@@ -191,6 +187,21 @@ describe('useSeasonValidation', () => {
       // ticket prices
         expect(deserializedWithRelations.ticketPrices.length).toBe(1)
         expect(deserializedWithRelations.ticketPrices.map(tp => tp.ticketType)).toEqual([TicketType.ADULT])
+    })
+
+    // The rows the repository's season reads, creates, updates and deletes return: every price row column, and on a
+    // create the dinner rows with their expense rows and the team rows without members or counts
+    it.each([
+      {description: 'the price rows', relations: {}},
+      {description: 'the price, dinner and team rows', relations: {
+        dinnerEvents: [DinnerEventFactory.serializedDinnerEvent({id: 1, expenses: [{amount: 2500}]})],
+        CookingTeams: [{id: 1, seasonId: 1, name: 'Team A', affinity: null}]
+      }}
+    ])('should deserialize a row with $description into a Season that SeasonSchema returns unchanged', ({relations}) => {
+      const priceRow = {id: 1, seasonId: 1, ticketType: TicketType.ADULT, price: 4000, description: null, maximumAgeLimit: null}
+      const deserialized = deserializeSeason({...serializeSeason(testSeason), id: 1, ticketPrices: [priceRow], ...relations}, withPortions)
+
+      expect(SeasonSchema.parse(deserialized)).toStrictEqual(deserialized)
     })
 
     it('should deserialize nested CookingTeam affinity fields from JSON strings', () => {

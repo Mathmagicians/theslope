@@ -577,16 +577,11 @@ export const getAdjacentDinner = (dinnerStartHour: number, dinnerDurationMinutes
         return pastDinners.at(-1)?.date ?? null
     }
 
-/**
- * Temporal category for dinner events
- * Re-exported from useSeason composable (ADR-001)
- */
-type TemporalCategory = 'next' | 'future' | 'past'
+/** A dinner's place in time against now: the next dinner, a later one, or one gone */
+export const TEMPORAL_CATEGORY = {next: 'next', future: 'future', past: 'past'} as const
+export type TemporalCategory = typeof TEMPORAL_CATEGORY[keyof typeof TEMPORAL_CATEGORY]
 
-/**
- * Dinner event with temporal category
- * Re-exported from useSeason composable (ADR-001)
- */
+/** A dinner event with its temporal category */
 type TemporalDinnerEvent<T> = T & { temporalCategory: TemporalCategory }
 
 /**
@@ -607,11 +602,11 @@ export const sortDinnerEventsByTemporal = <T extends { date: Date }>(
 
     for (const event of dinnerEvents) {
         if (nextDinnerDateRange && isSameDay(event.date, nextDinnerDateRange.start)) {
-            next.push({ ...event, temporalCategory: 'next' })
+            next.push({ ...event, temporalCategory: TEMPORAL_CATEGORY.next })
         } else if (isBefore(event.date, now)) {
-            past.push({ ...event, temporalCategory: 'past' })
+            past.push({ ...event, temporalCategory: TEMPORAL_CATEGORY.past })
         } else {
-            future.push({ ...event, temporalCategory: 'future' })
+            future.push({ ...event, temporalCategory: TEMPORAL_CATEGORY.future })
         }
     }
 

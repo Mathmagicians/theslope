@@ -42,6 +42,13 @@ export const MAINTENANCE_WORDS = {
     },
     /** A box's run button while its job runs */
     running: 'Kører...',
+    /** A job's toasts: the job's name and how its run ended */
+    job: {
+        done: (job: string) => `${job} afsluttet`,
+        failed: (job: string) => `${job} fejlede`,
+        /** The Heynabo import's toast on a finished run */
+        completed: (job: string) => `${job} fuldført`
+    },
     /** The labels of a run's stats, per job */
     stats: {
         [Job.HEYNABO_IMPORT]: {

@@ -1,6 +1,6 @@
 import {z} from 'zod'
 import {InhabitantFragmentSchema, AllergyTypeFragmentSchema, AllergyFragmentSchema} from '~/composables/fragments/domainFragments'
-import {useCoreValidation} from '~/composables/useCoreValidation'
+import {useCoreValidation, type SerializedInhabitantWithAllergies} from '~/composables/useCoreValidation'
 
 /**
  * Validation schemas for Allergy and AllergyType entities
@@ -73,10 +73,11 @@ export const useAllergyValidation = () => {
     const InhabitantWithAllergiesSchema = CoreInhabitantDisplaySchema.extend({
         allergies: z.array(AllergyDisplaySchema).default([])
     })
+    type InhabitantWithAllergies = z.infer<typeof InhabitantWithAllergiesSchema>
 
     // ADR-010: an inhabitant row loaded with allergies.include.allergyType
-    const deserializeInhabitantWithAllergies = (serialized: Record<string, unknown>): z.infer<typeof InhabitantWithAllergiesSchema> =>
-        InhabitantWithAllergiesSchema.parse({...deserializeInhabitantDisplay(serialized), allergies: serialized.allergies})
+    const deserializeInhabitantWithAllergies = ({allergies, ...inhabitant}: SerializedInhabitantWithAllergies): InhabitantWithAllergies =>
+        InhabitantWithAllergiesSchema.parse({...deserializeInhabitantDisplay(inhabitant), allergies})
 
 
     return {

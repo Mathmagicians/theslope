@@ -1,8 +1,10 @@
 import type {Season, SeasonUpdateResponse} from '~/composables/useSeasonValidation'
-import {ROLE_LABELS, type CookingTeamDetail, type CookingTeamAssignment, type CookingTeamCreate, type CookingTeamUpdate, type CookingTeamAssignmentCreate, type CookingTeamAssignmentUpdate, type CreateTeamsResponse, type TeamRole} from '~/composables/useCookingTeamValidation'
+import type {CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate, CookingTeamAssignmentUpdate, CreateTeamsResponse, TeamRole} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDetail, MenuSwapStrategy} from '~/composables/useBookingValidation'
 import type {JokerSlot, JokerSlotCreate} from '~/composables/useDutyValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
+import {SEASON_WORDS} from '~/config/seasonWords'
+import {TEAM_WORDS} from '~/config/teamWords'
 
 export const usePlanStore = defineStore("Plan", () => {
         // DEPENDENCIES
@@ -69,7 +71,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 default: () => null,
                 enabled: () => !!selectedSeasonId.value,
                 dependsOn: [seasonsDataset, activeSeasonIdDataset],
-                errorMessage: 'Kunne ikke hente sæson',
+                errorMessage: SEASON_WORDS.failed.season,
                 // The page's getter keeps driving the choice; the gone season re-derives through getDefaultSeasonId
                 notFound: {
                     recover: async () => {
@@ -77,7 +79,7 @@ export const usePlanStore = defineStore("Plan", () => {
                         await Promise.all([refreshSeasons(), refreshActiveSeasonId()])
                     },
                     retries: 1,
-                    toast: notFoundToast(seasons, selectedSeasonId, 'sæsonen'),
+                    toast: notFoundToast(seasons, selectedSeasonId, SEASON_WORDS.notFound),
                     message: () => getRandomEmptyMessageText('seasonGone', now.value)
                 }
             }
@@ -105,7 +107,7 @@ export const usePlanStore = defineStore("Plan", () => {
             {
                 schema: CookingTeamDetailSchema.nullable(),
                 default: () => null,
-                errorMessage: 'Kunne ikke hente hold',
+                errorMessage: TEAM_WORDS.admin.failed,
                 enabled: () => !!selectedTeamId.value,
                 dependsOn: [seasonsDataset]
             }
@@ -130,13 +132,13 @@ export const usePlanStore = defineStore("Plan", () => {
         // Toast descriptions report what a save set in motion (ADR-009 operation results)
         const formatSeasonUpdate = (result: SeasonUpdateResponse): string => {
             const {created, deleted} = result.reconciliation
-            const sentences = [`${created} datoer tilføjet, ${deleted} fjernet.`]
-            if (result.scaffold) sentences.push('Forudbestillinger er opdateret.')
-            if (created > 0) sentences.push('Husk at tildele madhold til nye datoer.')
+            const sentences = [SEASON_WORDS.toasts.updated.reconciled(created, deleted)]
+            if (result.scaffold) sentences.push(SEASON_WORDS.toasts.updated.scaffolded)
+            if (created > 0) sentences.push(SEASON_WORDS.toasts.updated.assignTeams)
             return sentences.join(' ')
         }
         const formatCreateTeams = ({teams, eventsAssigned}: CreateTeamsResponse): string =>
-            `${teams.length} madhold oprettet · ${eventsAssigned} madlavninger tildelt`
+            TEAM_WORDS.admin.created.description(teams.length, eventsAssigned)
 
         const toast = useToast()
 
@@ -230,7 +232,7 @@ export const usePlanStore = defineStore("Plan", () => {
             if (created === null) return null
 
             await loadSeasons()
-            toastSaved('Sæson oprettet')
+            toastSaved(SEASON_WORDS.toasts.created)
             return created
         }
 
@@ -263,7 +265,7 @@ export const usePlanStore = defineStore("Plan", () => {
 
             await loadSeasons()
             await settleSeason()
-            toastSaved('Sæson opdateret', formatSeasonUpdate(result))
+            toastSaved(SEASON_WORDS.toasts.updated.title, formatSeasonUpdate(result))
             return result
         }
 
@@ -318,7 +320,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 console.info(`👥 > PLAN_STORE > Created ${created.teams.length} team(s), assigned ${created.eventsAssigned} dinner event(s)`)
 
                 await settleSeason()
-                toastSaved('Madhold oprettet', formatCreateTeams(created))
+                toastSaved(TEAM_WORDS.admin.created.title, formatCreateTeams(created))
                 return created
             } finally {
                 isCreatingTeams.value = false
@@ -335,7 +337,7 @@ export const usePlanStore = defineStore("Plan", () => {
             })
             console.info(`👥 > PLAN_STORE > Updated team "${updated.name}"`)
             await refreshTeamAggregates()
-            if (team.affinity !== undefined) toastSaved('Madlavningsdage for teams opdateret')
+            if (team.affinity !== undefined) toastSaved(TEAM_WORDS.admin.affinityUpdated)
             return updated
         }
 
@@ -349,7 +351,7 @@ export const usePlanStore = defineStore("Plan", () => {
             // A deleted team has no Detail to refresh: the choice skips it and keeps following the page's getter
             skipGoneId(teamChoice, teamId)
             await refreshTeamAggregates()
-            toastSaved('Madhold slettet')
+            toastSaved(TEAM_WORDS.admin.deleted)
             return deletedId
         }
 
@@ -363,7 +365,7 @@ export const usePlanStore = defineStore("Plan", () => {
             })
             console.info(`👥🔗 > PLAN_STORE > Added member ${assignment.inhabitantId} to team ${assignment.cookingTeamId} as ${assignment.role}`)
             await refreshTeamAggregates()
-            toastSaved('Medlem tilføjet til hold', `${created.inhabitant.name} ${created.inhabitant.lastName}`)
+            toastSaved(TEAM_WORDS.admin.memberAdded, `${created.inhabitant.name} ${created.inhabitant.lastName}`)
             return created
         }
 
@@ -376,7 +378,7 @@ export const usePlanStore = defineStore("Plan", () => {
             })
             console.info(`👥🔗 > PLAN_STORE > Updated team member assignment ${assignmentId}`)
             await refreshTeamAggregates()
-            toastSaved('Medlem opdateret', `${updated.inhabitant.name} ${updated.inhabitant.lastName}`)
+            toastSaved(TEAM_WORDS.admin.memberUpdated, `${updated.inhabitant.name} ${updated.inhabitant.lastName}`)
             return updated
         }
 
@@ -388,7 +390,7 @@ export const usePlanStore = defineStore("Plan", () => {
             })
             console.info(`👥🔗 > PLAN_STORE > Removed team member assignment ${assignmentId}`)
             await refreshTeamAggregates()
-            toastSaved('Medlem fjernet fra hold')
+            toastSaved(TEAM_WORDS.admin.memberRemoved)
             return deletedId
         }
 
@@ -401,7 +403,7 @@ export const usePlanStore = defineStore("Plan", () => {
             })
             console.info(`🃏 > PLAN_STORE > Added ${slot.role} joker slot to team ${teamId}`)
             await refreshTeamAggregates()
-            toastSaved('Joker tilføjet', ROLE_LABELS[created.role])
+            toastSaved(TEAM_WORDS.admin.jokerAdded, TEAM_WORDS.roles[created.role].label)
             return created
         }
 
@@ -413,7 +415,7 @@ export const usePlanStore = defineStore("Plan", () => {
             })
             console.info(`🃏 > PLAN_STORE > Removed joker slot ${slotId} from team ${teamId}`)
             await refreshTeamAggregates()
-            toastSaved('Joker fjernet')
+            toastSaved(TEAM_WORDS.admin.jokerRemoved)
             return deletedId
         }
 
@@ -480,11 +482,11 @@ export const usePlanStore = defineStore("Plan", () => {
                 await refreshTeamAggregates()
                 await useUsersStore().loadMyTeams()
                 await useBookingsStore().refreshSelectedDinnerEventDetail()
-                toastSaved('Du har meldt afbud. Tjansen som chefkok er nu ledig.')
+                toastSaved(TEAM_WORDS.toasts.resigned.title)
                 if (heynaboSyncDegraded) {
                     toast.add({
-                        title: 'Heynabo-synkronisering fejlede',
-                        description: 'Tjansen er fjernet, men Heynabo-begivenheden kunne ikke slettes. Tjek Heynabo.',
+                        title: TEAM_WORDS.toasts.resigned.heynaboFailed.title,
+                        description: TEAM_WORDS.toasts.resigned.heynaboFailed.description,
                         color: COLOR.error
                     })
                 }

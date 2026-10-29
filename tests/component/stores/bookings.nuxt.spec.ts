@@ -24,6 +24,8 @@ import {useTicket} from '~/composables/useTicket'
 import {useBookingValidation, DinnerState} from '~/composables/useBookingValidation'
 import {adminBypassQuery} from '~/composables/useCoreValidation'
 import {TEAM_WORDS} from '~/config/teamWords'
+import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
+import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {addDays} from 'date-fns'
 import {flushPromises} from '@vue/test-utils'
@@ -544,6 +546,8 @@ describe('Bookings store — a cancelled dinner', () => {
 })
 
 describe('Bookings store — daily maintenance', () => {
+    const dailyMaintenanceDone = MAINTENANCE_WORDS.job.done(MAINTENANCE_WORDS.jobTypes[useMaintenanceValidation().JobType.DAILY_MAINTENANCE])
+
     it('keeps the result and reports it in a toast', async () => {
         const store = useBookingsStore()
 
@@ -551,7 +555,7 @@ describe('Bookings store — daily maintenance', () => {
 
         expect(store.hasDailyMaintenanceResult).toBe(true)
         expect(store.hasDailyMaintenanceError).toBe(false)
-        expect(toastTitles()).toContain('Daglig vedligeholdelse afsluttet')
+        expect(toastTitles()).toContain(dailyMaintenanceDone)
     })
 
     it('exposes the error of a failed run', async () => {
@@ -563,7 +567,7 @@ describe('Bookings store — daily maintenance', () => {
         expect(store.hasDailyMaintenanceError).toBe(true)
         expect(store.hasDailyMaintenanceResult).toBe(false)
         expect(store.dailyMaintenanceError?.message).toBeTruthy()
-        expect(toastTitles()).not.toContain('Daglig vedligeholdelse afsluttet')
+        expect(toastTitles()).not.toContain(dailyMaintenanceDone)
     })
 })
 

@@ -16,7 +16,7 @@ icon for an ended season, and the season's status glyph follows the name
 
 <script setup lang="ts">
 import type {Season} from '~/composables/useSeasonValidation'
-import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import {SEASON_STATUS} from '~/config/seasonWords'
 import type {SeasonStatusValue} from '~/utils/season'
 
 interface Props {

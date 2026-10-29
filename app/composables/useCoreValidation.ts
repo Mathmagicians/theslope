@@ -226,9 +226,17 @@ export const useCoreValidation = () => {
         dinnerPreferences: WeekDayMapSchemaOptional.optional().nullable()
     })
 
+    // The name a person is known by: the views, the audit and the mails name an inhabitant by it
+    const InhabitantNameSchema = InhabitantDisplaySchema.pick({name: true, lastName: true})
+
     // Database row: the dinner preferences travel as JSON (ADR-010)
     const SerializedInhabitantSchema = InhabitantFragmentSchema.extend({
         dinnerPreferences: z.string().nullable()
+    })
+
+    // An inhabitant row read with allergies.include.allergyType
+    const SerializedInhabitantWithAllergiesSchema = SerializedInhabitantSchema.extend({
+        allergies: z.array(AllergyFragmentSchema)
     })
 
     // The user rows the reads return: the display read leaves the Heynabo token out and selects the inhabitant's
@@ -277,6 +285,12 @@ export const useCoreValidation = () => {
 
     const HouseholdUpdateSchema = BaseHouseholdSchema.partial().extend({
         id: z.number().int().positive()
+    })
+
+    // The move-out a household create sets on a previous owner at its address
+    const HouseholdMoveOutSchema = z.object({
+        id: IdSchema,
+        moveOutDate: z.coerce.date()
     })
 
     /**
@@ -341,7 +355,7 @@ export const useCoreValidation = () => {
     })
 
     const SerializedHouseholdDetailSchema = HouseholdFragmentSchema.extend({
-        inhabitants: z.array(SerializedInhabitantSchema.extend({allergies: z.array(AllergyFragmentSchema)}))
+        inhabitants: z.array(SerializedInhabitantWithAllergiesSchema)
     })
 
     // ADR-009: User detail with nested Inhabitant and Household (essential context for auth)
@@ -374,9 +388,18 @@ export const useCoreValidation = () => {
 
     type UserCreate = z.infer<typeof UserCreateSchema>
     type InhabitantDisplay = z.infer<typeof InhabitantDisplaySchema>
+    type InhabitantDetail = z.infer<typeof InhabitantDetailSchema>
+    type UserDisplay = z.infer<typeof UserDisplaySchema>
+    type UserDetail = z.infer<typeof UserDetailSchema>
+    type HouseholdDisplay = z.infer<typeof HouseholdDisplaySchema>
+    type HouseholdDetail = z.infer<typeof HouseholdDetailSchema>
 
     type SerializedUserInput = z.infer<typeof SerializedUserInputSchema>
     type SerializedInhabitant = z.infer<typeof SerializedInhabitantSchema>
+    type SerializedUserDisplay = z.infer<typeof SerializedUserDisplaySchema>
+    type SerializedUserDetail = z.infer<typeof SerializedUserDetailSchema>
+    type SerializedHouseholdDisplay = z.infer<typeof SerializedHouseholdDisplaySchema>
+    type SerializedHouseholdDetail = z.infer<typeof SerializedHouseholdDetailSchema>
 
     // ========================================================================
     // SERIALIZATION FUNCTIONS (ADR-010)
@@ -412,7 +435,7 @@ export const useCoreValidation = () => {
     })
 
     // The JSON columns of a User row as domain values
-    const deserializeUserColumns = (serializedUser: z.infer<typeof SerializedUserDisplaySchema>) => ({
+    const deserializeUserColumns = (serializedUser: SerializedUserDisplay) => ({
         systemRoles: JSON.parse(serializedUser.systemRoles),
         notificationChannels: JSON.parse(serializedUser.notificationChannels),
         appearance: JSON.parse(serializedUser.appearance)
@@ -425,33 +448,21 @@ export const useCoreValidation = () => {
         dinnerPreferences: serialized.dinnerPreferences ? deserializeWeekDayMap(serialized.dinnerPreferences) : null
     })
 
-    /**
-     * ADR-010: Deserialize InhabitantDisplay from database format to domain format
-     * Converts JSON string dinnerPreferences to WeekDayMap and dates to Date objects
-     * Display = lightweight bounded context for lists (ADR-009)
-     */
-    const deserializeInhabitantDisplay = (serialized: Record<string, unknown>): InhabitantDisplay => {
-        const deserialized = {
-            ...serialized,
-            birthDate: serialized.birthDate ? new Date(serialized.birthDate as string | number | Date) : null,
-            dinnerPreferences: serialized.dinnerPreferences
-                ? deserializeWeekDayMap(serialized.dinnerPreferences as string)
-                : null
-        }
-        return InhabitantDisplaySchema.parse(deserialized)
-    }
+    /** ADR-010: an Inhabitant row as InhabitantDisplay, the lightweight bounded context for lists (ADR-009) */
+    const deserializeInhabitantDisplay = (serialized: SerializedInhabitant): InhabitantDisplay =>
+        InhabitantDisplaySchema.parse(deserializeInhabitantColumns(serialized))
 
     /** ADR-010: an Inhabitant row as InhabitantDetail, for GET/:id and the mutations (ADR-009) */
-    const deserializeInhabitantDetail = (serialized: SerializedInhabitant): z.infer<typeof InhabitantDetailSchema> =>
+    const deserializeInhabitantDetail = (serialized: SerializedInhabitant): InhabitantDetail =>
         InhabitantDetailSchema.parse(deserializeInhabitantColumns(serialized))
 
-    const deserializeUserDisplay = (serializedUser: z.infer<typeof SerializedUserDisplaySchema>): z.infer<typeof UserDisplaySchema> => UserDisplaySchema.parse({
+    const deserializeUserDisplay = (serializedUser: SerializedUserDisplay): UserDisplay => UserDisplaySchema.parse({
         ...serializedUser,
         ...deserializeUserColumns(serializedUser)
     })
 
     // The household of the user's inhabitant carries its shortName, computed from the address
-    const deserializeUserDetail = (serializedUser: z.infer<typeof SerializedUserDetailSchema>): z.infer<typeof UserDetailSchema> => {
+    const deserializeUserDetail = (serializedUser: SerializedUserDetail): UserDetail => {
         const inhabitant = serializedUser.Inhabitant
         return UserDetailSchema.parse({
             ...serializedUser,
@@ -465,17 +476,17 @@ export const useCoreValidation = () => {
 
     // A household row's columns as domain values: the shortName computed from the address, a missing move-out date null;
     // the schema the caller parses with keeps what its read loaded beyond them (the detail's allergies)
-    const deserializeHouseholdColumns = (serialized: z.infer<typeof SerializedHouseholdDisplaySchema>) => ({
+    const deserializeHouseholdColumns = (serialized: SerializedHouseholdDisplay) => ({
         ...serialized,
         moveOutDate: serialized.moveOutDate ?? null,
         shortName: getHouseholdShortName(serialized.address),
         inhabitants: serialized.inhabitants.map(deserializeInhabitantColumns)
     })
 
-    const deserializeHouseholdDisplay = (serialized: z.infer<typeof SerializedHouseholdDisplaySchema>): z.infer<typeof HouseholdDisplaySchema> =>
+    const deserializeHouseholdDisplay = (serialized: SerializedHouseholdDisplay): HouseholdDisplay =>
         HouseholdDisplaySchema.parse(deserializeHouseholdColumns(serialized))
 
-    const deserializeHouseholdDetail = (serialized: z.infer<typeof SerializedHouseholdDetailSchema>): z.infer<typeof HouseholdDetailSchema> =>
+    const deserializeHouseholdDetail = (serialized: SerializedHouseholdDetail): HouseholdDetail =>
         HouseholdDetailSchema.parse(deserializeHouseholdColumns(serialized))
 
     return {
@@ -502,13 +513,16 @@ export const useCoreValidation = () => {
         InhabitantCreateSchema,
         InhabitantUpdateSchema,
         InhabitantDisplaySchema,
+        InhabitantNameSchema,
         InhabitantDetailSchema,
         SerializedInhabitantSchema,
+        SerializedInhabitantWithAllergiesSchema,
         // Schemas - Household
         BaseHouseholdSchema,
         HouseholdCreateSchema,
         HouseholdCreateFormSchema,
         HouseholdUpdateSchema,
+        HouseholdMoveOutSchema,
         HouseholdDisplaySchema,
         HouseholdDetailSchema,
         SerializedHouseholdDisplaySchema,
@@ -554,11 +568,16 @@ export type LoginCredentials = z.infer<ReturnType<typeof useCoreValidation>['Log
 // INHABITANT TYPES
 // Display: Minimal inhabitant info for lists (GET /api/admin/household/:id/inhabitants)
 export type InhabitantDisplay = z.infer<ReturnType<typeof useCoreValidation>['InhabitantDisplaySchema']>
+// Name: the first and last name an inhabitant is named by
+export type InhabitantName = z.infer<ReturnType<typeof useCoreValidation>['InhabitantNameSchema']>
 // Detail: Full inhabitant data (GET /api/admin/household/:id/inhabitants/:id)
 export type InhabitantDetail = z.infer<ReturnType<typeof useCoreValidation>['InhabitantDetailSchema']>
 // Mutations
 export type InhabitantCreate = z.infer<ReturnType<typeof useCoreValidation>['InhabitantCreateSchema']>
 export type InhabitantUpdate = z.infer<ReturnType<typeof useCoreValidation>['InhabitantUpdateSchema']>
+// Database rows (ADR-010)
+export type SerializedInhabitant = z.infer<ReturnType<typeof useCoreValidation>['SerializedInhabitantSchema']>
+export type SerializedInhabitantWithAllergies = z.infer<ReturnType<typeof useCoreValidation>['SerializedInhabitantWithAllergiesSchema']>
 
 // HOUSEHOLD TYPES (ADR-009: Only Display and Detail - mutations return Detail)
 // Display: Household summary for lists (GET /api/admin/household)
@@ -569,6 +588,7 @@ export type HouseholdDetail = z.infer<ReturnType<typeof useCoreValidation>['Hous
 export type HouseholdCreate = z.infer<ReturnType<typeof useCoreValidation>['HouseholdCreateSchema']>
 export type HouseholdCreateFormData = z.infer<ReturnType<ReturnType<typeof useCoreValidation>['HouseholdCreateFormSchema']>>
 export type HouseholdUpdate = z.infer<ReturnType<typeof useCoreValidation>['HouseholdUpdateSchema']>
+export type HouseholdMoveOut = z.infer<ReturnType<typeof useCoreValidation>['HouseholdMoveOutSchema']>
 
 // ROLE OWNERSHIP TYPES
 // ReconcileResult: Result of role reconciliation with admin change tracking

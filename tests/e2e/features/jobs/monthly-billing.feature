@@ -9,9 +9,10 @@ Feature: Monthly billing
     And the past month has unbilled orders in 2 households
     And the MONTHLY_BILLING job has run 1 time
 
-  Scenario: The invoices name their household and are ordered by address, then PBS number
+  Scenario: The invoices name their household, add up their transactions and are ordered by address, then PBS number
     Then each invoice of the period names its household and PBS number
     And the invoices of the period are ordered by address, then PBS number
+    And the transactions of each invoice add up to its amount
 
   Scenario: The visitor opens the period and its CSV file through the accountant link
     Given a visitor without a session

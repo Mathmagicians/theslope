@@ -13,8 +13,10 @@ import type {
     CreateOrdersResult,
     DinnerEventCreate,
     DinnerEventDisplay,
+    DinnerEventDate,
     DinnerEventDetail,
     DinnerState,
+    SerializedDinnerEvent,
     OrderHistoryDisplay,
     OrderForTransaction,
     DinnerMode,
@@ -65,7 +67,7 @@ import {
 const {throwH3Error, isPrismaNotFound} = eventHandlerHelper
 
 // The dinner embedded in an order read: its cost is the sum of the selected expense amounts, never the stored column
-const embeddedDinnerEvent = (dinnerEvent: Record<string, unknown>) => useBookingValidation().deserializeDinnerEvent(dinnerEvent)
+const embeddedDinnerEvent = (dinnerEvent: SerializedDinnerEvent) => useBookingValidation().deserializeDinnerEvent(dinnerEvent)
 
 // The user who wrote a history row with the name of their inhabitant, as the order timeline and Billetændringer name them
 const performedByUserSelect = {select: {id: true, email: true, Inhabitant: {select: {name: true, lastName: true}}}} as const
@@ -1084,7 +1086,7 @@ export async function updateDinnerEventAllergens(d1Client: D1Database, dinnerEve
  */
 export async function fetchPendingDinnersInActiveSeason(
     d1Client: D1Database
-): Promise<{id: number, date: Date}[]> {
+): Promise<DinnerEventDate[]> {
     const {CONSUMABLE_DINNER_STATES} = useBooking()
     const activeSeasonId = await fetchActiveSeasonId(d1Client)
 

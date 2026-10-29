@@ -35,7 +35,7 @@ const {TeamRoleSchema} = useCookingTeamValidation()
 
 const period = ref<DateRange>({...props.seasonDates})
 
-const draft = reactive<Pick<JokerSlotDraft, 'role' | 'allocationPercentage'> & {affinity: WeekDayMap, note?: string}>({
+const draft = reactive<Omit<JokerSlotDraft, 'startDate' | 'endDate' | 'affinity' | 'note'> & {affinity: WeekDayMap, note?: string}>({
   role: TeamRoleSchema.enum.COOK,
   affinity: props.teamAffinity ? {...props.teamAffinity} : createDefaultWeekdayMap(false),
   allocationPercentage: JokerSlotCreateSchema.shape.allocationPercentage.parse(undefined),

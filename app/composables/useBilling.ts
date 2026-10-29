@@ -6,7 +6,7 @@ import {ticketTypeCount, ticketTypeLabel, ticketTypeLetter} from '~/composables/
 import {useCookingTeam} from '~/composables/useCookingTeam'
 import {useBookingValidation, type TicketType, type DinnerEventInfo, type DinnerEventDetail} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
-import type {BillingSideEffectStamps, CostEntry, Expense, HouseholdEntry, InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
+import type {BillingSideEffectStamps, CostEntry, HouseholdEntry, InvoiceDisplay, PayerSnapshot, TransactionDisplay} from '~/composables/useBillingValidation'
 
 const LINK_TRANSACTION_BATCH_SIZE = 90
 
@@ -290,10 +290,7 @@ export const useBilling = () => {
      * at the date for one without a title. The entry form prefills them; the route writes them for a body without a note
      */
     const {getTeamShortName} = useCookingTeam()
-    const expenseNoteWords = (
-        dinner: Pick<DinnerEventDetail, 'date' | 'menuTitle'> & {cookingTeam: Pick<NonNullable<DinnerEventDetail['cookingTeam']>, 'name'> | null},
-        payer: Pick<Expense['paidBy'], 'name' | 'email'>
-    ): string => {
+    const expenseNoteWords = (dinner: DinnerEventDetail, payer: PayerSnapshot): string => {
         const title = dinner.menuTitle ? `"${dinner.menuTitle}" ` : ''
         const team = dinner.cookingTeam ? ` for ${getTeamShortName(dinner.cookingTeam.name)}` : ''
         return `${title}${formatDate(dinner.date)}, ${payer.name ?? payer.email} bestiller${team}`

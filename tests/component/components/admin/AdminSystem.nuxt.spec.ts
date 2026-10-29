@@ -7,7 +7,7 @@ import {createError, getQuery, type H3Event} from 'h3'
 import {addDays} from 'date-fns'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId, iconNamesIn, resetStores, registerEmptyStoreEndpoints, untilTrue, findLoadingRow, tableHeaders, cellsByHeader, VIEWPORTS} from '~~/tests/component/testHelpers'
 import AdminSystem from '~/components/admin/AdminSystem.vue'
-import {ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {ICONS, IMG} from '~/composables/useTheSlopeDesignSystem'
 import {formatJobStat} from '~/composables/useMaintenance'
 import {NOTIFICATION_COUNT_WORDS} from '~/config/notificationTemplates'
 import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
@@ -50,23 +50,29 @@ registerEndpoint('/api/admin/maintenance/job-run', async (event: H3Event) => {
     return latest ? [latest] : []
 })
 
-// What each box job's run reports, stored as the run's resultSummary and answered by its button run
+// What each box job's run reports, stored as the run's resultSummary and answered by its button run; the mark its
+// header wears at rest: Heynabo's logo on the import, the job's icon on the others
 const heynaboSummary = HouseholdFactory.defaultHeynaboImportResponse()
 const dailySummary = OrderFactory.defaultDailyMaintenanceResult()
 const monthlySummary = {results: [], periods: [BillingFactory.defaultPeriodSideEffects()], jobRunId: 1}
 const BOX_JOBS = [
     {jobType: JobType.HEYNABO_IMPORT, runUrl: '/api/admin/heynabo/import', summary: heynaboSummary,
-        stats: () => maintenance.formatHeynaboStats(heynaboSummary), reloadsHouseholds: true},
+        stats: () => maintenance.formatHeynaboStats(heynaboSummary), reloadsHouseholds: true,
+        mark: 'the Heynabo logo', logo: IMG.heynabo, icons: []},
     {jobType: JobType.DAILY_MAINTENANCE, runUrl: '/api/admin/maintenance/daily', summary: dailySummary,
-        stats: () => maintenance.formatDailyMaintenanceStats(dailySummary), reloadsHouseholds: false},
+        stats: () => maintenance.formatDailyMaintenanceStats(dailySummary), reloadsHouseholds: false,
+        mark: 'its icon', logo: null, icons: [ICONS.clipboard]},
     {jobType: JobType.MONTHLY_BILLING, runUrl: '/api/admin/maintenance/monthly', summary: monthlySummary,
-        stats: () => maintenance.formatMonthlyBillingStats(monthlySummary), reloadsHouseholds: false}
+        stats: () => maintenance.formatMonthlyBillingStats(monthlySummary), reloadsHouseholds: false,
+        mark: 'its icon', logo: null, icons: [ICONS.ticket]}
 ]
 
-// A button run answers its job's summary, or a server error while `fails` holds
+// A button run answers its job's summary, or a server error while `fails` holds; a held run answers once its url leaves the set
 const buttonRun = {fails: false}
+const heldRuns = shallowReactive(new Set<string>())
 for (const {runUrl, summary} of BOX_JOBS) {
-    registerEndpoint(runUrl, () => {
+    registerEndpoint(runUrl, async () => {
+        await untilTrue(() => !heldRuns.has(runUrl))
         if (buttonRun.fails) throw createError({statusCode: 500, statusMessage: 'D1 down'})
         return summary
     })
@@ -90,7 +96,10 @@ beforeEach(() => {
     buttonRun.fails = false
 })
 // A read still held answers, so no handler outlives its test
-afterEach(() => heldReads.clear())
+afterEach(() => {
+    heldReads.clear()
+    heldRuns.clear()
+})
 
 const HEADERS = ['Dato', 'Job', 'Status', 'Varighed', 'Kilde', 'Resultat']
 const NO_RUNS = 'Ingen kørsler endnu'
@@ -135,6 +144,8 @@ describe('AdminSystem job history while it loads', () => {
 const boxOf = (wrapper: SystemWrapper, jobType: Job) =>
     new DOMWrapper(findByTestId(wrapper, `trigger-${jobType.toLowerCase()}`).element.closest('[data-slot="root"]'))
 const isLoading = (box: DOMWrapper<Element>) => box.findAll('[aria-busy="true"]').length > 0
+// The card's header: the job's mark over its schedule
+const headerOf = (box: DOMWrapper<Element>) => box.find('[data-slot="header"]')
 // A box's run lines: its start, its status and its stats, each with the icon before its text
 const runLinesOf = (box: DOMWrapper<Element>) =>
     findAllByTestId(box, 'job-run-line').map(line => ({icon: iconNamesIn(line)[0], text: line.text()}))
@@ -155,6 +166,34 @@ describe('AdminSystem job boxes', () => {
         expect(box.text()).toContain(description)
         expect(box.find('button').text()).toBe(buttonLabel)
     })
+
+    it.each(BOX_JOBS)('GIVEN the $jobType box at rest THEN its header wears $mark', async ({jobType, logo, icons}) => {
+        const wrapper = await mountSystem(true)
+
+        const header = headerOf(boxOf(wrapper, jobType))
+        const image = header.find('img')
+        expect(image.exists() ? image.attributes('src') : null).toBe(logo)
+        expect(iconNamesIn(header)).toEqual(icons)
+    })
+
+    it.each(BOX_JOBS)(
+        'GIVEN a $jobType run on the way THEN its header spins the sync icon in place of $mark, WHEN it lands THEN the mark returns',
+        async ({jobType, runUrl, logo, icons}) => {
+            const wrapper = await mountSystem(true)
+            heldRuns.add(runUrl)
+
+            await boxOf(wrapper, jobType).find('button').trigger('click')
+
+            await vi.waitFor(() => expect(iconNamesIn(headerOf(boxOf(wrapper, jobType)))).toEqual([ICONS.sync]))
+            expect(headerOf(boxOf(wrapper, jobType)).find('img').exists()).toBe(false)
+
+            heldRuns.delete(runUrl)
+
+            await vi.waitFor(() => expect(isLoading(boxOf(wrapper, jobType))).toBe(false))
+            const image = headerOf(boxOf(wrapper, jobType)).find('img')
+            expect(image.exists() ? image.attributes('src') : null).toBe(logo)
+            expect(iconNamesIn(headerOf(boxOf(wrapper, jobType)))).toEqual(icons)
+        })
 
     it.each(BOX_JOBS)('GIVEN no run of $jobType WHEN the box loads THEN it says so, with no loading state', async ({jobType}) => {
         jobRuns.list = []

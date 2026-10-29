@@ -254,7 +254,8 @@ After the scenario, the scene puts back the member's settings. The rows the scen
 `createdRows`, and the AfterAll deletes them when the worker ends, as the specs' afterAll does. Each cleanup step
 runs, and the failed steps fail their hook together (`AggregateError`). A team creation rewrites every team of the
 shared season: `workerTeams` holds the teams a Background sets up with their dinners, and the worker's scenarios share
-one creation (`chef-page.feature`).
+one creation (`chef-page.feature`). A dinner alone on its day goes into `scene.dayDinnerIds` and is removed when the
+scenario ends: the singleton season has fewer free days than the workers hold at once.
 
 ```gherkin
 @smoke

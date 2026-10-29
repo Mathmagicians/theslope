@@ -13,6 +13,7 @@
  * - Settings tab: Settings
  */
 import {HELP_TEXTS} from '~/config/help-texts'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR, ALERTS, NOISE } = useTheSlopeDesignSystem()
 const now = useClock()
@@ -156,7 +157,7 @@ useHead({
   meta: [
     {
       name: "description",
-      content: `Tilmeldinger for husstanden ${shortname.value}`,
+      content: HOUSEHOLD_WORDS.page.description(shortname.value),
     },
   ],
 })
@@ -166,10 +167,10 @@ useHead({
   <div>
     <ViewError
 v-if="isHouseholdsErrored" :error="householdsError?.statusCode"
-               :message="`Kunne ikke hente husstande`" :cause="householdsError"/>
+               :message="HOUSEHOLD_WORDS.failed.households" :cause="householdsError"/>
     <ViewError
 v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
-               :message="`Kunne ikke hente data for husstanden ${shortname}`" :cause="selectedHouseholdError"/>
+               :message="HOUSEHOLD_WORDS.failed.householdPage(shortname)" :cause="selectedHouseholdError"/>
     <Loader v-else-if="!isHouseholdsStoreReady" :text="`Henter husstanden ${shortname}`"/>
     <UCard v-else v-bind="COMPONENTS.householdPage.card">
       <!-- Household status ribbon -->
@@ -195,14 +196,14 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
             v-bind="{...ALERTS.info, ...ALERTS.withActions}"
             data-testid="visitor-banner"
             :icon="ICONS.viewOnly"
-            title="Du besøger nu en anden husstand end din egen"
-            description="Kigge, ikke røre"
+            :title="HOUSEHOLD_WORDS.page.visitor.title"
+            :description="HOUSEHOLD_WORDS.page.visitor.description"
           >
             <template v-if="showAdminOverride" #actions>
               <DangerButton
                 data-testid="admin-override-btn"
-                label="Admin røre alligevel"
-                confirm-label="Klik igen for at låse op"
+                :label="HOUSEHOLD_WORDS.page.visitor.override"
+                :confirm-label="HOUSEHOLD_WORDS.page.visitor.confirmOverride"
                 :icon="ICONS.authorize"
                 :initial-color="COLOR.info"
                 :initial-variant="NOISE.subtle"
@@ -217,7 +218,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
             v-bind="{...ALERTS.warning, ...ALERTS.withActions}"
             data-testid="admin-override-active"
             :icon="ICONS.authorize"
-            title="Admin rører, men forsigtigt"
+            :title="HOUSEHOLD_WORDS.page.override.title"
           >
             <template #actions>
               <UButton
@@ -227,7 +228,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
                 :icon="ICONS.xMark"
                 @click="adminOverrideArmed = false"
               >
-                Afslut
+                {{ HOUSEHOLD_WORDS.page.override.exit }}
               </UButton>
             </template>
           </UAlert>

@@ -82,6 +82,16 @@ Then('the invoices of the period are ordered by address, then PBS number', async
     expect(invoices.map(invoice => invoice.id)).toEqual([...invoices].sort(byAddressThenPbsId).map(invoice => invoice.id))
 })
 
+Then('the transactions of each invoice add up to its amount', async ({adminContext: admin, scene}) => {
+    const {invoices} = await BillingFactory.getBillingPeriodById(admin, await periodOf(admin, scene))
+    for (const {id} of scene.billedHouseholds) {
+        const invoice = invoices.find(invoice => invoice.householdId === id)
+        expect(invoice, `household ${id} has an invoice`).toBeDefined()
+        const transactions = await BillingFactory.getInvoiceTransactions(admin, invoice!.id)
+        expect(transactions.reduce((sum, transaction) => sum + transaction.amount, 0), `invoice ${invoice!.id}`).toBe(invoice!.amount)
+    }
+})
+
 When('{actor} opens the period\'s accountant link', async ({adminContext: admin, scene}, actor: Actor) => {
     const {shareToken} = await BillingFactory.getBillingPeriodById(admin, await periodOf(admin, scene))
     scene.publicPeriod = await BillingFactory.getBillingPeriodByToken(contextOfActor(scene, actor), shareToken)

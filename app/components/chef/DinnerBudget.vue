@@ -37,6 +37,7 @@ import type { OrderDetail } from '~/composables/useBookingValidation'
 import type { Expense } from '~/composables/useBillingValidation'
 import type { DinnerSpendingFragment, TeamSpendingFragment } from '~/composables/useBookingUi'
 import type {TableColumn} from '@nuxt/ui'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 interface Props {
   orders: OrderDetail[]
@@ -145,13 +146,13 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
             <span :class="COMPONENTS.dinnerBudget.boxLabelText">RÅDIGHEDSBELØB</span>
           </div>
           <div :class="COMPONENTS.dinnerBudget.boxAmountLarge"><VatAmount :gross="budget.availableBudget" /></div>
-          <div :class="COMPONENTS.dinnerBudget.boxUnit">ex / inkl. moms</div>
+          <div :class="COMPONENTS.dinnerBudget.boxUnit">{{ BOOKING_WORDS.vatUnits }}</div>
           <div :class="COMPONENTS.dinnerBudget.boxLine">
-            <span>Brugt</span>
+            <span>{{ BOOKING_WORDS.allowance.spent }}</span>
             <VatAmount :gross="spent" data-testid="budget-spent" />
           </div>
           <div :class="COMPONENTS.dinnerBudget.boxLine">
-            <span>Tilbage</span>
+            <span>{{ BOOKING_WORDS.allowance.left }}</span>
             <VatAmount :gross="left" balance :pending="spendingAwaitsTickets(figures)" data-testid="budget-left" />
           </div>
         </div>
@@ -165,7 +166,7 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
             <span :class="COMPONENTS.dinnerBudget.boxLabelText">KØKKENBIDRAG</span>
           </div>
           <div :class="COMPONENTS.dinnerBudget.boxAmountLarge"><VatAmount :gross="budget.kitchenContribution" /></div>
-          <div :class="COMPONENTS.dinnerBudget.boxUnit">ex / inkl. moms</div>
+          <div :class="COMPONENTS.dinnerBudget.boxUnit">{{ BOOKING_WORDS.vatUnits }}</div>
           <div :class="COMPONENTS.dinnerBudget.boxUnit">{{ budget.kitchenBaseRatePercent }}% af indtægter</div>
         </div>
       </UCard>
@@ -193,7 +194,7 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
             <td :class="COMPONENTS.table.sumAmountCell"><span :class="COMPONENTS.dinnerBudget.summaryDeduction">-<VatAmount :gross="budget.kitchenContribution" /></span></td>
           </tr>
           <tr :class="COMPONENTS.table.totalRow" data-testid="budget-summary-available">
-            <td :class="COMPONENTS.table.sumCell" colspan="3">Rådighedsbeløb</td>
+            <td :class="COMPONENTS.table.sumCell" colspan="3">{{ BOOKING_WORDS.allowance.budget }}</td>
             <td :class="COMPONENTS.table.sumAmountCell"><VatAmount :gross="budget.availableBudget" /></td>
           </tr>
         </template>

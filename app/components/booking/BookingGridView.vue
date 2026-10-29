@@ -163,7 +163,7 @@
  * │ Anna V           │ [mode]│   -[mode]-   │ <- the ticket she held, struck through
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
-import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, ScaffoldOrdersRequest} from '~/composables/useBookingValidation'
+import type {BookingIntent, DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, ScaffoldOrdersRequest} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
@@ -172,7 +172,7 @@ import {compareAsc, isSameDay} from 'date-fns'
 import {BookingViewSchema, BookingRowTypeSchema, type BookingView, type BookingRowType} from '~/composables/useBookingView'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import type {DateRange} from '~/types/dateTypes'
-import {EMPTY_RELEASED_TICKET_COUNTS, bookingContextOf, type BookingChanges, type BookingContext, type BookingIntent, type GuestBookingIntent, type ReleasedTicketCounts, type WaitlistEntryIntent} from '~/composables/useBooking'
+import {EMPTY_RELEASED_TICKET_COUNTS, bookingContextOf, type BookingChanges, type BookingContext, type GuestBookingIntent, type ReleasedTicketCounts, type WaitlistEntryIntent} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
@@ -627,15 +627,19 @@ const contextOf = (event: DinnerEventDisplay): BookingContext => householdContex
 // The cell slots render inside UTable's render: a fresh array per render makes every selector patch on every click, one array per cell lets Vue skip the untouched ones
 const enabledModesByCell = computed(() => {
   const eventById = new Map(flatEvents.value.map(event => [event.id, event]))
-  const inhabitantCells = flatEvents.value.flatMap(event => props.household.inhabitants.map(({id}) => [
-    expectedBookingKey(id, event.id),
-    getBookingOptions({
-      order: personOn.value(id, event.id).order,
-      waitlistEntry: personOn.value(id, event.id).waitlistEntry ?? null,
-      candidate: dinnerMode => buildDesiredOrders([cellIntent(id, event.id, dinnerMode)], props.orders, props.household.inhabitants, props.dinnerEvents, props.ticketPrices)[0] ?? null
-    }, contextOf(event))
-  ] as const))
-  const cells = new Map<string, DinnerMode[]>(inhabitantCells)
+  // Each column's inhabitant cells, which its power cell intersects
+  const columns = flatEvents.value.map(event => ({
+    event,
+    inhabitantCells: props.household.inhabitants.map(({id}) => [
+      expectedBookingKey(id, event.id),
+      getBookingOptions({
+        order: personOn.value(id, event.id).order,
+        waitlistEntry: personOn.value(id, event.id).waitlistEntry ?? null,
+        candidate: dinnerMode => buildDesiredOrders([cellIntent(id, event.id, dinnerMode)], props.orders, props.household.inhabitants, props.dinnerEvents, props.ticketPrices)[0] ?? null
+      }, contextOf(event))
+    ] as const)
+  }))
+  const inhabitantCells = columns.flatMap(column => column.inhabitantCells)
   const guestCells = guestRows.value.map(({id, guestOrders, waitlistEntry, dinnerEventId}) => {
     const event = eventById.get(dinnerEventId!)!
     const row = waitlistEntry
@@ -643,8 +647,8 @@ const enabledModesByCell = computed(() => {
       : {order: guestOrders![0]!, waitlistEntry: null, candidate: (dinnerMode: DinnerMode) => buildGuestDesiredOrders([{guestOrders: guestOrders!, dinnerMode}], props.ticketPrices)[0] ?? null}
     return [id, getBookingOptions(row, contextOf(event))] as const
   })
-  const eventCells = flatEvents.value.flatMap(event => [
-    [`power-${event.id}`, powerOptions(props.household.inhabitants.map(({id}) => cells.get(expectedBookingKey(id, event.id))!))] as const,
+  const eventCells = columns.flatMap(({event, inhabitantCells: columnCells}) => [
+    [`power-${event.id}`, powerOptions(columnCells.map(([, modes]) => modes))] as const,
     [`guest-add-${event.id}`, getBookingOptions(newGuestRow(props.bookerId, event.id, props.ticketPrices), contextOf(event))] as const
   ])
   return new Map<string, DinnerMode[]>([...inhabitantCells, ...guestCells, ...eventCells])
@@ -670,11 +674,12 @@ const residencyAlert = computed(() => {
   return getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate, now.value)
 })
 
-// The column header's lock chip on a locked dinner shows the dinner's supply, as the dinner calendar's: it waits with the rows
-const getEventLockChip = (event: DinnerEventDisplay) => {
-  if (props.loading || canBookEvent(event)) return null
-  return lockChip(event, props.lockStatus, now.value)
-}
+// The column header's lock chip on a locked dinner shows the dinner's supply, as the dinner calendar's: it waits with the
+// rows. Read once per header, keyed by its dinner, so the template narrows the chip
+const headerLockChipOf = (event: DinnerEventDisplay) => ({
+  key: event.id,
+  chip: props.loading || canBookEvent(event) ? null : lockChip(event, props.lockStatus, now.value)
+})
 
 // ============================================================================
 // NAVIGATION
@@ -792,17 +797,21 @@ const getEventSummary = (eventId: number) => {
             >
               {{ DINNER_STATE_BADGES.CANCELLED.label }}
             </UBadge>
-            <UChip
-              v-else-if="getEventLockChip(event)"
-              v-bind="COMPONENTS.bookingGrid.lockChip"
-              :color="getEventLockChip(event)!.color"
-              :text="getEventLockChip(event)!.text"
-              :ui="getEventLockChip(event)!.icon ? COMPONENTS.dinnerCalendar.queueChip.ui : undefined"
-            >
-              <template v-if="getEventLockChip(event)!.icon" #content>
-                <UIcon :name="getEventLockChip(event)!.icon!" :class="COMPONENTS.dinnerCalendar.queueChip.icon" />
+            <template v-else>
+              <template v-for="{key, chip} in [headerLockChipOf(event)]" :key="key">
+                <UChip
+                  v-if="chip"
+                  v-bind="COMPONENTS.bookingGrid.lockChip"
+                  :color="chip.color"
+                  :text="chip.text"
+                  :ui="chip.icon ? COMPONENTS.dinnerCalendar.queueChip.ui : undefined"
+                >
+                  <template v-if="chip.icon" #content>
+                    <UIcon :name="chip.icon" :class="COMPONENTS.dinnerCalendar.queueChip.icon" />
+                  </template>
+                </UChip>
               </template>
-            </UChip>
+            </template>
           </div>
         </div>
       </template>

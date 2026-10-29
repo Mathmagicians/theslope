@@ -307,7 +307,7 @@ describe('ChefMenuCard — release portions', () => {
         const wrapper = await mountChefCard(queue)
 
         expect(findByTestId(wrapper, WAITLIST_TEST_IDS.chefAlert).text())
-            .toContain(`${SUPPLY_WORDS.queuedCount({queuedFormatted})} · ${formatPortions(queue.portions)} portioner`)
+            .toContain(`${SUPPLY_WORDS.queuedCount(queuedFormatted)} · ${formatPortions(queue.portions)} portioner`)
     })
 
     it.each([

@@ -376,6 +376,7 @@ describe('deadlinesForSeason', () => {
     // Default season config (matches app.config.ts defaults)
     // Note: booking deadline (8 days) is from season, menu deadline (10 days) is from config
     const defaultSeasonConfig = {
+        ...SeasonFactory.defaultSeason(),
         ticketIsCancellableDaysBefore: 8,  // Booking deadline (from season)
         diningModeIsEditableMinutesBefore: 60
     }
@@ -420,7 +421,7 @@ describe('deadlinesForSeason', () => {
 
         it('should use season-specific deadline value', () => {
             // GIVEN: Season with short 2-day deadline
-            const shortDeadlineSeason = { ticketIsCancellableDaysBefore: 2, diningModeIsEditableMinutesBefore: 60 }
+            const shortDeadlineSeason = { ...defaultSeasonConfig, ticketIsCancellableDaysBefore: 2 }
             const { canModifyOrders: shortDeadlineCheck } = deadlinesForSeason(shortDeadlineSeason, new Date())
 
             // Dinner 3 days from now

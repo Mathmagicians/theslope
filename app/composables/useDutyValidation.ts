@@ -41,13 +41,15 @@ export const useDutyValidation = () => {
     })
 
     type JokerSlot = z.infer<typeof JokerSlotSchema>
+    type JokerSlotCreate = z.infer<typeof JokerSlotCreateSchema>
+    type SerializedJokerSlot = z.infer<typeof SerializedJokerSlotSchema>
 
-    const serializeJokerSlot = <T extends Pick<JokerSlot, 'affinity'>>(slot: T): Omit<T, 'affinity'> & {affinity: string} => ({
+    const serializeJokerSlot = <T extends JokerSlotCreate>(slot: T): Omit<T, 'affinity'> & {affinity: string} => ({
         ...slot,
         affinity: serializeWeekDayMap(slot.affinity)
     })
 
-    const deserializeJokerSlot = (serialized: z.infer<typeof SerializedJokerSlotSchema>): JokerSlot => JokerSlotSchema.parse({
+    const deserializeJokerSlot = (serialized: SerializedJokerSlot): JokerSlot => JokerSlotSchema.parse({
         ...serialized,
         affinity: deserializeWeekDayMap(serialized.affinity)
     })

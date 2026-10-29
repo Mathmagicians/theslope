@@ -5,6 +5,7 @@ import {addDays, addMonths, endOfMonth, startOfMonth} from 'date-fns'
 import DinnerCalendarDisplay from '~/components/calendar/DinnerCalendarDisplay.vue'
 import {DEADLINE_LABELS, EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
 import CalendarLegend from '~/components/calendar/CalendarLegend.vue'
+import CountdownTimer, {COUNTDOWN_PALETTE} from '~/components/calendar/CountdownTimer.vue'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {DATE_WORDS} from '~/config/dateWords'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -70,7 +71,7 @@ describe('DinnerCalendarDisplay lock chips', () => {
         chips.forEach(({desc, dinner, text, glyphs}) => {
             const chip = chipOf(wrapper, dinner.date)
             expect(chip?.textContent?.trim(), desc).toBe(text)
-            expect(iconNamesIn(new DOMWrapper(chip!)), desc).toEqual(glyphs)
+            expect(iconNamesIn(new DOMWrapper(chip)), desc).toEqual(glyphs)
         })
         expect(chipOf(wrapper, OPEN.date)).toBeNull()
 
@@ -91,7 +92,7 @@ describe('DinnerCalendarDisplay lock chips', () => {
             const entry = findAllByTestId(wrapper, 'calendar-legend-entry').find(candidate => candidate.text().includes(label))
             const chip = entry?.find('[data-slot="base"]').element ?? null
             expect(chip?.textContent?.trim(), label).toBe(text)
-            expect(iconNamesIn(new DOMWrapper(chip!)), label).toEqual(glyphs)
+            expect(iconNamesIn(new DOMWrapper(chip)), label).toEqual(glyphs)
         })
     })
 })
@@ -163,5 +164,26 @@ describe('DinnerCalendarDisplay day circles', () => {
         expect(phone).toEqual(expect.arrayContaining(CALENDAR.day.size.split(' ')))
         expect(await circleClasses(true)).toEqual(phone)
         expect(await circleClasses(null)).toEqual(phone)
+    })
+})
+
+describe('DinnerCalendarDisplay words', () => {
+    beforeEach(() => {
+        resetStores()
+    })
+
+    it('the countdown reads the next dinner\'s words in the dinner palette, and the accordion its title', async () => {
+        const wrapper = await mountWithTooltipProvider(DinnerCalendarDisplay, {
+            props: {seasonDates: {start: MONTH, end: endOfMonth(MONTH)}, holidays: [], showCountdown: true, selectedDate: MONTH},
+            isMd: true
+        })
+
+        expect(wrapper.findComponent(CountdownTimer).props()).toMatchObject({
+            title: BOOKING_WORDS.calendar.countdownTitle,
+            timeLabel: BOOKING_WORDS.calendar.countdownTimeLabel,
+            emptyText: DATE_WORDS.countdown.none,
+            palette: COUNTDOWN_PALETTE.dinner
+        })
+        expect(wrapper.text()).toContain(BOOKING_WORDS.calendar.title)
     })
 })

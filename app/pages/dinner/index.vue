@@ -71,7 +71,6 @@ planStore.selectTeam(() => dinnerEventDetail.value?.cookingTeamId ?? null)
 // Derive needed data from store
 const seasonDates = computed(() => selectedSeason.value?.seasonDates)
 const holidays = computed(() => selectedSeason.value?.holidays ?? [])
-const cookingDays = computed(() => selectedSeason.value?.cookingDays)
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 
 const {deadlinesForSeason} = useSeason()
@@ -176,7 +175,6 @@ useHead({
             v-if="seasonDates && selectedDate"
             v-model:calendar-open="calendarOpen"
             :season-dates="seasonDates"
-            :cooking-days="cookingDays"
             :holidays="holidays"
             :dinner-events="dinnerEvents"
             :lock-status="lockStatus"

@@ -605,7 +605,7 @@ const handleCardClick = () => {
           v-if="isEditing && hasQueue && !isAddingExtraPortions && canCancelDinner(dinnerEvent)"
           v-bind="{...ALERTS.info, ...ALERTS.withActions}"
           :icon="ICONS.waitlist"
-          :title="`${SUPPLY_WORDS.queuedCount({queuedFormatted})} · ${formatPortions(waitlist!.portions)} portioner`"
+          :title="`${SUPPLY_WORDS.queuedCount(queuedFormatted)} · ${formatPortions(waitlist!.portions)} portioner`"
           :description="SUPPLY_WORDS.chefAsk(waitlist!.entries)"
           :class="COMPONENTS.chefMenuCard.alertGap"
           data-testid="chef-waitlist-alert"

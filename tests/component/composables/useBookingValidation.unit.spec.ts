@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest'
-import {useBookingValidation, type OrderAuditAction, type OrderHistoryDisplay} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDetail, type OrderAuditAction, type OrderHistoryDisplay} from '~/composables/useBookingValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import type {PortionTicket} from '~/composables/useTicketPriceValidation'
@@ -190,10 +190,7 @@ describe('useBookingValidation', () => {
     describe('deserializeDinnerEvent', () => {
       it('GIVEN allergens as join table WHEN deserializing THEN flattens to array', () => {
         const mockAllergyTypes = AllergyFactory.createMockAllergyTypes()
-        const prismaEvent = {
-          ...DinnerEventFactory.defaultDinnerEventDisplay(),
-          allergens: mockAllergyTypes.map(at => ({allergyType: at}))
-        }
+        const prismaEvent = DinnerEventFactory.serializedDinnerEvent({allergens: mockAllergyTypes.map(at => ({allergyType: at}))})
         const result = deserializeDinnerEvent(prismaEvent)
         expect(result.allergens).toBeDefined()
         expect(result.allergens).toHaveLength(2)
@@ -201,17 +198,14 @@ describe('useBookingValidation', () => {
       })
 
       it('GIVEN null allergens WHEN deserializing THEN returns empty array', () => {
-        const prismaEvent = {
-          ...DinnerEventFactory.defaultDinnerEventDisplay(),
-          allergens: null
-        }
+        const prismaEvent = DinnerEventFactory.serializedDinnerEvent({allergens: null})
         const result = deserializeDinnerEvent(prismaEvent)
         expect(result.allergens).toEqual([])
       })
 
       // The arithmetic of the sum, an empty relation included, is sumAmounts' (utils/ledger.unit.spec.ts)
       it('GIVEN expense rows WHEN deserializing THEN the cost is their sum and the stored column is discarded', () => {
-        const prismaEvent = {...DinnerEventFactory.defaultDinnerEventDisplay(), totalCost: 99, expenses: [{amount: 101200}, {amount: 29800}]}
+        const prismaEvent = DinnerEventFactory.serializedDinnerEvent({totalCost: 99, expenses: [{amount: 101200}, {amount: 29800}]})
         const result = deserializeDinnerEvent(prismaEvent)
         expect(result.totalCost).toBe(131000)
         expect(result).not.toHaveProperty('expenses')
@@ -223,9 +217,8 @@ describe('useBookingValidation', () => {
       const withPortions = <T extends PortionTicket>(ticketPrice: T) => ({...ticketPrice, portions: 0.5})
 
       it('GIVEN a ticket with its price row WHEN deserializing THEN the row carries the portions the lookup gives it', () => {
-        const ticket = {...OrderFactory.defaultOrderDetail(), inhabitant: null}
-        const result = deserializeDinnerEventDetail(DinnerEventFactory.defaultSerializedDinnerEventDetail({tickets: [ticket]}), withPortions)
-        expect((result.tickets as Array<{ticketPrice: {portions: number}}>)[0]!.ticketPrice.portions).toBe(0.5)
+        const result = deserializeDinnerEventDetail(DinnerEventFactory.defaultSerializedDinnerEventDetail({tickets: [DinnerEventFactory.serializedTicket()]}), withPortions)
+        expect(result.tickets![0]!.ticketPrice!.portions).toBe(0.5)
       })
 
       it('GIVEN expense rows WHEN deserializing THEN the lines are domain rows, the cost is their sum and the ticket reference carries it', () => {
@@ -234,15 +227,14 @@ describe('useBookingValidation', () => {
           ExpenseFactory.defaultExpense({id: 1, amount: 101200}),
           ExpenseFactory.defaultExpense({id: 2, amount: 29800, paidByUserId: null, paidBy: {id: null, email: ''}})
         ]
-        const ticket = {...OrderFactory.defaultOrderDetail(), ticketPrice: {ticketType: TicketTypeSchema.enum.ADULT}, inhabitant: null}
-        const result = deserializeDinnerEventDetail({
-          ...DinnerEventFactory.defaultSerializedDinnerEventDetail({tickets: [ticket]}),
+        const result = deserializeDinnerEventDetail(DinnerEventFactory.defaultSerializedDinnerEventDetail({
+          tickets: [DinnerEventFactory.serializedTicket()],
           totalCost: 99,
           expenses: rows.map(serializeExpense)
-        }, withPortions)
+        }), withPortions)
         expect(result.totalCost).toBe(131000)
         expect(result.expenses).toEqual(rows)
-        expect((result.tickets as Array<{dinnerEvent: {totalCost: number}}>)[0]!.dinnerEvent.totalCost).toBe(131000)
+        expect(result.tickets![0]!.dinnerEvent.totalCost).toBe(131000)
       })
 
       // Use real serialize methods to generate test data (ADR-010)
@@ -259,9 +251,9 @@ describe('useBookingValidation', () => {
           input: () => DinnerEventFactory.defaultSerializedDinnerEventDetail({
             chef: DinnerEventFactory.serializedInhabitant(SERIALIZED_PREFERENCES)
           }),
-          assertion: (result: Record<string, unknown>) => {
-            expect(typeof (result.chef as Record<string, unknown>).dinnerPreferences).toBe('object')
-            expect((result.chef as Record<string, unknown>).dinnerPreferences).toHaveProperty('mandag')
+          assertion: (result: DinnerEventDetail) => {
+            expect(typeof result.chef!.dinnerPreferences).toBe('object')
+            expect(result.chef!.dinnerPreferences).toHaveProperty('mandag')
           }
         },
         {
@@ -269,14 +261,14 @@ describe('useBookingValidation', () => {
           input: () => DinnerEventFactory.defaultSerializedDinnerEventDetail({
             chef: DinnerEventFactory.serializedInhabitant(null)
           }),
-          assertion: (result: Record<string, unknown>) => {
-            expect((result.chef as Record<string, unknown>).dinnerPreferences).toBeNull()
+          assertion: (result: DinnerEventDetail) => {
+            expect(result.chef!.dinnerPreferences).toBeNull()
           }
         },
         {
           desc: 'null chef',
           input: () => DinnerEventFactory.defaultSerializedDinnerEventDetail({chef: null}),
-          assertion: (result: Record<string, unknown>) => {
+          assertion: (result: DinnerEventDetail) => {
             expect(result.chef).toBeNull()
           }
         },
@@ -285,20 +277,19 @@ describe('useBookingValidation', () => {
           input: () => DinnerEventFactory.defaultSerializedDinnerEventDetail({
             cookingTeam: DinnerEventFactory.serializedCookingTeam(SERIALIZED_AFFINITY)
           }),
-          assertion: (result: Record<string, unknown>) => {
-            expect(typeof (result.cookingTeam as Record<string, unknown>).affinity).toBe('object')
-            expect((result.cookingTeam as Record<string, unknown>).affinity).toHaveProperty('mandag')
+          assertion: (result: DinnerEventDetail) => {
+            expect(typeof result.cookingTeam!.affinity).toBe('object')
+            expect(result.cookingTeam!.affinity).toHaveProperty('mandag')
           }
         },
         {
           desc: 'ticket inhabitant with dinnerPreferences JSON string',
           input: () => DinnerEventFactory.defaultSerializedDinnerEventDetail({
-            tickets: [{id: 1, inhabitant: DinnerEventFactory.serializedInhabitant(SERIALIZED_PREFERENCES)}]
+            tickets: [DinnerEventFactory.serializedTicket({inhabitant: {...DinnerEventFactory.serializedInhabitant(SERIALIZED_PREFERENCES), allergies: []}})]
           }),
-          assertion: (result: Record<string, unknown>) => {
-            const tickets = result.tickets as Array<Record<string, unknown>>
-            expect(tickets[0]).toBeDefined()
-            const inhabitant = tickets[0]!.inhabitant as Record<string, unknown>
+          assertion: (result: DinnerEventDetail) => {
+            expect(result.tickets?.[0]).toBeDefined()
+            const inhabitant = result.tickets![0]!.inhabitant
             expect(typeof inhabitant.dinnerPreferences).toBe('object')
             expect(inhabitant.dinnerPreferences).toHaveProperty('mandag')
           }
@@ -311,10 +302,9 @@ describe('useBookingValidation', () => {
       it('GIVEN a ticket inhabitant with allergies WHEN deserializing THEN keeps each allergy with its allergy type', () => {
         const allergies = AllergyFactory.serializedAllergies(2)
         const result = deserializeDinnerEventDetail(DinnerEventFactory.defaultSerializedDinnerEventDetail({
-          tickets: [{id: 1, inhabitant: {...DinnerEventFactory.serializedInhabitant(SERIALIZED_PREFERENCES), allergies}}]
+          tickets: [DinnerEventFactory.serializedTicket({inhabitant: {...DinnerEventFactory.serializedInhabitant(SERIALIZED_PREFERENCES), allergies}})]
         }), withPortions)
-        const tickets = result.tickets as Array<{inhabitant: {allergies: Array<{allergyType: unknown}>}}>
-        expect(tickets[0]!.inhabitant.allergies.map(a => a.allergyType)).toEqual(allergies.map(a => a.allergyType))
+        expect(result.tickets![0]!.inhabitant.allergies.map(a => a.allergyType)).toEqual(allergies.map(a => a.allergyType))
       })
     })
   })

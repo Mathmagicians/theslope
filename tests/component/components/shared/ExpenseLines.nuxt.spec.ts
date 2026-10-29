@@ -9,7 +9,8 @@ import {useOrder} from '~/composables/useOrder'
 import {useTicket} from '~/composables/useTicket'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, kitchenConfig, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, kitchenConfig, resetStores, tableHeaders} from '~~/tests/component/testHelpers'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 enableAutoUnmount(afterEach)
 
@@ -82,7 +83,7 @@ describe('ExpenseLines', () => {
             expect(findByTestId(wrapper, 'expense-row').text()).toContain('Madbestilling')
             expect(findByTestId(wrapper, 'expense-total').text()).toContain(formatPrice(exOf(spent)))
             expect(findByTestId(wrapper, 'expense-total').text()).toContain(`/ ${formatPrice(spent)} kr`)
-            expect(findByTestId(wrapper, 'expense-row').text()).toContain('ex / inkl. moms')
+            expect(findByTestId(wrapper, 'expense-row').text()).toContain(BOOKING_WORDS.vatUnits)
             expect(lineRows(wrapper)).toHaveLength(0)
             expect(findByTestId(wrapper, 'expense-form').exists()).toBe(false)
             expect(findByTestId(wrapper, 'expense-table').exists()).toBe(false)
@@ -191,6 +192,7 @@ describe('ExpenseLines', () => {
         it('GIVEN no lines WHEN open THEN the table says so under its headers and the form is ready', async () => {
             const wrapper = await mount({editable: true, expenses: []})
             await open(wrapper)
+            expect(tableHeaders(wrapper)).toContain(BOOKING_WORDS.vatUnits)
             expect(findByTestId(wrapper, 'expense-table-empty').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noReceipts', new Date()).text)
             expect(lineRows(wrapper)).toHaveLength(0)
             expect(findByTestId(wrapper, 'expense-form').exists()).toBe(true)

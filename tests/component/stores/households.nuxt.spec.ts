@@ -19,6 +19,8 @@ import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
 import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { useHouseholdsStore } from '~/stores/households'
+import { API_ERROR_WORDS } from '~/config/apiErrorWords'
+import { HOUSEHOLD_WORDS } from '~/config/householdWords'
 import { useBookingsStore } from '~/stores/bookings'
 const Action = useBookingValidation().BookingActionSchema.enum
 const DinnerMode = useBookingValidation().DinnerModeSchema.enum
@@ -824,7 +826,7 @@ describe('Households Store - household selection', () => {
     await vi.waitFor(() => expect(householdIndexEndpoint.mock.calls.length).toBeGreaterThan(householdListRequests))
     await vi.waitFor(() => expect(store.selectedHousehold?.id).toBe(mine!.id))
     expect(store.selectedHouseholdId).toBe(mine!.id)
-    expect(useToast().toasts.value.at(-1)?.title).toBe(`Kan ikke finde husstanden ${gone.shortName}`)
+    expect(useToast().toasts.value.at(-1)?.title).toBe(API_ERROR_WORDS.notFoundOf(HOUSEHOLD_WORDS.notFound, gone.shortName))
   })
 
   it('after a 404 the page\'s getter still drives the selection', async () => {

@@ -1,10 +1,10 @@
 import {subMinutes} from 'date-fns'
 import {
-    PlacementRecovery, type GrabbedWaitlistEntry, type PlacementOrder, type TicketWaitlistDisplay, type WaitlistPlacementOutcomes
+    PlacementRecovery, type GrabbedWaitlistEntry, type PlacementOrder, type TicketForSale, type TicketWaitlistDisplay, type WaitlistPlacementOutcomes
 } from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useTicket} from '~/composables/useTicket'
-import {OrderState, type OrderDisplay, type TicketSale, type TicketType, type WaitlistJoined} from '~/composables/useBookingValidation'
+import {OrderState, type TicketSale, type TicketType, type WaitlistJoined} from '~/composables/useBookingValidation'
 import {groupBy} from '~/utils/batchUtils'
 import {sumBy} from '~/utils/ledger'
 
@@ -15,9 +15,6 @@ export const byTimeThenId = <T extends {id: number}>(getTime: (item: T) => numbe
 type PortionsOf = (entry: TicketWaitlistDisplay) => number
 type TicketTypeOf = (entry: TicketWaitlistDisplay) => TicketType | undefined
 type IsHeld = (entry: TicketWaitlistDisplay) => boolean
-
-/** A ticket for sale: a released order, its inhabitant and the household that sells it */
-export type TicketForSale = Pick<OrderDisplay, 'id' | 'dinnerEventId' | 'ticketPriceId' | 'releasedAt' | 'inhabitantId'> & {householdId: number}
 
 interface WaitlistTake {
     entry: TicketWaitlistDisplay
@@ -82,12 +79,12 @@ export const useWaitlist = () => {
     // takes that type's tickets on its dinner, oldest released first
     const previewSale = (
         entries: TicketWaitlistDisplay[], releasedOrders: TicketForSale[], ticketPrices: TicketPrice[]
-    ): Pick<WaitlistPlacementOutcomes, 'waitlistTicketsSold'> => {
+    ): TicketSale[] => {
         const typeOfPrice = ticketTypeOfPrice(ticketPrices)
         // A release without its moment sorts first, as the database orders a null first
         const oldestFirst = [...releasedOrders].sort(byTimeThenId(ticket => ticket.releasedAt?.getTime() ?? 0))
         const dinnerQueues = groupBy<TicketWaitlistDisplay, number>(entry => entry.dinnerEventId)(entries)
-        const waitlistTicketsSold = [...dinnerQueues].flatMap(([dinnerEventId, dinnerQueue]) =>
+        return [...dinnerQueues].flatMap(([dinnerEventId, dinnerQueue]) =>
             [...waitingLines(dinnerQueue, ticketTypeOfEntry(ticketPrices))].flatMap(([ticketType, line]) => {
                 const forSale = oldestFirst.filter(ticket => ticket.dinnerEventId === dinnerEventId && typeOfPrice(ticket.ticketPriceId) === ticketType)
                 return line.slice(0, forSale.length).map((buyer, index): TicketSale => ({
@@ -96,7 +93,6 @@ export const useWaitlist = () => {
                     sellerHouseholdId: forSale[index]!.householdId, sellerInhabitantId: forSale[index]!.inhabitantId
                 }))
             }))
-        return {waitlistTicketsSold}
     }
 
     // 1-based place in the line of the entry's ticket type, null when the entry is not in the queue

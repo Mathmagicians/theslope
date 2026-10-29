@@ -23,7 +23,8 @@ import {
     sortSeasonsByActivePriority,
     splitDinnerEvents,
     sortDinnerEventsByTemporal,
-    getEventsForGridView
+    getEventsForGridView,
+    TEMPORAL_CATEGORY
 } from '~/utils/season'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
@@ -1204,7 +1205,7 @@ describe('Active Season Management utilities', () => {
 
             // Order: next, future (ascending), past (descending - most recent first)
             expect(result.map(e => e.id)).toEqual([3, 4, 5, 2, 1])
-            expect(result.map(e => e.temporalCategory)).toEqual(['next', 'future', 'future', 'past', 'past'])
+            expect(result.map(e => e.temporalCategory)).toEqual([TEMPORAL_CATEGORY.next, TEMPORAL_CATEGORY.future, TEMPORAL_CATEGORY.future, TEMPORAL_CATEGORY.past, TEMPORAL_CATEGORY.past])
         })
 
         it('should handle null nextDinnerDateRange', () => {
@@ -1214,7 +1215,7 @@ describe('Active Season Management utilities', () => {
             const result = sortDinnerEventsByTemporal([pastEvent, futureEvent], null, referenceDate)
 
             expect(result.map(e => e.id)).toEqual([2, 1])
-            expect(result.map(e => e.temporalCategory)).toEqual(['future', 'past'])
+            expect(result.map(e => e.temporalCategory)).toEqual([TEMPORAL_CATEGORY.future, TEMPORAL_CATEGORY.past])
         })
     })
 

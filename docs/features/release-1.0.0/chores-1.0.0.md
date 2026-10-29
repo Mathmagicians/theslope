@@ -77,8 +77,8 @@ existing summary. Both are increments of exactly the transactions linked in this
 
 ### TDD
 
-`tests/e2e/api/serial/admin/maintenance.e2e.spec.ts`: after the first billing, transact one more order in the same
-period (order → consume → daily maintenance), run billing again → the household's invoice `amount` and the period's
+`tests/e2e/features/jobs/monthly-billing.feature`, a scenario: after the first billing, one more order in the same period
+(order → consume → daily maintenance), billing again → the household's invoice `amount` and the period's
 `totalAmount` / `ticketCount` include it, `version` is 2, `invoiceSum` = `transactionSum` on the period detail. The
 control sums (`useBilling` `controlInvoices` / `controlTransactions`) already assert equality.
 

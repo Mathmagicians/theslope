@@ -59,7 +59,6 @@
  */
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
 import type { TeamRole, CookingTeamAssignment, CookingTeamDisplay } from '~/composables/useCookingTeamValidation'
-import { ROLE_LABELS } from '~/composables/useCookingTeamValidation'
 import type { JokerSlotCreate } from '~/composables/useDutyValidation'
 import { TEAM_WORDS } from '~/config/teamWords'
 
@@ -349,7 +348,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             <UTooltip
               v-for="assignment in assignments"
               :key="assignment.id"
-              :text="`${assignment.inhabitant?.name} ${assignment.inhabitant?.lastName} (${ROLE_LABELS[assignment.role]})`"
+              :text="`${assignment.inhabitant?.name} ${assignment.inhabitant?.lastName} (${TEAM_WORDS.roles[assignment.role].label})`"
             >
               <UAvatar
                 :src="assignment.inhabitant?.pictureUrl ?? undefined"
@@ -408,7 +407,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             >
               <h5 :class="COMPONENTS.roleBox.heading" :data-testid="`team-role-heading-${role}`">
                 <UIcon :name="ROLE_ICONS[role]" :class="COMPONENTS.roleBox.glyph" />
-                <span>{{ ROLE_LABELS[role] }}</span>
+                <span>{{ TEAM_WORDS.roles[role].label }}</span>
               </h5>
 
               <div v-if="members.length > 0" :class="COMPONENTS.roleBox.memberList">
@@ -444,7 +443,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
               </div>
 
               <div v-else :class="COMPONENTS.roleBox.empty">
-                Ingen {{ ROLE_LABELS[role].toLowerCase() }}
+                Ingen {{ TEAM_WORDS.roles[role].label.toLowerCase() }}
               </div>
             </div>
 
@@ -459,7 +458,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   <span>{{ formatDateRange({start: slot.startDate, end: slot.endDate}) }}</span>
                   <WeekDayMapDisplay :model-value="slot.affinity" compact disabled />
                   <UIcon :name="ROLE_ICONS[slot.role]" :class="COMPONENTS.roleBox.glyph" />
-                  <span>{{ ROLE_LABELS[slot.role] }}</span>
+                  <span>{{ TEAM_WORDS.roles[slot.role].label }}</span>
                   <span v-if="slot.note">{{ slot.note }}</span>
                   <UBadge
                     v-bind="getCalendarCountBadge(teamNumber)"

@@ -410,7 +410,7 @@ describe('scaffoldToastLook', () => {
         {desc: 'a run with a failed order', errored: 1, color: COLOR.error},
         {desc: 'a run where every order landed', errored: 0, color: COLOR.success}
     ])('$desc toasts in $color with the ticket and breaks its lines', ({errored, color}) => {
-        expect(scaffoldToastLook({errored})).toEqual({color, icon: ICONS.ticket, ui: {description: COMPONENTS.bookingResult.lines}})
+        expect(scaffoldToastLook(OrderFactory.defaultScaffoldResult({errored}))).toEqual({color, icon: ICONS.ticket, ui: {description: COMPONENTS.bookingResult.lines}})
     })
 })
 

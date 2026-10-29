@@ -119,10 +119,12 @@ export type Scene = {
     memberSettings?: {userId: number, notificationChannels: NotificationChannel[], appearance: Appearance, phone: string | null}
     /** Where the scenario records the rows it creates: the worker's rows, removed when the worker ends (AfterAll) */
     created: CreatedRows
+    /** The dinners alone on their day, removed when the scenario ends: the season has fewer free days than workers need */
+    dayDinnerIds: number[]
 }
 
 const emptyScene = (created: CreatedRows): Scene => ({
-    jobRuns: [], people: {}, waiting: [], teams: [], teamDinners: [], households: {}, places: [], billedHouseholds: [],
+    jobRuns: [], people: {}, waiting: [], teams: [], teamDinners: [], households: {}, places: [], billedHouseholds: [], dayDinnerIds: [],
     created
 })
 
@@ -244,6 +246,13 @@ const attemptAll = async (what: string, steps: (() => Promise<unknown>)[]): Prom
     if (failures.length > 0) throw new AggregateError(failures, `${what} failed`)
 }
 
+/** Removes the scenario's dinners alone on their day: the day is free again for the next scenario */
+const deleteDayDinners = async (browser: Browser, {dayDinnerIds}: Scene): Promise<void> => {
+    if (dayDinnerIds.length === 0) return
+    const admin = await validatedBrowserContext(browser)
+    await Promise.all(dayDinnerIds.map(id => DinnerEventFactory.deleteDinnerEvent(admin, id))).finally(() => admin.close())
+}
+
 /** Puts back the member's settings the scenario changed: the next scenario reads them */
 const putBackMemberSettings = async (browser: Browser, {memberSettings}: Scene): Promise<void> => {
     if (!memberSettings) return
@@ -335,7 +344,7 @@ export const test = mergeTests(base, uiTest).extend<{adminContext: BrowserContex
     scene: async ({browser, createdRows}, use) => {
         const scene = emptyScene(createdRows)
         await use(scene)
-        await putBackMemberSettings(browser, scene)
+        await attemptAll('The scenario\'s cleanup', [() => deleteDayDinners(browser, scene), () => putBackMemberSettings(browser, scene)])
     }
 })
 

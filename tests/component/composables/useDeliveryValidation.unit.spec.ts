@@ -11,7 +11,7 @@ describe('deliveredVersions', () => {
         ['no rows', [], {[ARCHIVE]: 0, [EMAIL]: 0, [SMS]: 0}],
         ['several versions and a re-send', [{kind: ARCHIVE, version: 1}, {kind: EMAIL, version: 1}, {kind: ARCHIVE, version: 2}, {kind: EMAIL, version: 2}, {kind: EMAIL, version: 2}], {[ARCHIVE]: 2, [EMAIL]: 2, [SMS]: 0}]
     ] as const)('reduces %s to the highest version per kind', (_name, rows, expected) => {
-        expect(deliveredVersions([...rows])).toEqual(expected)
+        expect(deliveredVersions(rows.map(row => NotificationFactory.defaultDelivery(row)))).toEqual(expected)
     })
 })
 

@@ -4,14 +4,14 @@ import {useSeason, type BookingDeadlines} from "~/composables/useSeason"
 import {useBookingValidation, OrderState, type ScaffoldResult, type DesiredOrder, type DinnerMode, type DinnerState, type OrderAuditAction, type OrderSnapshot, type QueuePosition, type BookingOutcomes, type BookingAction, type BookingResult, type OrderDisplay, type TicketType, OrderAuditAction as AuditActions, BookingFailure} from "~/composables/useBookingValidation"
 import type {HouseholdDisplay} from "~/composables/useCoreValidation"
 import type {TicketPrice} from "~/composables/useTicketPriceValidation"
-import type {TicketWaitlistCreate, TicketWaitlistDisplay, WaitlistAuditContext, WaitlistOrder, WaitlistPlacementOutcomes} from "~/composables/useWaitlistValidation"
+import type {TicketForSale, TicketWaitlistCreate, TicketWaitlistDisplay, WaitlistAuditContext, WaitlistOrder, WaitlistPlacementOutcomes} from "~/composables/useWaitlistValidation"
 import type {WeekDay, WeekDayMap} from "~/types/dateTypes"
 import {dateToWeekDay} from "~/utils/season"
 import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets, bookingOutcomes, actionOfUpdate, countTotals} from "~/composables/useBooking"
 import {groupBy, partition, writeBatchOnce, writeBatchOrEach} from "~/utils/batchUtils"
 import {sellTicketsToWaitlist, joinWaitlist, previewJoinWaitlist, isClosedDinner} from "~~/server/utils/waitlistAssignment"
 import {fetchWaitlistForDinners, deleteWaitlistEntries, updateWaitlistEntryOrders, type WaitlistJoin} from "~~/server/data/waitlistRepository"
-import {useWaitlist, byTimeThenId, type TicketForSale} from "~/composables/useWaitlist"
+import {useWaitlist, byTimeThenId} from "~/composables/useWaitlist"
 import {isHouseholdActiveOnDay} from "~/composables/useHousehold"
 import {useTicket} from "~/composables/useTicket"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
@@ -154,7 +154,7 @@ const previewSupply = (d1Client: D1Database, ticketPrices: TicketPrice[], ticket
         entryRequeued: (entryId, order) => {
             requeued.set(entryId, order)
         },
-        sell: async dinnerEventIds => ({...previewSale(await queueOf(dinnerEventIds), [...tickets.values()], ticketPrices), waitlistPortionsAssigned: []})
+        sell: async dinnerEventIds => ({waitlistTicketsSold: previewSale(await queueOf(dinnerEventIds), [...tickets.values()], ticketPrices), waitlistPortionsAssigned: []})
     }
 }
 

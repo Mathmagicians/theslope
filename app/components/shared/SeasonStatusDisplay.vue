@@ -45,7 +45,7 @@ PAST SEASON:
 
 <script setup lang="ts">
 import {usePlanStore} from '~/stores/plan'
-import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import {SEASON_STATUS} from '~/config/seasonWords'
 
 interface Props {
   seasonId: number | null

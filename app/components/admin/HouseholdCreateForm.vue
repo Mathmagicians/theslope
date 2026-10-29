@@ -7,7 +7,7 @@
  * when no addresses exist (e.g. before first Heynabo sync).
  */
 import type {FormSubmitEvent, Form} from '@nuxt/ui'
-import type {HouseholdDisplay, HouseholdCreateFormData} from '~/composables/useCoreValidation'
+import type {HouseholdDisplay, HouseholdCreateFormData, HouseholdCreate, HouseholdMoveOut} from '~/composables/useCoreValidation'
 
 interface Props {
     existingHouseholds: HouseholdDisplay[]
@@ -15,18 +15,9 @@ interface Props {
 
 const props = defineProps<Props>()
 
-interface CreatePayload {
-    pbsId: number
-    address: string
-    movedInDate: Date
-    heynaboId: number
-    name: string
-    // Move-out dates to apply to existing prevOwners whose date changed or was null.
-    prevOwnerMoveOutUpdates: {id: number, moveOutDate: Date}[]
-}
-
+// The create carries the move-outs of the prevOwners whose date changed or was null
 const emit = defineEmits<{
-    create: [payload: CreatePayload]
+    create: [household: HouseholdCreate, prevOwnerMoveOutUpdates: HouseholdMoveOut[]]
     cancel: []
 }>()
 
@@ -121,9 +112,8 @@ const handleSubmit = async (event: FormSubmitEvent<HouseholdCreateFormData>) => 
             address: address.trim(),
             movedInDate,
             heynaboId: prevOwner.heynaboId,
-            name: prevOwner.name,
-            prevOwnerMoveOutUpdates
-        })
+            name: prevOwner.name
+        }, prevOwnerMoveOutUpdates)
     } finally {
         isSaving.value = false
     }

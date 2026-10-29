@@ -163,7 +163,8 @@ import {compareAsc, isSameDay} from 'date-fns'
 
 const BookingRow = BookingRowTypeSchema.enum
 
-interface TableRow {
+// A row as the table builds it, before the modes it may pick: those follow from what its save sends (enabledModesOf)
+interface FormRow {
   rowType: BookingRowType
   id: number | string
   name: string
@@ -175,7 +176,6 @@ interface TableRow {
   order: OrderDisplay | null
   orders?: OrderDisplay[] // For grouped guest orders
   dinnerMode: DinnerMode
-  enabledModes: DinnerMode[] // The modes the row may pick (getBookingOptions); none: the row is read-only
   waitlistEntry?: TicketWaitlistDetail // The inhabitant's own place in the queue, while they hold no ticket
   expected?: boolean // No order and no queue entry: the mode is the booking the preferences give the row
   consensus?: boolean // Power mode: true=all agree, false=mixed
@@ -189,8 +189,9 @@ interface TableRow {
   allergyTypes: AllergyTypeDisplay[] // The booked inhabitant's live allergy profile; empty for every other row
 }
 
-// The parts of a row its save reads
-type SavedRow = Pick<TableRow, 'rowType' | 'id' | 'order' | 'orders' | 'waitlistEntry'>
+interface TableRow extends FormRow {
+  enabledModes: DinnerMode[] // The modes the row may pick (getBookingOptions); none: the row is read-only
+}
 
 interface Props {
   household?: HouseholdDetail
@@ -357,7 +358,7 @@ const columns = computed(() => [
 const {myInhabitant: bookerInhabitant} = storeToRefs(householdsStore)
 
 // The modes a row may pick: the desired order its save sends for each mode, as the decision matrix lands it
-const enabledModesOf = (row: SavedRow): DinnerMode[] => getBookingOptions({
+const enabledModesOf = (row: FormRow): DinnerMode[] => getBookingOptions({
   order: row.order,
   waitlistEntry: row.waitlistEntry ?? null,
   candidate: dinnerMode => buildDesiredOrdersForRow(row, dinnerMode)[0] ?? null
@@ -462,7 +463,7 @@ const tableData = computed((): TableRow[] => {
 
   // EDIT mode: power + inhabitants + guest orders + add guest
   // Synthetic inhabitant for UserListItem consistency
-  const guestAddInhabitant = {
+  const guestAddInhabitant: InhabitantDisplay = {
     id: 0,
     name: 'Tilføj gæst',
     lastName: '',
@@ -471,7 +472,7 @@ const tableData = computed((): TableRow[] => {
     birthDate: null,
     householdId: 0,
     dinnerPreferences: null
-  } as InhabitantDisplay
+  }
 
   return [
     powerRow,
@@ -486,7 +487,7 @@ const tableData = computed((): TableRow[] => {
 // ============================================================================
 
 // Build desired orders for a row in a mode (DRY: the save, its preview and the row's modes)
-const buildDesiredOrdersForRow = (row: SavedRow, dinnerMode: DinnerMode): DesiredOrder[] => {
+const buildDesiredOrdersForRow = (row: FormRow, dinnerMode: DinnerMode): DesiredOrder[] => {
   const dinnerEventId = props.dinnerEvent.id
   const buildForInhabitants = (inhabitantIds: number[]) => buildDesiredOrders(
     inhabitantIds.map(inhabitantId => ({inhabitantId, dinnerEventId, dinnerMode})),

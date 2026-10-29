@@ -11,6 +11,7 @@ import {useBookingValidation, type OrderDetail, type OrderState, type TicketType
 import {cookingRoundWords, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, registerEmptyStoreEndpoints, kitchenConfig, resetStores} from '~~/tests/component/testHelpers'
 import {formatDate, DATE_SETTINGS} from '~/utils/date'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 /**
  * DinnerBudget: the three boxes in both units, the RÅDIGHEDSBELØB box with start, Brugt and Tilbage, and under the
@@ -65,6 +66,9 @@ describe('DinnerBudget', () => {
         expect(findByTestId(wrapper, 'budget-box-revenue').text()).not.toContain('/')
         expect(findByTestId(wrapper, 'budget-box-available').text()).toContain(`/ ${formatPrice(budget.availableBudget)} kr`)
         expect(findByTestId(wrapper, 'budget-box-contribution').text()).toContain(`/ ${formatPrice(budget.kitchenContribution)} kr`)
+        // Both split boxes name the units under their amount
+        expect(findByTestId(wrapper, 'budget-box-available').text()).toContain(BOOKING_WORDS.vatUnits)
+        expect(findByTestId(wrapper, 'budget-box-contribution').text()).toContain(BOOKING_WORDS.vatUnits)
         expect(budget.totalRevenue).toBe(12500)
 
         // Brugt and Tilbage with its icon; both carry the icon slot, so their kr line up

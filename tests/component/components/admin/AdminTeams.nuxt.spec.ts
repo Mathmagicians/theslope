@@ -10,6 +10,7 @@ import CookingTeamCard from '~/components/cooking-team/CookingTeamCard.vue'
 import TeamCalendarDisplay from '~/components/calendar/TeamCalendarDisplay.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
+import {TEAM_WORDS} from '~/config/teamWords'
 import {useAuthStore} from '~/stores/auth'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -95,8 +96,8 @@ describe('AdminTeams', () => {
         await clickCreateTeams(wrapper)
 
         const toast = await lastToast()
-        expect(toast?.title).toBe('Madhold oprettet')
-        expect(toast?.description).toBe('2 madhold oprettet · 6 madlavninger tildelt')
+        expect(toast?.title).toBe(TEAM_WORDS.admin.created.title)
+        expect(toast?.description).toBe(TEAM_WORDS.admin.created.description(2, 6))
         await vi.waitFor(() => expect(wrapper.find('#team-count').exists()).toBe(false))
     })
 

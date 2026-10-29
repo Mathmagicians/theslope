@@ -9,12 +9,12 @@ UX MOCKUP: Admin System Jobs Panel
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                                        │
 │  ┌──────────────────────────────┐  ┌──────────────────────────────┐  ┌──────────────────────────────┐  │
-│  │       (clipboard icon)       │  │        (ticket icon)         │  │         (users icon)         │  │
+│  │       (Heynabo logo)         │  │       (clipboard icon)       │  │        (ticket icon)         │  │
 │  │                              │  │                              │  │                              │  │
-│  │ Daglig                       │  │ Månedlig                     │  │ Heynabo                      │  │
-│  │ Vedligeholdelse              │  │ Fakturering                  │  │ Import                       │  │
+│  │ Heynabo                      │  │ Daglig                       │  │ Månedlig                     │  │
+│  │ Import                       │  │ Vedligeholdelse              │  │ Fakturering                  │  │
 │  │                              │  │                              │  │                              │  │
-│  │ [ Kør daglig vedligeholdelse │  │ [ Kør fakturering            │  │ [ Kør import                 │  │
+│  │ [ Kør import                 │  │ [ Kør daglig vedligeholdelse │  │ [ Kør fakturering            │  │
 │  │   (arrow icon)             ] │  │   (arrow icon)             ] │  │   (arrow icon)             ] │  │
 │  └──────────────────────────────┘  └──────────────────────────────┘  └──────────────────────────────┘  │
 │                                                                                                        │
@@ -39,7 +39,7 @@ UX MOCKUP: Job boxes
 
 A box after a failed run:
 ┌─────────────────────────────────┐
-│ (users icon)  Dagligt kl. 02:00 │
+│ (Heynabo logo) Dagligt kl. 02:00│
 │ Heynabo Import                  │
 │ Synkroniser husstande og ...    │
 │ (clock icon)  26/10/2026 14:02  │
@@ -50,7 +50,8 @@ A box after a failed run:
 │ [ Kør import ]                  │
 └─────────────────────────────────┘
 A box whose job never ran: the same card with the line "Ingen kørsler endnu" in place of the run lines. A box shows the skeleton while its job runs or its latest run is read.
-Each stat line wears the icon of its own stat.
+Each stat line wears the icon of its own stat. The Heynabo import's header wears the Heynabo logo (UAvatar, at the job icon's
+size); the other jobs wear their icons; while a job runs, the spinning sync icon takes the mark's place.
 
 Visual check: /admin/system, each box after a run (the daily box with and without the scaffold step), phone and desktop.
 -->
@@ -68,7 +69,7 @@ const props = withDefaults(defineProps<Props>(), {
   canEdit: false
 })
 
-const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, ALERTS, COMPONENTS, getRandomEmptyMessageText, getRainbowBand, NOISE } = useTheSlopeDesignSystem()
+const { COLOR, ICONS, IMG, SIZES, TYPOGRAPHY, LAYOUTS, ALERTS, COMPONENTS, getRandomEmptyMessageText, getRainbowBand, NOISE } = useTheSlopeDesignSystem()
 
 const {
     jobTypeLabels,
@@ -215,7 +216,8 @@ const jobDefinitions = computed(() => [
     schedule: systemJobs.heynaboImport.description,
     color: COLOR.ocean,
     headerBg: getRainbowBand(2),
-    icon: ICONS.users,
+    logo: IMG.heynabo,
+    icon: null,
     isRunning: isImportHeynaboLoading.value,
     isLoading: isImportHeynaboLoading.value || isLatestRunLoading(JobType.HEYNABO_IMPORT),
     stats: latestRunLines(JobType.HEYNABO_IMPORT),
@@ -228,6 +230,7 @@ const jobDefinitions = computed(() => [
     schedule: systemJobs.dailyMaintenance.description,
     color: COLOR.peach,
     headerBg: getRainbowBand(4),
+    logo: null,
     icon: ICONS.clipboard,
     isRunning: isDailyMaintenanceRunning.value,
     isLoading: isDailyMaintenanceRunning.value || isLatestRunLoading(JobType.DAILY_MAINTENANCE),
@@ -241,6 +244,7 @@ const jobDefinitions = computed(() => [
     schedule: systemJobs.monthlyBilling.description,
     color: COLOR.secondary,
     headerBg: getRainbowBand(0),
+    logo: null,
     icon: ICONS.ticket,
     isRunning: isMonthlyBillingRunning.value,
     isLoading: isMonthlyBillingRunning.value || isLatestRunLoading(JobType.MONTHLY_BILLING),
@@ -268,10 +272,14 @@ const jobDefinitions = computed(() => [
           <div
             :class="[job.headerBg, COMPONENTS.adminSystem.jobHeader]"
           >
+            <!-- The box's mark: the spinning sync icon while the job runs, else the service's logo or the job's icon -->
             <UIcon
-              :name="job.isRunning ? ICONS.sync : job.icon"
-              :class="[COMPONENTS.adminSystem.jobIcon, job.isRunning && COMPONENTS.adminSystem.jobIconRunning]"
+              v-if="job.isRunning"
+              :name="ICONS.sync"
+              :class="[COMPONENTS.adminSystem.jobIcon, COMPONENTS.adminSystem.jobIconRunning]"
             />
+            <UAvatar v-else-if="job.logo" v-bind="COMPONENTS.adminSystem.jobLogo" :src="job.logo" alt="" />
+            <UIcon v-else-if="job.icon" :name="job.icon" :class="COMPONENTS.adminSystem.jobIcon" />
             <span :class="TYPOGRAPHY.bodyTextSmall">
               {{ job.schedule }}
             </span>

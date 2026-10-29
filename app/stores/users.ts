@@ -1,9 +1,12 @@
 import type {HeynaboImportResponse} from '~/composables/useHeynaboValidation'
+import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
+import {USER_WORDS} from '~/config/userWords'
 
 export const useUsersStore = defineStore("Users", () => {
     // DEPENDENCIES
     const {storeAsyncData, loadOrThrow, apiRequest, toastSaved, runJob} = useApiHandler()
-    const {formatHeynaboStats} = useMaintenance()
+    const {formatHeynaboStats, jobTypeLabels} = useMaintenance()
+    const {JobType} = useMaintenanceValidation()
 
     // Get SystemRole enum from validation composable
     const {SystemRoleSchema, UserDisplaySchema} = useCoreValidation()
@@ -60,13 +63,14 @@ export const useUsersStore = defineStore("Users", () => {
     const loadUsers = () => loadOrThrow(usersDataset, () => `${LOG_CTX} 🪪 > USERS_STORE > loadUsers > Loaded ${users.value.length} users`)
 
     // Heynabo import - only when triggered by admin, not on store creation
+    const heynaboImportLabel = jobTypeLabels[JobType.HEYNABO_IMPORT]
     const {result: heynaboImport, error: heynaboImportError, isRunning: isImportHeynaboLoading, run: runHeynaboImport} = runJob<HeynaboImportResponse>({
         url: '/api/admin/heynabo/import',
         query: () => ({triggeredBy: `ADMIN:${authStore.email}`}),
         action: 'importHeynaboData',
-        errorMessage: 'Heynabo import fejlede',
+        errorMessage: MAINTENANCE_WORDS.job.failed(heynaboImportLabel),
         formatStats: formatHeynaboStats,
-        title: 'Heynabo import fuldført',
+        title: MAINTENANCE_WORDS.job.completed(heynaboImportLabel),
         log: `${LOG_CTX} 🪪 > USERS_STORE > importHeynaboData >`,
         onSuccess: () => loadUsers()
     })
@@ -87,7 +91,7 @@ export const useUsersStore = defineStore("Users", () => {
             body: { systemRoles },
             action: 'updateUserRoles'
         })
-        toastSaved('Roller opdateret', 'Brugerens roller er blevet opdateret')
+        toastSaved(USER_WORDS.toasts.rolesUpdated.title, USER_WORDS.toasts.rolesUpdated.description)
         await refreshUsers()
     }
 

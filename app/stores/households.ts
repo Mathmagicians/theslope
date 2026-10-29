@@ -1,7 +1,8 @@
 import type {
     HouseholdDisplay,
     HouseholdDetail,
-    HouseholdCreate
+    HouseholdCreate,
+    HouseholdMoveOut
 } from '~/composables/useCoreValidation'
 import {useBookingValidation, type ScaffoldResult, type DinnerMode} from '~/composables/useBookingValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
@@ -343,7 +344,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
      */
     const createHousehold = async (
         household: HouseholdCreate,
-        prevOwnerMoveOutUpdates: {id: number, moveOutDate: Date}[]
+        prevOwnerMoveOutUpdates: HouseholdMoveOut[]
     ): Promise<HouseholdDetail | null> => {
         try {
             console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Creating household at ${household.address} (PBS ${household.pbsId})`)

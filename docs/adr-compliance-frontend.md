@@ -42,7 +42,7 @@ and the component headers hold the detail; a row names a gap in a few words.
 | `/` | `Hero.vue` | N/A | N/A | N/A | ✅ | ✅ | ✅ |
 | `/login` | `Login.vue` | ✅ auth | N/A | ✅ | ✅ | ⚠️ via the cards | ⚠️ e2e only |
 | `/dinner` | `dinner/index.vue` | ✅ plan, bookings, auth | N/A | ✅ `?date=` `?cal=` | ✅ | ❌ | ⚠️ e2e only; master-detail on `LAYOUTS.masterDetailPage` (ADR-018) |
-| `/chef` | `chef/index.vue` | ✅ plan, users, allergies, bookings | N/A | ✅ `?team=` over the season's teams, `?date=`, `?view=`; a calendar click writes `?team=` and `?date=` in one navigation | ✅ | ❌ | ⚠️ e2e only; master-detail on `LAYOUTS.masterDetailPage` (ADR-018); a team the person is not on opens as a visit, read through the plan store's selected team; the bookings store toasts the chef's dinner actions (ADR-007) |
+| `/chef` | `chef/index.vue` | ✅ plan, users, allergies, bookings | N/A | ✅ `?team=` over the season's teams, by default the person's first team, else the team of the season's next dinner; `?date=`, `?view=`; a calendar click writes `?team=` and `?date=` in one navigation | ✅ | ✅ `chef.nuxt`: the team on view with and without `?team=`, the visit of a person on no team, "Ingen madhold" alone with no dinner ahead or no season | ⚠️ the plan store's team dataset waits for the seasons only, while a no-team visit's team resolves from the selected season and `myTeams` (ADR-007 compliance 9); master-detail on `LAYOUTS.masterDetailPage` (ADR-018); the next dinner from `useSeason().splitDinnerEvents` on `useClock`, dinner dates used as the `Date` they are (ADR-017); a team the person is not on opens as a visit, read through the plan store's selected team; with no team on view the calendar slot stays empty; the bookings store toasts the chef's dinner actions (ADR-007) |
 | **Public** | | | | | | | |
 | `/public/billing/[token]` | `public/billing/[token].vue` | N/A, `storeAsyncData` (ADR-007 component-local) | N/A | N/A | ✅ `PublicBilling` | ❌ | ⚠️ e2e only |
 | `/public/billing/[token].csv` | `public/billing/[token].csv.vue` | N/A | N/A | N/A | ❌ | ❌ | ❌ no tests; no link reaches it |
@@ -72,7 +72,7 @@ Status.
 | `TeamMemberAddForm.vue` | `/admin/teams` | none | ✅ | ✅ parent | ✅ |
 | `TeamRoleFields.vue` | `/admin/teams` | none | ✅ parent | ✅ parent | ✅ |
 | `JokerSlotForm.vue` | `/admin/teams` | none | ✅ | ✅ | ✅ |
-| `MyTeamSelector.vue` | `/chef` | none | ✅ | ✅ parent | ✅ the visiting tab last, "Ikke dit hold" on the team name's line (`COMPONENTS.myTeamSelector.nameLine`, `COMPONENTS.visitBadge`), its word from `TEAM_WORDS` (ADR-017, ADR-018); "Ingen madhold" on `ALERTS.emptyState` |
+| `MyTeamSelector.vue` | `/chef` | none | ✅ | ✅ parent | ✅ the visiting tab last, "Ikke dit hold" on the team name's line (`COMPONENTS.myTeamSelector.nameLine`, `COMPONENTS.visitBadge`), its word from `TEAM_WORDS` (ADR-017, ADR-018); the visit alone for a person on no team; "Ingen madhold" on `ALERTS.emptyState` with no team and no visit |
 | `WorkAssignment.vue` | `/dinner`, `/chef` | plan, auth | ❌ | ✅ parent | ⚠️ missing unit |
 | `InhabitantSelector.vue` | `/admin/teams` | none | ✅ | ✅ parent | ✅ |
 | `CookingTeamBadges.vue` | `/admin/teams`, `/chef`, `/dinner` | none | ✅ | ✅ parent | ✅ |
@@ -214,7 +214,7 @@ Status.
 |---|---|---|---|---|---|---|
 | **Validation** | | | | | | |
 | `useCoreValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ⚠️ `queryFlag` and `adminBypassQuery`; serialized schemas for user, inhabitant and household (ADR-010 compliance 3); `deserializeInhabitantDisplay` untyped, its fix in flight |
-| `useBookingValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ `BookingFailureSchema` (module-level `BookingFailure`) gives a failed order its reason; `WaitlistAssignedSchema` lives here, for the outcomes a scaffold run reports (`waitlistPortionsAssigned`) |
+| `useBookingValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ `BookingFailureSchema` (module-level `BookingFailure`) gives a failed order its reason; `WaitlistAssignedSchema` lives here, for the outcomes a scaffold run reports (`waitlistPortionsAssigned`); `CLOSED_DINNER_STATES`, the closed dinner states; `OrderSortBySchema` (module-level `OrderSortBy`) sorts an order read; `SnapshotOrderSchema` and `OrderAuditRowSchema` type the order snapshot and the audit row |
 | `useSeasonValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `useCookingTeamValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `useDutyValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -255,7 +255,7 @@ Status.
 | `useUrlQueryWriter()` | client | N/A | N/A | N/A | ✅ | ✅ |
 | `useApiHandler()` | client | N/A | N/A | N/A | ✅ | ✅ `runJob` toasts its stats through `formatJobStats`; error words from `API_ERROR_WORDS` (ADR-017); an API error read by `ApiErrorStatusSchema`, no `in` check, no cast; `loadOrThrow` takes a `StoreDataset` |
 | `useBookingUi()` | pure UI | N/A | N/A | ✅ | ✅ | ✅ a failed order's conflict reads in the result lines (`CONFLICT_WORDS`); `createChefBadges` reads `getChefDeadlines` |
-| `app/utils/date.ts` | isomorphic | N/A | N/A | N/A | ✅ | ⚠️ `formatDateInTimezone` writes a moment as the clock in the timezone shows it (the server runs in UTC); masks and pattern strings: `features/release-0.9.3/feature-0.9.3.md` § Dates |
+| `app/utils/date.ts` | isomorphic | N/A | N/A | N/A | ✅ | ⚠️ its words from `app/config/dateWords.ts` (ADR-017 compliance 7); `formatDateInTimezone` writes a moment as the clock in the timezone shows it (the server runs in UTC); masks and pattern strings: `features/release-0.9.3/feature-0.9.3.md` § Dates |
 | `useUserRolesUi()` | pure UI | N/A | N/A | N/A | ✅ | ✅ |
 | `useInstallPrompt()` | pure UI | N/A | N/A | N/A | ✅ | ✅ |
 | `useTemporalCalendar()` | client | N/A | N/A | ✅ | ✅ parent | ✅ the dinner on a calendar day and a cancelled day (`getDinnerForDay`, `isCancelledDay`), for the dinner and chef calendars |

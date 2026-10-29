@@ -1,11 +1,12 @@
-import type {OrderDisplay, OrderDetail, OrderState, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState, TicketChangesResponse} from '~/composables/useBookingValidation'
+import {CLOSED_DINNER_STATES, type OrderDisplay, type OrderDetail, type OrderState, type DinnerEventDetail, type DinnerEventUpdate, type DailyMaintenanceResult, type ScaffoldOrdersRequest, type ScaffoldOrdersResponse, type DesiredOrder, type DinnerState, type TicketChangesResponse, type ForSaleCounts, type WaitlistCounts} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, Expense, ExpenseCreate} from '~/composables/useBillingValidation'
 import type {WaitlistAssignmentResult, TicketWaitlistDisplay, TicketWaitlistDetail, WaitlistQueueSummary} from '~/composables/useWaitlistValidation'
 import {useWaitlist} from '~/composables/useWaitlist'
-import type {ReleasedTicketCounts, WaitlistCounts} from '~/composables/useBooking'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {useBilling} from '~/composables/useBilling'
 import {TEAM_WORDS} from '~/config/teamWords'
 import {BOOKING_WORDS} from '~/config/bookingWords'
+import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
 import {stringifyQuery} from 'ufo'
 
 export const useBookingsStore = defineStore("Bookings", () => {
@@ -200,14 +201,14 @@ export const useBookingsStore = defineStore("Bookings", () => {
         {
             schema: OrderDisplaySchema.array().transform(released => {
                 const grouped = groupBy<OrderDisplay, number>(o => o.dinnerEventId)(released)
-                const counts = new Map<number, Omit<ReleasedTicketCounts, keyof WaitlistCounts>>()
+                const counts = new Map<number, ForSaleCounts>()
                 for (const [dinnerEventId, orders] of grouped) {
                     const byType = countTicketTypes(orders)
                     counts.set(dinnerEventId, {total: orders.length, formatted: formatTicketCounts(byType), byType})
                 }
                 return counts
             }),
-            default: () => new Map<number, Omit<ReleasedTicketCounts, keyof WaitlistCounts>>(),
+            default: () => new Map<number, ForSaleCounts>(),
             enabled: () => lockedDinnerIds.value.length > 0,
             dependsOn: [planStore.selectedSeasonDataset]
         }
@@ -257,7 +258,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const refreshSeasonOnClosedDinners = async (request: ScaffoldOrdersRequest, {seasonId, dinners}: ScaffoldResult) => {
         const covered = new Set(dinners.map(({id}) => id))
         const shownOpen = new Set((planStore.selectedSeason?.dinnerEvents ?? [])
-            .filter(({state}) => state !== DinnerState.CANCELLED && state !== DinnerState.CONSUMED)
+            .filter(({state}) => !CLOSED_DINNER_STATES.includes(state))
             .map(({id}) => id))
         if (seasonId !== null && request.dinnerEventIds.some(id => shownOpen.has(id) && !covered.has(id))) await refreshSelectedSeason()
     }
@@ -589,9 +590,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
         query: () => ({triggeredBy: `ADMIN:${authStore.email}`}),
         schema: DailyMaintenanceResultSchema,
         action: 'runDailyMaintenance',
-        errorMessage: BOOKING_WORDS.job.failed(dailyMaintenanceLabel),
+        errorMessage: MAINTENANCE_WORDS.job.failed(dailyMaintenanceLabel),
         formatStats: formatDailyMaintenanceStats,
-        title: BOOKING_WORDS.job.done(dailyMaintenanceLabel),
+        title: MAINTENANCE_WORDS.job.done(dailyMaintenanceLabel),
         log: `${CTX} Daily maintenance completed:`,
         // Maintenance closes orders and creates transactions server-side
         onSuccess: () => Promise.all([refreshOrders(), refreshCurrentPeriodTransactions()])
@@ -740,9 +741,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
         query: () => ({triggeredBy: `ADMIN:${authStore.email}`}),
         schema: MonthlyBillingResponseSchema,
         action: 'runMonthlyBilling',
-        errorMessage: BOOKING_WORDS.job.failed(monthlyBillingLabel),
+        errorMessage: MAINTENANCE_WORDS.job.failed(monthlyBillingLabel),
         formatStats: formatMonthlyBillingStats,
-        title: BOOKING_WORDS.job.done(monthlyBillingLabel),
+        title: MAINTENANCE_WORDS.job.done(monthlyBillingLabel),
         log: `${CTX} Monthly billing completed:`,
         // Billing moves transactions out of the unbilled current period into invoiced periods
         onSuccess: () => Promise.all([refreshBillingPeriods(), refreshCurrentPeriodTransactions()])

@@ -4,6 +4,9 @@ import { useCookingTeamValidation, type CookingTeamAssignment, type TeamRole } f
 import type { InhabitantDisplay } from '~/composables/useCoreValidation'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import { TEAM_WORDS } from '~/config/teamWords'
+import { formatDate } from '~/utils/date'
 import { createDefaultWeekdayMap } from '~/types/dateTypes'
 import { RAINBOW, getRainbowBand } from '~/composables/useTheSlopeDesignSystem'
 
@@ -58,7 +61,7 @@ describe('useCookingTeam', () => {
     const { countChefs } = useCookingTeam()
     const { TeamRoleSchema } = useCookingTeamValidation()
     const { CHEF, COOK, JUNIORHELPER } = TeamRoleSchema.enum
-    const roles = (...values: TeamRole[]) => values.map(role => ({ role }))
+    const roles = (...values: TeamRole[]) => values.map(role => SeasonFactory.defaultCookingTeamAssignment({ role }))
 
     it.each([
       { assignments: roles(COOK, JUNIORHELPER), expected: 0, description: 'no chefs among members' },
@@ -85,6 +88,22 @@ describe('useCookingTeam', () => {
       ])('returns "$expected" from "$teamName" ($description)', ({ teamName, expected }) => {
         expect(getTeamShortName(teamName)).toBe(expected)
       })
+    })
+  })
+
+  describe('formatRoleClaimedTitle', () => {
+    const { formatRoleClaimedTitle } = useCookingTeam()
+    const { TeamRoleSchema } = useCookingTeamValidation()
+    const dinner = DinnerEventFactory.defaultDinnerEventDetail()
+    const team = SeasonFactory.defaultCookingTeamDisplay({ name: 'Madhold 2 - 08/25-06/26' })
+
+    it.each([
+      { cookingTeam: team, teamShortName: 'Madhold 2', description: 'names the dinner\'s team by its short name' },
+      { cookingTeam: null, teamShortName: null, description: 'leaves the team out when the dinner has none' }
+    ])('reads the role and the dinner date into the toast title ($description)', ({ cookingTeam, teamShortName }) => {
+      const role = TeamRoleSchema.enum.COOK
+      expect(formatRoleClaimedTitle({ ...dinner, cookingTeam }, role))
+        .toBe(TEAM_WORDS.toasts.roleClaimed(TEAM_WORDS.roles[role].label, formatDate(dinner.date), teamShortName))
     })
   })
 
@@ -193,6 +212,8 @@ describe('useCookingTeam', () => {
     const cookingDates = [6, 8, 13, 15, 20, 22].map(day => new Date(2026, 9, day))
     const tuesday = createDefaultWeekdayMap([false, true, false, false, false, false, false])
     const tuesdayAndThursday = createDefaultWeekdayMap([false, true, false, true, false, false, false])
+    const savedSlot = (startDate: Date, endDate: Date, affinity: typeof tuesday) =>
+      ({...SeasonFactory.defaultJokerSlot({startDate, endDate, affinity}), id: 1, cookingTeamId: 1, note: null, createdAt: startDate, updatedAt: startDate})
 
     describe.each([
       {desc: 'period across weeks', start: new Date(2026, 9, 5), end: new Date(2026, 9, 21), affinity: tuesday, expected: 3},
@@ -201,7 +222,7 @@ describe('useCookingTeam', () => {
       {desc: 'period with no cooking day', start: new Date(2026, 9, 23), end: new Date(2026, 9, 31), affinity: tuesdayAndThursday, expected: 0}
     ])('$desc', ({start, end, affinity, expected}) => {
       it(`counts ${expected} shifts`, () => {
-        expect(countJokerSlotShifts({startDate: start, endDate: end, affinity}, cookingDates)).toBe(expected)
+        expect(countJokerSlotShifts(savedSlot(start, end, affinity), cookingDates)).toBe(expected)
       })
     })
   })

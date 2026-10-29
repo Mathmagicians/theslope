@@ -5,28 +5,24 @@
 The checks with human eyes of what users see and the tests leave unproven, as a walk through the app. A check passes with its date in **Signed off** and becomes one
 line under § Signed off.
 
-## /dinner (1)
-
-| # | Package | State, viewport | What to see | Signed off |
-|---|---|---|---|---|
-| 114 | Defect 73 | `/dinner` | The deadline badges look as before | |
-
 ## /chef (2)
 
 | # | Package | State, viewport | What to see | Signed off |
 |---|---|---|---|---|
-| 122 | Defect 109 | A dinner's Budget at 375px | "ex / inkl. moms" sits on its own line under the badge and the period, on the right; nothing is cut off | |
-| 148 | Defect 147 | `/chef` for a person on no team, phone and desktop, light and dark mode | "Ingen madhold" centred on a neutral soft surface with the larger title, in place of the violet box | finding: defect 147 reopened |
+| 122 | Defect 109 | A dinner's Budget at 375px, a dinner with a long menu title | The title wraps in full with ", dd/mm" at its end; "ex / inkl. moms" sits on its own line, on the right. The team's round: "ex / inkl. moms" under the badge and the period, on the right | |
+| 153 | Defect 109 | A dinner's Budget at 1280px, a short menu title | The title and "ex / inkl. moms" share one line | |
 
-## /admin/allergies/pdf (1)
+## /admin/system (1)
 
 | # | Package | State, viewport | What to see | Signed off |
 |---|---|---|---|---|
-| 135 | Defect 130 | Print preview from dark mode | White A4, dark text, the QR code beside the table, no Tilbage or Print button | |
+| 154 | Heynabo logo | The job boxes at 1280px; then Kør import | The Heynabo box shows the round Heynabo logo in full colour at the size of Daglig's and Månedlig's icons; during the import the spinning sync icon takes its place, and the logo returns after the run | |
 
 ## Signed off 2026-10-28
 
+- #148, #151, #152 `/chef` for a member on no team: the visit to the next dinner's team on phone and desktop, another team's dinner switches the tab (signed with defect 147)
 - #132–#134 The allergy poster: a white sheet with dark text in light and dark mode, Tilbage solid like Print, the member's mode kept
+- #135 The allergy poster's print preview from dark mode: white A4, dark text, the QR code beside the table
 - #88 Chef calendar visit: the team on view's dinners in colour, the other teams' as grey circles, Forklaring's last line
 - #141–#145 The visiting tab: the team icon above or beside "Madhold N" and "Ikke dit hold" on phone and desktop
 - #123–#126 Avatar ring colours: the Alle row rings orange, inhabitants amber, the allergy managers ocean blue at 768px
@@ -81,3 +77,5 @@ line under § Signed off.
 
 - #110–#113, #115–#118 Booking views and chef page words, toasts and icons: the component tests prove them
 - #119 The pages' meta description: the page source, nothing users see
+- #114 The deadline badge: its two tokens hold the classes the template wrote, the same rendered classes
+- The no-team `/chef` with no dinner ahead or no season ("Ingen madhold" alone, no `?team=`): `chef.nuxt` proves it

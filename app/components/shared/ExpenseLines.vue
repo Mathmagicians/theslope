@@ -38,6 +38,7 @@ import type {SpendingFigures} from '~/composables/useOrder'
 import {allowanceRows} from '~/composables/useBookingUi'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 import type {Form, FormSubmitEvent, TableColumn} from '@nuxt/ui'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 const props = withDefaults(defineProps<{
   expenses: Expense[]
@@ -118,7 +119,7 @@ const lineColumns: TableColumn<Expense>[] = [
   {id: 'date', header: 'Dato'},
   {id: 'payer', header: 'Bestiller'},
   {id: 'note', header: 'Note'},
-  {id: 'amount', header: 'ex / inkl. moms', meta: COMPONENTS.table.amountColumn},
+  {id: 'amount', header: BOOKING_WORDS.vatUnits, meta: COMPONENTS.table.amountColumn},
   {id: 'remove', header: ''}
 ]
 </script>
@@ -133,7 +134,7 @@ const lineColumns: TableColumn<Expense>[] = [
       <div :class="COMPONENTS.cardSection.line">
         <template v-if="expenses.length">
           <VatAmount :gross="spent" data-testid="expense-total" />
-          <span :class="COMPONENTS.vatAmount.unitHeader">ex / inkl. moms</span>
+          <span :class="COMPONENTS.vatAmount.unitHeader">{{ BOOKING_WORDS.vatUnits }}</span>
         </template>
         <span v-else :class="COMPONENTS.expenseLines.empty" data-testid="expense-empty">{{ emptyText }}</span>
       </div>

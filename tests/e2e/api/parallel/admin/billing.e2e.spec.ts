@@ -8,9 +8,8 @@ const {validatedBrowserContext} = testHelpers
  * Admin Billing API Tests (parallel)
  *
  * Only tests that DO NOT require existing billing data live here.
- * Tests requiring billing data (current-period transactions, invoiceSum/transactionSum control sums, invoice ordering,
- * fetching transactions for an existing invoice) live in the `full billing pipeline` test
- * in tests/e2e/api/serial/admin/maintenance.e2e.spec.ts, which creates real billing data.
+ * Tests requiring billing data (invoice ordering, the transactions of an existing invoice) live in
+ * `tests/e2e/features/jobs/monthly-billing.feature`, which bills its own households.
  *
  * Endpoints covered here:
  * - GET /api/admin/billing/invoices/[id]  - error paths (non-existent / invalid IDs)

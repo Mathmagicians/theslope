@@ -1,5 +1,5 @@
 /**
- * The cooking team words users read on the chef page. Plain module without auto-imports (ADR-017).
+ * The cooking team words users read on the chef page and the admin's team page. Plain module without auto-imports (ADR-017).
  */
 import {useCookingTeamValidation, type TeamRole} from '~/composables/useCookingTeamValidation'
 
@@ -13,22 +13,37 @@ export const TEAM_WORDS = {
         badge: 'Ikke dit hold',
         line: (teamShortName: string) => `Du er ikke på ${teamShortName}`
     },
-    /** The person's role on the team on view */
+    /** A role: its name, and the banner of the person's role on the team on view */
     roles: {
         [Role.CHEF]: {
+            label: 'Chefkok',
             title: 'Du er chefkok',
             description: (teamShortName: string) =>
                 `Du er chefkok på ${teamShortName} og har ansvaret for at slå en menu op, handle ind og håndtere madlavningen.`
         },
         [Role.COOK]: {
+            label: 'Kok',
             title: 'Du er kok',
             description: (teamShortName: string) => `Du hjælper cheffen på ${teamShortName} med at lave maden`
         },
         [Role.JUNIORHELPER]: {
+            label: 'Kokkespire',
             title: 'Du er kokkespire',
             description: (teamShortName: string) => `Du er en sej kokkespire, som hjælper de voksne på ${teamShortName}`
         }
-    } satisfies Record<TeamRole, {title: string, description: (teamShortName: string) => string}>,
+    } satisfies Record<TeamRole, {label: string, title: string, description: (teamShortName: string) => string}>,
+    /**
+     * The chef calendar: its countdown's title and time label ("madlavning kl 18:00"), its two views, the agenda's
+     * heading over the days, and the chevron's name when the calendar is open and when it is closed
+     */
+    calendar: {
+        countdownTitle: 'Næste Madlavning',
+        countdownTimeLabel: 'madlavning',
+        views: {agenda: 'Agenda', calendar: 'Kalender'},
+        agendaTitle: 'Maddage',
+        hide: 'Skjul kalender',
+        show: 'Vis kalender'
+    },
     /** The chef calendar's legend; the selected day reads the calendars' shared word (`DATE_WORDS.calendarLegend`) */
     calendarLegend: {
         next: 'Næste madlavning',
@@ -78,6 +93,9 @@ export const TEAM_WORDS = {
                 ? heynaboSyncProblem
                 : `${heynaboSyncProblem} Tryk på Publicer knappen igen`
         },
+        /** A role the person just took on a dinner: the role's label, the dinner's date, and the team when it has one */
+        roleClaimed: (roleLabel: string, date: string, teamShortName: string | null) =>
+            `Du er nu blevet ${roleLabel.toLowerCase()} for middagen d. ${date}${teamShortName ? ` med ${teamShortName}` : ''}`,
         /** A save on a dinner without a chef claims the role, and the title names it */
         menuSaved: {
             title: (roleClaimed: string | null) => roleClaimed ? `Menu gemt — ${roleClaimed}` : 'Menu gemt',
@@ -97,6 +115,29 @@ export const TEAM_WORDS = {
             title: 'Portioner frigivet',
             description: (assigned: number, waiting: number) => `${assigned} fik billet, ${waiting} står stadig på ventelisten`,
             failed: 'Kunne ikke frigive portionerne'
+        },
+        /** A chef's resignation; a 207 means the role is gone and the Heynabo event still stands */
+        resigned: {
+            title: 'Du har meldt afbud. Tjansen som chefkok er nu ledig.',
+            heynaboFailed: {
+                title: 'Heynabo-synkronisering fejlede',
+                description: 'Tjansen er fjernet, men Heynabo-begivenheden kunne ikke slettes. Tjek Heynabo.'
+            }
         }
+    },
+    /** The admin's team page: a failed team read and the toasts of its team, member and joker saves */
+    admin: {
+        failed: 'Kunne ikke hente hold',
+        created: {
+            title: 'Madhold oprettet',
+            description: (teams: number, eventsAssigned: number) => `${teams} madhold oprettet · ${eventsAssigned} madlavninger tildelt`
+        },
+        affinityUpdated: 'Madlavningsdage for teams opdateret',
+        deleted: 'Madhold slettet',
+        memberAdded: 'Medlem tilføjet til hold',
+        memberUpdated: 'Medlem opdateret',
+        memberRemoved: 'Medlem fjernet fra hold',
+        jokerAdded: 'Joker tilføjet',
+        jokerRemoved: 'Joker fjernet'
     }
 } as const

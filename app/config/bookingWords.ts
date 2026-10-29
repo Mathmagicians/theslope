@@ -24,6 +24,8 @@ export const BOOKING_WORDS = {
     roundHeading: (team: string, range: string) => `${team}, ${roundPeriod(range)}`,
     /** The figures under a block of spending lines */
     allowance: {budget: 'Rådighedsbeløb', spent: 'Brugt', left: 'Tilbage'},
+    /** The units a split amount reads in (VatAmount): the ex moms figure, then the inkl. moms half */
+    vatUnits: 'ex / inkl. moms',
     /** A ticket price in a select menu: its type with its price, and the age limit beside its description */
     ticketPrice: {
         label: (ticketType: string, price: string) => `${ticketType} · ${price} kr`,
@@ -173,6 +175,12 @@ export const BOOKING_WORDS = {
     legend: {modified: 'Ændret', waitlist: 'På venteliste (#n)', birthday: 'Ny billetpris fra fødselsdagen'},
     /** A cancelled dinner: the corner ribbon on the chef's card and the booking form, and the booking calendar's legend entry */
     cancelledDinner: {ribbon: 'AFLYST', legend: 'Aflyst fællesspisning'},
+    /** The dinner calendar: its countdown's title and time label ("spisning kl 18:00"), and its accordion's title */
+    calendar: {
+        countdownTitle: 'Næste Fællesspisning',
+        countdownTimeLabel: 'spisning',
+        title: 'Fællesspisninger'
+    },
     /** The booking calendar's legend: the dinners' day circles, and the lock chips of the tickets for sale and of the waiting list */
     calendarLegend: {
         next: 'Næste fællesspisning',
@@ -251,11 +259,6 @@ export const BOOKING_WORDS = {
         dinner: 'Kan ikke finde middagen',
         billingPeriod: 'Kan ikke finde faktureringsperioden',
         invoice: 'Kan ikke finde fakturaen'
-    },
-    /** An admin job's toasts: the job's name and how its run ended */
-    job: {
-        done: (job: string) => `${job} afsluttet`,
-        failed: (job: string) => `${job} fejlede`
     },
     /** The event a dinner is announced as in Heynabo: its name, place and description lines */
     heynaboEvent: {

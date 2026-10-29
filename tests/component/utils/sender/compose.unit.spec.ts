@@ -42,10 +42,10 @@ describe('senderAddress', () => {
 
 describe('deploymentFromUrl', () => {
     it.each([
-        ['https://dev.skraaningen.dk', 'dev', 'dev.skraaningen.dk'],
-        ['https://www.skraaningen.dk', 'prod', 'www.skraaningen.dk'],
-        ['http://localhost:3000', 'local', 'localhost:3000'],
-        ['http://127.0.0.1:3000', 'local', '127.0.0.1:3000']
+        ['https://dev.skraaningen.dk', Environment.dev, 'dev.skraaningen.dk'],
+        ['https://www.skraaningen.dk', Environment.prod, 'www.skraaningen.dk'],
+        ['http://localhost:3000', Environment.local, 'localhost:3000'],
+        ['http://127.0.0.1:3000', Environment.local, '127.0.0.1:3000']
     ])('derives %s → environment %s, site %s', (url, environment, site) => {
         expect(deploymentFromUrl(url)).toEqual({environment, site})
     })

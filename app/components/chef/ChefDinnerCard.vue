@@ -35,7 +35,8 @@
  * - Mobile-first responsive design
  */
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
-import type { TemporalCategory, SeasonDeadlines } from '~/composables/useSeason'
+import type { SeasonDeadlines } from '~/composables/useSeason'
+import type { TemporalCategory } from '~/utils/season'
 
 interface Props {
   dinnerEvent: DinnerEventDisplay
@@ -46,7 +47,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   selected: false,
-  temporalCategory: 'future'
+  temporalCategory: TEMPORAL_CATEGORY.future
 })
 
 const emit = defineEmits<{
@@ -54,7 +55,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system & badge factory
-const { CALENDAR, CHEF_CALENDAR, COMPONENTS } = useTheSlopeDesignSystem()
+const { CALENDAR, CHEF_CALENDAR, COMPONENTS, dayColorClass } = useTheSlopeDesignSystem()
 const { createChefBadges } = useBookingUi()
 
 // Get released ticket count from store (for booking badge)
@@ -65,12 +66,8 @@ const releasedTicketCount = computed(() => bookingsStore.lockStatus.get(props.di
 const now = useClock()
 const badges = computed(() => createChefBadges(props.dinnerEvent, props.deadlines, now.value, releasedTicketCount.value))
 
-// Get color class based on temporal category (matches calendar view)
-// Use past styling for cancelled dinners
-const dateColorClass = computed(() => {
-  if (isCancelled.value) return CALENDAR.day.past
-  return props.temporalCategory === 'past' ? CALENDAR.day.past : CHEF_CALENDAR.day[props.temporalCategory]
-})
+// The date wears the calendar's colour for its category; a cancelled dinner wears the past
+const dateColorClass = computed(() => isCancelled.value ? CALENDAR.day.past : dayColorClass(CHEF_CALENDAR, props.temporalCategory))
 
 // Format dinner date with weekday (matches countdown timer style: "Lør 16/01")
 const formattedDate = computed(() => formatDanishWeekdayDate(props.dinnerEvent.date))
@@ -110,7 +107,7 @@ const handleClick = () => {
       </div>
 
       <!-- Status/deadline badges - hidden for past events and cancelled -->
-      <div v-if="temporalCategory !== 'past' && !isCancelled" :class="COMPONENTS.chefDinnerCard.badges">
+      <div v-if="temporalCategory !== TEMPORAL_CATEGORY.past && !isCancelled" :class="COMPONENTS.chefDinnerCard.badges">
         <DeadlineBadge v-for="badge in badges.values()" :key="badge.step" :badge="badge" />
       </div>
     </div>

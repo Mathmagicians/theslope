@@ -55,7 +55,7 @@ const bookerId = computed(() => myInhabitant.value?.id)
 const today = now.value
 const seasonDates = computed(() => selectedSeason.value?.seasonDates ?? { start: today, end: today })
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
-const dinnerDates = computed(() => dinnerEvents.value.map(e => new Date(e.date)))
+const dinnerDates = computed(() => dinnerEvents.value.map(e => e.date))
 const holidays = computed(() => selectedSeason.value?.holidays ?? [])
 
 // URL-synced view and date (curried pattern)
@@ -162,7 +162,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
   if (!eventId) return
 
   const event = dinnerEvents.value.find(e => e.id === eventId)
-  const dateStr = event ? formatDate(new Date(event.date)) : ''
+  const dateStr = event ? formatDate(event.date) : ''
 
   await bookingsStore.processSingleEventBookings(
     household.value.id,

@@ -23,7 +23,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | Endpoint | Return type | Validation | Repository | E2E | Status |
 |---|---|---|---|---|---|
 | **Orders** | | | | | |
-| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the sort from `OrderSortBySchema` |
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/order/waitlist.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `server/utils/waitlistAssignment.ts` | ✅ | N/A | ✅ | ✅ serial; recovery unit | ✅ `joinWaitlist` joins a household's claims on a dinner as one batch, idempotent on a later run; a placement grabs, writes, records and removes; the recovery settles a grab past `waitlistPlacingLeaseMinutes` and reports the sale or extra portion it finishes |

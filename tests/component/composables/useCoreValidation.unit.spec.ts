@@ -37,6 +37,14 @@ describe('queryFlag', () => {
     it.each([false, true])('GIVEN the flag %s THEN the endpoints\' flag schema reads it back from the url', (isSet) => {
         expect(QueryFlagSchema.parse(parseQuery(stringifyQuery({includeProvenance: queryFlag(isSet)})).includeProvenance)).toBe(isSet)
     })
+
+    it.each([
+        {query: 'includeProvenance=true', isSet: true},
+        {query: 'includeProvenance=false', isSet: false},
+        {query: '', isSet: false}
+    ])('GIVEN the url query "$query" THEN the endpoints\' flag schema reads $isSet', ({query, isSet}) => {
+        expect(QueryFlagSchema.parse(parseQuery(query).includeProvenance)).toBe(isSet)
+    })
 })
 
 describe('adminBypassQuery', () => {
@@ -96,7 +104,7 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
         it.each([
             {
                 testCase: 'with birthDate',
-                birthDate: '1990-01-01',
+                birthDate: new Date('1990-01-01'),
                 dinnerPreferences: null,
                 expectBirthDate: true,
                 expectDinnerPrefs: false
@@ -709,12 +717,7 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                 birthDate: new Date('1990-01-15'),
                 dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
             }),
-            // The display deserializer also reads a row whose dates arrive as strings
-            serialize: (data) => ({
-                ...data,
-                birthDate: data.birthDate.toISOString(),
-                dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences)
-            }),
+            serialize: (data) => ({...data, dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences)}),
             deserialize: deserializeInhabitantDisplay,
             checkFields: (original, deserialized) => {
                 expect(deserialized.birthDate).toBeInstanceOf(Date)

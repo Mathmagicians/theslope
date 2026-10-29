@@ -40,12 +40,21 @@
  *   [(team) Madhold 2] periode 11/11-12/11
  *                         ex / inkl. moms
  *
+ * The team's heading keeps its line; a dinner's title wraps, its date at its end, the unit words on a line of their own:
+ *   phone (375px)
+ *   | Langtidsstegt lammekølle med      |
+ *   | rodfrugter og persillesovs, 14/04 |
+ *   |                    ex / inkl. moms|
+ *   desktop (1280px): a title that fits keeps one line with the unit words on its right; a longer one wraps as above
+ *   | Risotto, 14/04                                                ex / inkl. moms |
+ *
  * A dot and the bold name mark the dinner on view among the team's days, on one line; a figure without tickets waits
  * instead of balancing; a fragment without rows shows the table's own empty state. A UTable on the table token; the
  * fragment comes from dinnerSpendingFragment or teamSpendingFragment and every figure from the useOrder spending helpers.
  */
 import type {TableColumn} from '@nuxt/ui'
 import type {SpendingFragment, SpendingTableRow} from '~/composables/useBookingUi'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 const props = defineProps<{
   fragment: SpendingFragment
@@ -63,28 +72,28 @@ const {spendingLeft, spendingAwaitsTickets} = useOrder()
 const columns: TableColumn<SpendingTableRow>[] = [
   {id: 'date', header: 'Dato'},
   {id: 'label', header: 'Middag'},
-  {id: 'allowance', header: 'Rådighedsbeløb', meta: COMPONENTS.table.amountColumn},
-  {id: 'spent', header: 'Brugt', meta: COMPONENTS.table.amountColumn},
-  {id: 'left', header: 'Tilbage', meta: COMPONENTS.table.amountColumn}
+  {id: 'allowance', header: BOOKING_WORDS.allowance.budget, meta: COMPONENTS.table.amountColumn},
+  {id: 'spent', header: BOOKING_WORDS.allowance.spent, meta: COMPONENTS.table.amountColumn},
+  {id: 'left', header: BOOKING_WORDS.allowance.left, meta: COMPONENTS.table.amountColumn}
 ]
 </script>
 
 <template>
   <section data-testid="cooking-round">
-    <div :class="COMPONENTS.dinnerBudget.headingLine">
+    <div :class="fragment.kind === SPENDING_KIND.team ? COMPONENTS.dinnerBudget.roundHeadingLine : COMPONENTS.dinnerBudget.dinnerHeadingLine">
       <div v-if="fragment.kind === SPENDING_KIND.team" :class="COMPONENTS.dinnerBudget.roundHeading" data-testid="cooking-round-heading">
         <CookingTeamBadges :team-number="fragment.teamNumber" :team-name="fragment.team" :show-counts="false" />
         <span :class="TYPOGRAPHY.sectionSubheading">{{ fragment.period }}</span>
       </div>
       <h5 v-else :class="TYPOGRAPHY.sectionSubheading" data-testid="cooking-round-heading">{{ fragment.heading }}</h5>
-      <span :class="COMPONENTS.dinnerBudget.headingUnits">ex / inkl. moms</span>
+      <span :class="COMPONENTS.dinnerBudget.headingUnits">{{ BOOKING_WORDS.vatUnits }}</span>
     </div>
     <UTable :data="fragment.rows" :columns="columns" :loading="loading" :ui="COMPONENTS.table.ui">
       <template #date-cell="{ row }">{{ formatDate(row.original.date, DATE_SETTINGS.DAY_MONTH_MASK) }}</template>
       <template #label-cell="{ row }">
         <span v-if="row.original.kind === SPENDING_KIND.dinner" :class="row.original.isCurrent ? COMPONENTS.table.currentDinnerLabel : COMPONENTS.table.dinnerLabel">
           <UIcon v-if="row.original.isCurrent" :name="ICONS.dot" :class="COMPONENTS.table.currentMarker" data-testid="cooking-round-marker" />
-          {{ formatDinnerName(row.original) }}
+          {{ formatDinnerName(row.original.menuTitle) }}
         </span>
         <span v-else :class="COMPONENTS.table.receiptLabel">{{ row.original.label }}</span>
       </template>

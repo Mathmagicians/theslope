@@ -3,10 +3,12 @@ import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
 import {nextTick} from 'vue'
 import {addDays, addMonths, endOfMonth, startOfMonth} from 'date-fns'
-import ChefCalendarDisplay from '~/components/calendar/ChefCalendarDisplay.vue'
+import ChefCalendarDisplay, {CHEF_CALENDAR_VIEW, type ChefCalendarView} from '~/components/calendar/ChefCalendarDisplay.vue'
+import CountdownTimer, {COUNTDOWN_PALETTE} from '~/components/calendar/CountdownTimer.vue'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {CHEF_CALENDAR} from '~/composables/useTheSlopeDesignSystem'
 import {TEAM_WORDS} from '~/config/teamWords'
+import {DATE_WORDS} from '~/config/dateWords'
 import {findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -27,13 +29,11 @@ const OTHER_TEAM_ID = 2
 // A month two ahead of today: the team's dinner there is its next, so the one month view focuses on it
 const MONTH = startOfMonth(addMonths(new Date(), 2))
 
-type ViewMode = 'agenda' | 'calendar'
-
 // The next test's resetStores drops the datasets a still-mounted calendar reads
 enableAutoUnmount(afterEach)
 
-const mountCalendar = async ({viewMode = 'agenda', accordionOpen = true, showSelection = false, dinnerEvents = [], otherTeamDinners = []}: {
-    viewMode?: ViewMode, accordionOpen?: boolean, showSelection?: boolean, dinnerEvents?: DinnerEventDisplay[], otherTeamDinners?: DinnerEventDisplay[]
+const mountCalendar = async ({viewMode = CHEF_CALENDAR_VIEW.agenda, accordionOpen = true, showSelection = false, dinnerEvents = [], otherTeamDinners = []}: {
+    viewMode?: ChefCalendarView, accordionOpen?: boolean, showSelection?: boolean, dinnerEvents?: DinnerEventDisplay[], otherTeamDinners?: DinnerEventDisplay[]
 } = {}) => {
     const {deadlinesForSeason} = useSeason()
     return await mountSuspended(ChefCalendarDisplay, {
@@ -42,7 +42,7 @@ const mountCalendar = async ({viewMode = 'agenda', accordionOpen = true, showSel
             team,
             dinnerEvents,
             otherTeamDinners,
-            deadlines: deadlinesForSeason({ticketIsCancellableDaysBefore: 4, diningModeIsEditableMinutesBefore: 0}, new Date()),
+            deadlines: deadlinesForSeason({...SeasonFactory.defaultSeason(), ticketIsCancellableDaysBefore: 4, diningModeIsEditableMinutesBefore: 0}, new Date()),
             viewMode,
             accordionOpen,
             showSelection
@@ -55,24 +55,38 @@ describe('ChefCalendarDisplay', () => {
         resetStores()
     })
 
-    it.each<{from: ViewMode, label: string, to: ViewMode}>([
-        {from: 'agenda', label: 'Kalender', to: 'calendar'},
-        {from: 'calendar', label: 'Agenda', to: 'agenda'}
-    ])('a click on the $label tab emits tab-click with $to', async ({from, label, to}) => {
+    it.each<{from: ChefCalendarView, to: ChefCalendarView}>([
+        {from: CHEF_CALENDAR_VIEW.agenda, to: CHEF_CALENDAR_VIEW.calendar},
+        {from: CHEF_CALENDAR_VIEW.calendar, to: CHEF_CALENDAR_VIEW.agenda}
+    ])('a click on the $to tab emits tab-click with $to', async ({from, to}) => {
+        const label = TEAM_WORDS.calendar.views[to]
         const wrapper = await mountCalendar({viewMode: from})
-        const tab = findByTestId(wrapper, TEST_IDS.header).findAll('[role="tab"]').find(t => t.text().includes(label))
-        expect(tab, `the ${label} tab renders in the header`).toBeDefined()
-        await tab!.trigger('mousedown', {button: 0})
+        const tabs = findByTestId(wrapper, TEST_IDS.header).findAll('[role="tab"]').filter(t => t.text().includes(label))
+        expect(tabs, `the ${label} tab renders in the header`).toHaveLength(1)
+        for (const tab of tabs) await tab.trigger('mousedown', {button: 0})
         await nextTick()
         expect(wrapper.emitted('tab-click')).toEqual([[to]])
     })
 
-    it.each([true, false])('accordion-open %s renders the content only when open, and the chevron emits update:accordion-open with the toggled value', async (open) => {
+    it.each([true, false])('accordion-open %s renders the content only when open, and the chevron names and emits update:accordion-open with the toggled value', async (open) => {
         const wrapper = await mountCalendar({accordionOpen: open})
         expect(findByTestId(wrapper, TEST_IDS.content).exists()).toBe(open)
-        expect(findByTestId(wrapper, TEST_IDS.toggle).attributes('aria-expanded')).toBe(String(open))
+        const toggle = findByTestId(wrapper, TEST_IDS.toggle)
+        expect(toggle.attributes('aria-expanded')).toBe(String(open))
+        expect(toggle.attributes('aria-label')).toBe(open ? TEAM_WORDS.calendar.hide : TEAM_WORDS.calendar.show)
         await clickByTestId(wrapper, TEST_IDS.toggle)
         expect(wrapper.emitted('update:accordion-open')).toEqual([[!open]])
+    })
+
+    it('the countdown reads the next cooking\'s words in the chef palette, and the agenda heads its days', async () => {
+        const wrapper = await mountCalendar()
+        expect(wrapper.findComponent(CountdownTimer).props()).toMatchObject({
+            title: TEAM_WORDS.calendar.countdownTitle,
+            timeLabel: TEAM_WORDS.calendar.countdownTimeLabel,
+            emptyText: DATE_WORDS.countdown.none,
+            palette: COUNTDOWN_PALETTE.chef
+        })
+        expect(findByTestId(wrapper, TEST_IDS.content).find('thead').text()).toContain(TEAM_WORDS.calendar.agendaTitle)
     })
 
     it('tells the chef when the team has no dinners, under a header without a button inside a button', async () => {
@@ -101,7 +115,7 @@ describe('ChefCalendarDisplay other teams\' dinners', () => {
     })
 
     const mountMonth = () => mountCalendar({
-        viewMode: 'calendar', accordionOpen: true, showSelection: true,
+        viewMode: CHEF_CALENDAR_VIEW.calendar, accordionOpen: true, showSelection: true,
         dinnerEvents: [OWN_DINNER], otherTeamDinners: [OTHER_TEAM_DINNER]
     })
     type Mounted = Awaited<ReturnType<typeof mountMonth>>

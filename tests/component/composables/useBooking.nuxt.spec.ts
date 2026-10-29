@@ -1,12 +1,14 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addHours, addYears} from 'date-fns'
-import {useBooking, type AlarmLevel, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, bookingContextOf, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, isDinnerCancelled, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
+import {useBooking, type AlarmLevel, formatPlace, formatDinnerName, actionOfUpdate, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getBookingOptions, bookingContextOf, powerOptions, DINNER_MODE_ORDER, bookingOutcomes, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, buildEntryDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, isDinnerCancelled, type OrderDecisionInput, type TicketPriceResolver, type BookingRow, type BookingContext} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {dateToWeekDay, isBeforeDeadline} from '~/utils/season'
 import {formatDate} from '~/utils/date'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {sumBy} from '~/utils/ledger'
-import {useBookingValidation, TicketState, SupplyState, type OrderDisplay, type DinnerMode, type DinnerState, type DesiredOrder, type OrderAuditAction, type OrderAuditChange, type OrderAuditSource, type OrderSnapshot, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
+import {useBookingValidation, TicketState, SupplyState, type BookingIntent, type OrderDisplay, type DinnerMode, type DinnerState, type DesiredOrder, type OrderAuditAction, type OrderAuditChange, type OrderAuditSource, type OrderSnapshot, type OrderState, type TicketType, type TicketChange, type DinnerEventDisplay, type DinnerEventDate, type ForSaleCounts, type WaitlistCounts} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplayInline} from '~/composables/useCookingTeamValidation'
+import {OPEN_DEADLINES, type BookingDeadlines} from '~/composables/useSeason'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {useHousehold} from '~/composables/useHousehold'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
@@ -286,8 +288,7 @@ describe('useBooking', () => {
             {state: DinnerStates.CANCELLED, expected: false, description: 'cannot cancel already CANCELLED dinners'},
             {state: DinnerStates.CONSUMED, expected: false, description: 'cannot cancel CONSUMED dinners'}
         ])('$description', ({state, expected}) => {
-            const dinnerEvent = {state: state as keyof typeof DinnerState}
-            expect(canCancelDinner(dinnerEvent)).toBe(expected)
+            expect(canCancelDinner({...DinnerEventFactory.defaultDinnerEventDisplay(), state})).toBe(expected)
         })
     })
 
@@ -354,7 +355,7 @@ describe('useBooking', () => {
                 expected: DinnerStepState.CONSUMED
             }
         ])('$description', ({state, date, totalCost, expected}) => {
-            const dinnerEvent = {state: state as keyof typeof DinnerState, date, totalCost}
+            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDisplay(), state, date, totalCost}
             expect(getDinnerStepState(dinnerEvent, defaultDeadlines)).toBe(expected)
         })
     })
@@ -372,7 +373,7 @@ describe('useBooking', () => {
             const futureDate = new Date()
             futureDate.setDate(futureDate.getDate() + 14)
 
-            const dinnerEvent = {state: DinnerStates.SCHEDULED, date: futureDate, totalCost: 0}
+            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDisplay(), state: DinnerStates.SCHEDULED, date: futureDate, totalCost: 0}
             expect(getStepConfig(dinnerEvent, defaultDeadlines).step).toBe(0)
         })
     })
@@ -470,12 +471,13 @@ describe('useBooking', () => {
             d.setHours(12, 0, 0, 0)
             return d
         }
+        const pending = (id: number, days: number): DinnerEventDate => ({id, date: daysFromNow(days)})
 
         it.each([
             {desc: 'empty input', dinners: [], expectedIds: []},
-            {desc: 'all future', dinners: [{id: 1, date: daysFromNow(1)}, {id: 2, date: daysFromNow(2)}], expectedIds: []},
-            {desc: 'all past', dinners: [{id: 1, date: daysFromNow(-1)}, {id: 2, date: daysFromNow(-2)}], expectedIds: [1, 2]},
-            {desc: 'mixed', dinners: [{id: 1, date: daysFromNow(-1)}, {id: 2, date: daysFromNow(1)}, {id: 3, date: daysFromNow(-2)}], expectedIds: [1, 3]}
+            {desc: 'all future', dinners: [pending(1, 1), pending(2, 2)], expectedIds: []},
+            {desc: 'all past', dinners: [pending(1, -1), pending(2, -2)], expectedIds: [1, 2]},
+            {desc: 'mixed', dinners: [pending(1, -1), pending(2, 1), pending(3, -2)], expectedIds: [1, 3]}
         ])('$desc → returns $expectedIds', ({dinners, expectedIds}) => {
             const result = getPastDinnerIds(dinners, new Date())
             expect(result.sort()).toEqual(expectedIds.sort())
@@ -927,7 +929,7 @@ describe('resolveDesiredOrdersToBuckets', () => {
     const farFutureDate = new Date()
     farFutureDate.setDate(farFutureDate.getDate() + 30)
 
-    const dinnerEventById = new Map([[101, { date: farFutureDate }]])
+    const dinnerEventById = new Map([[101, {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 101, date: farFutureDate}]])
     const canModifyOrders = () => true
     const canEditDiningMode = () => true
 
@@ -995,7 +997,7 @@ describe('resolveDesiredOrdersToBuckets', () => {
         const pastDate = new Date()
         pastDate.setDate(pastDate.getDate() + 1)  // Tomorrow = after deadline
 
-        const pastEventById = new Map([[201, { date: pastDate }]])
+        const pastEventById = new Map([[201, {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 201, date: pastDate}]])
         const cannotModify = () => false
         const cannotEdit = () => false
 
@@ -1676,12 +1678,14 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
 
 describe('Lock Status Utilities', () => {
     // Test helpers
-    const makeEvent = (id: number, daysFromNow: number) => ({
+    const makeEvent = (id: number, daysFromNow: number): DinnerEventDisplay => ({
+        ...DinnerEventFactory.defaultDinnerEventDisplay(),
         id,
         date: addDays(new Date(), daysFromNow)
     })
 
-    const makeDeadlines = (lockedDaysAhead: number) => ({
+    const makeDeadlines = (lockedDaysAhead: number): BookingDeadlines => ({
+        ...OPEN_DEADLINES,
         canModifyOrders: isBeforeDeadline(lockedDaysAhead, 0, new Date())
     })
 
@@ -1741,8 +1745,8 @@ describe('Lock Status Utilities', () => {
     describe('computeLockStatus', () => {
         // The released counts the store reads, and the ReleasedTicketCounts a locked dinner carries: its tickets for sale
         // beside its waiting list
-        const released = (total: number, formatted: string, byType: Partial<Record<typeof TicketTypes[keyof typeof TicketTypes], number>>) => ({ total, formatted, byType })
-        const queue = (queued: number, queuedFormatted: string, queuedByType: Partial<Record<typeof TicketTypes[keyof typeof TicketTypes], number>> = {}) => ({ queued, queuedFormatted, queuedByType })
+        const released = (total: number, formatted: string, byType: ForSaleCounts['byType']): ForSaleCounts => ({ total, formatted, byType })
+        const queue = (queued: number, queuedFormatted: string, queuedByType: WaitlistCounts['queuedByType'] = {}): WaitlistCounts => ({ queued, queuedFormatted, queuedByType })
         const counts = (supply = released(0, '-', {}), waitlist = queue(0, '-')) => ({ ...supply, ...waitlist })
         const emptyCount = counts()
         const adults = (count: number) => released(count, `${count}V`, {[TicketTypes.ADULT]: count})
@@ -1841,7 +1845,7 @@ describe('getBookingOptions — the rules matrix', () => {
         return state === undefined ? dinner : {...dinner, state}
     }
     const contextOf = (dinner: Dinner, {canModifyOrders, canEditDiningMode}: ColumnSpec): BookingContext => ({
-        event: {date: dinner.date, state: dinner.state},
+        event: dinner,
         deadlines: {canModifyOrders: () => canModifyOrders, canEditDiningMode: () => canEditDiningMode},
         isHouseholdInResidency: () => true,
         takesNoPortion: everyTicketTakesAPortion,
@@ -1942,8 +1946,7 @@ describe('getBookingOptions — the rules matrix', () => {
 })
 
 describe('bookingContextOf — the context the day view, the grid and the guest form hand getBookingOptions', () => {
-    const dinner = DinnerEventFactory.dinnerEventAt(101, 10)
-    const event = {date: dinner.date, state: dinner.state}
+    const event = DinnerEventFactory.dinnerEventAt(101, 10)
     const movedIn = addDays(today, 10)
     const movedOut = addDays(today, 20)
     // The household lives in from its move-in day, through its move-out day when it has one
@@ -2123,7 +2126,7 @@ describe('formatDinnerName', () => {
         {desc: 'an empty menu title', menuTitle: '', name: 'Fællesspisning'},
         {desc: 'a menu title of spaces', menuTitle: '   ', name: 'Fællesspisning'}
     ])('GIVEN $desc THEN the dinner reads "$name"', ({menuTitle, name}) => {
-        expect(formatDinnerName({menuTitle})).toBe(name)
+        expect(formatDinnerName(menuTitle)).toBe(name)
     })
 })
 
@@ -2155,7 +2158,8 @@ describe('replayTicketChanges', () => {
     const personOf = (actor: number) => ({name: `Navn${actor}`, lastName: `Efternavn${actor}`})
     // The buyer of household n eats as inhabitant 200 + n
     const buyerInhabitant = (householdId: number) => 200 + householdId
-    const householdOfInhabitant = (inhabitantId: number) => ({id: inhabitantId - 200, shortName: shortNameOf(inhabitantId - 200)})
+    const householdOfInhabitant = (inhabitantId: number): HouseholdDisplay =>
+        ({...HouseholdFactory.defaultHouseholdDetail(), id: inhabitantId - 200, shortName: shortNameOf(inhabitantId - 200)})
     const at =(minutes: number, seconds = 0) => new Date(2026, 3, 2, 20, minutes, seconds)
 
     type Ticket = {id: number, inhabitantId: number, ticketPriceId: number, householdId: number, isGuestTicket?: boolean}
@@ -2568,7 +2572,7 @@ describe('replayTicketChanges', () => {
 })
 
 describe('consecutiveDinnerRun', () => {
-    const dinner = (id: number, day: number) => ({id, date: new Date(2026, 3, day, 18)})
+    const dinner = (id: number, day: number): DinnerEventDisplayInline => ({...DinnerEventFactory.defaultDinnerEventDisplay(), id, date: new Date(2026, 3, day, 18)})
 
     it.each([
         {desc: 'three days in a row around the middle one', dinners: [dinner(1, 12), dinner(2, 13), dinner(3, 14)], around: 2, expected: [1, 2, 3]},

@@ -6,6 +6,7 @@ import {enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
 import {mountWithTooltipProvider, findByTestId, resetStores, iconNamesIn} from '~~/tests/component/testHelpers'
 import {ROLE_ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {TEAM_WORDS} from '~/config/teamWords'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
 
 enableAutoUnmount(afterEach)
@@ -35,13 +36,9 @@ describe('TeamMemberAddForm', () => {
 
     // ========== EDIT MODE PRE-FILL ==========
 
-    it.each([
-        [Role.CHEF, 'Chefkok'],
-        [Role.COOK, 'Kok'],
-        [Role.JUNIORHELPER, 'Kokkespire']
-    ])('edit mode pre-fills role %s as "%s" with its glyph on the trigger, and shows "Gem"', async (role, expectedLabel) => {
+    it.each(TeamRoleSchema.options)('edit mode pre-fills role %s with its label and its glyph on the trigger, and shows "Gem"', async (role) => {
         const wrapper = await mount({initialRole: role})
-        expect(wrapper.text()).toContain(expectedLabel)
+        expect(wrapper.text()).toContain(TEAM_WORDS.roles[role].label)
         expect(triggerGlyphs(wrapper)).toContain(ROLE_ICONS[role])
         expect(wrapper.text()).toContain('Gem')
     })

@@ -7,9 +7,13 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {useUsersStore} from '~/stores/users'
+import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
+import {USER_WORDS} from '~/config/userWords'
+import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 
 const {SystemRoleSchema} = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum
+const heynaboImportDone = MAINTENANCE_WORDS.job.completed(MAINTENANCE_WORDS.jobTypes[useMaintenanceValidation().JobType.HEYNABO_IMPORT])
 
 const usersEndpoint = vi.fn()
 const allergyManagersEndpoint = vi.fn()
@@ -84,7 +88,7 @@ describe('Users store', () => {
             await store.importHeynaboData()
 
             expect(store.heynaboImport?.householdsCreated).toBe(2)
-            expect(toastTitles()).toContain('Heynabo import fuldført')
+            expect(toastTitles()).toContain(heynaboImportDone)
             expect(usersEndpoint.mock.calls.length).toBeGreaterThan(userFetchesBefore)
         })
 
@@ -95,7 +99,7 @@ describe('Users store', () => {
             await expect(store.importHeynaboData()).rejects.toBeTruthy()
             expect(store.isImportHeynaboErrored).toBe(true)
             expect(store.heynaboImportError?.message).toBeTruthy()
-            expect(toastTitles()).not.toContain('Heynabo import fuldført')
+            expect(toastTitles()).not.toContain(heynaboImportDone)
         })
     })
 
@@ -107,7 +111,7 @@ describe('Users store', () => {
             await store.updateUserRoles(user.id!, [SystemRole.ADMIN])
 
             expect(updateUserEndpoint).toHaveBeenCalledTimes(1)
-            expect(toastTitles()).toContain('Roller opdateret')
+            expect(toastTitles()).toContain(USER_WORDS.toasts.rolesUpdated.title)
             expect(usersEndpoint.mock.calls.length).toBeGreaterThan(userFetchesBefore)
         })
 
@@ -116,7 +120,7 @@ describe('Users store', () => {
             const store = useUsersStore()
 
             await expect(store.updateUserRoles(user.id!, [SystemRole.ADMIN])).rejects.toBeTruthy()
-            expect(toastTitles()).not.toContain('Roller opdateret')
+            expect(toastTitles()).not.toContain(USER_WORDS.toasts.rolesUpdated.title)
         })
     })
 })

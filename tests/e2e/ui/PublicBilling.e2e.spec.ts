@@ -21,7 +21,7 @@ test.describe('Public Billing Page', () => {
         // Find a period with a shareToken
         const periodWithToken = periods.find(p => p.shareToken)
         if (!periodWithToken) {
-            throw new Error('No billing period with shareToken found - run maintenance.e2e.spec.ts first')
+            throw new Error('No billing period with shareToken found - run monthly-billing.feature first')
         }
 
         shareToken = periodWithToken.shareToken!
@@ -48,45 +48,6 @@ test.describe('Public Billing Page', () => {
         await expect(page.getByText('Fakturaer')).toBeVisible()
         await expect(page.getByText('PBS ID')).toBeVisible()
         await expect(page.getByText('Adresse')).toBeVisible()
-    })
-
-    test('GIVEN valid token WHEN requesting CSV endpoint THEN returns valid CSV', async ({page}) => {
-        // Navigate to page first to verify it loads
-        await page.goto(`/public/billing/${shareToken}`)
-        await expect(page.getByText('PBS Fakturaoversigt')).toBeVisible()
-
-        // Verify share button exists (CSV link is in popover)
-        await expect(page.getByRole('button', {name: 'Del links'})).toBeVisible()
-
-        // Test CSV endpoint directly (unauthenticated request: the page's context has no session)
-        const {csv, contentType} = await BillingFactory.getBillingCsvByToken(page.context(), shareToken)
-        expect(contentType).toContain('text/csv')
-
-        const header = csv.split('\n')[0]
-        expect(header).toContain('Kunde nr')
-        expect(header).toContain('Adresse')
-        expect(header).toContain('Total DKK')
-
-        // Verifies CSV data rows are sorted by address (primary) and pbsId (tiebreaker).
-        // Row format: pbsId,"address",totalDKK,...
-        const lines = csv.split('\n').filter(l => l.trim())
-        expect(lines.length, 'Need header + at least 2 data rows to verify ordering').toBeGreaterThanOrEqual(3)
-
-        const parseRow = (line: string) => {
-            const pbsId = Number(line.split(',')[0])
-            const addressMatch = line.match(/^[^,]+,"([^"]*)"/)
-            return {pbsId, address: addressMatch?.[1] ?? ''}
-        }
-        const rows = lines.slice(1).map(parseRow)
-        for (let i = 1; i < rows.length; i++) {
-            const prev = rows[i - 1]!
-            const curr = rows[i]!
-            if (prev.address === curr.address) {
-                expect(curr.pbsId).toBeGreaterThanOrEqual(prev.pbsId)
-            } else {
-                expect(curr.address.localeCompare(prev.address)).toBeGreaterThanOrEqual(0)
-            }
-        }
     })
 
     test('GIVEN invalid token WHEN navigating to public billing page THEN shows not found message', async ({page}) => {

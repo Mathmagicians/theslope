@@ -93,6 +93,7 @@ import {FORM_MODES, type FormMode} from '~/types/form'
 import type {ChefMenuForm} from '~/composables/useBookingValidation'
 import type {ExpenseCreate} from '~/composables/useBillingValidation'
 import type {CookingRoundRow} from '~/composables/useBookingUi'
+import {CHEF_CALENDAR_VIEW, type ChefCalendarView} from '~/components/calendar/ChefCalendarDisplay.vue'
 
 // Design system
 const {ICONS, LAYOUTS, ALERTS, COMPONENTS, breakpoint} = useTheSlopeDesignSystem()
@@ -171,17 +172,17 @@ const calendarError = computed(() => isPlanStoreErrored.value ? planStoreError.v
 
 // Calendar view mode + accordion state via URL query param - survives component remounts (ADR-006)
 // Format: view=calendar:open or view=agenda:closed
-type ViewState = { mode: 'agenda' | 'calendar', open: boolean }
+const ACCORDION_STATE = {open: 'open', closed: 'closed'} as const
+type ViewState = { mode: ChefCalendarView, open: boolean }
 const {value: viewState, setValue: setViewState} = useQueryParam<ViewState>('view', {
-  serialize: (v) => `${v.mode}:${v.open ? 'open' : 'closed'}`,
+  serialize: (v) => `${v.mode}:${v.open ? ACCORDION_STATE.open : ACCORDION_STATE.closed}`,
   deserialize: (s) => {
-    const [mode, state] = s.split(':')
-    if ((mode === 'agenda' || mode === 'calendar') && (state === 'open' || state === 'closed')) {
-      return { mode, open: state === 'open' }
-    }
-    return null
+    const [modeText, stateText] = s.split(':')
+    const mode = Object.values(CHEF_CALENDAR_VIEW).find(view => view === modeText)
+    const state = Object.values(ACCORDION_STATE).find(value => value === stateText)
+    return mode && state ? { mode, open: state === ACCORDION_STATE.open } : null
   },
-  defaultValue: () => ({ mode: 'calendar', open: breakpoint.isMd.value ?? false }),
+  defaultValue: () => ({ mode: CHEF_CALENDAR_VIEW.calendar, open: breakpoint.isMd.value ?? false }),
   // The default reads the viewport, so the one-shot sync waits for the layout to measure it
   syncWhen: () => isPageReady.value && breakpoint.measured.value
 })
@@ -191,7 +192,7 @@ const calendarViewMode = computed(() => viewState.value.mode)
 const calendarAccordionOpen = computed(() => viewState.value.open)
 
 // A tab click sets the mode and opens the calendar; the chevron toggles the open state in the current mode
-const handleTabClick = (mode: 'agenda' | 'calendar') => setViewState({ mode, open: true })
+const handleTabClick = (mode: ChefCalendarView) => setViewState({ mode, open: true })
 const handleAccordionToggle = (open: boolean) => setViewState({ mode: viewState.value.mode, open })
 const teamDinnerDates = computed(() => teamDinnerEvents.value.map(dinner => dinner.date))
 
@@ -262,7 +263,7 @@ const expenseNote = computed(() => {
   const user = authStore.user
   if (!dinnerEventDetail.value || !user) return ''
   const name = user.Inhabitant ? formatNameWithInitials(user.Inhabitant) : user.email
-  return expenseNoteWords(dinnerEventDetail.value, {name, email: user.email})
+  return expenseNoteWords(dinnerEventDetail.value, {id: user.id, name, email: user.email})
 })
 
 const handleAddExpense = (line: ExpenseCreate) => {

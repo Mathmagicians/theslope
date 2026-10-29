@@ -43,7 +43,7 @@
  * - Countdown timer (train station style, CountdownTimer's dinner palette)
  * - Holidays (green rings)
  * - Generated dinner events (peach filled, DINNER_CALENDAR.day.future) - actual events created for the season
- * - Next dinner (special highlight, DINNER_CALENDAR.day.next) - the day in the 'next-dinner' event list
+ * - Next dinner (special highlight, DINNER_CALENDAR.day.next)
  *
  * Uses BaseCalendar for consistent calendar structure and event management.
  * Domain-specific rendering via slots (rings for holidays, filled for actual).
@@ -53,9 +53,9 @@ import type {DateValue} from '@internationalized/date'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
 import {LEGEND_KIND, type CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
+import {COUNTDOWN_PALETTE} from '~/components/calendar/CountdownTimer.vue'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {isSameDay} from 'date-fns'
-import {isCalendarDateInDateList, toDate} from '~/utils/date'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {DATE_WORDS} from '~/config/dateWords'
 
@@ -65,7 +65,6 @@ interface Props {
   dinnerEvents?: DinnerEventDisplay[]
   numberOfMonths?: number
   showCountdown?: boolean
-  useRings?: boolean
   selectedDate?: Date
   /** Lock status map keyed by dinner event ID (null = not locked, counts = locked with breakdown) */
   lockStatus?: Map<number, ReleasedTicketCounts | null>
@@ -75,14 +74,13 @@ const props = withDefaults(defineProps<Props>(), {
   dinnerEvents: () => [],
   numberOfMonths: 1,
   showCountdown: false,
-  useRings: false,
   selectedDate: undefined,
   lockStatus: undefined
 })
 
 const {getHolidayDatesFromDateRangeList} = useSeason()
-const {useTemporalSplit, createTemporalEventLists, getDinnerForDay, isCancelledDay} = useTemporalCalendar()
-const {CALENDAR, DINNER_CALENDAR, COMPONENTS, SIZES, ICONS, BOOKING_LOCK_STATUS, dayCircleClasses} = useTheSlopeDesignSystem()
+const {useTemporalSplit, createTemporalEventLists, dayTypeOf, getDinnerForDay, isCancelledDay} = useTemporalCalendar()
+const {CALENDAR, DINNER_CALENDAR, COMPONENTS, SIZES, ICONS, BOOKING_LOCK_STATUS, dayCircleClasses, dayColorClass} = useTheSlopeDesignSystem()
 const {lockChip} = useBookingUi()
 const now = useClock()
 
@@ -111,22 +109,8 @@ const getLockChipForDay = (day: DateValue) => {
   return dinner ? lockChip(dinner, props.lockStatus, now.value) : null
 }
 
-// Day type detection - returns 'next' | 'future' | 'past' | null
-type DayType = 'next' | 'future' | 'past'
-const getDayType = (eventLists: DayEventList[]): DayType | null => {
-  if (eventLists.some(list => list.listId === 'next-dinner')) return 'next'
-  if (eventLists.some(list => list.listId === 'future-dinners')) return 'future'
-  if (eventLists.some(list => list.listId === 'past-dinners')) return 'past'
-  return null
-}
-
-// Get day color class (past is shared, next/future are palette-specific)
-const getDayColorClass = (type: DayType): string => {
-  return type === 'past' ? CALENDAR.day.past : DINNER_CALENDAR.day[type]
-}
-
-// The day read once per cell, so the template narrows its dinner type and its lock chip
-const dayCellOf = (day: DateValue, eventLists: DayEventList[]) => ({type: getDayType(eventLists), chip: getLockChipForDay(day)})
+// The day read once per cell, keyed by its date, so the template narrows its dinner type and its lock chip
+const dayCellOf = (day: DateValue, eventLists: DayEventList[]) => ({key: day.toString(), type: dayTypeOf(eventLists), chip: getLockChipForDay(day)})
 
 // Legend items: the lock chips wrap a planned-day circle at the lock chip's size, as the day cells do
 const legendItems = computed((): CalendarLegendItem[] => {
@@ -188,12 +172,12 @@ const isSelected = (day: DateValue): boolean => {
     <!-- Countdown Timer (Train Station Style) -->
     <CountdownTimer
       v-if="showCountdown"
-      title="Næste Fællesspisning"
-      time-label="spisning"
-      empty-text="Ingen"
+      :title="BOOKING_WORDS.calendar.countdownTitle"
+      :time-label="BOOKING_WORDS.calendar.countdownTimeLabel"
+      :empty-text="DATE_WORDS.countdown.none"
       :next-event="nextDinner"
       :event-start-hour="dinnerStartHour"
-      palette="dinner"
+      :palette="COUNTDOWN_PALETTE.dinner"
       clickable
       @select="handleCountdownClick"
     />
@@ -203,7 +187,7 @@ const isSelected = (day: DateValue): boolean => {
       <template #leading>
         <div :class="COMPONENTS.dinnerCalendar.leading">
           <UIcon :name="ICONS.calendarDays" />
-          <span>Fællesspisninger</span>
+          <span>{{ BOOKING_WORDS.calendar.title }}</span>
         </div>
       </template>
       <template #calendar-content>
@@ -211,7 +195,7 @@ const isSelected = (day: DateValue): boolean => {
         <div :class="COMPONENTS.dinnerCalendar.calendar">
           <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="numberOfMonths" :focus-date="selectedDate">
             <template #day="{ day, eventLists }">
-              <template v-for="{type, chip} in [dayCellOf(day, eventLists)]" :key="day.toString()">
+              <template v-for="{key, type, chip} in [dayCellOf(day, eventLists)]" :key="key">
                 <!-- Holiday takes precedence (green ring) -->
                 <div
                   v-if="isHoliday(day)"
@@ -241,7 +225,7 @@ const isSelected = (day: DateValue): boolean => {
                   :data-testid="`calendar-dinner-date-${day.day}`"
                 >
                   <div
-                    :class="dayCircleClasses(getDayColorClass(type), isSelected(day) && DINNER_CALENDAR.selection)"
+                    :class="dayCircleClasses(dayColorClass(DINNER_CALENDAR, type), isSelected(day) && DINNER_CALENDAR.selection)"
                     @click="handleDateClick(day)"
                   >
                     {{ day.day }}
@@ -259,7 +243,7 @@ const isSelected = (day: DateValue): boolean => {
                 <div
                   v-else-if="type"
                   :data-testid="`calendar-dinner-date-${day.day}`"
-                  :class="dayCircleClasses(getDayColorClass(type), isSelected(day) && DINNER_CALENDAR.selection)"
+                  :class="dayCircleClasses(dayColorClass(DINNER_CALENDAR, type), isSelected(day) && DINNER_CALENDAR.selection)"
                   @click="handleDateClick(day)"
                 >
                   {{ day.day }}

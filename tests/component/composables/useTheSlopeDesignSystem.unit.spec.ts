@@ -1,6 +1,7 @@
 import {describe, it, expect, afterEach} from 'vitest'
 import {ref} from 'vue'
-import {getRandomEmptyMessage, EMPTY_STATE_MESSAGES, createResponsiveAlerts, createBreakpoint, createMasterDetail, ORDER_STATE_COLORS, COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
+import {getRandomEmptyMessage, EMPTY_STATE_MESSAGES, createResponsiveAlerts, createBreakpoint, createMasterDetail, ORDER_STATE_COLORS, COMPONENTS, CALENDAR, CHEF_CALENDAR, DINNER_CALENDAR, dayColorClass} from '~/composables/useTheSlopeDesignSystem'
+import {TEMPORAL_CATEGORY} from '~/utils/season'
 
 const contexts = Object.keys(EMPTY_STATE_MESSAGES) as Array<keyof typeof EMPTY_STATE_MESSAGES>
 
@@ -62,5 +63,16 @@ describe('createMasterDetail', () => {
         [true, true]
     ] as const)('isMd=%s → detail renders as a pane: %s', (md, asPane) => {
         expect(createMasterDetail(ref(md)).detailAsPane).toBe(asPane)
+    })
+})
+
+describe('dayColorClass', () => {
+    it.each([
+        {calendar: 'dinner', palette: DINNER_CALENDAR},
+        {calendar: 'chef', palette: CHEF_CALENDAR}
+    ])('the $calendar calendar colours its next and future days from its palette and a past day from the shared past', ({palette}) => {
+        expect(dayColorClass(palette, TEMPORAL_CATEGORY.next)).toBe(palette.day.next)
+        expect(dayColorClass(palette, TEMPORAL_CATEGORY.future)).toBe(palette.day.future)
+        expect(dayColorClass(palette, TEMPORAL_CATEGORY.past)).toBe(CALENDAR.day.past)
     })
 })

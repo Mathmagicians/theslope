@@ -142,14 +142,10 @@ describe('HouseholdCreateForm', () => {
 
         const emitted = wrapper.emitted('create')
         expect(emitted).toBeTruthy()
-        expect(emitted![0]![0]).toEqual({
-            pbsId: 116,
-            address: 'Skråningen 14',
-            movedInDate: moveInDate,
-            heynaboId: 42,
-            name: 'Familien Hansen',
-            prevOwnerMoveOutUpdates: [{id: 7, moveOutDate: moveInDate}]
-        })
+        expect(emitted![0]).toEqual([
+            {pbsId: 116, address: 'Skråningen 14', movedInDate: moveInDate, heynaboId: 42, name: 'Familien Hansen'},
+            [{id: 7, moveOutDate: moveInDate}]
+        ])
     })
 
     // ========== VALIDATION BLOCKS SUBMIT ==========

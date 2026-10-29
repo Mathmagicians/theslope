@@ -22,7 +22,10 @@ import {SEASON_CONFIG} from '~/config/season'
 export type DeadlineUrgency = 0 | 1 | 2
 
 /** The two predicates the booking generator decides by */
-export type BookingDeadlines = Pick<SeasonDeadlines, 'canModifyOrders' | 'canEditDiningMode'>
+export type BookingDeadlines = {
+    canModifyOrders: (dinnerEventDate: Date) => boolean
+    canEditDiningMode: (dinnerEventDate: Date) => boolean
+}
 
 /** Every dinner books, cancels and changes mode as if before its deadlines: an admin's correction */
 export const OPEN_DEADLINES: BookingDeadlines = {canModifyOrders: () => true, canEditDiningMode: () => true}
@@ -31,7 +34,7 @@ export const OPEN_DEADLINES: BookingDeadlines = {canModifyOrders: () => true, ca
  * Season-configured deadline functions.
  * Time getters are ROOT, predicates derive via isBefore(now, timeGetter).
  */
-export type SeasonDeadlines = {
+export type SeasonDeadlines = BookingDeadlines & {
     // Time getters (ROOT)
     getDinnerStartTime: (dinnerEventDate: Date) => Date
     getMenuDeadlineTime: (dinnerEventDate: Date) => Date
@@ -39,8 +42,6 @@ export type SeasonDeadlines = {
     getDiningModeDeadlineTime: (dinnerEventDate: Date) => Date
 
     // Predicates (DERIVED)
-    canModifyOrders: (dinnerEventDate: Date) => boolean
-    canEditDiningMode: (dinnerEventDate: Date) => boolean
     isAnnounceMenuPastDeadline: (dinnerEventDate: Date) => boolean
     getOrderCancellationAction: (dinnerEventDate: Date) => {
         updates: { dinnerMode: DinnerMode, state: typeof OrderStateEnum.RELEASED, releasedAt: Date }
@@ -52,11 +53,6 @@ export type SeasonDeadlines = {
  * Preference update for batch inhabitant preference clipping
  */
 export type PreferenceUpdate = { inhabitantId: number, dinnerPreferences: WeekDayMap<DinnerMode> }
-
-/**
- * Temporal category for dinner events relative to current time
- */
-export type TemporalCategory = 'next' | 'future' | 'past'
 
 /**
  * Business logic for working with seasons
@@ -342,7 +338,7 @@ export const useSeason = () => {
      * Menu deadline from config (10 days), booking deadline from season (8 days).
      * The predicates compare against `now`, so a caller builds the deadlines per moment (a computed over the clock, a run's start).
      */
-    const deadlinesForSeason = (season: Pick<Season, 'ticketIsCancellableDaysBefore' | 'diningModeIsEditableMinutesBefore'>, now: Date): SeasonDeadlines => {
+    const deadlinesForSeason = (season: Season, now: Date): SeasonDeadlines => {
         const dinnerStartHour = getDefaultDinnerStartTime()
         const menuDeadlineDays = getMenuAnnouncementDeadlineDays()
 

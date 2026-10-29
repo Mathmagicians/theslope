@@ -79,7 +79,7 @@ const DeliveredVersionsSchema = z.object({
 const NO_DELIVERIES: DeliveredVersions = {ARCHIVE: 0, EMAIL: 0, SMS: 0}
 
 /** Pure: reduce a subject's delivery rows to the highest version per kind */
-export const deliveredVersions = (rows: Array<Pick<Delivery, 'kind' | 'version'>>): DeliveredVersions =>
+export const deliveredVersions = (rows: Delivery[]): DeliveredVersions =>
     rows.reduce((max, row) => ({...max, [row.kind]: Math.max(max[row.kind], row.version)}), {...NO_DELIVERIES})
 
 const USER_MARK = 'user-'

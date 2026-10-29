@@ -1,9 +1,9 @@
 import {describe, it, expect} from 'vitest'
 import {subMinutes} from 'date-fns'
-import {useWaitlist, type TicketForSale} from '~/composables/useWaitlist'
+import {useWaitlist} from '~/composables/useWaitlist'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
-import {useWaitlistValidation, type PlacementOrder, type TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
+import {useWaitlistValidation, type PlacementOrder, type TicketForSale, type TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
@@ -122,11 +122,11 @@ describe('useWaitlist', () => {
                 sold: []
             }
         ])('$description', ({tickets, sold}) => {
-            expect(previewSale(queue, tickets, TICKET_PRICES)).toEqual({waitlistTicketsSold: sold})
+            expect(previewSale(queue, tickets, TICKET_PRICES)).toEqual(sold)
         })
 
         it('sells nothing while nobody waits', () => {
-            expect(previewSale([], [ticket(70, TicketType.ADULT, 0, 5)], TICKET_PRICES)).toEqual({waitlistTicketsSold: []})
+            expect(previewSale([], [ticket(70, TicketType.ADULT, 0, 5)], TICKET_PRICES)).toEqual([])
         })
     })
 

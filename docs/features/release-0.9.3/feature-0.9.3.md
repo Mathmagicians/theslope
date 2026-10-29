@@ -527,9 +527,10 @@ Moved from release 0.9.1 on 2026-10-28; not built.
 
 ### Problem
 
-A refresh of a dataset sets it pending, so its store reads not ready and the page swaps to the loader. Claiming a role
-on the dinner page (`assignRoleToDinner` in `app/stores/plan.ts` awaits `refreshSelectedSeason()`) and saving a
-preference on the household page both remount the page.
+A refresh of a dataset sets it pending, so its store reads not ready and the page swaps to the loader. Claiming or
+resigning a role on the dinner page (`claimRoleForMe` and `resignRoleForMe` in `app/stores/plan.ts` await
+`refreshTeamAggregates`, which refreshes the selected season) and saving a preference on the household page remount the
+page.
 
 ### Solution
 

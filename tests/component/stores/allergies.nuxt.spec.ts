@@ -12,6 +12,7 @@ import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactor
 import { asyncDataStatus, resetStores, registerEmptyStoreEndpoints } from '~~/tests/component/testHelpers'
 
 import { useAllergiesStore } from '~/stores/allergies'
+import { ALLERGY_WORDS } from '~/config/allergyWords'
 
 // The test runtime has no session cookie, so the session is the one thing faked; the households store
 // selecting the household from it is real
@@ -182,7 +183,7 @@ describe('Allergies Store - selected allergy type', () => {
         await vi.waitFor(() => expect(allergyTypesEndpoint.mock.calls.length).toBeGreaterThan(catalogRequests))
         await vi.waitFor(() => expect(store.selectedAllergyTypeId).toBeNull())
         expect(goneAllergyTypeEndpoint).toHaveBeenCalledTimes(1)
-        expect(useToast().toasts.value.at(-1)?.title).toBe('Kan ikke finde allergitypen')
+        expect(useToast().toasts.value.at(-1)?.title).toBe(ALLERGY_WORDS.notFound.allergyType)
     })
 
     it('after a 404 the page\'s getter still drives the selection', async () => {

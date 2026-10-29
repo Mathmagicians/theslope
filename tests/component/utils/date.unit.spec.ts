@@ -32,6 +32,7 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {isValid, isSameDay} from "date-fns"
 import type {DateRange} from "~/types/dateTypes"
 import {CalendarDate} from '@internationalized/date'
+import {DATE_WORDS} from '~/config/dateWords'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 
@@ -174,9 +175,9 @@ describe('copyPartialDateRange', () => {
 })
 
 describe('formatDateRange', () => {
-    it('should format undefined range as ?->?', () => {
+    it('reads no range as the no-range word', () => {
         const result = formatDateRange(undefined)
-        expect(result).toBe('?->?')
+        expect(result).toBe(DATE_WORDS.noRange)
     })
 
     it('should format date range correctly with default mask', () => {

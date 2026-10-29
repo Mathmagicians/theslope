@@ -1,6 +1,6 @@
-import {expect, type BrowserContext, type Page} from '@playwright/test'
+import {expect, type BrowserContext, type Page, type TestInfo} from '@playwright/test'
 import {defineParameterType, type DataTable} from 'playwright-bdd'
-import {Given, When, Then, fromScene, contextOfActor, teamOf, type Actor, type Scene, type WorkerTeams} from '~~/tests/e2e/fixtures'
+import {Given, When, Then, ACTOR, fromScene, contextOfActor, teamOf, type Actor, type Scene, type WorkerTeams} from '~~/tests/e2e/fixtures'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
@@ -12,7 +12,7 @@ import {SEASON_CONFIG} from '~/config/season'
 import {computeCookingDates, getDinnerOnDate, splitDinnerEvents} from '~/utils/season'
 import {formatDanishWeekdayDate, formatDate, parseDate} from '~/utils/date'
 
-const {getSessionUserInfo, gotoHydrated, collectHydrationWarnings, salt, pageCalendarToMonth} = testHelpers
+const {getSessionUserInfo, gotoHydrated, collectHydrationWarnings, salt, pageCalendarToMonth, doScreenshot, waitForApi} = testHelpers
 const {TeamRoleSchema} = useCookingTeamValidation()
 const {getTeamShortName} = useCookingTeam()
 
@@ -23,16 +23,46 @@ const nextDinnerOf = splitDinnerEvents(SEASON_CONFIG.defaultDinnerStartTime, SEA
 
 defineParameterType({name: 'teamRole', regexp: [...TeamRoleSchema.options]})
 
+/** The chef of a dinner by the words of a feature: the actor whose inhabitant cooks it, or none */
+const DINNER_CHEFS = {'without a chef': null, 'with the admin as its chef': ACTOR.ADMIN} as const
+defineParameterType({name: 'dinnerChef', regexp: Object.keys(DINNER_CHEFS), transformer: (words: string) => DINNER_CHEFS[words as keyof typeof DINNER_CHEFS]})
+
+/** The pages that show a dinner's chef duty, on the dinner; the dinner page's views go to the docs */
+type DutyPage = {path: string, url: (dinner: DinnerEventDisplay) => string, documents: boolean}
+const DUTY_PAGES: DutyPage[] = [
+    {path: CHEF_PAGE, url: dinner => `${CHEF_PAGE}?team=${dinner.cookingTeamId}&${DATE_PARAM}=${formatDate(dinner.date)}`, documents: false},
+    {path: '/dinner', url: dinner => `/dinner?${DATE_PARAM}=${formatDate(dinner.date)}`, documents: true}
+]
+defineParameterType({
+    name: 'dutyPage',
+    regexp: DUTY_PAGES.map(dutyPage => dutyPage.path),
+    transformer: (path: string): DutyPage => DUTY_PAGES.find(dutyPage => dutyPage.path === path)!
+})
+
+const CHEF_WANTED = 'chef-wanted'
+/** Whether the page on view documents the duty */
+const documents = (page: Page): boolean => DUTY_PAGES.some(dutyPage => dutyPage.documents && dutyPage.path === new URL(page.url()).pathname)
+const resignButtonOf = (page: Page) => page.getByTestId('role-assignment-resign').first().locator('button')
+
+// The trigger toggles the form: an open form stays open
+const openRoleForm = async (page: Page) => {
+    const cancel = page.getByTestId('role-assignment-cancel').first()
+    if (!await cancel.isVisible()) await page.getByTestId('role-assignment-trigger').first().click()
+    await expect(cancel, 'the role form opens').toBeVisible()
+}
+
 /** The role cell of a team the actor is not on */
 const NOT_ON_TEAM = 'none'
 
 /**
  * The teams come in one team creation per worker (it rewrites every team of the shared season), the actor's inhabitant
- * on each in its role, or not on it for a null role; team n lands at index n - 1 of the scene's teams
+ * on each in its role, or not on it for a null role; team n lands at index n - 1 of the scene's teams. The creation runs in
+ * the worker's first scenario, which keeps its own time on top
  */
-const setUpTeams = async (admin: BrowserContext, actorContext: BrowserContext, scene: Scene, workerTeams: WorkerTeams, actor: Actor, roleOnTeam: [number, TeamRole | null][]) => {
+const setUpTeams = async (admin: BrowserContext, actorContext: BrowserContext, scene: Scene, workerTeams: WorkerTeams, testInfo: TestInfo, actor: Actor, roleOnTeam: [number, TeamRole | null][]) => {
     const key = `${actor} ${JSON.stringify(roleOnTeam)}`
     if (!workerTeams.has(key)) {
+        const started = Date.now()
         const {inhabitantId} = await getSessionUserInfo(actorContext)
         const created = await SeasonFactory.createCookingTeams(admin, fromScene(scene, 'activeSeason'), roleOnTeam.map(([number, role]) => ({
             teamName: `ChefTeam${number}`,
@@ -44,6 +74,7 @@ const setUpTeams = async (admin: BrowserContext, actorContext: BrowserContext, s
             scene.created.teamIds.push(team.id!)
         })
         workerTeams.set(key, {teams, teamDinners: []})
+        testInfo.setTimeout(testInfo.timeout + Date.now() - started)
     }
     Object.assign(scene, workerTeams.get(key))
 }
@@ -75,10 +106,10 @@ const dateInUrl = async (page: Page): Promise<Date> => {
     return parseDate(new URL(page.url()).searchParams.get(DATE_PARAM)!)
 }
 
-Given('{actor} is on the teams', async ({adminContext: admin, contextOf, scene, workerTeams}, actor: Actor, table: DataTable) => {
+Given('{actor} is on the teams', async ({adminContext: admin, contextOf, scene, workerTeams, $testInfo}, actor: Actor, table: DataTable) => {
     const roleOnTeam = table.hashes().map(({team, role}): [number, TeamRole | null] =>
         [Number(team), role === NOT_ON_TEAM ? null : TeamRoleSchema.parse(role)])
-    await setUpTeams(admin, await contextOf(actor), scene, workerTeams, actor, roleOnTeam)
+    await setUpTeams(admin, await contextOf(actor), scene, workerTeams, $testInfo, actor, roleOnTeam)
 })
 
 // Team n cooks on the nth cooking day ahead, beside the season's own dinner: the chef page selects among the team's
@@ -94,10 +125,64 @@ Given('team {int} cooks a dinner', async ({adminContext: admin, scene}, number: 
     })
 })
 
-// A click on a day opens the team on view's dinner before another team's
+// A click on a day opens the team on view's dinner before another team's. The dinner is the scenario's: the scenario
+// holds its own copy of the team dinners, so the worker's teams keep their dinners on cooking days
 Given('team {int} cooks the only dinner of its day', async ({adminContext: admin, scene}, number: number) => {
-    await placeTeamDinner(scene, number, () =>
-        DinnerEventFactory.createDinnerEventOnFreeDay(admin, fromScene(scene, 'activeSeason'), dinnerOfTeam(teamOf(scene, number), number)))
+    const dinner = await DinnerEventFactory.createDinnerEventOnFreeDay(admin, fromScene(scene, 'activeSeason'), dinnerOfTeam(teamOf(scene, number), number))
+    scene.dayDinnerIds.push(dinner.id!)
+    const teamDinners = [...scene.teamDinners]
+    teamDinners[number - 1] = dinner
+    scene.teamDinners = teamDinners
+})
+
+// A dinner of its own on a day of its own, so the dinner page shows it alone; the chef takes the duty through the role
+// endpoint, which also puts them on the team
+Given('team {int} cooks a dinner {dinnerChef}', async ({adminContext: admin, contextOf, scene}, number: number, chef: Actor | null) => {
+    const season = fromScene(scene, 'activeSeason')
+    const event = await DinnerEventFactory.createDinnerEventOnFreeDay(admin, season, {...dinnerOfTeam(teamOf(scene, number), number), chefId: null})
+    scene.dayDinnerIds.push(event.id!)
+    const chefId = chef ? (await getSessionUserInfo(await contextOf(chef))).inhabitantId : null
+    if (chefId) await DinnerEventFactory.assignRoleToDinnerEvent(admin, event.id!, chefId, TeamRoleSchema.enum.CHEF)
+    scene.dinner = {season, event: {...event, chefId}}
+})
+
+// The dinner page's duty without a chef goes to the docs
+When('{actor} opens {dutyPage} on the dinner', async ({scene}, actor: Actor, dutyPage: DutyPage) => {
+    const {event} = fromScene(scene, 'dinner')
+    const page = await contextOfActor(scene, actor).newPage()
+    scene.page = page
+    await gotoHydrated(page, dutyPage.url(event))
+    if (dutyPage.documents && event.chefId === null) {
+        await expect(page.getByTestId(CHEF_WANTED).first()).toBeVisible()
+        await doScreenshot(page, 'chef/role-wanted', true)
+    }
+})
+
+// A dinner without a chef takes a volunteer, a dinner with a chef a takeover: both save the role form
+When('{actor} takes the chef duty', async ({scene}, actor: Actor) => {
+    contextOfActor(scene, actor)
+    const page = fromScene(scene, 'page')
+    await openRoleForm(page)
+    const assigned = waitForApi(page, `/cooking/${fromScene(scene, 'dinner').event.id}/assign-role`, 'POST')
+    await page.getByTestId('role-assignment-save').first().click()
+    expect((await assigned).status(), 'the role write lands on the dinner').toBe(200)
+})
+
+// Meld afbud is a DangerButton: the first click arms it, the second resigns. The resignation re-reads the season, and
+// the dinner page shows its loader until that read lands
+When('{actor} resigns from the chef duty', async ({scene}, actor: Actor) => {
+    contextOfActor(scene, actor)
+    const page = fromScene(scene, 'page')
+    const {season, event} = fromScene(scene, 'dinner')
+    await openRoleForm(page)
+    const resign = resignButtonOf(page)
+    await resign.click()
+    await expect(resign).toContainText('Tryk igen')
+    const removed = waitForApi(page, `/cooking/${event.id}/remove-role`, 'POST')
+    const seasonRead = waitForApi(page, `/api/admin/season/${season.id}`, 'GET')
+    await resign.click()
+    expect((await removed).status(), 'the resignation lands on the dinner').toBe(200)
+    await seasonRead
 })
 
 // The hydration warnings are collected from the start
@@ -181,4 +266,19 @@ Then('{actor} sees the role buttons', async ({scene}, actor: Actor) => {
     contextOfActor(scene, actor)
     const workAssignment = fromScene(scene, 'page').getByTestId('work-assignment')
     for (const name of ROLE_BUTTONS) await expect(workAssignment.locator(`[name="${name}"]`)).toBeVisible()
+})
+
+// The page is read again: the duty renders from the dinner the server holds
+Then('{actor} is the chef of the dinner', async ({scene}, actor: Actor) => {
+    contextOfActor(scene, actor)
+    const page = fromScene(scene, 'page')
+    await gotoHydrated(page, page.url())
+    if (documents(page)) await doScreenshot(page, 'chef/role-assigned', true)
+    await openRoleForm(page)
+    await expect(resignButtonOf(page), `${actor} can resign: the duty is theirs`).toBeVisible()
+})
+
+// The page shows the duty wanted again once the resignation lands
+Then('the dinner has no chef', async ({scene}) => {
+    await expect(fromScene(scene, 'page').getByTestId(CHEF_WANTED).first()).toBeVisible()
 })
