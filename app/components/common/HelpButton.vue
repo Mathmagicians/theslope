@@ -34,6 +34,7 @@ Features:
 <script setup lang="ts">
 import { HELP_TEXTS } from '~/config/help-texts'
 import type { FeedbackIssue, FeedbackType } from '~/composables/useFeedbackValidation'
+import { BUTTON_WORDS } from '~/config/buttonWords'
 
 const route = useRoute()
 const requestUrl = useRequestURL()
@@ -203,7 +204,7 @@ watch(() => route.path, () => {
                           v-bind="BUTTONS.cancel"
                           @click="cancelFeedback"
                       >
-                        Annuller
+                        {{ BUTTON_WORDS.cancel }}
                       </UButton>
                       <UButton
                           v-bind="BUTTONS.save"

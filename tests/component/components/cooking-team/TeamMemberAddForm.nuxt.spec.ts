@@ -7,6 +7,7 @@ import {mountWithTooltipProvider, findByTestId, resetStores, iconNamesIn} from '
 import {ROLE_ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {TEAM_WORDS} from '~/config/teamWords'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
 
 enableAutoUnmount(afterEach)
@@ -29,7 +30,7 @@ describe('TeamMemberAddForm', () => {
     // ========== RENDERING ==========
 
     it('add mode shows its labels and the "Tilføj" button', async () => {
-        const labels = ['Vælg rolle på hold', 'Arbejdstid', 'Kan kun følgende ugedage', 'Annuller', 'Tilføj']
+        const labels = ['Vælg rolle på hold', 'Arbejdstid', 'Kan kun følgende ugedage', BUTTON_WORDS.cancel, BUTTON_WORDS.add]
         const wrapper = await mount()
         labels.forEach(label => expect(wrapper.text(), label).toContain(label))
     })
@@ -40,7 +41,7 @@ describe('TeamMemberAddForm', () => {
         const wrapper = await mount({initialRole: role})
         expect(wrapper.text()).toContain(TEAM_WORDS.roles[role].label)
         expect(triggerGlyphs(wrapper)).toContain(ROLE_ICONS[role])
-        expect(wrapper.text()).toContain('Gem')
+        expect(wrapper.text()).toContain(BUTTON_WORDS.save)
     })
 
     it('pre-fills percentage', async () => {
@@ -52,16 +53,16 @@ describe('TeamMemberAddForm', () => {
 
     it('emits cancel on Annuller click', async () => {
         const wrapper = await mount()
-        const cancelBtn = wrapper.findAll('button').find(b => b.text().includes('Annuller'))
-        await cancelBtn!.trigger('click')
+        const cancelBtn = wrapper.findAll('button').find(b => b.text().includes(BUTTON_WORDS.cancel))
+        await cancelBtn?.trigger('click')
         await nextTick()
         expect(wrapper.emitted('cancel')).toBeTruthy()
     })
 
     it('emits submit with default values on Tilføj click', async () => {
         const wrapper = await mount()
-        const submitBtn = wrapper.findAll('button').find(b => b.text().includes('Tilføj'))
-        await submitBtn!.trigger('click')
+        const submitBtn = wrapper.findAll('button').find(b => b.text().includes(BUTTON_WORDS.add))
+        await submitBtn?.trigger('click')
         await nextTick()
         const emitted = wrapper.emitted('submit')
         expect(emitted).toBeTruthy()

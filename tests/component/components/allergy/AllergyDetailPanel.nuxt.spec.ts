@@ -7,6 +7,7 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from './allergyTestIds'
 import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {FORM_MODES} from '~/types/form'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 // AllergyTypeCard reads the active season's ticket prices from the plan store - fake its HTTP (Rule 6)
 registerEndpoint('/api/admin/season/active', () => null)
@@ -45,7 +46,7 @@ describe('AllergyDetailPanel', () => {
 
             expect(wrapper.text()).toContain(firstType!.name)
             expect(wrapper.text()).toContain('Detaljer')
-            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).attributes('aria-label')).toBe('Rediger')
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).attributes('aria-label')).toBe(BUTTON_WORDS.edit)
         })
 
         it.each([

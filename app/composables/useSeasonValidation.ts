@@ -9,9 +9,6 @@ import {IdSchema} from '~/composables/useCoreValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
 import {SEASON_STATUS} from '~/config/seasonWords'
 
-// Re-exported until the design system, utils/season.ts and its spec read it from the season words
-export {SEASON_STATUS}
-
 const seasonStatusValues = [SEASON_STATUS.ACTIVE, SEASON_STATUS.FUTURE, SEASON_STATUS.CURRENT, SEASON_STATUS.PAST] as const
 
 /**

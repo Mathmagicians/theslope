@@ -42,6 +42,7 @@ which patterns are shared. A component's own layout lives in its header mockup a
 | `COLOR`, `NOISE` | a Nuxt UI `color` prop; a Nuxt UI `variant` prop read as an emphasis ladder |
 | `TEXT`, `BG`, `BORDER`, `RING` | ink, surfaces, edges and rings: shared rungs, single-owner values named by their owner, family rungs |
 | `TYPOGRAPHY`, `LAYOUTS`, `SIZES`, `ICONS` | text styles, layout classes, responsive sizes, icon names |
+| `IMG` | brand and service images (the Heynabo logo), on a UAvatar or a UButton avatar |
 | `BUTTONS`, `ALERTS` | button kinds and alert kinds; a toggle kind takes its open state, a modifier spreads after a kind |
 | `COMPONENTS` | one key per component or shared element that owns a layout, named after it; the keys inside name the parts its header mockup draws |
 | the calendar tokens | days, pickers, countdowns, one palette per calendar surface |

@@ -204,6 +204,13 @@ export const cellsByHeader = (wrapper: BaseWrapper<Node>, rowIndex = 0): Record<
     return Object.fromEntries(tableHeaders(wrapper).map((header, index) => [header, cells[index]]))
 }
 
+/** A table's body row by its index, the first at 0: the element, for what a row holds beyond its cells' text */
+export const rowAt = (wrapper: BaseWrapper<Node>, rowIndex = 0) => wrapper.find('table').find(`tbody tr:nth-child(${rowIndex + 1})`)
+
+/** A body row's cell by the header of its column: the element, for what a cell holds beyond its text */
+export const cellAt = (wrapper: BaseWrapper<Node>, rowIndex: number, header: string) =>
+    rowAt(wrapper, rowIndex).find(`td:nth-child(${tableHeaders(wrapper).indexOf(header) + 1})`)
+
 /** The body rows UTable marks open (`data-expanded`), each with the row after it, where the table renders its #expanded slot */
 export const findOpenRows = (wrapper: BaseWrapper<Node>): {row: DOMWrapper<Element>, detail: DOMWrapper<Element>}[] => {
     const rows = wrapper.findAll('tbody tr')

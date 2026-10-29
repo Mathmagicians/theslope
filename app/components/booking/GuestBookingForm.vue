@@ -20,6 +20,7 @@ import type {BookingContext, ReleasedTicketCounts} from '~/composables/useBookin
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import type {FormSubmitEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 interface Props {
   householdId: number
@@ -269,7 +270,7 @@ const handleCancel = () => emit('cancel')
               data-testid="guest-form-cancel"
               @click="handleCancel"
             >
-              Annuller
+              {{ BUTTON_WORDS.cancel }}
             </UButton>
             <UButton
               v-bind="BUTTONS.save"

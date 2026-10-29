@@ -52,6 +52,7 @@
 <script setup lang="ts">
 import type {UserDetail, UserDisplay} from '~/composables/useCoreValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 interface Props {
   user: UserDetail | UserDisplay
@@ -278,7 +279,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           data-testid="edit-roles-btn"
           @click="startEditingRoles"
         >
-          Rediger
+          {{ BUTTON_WORDS.edit }}
         </UButton>
 
         <!-- Edit mode: Save/Cancel buttons -->
@@ -289,7 +290,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
             data-testid="cancel-roles-btn"
             @click="cancelEditingRoles"
           >
-            Annuller
+            {{ BUTTON_WORDS.cancel }}
           </UButton>
           <UButton
             v-bind="BUTTONS.save"
@@ -297,7 +298,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
             data-testid="save-roles-btn"
             @click="saveRoles"
           >
-            Gem
+            {{ BUTTON_WORDS.save }}
           </UButton>
         </div>
       </div>

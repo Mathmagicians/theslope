@@ -8,6 +8,7 @@
  */
 import type {FormSubmitEvent, Form} from '@nuxt/ui'
 import type {HouseholdDisplay, HouseholdCreateFormData, HouseholdCreate, HouseholdMoveOut} from '~/composables/useCoreValidation'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 interface Props {
     existingHouseholds: HouseholdDisplay[]
@@ -219,7 +220,7 @@ const handleCancel = () => emit('cancel')
                         data-testid="create-household-cancel"
                         @click="handleCancel"
                     >
-                        Annuller
+                        {{ BUTTON_WORDS.cancel }}
                     </UButton>
                     <UButton
                         v-bind="BUTTONS.save"

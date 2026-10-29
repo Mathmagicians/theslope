@@ -37,6 +37,7 @@ import {
   type Palette
 } from '~/composables/useUserPreferenceValidation'
 import {USER_WORDS} from '~/config/userWords'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 const authStore = useAuthStore()
 const {TYPOGRAPHY, LAYOUTS, BUTTONS, COMPONENTS, ICONS, COLOR, SIZES, NOISE} = useTheSlopeDesignSystem()
@@ -125,7 +126,7 @@ const sendTest = async () => {
         <UButton
           v-if="!isEditing"
           v-bind="BUTTONS.edit"
-          aria-label="Rediger"
+          :aria-label="BUTTON_WORDS.edit"
           data-testid="pref-edit"
           @click="startEditing"
         />
@@ -276,7 +277,7 @@ const sendTest = async () => {
           data-testid="pref-cancel"
           @click="cancelEditing"
         >
-          Annuller
+          {{ BUTTON_WORDS.cancel }}
         </UButton>
         <UButton
           v-bind="BUTTONS.save"
@@ -284,7 +285,7 @@ const sendTest = async () => {
           data-testid="pref-save"
           @click="save"
         >
-          Gem
+          {{ BUTTON_WORDS.save }}
         </UButton>
       </div>
     </div>

@@ -2,7 +2,7 @@ import {type DateRange, type WeekDayMap, type WeekDay, WEEKDAYS, createWeekDayMa
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {Season, SeasonStatus} from '~/composables/useSeasonValidation'
-import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import {SEASON_STATUS} from '~/config/seasonWords'
 import {
     getEachDayOfIntervalWithSelectedWeekdays,
     excludeDatesFromInterval,

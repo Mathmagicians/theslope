@@ -44,6 +44,7 @@ import {FORM_MODES} from "~/types/form"
 import type {TeamRole, CookingTeamCreate, CookingTeamDisplay} from "~/composables/useCookingTeamValidation"
 import type {WeekDayMap} from "~/types/dateTypes"
 import type {JokerSlotCreate} from "~/composables/useDutyValidation"
+import {BUTTON_WORDS} from "~/config/buttonWords"
 
 // Props - canEdit from parent for authorization
 interface Props {
@@ -295,7 +296,7 @@ const columns = [
         variant: NOISE.quiet,
         icon: isOpen ? RESPONSIVE_ICONS.detailOpen : ICONS.chevronDown,
         square: true,
-        'aria-label': isOpen ? 'Luk' : 'Åbn detaljer',
+        'aria-label': isOpen ? BUTTON_WORDS.close : 'Åbn detaljer',
         'data-testid': `team-toggle-${row.original.id}`,
         onClick: () => handleToggleTeam(row.original.id)
       })
@@ -431,7 +432,7 @@ const columns = [
                       :aria-label="`Rediger ${getTeamShortName(selectedTeam.name)}`"
                       @click="onModeChange(FORM_MODES.EDIT)"
                   >
-                    Rediger
+                    {{ BUTTON_WORDS.edit }}
                   </UButton>
                   <UButton
                       v-else-if="formMode === FORM_MODES.EDIT"
@@ -537,7 +538,7 @@ const columns = [
           {{ isActionLoading ? 'Arbejder...' : 'Opret madhold' }}
         </UButton>
         <UButton v-bind="BUTTONS.cancel" @click="handleCancel">
-          Annuller
+          {{ BUTTON_WORDS.cancel }}
         </UButton>
       </div>
 

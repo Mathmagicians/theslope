@@ -14,6 +14,7 @@ import type {Form, FormSubmitEvent} from '@nuxt/ui'
 import type {DateRange, WeekDayMap} from '~/types/dateTypes'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
 import type {JokerSlotCreate} from '~/composables/useDutyValidation'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 type JokerSlotDraft = z.input<ReturnType<typeof useDutyValidation>['JokerSlotCreateSchema']>
 
@@ -83,10 +84,10 @@ const handleSubmit = ({data: {note, ...slot}}: FormSubmitEvent<JokerSlotCreate>)
 
     <div :class="LAYOUTS.formButtonRow">
       <UButton v-bind="BUTTONS.cancel" data-testid="joker-slot-cancel" @click="emit('cancel')">
-        Annuller
+        {{ BUTTON_WORDS.cancel }}
       </UButton>
       <UButton v-bind="BUTTONS.save" data-testid="joker-slot-submit" @click="formRef?.submit()">
-        Tilføj
+        {{ BUTTON_WORDS.add }}
       </UButton>
     </div>
   </UForm>

@@ -94,6 +94,7 @@ import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import type {DinnerMode} from '~/composables/useBookingValidation'
 import type {TicketPresentation} from '~/composables/useBookingUi'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 interface Props {
   household: HouseholdDetail
@@ -258,7 +259,7 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
               v-if="canEdit"
               v-bind="BUTTONS.edit"
               :icon="row.getIsExpanded() ? ICONS.chevronDown : (row.original.isSynthetic ? COMPONENTS.powerMode.buttonIcon : BUTTONS.edit.icon)"
-              :aria-label="row.getIsExpanded() ? 'Luk' : (row.original.isSynthetic ? 'Power mode' : 'Rediger præferencer')"
+              :aria-label="row.getIsExpanded() ? BUTTON_WORDS.close : (row.original.isSynthetic ? 'Power mode' : 'Rediger præferencer')"
               :data-testid="row.original.isSynthetic ? 'power-mode-toggle' : `inhabitant-${row.original.id}-edit-preferences`"
               :class="[
                 COMPONENTS.openTurn(row.getIsExpanded()),
@@ -367,7 +368,7 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
                       data-testid="cancel-preferences"
                       @click="row.toggleExpanded()"
                   >
-                    Annuller
+                    {{ BUTTON_WORDS.cancel }}
                   </UButton>
                   <UButton
                       v-if="canEdit"
@@ -389,7 +390,7 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
                         ]"
                       />
                     </template>
-                    {{ isSaving ? 'Arbejder...' : (row.original.isSynthetic ? 'Gem for alle' : 'Gem') }}
+                    {{ isSaving ? 'Arbejder...' : (row.original.isSynthetic ? 'Gem for alle' : BUTTON_WORDS.save) }}
                   </UButton>
                 </UFieldGroup>
               </div>

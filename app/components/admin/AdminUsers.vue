@@ -19,6 +19,7 @@ The chevron opens one row at a time, holding the user's UserProfileCard; on a ph
 <script setup lang="ts">
 import {h, resolveComponent} from 'vue'
 import {getPaginationRowModel} from '@tanstack/vue-table'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 interface Props {
   canEdit?: boolean
@@ -97,7 +98,7 @@ const userColumns = [
           variant: NOISE.quiet,
           icon: row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight,
           square: true,
-          'aria-label': row.getIsExpanded() ? 'Luk' : 'Åbn detaljer',
+          'aria-label': row.getIsExpanded() ? BUTTON_WORDS.close : 'Åbn detaljer',
           onClick: () => row.toggleExpanded()
         })
   },

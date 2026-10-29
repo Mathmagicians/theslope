@@ -1037,7 +1037,6 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
 export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
     console.info(`🌞 > SEASON > [GET] Fetching all seasons`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {SeasonSchema} = useSeasonValidation()
 
     try {
         const seasons = await prisma.season.findMany({
@@ -1050,11 +1049,7 @@ export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
         })
         console.info(`🌞 > SEASON > [GET] Successfully fetched ${seasons.length} seasons`)
 
-        // Validate each season after deserialization
-        return seasons.map(season => {
-            const deserialized = deserializeSeason(season, useTicket().withPortions)
-            return SeasonSchema.parse(deserialized)
-        })
+        return seasons.map(season => deserializeSeason(season, useTicket().withPortions))
     } catch (error) {
         return throwH3Error('🌞 > SEASON > [GET]: Error fetching seasons', error)
     }
@@ -1067,7 +1062,6 @@ export async function deleteSeason(
 ): Promise<Season> {
     console.info(`🌞 > SEASON > [DELETE] Deleting season with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {SeasonSchema} = useSeasonValidation()
 
     try {
         // ADR-013: Fetch announced DinnerEvents BEFORE cascade deletion for Heynabo cleanup
@@ -1100,9 +1094,7 @@ export async function deleteSeason(
         }
 
         console.info(`🌞 > SEASON > [DELETE] Successfully deleted season ${deletedSeason.shortName}`)
-        // ADR-010: Repository MUST validate returned data
-        const deserialized = deserializeSeason(deletedSeason, useTicket().withPortions)
-        return SeasonSchema.parse(deserialized)
+        return deserializeSeason(deletedSeason, useTicket().withPortions)
     } catch (error) {
         return throwH3Error(`🌞 > SEASON > [DELETE]: Error deleting season with ID ${id}`, error)
     }
@@ -1143,9 +1135,7 @@ export async function createSeason(d1Client: D1Database, seasonData: Season): Pr
 
         console.info(`🌞 > SEASON > [CREATE] Successfully created season ${newSeason.shortName} with ID ${newSeason.id} and ${newSeason.ticketPrices.length} ticket prices`)
 
-        // ADR-010: Validate output BEFORE returning (ensure DB returned valid data)
-        const deserialized = deserializeSeason(newSeason, useTicket().withPortions)
-        return SeasonSchema.parse(deserialized)
+        return deserializeSeason(newSeason, useTicket().withPortions)
     } catch (error) {
         return throwH3Error(`🌞 > SEASON > [CREATE]: Error creating season ${seasonData?.shortName}`, error)
     }
@@ -1204,9 +1194,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
 
         console.info(`🌞 > SEASON > [UPDATE] Successfully updated season ${updatedSeason.shortName} (ID: ${updatedSeason.id}) with ${updatedSeason.ticketPrices.length} ticket prices`)
 
-        // ADR-010: Validate output BEFORE returning (ensure DB returned valid data)
-        const deserialized = deserializeSeason(updatedSeason, useTicket().withPortions)
-        return SeasonSchema.parse(deserialized)
+        return deserializeSeason(updatedSeason, useTicket().withPortions)
     } catch (error) {
         return throwH3Error(`🌞 > SEASON > [UPDATE]: Error updating season with ID ${id}`, error)
     }

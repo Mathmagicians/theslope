@@ -2,10 +2,12 @@
  * The booking words users read. Plain module without auto-imports: the app and the server import it (ADR-017).
  */
 import {useBookingValidation, DinnerMode, OrderAuditAction, OrderState, TicketState, type BookingAction, type BookingOutcome} from '~/composables/useBookingValidation'
+import {useBillingValidation, type VatMode} from '~/composables/useBillingValidation'
 
 const {BookingActionSchema, TicketChangeKindSchema} = useBookingValidation()
 const Action = BookingActionSchema.enum
 const TicketChangeKind = TicketChangeKindSchema.enum
+const VatModeValue = useBillingValidation().VatModeSchema.enum
 
 const ticketCount = (count: number) => `${count} billet${count === 1 ? '' : 'ter'}`
 const roundPeriod = (range: string) => `periode ${range}`
@@ -26,6 +28,31 @@ export const BOOKING_WORDS = {
     allowance: {budget: 'Rådighedsbeløb', spent: 'Brugt', left: 'Tilbage'},
     /** The units a split amount reads in (VatAmount): the ex moms figure, then the inkl. moms half */
     vatUnits: 'ex / inkl. moms',
+    /**
+     * The chef's Budget pane: its title and chevron, the three boxes with the kuverter and the contribution's rate, the
+     * ticket table and its sums; the spending tables' columns (CookingRoundSpending, ExpenseLines); the receipt form's
+     * units and placeholders, and the line under the amount that reads it in the other unit, keyed by the unit typed
+     */
+    budget: {
+        title: 'Budget',
+        toggle: (open: boolean) => open ? 'Skjul budgettet' : 'Vis budgettet',
+        boxes: {revenue: 'INDTÆGTER', allowance: 'RÅDIGHEDSBELØB', contribution: 'KØKKENBIDRAG'},
+        portions: (portions: string) => `${portions} kuverter`,
+        contributionRate: (percent: number) => `${percent}% af indtægter`,
+        ticketColumns: {ticketType: 'Billettype', count: 'Antal', unitPrice: 'Stk pris', revenue: 'Total'},
+        revenue: 'Indtægter',
+        contribution: (percent: number) => `Køkkenbidrag (${percent}%)`,
+        columns: {date: 'Dato', dinner: 'Middag', payer: 'Bestiller', note: 'Note'},
+        vatModes: {
+            [VatModeValue.inkl]: 'Inkl. moms',
+            [VatModeValue.ex]: 'Ex moms'
+        } satisfies Record<VatMode, string>,
+        otherUnit: {
+            [VatModeValue.ex]: (amount: string) => `= ${amount} kr inkl. moms`,
+            [VatModeValue.inkl]: (amount: string) => `= ${amount} kr ex moms`
+        } satisfies Record<VatMode, (amount: string) => string>,
+        placeholders: {amount: 'beløb', note: 'note'}
+    },
     /** A ticket price in a select menu: its type with its price, and the age limit beside its description */
     ticketPrice: {
         label: (ticketType: string, price: string) => `${ticketType} · ${price} kr`,

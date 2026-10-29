@@ -100,6 +100,7 @@ import type { Form, FormSubmitEvent } from '#ui/types'
 import type { WaitlistQueueSummary, ExtraPortionsRequest } from '~/composables/useWaitlistValidation'
 import { FORM_MODES, type FormMode } from '~/types/form'
 import { BOOKING_WORDS } from '~/config/bookingWords'
+import { BUTTON_WORDS } from '~/config/buttonWords'
 
 interface Props {
   dinnerEvent: DinnerEventDetail
@@ -585,7 +586,7 @@ const handleCardClick = () => {
                     data-testid="dinner-aflys-dismiss"
                     @click="isMoreOpen = false"
                   >
-                    Annuller
+                    {{ BUTTON_WORDS.cancel }}
                   </UButton>
                   <DangerButton
                     :label="isUpdating ? 'Arbejder...' : 'Aflys middagen'"
@@ -712,8 +713,8 @@ const handleCardClick = () => {
           <UTextarea v-model="formState.menuDescription" placeholder="Kort beskrivelse af retten og evt. tilbehør" :rows="3" :size="SIZES.standard" name="chef-menu-description-input" :class="COMPONENTS.chefMenuCard.field" />
         </UFormField>
         <div :class="LAYOUTS.formButtonRow">
-          <UButton v-bind="BUTTONS.cancel" data-testid="cancel-menu-edit" @click="handleMenuCancel">Annuller</UButton>
-          <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" type="submit" data-testid="save-menu-edit">Gem</UButton>
+          <UButton v-bind="BUTTONS.cancel" data-testid="cancel-menu-edit" @click="handleMenuCancel">{{ BUTTON_WORDS.cancel }}</UButton>
+          <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" type="submit" data-testid="save-menu-edit">{{ BUTTON_WORDS.save }}</UButton>
         </div>
       </UForm>
 
@@ -755,8 +756,8 @@ const handleCardClick = () => {
           <div :class="COMPONENTS.cardSection.editorHead">
             <h4 :class="COMPONENTS.cardSection.editorTitle">Allergener i menuen</h4>
             <div :class="LAYOUTS.formButtonRow">
-              <UButton v-bind="BUTTONS.cancel" data-testid="cancel-allergens-edit" @click="handleAllergenCancel">Annuller</UButton>
-              <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" data-testid="save-allergens-edit" @click="handleAllergenSave">Gem</UButton>
+              <UButton v-bind="BUTTONS.cancel" data-testid="cancel-allergens-edit" @click="handleAllergenCancel">{{ BUTTON_WORDS.cancel }}</UButton>
+              <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" data-testid="save-allergens-edit" @click="handleAllergenSave">{{ BUTTON_WORDS.save }}</UButton>
             </div>
           </div>
           <AllergenMultiSelector

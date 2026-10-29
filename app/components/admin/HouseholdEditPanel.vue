@@ -11,6 +11,7 @@
  * - Slet: DangerButton two-click delete
  */
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 interface Props {
   household: HouseholdDisplay
@@ -161,7 +162,7 @@ const householdLabel = computed(() => `${props.household.shortName} (PBS ${props
           @confirm="emit('delete')"
       />
       <UButton v-bind="BUTTONS.cancel" @click="emit('close')">
-        Annuller
+        {{ BUTTON_WORDS.cancel }}
       </UButton>
     </div>
   </div>

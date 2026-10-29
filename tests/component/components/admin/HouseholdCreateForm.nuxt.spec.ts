@@ -5,6 +5,7 @@ import HouseholdCreateForm from '~/components/admin/HouseholdCreateForm.vue'
 import {nextTick} from 'vue'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 import {mountWithTooltipProvider, findDateSegments, resetStores} from '~~/tests/component/testHelpers'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 enableAutoUnmount(afterEach)
 
@@ -78,7 +79,7 @@ describe('HouseholdCreateForm', () => {
     // ========== RENDERING ==========
 
     it('renders its labels and buttons', async () => {
-        const labels = ['Ny husstand', 'PBS', 'Adresse', 'Vælg en indflytningsdato', 'Annuller', 'Opret husstand']
+        const labels = ['Ny husstand', 'PBS', 'Adresse', 'Vælg en indflytningsdato', BUTTON_WORDS.cancel, 'Opret husstand']
         const wrapper = await mount()
         labels.forEach(label => expect(wrapper.text(), label).toContain(label))
     })
@@ -118,8 +119,8 @@ describe('HouseholdCreateForm', () => {
 
     it('emits cancel on Annuller click', async () => {
         const wrapper = await mount()
-        const cancelBtn = wrapper.findAll('button').find(b => b.text().includes('Annuller'))
-        await cancelBtn!.trigger('click')
+        const cancelBtn = wrapper.findAll('button').find(b => b.text().includes(BUTTON_WORDS.cancel))
+        await cancelBtn?.trigger('click')
         await nextTick()
         expect(wrapper.emitted('cancel')).toBeTruthy()
     })

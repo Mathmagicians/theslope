@@ -9,6 +9,7 @@ import AdminPlanningSeason from '~/components/admin/planning/AdminPlanningSeason
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {FORM_MODES, type FormMode} from '~/types/form'
 import {computeCookingDates} from '~/utils/season'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 // The form reads its saving state from the real plan store; only HTTP is faked (testing.md Rule 6)
 registerEndpoint('/api/admin/season/active', () => null)
@@ -48,7 +49,7 @@ describe('AdminPlanningSeason', () => {
 
         // The edit control keeps the imperative "Rediger"
         const label = findByTestId(wrapper, PLANNING_TEST_IDS.edit).text()
-        expect(label.split(' ')[0]).toBe('Rediger')
+        expect(label.split(' ')[0]).toBe(BUTTON_WORDS.edit)
         expect(label).toContain(season.shortName)
         await clickByTestId(wrapper, PLANNING_TEST_IDS.edit)
         expect(wrapper.emitted('edit')).toBeTruthy()
@@ -67,9 +68,9 @@ describe('AdminPlanningSeason', () => {
         expect(wrapper.find('input[name="shortName"]').exists()).toBe(false)
         expect(findByTestId(wrapper, PLANNING_TEST_IDS.edit).exists()).toBe(false)
 
-        expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).text()).toBe('Gem')
+        expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).text()).toBe(BUTTON_WORDS.save)
         expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).attributes('type')).toBe('submit')
-        expect(findByTestId(wrapper, PLANNING_TEST_IDS.cancel).text()).toBe('Annuller')
+        expect(findByTestId(wrapper, PLANNING_TEST_IDS.cancel).text()).toBe(BUTTON_WORDS.cancel)
         await clickByTestId(wrapper, PLANNING_TEST_IDS.cancel)
         expect(wrapper.emitted('cancel')).toBeTruthy()
     })

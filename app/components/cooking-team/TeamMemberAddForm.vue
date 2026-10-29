@@ -8,6 +8,7 @@
  */
 import type {TeamRole} from '~/composables/useCookingTeamValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 interface Props {
   teamAffinity?: WeekDayMap | null
@@ -58,11 +59,11 @@ const handleSubmit = () => {
 
     <div :class="LAYOUTS.formButtonRow">
       <UButton v-bind="BUTTONS.cancel" @click="emit('cancel')">
-        Annuller
+        {{ BUTTON_WORDS.cancel }}
       </UButton>
       <UButton v-bind="BUTTONS.save" @click="handleSubmit">
         <template #leading><UIcon :name="isEditMode ? ICONS.check : ICONS.plusCircle" /></template>
-        {{ isEditMode ? 'Gem' : 'Tilføj' }}
+        {{ isEditMode ? BUTTON_WORDS.save : BUTTON_WORDS.add }}
       </UButton>
     </div>
   </div>

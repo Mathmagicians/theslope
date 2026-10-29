@@ -18,6 +18,7 @@ import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {TableData, TableRow} from '@nuxt/ui'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 const props = withDefaults(defineProps<{
   canEdit?: boolean
@@ -462,7 +463,7 @@ const dinnerBreakdownStats = computed(() => {
                           :variant="NOISE.quiet"
                           :icon="ICONS.xMark"
                           :size="SIZES.small"
-                          aria-label="Annuller"
+                          :aria-label="BUTTON_WORDS.cancel"
                           @click="cancelEditing"
                       />
                     </div>

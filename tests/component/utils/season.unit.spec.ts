@@ -26,7 +26,7 @@ import {
     getEventsForGridView,
     TEMPORAL_CATEGORY
 } from '~/utils/season'
-import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import {SEASON_STATUS} from '~/config/seasonWords'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import type {DateRange, WeekDay, WeekDayMap} from '~/types/dateTypes'
 import {createDateInTimezone, getPeriodBoundary} from '~/utils/date'
@@ -54,6 +54,9 @@ const createEvent = (id: number, date: Date, teamId: number | null = null) => ({
     cookingTeamId: teamId,
     seasonId: 1
 })
+
+// The first dinner of a roster's events, where its rotation starts
+const firstDayOf = (events: ReturnType<typeof createEvent>[]) => new Date(Math.min(...events.map(event => event.date.getTime())))
 
 describe('computeCookingDates', () => {
     it('should return dates for cooking days: Mon-Fri in one week', () => {
@@ -495,7 +498,7 @@ describe('computeTeamAssignmentsForEvents', () => {
         }
     ])('should assign teams in round-robin: $scenario', ({ teams, cookingDays, events, consecutiveCookingDays, expectedAssignments }) => {
         // GIVEN: Teams with computed affinities
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, consecutiveCookingDays, events[0]!.date)
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, consecutiveCookingDays, firstDayOf(events))
 
         // WHEN: Assigning teams to events
         const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, consecutiveCookingDays, events)
@@ -514,16 +517,18 @@ describe('computeTeamAssignmentsForEvents', () => {
             createEvent(3, new Date(2025, 0, 10)),    // Fri
             createEvent(4, new Date(2025, 0, 13))     // Mon
         ]
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, events[0]!.date)
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, firstDayOf(events))
 
         // WHEN: Assigning teams with consecutiveCookingDays=2
         const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, 2, events)
 
         // THEN: Already assigned event is skipped but quota increments
-        expect(result[0]!.cookingTeamId).toBe(1)  // Event 1 → Team 1 (quota=1)
-        expect(result[1]!.cookingTeamId).toBe(99) // Event 2 → Unchanged (quota=2, rotates)
-        expect(result[2]!.cookingTeamId).toBe(2)  // Event 3 → Team 2 (new cycle)
-        expect(result[3]!.cookingTeamId).toBe(2)  // Event 4 → Team 2 (quota=1)
+        expect(result.map(event => event.cookingTeamId)).toEqual([
+            1,  // Event 1 → Team 1 (quota=1)
+            99, // Event 2 → Unchanged (quota=2, rotates)
+            2,  // Event 3 → Team 2 (new cycle)
+            2   // Event 4 → Team 2 (quota=1)
+        ])
     })
 
     it.each([
@@ -543,7 +548,7 @@ describe('computeTeamAssignmentsForEvents', () => {
         // GIVEN: Teams with computed affinities (if any)
         const cookingDays = createDefaultWeekdayMap([true, false, true, false, true, false, false])
         const teamsWithAffinities = teams.length > 0 && events.length > 0
-            ? computeAffinitiesForTeams(teams, cookingDays, 1, events[0]!.date)
+            ? computeAffinitiesForTeams(teams, cookingDays, 1, firstDayOf(events))
             : teams
 
         // WHEN: Assigning teams in edge case scenario
@@ -565,16 +570,18 @@ describe('computeTeamAssignmentsForEvents', () => {
             createEvent(2, new Date(2025, 0, 10)), // Fri Jan 10
             createEvent(3, new Date(2025, 0, 13))  // Mon Jan 13
         ]
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, events[0]!.date)
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, firstDayOf(events))
 
         // WHEN: Assigning teams with consecutiveCookingDays=2
         const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, 2, events, holidays)
 
         // THEN: Short holiday counts as ghost duty - rotation happens
-        expect(result[0]!.cookingTeamId).toBe(1) // Mon Jan 6 → Team 1 (quota=1)
-        // Holiday Wed Jan 8 → SHORT (1 day) → ghost duty → Team 1 quota=2, rotation triggers
-        expect(result[1]!.cookingTeamId).toBe(2) // Fri Jan 10 → Team 2 (new cycle, quota=1)
-        expect(result[2]!.cookingTeamId).toBe(2) // Mon Jan 13 → Team 2 (quota=2)
+        expect(result.map(event => event.cookingTeamId)).toEqual([
+            1, // Mon Jan 6 → Team 1 (quota=1)
+            // Holiday Wed Jan 8 → SHORT (1 day) → ghost duty → Team 1 quota=2, rotation triggers
+            2, // Fri Jan 10 → Team 2 (new cycle, quota=1)
+            2  // Mon Jan 13 → Team 2 (quota=2)
+        ])
     })
 
     it('should handle WEEK-OFF holidays (>= 7 days) by NOT incrementing quota (keeps weekday alignment)', () => {
@@ -592,17 +599,19 @@ describe('computeTeamAssignmentsForEvents', () => {
             createEvent(3, new Date(2025, 0, 17)), // Fri Jan 17
             createEvent(4, new Date(2025, 0, 20))  // Mon Jan 20
         ]
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, events[0]!.date)
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, firstDayOf(events))
 
         // WHEN: Assigning teams with consecutiveCookingDays=2
         const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, 2, events, holidays)
 
         // THEN: Week-off holiday does NOT advance counter - teams keep their weekday alignment
         // No ghost duties from week-off, so rotation starts fresh from first event
-        expect(result[0]!.cookingTeamId).toBe(1) // Mon Jan 13 → Team 1 (quota=1)
-        expect(result[1]!.cookingTeamId).toBe(1) // Wed Jan 15 → Team 1 (quota=2, rotation)
-        expect(result[2]!.cookingTeamId).toBe(2) // Fri Jan 17 → Team 2 (quota=1)
-        expect(result[3]!.cookingTeamId).toBe(2) // Mon Jan 20 → Team 2 (quota=2)
+        expect(result.map(event => event.cookingTeamId)).toEqual([
+            1, // Mon Jan 13 → Team 1 (quota=1)
+            1, // Wed Jan 15 → Team 1 (quota=2, rotation)
+            2, // Fri Jan 17 → Team 2 (quota=1)
+            2  // Mon Jan 20 → Team 2 (quota=2)
+        ])
     })
 
     it('should handle 8-day holiday as 1 week-off + 1 short day (partial ghost duty)', () => {
@@ -620,7 +629,7 @@ describe('computeTeamAssignmentsForEvents', () => {
             createEvent(3, new Date(2025, 0, 20)), // Mon Jan 20
             createEvent(4, new Date(2025, 0, 22))  // Wed Jan 22
         ]
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, events[0]!.date)
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, firstDayOf(events))
 
         // WHEN: Assigning teams with consecutiveCookingDays=2
         const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, 2, events, holidays)
@@ -628,10 +637,12 @@ describe('computeTeamAssignmentsForEvents', () => {
         // THEN: Mon Jan 13 (8th day) counts as ghost duty for Team 1 (quota=1)
         // Week-off days (Jan 6, 8, 10) don't count
         // So Team 1 has 1 ghost duty, then first real event continues their quota
-        expect(result[0]!.cookingTeamId).toBe(1) // Wed Jan 15 → Team 1 (quota=2 after ghost, rotation)
-        expect(result[1]!.cookingTeamId).toBe(2) // Fri Jan 17 → Team 2 (quota=1)
-        expect(result[2]!.cookingTeamId).toBe(2) // Mon Jan 20 → Team 2 (quota=2, rotation)
-        expect(result[3]!.cookingTeamId).toBe(1) // Wed Jan 22 → Team 1 (quota=1)
+        expect(result.map(event => event.cookingTeamId)).toEqual([
+            1, // Wed Jan 15 → Team 1 (quota=2 after ghost, rotation)
+            2, // Fri Jan 17 → Team 2 (quota=1)
+            2, // Mon Jan 20 → Team 2 (quota=2, rotation)
+            1  // Wed Jan 22 → Team 1 (quota=1)
+        ])
     })
 
     /**
@@ -752,7 +763,7 @@ describe('computeTeamAssignmentsForEvents', () => {
         )
 
         // Compute affinities starting from first event
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, consecutiveCookingDays, events[0]!.date)
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, consecutiveCookingDays, firstDayOf(events))
 
         // WHEN: Assigning teams to events
         const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, consecutiveCookingDays, events, holidays)
@@ -1300,7 +1311,7 @@ describe('Active Season Management utilities', () => {
                 const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)([dinnerDate], now)
 
                 expect(result).not.toBeNull()
-                expect(result!.start.getUTCHours()).toBe(expectedUtcHour)
+                expect(result?.start.getUTCHours()).toBe(expectedUtcHour)
             })
         })
     })

@@ -90,11 +90,12 @@ const figures = computed(() => ({budgetGross: budget.value.availableBudget, spen
 const left = computed(() => spendingLeft(figures.value))
 
 type TicketRevenueRow = (typeof revenueByType.value)[number]
+const WORDS = BOOKING_WORDS.budget
 const ticketColumns: TableColumn<TicketRevenueRow>[] = [
-  {accessorKey: 'ticketType', header: 'Billettype'},
-  {accessorKey: 'count', header: 'Antal', meta: COMPONENTS.table.amountColumn},
-  {accessorKey: 'unitPrice', header: 'Stk pris', meta: COMPONENTS.table.amountColumn},
-  {accessorKey: 'revenue', header: 'Total', meta: COMPONENTS.table.amountColumn}
+  {accessorKey: 'ticketType', header: WORDS.ticketColumns.ticketType},
+  {accessorKey: 'count', header: WORDS.ticketColumns.count, meta: COMPONENTS.table.amountColumn},
+  {accessorKey: 'unitPrice', header: WORDS.ticketColumns.unitPrice, meta: COMPONENTS.table.amountColumn},
+  {accessorKey: 'revenue', header: WORDS.ticketColumns.revenue, meta: COMPONENTS.table.amountColumn}
 ]
 </script>
 
@@ -109,13 +110,13 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
   <div v-else :class="COMPONENTS.dinnerBudget.stack">
     <!-- The pane's title with the chevron that opens the details below -->
     <div :class="COMPONENTS.collapsible.headerRow">
-      <h4 :class="TYPOGRAPHY.sectionSubheading">Budget</h4>
+      <h4 :class="TYPOGRAPHY.sectionSubheading">{{ WORDS.title }}</h4>
       <UButton
         v-bind="BUTTONS.flipOpen(showDetails)"
         :color="COLOR.neutral"
         :variant="NOISE.quiet"
         :size="SIZES.standard"
-        :aria-label="showDetails ? 'Skjul budgettet' : 'Vis budgettet'"
+        :aria-label="WORDS.toggle(showDetails)"
         name="toggle-budget-details"
         @click="showDetails = !showDetails"
       />
@@ -128,12 +129,12 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
         <div :class="COMPONENTS.dinnerBudget.box">
           <div :class="COMPONENTS.dinnerBudget.boxLabel">
             <UIcon :name="ICONS.economy" :class="COMPONENTS.dinnerBudget.boxGlyph" />
-            <span :class="COMPONENTS.dinnerBudget.boxLabelText">INDTÆGTER</span>
+            <span :class="COMPONENTS.dinnerBudget.boxLabelText">{{ WORDS.boxes.revenue }}</span>
           </div>
           <!-- Ticket money is what the households pay: plain kr, no VAT split -->
           <div :class="COMPONENTS.dinnerBudget.boxAmountLarge">{{ formatPrice(budget.totalRevenue) }} kr</div>
           <div :class="COMPONENTS.dinnerBudget.boxFact">
-            {{ formatPortions(totalPortions) }} kuverter
+            {{ WORDS.portions(formatPortions(totalPortions)) }}
           </div>
         </div>
       </UCard>
@@ -143,7 +144,7 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
         <div :class="COMPONENTS.dinnerBudget.box">
           <div :class="COMPONENTS.dinnerBudget.boxLabel">
             <UIcon :name="ICONS.shoppingCart" :class="COMPONENTS.dinnerBudget.boxGlyph" />
-            <span :class="COMPONENTS.dinnerBudget.boxLabelText">RÅDIGHEDSBELØB</span>
+            <span :class="COMPONENTS.dinnerBudget.boxLabelText">{{ WORDS.boxes.allowance }}</span>
           </div>
           <div :class="COMPONENTS.dinnerBudget.boxAmountLarge"><VatAmount :gross="budget.availableBudget" /></div>
           <div :class="COMPONENTS.dinnerBudget.boxUnit">{{ BOOKING_WORDS.vatUnits }}</div>
@@ -163,11 +164,11 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
         <div :class="COMPONENTS.dinnerBudget.box">
           <div :class="COMPONENTS.dinnerBudget.boxLabel">
             <UIcon :name="ICONS.household" :class="COMPONENTS.dinnerBudget.boxGlyph" />
-            <span :class="COMPONENTS.dinnerBudget.boxLabelText">KØKKENBIDRAG</span>
+            <span :class="COMPONENTS.dinnerBudget.boxLabelText">{{ WORDS.boxes.contribution }}</span>
           </div>
           <div :class="COMPONENTS.dinnerBudget.boxAmountLarge"><VatAmount :gross="budget.kitchenContribution" /></div>
           <div :class="COMPONENTS.dinnerBudget.boxUnit">{{ BOOKING_WORDS.vatUnits }}</div>
-          <div :class="COMPONENTS.dinnerBudget.boxUnit">{{ budget.kitchenBaseRatePercent }}% af indtægter</div>
+          <div :class="COMPONENTS.dinnerBudget.boxUnit">{{ WORDS.contributionRate(budget.kitchenBaseRatePercent) }}</div>
         </div>
       </UCard>
     </div>
@@ -186,11 +187,11 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
         </template>
         <template #body-bottom>
           <tr :class="COMPONENTS.table.totalRow" data-testid="budget-summary-revenue">
-            <td :class="COMPONENTS.table.sumCell" colspan="3">Indtægter</td>
+            <td :class="COMPONENTS.table.sumCell" colspan="3">{{ WORDS.revenue }}</td>
             <td :class="COMPONENTS.table.sumAmountCell">{{ formatPrice(budget.totalRevenue) }} kr</td>
           </tr>
           <tr>
-            <td :class="COMPONENTS.table.sumCell" colspan="3">Køkkenbidrag ({{ budget.kitchenBaseRatePercent }}%)</td>
+            <td :class="COMPONENTS.table.sumCell" colspan="3">{{ WORDS.contribution(budget.kitchenBaseRatePercent) }}</td>
             <td :class="COMPONENTS.table.sumAmountCell"><span :class="COMPONENTS.dinnerBudget.summaryDeduction">-<VatAmount :gross="budget.kitchenContribution" /></span></td>
           </tr>
           <tr :class="COMPONENTS.table.totalRow" data-testid="budget-summary-available">

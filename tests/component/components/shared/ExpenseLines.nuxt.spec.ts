@@ -9,8 +9,9 @@ import {useOrder} from '~/composables/useOrder'
 import {useTicket} from '~/composables/useTicket'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, kitchenConfig, resetStores, tableHeaders} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, kitchenConfig, resetStores, tableHeaders, cellsByHeader, rowAt} from '~~/tests/component/testHelpers'
 import {BOOKING_WORDS} from '~/config/bookingWords'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 enableAutoUnmount(afterEach)
 
@@ -36,12 +37,13 @@ const grossOf = (exKr: number) => convertVat(exKr * 100, vatPercent, false)
 const exOf = (grossOre: number) => convertVat(grossOre, vatPercent, true)
 
 const NOTE_PREFILL = '"Risotto" 14/04/2026, Anna H. bestiller for Madhold 2'
-const lines = () => [
-    ExpenseFactory.defaultExpense({id: 1, amount: grossOf(1012), paidBy: {id: 1, email: 'anna@example.com', name: 'Anna H.'}, description: NOTE_PREFILL, createdAt: new Date('2026-04-12T10:00:00')}),
-    ExpenseFactory.defaultExpense({id: 2, amount: grossOf(298), paidBy: {id: 2, email: 'bo@example.com', name: 'Bo K.'}, description: 'Mejeri', createdAt: new Date('2026-04-14T10:00:00')})
-]
+const annaLine = () => ExpenseFactory.defaultExpense({id: 1, amount: grossOf(1012), paidBy: {id: 1, email: 'anna@example.com', name: 'Anna H.'}, description: NOTE_PREFILL, createdAt: new Date('2026-04-12T10:00:00')})
+const boLine = () => ExpenseFactory.defaultExpense({id: 2, amount: grossOf(298), paidBy: {id: 2, email: 'bo@example.com', name: 'Bo K.'}, description: 'Mejeri', createdAt: new Date('2026-04-14T10:00:00')})
+const lines = () => [annaLine(), boLine()]
 const spentOf = (expenses: ReturnType<typeof lines>) => expenses.reduce((sum, line) => sum + line.amount, 0)
 const BUDGET = 178100
+const ALLOWANCE = BOOKING_WORDS.allowance
+const {columns, otherUnit, placeholders, vatModes} = BOOKING_WORDS.budget
 
 const defaultProps = (props: Record<string, unknown>) => ({
     expenses: lines(), title: 'Madbestilling', hint: 'Hvad kostede indkøbene?', emptyText: 'Madbestilling mangler',
@@ -56,11 +58,12 @@ const open = async (wrapper: Parameters<typeof clickByTestId>[0]) => {
     await clickByTestId(wrapper, 'expense-edit')
     await nextTick()
 }
+const amountInput = (wrapper: Wrapper) => wrapper.find<HTMLInputElement>('input[name="expense-amount-input"]')
 const fillAmount = async (wrapper: Wrapper, value: string) => {
-    await wrapper.find('input[name="expense-amount-input"]').setValue(value)
+    await amountInput(wrapper).setValue(value)
     await nextTick()
 }
-const noteInput = (wrapper: Wrapper) => wrapper.find('input[name="expense-note-input"]')
+const noteInput = (wrapper: Wrapper) => wrapper.find<HTMLInputElement>('input[name="expense-note-input"]')
 const fillNote = async (wrapper: Wrapper, value: string) => {
     await noteInput(wrapper).setValue(value)
     await nextTick()
@@ -73,7 +76,9 @@ const clickAdd = async (wrapper: Wrapper) => {
 }
 // The lines are the table's plain body rows; the sum rows carry test ids
 const lineRows = (wrapper: Wrapper) => wrapper.findAll('tbody tr').filter(tr => tr.attributes('data-testid') === undefined && !findByTestId(tr, 'expense-table-empty').exists())
+// A sum row by its label: this dinner's rows come first and the team's round last, so the round's row is the last one
 const hintRow = (wrapper: Wrapper, label: string) => findAllByTestId(wrapper, 'expense-hint-row').find(row => row.text().startsWith(label))
+const roundRow = (wrapper: Wrapper, label: string) => findAllByTestId(wrapper, 'expense-hint-row').findLast(row => row.text().startsWith(label))
 
 describe('ExpenseLines', () => {
     describe('folded', () => {
@@ -105,7 +110,7 @@ describe('ExpenseLines', () => {
             await open(wrapper)
             expect(findByTestId(wrapper, 'expense-row').exists()).toBe(false)
             expect(wrapper.text()).toContain('Hvad kostede indkøbene?')
-            expect(findByTestId(wrapper, 'expense-back').text()).toContain('Luk')
+            expect(findByTestId(wrapper, 'expense-back').text()).toBe(BUTTON_WORDS.close)
 
             await clickByTestId(wrapper, 'expense-back')
             await nextTick()
@@ -124,51 +129,55 @@ describe('ExpenseLines', () => {
             expect(form).toBeGreaterThan(-1)
             expect(table).toBeGreaterThan(form)
             expect(sums).toBeGreaterThan(table)
-            expect((noteInput(wrapper).element as HTMLInputElement).value).toBe(NOTE_PREFILL)
+            expect(noteInput(wrapper).element.value).toBe(NOTE_PREFILL)
+            // The form's placeholders, its two units and its add button
+            expect(amountInput(wrapper).attributes('placeholder')).toBe(placeholders.amount)
+            expect(noteInput(wrapper).attributes('placeholder')).toBe(placeholders.note)
+            expect(wrapper.findComponent({name: 'USelect'}).props('items')).toEqual(VatModeSchema.options.map(value => ({value, label: vatModes[value]})))
+            expect(findByTestId(wrapper, 'expense-add').text()).toBe(BUTTON_WORDS.add)
 
-            const rows = lineRows(wrapper)
-            expect(rows).toHaveLength(2)
+            expect(lineRows(wrapper)).toHaveLength(2)
+            expect(tableHeaders(wrapper)).toEqual([columns.date, columns.payer, columns.note, BOOKING_WORDS.vatUnits, ''])
             lines().forEach((line, index) => {
-                expect(rows[index]!.findAll('td')[0]!.text()).toBe(formatDate(line.createdAt, DATE_SETTINGS.DAY_MONTH_MASK))
-                expect(findByTestId(rows[index]!, 'expense-payer').text()).toBe(line.paidBy.name!)
-                expect(findByTestId(rows[index]!, 'expense-note').text()).toBe(line.description)
-                expect(rows[index]!.text()).toContain(formatPrice(exOf(line.amount)))
-                expect(rows[index]!.text()).toContain(`/ ${formatPrice(line.amount)} kr`)
+                const cells = cellsByHeader(wrapper, index)
+                expect(cells).toMatchObject({
+                    [columns.date]: formatDate(line.createdAt, DATE_SETTINGS.DAY_MONTH_MASK),
+                    [columns.payer]: line.paidBy.name,
+                    [columns.note]: line.description
+                })
+                expect(cells[BOOKING_WORDS.vatUnits]).toContain(formatPrice(exOf(line.amount)))
+                expect(cells[BOOKING_WORDS.vatUnits]).toContain(`/ ${formatPrice(line.amount)} kr`)
             })
-            expect(findAllByTestId(wrapper, 'expense-remove')).toHaveLength(2)
+            expect(findAllByTestId(wrapper, 'expense-remove').map(remove => remove.attributes('aria-label'))).toEqual([BUTTON_WORDS.remove, BUTTON_WORDS.remove])
 
             const spent = spentOf(lines())
-            expect(hintRow(wrapper, 'Rådighedsbeløb')!.text()).toContain(`/ ${formatPrice(BUDGET)} kr`)
-            expect(hintRow(wrapper, 'Brugt')!.text()).toContain(`/ ${formatPrice(spent)} kr`)
-            const left = hintRow(wrapper, 'Tilbage')!
-            expect(left.text()).toContain(`/ +${formatPrice(BUDGET - spent)} kr`)
-            expect(findByTestId(left, 'vat-amount-ok').exists()).toBe(true)
+            expect(hintRow(wrapper, ALLOWANCE.budget)?.text()).toContain(`/ ${formatPrice(BUDGET)} kr`)
+            expect(hintRow(wrapper, ALLOWANCE.spent)?.text()).toContain(`/ ${formatPrice(spent)} kr`)
+            const left = hintRow(wrapper, ALLOWANCE.left)
+            expect(left?.text()).toContain(`/ +${formatPrice(BUDGET - spent)} kr`)
+            expect(left && findByTestId(left, 'vat-amount-ok').exists()).toBe(true)
             expect(findByTestId(wrapper, 'expense-spent').exists()).toBe(false)
         })
 
         it('GIVEN spending over the budget WHEN open THEN Tilbage reads red with its minus and the overdraft icon', async () => {
             const wrapper = await mount({editable: true, budgetGross: 1000})
             await open(wrapper)
-            const left = hintRow(wrapper, 'Tilbage')!
-            expect(left.text()).toContain(`/ -${formatPrice(spentOf(lines()) - 1000)} kr`)
-            expect(findByTestId(left, 'vat-amount-over').exists()).toBe(true)
+            const left = hintRow(wrapper, ALLOWANCE.left)
+            expect(left?.text()).toContain(`/ -${formatPrice(spentOf(lines()) - 1000)} kr`)
+            expect(left && findByTestId(left, 'vat-amount-over').exists()).toBe(true)
         })
 
         it('GIVEN the round WHEN open THEN the whole team gets its heading and the same three rows; without one no round block shows', async () => {
-            const [first, last] = lines()
-            const label = `Madhold 2, periode ${formatDateRange({start: first!.createdAt, end: last!.createdAt}, DATE_SETTINGS.DAY_MONTH_MASK)}`
+            const label = `Madhold 2, periode ${formatDateRange({start: annaLine().createdAt, end: boLine().createdAt}, DATE_SETTINGS.DAY_MONTH_MASK)}`
             const withRound = await mount({editable: true, round: {label, figures: {budgetGross: 400000, spentGross: 423800}}})
             await open(withRound)
             expect(findByTestId(withRound, 'expense-hint-heading').text()).toBe(label)
-            const rows = findAllByTestId(withRound, 'expense-hint-row')
-            expect(rows).toHaveLength(6)
-            expect(rows[3]!.text()).toContain('Rådighedsbeløb')
-            expect(rows[3]!.text()).toContain(`/ ${formatPrice(400000)} kr`)
-            expect(rows[4]!.text()).toContain('Brugt')
-            expect(rows[4]!.text()).toContain(`/ ${formatPrice(423800)} kr`)
-            expect(rows[5]!.text()).toContain('Tilbage')
-            expect(rows[5]!.text()).toContain(`/ -${formatPrice(23800)} kr`)
-            expect(findByTestId(rows[5]!, 'vat-amount-over').exists()).toBe(true)
+            expect(findAllByTestId(withRound, 'expense-hint-row')).toHaveLength(6)
+            expect(roundRow(withRound, ALLOWANCE.budget)?.text()).toContain(`/ ${formatPrice(400000)} kr`)
+            expect(roundRow(withRound, ALLOWANCE.spent)?.text()).toContain(`/ ${formatPrice(423800)} kr`)
+            const roundLeft = roundRow(withRound, ALLOWANCE.left)
+            expect(roundLeft?.text()).toContain(`/ -${formatPrice(23800)} kr`)
+            expect(roundLeft && findByTestId(roundLeft, 'vat-amount-over').exists()).toBe(true)
 
             const without = await mount({editable: true})
             await open(without)
@@ -179,14 +188,15 @@ describe('ExpenseLines', () => {
         it('GIVEN a budget of nothing yet WHEN open THEN Tilbage carries the waiting glyph', async () => {
             const wrapper = await mount({editable: true, budgetGross: 0, expenses: []})
             await open(wrapper)
-            expect(findByTestId(hintRow(wrapper, 'Tilbage')!, 'vat-amount-pending').exists()).toBe(true)
+            const left = hintRow(wrapper, ALLOWANCE.left)
+            expect(left && findByTestId(left, 'vat-amount-pending').exists()).toBe(true)
         })
 
         it('GIVEN no budget WHEN open THEN the hint carries Brugt alone', async () => {
             const wrapper = await mount({editable: true, budgetGross: null})
             await open(wrapper)
             expect(findAllByTestId(wrapper, 'expense-hint-row')).toHaveLength(1)
-            expect(hintRow(wrapper, 'Brugt')).toBeDefined()
+            expect(hintRow(wrapper, ALLOWANCE.spent)).toBeDefined()
         })
 
         it('GIVEN no lines WHEN open THEN the table says so under its headers and the form is ready', async () => {
@@ -204,12 +214,12 @@ describe('ExpenseLines', () => {
             const wrapper = await mount({editable: true})
             await open(wrapper)
             await fillAmount(wrapper, '1012')
-            expect(findByTestId(wrapper, 'expense-alternative').text()).toBe(`= ${formatPrice(grossOf(1012))} kr inkl. moms`)
+            expect(findByTestId(wrapper, 'expense-alternative').text()).toBe(otherUnit[VatModeSchema.enum.ex](formatPrice(grossOf(1012))))
 
             await clickAdd(wrapper)
 
             expect(wrapper.emitted('add')).toEqual([[{amount: grossOf(1012), description: NOTE_PREFILL}]])
-            expect((wrapper.find('input[name="expense-amount-input"]').element as HTMLInputElement).value).toBe('')
+            expect(amountInput(wrapper).element.value).toBe('')
         })
 
         it('GIVEN an edited note WHEN adding THEN emits it as typed and the field returns to the prefill', async () => {
@@ -221,7 +231,7 @@ describe('ExpenseLines', () => {
             await clickAdd(wrapper)
 
             expect(wrapper.emitted('add')).toEqual([[{amount: grossOf(298), description: 'Mejeri'}]])
-            expect((noteInput(wrapper).element as HTMLInputElement).value).toBe(NOTE_PREFILL)
+            expect(noteInput(wrapper).element.value).toBe(NOTE_PREFILL)
         })
 
         it('GIVEN an emptied note WHEN adding THEN the line carries no note, so the route writes the words', async () => {
@@ -241,7 +251,7 @@ describe('ExpenseLines', () => {
             wrapper.findComponent({name: 'USelect'}).vm.$emit('update:modelValue', VatModeSchema.enum.inkl)
             await nextTick()
             await fillAmount(wrapper, '1265')
-            expect(findByTestId(wrapper, 'expense-alternative').text()).toBe(`= ${formatPrice(exOf(126500))} kr ex moms`)
+            expect(findByTestId(wrapper, 'expense-alternative').text()).toBe(otherUnit[VatModeSchema.enum.inkl](formatPrice(exOf(126500))))
 
             await clickAdd(wrapper)
 
@@ -265,8 +275,7 @@ describe('ExpenseLines', () => {
         it('GIVEN a line WHEN its remove button is clicked THEN emits remove with the id', async () => {
             const wrapper = await mount({editable: true})
             await open(wrapper)
-            const removes = findAllByTestId(wrapper, 'expense-remove')
-            await removes[1]!.trigger('click')
+            await findByTestId(rowAt(wrapper, 1), 'expense-remove').trigger('click')
             expect(wrapper.emitted('remove')).toEqual([[2]])
         })
 

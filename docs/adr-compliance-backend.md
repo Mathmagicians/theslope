@@ -23,7 +23,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | Endpoint | Return type | Validation | Repository | E2E | Status |
 |---|---|---|---|---|---|
 | **Orders** | | | | | |
-| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the sort from `OrderSortBySchema` |
+| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the sort from `OrderSortBySchema`; its three flags through `QueryFlagSchema`, `=false` reads false |
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/order/waitlist.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `server/utils/waitlistAssignment.ts` | ✅ | N/A | ✅ | ✅ serial; recovery unit | ✅ `joinWaitlist` joins a household's claims on a dinner as one batch, idempotent on a later run; a placement grabs, writes, records and removes; the recovery settles a grab past `waitlistPlacingLeaseMinutes` and reports the sale or extra portion it finishes |
@@ -36,20 +36,20 @@ function and the spec hold the detail; a row names a gap in a few words.
 | **Admin - dinner events** | | | | | |
 | `/api/admin/dinner-event/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/dinner-event/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/dinner-event/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/dinner-event/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes its typed row (ADR-010 compliance 3) |
 | `/api/admin/dinner-event/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Admin - teams** | | | | | |
 | `/api/admin/team/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/team/index.put.ts` | ✅ | ⚠️ | ✅ | ✅ | ⚠️ raw body read beside the validated one |
-| `/api/admin/team/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/team/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/team/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes its typed row (ADR-010 compliance 3) |
+| `/api/admin/team/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ writes the team's columns; its members change through the assignment endpoints |
 | `/api/admin/team/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deleted id |
 | `/api/admin/team/[id]/joker-slot/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/team/[id]/joker-slot/[slotId].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deleted id |
 | `/api/admin/team/assignment/index.get.ts` | ❌ | N/A | N/A | N/A | ❌ stub |
 | `/api/admin/team/assignment/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/team/assignment/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/team/assignment/[id].post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec written, not run |
+| `/api/admin/team/assignment/[id].post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec written, not run; `updateTeamAssignment` takes `CookingTeamAssignmentUpdate` |
 | `/api/admin/team/assignment/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deleted id |
 | **Admin - users** | | | | | |
 | `/api/admin/users/index.get.ts` | ✅ | ⚠️ | ✅ | ✅ | ⚠️ raw query read; deserializes through the typed schemas |
@@ -62,15 +62,15 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/household/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through the typed schemas |
 | `/api/admin/household/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through the typed schemas |
 | `/api/admin/household/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through the typed schemas |
-| `/api/admin/household/inhabitants/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/household/inhabitants/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through `deserializeInhabitantDetail` |
 | `/api/admin/household/inhabitants/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/household/inhabitants/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/household/inhabitants/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through `deserializeInhabitantDetail` |
+| `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through `deserializeInhabitantDetail` |
 | `/api/admin/household/inhabitants/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Admin - seasons** | | | | | |
 | `/api/admin/season/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/season/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/season/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/season/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes its typed row (ADR-010 compliance 3) |
 | `/api/admin/season/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/season/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/season/active.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -99,7 +99,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/billing/periods/[id].get.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed |
 | `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec skipped, import replaced |
 | **Admin - maintenance and jobs** | | | | | |
-| `/api/admin/maintenance/daily.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial | ⚠️ raw body read; the scaffold step drops cancelled and consumed dinners; the run sends the notifications of the dinners (`sendNotifications`) and then the chef deadlines (`sendChefDeadlines`), counted per sender event in `notifications` (`BOOKING_STATUS`, `CHEF_DEADLINES`) |
+| `/api/admin/maintenance/daily.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial | ⚠️ raw body read; the scaffold step drops cancelled and consumed dinners; the run sends the notifications of the dinners (`sendNotifications`) and then the chef deadlines (`sendChefDeadlines`), counted per sender event in `notifications` (`BOOKING_STATUS`, `CHEF_DEADLINES`); the pending dinners read as `DinnerEventDate[]` (`fetchPendingDinnersInActiveSeason`) |
 | `/api/admin/maintenance/monthly.post.ts` | ✅ | ⚠️ | ✅ | ✅ serial | ⚠️ raw body read |
 | `/api/admin/maintenance/job-run/index.get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/maintenance/job-run/[id].get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |

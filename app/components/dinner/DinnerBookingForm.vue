@@ -160,6 +160,7 @@ import {BookingRowTypeSchema, type BookingRowType} from '~/composables/useBookin
 import {FORM_MODES} from '~/types/form'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {compareAsc, isSameDay} from 'date-fns'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 const BookingRow = BookingRowTypeSchema.enum
 
@@ -713,7 +714,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
           v-if="canOpenRow(row.original)"
           v-bind="BUTTONS.edit"
           :icon="row.getIsExpanded() ? ICONS.chevronDown : (row.original.rowType === BookingRow.power ? COMPONENTS.powerMode.buttonIcon : (row.original.rowType === BookingRow['guest-add'] ? ICONS.plusCircle : BUTTONS.edit.icon))"
-          :aria-label="row.getIsExpanded() ? 'Luk' : 'Rediger'"
+          :aria-label="row.getIsExpanded() ? BUTTON_WORDS.close : BUTTON_WORDS.edit"
           :data-testid="`${row.original.rowType}-${row.original.id}-toggle`"
           :class="[COMPONENTS.openTurn(row.getIsExpanded()), row.original.rowType === BookingRow.power && !row.getIsExpanded() && COMPONENTS.bookingForm.powerToggleIdle]"
           @click="row.toggleExpanded()"
@@ -954,7 +955,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
                   :data-testid="`${row.original.rowType}-${row.original.id}-cancel`"
                   @click="handleCancel"
                 >
-                  Annuller
+                  {{ BUTTON_WORDS.cancel }}
                 </UButton>
                 <UButton
                   v-bind="BUTTONS.save"

@@ -17,6 +17,7 @@ import type {UserDetail} from '~/composables/useCoreValidation'
 import {PALETTES, useUserPreferenceValidation} from '~/composables/useUserPreferenceValidation'
 import {PREF_TEST_IDS} from './userPreferencesTestIds'
 import {USER_WORDS} from '~/config/userWords'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 // The test runtime has no session cookie and no /api/_auth endpoint, so the session nuxt-auth-utils
 // would hydrate is the one thing faked - the auth store is real
@@ -112,7 +113,7 @@ describe('UserPreferencesCard', () => {
         // The row pencil of docs/ui.md "Edit affordances": a glyph with an accessible name, no text
         const pencil = findByTestId(wrapper, PREF_TEST_IDS.edit)
         expect(pencil.text()).toBe('')
-        expect(pencil.attributes('aria-label')).toBe('Rediger')
+        expect(pencil.attributes('aria-label')).toBe(BUTTON_WORDS.edit)
     })
 
     it('GIVEN a session snapshot from before the columns existed THEN the card falls back to the column defaults', async () => {

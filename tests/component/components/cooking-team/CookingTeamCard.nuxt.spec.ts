@@ -14,6 +14,7 @@ import type {JokerSlot} from '~/composables/useDutyValidation'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
 import {formatDate} from '~/utils/date'
 import {TEAM_WORDS} from '~/config/teamWords'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 import {JOKER_SLOT_IDS, submitJokerSlotForm} from '~~/tests/component/components/cooking-team/jokerSlotForm'
 
 const {TeamRoleSchema} = useCookingTeamValidation()
@@ -311,7 +312,7 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
 
         expect(avatarsIn(row)[0]!.props('icon')).toBe(ICONS.joker)
         expect(row.text()).toContain('Joker · en plads uden navn')
-        expect(addButton(wrapper).text()).toBe('Tilføj')
+        expect(addButton(wrapper).text()).toBe(BUTTON_WORDS.add)
         expect(addButton(wrapper).attributes('aria-expanded')).toBe('false')
         expect(addButtonIcon(wrapper).props('icon')).toBe(ICONS.plusCircle)
         expect(addButtonIcon(wrapper).props('trailingIcon')).toBeUndefined()
@@ -325,13 +326,13 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
         await flushPromises()
 
         expect(addButton(wrapper).attributes('aria-expanded')).toBe('true')
-        expect(addButton(wrapper).text()).toBe('Luk')
+        expect(addButton(wrapper).text()).toBe(BUTTON_WORDS.close)
         expect(addButtonIcon(wrapper).props('icon')).toBe(ICONS.chevronDown)
         const form = findByTestId(wrapper, JOKER_SLOT_IDS.form)
         expect(form.exists()).toBe(true)
         expect([...form.element.parentElement!.classList]).toEqual(expect.arrayContaining(classesOf(COMPONENTS.teamCard.memberForm)))
-        expect(findByTestId(form, JOKER_SLOT_IDS.submit).text()).toBe('Tilføj')
-        expect(findByTestId(form, JOKER_SLOT_IDS.cancel).text()).toBe('Annuller')
+        expect(findByTestId(form, JOKER_SLOT_IDS.submit).text()).toBe(BUTTON_WORDS.add)
+        expect(findByTestId(form, JOKER_SLOT_IDS.cancel).text()).toBe(BUTTON_WORDS.cancel)
     })
 
     it('the form\'s Tilføj emits add:jokerSlot on the team days and closes the row', async () => {
@@ -353,7 +354,7 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
         })
         expect(findByTestId(wrapper, JOKER_SLOT_IDS.form).exists()).toBe(false)
         expect(addButton(wrapper).attributes('aria-expanded')).toBe('false')
-        expect(addButton(wrapper).text()).toBe('Tilføj')
+        expect(addButton(wrapper).text()).toBe(BUTTON_WORDS.add)
         expect(addButtonIcon(wrapper).props('icon')).toBe(ICONS.plusCircle)
     })
 

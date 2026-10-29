@@ -3,6 +3,7 @@ import {useBookingValidation, type DinnerEventDetail, type MenuSwapStrategy} fro
 import type {TeamRole} from '~/composables/useCookingTeamValidation'
 import {TEAM_WORDS} from '~/config/teamWords'
 import {useCookingTeam} from '~/composables/useCookingTeam'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 type RoleAssignmentMode = 'volunteer' | 'resign' | 'swap'
 
@@ -101,7 +102,7 @@ const handleSubmit = () => {
                     data-testid="role-assignment-cancel"
                     @click="emit('cancel')"
                 >
-                    Annuller
+                    {{ BUTTON_WORDS.cancel }}
                 </UButton>
                 <DangerButton
                     v-if="mode === 'resign'"

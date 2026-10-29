@@ -1,14 +1,14 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {nextTick} from 'vue'
-import {enableAutoUnmount, type BaseWrapper} from '@vue/test-utils'
+import {enableAutoUnmount} from '@vue/test-utils'
 import CookingRoundSpending from '~/components/chef/CookingRoundSpending.vue'
 import CookingTeamBadges from '~/components/shared/CookingTeamBadges.vue'
 import {cookingRoundWords, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow, type SpendingFragment} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useTicket} from '~/composables/useTicket'
 import {formatDate, DATE_SETTINGS} from '~/utils/date'
-import {mountWithTooltipProvider, findByTestId, resetStores, registerEmptyStoreEndpoints, holdEndpoint, isTableLoading, untilTrue} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, resetStores, registerEmptyStoreEndpoints, holdEndpoint, isTableLoading, untilTrue, cellsByHeader, rowAt, cellAt} from '~~/tests/component/testHelpers'
 import {useBookingsStore} from '~/stores/bookings'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {BOOKING_WORDS} from '~/config/bookingWords'
@@ -40,9 +40,7 @@ const words = cookingRoundWords('Madhold 2', 2, LASAGNE.date, RISOTTO.date)
 const mount = (props: {fragment: SpendingFragment}) => mountWithTooltipProvider(CookingRoundSpending, {props, isMd: true})
 // The table's body rows without the total row the body-bottom slot adds
 const dataRows = (wrapper: Awaited<ReturnType<typeof mount>>) => wrapper.findAll('tbody tr').filter(tr => tr.attributes('data-testid') !== 'cooking-round-total')
-// A body row and a row's cell by their place, the first at 1; the body rows come before the total row
-const rowAt = (wrapper: BaseWrapper<Node>, place: number) => wrapper.find(`tbody tr:nth-child(${place})`)
-const cellAt = (row: BaseWrapper<Node>, place: number) => row.find(`td:nth-child(${place})`)
+const columns = BOOKING_WORDS.budget.columns
 const dayMonth = (date: Date) => formatDate(date, DATE_SETTINGS.DAY_MONTH_MASK)
 
 describe('CookingRoundSpending, the team\'s round', () => {
@@ -55,24 +53,23 @@ describe('CookingRoundSpending, the team\'s round', () => {
         expect(wrapper.findAllComponents(CookingTeamBadges)).toHaveLength(1)
         expect(dataRows(wrapper)).toHaveLength(3)
         rows.forEach((row, index) => {
-            expect(cellAt(rowAt(wrapper, index + 1), 1).text()).toBe(dayMonth(row.date))
-            expect(rowAt(wrapper, index + 1).text()).toContain(row.menuTitle)
+            expect(cellsByHeader(wrapper, index)).toMatchObject({[columns.date]: dayMonth(row.date), [columns.dinner]: row.menuTitle})
         })
         // The dinner on view reads a dot before its name and the name in bold; the other days read their name alone
-        const marker = cellAt(rowAt(wrapper, 3), 2).findComponent({name: 'UIcon'})
+        const marker = cellAt(wrapper, 2, columns.dinner).findComponent({name: 'UIcon'})
         expect(marker.attributes('data-testid')).toBe('cooking-round-marker')
         expect(marker.props('name')).toBe(ICONS.dot)
         expect(marker.element.parentElement?.className).toBe(COMPONENTS.table.currentDinnerLabel)
-        expect(findByTestId(rowAt(wrapper, 1), 'cooking-round-marker').exists()).toBe(false)
-        expect(cellAt(rowAt(wrapper, 1), 2).find('span').classes().join(' ')).toBe(COMPONENTS.table.dinnerLabel)
+        expect(findByTestId(rowAt(wrapper, 0), 'cooking-round-marker').exists()).toBe(false)
+        expect(cellAt(wrapper, 0, columns.dinner).find('span').classes().join(' ')).toBe(COMPONENTS.table.dinnerLabel)
 
         // Each row's allowance, spending and what is left in both units, red with the exclamation icon when over
-        const over = rowAt(wrapper, 1)
+        const over = rowAt(wrapper, 0)
         expect(over.text()).toContain(`/ ${formatPrice(178100)} kr`)
         expect(over.text()).toContain(`/ ${formatPrice(192500)} kr`)
         expect(over.text()).toContain(`/ -${formatPrice(14400)} kr`)
         expect(findByTestId(over, 'vat-amount-over').exists()).toBe(true)
-        expect(findByTestId(rowAt(wrapper, 2), 'vat-amount-ok').exists()).toBe(true)
+        expect(findByTestId(rowAt(wrapper, 1), 'vat-amount-ok').exists()).toBe(true)
 
         // The round sums into the team's total row
         const total = findByTestId(wrapper, 'cooking-round-total')
@@ -91,7 +88,7 @@ describe('CookingRoundSpending, the team\'s round', () => {
     it('GIVEN a dinner without tickets yet WHEN rendering THEN its Tilbage carries the waiting glyph, not the check', async () => {
         const empty: CookingRoundRow = {dinnerEventId: 4, date: new Date('2026-04-15T18:00:00'), menuTitle: 'Pasta', isCurrent: false, budgetGross: 0, spentGross: 0}
         const wrapper = await mount({fragment: teamSpendingFragment([...rows, empty], words)})
-        const last = rowAt(wrapper, 4)
+        const last = rowAt(wrapper, 3)
         expect(findByTestId(last, 'vat-amount-pending').exists()).toBe(true)
         expect(findByTestId(last, 'vat-amount-ok').exists()).toBe(false)
     })
@@ -99,7 +96,7 @@ describe('CookingRoundSpending, the team\'s round', () => {
     it('GIVEN a dinner without a menu title WHEN rendering THEN its Middag cell reads the untitled dinner\'s name', async () => {
         const untitled: CookingRoundRow = {...RISOTTO, menuTitle: ''}
         const wrapper = await mount({fragment: teamSpendingFragment([LASAGNE, untitled], words)})
-        expect(cellAt(rowAt(wrapper, 2), 2).text()).toBe(BOOKING_WORDS.untitledDinner)
+        expect(cellsByHeader(wrapper, 1)[columns.dinner]).toBe(BOOKING_WORDS.untitledDinner)
     })
 })
 
@@ -121,8 +118,8 @@ describe('CookingRoundSpending, this dinner', () => {
         const wrapper = await mount({fragment: dinnerSpendingFragment(RISOTTO, [receipt])})
         expect(findByTestId(wrapper, 'cooking-round-heading').text()).toBe(`Risotto, ${dayMonth(RISOTTO.date)}`)
         expect(dataRows(wrapper)).toHaveLength(1)
-        const line = rowAt(wrapper, 1)
-        expect(cellAt(line, 1).text()).toBe(dayMonth(receipt.createdAt))
+        const line = rowAt(wrapper, 0)
+        expect(cellsByHeader(wrapper, 0)[columns.date]).toBe(dayMonth(receipt.createdAt))
         expect(line.text()).toContain(NOTE)
         expect(line.text()).toContain(`/ ${formatPrice(126500)} kr`)
         expect(findByTestId(line, 'cooking-round-marker').exists()).toBe(false)

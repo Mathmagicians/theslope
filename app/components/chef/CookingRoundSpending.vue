@@ -70,8 +70,8 @@ const noReceipts = getRandomEmptyMessageText('noReceipts', now.value)
 const {spendingLeft, spendingAwaitsTickets} = useOrder()
 
 const columns: TableColumn<SpendingTableRow>[] = [
-  {id: 'date', header: 'Dato'},
-  {id: 'label', header: 'Middag'},
+  {id: 'date', header: BOOKING_WORDS.budget.columns.date},
+  {id: 'label', header: BOOKING_WORDS.budget.columns.dinner},
   {id: 'allowance', header: BOOKING_WORDS.allowance.budget, meta: COMPONENTS.table.amountColumn},
   {id: 'spent', header: BOOKING_WORDS.allowance.spent, meta: COMPONENTS.table.amountColumn},
   {id: 'left', header: BOOKING_WORDS.allowance.left, meta: COMPONENTS.table.amountColumn}

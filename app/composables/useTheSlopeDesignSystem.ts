@@ -1,7 +1,7 @@
 import {computed} from 'vue'
 import type {WeekDay} from '~/types/dateTypes'
 import type {AlertProps, AvatarProps, ButtonProps, BadgeProps, ChipProps} from '@nuxt/ui'
-import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import {SEASON_STATUS} from '~/config/seasonWords'
 import type {TicketState} from '~/composables/useBookingValidation'
 import {TEMPORAL_CATEGORY, type SeasonStatusValue, type TemporalCategory} from '~/utils/season'
 

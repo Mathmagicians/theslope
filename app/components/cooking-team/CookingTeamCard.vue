@@ -61,6 +61,7 @@ import type { WeekDayMap, DateRange } from '~/types/dateTypes'
 import type { TeamRole, CookingTeamAssignment, CookingTeamDisplay } from '~/composables/useCookingTeamValidation'
 import type { JokerSlotCreate } from '~/composables/useDutyValidation'
 import { TEAM_WORDS } from '~/config/teamWords'
+import { BUTTON_WORDS } from '~/config/buttonWords'
 
 // Design system
 const { SIZES, ICONS, ALERTS, BUTTONS, TYPOGRAPHY, COMPONENTS, ROLE_ICONS, getRainbowBand, getCalendarCountBadge, getRandomEmptyMessage } = useTheSlopeDesignSystem()
@@ -522,7 +523,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                 <template #leading>
                   <UIcon :name="row.getIsExpanded() ? ICONS.chevronDown : isInThisTeam(row.original.id) ? ICONS.edit : ICONS.plusCircle" />
                 </template>
-                {{ row.getIsExpanded() ? 'Luk' : isInThisTeam(row.original.id) ? 'Rediger' : 'Tilføj' }}
+                {{ row.getIsExpanded() ? BUTTON_WORDS.close : isInThisTeam(row.original.id) ? BUTTON_WORDS.edit : BUTTON_WORDS.add }}
               </UButton>
             </template>
 
@@ -562,7 +563,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   data-testid="joker-slot-add"
                   @click="isJokerFormOpen = !isJokerFormOpen"
                 >
-                  {{ isJokerFormOpen ? 'Luk' : 'Tilføj' }}
+                  {{ isJokerFormOpen ? BUTTON_WORDS.close : BUTTON_WORDS.add }}
                 </UButton>
               </div>
               <div v-if="isJokerFormOpen" :class="COMPONENTS.teamCard.memberForm">

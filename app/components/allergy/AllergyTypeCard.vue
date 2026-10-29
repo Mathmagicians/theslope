@@ -2,6 +2,7 @@
 import type {Form, FormSubmitEvent} from '@nuxt/ui'
 import type {AllergyTypeCreate, AllergyTypeDetail} from '~/composables/useAllergyValidation'
 import {FORM_MODES} from '~/types/form'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 // Design system
 const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, TYPOGRAPHY, TEXT, RING, getRandomEmptyMessage, NOISE } = useTheSlopeDesignSystem()
@@ -113,7 +114,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy', now.value)
           data-testid="cancel-allergy-type"
           @click="handleCancel"
       >
-        Annuller
+        {{ BUTTON_WORDS.cancel }}
       </UButton>
       <UButton
           v-bind="BUTTONS.save"
@@ -121,7 +122,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy', now.value)
           data-testid="save-allergy-type"
           @click="formRef?.submit()"
       >
-        Gem
+        {{ BUTTON_WORDS.save }}
       </UButton>
     </div>
   </UForm>

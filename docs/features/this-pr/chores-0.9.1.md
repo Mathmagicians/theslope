@@ -33,6 +33,7 @@ QA with human eyes: [qa.md](qa.md). Review defects: [defects.md](defects.md).
 | The app reads the time through `useClock` | ADR-017 compliance 8; the server render and the client agree on the minute | – | done 542b274 |
 | Delete responses | A bulk delete reports the ids it read before the delete; a single delete answers the deleted id (ADR-009 rule 7) | – | done f4bb23f |
 | Avatar ring colours | Each face rings in its surface's semantic colour (`docs/ui.md` § Faces) | – | done f4bb23f, signed off 2026-10-28 |
+| Heynabo logo on the import's job box | `/admin/system`; mockup in `AdminSystem.vue` | – | done 3dbea43, in your test (QA #154) |
 
 ## In flight
 
