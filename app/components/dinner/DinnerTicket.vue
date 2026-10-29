@@ -73,7 +73,6 @@ const props = withDefaults(defineProps<Props>(), {
 const isGuest = computed(() => props.guestCount !== undefined)
 
 const {COMPONENTS, ICONS, SIZES, NOISE} = useTheSlopeDesignSystem()
-const {formatPrice} = useTicket()
 const ticket = COMPONENTS.ticket
 
 // The state cell's glyph; a normal ticket's cell stays empty
@@ -104,15 +103,10 @@ const infoIconClass = computed(() => {
   return color && isTicketTypeColor(color) ? ticket.infoIcon[color] : undefined
 })
 
-// Combined badge text: "VOKSEN · 55kr" or "BARN · 35kr · 2 Gæster" or "Powermode!" (no price for power mode)
-const badgeText = computed(() => {
-  const parts = [props.ticketConfig?.label ?? '']
-  if (props.consensus === undefined) parts.push(`${formatPrice(props.price)} kr`) // Only show price for regular tickets
-  if (isGuest.value) {
-    parts.push(props.guestCount === 1 ? 'Gæst' : `${props.guestCount} Gæster`)
-  }
-  return parts.join(' · ')
-})
+// Power mode's badge names itself, without a price
+const badgeText = computed(() => props.consensus === undefined
+  ? ticketBadgeLabel(props.ticketConfig?.label ?? '', props.price, props.guestCount)
+  : props.ticketConfig?.label ?? '')
 </script>
 
 <template>

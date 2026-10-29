@@ -2,11 +2,12 @@ import { test, expect } from '@playwright/test'
 import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { useBookingValidation } from '~/composables/useBookingValidation'
-import type { TicketPrice } from '~/composables/useTicketPriceValidation'
+import { useTicket } from '~/composables/useTicket'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
 const { validatedBrowserContext, getSessionUserInfo } = testHelpers
 const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema } = useBookingValidation()
+const { findTicketPriceByType } = useTicket()
 
 const testOrderIds: number[] = []
 const testSeasonIds: number[] = []
@@ -31,7 +32,7 @@ test.describe('Order API', () => {
     testSeasonId = season.id!
     testSeasonIds.push(testSeasonId)
 
-    const adultTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.ADULT)
+    const adultTicketPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, season.ticketPrices)
 
     if (!adultTicketPrice?.id) {
       throw new Error('Season must have an ADULT ticket price with an id')

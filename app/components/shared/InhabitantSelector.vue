@@ -64,7 +64,7 @@ const columns = [
   { accessorKey: 'actions', header: props.actionsHeader }
 ]
 
-// Row expansion (parent controls which row is expanded via v-model)
+// Open rows keyed by the inhabitant's row id, so an open row stays with its inhabitant through a search or a sort
 const expanded = defineModel<Record<string, boolean>>('expanded', { default: () => ({}) })
 
 // Pagination
@@ -85,6 +85,7 @@ const table = useTemplateRef('table')
         ref="table"
         v-model:pagination="pagination"
         v-model:expanded="expanded"
+        :get-row-id="rowIdOf"
         sticky
         :columns="columns"
         :data="filteredInhabitants"

@@ -14,6 +14,7 @@ import type {Form, FormSubmitEvent} from '@nuxt/ui'
 import type {DateRange, WeekDayMap} from '~/types/dateTypes'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
 import type {JokerSlotCreate} from '~/composables/useDutyValidation'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 type JokerSlotDraft = z.input<ReturnType<typeof useDutyValidation>['JokerSlotCreateSchema']>
 
@@ -35,7 +36,7 @@ const {TeamRoleSchema} = useCookingTeamValidation()
 
 const period = ref<DateRange>({...props.seasonDates})
 
-const draft = reactive<Pick<JokerSlotDraft, 'role' | 'allocationPercentage'> & {affinity: WeekDayMap, note?: string}>({
+const draft = reactive<Omit<JokerSlotDraft, 'startDate' | 'endDate' | 'affinity' | 'note'> & {affinity: WeekDayMap, note?: string}>({
   role: TeamRoleSchema.enum.COOK,
   affinity: props.teamAffinity ? {...props.teamAffinity} : createDefaultWeekdayMap(false),
   allocationPercentage: JokerSlotCreateSchema.shape.allocationPercentage.parse(undefined),
@@ -82,11 +83,11 @@ const handleSubmit = ({data: {note, ...slot}}: FormSubmitEvent<JokerSlotCreate>)
     </UFormField>
 
     <div :class="LAYOUTS.formButtonRow">
-      <UButton v-bind="BUTTONS.cancel" :size="SIZES.small" data-testid="joker-slot-cancel" @click="emit('cancel')">
-        Annuller
+      <UButton v-bind="BUTTONS.cancel" data-testid="joker-slot-cancel" @click="emit('cancel')">
+        {{ BUTTON_WORDS.cancel }}
       </UButton>
-      <UButton v-bind="BUTTONS.save" :size="SIZES.small" data-testid="joker-slot-submit" @click="formRef?.submit()">
-        Tilføj
+      <UButton v-bind="BUTTONS.save" data-testid="joker-slot-submit" @click="formRef?.submit()">
+        {{ BUTTON_WORDS.add }}
       </UButton>
     </div>
   </UForm>

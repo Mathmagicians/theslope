@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect} from '~~/tests/e2e/uiTest'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -8,7 +8,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, gotoHydrated, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
@@ -44,6 +44,10 @@ test.describe('Cross-Household Bookings - Serial UI Tests', () => {
         targetPbsId = targetHousehold.pbsId
         createdHouseholdIds.push(targetHouseholdId)
 
+        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 0, deadline: 2, cookingDays: 'all', startInDays: 5})
+        createdSeasonIds.push(testSeason.season.id!)
+
+        // The preference writes scaffold each household's orders on the active test season
         const targetInhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, targetHouseholdId, {
             name: salt('TargetUser', testSalt),
             lastName: salt('Last', testSalt),
@@ -51,18 +55,9 @@ test.describe('Cross-Household Bookings - Serial UI Tests', () => {
         })
         targetInhabitantId = targetInhabitant.id
 
-        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 10, deadline: 2, cookingDays: 'all', startInDays: 5})
-        createdSeasonIds.push(testSeason.season.id!)
-
-        // Trigger scaffold via admin endpoint to create orders based on preferences
         await HouseholdFactory.updateInhabitant(
             adminContext, adminInhabitantId,
             {dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.DINEIN)},
-            200, testSeason.season.id!
-        )
-        await HouseholdFactory.updateInhabitant(
-            adminContext, targetInhabitantId,
-            {dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.DINEINLATE)},
             200, testSeason.season.id!
         )
     })
@@ -84,8 +79,8 @@ test.describe('Cross-Household Bookings - Serial UI Tests', () => {
         expect(adminOrder?.dinnerMode).toBe(DinnerMode.DINEIN)
         expect(targetOrder?.dinnerMode).toBe(DinnerMode.DINEINLATE)
 
-        await page.goto(`/household/${encodeURIComponent(targetShortName)}/bookings?pbs=${targetPbsId}`)
-        await pollUntil(() => page.locator('[data-testid="household-bookings"]').isVisible(), visible => visible)
+        await gotoHydrated(page, `/household/${encodeURIComponent(targetShortName)}/bookings?pbs=${targetPbsId}`)
+        await expect(page.locator('[data-testid="household-bookings"]')).toBeVisible()
         await expect(page.locator('[data-testid="booking-table"]')).toBeVisible()
 
         // Target inhabitant name should be visible in booking table

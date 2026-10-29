@@ -83,6 +83,23 @@ c4: ## Generate the C4 container diagram from the wrangler configs and render do
 c4-check: ## Fail when the C4 container diagram differs from the wrangler configs
 	@$(C4_GENERATE) | diff -u $(C4_CONTAINER) - || { echo "$(C4_CONTAINER) is stale - run make c4"; exit 1; }
 
+# --- GitHub Actions workflows → their YAML syntax (yaml valid) and CodeQL's Actions queries (.output/codeql-actions); CodeQL
+# reads a workflow GitHub cannot parse without a finding. pre:all runs the lint when the branch or the working tree changes
+# .github, CI's CodeQL pipeline scans the pushed workflows
+.PHONY: lint-gh-actions lint-gh-actions-changed
+
+lint-gh-actions-changed: ## Run lint-gh-actions when the branch or the working tree changes .github (skipped in CI)
+	@[ -n "$$CI" ] || { git diff --quiet $$(git merge-base origin/main HEAD) -- .github && [ -z "$$(git ls-files --others --exclude-standard .github)" ]; } || $(MAKE) --no-print-directory lint-gh-actions
+
+lint-gh-actions: ## Check the workflows' YAML syntax, then run CodeQL's Actions queries (latest) on them; prints the findings and fails on one
+	@for workflow in .github/workflows/*.yml; do npx --no-install yaml valid < "$$workflow" || { echo "❌ Not valid YAML: $$workflow"; exit 1; }; done
+	@mkdir -p .output
+	@gh codeql set-version latest
+	@gh codeql pack download codeql/actions-queries
+	@gh codeql database create .output/codeql-actions --language=actions --source-root=. --overwrite --quiet
+	@gh codeql database analyze .output/codeql-actions codeql/actions-queries --format=csv --output=.output/codeql-actions.csv --quiet
+	@! grep . .output/codeql-actions.csv
+
 # --- Schema → migration files → Prisma client + zod (prisma/generated, committed)
 .PHONY: d1-prisma-zod d1-prisma d1-prisma-check d1-create-migration d1-flatten-migrations
 
@@ -301,7 +318,7 @@ d1-copy-dev-to-local: ## Replace the local D1 with a copy of dev (schema, data, 
 # ============================================================================
 # TESTING
 # ============================================================================
-.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod test-report bdd-report bdd-steps developer-resolve developer-assemble developer-build developer-publish
+.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod test-report bdd-report bdd-steps developer-resolve developer-assemble developer-build developer-publish developer-test
 
 # The summary tables are jq programs under scripts/ (test-report.jq, bdd-report.jq); the step reuse is
 # scripts/bdd-steps.mjs, which matches the feature lines through playwright-bdd's generator
@@ -320,7 +337,7 @@ test-report: ## Markdown summary of a Playwright suite - report=<json> title=<te
 suite ?= api
 bdd_report = .output/bdd/reports/e2e-$(suite)-bdd.json
 
-bdd-report: ## BDD summary of a suite - [suite=api|ui|smoke] [report=<cucumber json>] [title=<text>] [note=<text>]
+bdd-report: ## BDD summary of a suite - [suite=api|ui|ui-serial|smoke] [report=<cucumber json>] [title=<text>] [note=<text>]
 	@report="$(or $(report),$(bdd_report))"; title="$(or $(title),BDD $(suite) tests)"; \
 	if [ -f "$$report" ]; then \
 		jq -r -f scripts/bdd-report.jq --arg title "$$title" --arg note "$(note)" "$$report" \
@@ -338,9 +355,9 @@ DEVELOPER_OUT := .output/developer
 DEVELOPER_PUBLIC := $(DEVELOPER_OUT)/public
 site ?= $(DEVELOPER_OUT)/site
 artifacts ?= $(DEVELOPER_OUT)/artifacts
-DEVELOPER_SUITES := api ui smoke
+DEVELOPER_SUITES := api ui ui-serial smoke
 DEVELOPER_ASSEMBLE_USAGE := usage: make developer-assemble env=<dev|prod> run=<pipeline run id> version=<version> sha=<commit> [url=<app url>] [site=] [artifacts=]
-# A pipeline run that deploys uploads the artifact `deployment`: its version-info lines plus ENV and URL
+# A pipeline run that deploys uploads the artifact `deployment`: RELEASE_VERSION, COMMIT_SHA, ENV and URL from its step outputs
 developer-resolve: ## What a pipeline run published, from its deployment artifact, as env lines - run=<pipeline run id> [artifacts=]
 	@test -n "$(run)" || { echo "usage: make developer-resolve run=<pipeline run id> [artifacts=artifacts]"; exit 1; }
 	@rm -rf "$(artifacts)/deployment"; \
@@ -371,23 +388,29 @@ developer-assemble: ## Lay a run's results and manifest under site/environments 
 	@[ ! -f "$(artifacts)/openapi/_openapi.json" ] || cp "$(artifacts)/openapi/_openapi.json" "$(site)/environments/$(env)/openapi.json"
 	@cat "$(site)/environments/$(env).json"
 
-# The hashed chunks live under _nuxt; the previous build's go before the copy so they do not pile up on gh-pages
-developer-build: ## Generate the site into the gh-pages checkout - nuxi generate, CNAME and .nojekyll [site=]
-	@npx nuxi generate developer
+# The hashed chunks live under _nuxt; the previous build's go before the copy so they do not pile up on gh-pages.
+# base is the path the site is served under (NUXT_APP_BASE_URL); domain, when set, is the custom domain in CNAME
+developer-build: ## Generate the site into the gh-pages checkout - nuxi generate, CNAME and .nojekyll [base=/] [domain=] [site=]
+	@NUXT_APP_BASE_URL="$(or $(base),/)" npx nuxi generate developer
 	@mkdir -p "$(site)" && rm -rf "$(site)/_nuxt" && cp -R "$(DEVELOPER_PUBLIC)/." "$(site)/" && \
-	echo developer.skraaningen.dk > "$(site)/CNAME" && touch "$(site)/.nojekyll"
+	{ if [ -n "$(domain)" ]; then echo "$(domain)" > "$(site)/CNAME"; else rm -f "$(site)/CNAME"; fi; } && touch "$(site)/.nojekyll"
 
 developer-publish: ## Force-push site/ as the single commit of gh-pages - [env=<env>] [site=]
 	@test -d "$(site)" || { echo "usage: make developer-publish [env=<env>] [site=site] (run developer-build first)"; exit 1; }
 	@cd "$(site)" && \
 	{ [ -d .git ] || git init -q; } && \
 	{ git remote get-url origin > /dev/null 2>&1 || git remote add origin "https://github.com/$${GITHUB_REPOSITORY:?GITHUB_REPOSITORY missing and $(site) has no origin}.git"; } && \
-	{ [ -z "$$GITHUB_TOKEN" ] || git config http.https://github.com/.extraheader "AUTHORIZATION: basic $$(printf 'x-access-token:%s' "$$GITHUB_TOKEN" | base64 | tr -d '\n')"; } && \
+	git config credential.https://github.com.helper '!gh auth git-credential' && \
 	git add -A && \
 	commit=$$(git -c user.name="$$(git config user.name || echo 'github-actions[bot]')" -c user.email="$$(git config user.email || echo 'github-actions[bot]@users.noreply.github.com')" \
 		commit-tree "$$(git write-tree)" -m "Developer companion $$(date -u +%Y-%m-%dT%H:%MZ) $(env)") && \
 	git update-ref refs/heads/gh-pages "$$commit" && \
 	git push -q --force origin refs/heads/gh-pages:refs/heads/gh-pages
+
+# The spec and its Playwright config live in developer/ (developer/playwright.config.ts)
+developer-test: ## Follow the links of the published site and read its header - url=<site address>
+	@test -n "$(url)" || { echo "usage: make developer-test url=<site address>"; exit 1; }
+	@BASE_URL="$(url)" npx playwright test -c developer
 
 unit-test: ## Run all unit tests
 	@npx vitest --run
@@ -543,7 +566,8 @@ typegen: ## Regenerate wrangler binding typings for every worker from wrangler.t
 # SENDER EVENTS — trigger a notification event on an environment (the cron twins' pattern, via theslope_call)
 # ============================================================================
 .PHONY: theslope-sender-event-test-local theslope-sender-event-test-dev theslope-sender-event-test-prod \
-        theslope-sender-event-monthly-billing-local theslope-sender-event-monthly-billing-dev theslope-sender-event-monthly-billing-prod queues-info-dev queues-info-prod
+        theslope-sender-event-monthly-billing-local theslope-sender-event-monthly-billing-dev theslope-sender-event-monthly-billing-prod queues-info-dev queues-info-prod \
+        theslope-sender-dry-run-booking-status-local theslope-sender-dry-run-booking-status-dev theslope-sender-dry-run-booking-status-prod
 
 # $(1)=env file. The mail goes to the environment's admin mailbox
 define theslope_sender_event_test
@@ -573,6 +597,20 @@ theslope-sender-event-monthly-billing-dev: ## Re-send the accountant mail for a 
 
 theslope-sender-event-monthly-billing-prod: ## Re-send the accountant mail for a period on prod — bpid=<billingPeriodSummaryId>
 	$(call theslope_sender_event_monthly_billing,$(ENV_prod))
+
+# $(1)=env file. The delivery dry run: per user, the booking notifications the next run sends
+define theslope_sender_dry_run_booking_status
+	$(call theslope_call,$(1),"$$BASE_URL/api/admin/sender/delivery?dryRun=BOOKING_STATUS")
+endef
+
+theslope-sender-dry-run-booking-status-local: ## Delivery dry run of the active season's booking notifications on localhost
+	$(call theslope_sender_dry_run_booking_status,$(ENV_local))
+
+theslope-sender-dry-run-booking-status-dev: ## Delivery dry run of the active season's booking notifications on dev
+	$(call theslope_sender_dry_run_booking_status,$(ENV_dev))
+
+theslope-sender-dry-run-booking-status-prod: ## Delivery dry run of the active season's booking notifications on prod
+	$(call theslope_sender_dry_run_booking_status,$(ENV_prod))
 
 queues-info-dev: ## Backlog of the dev sender queue
 	@npx wrangler queues info theslope-sender-dev

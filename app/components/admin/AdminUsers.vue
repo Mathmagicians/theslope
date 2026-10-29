@@ -1,27 +1,26 @@
 <!--
-UX MOCKUP: /admin/users table on a phone
+UX MOCKUP: /admin/users table
 
-MOBILE (<md)                        DESKTOP (md+)
-┌─────────────────────────────────┐ › · # · Navn · Mail · Telefon ·
-│ 🔍 Søg efter navn eller email…  │ Systemroller · Sidst opdateret
-│ [⇅ Navn] [«] [‹] [1] [›] [»]    │
-├───┬───────────┬─────────────────┤
-│   │ Navn      │ Mail            │
-│ › │ …         │ …               │
-│ ⌄ │ …         │ …               │
+┌─────────────────────────────────┐
+│ Søg efter navn… (search icon)   │
+│ [(sort icon) Navn] (pager) 1    │
+├───┬────┬─────────┬──────────────┼ - - - - - - - - - - - - - - - - - - - - - - -
+│   │ #  │ Navn    │ Mail         │ Telefon    Systemroller  Sidst opdateret
+│ › │ 12 │ Anna    │ anna@…       │ 12345678   [badge]       for 2 dage siden
+│ ⌄ │ 13 │ Bo      │ bo@…         │ …          [badge]       …
 │ ┌─────────────────────────────┐ │
 │ │ UserProfileCard             │ │
 │ └─────────────────────────────┘ │
 └─────────────────────────────────┘
-On a phone #, Telefon, Systemroller and Sidst opdateret are hidden (columnVisibility);
-phone and roles show in the expanded UserProfileCard.
+Every viewport shows all six columns beside the chevron column; on a phone the table scrolls sideways inside its card.
+The chevron opens one row at a time, holding the user's UserProfileCard; on a phone the card keeps to the box in view while the columns scroll.
 -->
 
 <script setup lang="ts">
 import {h, resolveComponent} from 'vue'
 import {getPaginationRowModel} from '@tanstack/vue-table'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
-// Props - canEdit from parent for authorization
 interface Props {
   canEdit?: boolean
 }
@@ -34,19 +33,15 @@ const UButton = resolveComponent('UButton')
 const store = useUsersStore()
 const {users, isUsersLoading, isUsersErrored, usersError} = storeToRefs(store)
 
-// Use existing role badge definitions
 const {roleLabels} = useUserRolesUi()
-const {COMPONENTS, ICONS, ALERTS, COLOR, TEXT, BG, columnVisibility, NOISE, SIZES} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, ALERTS, COLOR, TEXT, BG, NOISE, SIZES} = useTheSlopeDesignSystem()
 
-// Search/filter state
 const searchQuery = ref('')
 const sortDescending = ref(false)
 
-// Filter and sort users
 const filteredUsers = computed(() => {
   let result = users.value
 
-  // Filter by search query
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(user =>
@@ -56,7 +51,7 @@ const filteredUsers = computed(() => {
     )
   }
 
-  // Sort by name (data is already sorted from DB, just reverse if needed)
+  // The users arrive sorted by name; descending reverses them
   if (sortDescending.value) {
     result = [...result].reverse()
   }
@@ -64,60 +59,25 @@ const filteredUsers = computed(() => {
   return result
 })
 
-const formattedUsers = computed(() => filteredUsers.value?.map((user) => {
-  return {
-    ...user,
-    greeting: user.Inhabitant?.name || 'Ukendt bruger'
-  }
-})) || []
+const formattedUsers = computed(() => filteredUsers.value.map(user => ({
+  ...user,
+  greeting: user.Inhabitant?.name || 'Ukendt bruger'
+})))
 
-// Track expanded rows
-const expanded = ref<Record<number, boolean>>({})
-
-// Type guard to ensure user has required Inhabitant data
 type UserWithInhabitant = typeof users.value[number] & {
   Inhabitant: NonNullable<typeof users.value[number]['Inhabitant']>
 }
 
-function hasInhabitant(user: typeof users.value[number] | null | undefined): user is UserWithInhabitant {
-  return !!user?.Inhabitant
-}
+const hasInhabitant = (user: typeof users.value[number] | undefined): user is UserWithInhabitant => !!user?.Inhabitant
 
-// Track the currently expanded user via ref (set by watcher)
 const expandedUser = ref<UserWithInhabitant | null>(null)
 
-// Watch for row expansion to track expanded user and enforce single expansion
-watch(expanded, (newExpanded, oldExpanded) => {
-  const expandedKeys = Object.keys(newExpanded).filter(key => newExpanded[Number(key)])
-
-  if (expandedKeys.length > 1) {
-    // More than one row expanded - close all except the most recently opened
-    const newlyExpandedKey = expandedKeys.find(key => !oldExpanded[Number(key)])
-    if (newlyExpandedKey) {
-      Object.keys(expanded.value).forEach(key => {
-        if (key !== newlyExpandedKey) {
-          expanded.value[Number(key)] = false
-        }
-      })
-
-      // Set expanded user for the newly expanded row
-      const rowIndex = Number(newlyExpandedKey)
-      const formattedUser = formattedUsers.value[rowIndex]
-      if (formattedUser) {
-        const originalUser = users.value.find(u => u.id === formattedUser.id)
-        expandedUser.value = hasInhabitant(originalUser) ? originalUser : null
-      }
-    }
-  } else if (expandedKeys.length === 1) {
-    // Exactly one row expanded - set expanded user
-    const rowIndex = Number(expandedKeys[0])
-    const formattedUser = formattedUsers.value[rowIndex]
-    if (formattedUser) {
-      const originalUser = users.value.find(u => u.id === formattedUser.id)
-      expandedUser.value = hasInhabitant(originalUser) ? originalUser : null
-    }
-  } else {
-    // No rows expanded - clear expanded user
+const {expanded} = useExpandableRow({
+  onExpand: (rowId) => {
+    const user = findRowById(users.value, rowId)
+    expandedUser.value = hasInhabitant(user) ? user : null
+  },
+  onCollapse: () => {
     expandedUser.value = null
   }
 })
@@ -129,9 +89,6 @@ interface TableRow {
   original: typeof formattedUsers.value[number]
 }
 
-// Shown in the expanded UserProfileCard on a phone (mockup above)
-const HIDDEN_ON_PHONE = ['id', 'phone', 'systemRoles', 'updatedAt'] as const
-
 const userColumns = [
   {
     id: 'expand',
@@ -141,7 +98,7 @@ const userColumns = [
           variant: NOISE.quiet,
           icon: row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight,
           square: true,
-          'aria-label': row.getIsExpanded() ? 'Luk' : 'Åbn detaljer',
+          'aria-label': row.getIsExpanded() ? BUTTON_WORDS.close : 'Åbn detaljer',
           onClick: () => row.toggleExpanded()
         })
   },
@@ -179,7 +136,6 @@ const pagination = ref({
       </div>
     </template>
 
-    <!-- Search, Sort, and Pagination Row -->
     <div :class="COMPONENTS.adminUsers.toolbar">
       <TableSearchPagination
           v-model:search-query="searchQuery"
@@ -201,14 +157,14 @@ const pagination = ref({
         ref="table"
         v-model:expanded="expanded"
         v-model:pagination="pagination"
+        :get-row-id="rowIdOf"
         :data="formattedUsers"
         :columns="userColumns"
         :loading="isUsersLoading"
         v-bind="COMPONENTS.adminUsers.loadingBar"
         caption="Brugere - importeret fra Heynabo"
         :class="COMPONENTS.adminUsers.table"
-        :ui="COMPONENTS.table.ui"
-        :column-visibility="columnVisibility(HIDDEN_ON_PHONE)"
+        :ui="COMPONENTS.table.adminUsersUi"
         :pagination-options="{
           getPaginationRowModel: getPaginationRowModel()
         }"
@@ -245,7 +201,7 @@ const pagination = ref({
 
       <!-- Expanded row content -->
       <template #expanded>
-        <div :class="[COMPONENTS.adminUsers.detail, BG.panel]">
+        <div :class="[COMPONENTS.adminUsers.detail, COMPONENTS.adminUsers.expandedPanel, BG.panel]">
           <UserProfileCard
             v-if="expandedUser"
             :user="expandedUser"

@@ -129,8 +129,8 @@ export const useAllergy = () => {
    * Check if an AllergyTypeDetail has any inhabitants with recently updated allergies.
    * Used for showing "new" badge on allergy types in lists/tables.
    */
-  const hasNewAllergyInhabitants = (allergyType: AllergyTypeDetail): boolean => {
-    return allergyType.inhabitants?.some(i => isNew(i.allergyUpdatedAt)) ?? false
+  const hasNewAllergyInhabitants = (allergyType: AllergyTypeDetail, now: Date): boolean => {
+    return allergyType.inhabitants?.some(i => isNew(i.allergyUpdatedAt, now)) ?? false
   }
 
   return {

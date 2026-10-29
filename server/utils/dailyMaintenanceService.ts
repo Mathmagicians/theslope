@@ -17,11 +17,16 @@ import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {deleteWaitlistForConsumedDinners} from '~~/server/data/waitlistRepository'
 import type {DailyMaintenanceResult} from '~/composables/useBookingValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {useBooking} from '~/composables/useBooking'
+import type {EmailChannel} from '~~/server/utils/sender/config'
+import {sendNotifications} from '~~/server/utils/sender/events/waitlist'
+import {sendChefDeadlines} from '~~/server/utils/sender/events/chef-deadlines'
 
 const LOG = '🔧 > DAILY > [MAINTENANCE]'
+const {BOOKING_STATUS, CHEF_DEADLINES} = useDeliveryValidation().SenderEventSchema.enum
 
-export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: string): Promise<DailyMaintenanceResult> {
+export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: string, email: EmailChannel): Promise<DailyMaintenanceResult> {
     const {JobType, JobStatus} = useMaintenanceValidation()
 
     console.info(`${LOG} Starting daily maintenance (triggeredBy=${triggeredBy})`)
@@ -53,6 +58,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
         const activeSeasonId = await fetchActiveSeasonId(d1Client)
         let initPrefsResult = {initialized: 0}
         let scaffoldResult = null
+        let notifications: DailyMaintenanceResult['notifications'] = {}
 
         if (activeSeasonId) {
             initPrefsResult = await clipPreferences(d1Client, activeSeasonId)
@@ -60,8 +66,17 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
 
             scaffoldResult = await scaffoldPrebookings(d1Client, {seasonId: activeSeasonId})
             console.info(`${LOG} scaffold: ${useBooking().formatScaffoldResult(scaffoldResult)}`)
+
+            // The dinners as they stand after the scaffold send the notifications of its outcomes too
+            const {counts} = await sendNotifications(d1Client, email, activeSeasonId, {jobRunId: jobRun.id})
+            console.info(`${LOG} notifications: ${BOOKING_STATUS} sent ${counts.sent}`)
+
+            // The chef hears the deadlines as the scaffold left the dinners
+            const {counts: chefCounts} = await sendChefDeadlines(d1Client, email, activeSeasonId, {jobRunId: jobRun.id})
+            console.info(`${LOG} notifications: ${CHEF_DEADLINES} sent ${chefCounts.sent}`)
+            notifications = {[BOOKING_STATUS]: counts, [CHEF_DEADLINES]: chefCounts}
         } else {
-            console.info(`${LOG} initPrefs/scaffold skipped: no active season`)
+            console.info(`${LOG} initPrefs/scaffold/notifications skipped: no active season`)
         }
 
         const result: DailyMaintenanceResult = {
@@ -71,7 +86,8 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             transact: transactResult,
             clearWaitlist,
             initPrefs: initPrefsResult,
-            scaffold: scaffoldResult
+            scaffold: scaffoldResult,
+            notifications
         }
 
         // Complete job run with success

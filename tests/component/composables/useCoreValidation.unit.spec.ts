@@ -5,14 +5,14 @@
  */
 
 import {describe, it, expect} from 'vitest'
-import {useCoreValidation, getHouseholdShortName} from '~/composables/useCoreValidation'
+import {parseQuery, stringifyQuery} from 'ufo'
+import {useCoreValidation, getHouseholdShortName, adminBypassQuery, AdminBypassQuerySchema, queryFlag, QueryFlagSchema} from '~/composables/useCoreValidation'
 import type {UserCreate} from '~/composables/useCoreValidation'
-import {useBookingValidation, type DinnerMode as DinnerModeType} from '~/composables/useBookingValidation'
-import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS, useUserPreferenceValidation} from '~/composables/useUserPreferenceValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
+import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS, useUserPreferenceValidation, type UserPreferencesUpdate} from '~/composables/useUserPreferenceValidation'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
-import type {WeekDayMap} from '~/types/dateTypes'
 
 const DinnerMode = useBookingValidation().DinnerModeSchema.enum
 const SystemRole = useCoreValidation().SystemRoleSchema.enum
@@ -26,15 +26,45 @@ const serializedUserColumns = (user: UserCreate) => ({
 })
 
 // ============================================================================
+// QUERY FLAGS AND THE OVERRIDE QUERY (ADR-004)
+// ============================================================================
+
+describe('queryFlag', () => {
+    it('GIVEN an unset flag THEN the url carries no parameter', () => {
+        expect(stringifyQuery({includeProvenance: queryFlag(false)})).toBe('')
+    })
+
+    it.each([false, true])('GIVEN the flag %s THEN the endpoints\' flag schema reads it back from the url', (isSet) => {
+        expect(QueryFlagSchema.parse(parseQuery(stringifyQuery({includeProvenance: queryFlag(isSet)})).includeProvenance)).toBe(isSet)
+    })
+
+    it.each([
+        {query: 'includeProvenance=true', isSet: true},
+        {query: 'includeProvenance=false', isSet: false},
+        {query: '', isSet: false}
+    ])('GIVEN the url query "$query" THEN the endpoints\' flag schema reads $isSet', ({query, isSet}) => {
+        expect(QueryFlagSchema.parse(parseQuery(query).includeProvenance)).toBe(isSet)
+    })
+})
+
+describe('adminBypassQuery', () => {
+    it('GIVEN the household\'s own change THEN the url carries no parameter', () => {
+        expect(stringifyQuery(adminBypassQuery(false))).toBe('')
+    })
+
+    it.each([false, true])('GIVEN adminBypass %s THEN the endpoints\' query schema reads it back from the url', (adminBypass) => {
+        expect(AdminBypassQuerySchema.parse(parseQuery(stringifyQuery(adminBypassQuery(adminBypass))))).toEqual({adminBypass})
+    })
+})
+
+// ============================================================================
 // USER VALIDATION TESTS
 // ============================================================================
 
 describe('useCoreValidation - User Schemas', () => {
     const {
         BaseUserSchema,
-        UserCreateSchema,
-        serializeUserInput,
-        deserializeUser
+        UserCreateSchema
     } = useCoreValidation()
 
     it.each([
@@ -42,20 +72,6 @@ describe('useCoreValidation - User Schemas', () => {
         ['UserCreateSchema', () => UserCreateSchema, UserFactory.defaultUser()]
     ])('%s should parse factory data', (_name, getSchema, input) => {
         expect(() => getSchema().parse(input)).not.toThrow()
-    })
-
-    it('should serialize and deserialize user systemRoles', () => {
-        const user = {...UserFactory.defaultUser(), id: 1, createdAt: new Date(), updatedAt: new Date()}
-        const serialized = serializeUserInput(user)
-
-        expect(typeof serialized.systemRoles).toBe('string')
-        expect(serialized.systemRoles).toBe(JSON.stringify(user.systemRoles))
-
-        const serializedUser = {...serialized, id: 1, createdAt: new Date(), updatedAt: new Date()}
-        const deserialized = deserializeUser(serializedUser)
-
-        expect(Array.isArray(deserialized.systemRoles)).toBe(true)
-        expect(deserialized.systemRoles).toEqual(user.systemRoles)
     })
 })
 
@@ -79,7 +95,7 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
         ['BaseInhabitantSchema', () => BaseInhabitantSchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}],
         ['InhabitantCreateSchema', () => InhabitantCreateSchema, HouseholdFactory.defaultInhabitantData()],
         ['InhabitantDisplaySchema', () => InhabitantDisplaySchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}],
-        ['InhabitantDetailSchema', () => InhabitantDetailSchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}]
+        ['InhabitantDetailSchema', () => InhabitantDetailSchema, {...HouseholdFactory.defaultInhabitantData(), id: 1, dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)}]
     ])('%s should parse factory data', (_name, getSchema, input) => {
         expect(() => getSchema().parse(input)).not.toThrow()
     })
@@ -88,7 +104,7 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
         it.each([
             {
                 testCase: 'with birthDate',
-                birthDate: '1990-01-01',
+                birthDate: new Date('1990-01-01'),
                 dinnerPreferences: null,
                 expectBirthDate: true,
                 expectDinnerPrefs: false
@@ -125,11 +141,12 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
         })
     })
 
+    // An Inhabitant row as the database returns it: dates as dates, the preferences as JSON (ADR-010)
     describe('deserializeInhabitantDetail', () => {
         it.each([
             {
                 testCase: 'with birthDate',
-                birthDate: '1990-01-01',
+                birthDate: new Date('1990-01-01'),
                 dinnerPreferences: null,
                 expectBirthDate: true,
                 expectDinnerPrefs: false
@@ -196,7 +213,7 @@ describe('useCoreValidation - Household Schemas', () => {
             const serialized = {
                 ...HouseholdFactory.defaultHouseholdData(),
                 id: 1,
-                movedInDate: '2020-01-01',
+                movedInDate: new Date('2020-01-01'),
                 moveOutDate: null,
                 inhabitants: []
             }
@@ -210,14 +227,14 @@ describe('useCoreValidation - Household Schemas', () => {
 
         it.each([
             {moveOutDate: null, description: 'null moveOutDate'},
-            {moveOutDate: '2024-12-31', description: 'with moveOutDate'}
+            {moveOutDate: new Date('2024-12-31'), description: 'with moveOutDate'}
         ])('should handle $description', ({moveOutDate}) => {
             const householdData = HouseholdFactory.defaultHouseholdData()
 
             const serialized = {
                 ...householdData,
                 id: 1,
-                movedInDate: '2020-01-01',
+                movedInDate: new Date('2020-01-01'),
                 moveOutDate,
                 inhabitants: []
             }
@@ -237,7 +254,7 @@ describe('useCoreValidation - Household Schemas', () => {
             const serialized = {
                 ...HouseholdFactory.defaultHouseholdData(),
                 id: 1,
-                movedInDate: '2020-01-01',
+                movedInDate: new Date('2020-01-01'),
                 moveOutDate: null,
                 shortName: 'A_123',
                 inhabitants: [
@@ -245,8 +262,9 @@ describe('useCoreValidation - Household Schemas', () => {
                         ...HouseholdFactory.defaultInhabitantData(),
                         id: 1,
                         householdId: 1,
-                        birthDate: '1990-01-01',
-                        dinnerPreferences: null
+                        birthDate: new Date('1990-01-01'),
+                        dinnerPreferences: null,
+                        allergies: []
                     }
                 ]
             }
@@ -260,7 +278,7 @@ describe('useCoreValidation - Household Schemas', () => {
         const householdRowWithAllergies = () => ({
             ...HouseholdFactory.defaultHouseholdData(),
             id: 1,
-            movedInDate: '2020-01-01',
+            movedInDate: new Date('2020-01-01'),
             moveOutDate: null,
             inhabitants: [
                 {...HouseholdFactory.defaultInhabitantData(), id: 1, householdId: 1, birthDate: null, dinnerPreferences: null, allergies: AllergyFactory.serializedAllergies(2, 1)},
@@ -356,7 +374,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
                 id: 1,
                 userId: 1,
                 householdId: 1,
-                birthDate: '1990-01-01',
+                birthDate: new Date('1990-01-01'),
                 dinnerPreferences: serializeWeekDayMap(defaultPrefs),
                 household: {
                     ...HouseholdFactory.defaultHouseholdData(),
@@ -649,49 +667,15 @@ describe('useCoreValidation - InhabitantCreateSchema Additional Tests', () => {
         }
     })
 
-    it('should accept inhabitant with valid dinnerPreferences WeekDayMap', () => {
-        const inhabitant = {
+    // The season initialises a person's preferences and the preference write changes them; the create takes none
+    it('should parse a create carrying a dinnerPreferences map without dinnerPreferences', () => {
+        const result = InhabitantCreateSchema.safeParse({
             ...HouseholdFactory.defaultInhabitantData(),
-            householdId: 1,
             dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
-        }
+        })
 
-        const result = InhabitantCreateSchema.safeParse(inhabitant)
         expect(result.success).toBe(true)
-        if (result.success) {
-            expect(result.data.dinnerPreferences?.mandag).toBe(DinnerMode.DINEIN)
-            expect(result.data.dinnerPreferences?.tirsdag).toBe(DinnerMode.DINEIN)
-        }
-    })
-
-    it.each([
-        {
-            getData: () => {
-                const map = createDefaultWeekdayMap(DinnerMode.DINEIN)
-                // Cast to test invalid enum value at runtime
-                map.mandag = 'INVALID_MODE' as DinnerModeType
-                return map
-            },
-            description: 'invalid DinnerMode value'
-        },
-        {
-            getData: () => {
-                const map = createDefaultWeekdayMap(DinnerMode.DINEIN) as Record<string, unknown>
-                Reflect.deleteProperty(map, 'onsdag')
-                Reflect.deleteProperty(map, 'torsdag')
-                return map
-            },
-            description: 'incomplete WeekDayMap (missing days)'
-        }
-    ])('should reject inhabitant with $description in dinnerPreferences', ({getData}) => {
-        const invalidInhabitant = {
-            ...HouseholdFactory.defaultInhabitantData(),
-            householdId: 1,
-            dinnerPreferences: getData()
-        }
-
-        const result = InhabitantCreateSchema.safeParse(invalidInhabitant)
-        expect(result.success).toBe(false)
+        expect(result.data).not.toHaveProperty('dinnerPreferences')
     })
 })
 
@@ -708,20 +692,23 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
         createDefaultWeekdayMap
     } = useCoreValidation()
 
-    // Type aliases for roundtrip test data
-    type SerializeFn = (data: Record<string, unknown>) => Record<string, unknown>
-    type CheckFieldsFn = (original: Record<string, unknown>, deserialized: Record<string, unknown>) => void
-
-    interface RoundtripTestCase {
+    // A case per row: the domain value, the row the database returns for it, and the fields its deserializer brings back
+    const roundtrip = <Domain, Row, Deserialized>(testCase: {
         type: string
-        getData: () => Record<string, unknown>
-        serialize: SerializeFn
-        deserialize: (data: Record<string, unknown>) => Record<string, unknown>
-        checkFields: CheckFieldsFn
-    }
+        getData: () => Domain
+        serialize: (data: Domain) => Row
+        deserialize: (row: Row) => Deserialized
+        checkFields: (original: Domain, deserialized: Deserialized) => void
+    }) => ({
+        type: testCase.type,
+        run: () => {
+            const original = testCase.getData()
+            testCase.checkFields(original, testCase.deserialize(testCase.serialize(original)))
+        }
+    })
 
-    const testCases: RoundtripTestCase[] = [
-        {
+    const testCases = [
+        roundtrip({
             type: 'inhabitant',
             getData: () => ({
                 ...HouseholdFactory.defaultInhabitantData(),
@@ -730,19 +717,15 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                 birthDate: new Date('1990-01-15'),
                 dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
             }),
-            serialize: (data) => ({
-                ...data,
-                birthDate: (data.birthDate as Date).toISOString(),
-                dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences as WeekDayMap<DinnerModeType>)
-            }),
+            serialize: (data) => ({...data, dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences)}),
             deserialize: deserializeInhabitantDisplay,
             checkFields: (original, deserialized) => {
                 expect(deserialized.birthDate).toBeInstanceOf(Date)
-                expect((deserialized.birthDate as Date).getTime()).toBe((original.birthDate as Date).getTime())
+                expect(deserialized.birthDate!.getTime()).toBe(original.birthDate.getTime())
                 expect(deserialized.dinnerPreferences).toEqual(original.dinnerPreferences)
             }
-        },
-        {
+        }),
+        roundtrip({
             type: 'household summary',
             getData: () => ({
                 ...HouseholdFactory.defaultHouseholdData(),
@@ -753,33 +736,28 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                     {
                         ...HouseholdFactory.defaultInhabitantData(),
                         id: 10,
-                        birthDate: new Date('1990-01-15')
+                        birthDate: new Date('1990-01-15'),
+                        dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
                     }
                 ]
             }),
             serialize: (data) => ({
                 ...data,
-                movedInDate: (data.movedInDate as Date).toISOString(),
-                moveOutDate: (data.moveOutDate as Date | null)?.toISOString(),
-                inhabitants: (data.inhabitants as Record<string, unknown>[]).map((i) => ({
-                    ...i,
-                    birthDate: (i.birthDate as Date | null)?.toISOString(),
-                    dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as WeekDayMap<DinnerModeType>) : null
-                }))
+                inhabitants: data.inhabitants.map((i) => ({...i, dinnerPreferences: serializeWeekDayMap(i.dinnerPreferences)}))
             }),
             deserialize: deserializeHouseholdDisplay,
             checkFields: (original, deserialized) => {
                 expect(deserialized.movedInDate).toBeInstanceOf(Date)
-                expect((deserialized.movedInDate as Date).getTime()).toBe((original.movedInDate as Date).getTime())
-                expect(deserialized.shortName).toBe(getHouseholdShortName(original.address as string))
-                const [originalInhabitant] = original.inhabitants as Record<string, unknown>[]
-                const [deserializedInhabitant] = deserialized.inhabitants as Record<string, unknown>[]
+                expect(deserialized.movedInDate.getTime()).toBe(original.movedInDate.getTime())
+                expect(deserialized.shortName).toBe(getHouseholdShortName(original.address))
+                const [originalInhabitant] = original.inhabitants
+                const [deserializedInhabitant] = deserialized.inhabitants
                 expect(deserializedInhabitant).toBeDefined()
                 expect(deserializedInhabitant!.birthDate).toBeInstanceOf(Date)
                 expect(deserializedInhabitant!.dinnerPreferences).toEqual(originalInhabitant!.dinnerPreferences)
             }
-        },
-        {
+        }),
+        roundtrip({
             type: 'household with inhabitants',
             getData: () => ({
                 ...HouseholdFactory.defaultHouseholdData(),
@@ -796,35 +774,27 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
                     }
                 ]
             }),
+            // The detail read loads each inhabitant's allergies
             serialize: (data) => ({
                 ...data,
-                movedInDate: (data.movedInDate as Date).toISOString(),
-                inhabitants: (data.inhabitants as Record<string, unknown>[]).map((i) => ({
-                    ...i,
-                    birthDate: (i.birthDate as Date | null)?.toISOString(),
-                    dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as WeekDayMap<DinnerModeType>) : null
-                }))
+                inhabitants: data.inhabitants.map((i) => ({...i, dinnerPreferences: serializeWeekDayMap(i.dinnerPreferences), allergies: []}))
             }),
             deserialize: deserializeHouseholdDetail,
             checkFields: (original, deserialized) => {
-                expect(deserialized.shortName).toBe(getHouseholdShortName(original.address as string))
+                expect(deserialized.shortName).toBe(getHouseholdShortName(original.address))
                 expect(deserialized.movedInDate).toBeInstanceOf(Date)
-                const [originalInhabitant] = original.inhabitants as Record<string, unknown>[]
-                const [deserializedInhabitant] = deserialized.inhabitants as Record<string, unknown>[]
+                const [originalInhabitant] = original.inhabitants
+                const [deserializedInhabitant] = deserialized.inhabitants
                 expect(deserializedInhabitant).toBeDefined()
                 expect(deserializedInhabitant!.birthDate).toBeInstanceOf(Date)
-                expect((deserializedInhabitant!.birthDate as Date).getTime()).toBe((originalInhabitant!.birthDate as Date).getTime())
+                expect(deserializedInhabitant!.birthDate!.getTime()).toBe(originalInhabitant!.birthDate.getTime())
                 expect(deserializedInhabitant!.dinnerPreferences).toEqual(originalInhabitant!.dinnerPreferences)
             }
-        }
+        })
     ]
 
-    it.each(testCases)('should roundtrip $type', ({getData, serialize, deserialize, checkFields}) => {
-        const original = getData()
-        const serialized = serialize(original)
-        const deserialized = deserialize(serialized)
-
-        checkFields(original, deserialized)
+    it.each(testCases)('should roundtrip $type', ({run}) => {
+        run()
     })
 })
 
@@ -837,12 +807,14 @@ describe('useCoreValidation - User preference columns', () => {
         BaseUserSchema,
         UserDetailSchema,
         UserSessionSchema,
+        SerializedUserInputSchema,
         serializeUserInput,
-        deserializeUser,
+        serializeUserUpdate,
+        deserializeUserDisplay,
         deserializeUserDetail
     } = useCoreValidation()
 
-    const preferences: Pick<UserCreate, 'notificationChannels' | 'appearance'> = {
+    const preferences: UserPreferencesUpdate = {
         notificationChannels: [NotificationChannelSchema.enum.EMAIL, NotificationChannelSchema.enum.SMS],
         appearance: {palette: PaletteSchema.enum['high-contrast'], textScale: TextScaleSchema.enum.large}
     }
@@ -855,38 +827,48 @@ describe('useCoreValidation - User preference columns', () => {
         expect(parsed.appearance).toEqual(DEFAULT_APPEARANCE)
     })
 
-    it('GIVEN domain preferences THEN serializeUserInput writes both columns as JSON strings', () => {
-        const serialized = serializeUserInput({...UserFactory.defaultUser(), ...preferences})
+    // A user with roles and preferences of its own, so each JSON column differs from its default
+    const user = {...UserFactory.defaultUser(), systemRoles: [SystemRole.ADMIN], ...preferences}
 
-        expect(serialized.notificationChannels).toBe(JSON.stringify(preferences.notificationChannels))
-        expect(serialized.appearance).toBe(JSON.stringify(preferences.appearance))
+    it('GIVEN domain roles and preferences THEN serializeUserInput writes the three JSON columns as strings', () => {
+        expect(serializeUserInput(user)).toMatchObject(serializedUserColumns(user))
     })
 
-    it('GIVEN a database row THEN deserializeUser parses both columns back to domain values', () => {
-        const user = {...UserFactory.defaultUser(), ...preferences}
-        const row = {...user, ...serializedUserColumns(user), id: 1, createdAt: new Date(), updatedAt: new Date()}
+    // A partial update by id writes the columns it carries; every other column carries the store's skip (ADR-012)
+    describe('serializeUserUpdate', () => {
+        // Stands for Prisma.skip, which the validation layer does not import
+        const SKIP = Symbol('skip')
+        const skipped = Object.fromEntries(Object.keys(SerializedUserInputSchema.shape).map(column => [column, SKIP]))
 
-        const deserialized = deserializeUser(row)
-
-        expect(deserialized.notificationChannels).toEqual(preferences.notificationChannels)
-        expect(deserialized.appearance).toEqual(preferences.appearance)
+        it.each([
+            {update: 'the user\'s own channels and appearance', delta: preferences,
+                written: {notificationChannels: JSON.stringify(preferences.notificationChannels), appearance: JSON.stringify(preferences.appearance)}},
+            {update: 'an admin clearing the phone', delta: {phone: null}, written: {phone: null}},
+            {update: 'the import\'s login and roles', delta: {email: user.email, passwordHash: user.passwordHash, systemRoles: user.systemRoles},
+                written: {email: user.email, passwordHash: user.passwordHash, systemRoles: JSON.stringify(user.systemRoles)}}
+        ])('GIVEN $update WHEN serialized THEN those columns are written as stored and the others skipped', ({delta, written}) => {
+            expect(serializeUserUpdate(delta, SKIP)).toEqual({...skipped, ...written})
+        })
     })
 
-    it('GIVEN a database row THEN deserializeUserDetail parses both columns back to domain values', () => {
-        const user = {...UserFactory.defaultUser(), ...preferences}
-        const row = {
-            ...user,
-            ...serializedUserColumns(user),
-            id: 1,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            Inhabitant: null
-        }
+    // A User row as the database returns it: the JSON columns as strings, the Heynabo token in passwordHash (ADR-010)
+    describe('a User row', () => {
+        const row = {...serializeUserInput(user), id: 1, createdAt: new Date(), updatedAt: new Date(), Inhabitant: null}
+        const parsed = {systemRoles: user.systemRoles, notificationChannels: user.notificationChannels, appearance: user.appearance}
+        const deserialized = [
+            {as: 'a Display', deserialize: () => deserializeUserDisplay(row)},
+            {as: 'a Detail', deserialize: () => deserializeUserDetail(row)}
+        ]
 
-        const detail = deserializeUserDetail(row)
+        it.each(deserialized)('GIVEN a row WHEN deserialized as $as THEN its JSON columns parse back to domain values', ({deserialize}) => {
+            expect(deserialize()).toMatchObject(parsed)
+        })
 
-        expect(detail.notificationChannels).toEqual(preferences.notificationChannels)
-        expect(detail.appearance).toEqual(preferences.appearance)
+        it.each(deserialized)('GIVEN a row with a passwordHash WHEN deserialized as $as THEN it carries no passwordHash', ({deserialize}) => {
+            expect(row.passwordHash, 'the row carries the token').toBeTruthy()
+
+            expect(deserialize()).not.toHaveProperty('passwordHash')
+        })
     })
 
     it('GIVEN a session user THEN the session carries both columns', () => {

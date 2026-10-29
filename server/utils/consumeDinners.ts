@@ -18,7 +18,7 @@ export async function consumeDinners(d1Client: D1Database): Promise<ConsumeResul
         return {consumed: 0}
     }
 
-    const pastDinnerIds = getPastDinnerIds(pendingDinners)
+    const pastDinnerIds = getPastDinnerIds(pendingDinners, new Date())
 
     if (pastDinnerIds.length === 0) {
         console.info(`${LOG} No past pending dinners to consume`)

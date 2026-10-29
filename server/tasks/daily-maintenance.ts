@@ -6,7 +6,6 @@
  */
 import {runDailyMaintenance} from '~~/server/utils/dailyMaintenanceService'
 import {emailChannel} from '~~/server/utils/sender/config'
-import {notifyBookingOutcomes} from '~~/server/utils/sender/events/waitlist'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const LOG = '🔧 > TASK > [DAILY_MAINTENANCE]'
@@ -15,7 +14,7 @@ const {throwH3Error} = eventHandlerHelper
 export default defineTask({
     meta: {
         name: 'daily-maintenance',
-        description: 'Consume dinners, close orders, create transactions, scaffold pre-bookings'
+        description: 'Consume dinners, close orders, create transactions, scaffold pre-bookings, send the booking mails'
     },
     async run({ context }) {
         const env = context?.cloudflare?.env
@@ -25,8 +24,7 @@ export default defineTask({
         }
 
         try {
-            const result = await runDailyMaintenance(d1Client, 'CRON')
-            if (result.scaffold) await notifyBookingOutcomes(d1Client, emailChannel(env ?? {}), result.scaffold.outcomes)
+            const result = await runDailyMaintenance(d1Client, 'CRON', emailChannel(env ?? {}))
             return { result }
         } catch (error) {
             return throwH3Error(`${LOG} Failed`, error)

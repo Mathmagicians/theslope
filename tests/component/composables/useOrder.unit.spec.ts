@@ -3,6 +3,7 @@ import { useOrder } from '~/composables/useOrder'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { sumBy } from '~/utils/ledger'
 import { OrderFactory } from '../../e2e/testDataFactories/orderFactory'
+import { WaitlistFactory } from '../../e2e/testDataFactories/waitlistFactory'
 
 // Get enum schemas for type-safe test data
 const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema } = useBookingValidation()
@@ -131,6 +132,22 @@ describe('useOrder', () => {
 
       expect(released).toHaveLength(1)
       expect(released.every(o => o.state === OrderState.RELEASED)).toBe(true)
+    })
+  })
+
+  // The booking grid's name cell: a person's own tickets and places over a row's dinners
+  describe('personTicketCounts', () => {
+    const { personTicketCounts } = useOrder()
+    const ticket = (state: typeof OrderState[keyof typeof OrderState], dinnerMode: typeof DinnerMode[keyof typeof DinnerMode] = DinnerMode.DINEIN) =>
+      OrderFactory.defaultOrder(undefined, { state, dinnerMode })
+
+    it.each([
+      { desc: 'a booked and a released ticket', orders: [ticket(OrderState.BOOKED), ticket(OrderState.RELEASED)], places: 0, counts: { total: 2, released: 1, queued: 0 } },
+      { desc: 'tickets the close or a cancellation ended', orders: [ticket(OrderState.CLOSED, DinnerMode.NONE), ticket(OrderState.CANCELLED)], places: 0, counts: { total: 0, released: 0, queued: 0 } },
+      { desc: 'two places on the waiting list', orders: [], places: 2, counts: { total: 0, released: 0, queued: 2 } }
+    ])('GIVEN $desc THEN counts $counts.total tickets, $counts.released released and $counts.queued places', ({ orders, places, counts }) => {
+      const entries = Array.from({ length: places }, (_, index) => WaitlistFactory.defaultEntry({ id: index + 1 }))
+      expect(personTicketCounts(orders, entries)).toEqual(counts)
     })
   })
 

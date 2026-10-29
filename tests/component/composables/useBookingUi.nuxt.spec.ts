@@ -1,17 +1,21 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createTicketStateBadge, createBirthdayBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, moreTicketsAlert, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewSaveOutcome, expectedBookings, expectedBookingKey, personOnDinner, guestItemsOf, scaffoldToastLook, scaffoldToast, formatResultLines, formatPreviewLines, ticketBadgeLabel, cookingRoundWords, dinnerSpendingFragment, teamSpendingFragment, SPENDING_KIND, ticketTypePresentation, ticketPricePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, ticketChangeHouseholds, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS} from '~/composables/useBooking'
-import {useBookingValidation, TicketState, type BookingAction, type BookingResult, type QueuePosition, type TicketType} from '~/composables/useBookingValidation'
+import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
+import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, formatPlace} from '~/composables/useBooking'
+import {useBookingValidation, TicketState, type BookingAction, type BookingResult, type QueuePosition} from '~/composables/useBookingValidation'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {lockedDinnerSupply} from '~~/tests/component/testHelpers'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {ticketTypeLabel} from '~/composables/useTicket'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 import {formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
 import appConfig from '~/app.config'
 
@@ -23,7 +27,7 @@ const {ICONS, COLOR, COMPONENTS, BOOKING_LOCK_STATUS, ORDER_STATE_COLORS} = useT
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: useSeason runs there, not at module level
 let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
 beforeAll(() => {
-    deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason())
+    deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason(), new Date())
 })
 
 // Far enough ahead that every deadline is still open (app.config imported directly: the value feeds collection-time it.each data)
@@ -53,10 +57,11 @@ describe('spending fragments', () => {
     it('builds this dinner\'s fragment: heading with title and date, the receipts as rows, its figures in the total', () => {
         const receipts = [ExpenseFactory.defaultExpense({id: 7, amount: 101200, description: '"Ret 2" 12/04/2026, Anna H. bestiller for Madhold 2'})]
         const fragment = dinnerSpendingFragment(dinner(2, true), receipts)
+        expect(fragment.kind).toBe(SPENDING_KIND.dinner)
         expect(fragment.heading).toBe(`Ret 2, ${formatDate(dinner(2, true).date, DATE_SETTINGS.DAY_MONTH_MASK)}`)
         expect(fragment.rows).toHaveLength(1)
         // The receipt row reads the line's note
-        expect(fragment.rows[0]).toMatchObject({kind: 'receipt', label: '"Ret 2" 12/04/2026, Anna H. bestiller for Madhold 2', amount: 101200})
+        expect(fragment.rows[0]).toMatchObject({kind: SPENDING_KIND.receipt, label: '"Ret 2" 12/04/2026, Anna H. bestiller for Madhold 2', amount: 101200})
         expect(fragment.total).toEqual({label: 'Ret 2', figures: {budgetGross: 2000, spentGross: 200}})
     })
 
@@ -67,12 +72,15 @@ describe('spending fragments', () => {
         expect(fragment.total.label).toBe('Fællesspisning')
     })
 
-    it('builds the team\'s fragment: its words as heading and total label, the days as rows, the sums as figures', () => {
-        const heading = `Hele Madhold 2, periode ${formatDateRange({start: dinner(1, false).date, end: dinner(2, true).date}, DATE_SETTINGS.DAY_MONTH_MASK)}`
-        const fragment = teamSpendingFragment([dinner(1, false), dinner(2, true)], {team: 'Hele Madhold 2', heading})
-        expect(fragment.heading).toBe(heading)
-        expect(fragment.rows.map(row => row.kind)).toEqual(['dinner', 'dinner'])
-        expect(fragment.total).toEqual({label: 'Hele Madhold 2', figures: {budgetGross: 3000, spentGross: 300}})
+    it('builds the team\'s fragment: the team for its badge with the period, the days as rows, the team in the total row with the sums', () => {
+        const words = cookingRoundWords('Madhold 2', 2, dinner(1, false).date, dinner(2, true).date)
+        const range = formatDateRange({start: dinner(1, false).date, end: dinner(2, true).date}, DATE_SETTINGS.DAY_MONTH_MASK)
+        // The round reads the team's short name and number, its period, and the Madbestilling hint's heading
+        expect(words).toEqual({team: 'Madhold 2', teamNumber: 2, period: `periode ${range}`, heading: `Madhold 2, periode ${range}`})
+        const fragment = teamSpendingFragment([dinner(1, false), dinner(2, true)], words)
+        expect(fragment).toMatchObject({kind: SPENDING_KIND.team, team: 'Madhold 2', teamNumber: 2, period: words.period})
+        expect(fragment.rows.map(row => row.kind)).toEqual([SPENDING_KIND.dinner, SPENDING_KIND.dinner])
+        expect(fragment.total).toEqual({label: 'Madhold 2', figures: {budgetGross: 3000, spentGross: 300}})
     })
 
     it('builds the allowance rows: the allowance, Brugt and Tilbage with its balance, or Brugt alone without an allowance', () => {
@@ -112,10 +120,16 @@ describe('useBookingUi', () => {
         })
     })
 
+    // The booking form's alert on a closed dinner reads the sentence: buy a ticket for sale, else join the waiting list;
+    // no alert with neither
     describe('a closed dinner\'s supply', () => {
-        it.each(SUPPLY_TABLE)('$desc: the value line reads "$value" and the sentence "$sentence"', ({counts, value, sentence}) => {
+        const ALERT_ICONS = {forSale: ICONS.claim, waitlist: ICONS.waitlist, closed: null}
+
+        it.each(SUPPLY_TABLE)('$desc: the value line reads "$value", the sentence "$sentence", and the booking form\'s alert follows the supply ($look)', ({counts, look, value, sentence}) => {
             expect(lockedSupply(counts)).toBe(value)
             expect(closedForCancellation(counts)).toBe(sentence)
+            const icon = ALERT_ICONS[look]
+            expect(moreTicketsAlert(counts)).toEqual(icon === null ? null : {icon, title: BOOKING_WORDS.supply.moreTickets, description: sentence})
         })
     })
 
@@ -130,13 +144,36 @@ describe('useBookingUi', () => {
         })
     })
 
-    describe('createWaitlistBadge', () => {
+    // The badge beside a name: the label, glyph and colour of the order state the ticket shows, the badge's words with
+    // the caller's detail (the household a ticket was bought from, the place in the line of its ticket type)
+    describe('createTicketStateBadge', () => {
         it.each([
-            {position: 2, ticketType: TicketTypeSchema.enum.ADULT, value: 'Voksen #2'},
-            {position: 3, ticketType: TicketTypeSchema.enum.CHILD, value: 'Barn #3'}
-        ])('names the place $value in the glyph and colour of the queued order state', ({position, ticketType, value}) => {
-            const {icon, color} = ORDER_STATE_LABELS.queued
-            expect(createWaitlistBadge(position, ticketType)).toMatchObject({icon, color, value})
+            {ticketState: TicketState.released, shown: OrderState.RELEASED, detail: ''},
+            {ticketState: TicketState.claimed, shown: TicketState.claimed, detail: HouseholdFactory.defaultHouseholdDetail('seller').shortName},
+            {ticketState: TicketState.queued, shown: TicketState.queued, detail: formatPlace(2, ADULT)}
+        ] as const)('a $ticketState ticket wears the $shown order state and reads its words with the detail "$detail"', ({ticketState, shown, detail}) => {
+            const {label, icon, color} = ORDER_STATE_LABELS[shown]
+            const {value, helpText} = BOOKING_WORDS.ticketStateBadge[ticketState]
+            expect(createTicketStateBadge(ticketState, detail)).toEqual({label, icon, color, value: value(detail), helpText})
+        })
+
+        it('a normal ticket has no state badge', () => {
+            expect(createTicketStateBadge(TicketState.normal)).toBeNull()
+        })
+    })
+
+    // The badge beside a name on a person's first dinner at a new ticket type: the birthday glyph, the type's label from
+    // the dinner's day and month in the badge's words, the legend's words as its help text
+    describe('createBirthdayBadge', () => {
+        it.each([ADULT, CHILD])('a first dinner at %s reads "<type> fra <day/month>" in the birthday glyph, with the legend\'s words as help text', (ticketType) => {
+            const from = addDays(new Date(), 10)
+            expect(createBirthdayBadge(ticketType, from)).toEqual({
+                label: BOOKING_WORDS.birthdayBadge.label,
+                icon: ICONS.birthday,
+                color: COLOR.neutral,
+                value: BOOKING_WORDS.birthdayBadge.from(ticketTypeLabel(ticketType), formatDate(from, DATE_SETTINGS.DAY_MONTH_MASK)),
+                helpText: BOOKING_WORDS.legend.birthday
+            })
         })
     })
 
@@ -170,15 +207,25 @@ describe('useBookingUi', () => {
     })
 
     describe('lockChip', () => {
+        const dinner = DinnerEventFactory.dinnerEventAt(1, 1)
+
         it.each([
             {desc: 'tickets for sale count up', supply: lockedDinnerSupply({[ADULT]: 2}), chip: {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: '2'}},
-            {desc: 'tickets for sale lead a waiting list', supply: lockedDinnerSupply({[ADULT]: 2}, {[ADULT]: 1}), chip: {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: '2'}},
+            {desc: 'tickets for sale lead a waiting list', supply: lockedDinnerSupply({[CHILD]: 2}, {[ADULT]: 1}), chip: {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: '2'}},
             {desc: 'a waiting list shows the hourglass without a number', supply: lockedDinnerSupply({}, {[ADULT]: 3}), chip: {color: BOOKING_LOCK_STATUS.lockedWithQueue.color, icon: ICONS.waitlist}},
             {desc: 'neither leaves the closed chip without a number or a glyph', supply: lockedDinnerSupply(), chip: {color: BOOKING_LOCK_STATUS.locked.color}},
-            {desc: 'an open dinner has no chip', supply: null, chip: null},
-            {desc: 'a dinner outside the lock map has no chip', supply: undefined, chip: null}
+            {desc: 'an open dinner has no chip', supply: null, chip: null}
         ])('$desc', ({supply, chip}) => {
-            expect(lockChip(supply)).toEqual(chip)
+            expect(lockChip(dinner, new Map([[dinner.id, supply]]), new Date())).toEqual(chip)
+        })
+
+        it('a dinner outside the lock map has no chip', () => {
+            expect(lockChip(dinner, new Map(), new Date())).toBeNull()
+        })
+
+        it('a dinner that has started has no chip, whatever its supply', () => {
+            const started = DinnerEventFactory.dinnerEventAt(2, -1)
+            expect(lockChip(started, new Map([[started.id, lockedDinnerSupply({[ADULT]: 2})]]), new Date())).toBeNull()
         })
     })
 
@@ -224,7 +271,7 @@ describe('useBookingUi', () => {
 
     describe('createBookingBadges', () => {
         it('returns open booking and dining-mode badges for a far-future dinner', () => {
-            const badges = createBookingBadges(farFutureDinner(), deadlines)
+            const badges = createBookingBadges(farFutureDinner(), deadlines, new Date())
             expect(badges.booking.color).toBe('success')
             expect(badges.diningMode.color).toBe('success')
         })
@@ -237,7 +284,7 @@ describe('useBookingUi', () => {
         })
 
         it('returns badges for steps 1-4', () => {
-            const badges = createChefBadges(farFutureDinner(), deadlines)
+            const badges = createChefBadges(farFutureDinner(), deadlines, new Date())
             expect([...badges.keys()]).toEqual([1, 2, 3, 4])
             badges.forEach((badge, step) => expect(badge.step).toBe(step))
         })
@@ -249,7 +296,7 @@ describe('useBookingUi', () => {
             {desc: 'groceries bought: groceries step done', overrides: {totalCost: 1200}, step: 3, done: true},
             {desc: 'consumed dinner: dinner step done', overrides: {state: DinnerState.CONSUMED}, step: 4, done: true}
         ])('$desc', ({overrides, step, done}) => {
-            const badge = createChefBadges(farFutureDinner(overrides), deadlines).get(step)!
+            const badge = createChefBadges(farFutureDinner(overrides), deadlines, new Date()).get(step)!
             expect(badge.alarm).toBe(done ? -1 : 0)
             if (done) expect(badge.value).toBe('')
             else expect(badge.value).not.toBe('')
@@ -257,7 +304,7 @@ describe('useBookingUi', () => {
 
         it('booking badge carries released ticket counts once booking is closed', () => {
             const yesterday = {...DinnerEventFactory.defaultDinnerEventDisplay(), date: addDays(new Date(), -1)}
-            const badge = createChefBadges(yesterday, deadlines, lockedDinnerSupply({[ADULT]: 2})).get(2)!
+            const badge = createChefBadges(yesterday, deadlines, new Date(), lockedDinnerSupply({[ADULT]: 2})).get(2)!
             expect(badge.alarm).toBe(-1)
             expect(badge.value).toBe('2V til salg')
         })
@@ -336,13 +383,19 @@ describe('ticket type presentation', () => {
         })
     })
 
+    it('a price row shows the presentation of its ticket type; no row shows none', () => {
+        expect(ticketPricePresentation(TicketFactory.defaultPriceOf(TicketTypeSchema.enum.BABY)))
+            .toEqual(ticketTypePresentation(TicketTypeSchema.enum.BABY))
+        expect(ticketPricePresentation(undefined)).toBeNull()
+    })
+
     it('a person shows the presentation of the ticket type they resolve to', () => {
         expect(resolveTicketTypePresentation(new Date('2017-01-01'), prices, new Date('2025-01-15')))
             .toEqual(ticketTypePresentation(TicketTypeSchema.enum.CHILD))
     })
 
     it('a price as a select item carries its type presentation, its label with the price, and its age limit with its description', () => {
-        const child = prices.find(price => price.ticketType === TicketTypeSchema.enum.CHILD)!
+        const child = TicketFactory.defaultPriceOf(TicketTypeSchema.enum.CHILD)
         const item = ticketPriceSelectItems([child])[0]!
         expect(item.presentation).toEqual(ticketTypePresentation(TicketTypeSchema.enum.CHILD))
         expect(item.label).toBe(`${ticketTypeLabel(TicketTypeSchema.enum.CHILD)} · ${useTicket().formatPrice(child.price)} kr`)
@@ -357,17 +410,20 @@ describe('scaffoldToastLook', () => {
         {desc: 'a run with a failed order', errored: 1, color: COLOR.error},
         {desc: 'a run where every order landed', errored: 0, color: COLOR.success}
     ])('$desc toasts in $color with the ticket and breaks its lines', ({errored, color}) => {
-        expect(scaffoldToastLook({errored})).toEqual({color, icon: ICONS.ticket, ui: {description: COMPONENTS.bookingResult.lines}})
+        expect(scaffoldToastLook(OrderFactory.defaultScaffoldResult({errored}))).toEqual({color, icon: ICONS.ticket, ui: {description: COMPONENTS.bookingResult.lines}})
     })
 })
 
-// The people of a booking result: Anna and her guests of one ticket type, Lars, Knud and Lene
-const ANNA = {inhabitantId: 1, inhabitantName: 'Anna', ticketType: ADULT}
-const guestsOfAnna = (ticketType: TicketType | null) => ({...ANNA, isGuestTicket: true, ticketType})
-const LARS = {inhabitantId: 2, inhabitantName: 'Lars', ticketType: ADULT}
-const KNUD = {inhabitantId: 3, inhabitantName: 'Knud', ticketType: ADULT}
-const LENE = {inhabitantId: 4, inhabitantName: 'Lene', ticketType: ADULT}
-type Person = Pick<BookingResult, 'inhabitantId' | 'inhabitantName' | 'ticketType'> & {isGuestTicket?: boolean}
+// The season's prices a result carries, in the config's order: the baby who tastes, the hungry baby, the child, the adult
+const [TASTING_TICKET, HUNGRY_TICKET, CHILD_TICKET, ADULT_TICKET] = TicketFactory.defaultTicketPrices() as [TicketPrice, TicketPrice, TicketPrice, TicketPrice]
+// The people of a booking result: Anna and her guests of one ticket type and price, Lars, Knud and Lene
+const adult = (inhabitantId: number, inhabitantName: string) => ({inhabitantId, inhabitantName, ticketType: ADULT, priceAtBooking: ADULT_TICKET.price})
+const ANNA = adult(1, 'Anna')
+const guestsOfAnna = ({ticketType, price}: TicketPrice) => ({...ANNA, isGuestTicket: true, ticketType, priceAtBooking: price})
+const LARS = adult(2, 'Lars')
+const KNUD = adult(3, 'Knud')
+const LENE = adult(4, 'Lene')
+type Person = Pick<BookingResult, 'inhabitantId' | 'inhabitantName' | 'ticketType'> & {isGuestTicket?: boolean, priceAtBooking: number}
 
 // One order's result per action listed, all on one dinner: a booker's guests at one table
 const resultsOnDinner = (dinnerEventId: number, person: Person, ...actions: BookingAction[]): BookingResult[] =>
@@ -376,9 +432,12 @@ const resultsOnDinner = (dinnerEventId: number, person: Person, ...actions: Book
 const resultsAt = (person: Person, action: BookingAction, ...dinnerEventIds: number[]): BookingResult[] =>
     dinnerEventIds.map(dinnerEventId => OrderFactory.defaultBookingResult({...person, dinnerEventId, action}))
 const placeOf = (person: Person, position: number, dinnerEventId = 1): QueuePosition =>
-    ({inhabitantId: person.inhabitantId, dinnerEventId, isGuestTicket: !!person.isGuestTicket, position, ticketType: person.ticketType})
+    ({inhabitantId: person.inhabitantId, dinnerEventId, isGuestTicket: !!person.isGuestTicket, position, ticketType: person.ticketType, priceAtBooking: person.priceAtBooking})
 const soldToWaitlist = (count: number, dinnerEventId = 1) =>
-    Array.from({length: count}, () => ({dinnerEventId, ticketPriceId: 1, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1, sellerInhabitantId: 8}))
+    Array.from({length: count}, (_, index) => ({
+        dinnerEventId, ticketPriceId: 1, orderId: 80 + index, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false, buyerInhabitantId: 9, buyerHouseholdId: 2,
+        sellerHouseholdId: 1, sellerInhabitantId: 8
+    }))
 const run = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => OrderFactory.defaultScaffoldResult(overrides)
 // A run's outcomes with the tickets it sold to the waiting list
 const withSold = (waitlistTicketsSold: ReturnType<typeof soldToWaitlist>) => ({...run({}).outcomes, waitlistTicketsSold})
@@ -389,14 +448,17 @@ const dayOf = (dinnerEventId: number) => formatDate(RESULT_DINNERS.find(({id}) =
 const inResultDays = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => run({dinners: RESULT_DINNERS, ...overrides})
 // A ticket the person released, sold on the dinner: to the waiting list or to a claim
 const saleOf = (seller: Person, dinnerEventId: number) =>
-    ({dinnerEventId, ticketPriceId: 1, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1, sellerInhabitantId: seller.inhabitantId})
+    ({
+        dinnerEventId, ticketPriceId: 1, orderId: 80, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1,
+        sellerInhabitantId: seller.inhabitantId
+    })
 
 // The toast and the "Sidste ændring" alerts: the preview compacted, a line per day
 describe('formatResultLines', () => {
-    const SKRAANINGEN = {inhabitantId: 5, inhabitantName: 'Skraaningen', ticketType: ADULT}
-    const MARIE = {inhabitantId: 6, inhabitantName: 'Marie', ticketType: ADULT}
-    const BO = {inhabitantId: 7, inhabitantName: 'Bo', ticketType: ADULT}
-    const CARL = {inhabitantId: 8, inhabitantName: 'Carl', ticketType: ADULT}
+    const SKRAANINGEN = adult(5, 'Skraaningen')
+    const MARIE = adult(6, 'Marie')
+    const BO = adult(7, 'Bo')
+    const CARL = adult(8, 'Carl')
     const HOUSEHOLD = [ANNA, LARS, KNUD, LENE, SKRAANINGEN, MARIE, BO, CARL].map(person => person.inhabitantId)
     const conflictsAt = (person: Person, action: BookingAction, dinnerEventId: number): BookingResult[] =>
         resultsAt(person, action, dinnerEventId).map(result => ({...result, reason: useBookingValidation().BookingFailureSchema.enum.CONFLICT}))
@@ -442,21 +504,21 @@ describe('formatResultLines', () => {
             text: () => `${dayOf(11)}  tilmeldt: Anna, Knud · frameldt: Lars`
         },
         {
-            // A booker's guests of one ticket type at one dinner are one name, counted as the guest row counts them
+            // A booker's guests of one ticket type and price at one dinner are one name, named by the ticket and counted
             desc: 'a booker\'s guests after the booker',
-            result: inResultDays({results: [...resultsOnDinner(11, guestsOfAnna(CHILD), Action.BOOK, Action.BOOK), ...resultsAt(ANNA, Action.BOOK, 11)]}),
-            text: () => `${dayOf(11)}  tilmeldt: Anna, Gæst af Anna (Barn ×2)`
+            result: inResultDays({results: [...resultsOnDinner(11, guestsOfAnna(CHILD_TICKET), Action.BOOK, Action.BOOK), ...resultsAt(ANNA, Action.BOOK, 11)]}),
+            text: () => `${dayOf(11)}  tilmeldt: Anna, Gæst af Anna (Barn · 17 kr ×2)`
         },
         {
             // A place on the waiting list follows its person's name
             desc: 'places on the waiting list',
             result: inResultDays({
-                results: [...resultsAt(ANNA, Action.QUEUE, 11, 12), ...resultsAt(guestsOfAnna(ADULT), Action.QUEUE, 12)],
-                positions: [placeOf(ANNA, 5, 12), placeOf(guestsOfAnna(ADULT), 6, 12), placeOf(ANNA, 3, 11)]
+                results: [...resultsAt(ANNA, Action.QUEUE, 11, 12), ...resultsAt(guestsOfAnna(ADULT_TICKET), Action.QUEUE, 12)],
+                positions: [placeOf(ANNA, 5, 12), placeOf(guestsOfAnna(ADULT_TICKET), 6, 12), placeOf(ANNA, 3, 11)]
             }),
             text: () => [
                 `${dayOf(11)}  på ventelisten: Anna (Voksen #3)`,
-                `${dayOf(12)}  på ventelisten: Anna (Voksen #5), Gæst af Anna (Voksen) (Voksen #6)`
+                `${dayOf(12)}  på ventelisten: Anna (Voksen #5), Gæst af Anna (Voksen · 40 kr) (Voksen #6)`
             ].join('\n')
         },
         {
@@ -534,25 +596,43 @@ describe('formatPreviewLines', () => {
             ]
         },
         {
-            // A booker's guests of one ticket type at one dinner are one group, named with the count as the guest row badges it
+            // A booker's guests of one ticket type and price at one dinner are one group, named by the ticket and counted
             desc: 'a booker\'s guests after the booker',
-            results: [...resultsOnDinner(1, guestsOfAnna(CHILD), Action.BOOK, Action.BOOK), ...resultsAt(ANNA, Action.BOOK, 1), ...resultsAt(guestsOfAnna(CHILD), Action.BOOK, 2)],
+            results: [...resultsOnDinner(1, guestsOfAnna(TASTING_TICKET), Action.BOOK, Action.BOOK), ...resultsAt(ANNA, Action.BOOK, 1), ...resultsAt(guestsOfAnna(TASTING_TICKET), Action.BOOK, 2)],
             days: [
-                {dinnerEventId: 1, lines: ['Anna tilmeldes', 'Gæst af Anna (Barn ×2) tilmeldes']},
-                {dinnerEventId: 2, lines: ['Gæst af Anna (Barn) tilmeldes']}
+                {dinnerEventId: 1, lines: ['Anna tilmeldes', 'Gæst af Anna (Baby · 0 kr ×2) tilmeldes']},
+                {dinnerEventId: 2, lines: ['Gæst af Anna (Baby · 0 kr) tilmeldes']}
             ]
         },
         {
-            // One group per ticket type, in the order the results name them
+            // One group per ticket type and price, in the order the results name them
             desc: 'a booker\'s guests of two ticket types at one dinner',
-            results: [...resultsOnDinner(1, guestsOfAnna(CHILD), Action.BOOK, Action.BOOK), ...resultsOnDinner(1, guestsOfAnna(ADULT), Action.BOOK)],
-            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Barn ×2) tilmeldes', 'Gæst af Anna (Voksen) tilmeldes']}]
+            results: [...resultsOnDinner(1, guestsOfAnna(CHILD_TICKET), Action.BOOK, Action.BOOK), ...resultsOnDinner(1, guestsOfAnna(ADULT_TICKET), Action.BOOK)],
+            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Barn · 17 kr ×2) tilmeldes', 'Gæst af Anna (Voksen · 40 kr) tilmeldes']}]
+        },
+        {
+            desc: 'a booker\'s guests of one ticket type at two prices at one dinner',
+            results: [...resultsOnDinner(1, guestsOfAnna(TASTING_TICKET), Action.BOOK), ...resultsOnDinner(1, guestsOfAnna(HUNGRY_TICKET), Action.BOOK)],
+            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Baby · 0 kr) tilmeldes', 'Gæst af Anna (Baby · 9 kr) tilmeldes']}]
+        },
+        {
+            // A baby who tastes books at any time; the hungry baby's place is the one of its type and price
+            desc: 'a booker\'s baby who tastes booked and hungry baby queued at one dinner',
+            results: [...resultsOnDinner(1, guestsOfAnna(TASTING_TICKET), Action.BOOK), ...resultsOnDinner(1, guestsOfAnna(HUNGRY_TICKET), Action.QUEUE)],
+            positions: [placeOf(guestsOfAnna(HUNGRY_TICKET), 2)],
+            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Baby · 0 kr) tilmeldes', 'Gæst af Anna (Baby · 9 kr) skrives på ventelisten (Baby #2)']}]
         },
         {
             // The save buys the one ticket for sale for the first guest and queues the rest: a group per action
             desc: 'a booker\'s guests of one ticket type split by what the save does for them',
-            results: resultsOnDinner(1, guestsOfAnna(ADULT), Action.BUY, Action.QUEUE, Action.QUEUE),
-            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Voksen) køber en billet til salg', 'Gæst af Anna (Voksen ×2) skrives på ventelisten']}]
+            results: resultsOnDinner(1, guestsOfAnna(ADULT_TICKET), Action.BUY, Action.QUEUE, Action.QUEUE),
+            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (Voksen · 40 kr) køber en billet til salg', 'Gæst af Anna (Voksen · 40 kr ×2) skrives på ventelisten']}]
+        },
+        {
+            // A ticket type the result no longer names leaves the guests their count
+            desc: 'a booker\'s guests whose ticket type is gone',
+            results: [...resultsOnDinner(1, {...ANNA, isGuestTicket: true, ticketType: null}, Action.BOOK, Action.BOOK, Action.BOOK), ...resultsAt({...ANNA, isGuestTicket: true, ticketType: null}, Action.BOOK, 2)],
+            days: [{dinnerEventId: 1, lines: ['Gæst af Anna (×3) tilmeldes']}, {dinnerEventId: 2, lines: ['Gæst af Anna tilmeldes']}]
         },
         {
             desc: 'a ticket for sale bought',
@@ -562,11 +642,11 @@ describe('formatPreviewLines', () => {
         {
             // Each line carries its places on its dinner, ascending, as the toast names them
             desc: 'places on the waiting list',
-            results: [...resultsAt(ANNA, Action.QUEUE, 2, 3), ...resultsAt(guestsOfAnna(ADULT), Action.QUEUE, 3)],
-            positions: [placeOf(ANNA, 5, 3), placeOf(guestsOfAnna(ADULT), 6, 3), placeOf(ANNA, 3, 2)],
+            results: [...resultsAt(ANNA, Action.QUEUE, 2, 3), ...resultsAt(guestsOfAnna(ADULT_TICKET), Action.QUEUE, 3)],
+            positions: [placeOf(ANNA, 5, 3), placeOf(guestsOfAnna(ADULT_TICKET), 6, 3), placeOf(ANNA, 3, 2)],
             days: [
                 {dinnerEventId: 2, lines: ['Anna skrives på ventelisten (Voksen #3)']},
-                {dinnerEventId: 3, lines: ['Anna skrives på ventelisten (Voksen #5)', 'Gæst af Anna (Voksen) skrives på ventelisten (Voksen #6)']}
+                {dinnerEventId: 3, lines: ['Anna skrives på ventelisten (Voksen #5)', 'Gæst af Anna (Voksen · 40 kr) skrives på ventelisten (Voksen #6)']}
             ]
         },
         {
@@ -637,14 +717,14 @@ describe('formatPreviewLines', () => {
     })
 })
 
-// A booker's guest tickets of one type, as the guest row badges them and the preview and the toast name them
-describe('guestTicketsLabel', () => {
+// A ticket's badge, in the day view and in the grid: its type and its price, then its guests
+describe('ticketBadgeLabel', () => {
     it.each([
-        {label: 'Barn', count: 1, text: 'Barn'},
-        {label: 'Barn', count: 2, text: 'Barn ×2'},
-        {label: undefined, count: 3, text: '×3'}
-    ])('$count of $label read "$text"', ({label, count, text}) => {
-        expect(guestTicketsLabel(label, count)).toBe(text)
+        {holder: 'a person', label: 'Voksen', price: 5500, guestCount: undefined, text: 'Voksen · 55 kr'},
+        {holder: 'one guest', label: 'Baby', price: 900, guestCount: 1, text: 'Baby · 9 kr · Gæst'},
+        {holder: 'two guests', label: 'Baby', price: 0, guestCount: 2, text: 'Baby · 0 kr · 2 Gæster'}
+    ])('$label at $price øre for $holder reads "$text"', ({label, price, guestCount, text}) => {
+        expect(ticketBadgeLabel(label, price, guestCount)).toBe(text)
     })
 })
 
@@ -654,9 +734,75 @@ describe('expectedBookings', () => {
     it.each([
         {desc: 'an eating mode is the cell\'s expected booking', results: [OrderFactory.defaultBookingResult({...ANNA, dinnerEventId: 4, dinnerMode: TAKEAWAY})], expected: [[expectedBookingKey(ANNA.inhabitantId, 4), TAKEAWAY]]},
         {desc: 'Ingen expects no booking', results: [OrderFactory.defaultBookingResult({...ANNA, dinnerEventId: 4, dinnerMode: NONE, action: Action.CANCEL})], expected: []},
-        {desc: 'a guest ticket is no person\'s own cell', results: [OrderFactory.defaultBookingResult({...guestsOfAnna(ADULT), dinnerEventId: 4, dinnerMode: DINEIN})], expected: []},
+        {desc: 'a guest ticket is no person\'s own cell', results: [OrderFactory.defaultBookingResult({...guestsOfAnna(ADULT_TICKET), dinnerEventId: 4, dinnerMode: DINEIN})], expected: []},
         {desc: 'no reply yet expects nothing', results: null, expected: []}
     ])('$desc', ({results, expected}) => {
         expect([...expectedBookings(results === null ? null : run({results}))]).toEqual(expected)
+    })
+})
+
+// What a person holds on a dinner: an order supersedes a place on the waiting list, a place supersedes the plan, and a
+// guest ticket booked on the person is none of theirs
+describe('personOnDinner', () => {
+    const {DINEIN, DINEINLATE, TAKEAWAY, NONE} = DinnerModeSchema.enum
+    const DINNER = 4
+    const annaOrder = OrderFactory.defaultOrder('anna', {inhabitantId: ANNA.inhabitantId, dinnerEventId: DINNER, dinnerMode: TAKEAWAY})
+    const annaGuest = OrderFactory.defaultOrder('anna-guest', {id: 2, inhabitantId: ANNA.inhabitantId, dinnerEventId: DINNER, isGuestTicket: true})
+    const annaEntry = WaitlistFactory.defaultEntry({inhabitantId: ANNA.inhabitantId, dinnerEventId: DINNER, dinnerMode: DINEINLATE})
+    const annaPlan = new Map([[expectedBookingKey(ANNA.inhabitantId, DINNER), DINEIN]])
+    it.each([
+        {holds: 'a ticket', orders: [annaOrder], entries: [annaEntry], plan: annaPlan,
+            person: {order: annaOrder, waitlistEntry: undefined, expectedMode: undefined, heldMode: TAKEAWAY, shownMode: TAKEAWAY}},
+        {holds: 'a place on the waiting list', orders: [], entries: [annaEntry], plan: annaPlan,
+            person: {order: null, waitlistEntry: annaEntry, expectedMode: undefined, heldMode: DINEINLATE, shownMode: DINEINLATE}},
+        {holds: 'a plan', orders: [], entries: [], plan: annaPlan,
+            person: {order: null, waitlistEntry: undefined, expectedMode: DINEIN, heldMode: NONE, shownMode: DINEIN}},
+        {holds: 'a guest ticket and a plan', orders: [annaGuest], entries: [], plan: annaPlan,
+            person: {order: null, waitlistEntry: undefined, expectedMode: DINEIN, heldMode: NONE, shownMode: DINEIN}},
+        {holds: 'nothing', orders: [], entries: [], plan: new Map(),
+            person: {order: null, waitlistEntry: undefined, expectedMode: undefined, heldMode: NONE, shownMode: NONE}}
+    ])('GIVEN Anna holds $holds THEN she shows $person.shownMode', ({orders, entries, plan, person}) => {
+        expect(personOnDinner(orders, entries, plan)(ANNA.inhabitantId, DINNER)).toEqual(person)
+    })
+})
+
+// The guest rows: a placed group per booker, ticket type, price and dinner, then one row per queued guest; a guest has
+// no birth date, so the orders' price or the place's price row names the ticket type
+describe('guestItemsOf', () => {
+    const PRICES = TicketFactory.defaultTicketPrices()
+    const guestOrder = (id: number) => OrderFactory.defaultOrder(`guest-${id}`, {id, inhabitantId: ANNA.inhabitantId, isGuestTicket: true, ticketType: CHILD, priceAtBooking: CHILD_TICKET.price, ticketPriceId: CHILD_TICKET.id!})
+    const [firstGuest, secondGuest] = [guestOrder(21), guestOrder(22)]
+    const ownOrder = OrderFactory.defaultOrder('own', {id: 23, inhabitantId: ANNA.inhabitantId})
+    const queuedGuest = WaitlistFactory.defaultEntry({id: 31, inhabitantId: ANNA.inhabitantId, isGuestTicket: true, ticketPrice: HUNGRY_TICKET})
+    const ownEntry = WaitlistFactory.defaultEntry({id: 32, inhabitantId: ANNA.inhabitantId})
+    const placed = {id: expect.stringMatching(/^guest-group-/), orders: [firstGuest, secondGuest], waitlistEntry: undefined, held: firstGuest, ticketPrice: CHILD_TICKET}
+    const queued = {id: `guest-entry-${queuedGuest.id}`, orders: [], waitlistEntry: queuedGuest, held: queuedGuest.order, ticketPrice: HUNGRY_TICKET}
+    it.each([
+        {given: 'two guest tickets of one group and the booker\'s own', orders: [firstGuest, ownOrder, secondGuest], entries: [], items: [placed]},
+        {given: 'a queued guest and the booker\'s own place', orders: [], entries: [ownEntry, queuedGuest], items: [queued]},
+        {given: 'a queued guest and a placed group', orders: [firstGuest, secondGuest], entries: [queuedGuest], items: [placed, queued]},
+        {given: 'only the booker\'s own ticket and place', orders: [ownOrder], entries: [ownEntry], items: []}
+    ])('GIVEN $given THEN the guest rows are the placed groups, then the queued guests', ({orders, entries, items}) => {
+        expect(guestItemsOf(orders, entries, PRICES)).toEqual(items)
+    })
+})
+
+// Billetændringer's Husstand: the system's line over several reads System; a user's line over more than two reads the
+// first two and a control that opens the rest
+describe('ticketChangeHouseholds', () => {
+    const WORDS = BOOKING_WORDS.ticketChange
+    const FIVE = ['S_14', 'S_22', 'S_31', 'S_32', 'S_40']
+    it.each([
+        {line: 'the system\'s over several, folded', households: FIVE, bySystem: true, open: false, shown: {names: WORDS.bySystem}},
+        {line: 'the system\'s over several, open', households: FIVE, bySystem: true, open: true, shown: {names: WORDS.bySystem}},
+        {line: 'the system\'s over one', households: ['S_31'], bySystem: true, open: false, shown: {names: 'S_31'}},
+        {line: 'a user\'s over one', households: ['S_14'], bySystem: false, open: false, shown: {names: 'S_14'}},
+        {line: 'a user\'s over two', households: ['S_31', 'S_22'], bySystem: false, open: false, shown: {names: 'S_31, S_22'}},
+        {line: 'a user\'s over five, folded', households: FIVE, bySystem: false, open: false,
+            shown: {names: 'S_14, S_22', toggle: {label: WORDS.households.more(3), ariaLabel: WORDS.households.toggle(false, 5)}}},
+        {line: 'a user\'s over five, open', households: FIVE, bySystem: false, open: true,
+            shown: {names: 'S_14, S_22, S_31, S_32, S_40', toggle: {label: WORDS.households.fewer, ariaLabel: WORDS.households.toggle(true, 5)}}}
+    ])('$line reads "$shown.names"', ({households, bySystem, open, shown}) => {
+        expect(ticketChangeHouseholds(OrderFactory.defaultTicketChange({households, bySystem}), open)).toEqual(shown)
     })
 })

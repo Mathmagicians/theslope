@@ -2,6 +2,7 @@ import {describe, it, expect} from 'vitest'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import {useBookingValidation, type DinnerMode as DinnerModeType} from '~/composables/useBookingValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
@@ -80,6 +81,32 @@ describe('useWeekDayMapValidation - DinnerMode preferences', () => {
         if (validationResult.success) {
             expect(validationResult.data).toEqual(original)
         }
+    })
+
+    // The schema of the preference write's body
+    const {WeekDayMapSchemaOptional: PreferencesSchema, createDefaultWeekdayMap: createPreferences} = useCoreValidation()
+
+    it.each([
+        {
+            getData: () => {
+                const map = createPreferences(DinnerMode.DINEIN)
+                // Cast to test invalid enum value at runtime
+                map[WEEKDAYS[0]] = 'INVALID_MODE' as DinnerModeType
+                return map
+            },
+            description: 'invalid DinnerMode value'
+        },
+        {
+            getData: () => {
+                const map = createPreferences(DinnerMode.DINEIN) as Record<string, unknown>
+                Reflect.deleteProperty(map, WEEKDAYS[2])
+                Reflect.deleteProperty(map, WEEKDAYS[3])
+                return map
+            },
+            description: 'incomplete WeekDayMap (missing days)'
+        }
+    ])('should reject dinnerPreferences with $description', ({getData}) => {
+        expect(PreferencesSchema.safeParse(getData()).success).toBe(false)
     })
 })
 

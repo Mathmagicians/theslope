@@ -30,6 +30,15 @@
  *   20/10/2026 21:15  S_22        Bo K.   tilmeldt, ADMIN korrektion 1V  …
  *   20/10/2026 20:30  S_14, S_22  Mia S.  ekstra tilmeldt 1V 1B  …
  *
+ *   A user's line over more than two households (a season activation, an admin's run) names the first two and counts
+ *   the rest on a link (COMPONENTS.ticketChanges.householdsToggle); a click opens that line's list, which wraps inside
+ *   the capped Husstand cell (COMPONENTS.ticketChanges.households) while the other cells keep their line, and the link
+ *   then folds it again:
+ *   01/10/2026 04:00  S_14, S_22 [+54]             Bo K.  tilmeldt 41V 12B 3b  …
+ *   01/10/2026 04:00  S_14, S_22, S_31, S_32,      Bo K.  tilmeldt 41V 12B 3b  …
+ *                     S_40, S_41, S_43, S_45, …
+ *                     S_98, S_99 [skjul]
+ *
  *   No change since Framelding closed: the empty state with the moment line under it
  *                            Billetterne har holdt sig i ro
  *   ── Framelding lukker · 19/10/2026 18:00 ──────────────────────────────────────────────────────────────
@@ -41,14 +50,15 @@
  *
  * Visual check: /chef Billetændringer at 375px and desktop, since the deadline and with the full history: the chips sit
  * on the middle of the row's text line, and the moment line spans the table between the stretch since it and the older
- * rows.
+ * rows; a line over many households reads its first two and the count, and opened its names wrap inside the Husstand
+ * column, so on a desktop every column stays in view.
  *
  * ADR-007: component-local useAsyncData exception - the pane holds its own dinner's history, fetched on open through
  * the bookings store.
  */
 import type {TicketChange} from '~/composables/useBookingValidation'
 import type {TableColumn, TableRow} from '@nuxt/ui'
-import {isBefore, isFuture} from 'date-fns'
+import {isAfter, isBefore} from 'date-fns'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 
 const props = defineProps<{
@@ -59,7 +69,8 @@ const props = defineProps<{
 
 const {COMPONENTS, BUTTONS, SIZES, ICONS, NOISE, COLOR, TYPOGRAPHY, ALERTS, getRandomEmptyMessageText} = useTheSlopeDesignSystem()
 const WORDS = BOOKING_WORDS.ticketChange
-const noTicketChanges = getRandomEmptyMessageText('noTicketChanges')
+const now = useClock()
+const noTicketChanges = getRandomEmptyMessageText('noTicketChanges', now.value)
 
 // The moment Framelding closes, as a row of the table
 type DeadlineRow = {deadline: Date}
@@ -83,7 +94,7 @@ const open = ref(false)
 const showAll = ref(false)
 
 // Before Framelding closes nothing has moved since that moment, so the history is read whole and the newest change shown
-const beforeDeadline = computed(() => props.since !== null && isFuture(props.since))
+const beforeDeadline = computed(() => props.since !== null && isAfter(props.since, now.value))
 const windowStart = computed(() => showAll.value || beforeDeadline.value ? undefined : props.since ?? undefined)
 const {data, status, error, execute} = useAsyncData(
   computed(() => `ticket-changes-${props.dinnerEventId}-${windowStart.value?.getTime() ?? 'all'}`),
@@ -109,6 +120,13 @@ const rows = computed<ChangeRow[]>(() => {
 })
 // What the full history still holds beyond the rows shown
 const moreCount = computed(() => beforeDeadline.value && !showAll.value ? Math.max(changes.value.length - 1, 0) : (data.value?.olderCount ?? 0))
+
+// The lines whose households show in full
+const openHouseholds = reactive(new Set<number>())
+const toggleHouseholds = (id: number) => {
+  if (!openHouseholds.delete(id)) openHouseholds.add(id)
+}
+const householdsOf = (change: TicketChange) => ticketChangeHouseholds(change, openHouseholds.has(change.id))
 </script>
 
 <template>
@@ -139,7 +157,18 @@ const moreCount = computed(() => beforeDeadline.value && !showAll.value ? Math.m
           <template v-else>{{ formatMoment(row.original.timestamp) }}</template>
         </template>
         <template #households-cell="{ row }">
-          <template v-if="!isDeadline(row.original)">{{ ticketChangeHouseholds(row.original) }}</template>
+          <span v-if="!isDeadline(row.original)" :class="COMPONENTS.ticketChanges.households" data-testid="ticket-change-households">
+            {{ householdsOf(row.original).names }}
+            <UButton
+              v-if="householdsOf(row.original).toggle"
+              v-bind="COMPONENTS.ticketChanges.householdsToggle"
+              :label="householdsOf(row.original).toggle?.label"
+              :aria-label="householdsOf(row.original).toggle?.ariaLabel"
+              :aria-expanded="openHouseholds.has(row.original.id)"
+              data-testid="ticket-change-households-toggle"
+              @click="toggleHouseholds(row.original.id)"
+            />
+          </span>
         </template>
         <template #performedBy-cell="{ row }">
           <span v-if="!isDeadline(row.original)" data-testid="ticket-change-performer">{{ row.original.performedByName }}</span>

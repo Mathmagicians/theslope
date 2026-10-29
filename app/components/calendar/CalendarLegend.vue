@@ -1,11 +1,14 @@
 <script lang="ts">
 import type {NuxtUIChipSize, NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 
+/** The sample a legend entry paints: the day circle, the circle in a chip, the team's band */
+export const LEGEND_KIND = {circle: 'circle', chip: 'chip', badge: 'badge'} as const
+
 /** One legend entry: the sample a calendar paints a day as, and its name */
 export type CalendarLegendItem =
-  | {label: string, kind: 'circle', circleClass: string[]}
-  | {label: string, kind: 'chip', chipColor: NuxtUIColor, circleClass: string[], count?: string, icon?: string, chipSize?: NuxtUIChipSize}
-  | {label: string, kind: 'badge', badgeClass: string}
+  | {label: string, kind: typeof LEGEND_KIND.circle, circleClass: string[]}
+  | {label: string, kind: typeof LEGEND_KIND.chip, chipColor: NuxtUIColor, circleClass: string[], count?: string, icon?: string, chipSize?: NuxtUIChipSize}
+  | {label: string, kind: typeof LEGEND_KIND.badge, badgeClass: string}
 </script>
 
 <script setup lang="ts">
@@ -50,7 +53,7 @@ const {ALERTS, ICONS, COMPONENTS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
         <div v-for="(item, index) in items" :key="index" :class="COMPONENTS.legend.entry" data-testid="calendar-legend-entry">
           <div :class="COMPONENTS.legend.sample">
             <UChip
-              v-if="item.kind === 'chip'"
+              v-if="item.kind === LEGEND_KIND.chip"
               show
               :size="item.chipSize ?? SIZES.md"
               :color="item.chipColor"
@@ -63,7 +66,7 @@ const {ALERTS, ICONS, COMPONENTS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
               </template>
             </UChip>
             <UBadge
-              v-else-if="item.kind === 'badge'"
+              v-else-if="item.kind === LEGEND_KIND.badge"
               :size="SIZES.md"
               :class="[item.badgeClass, COMPONENTS.legend.badge]"
               data-testid="calendar-legend-badge"

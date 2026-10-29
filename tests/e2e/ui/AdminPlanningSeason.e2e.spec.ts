@@ -1,4 +1,4 @@
-import {test, expect, type Page} from '@playwright/test'
+import {test, expect, type Page} from '~~/tests/e2e/uiTest'
 import {authFiles} from '../config'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'

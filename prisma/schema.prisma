@@ -222,6 +222,7 @@ model DinnerEvent {
 
   @@index([seasonId])
   @@index([chefId])
+  @@index([cookingTeamId])
   @@index([date]) // For chronological queries
   @@index([state]) // For filtering by state
 }
@@ -319,7 +320,7 @@ model Delivery {
   kind        DeliveryKind
   reference   String // the R2 key, or the message's dedupeKey
   jobRunId    Int?
-  jobRun      JobRun?         @relation(fields: [jobRunId], references: [id], onDelete: SetNull) // null: re-sent by an admin
+  jobRun      JobRun?         @relation(fields: [jobRunId], references: [id], onDelete: SetNull) // null: sent outside a job run
   deliveredAt DateTime        @default(now())
 
   @@index([subjectType, subjectId, kind])
@@ -327,6 +328,9 @@ model Delivery {
 
 enum DeliverySubject {
   BILLING_PERIOD
+  TICKET_WAITLIST
+  ORDER
+  DINNER_EVENT
 }
 
 enum DeliveryKind {
@@ -346,6 +350,8 @@ model CookingTeam {
   dutyTemplates DinnerDutyTemplate[]
   jokerSlots    JokerSlot[]
   affinity      String? // JSON stringified map of Weekday to boolean
+
+  @@index([seasonId])
 }
 
 model CookingTeamAssignment {
@@ -388,6 +394,8 @@ model TicketPrice {
   description     String?
   maximumAgeLimit Int?
   orders          Order[]
+
+  @@index([seasonId])
 }
 
 model OrderHistory {
@@ -409,6 +417,7 @@ model OrderHistory {
   @@index([performedByUserId])
   @@index([timestamp])
   @@index([seasonId, inhabitantId, dinnerEventId, action]) // For cancellation lookups by season
+  @@index([dinnerEventId])
 }
 
 model JobRun {

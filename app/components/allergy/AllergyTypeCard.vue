@@ -2,6 +2,7 @@
 import type {Form, FormSubmitEvent} from '@nuxt/ui'
 import type {AllergyTypeCreate, AllergyTypeDetail} from '~/composables/useAllergyValidation'
 import {FORM_MODES} from '~/types/form'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 // Design system
 const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, TYPOGRAPHY, TEXT, RING, getRandomEmptyMessage, NOISE } = useTheSlopeDesignSystem()
@@ -19,8 +20,9 @@ const getHouseholdShortName = (householdId: number) => props.householdShortNames
 
 // Age category badge - the active season's ticket prices carry the age limits
 const {activeSeason} = storeToRefs(usePlanStore())
+const now = useClock()
 const ageBadge = (birthDate: Date | null | undefined) =>
-    resolveTicketTypePresentation(birthDate ?? null, activeSeason.value?.ticketPrices)
+    resolveTicketTypePresentation(birthDate ?? null, activeSeason.value?.ticketPrices, now.value)
 
 // EMITS
 const emit = defineEmits<{
@@ -57,11 +59,11 @@ const handleCancel = () => {
 const isCreate = computed(() => !props.allergyType)
 const inhabitantCount = computed(() => props.allergyType?.inhabitants?.length || 0)
 const hasRecentAllergies = computed(() =>
-    props.allergyType?.inhabitants?.some(i => isNew(i.allergyUpdatedAt)) || false
+    props.allergyType?.inhabitants?.some(i => isNew(i.allergyUpdatedAt, now.value)) || false
 )
 
 // Random fun empty state message from design system
-const emptyStateMessage = getRandomEmptyMessage('allergy')
+const emptyStateMessage = getRandomEmptyMessage('allergy', now.value)
 </script>
 
 <template>
@@ -112,7 +114,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
           data-testid="cancel-allergy-type"
           @click="handleCancel"
       >
-        Annuller
+        {{ BUTTON_WORDS.cancel }}
       </UButton>
       <UButton
           v-bind="BUTTONS.save"
@@ -120,7 +122,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
           data-testid="save-allergy-type"
           @click="formRef?.submit()"
       >
-        Gem
+        {{ BUTTON_WORDS.save }}
       </UButton>
     </div>
   </UForm>

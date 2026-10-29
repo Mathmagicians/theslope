@@ -1,17 +1,20 @@
 import {describe, expect, it} from 'vitest'
 import {composeEmail, missingAddress} from '~~/server/utils/sender/compose'
 import {deploymentFromUrl, useNotificationValidation} from '~/composables/useNotificationValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 import {NOTIFICATION_SENDER_NAME, NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES, senderAddress, senderDisplayName} from '~/config/notificationTemplates'
 import {maskEmail} from '~~/workers/common/mask'
 
-const {NotificationMessageSchema} = useNotificationValidation()
+const {NotificationMessageSchema, EnvironmentSchema} = useNotificationValidation()
+const Environment = EnvironmentSchema.enum
+const {deliveryReferencePrefix, DeliveryKindSchema} = useDeliveryValidation()
 const config = NotificationFactory.config()
-const toAnna = {kind: 'TEST', to: 'anna@example.com', values: {}} as const
+const toAnna = {kind: NotificationFactory.Kind.TEST, to: 'anna@example.com', values: {}} as const
 
 describe('senderDisplayName', () => {
     it('derives the sender line for an environment', () => {
-        expect(senderDisplayName('dev')).toBe('Skråningen dev')
+        expect(senderDisplayName(Environment.dev)).toBe('Skråningen dev')
     })
 })
 
@@ -30,8 +33,8 @@ describe('templates name the sender through {{senderName}}', () => {
 
 describe('senderAddress', () => {
     it.each([
-        ['dev', 'no-reply.dev@skraaningen.dk'],
-        ['prod', 'no-reply@skraaningen.dk']
+        [Environment.dev, 'no-reply.dev@skraaningen.dk'],
+        [Environment.prod, 'no-reply@skraaningen.dk']
     ])('derives the sender address for %s as %s', (environment, expected) => {
         expect(senderAddress(environment)).toBe(expected)
     })
@@ -39,10 +42,10 @@ describe('senderAddress', () => {
 
 describe('deploymentFromUrl', () => {
     it.each([
-        ['https://dev.skraaningen.dk', 'dev', 'dev.skraaningen.dk'],
-        ['https://www.skraaningen.dk', 'prod', 'www.skraaningen.dk'],
-        ['http://localhost:3000', 'local', 'localhost:3000'],
-        ['http://127.0.0.1:3000', 'local', '127.0.0.1:3000']
+        ['https://dev.skraaningen.dk', Environment.dev, 'dev.skraaningen.dk'],
+        ['https://www.skraaningen.dk', Environment.prod, 'www.skraaningen.dk'],
+        ['http://localhost:3000', Environment.local, 'localhost:3000'],
+        ['http://127.0.0.1:3000', Environment.local, '127.0.0.1:3000']
     ])('derives %s → environment %s, site %s', (url, environment, site) => {
         expect(deploymentFromUrl(url)).toEqual({environment, site})
     })
@@ -65,7 +68,7 @@ describe('composeEmail', () => {
         expect(message.subject).toBe('Skråningen: testbesked fra theslope-sender (dev)')
         expect(message.text).toContain(`id: ${message.meta.dedupeKey}`)
         expect(message.text.endsWith('— Skråningen · dev.skraaningen.dk')).toBe(true)
-        expect(message).toMatchObject({from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {environment: 'dev', source: 'theslope-app', kind: 'TEST'}})
+        expect(message).toMatchObject({from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {environment: 'dev', source: 'theslope-app', kind: NotificationFactory.Kind.TEST}})
     })
 
     it('sends without a Reply-To when no admin mailbox is configured', () => {
@@ -79,6 +82,15 @@ describe('composeEmail', () => {
         expect(message.meta.dedupeKey.startsWith(prefix)).toBe(true)
         expect(message.meta.dedupeKey.slice(prefix.length)).toMatch(/^[0-9a-f-]{36}$/)
         expect(message.meta.dedupeKey).not.toContain(toAnna.to)
+    })
+
+    // Two logins whose addresses mask alike are two recipients; the masked address stays in the key for grep
+    it('keys a mail to a login on the login\'s delivery reference prefix ahead of the masked recipient', () => {
+        const message = composeEmail(config, {...toAnna, userId: 7})
+
+        const prefix = `${deliveryReferencePrefix(NotificationFactory.Kind.TEST, DeliveryKindSchema.enum.EMAIL, 7)}${maskEmail(toAnna.to)}:`
+        expect(message.meta.dedupeKey.startsWith(prefix)).toBe(true)
+        expect(message.meta.dedupeKey.slice(prefix.length)).toMatch(/^[0-9a-f-]{36}$/)
     })
 
     it('carries cc and a correlation id when given', () => {
@@ -98,7 +110,6 @@ describe('composeEmail', () => {
     })
 
     it.each([
-        ['an unknown kind', {...toAnna, kind: 'NOPE'}, /template.*NOPE/i],
         ['a value no template uses', {...toAnna, values: {unused: 'x'}}, /unused/]
     ])('throws on %s — a template bug must fail in tests', (_name, input, error) => {
         expect(() => composeEmail(config, input)).toThrow(error)

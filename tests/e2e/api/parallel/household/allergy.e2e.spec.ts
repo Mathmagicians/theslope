@@ -1,15 +1,17 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, type BrowserContext} from '@playwright/test'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
-const {validatedBrowserContext, salt} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom} = testHelpers
 
 // Variables to store IDs for cleanup
-// Only track root entities - CASCADE will delete children
+// Only track root entities - CASCADE will delete children; a person in the member's household goes on its own
 const createdAllergyTypeIds: number[] = []
 const createdHouseholdIds: number[] = []
+const createdInhabitantIds: number[] = []
 
+// The admin changes the allergies of the spec's own households through the override (ADR-004)
 test.describe('Allergy API - CRUD Operations', () => {
 
     test('GIVEN inhabitant and allergy type exist WHEN creating and fetching an allergy by ID THEN both return the allergy', async ({browser}) => {
@@ -29,7 +31,7 @@ test.describe('Allergy API - CRUD Operations', () => {
             inhabitantId: inhabitant.id,
             allergyTypeId: allergyType.id,
             inhabitantComment: 'Cøliaki'
-        })
+        }, 201, true)
 
         // THEN: The create response carries the allergy
         expect(created.id).toBeGreaterThan(0)
@@ -73,12 +75,12 @@ test.describe('Allergy API - CRUD Operations', () => {
             inhabitantId: inhabitant.id,
             allergyTypeId: allergyType1.id,
             inhabitantComment: 'Severe'
-        })
+        }, 201, true)
         await AllergyFactory.createAllergy(context, {
             inhabitantId: inhabitant.id,
             allergyTypeId: allergyType2.id,
             inhabitantComment: null
-        })
+        }, 201, true)
 
         // WHEN: Fetch allergies for inhabitant
         const allergies = await AllergyFactory.getAllergiesForInhabitant(context, inhabitant.id)
@@ -113,12 +115,12 @@ test.describe('Allergy API - CRUD Operations', () => {
             inhabitantId: inhabitant1.id,
             allergyTypeId: allergyType.id,
             inhabitantComment: 'Mild'
-        })
+        }, 201, true)
         await AllergyFactory.createAllergy(context, {
             inhabitantId: inhabitant2.id,
             allergyTypeId: allergyType.id,
             inhabitantComment: 'Severe'
-        })
+        }, 201, true)
 
         // WHEN: Fetch allergies for household
         const allergies = await AllergyFactory.getAllergiesForHousehold(context, household.id)
@@ -150,13 +152,13 @@ test.describe('Allergy API - CRUD Operations', () => {
             inhabitantId: inhabitant.id,
             allergyTypeId: allergyType.id,
             inhabitantComment: 'Original comment'
-        })
+        }, 201, true)
 
         // WHEN: Update allergy comment
         const updateData = {
             inhabitantComment: 'Updated comment - now has EpiPen'
         }
-        const updated = await AllergyFactory.updateAllergy(context, original.id, updateData)
+        const updated = await AllergyFactory.updateAllergy(context, original.id, updateData, 200, true)
 
         // THEN: Verify updates
         expect(updated.id).toBe(original.id)
@@ -183,10 +185,10 @@ test.describe('Allergy API - CRUD Operations', () => {
         const created = await AllergyFactory.createAllergy(context, {
             inhabitantId: inhabitant.id,
             allergyTypeId: allergyType.id
-        })
+        }, 201, true)
 
         // WHEN: Delete allergy
-        const deleted = await AllergyFactory.deleteAllergy(context, created.id)
+        const deleted = await AllergyFactory.deleteAllergy(context, created.id, 200, true)
 
         // THEN: Verify deletion
         expect(deleted).not.toBeNull()
@@ -212,12 +214,54 @@ test.describe('Allergy API - CRUD Operations', () => {
         const created = await AllergyFactory.createAllergy(context, {
             inhabitantId: inhabitant.id,
             allergyTypeId: allergyType.id
-        })
+        }, 201, true)
 
         // THEN: Verify it was created without comment
         expect(created.id).toBeGreaterThan(0)
         expect(created.inhabitantComment).toBeNull()
     })
+})
+
+// Every member reads; a household changes its own allergies, an admin or the allergy manager another household's through
+// the override, asked per change (ADR-004)
+// The roles each change accepts: the requireHouseholdAccess table, tests/component/utils/authorizationHelper.unit.spec.ts
+test.describe('Allergy API - who changes a household\'s allergies', () => {
+    const testSalt = temporaryAndRandom()
+    let adminContext: BrowserContext
+    const inhabitantIn: Record<'their own household' | 'another household', number> = {'their own household': 0, 'another household': 0}
+
+    test.beforeAll(async ({browser}) => {
+        adminContext = await validatedBrowserContext(browser)
+        const {householdId} = await getSessionUserInfo(await memberValidatedBrowserContext(browser))
+        const household = await HouseholdFactory.createHousehold(adminContext)
+        createdHouseholdIds.push(household.id)
+        const [own, another] = await Promise.all([
+            HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {name: salt('Anders', testSalt), lastName: 'Allergiker'}),
+            HouseholdFactory.createInhabitantForHousehold(adminContext, household.id)
+        ])
+        createdInhabitantIds.push(own.id)
+        inhabitantIn['their own household'] = own.id
+        inhabitantIn['another household'] = another.id
+    })
+
+    // The admin's override lands in the CRUD cases above
+    const actors = [
+        {who: 'a member of the household', session: memberValidatedBrowserContext, on: 'their own household', allowed: true},
+        {who: 'an admin without the override', session: validatedBrowserContext, on: 'another household', allowed: false}
+    ] as const
+
+    for (const {who, session, on, allowed} of actors) {
+        for (const allergyChange of AllergyFactory.ALLERGY_CHANGES) {
+            const {change, status, after} = allergyChange
+            test(`GIVEN ${who} WHEN it ${change} an allergy on ${on} THEN it answers ${allowed ? status : 403}`, async ({browser}) => {
+                const comments = await AllergyFactory.changeAllergyAs(adminContext, await session(browser), allergyChange, {
+                    inhabitantId: inhabitantIn[on], testSalt, expectedStatus: allowed ? status : 403, createdAllergyTypeIds
+                })
+
+                expect(comments).toEqual(allowed ? after.allowed : after.refused)
+            })
+        }
+    }
 })
 
 test.describe('Allergy API - Validation', () => {
@@ -289,7 +333,7 @@ test.describe('Allergy API - CASCADE Deletion', () => {
             inhabitantId: inhabitant.id,
             allergyTypeId: allergyType.id,
             inhabitantComment: 'Will be cascaded'
-        })
+        }, 201, true)
 
         // WHEN: Delete allergy type
         await AllergyFactory.deleteAllergyType(context, allergyType.id)
@@ -313,7 +357,7 @@ test.describe('Allergy API - CASCADE Deletion', () => {
         const allergy = await AllergyFactory.createAllergy(context, {
             inhabitantId: inhabitant.id,
             allergyTypeId: allergyType.id
-        })
+        }, 201, true)
 
         // WHEN: Delete inhabitant
         await HouseholdFactory.deleteInhabitant(context, inhabitant.id, 200)
@@ -331,5 +375,6 @@ test.afterAll(async ({browser}) => {
     // Deleting Household cascades to Inhabitants and their Allergies
     // Deleting AllergyType cascades to any remaining Allergies
     await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
+    await Promise.all(createdInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(context, id)))
     await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
 })

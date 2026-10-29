@@ -2,22 +2,23 @@
 AdminSystem - System administration panel with job history and manual triggers
 
 UX MOCKUP: Admin System Jobs Panel
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ 🔄 SYSTEM JOBS                                                               │
-├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐              │
-│  │       🔄        │  │       🔄        │  │       🔄        │              │
-│  │                 │  │                 │  │                 │              │
-│  │ Daglig          │  │ Månedlig        │  │ Heynabo         │              │
-│  │ Vedligeholdelse │  │ Fakturering     │  │ Import          │              │
-│  │                 │  │                 │  │                 │              │
-│  │ [  Kør nu  →  ] │  │ [  Kør nu  →  ] │  │ [  Kør nu  →  ] │              │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘              │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ (sync icon) SYSTEM JOBS                                                                                │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                                        │
+│  ┌──────────────────────────────┐  ┌──────────────────────────────┐  ┌──────────────────────────────┐  │
+│  │       (Heynabo logo)         │  │       (clipboard icon)       │  │        (ticket icon)         │  │
+│  │                              │  │                              │  │                              │  │
+│  │ Heynabo                      │  │ Daglig                       │  │ Månedlig                     │  │
+│  │ Import                       │  │ Vedligeholdelse              │  │ Fakturering                  │  │
+│  │                              │  │                              │  │                              │  │
+│  │ [ Kør import                 │  │ [ Kør daglig vedligeholdelse │  │ [ Kør fakturering            │  │
+│  │   (arrow icon)             ] │  │   (arrow icon)             ] │  │   (arrow icon)             ] │  │
+│  └──────────────────────────────┘  └──────────────────────────────┘  └──────────────────────────────┘  │
+│                                                                                                        │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 Jobs run automatically via Nitro scheduledTasks + Cloudflare Cron Triggers.
 Admins can manually re-trigger jobs if they failed.
@@ -26,24 +27,41 @@ UX MOCKUP: Job history on a phone
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ┌─────────────────────────────────┐
-│ 🕑 Jobhistorik                  │
-├───┬─────────┬─────────┬─────────┤
-│   │ Dato    │ Job     │ Status  │
-│ › │ …       │ …       │ [badge] │
-│ ⌄ │ …       │ …       │ [badge] │
-│ ┌─────────────────────────────┐ │
-│ │ Varighed · Kilde            │ │
-│ │ Resultat                    │ │
-│ └─────────────────────────────┘ │
+│ (clock icon) Jobhistorik        │
+├──────────────────┬──────────┬───┼ - - - - - - - - - - - - - - - - -
+│ Dato             │ Job      │ St│atus      Varighed  Kilde  Resultat
+│ 26/10/2026 18:43 │ Daglig … │ [b│adge]     7.0s      ADMIN  Middage …
 └─────────────────────────────────┘
+The table keeps its six columns and scrolls sideways inside its card.
 
-From md: Dato, Job, Status, Varighed, Kilde, Resultat; no chevron.
+UX MOCKUP: Job boxes
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A box after a failed run:
+┌─────────────────────────────────┐
+│ (Heynabo logo) Dagligt kl. 02:00│
+│ Heynabo Import                  │
+│ Synkroniser husstande og ...    │
+│ (clock icon)  26/10/2026 14:02  │
+│ (status icon) Fejlet            │
+│ ┌ Fejl ───────────────────────┐ │
+│ │ the request's error message │ │
+│ └─────────────────────────────┘ │
+│ [ Kør import ]                  │
+└─────────────────────────────────┘
+A box whose job never ran: the same card with the line "Ingen kørsler endnu" in place of the run lines. A box shows the skeleton while its job runs or its latest run is read.
+Each stat line wears the icon of its own stat. The Heynabo import's header wears the Heynabo logo (UAvatar, at the job icon's
+size); the other jobs wear their icons; while a job runs, the spinning sync icon takes the mark's place.
+
+Visual check: /admin/system, each box after a run (the daily box with and without the scaffold step), phone and desktop.
 -->
 
 <script setup lang="ts">
+import type {TreeItem} from '@nuxt/ui'
 import type {JobRunDisplay} from '~/composables/useMaintenanceValidation'
+import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
 
-// Props - canEdit from parent for authorization
+// The parent decides who may run a job
 interface Props {
   canEdit?: boolean
 }
@@ -51,119 +69,100 @@ const props = withDefaults(defineProps<Props>(), {
   canEdit: false
 })
 
-// Design system
-const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, ALERTS, BUTTONS, COMPONENTS, columnVisibility, getRandomEmptyMessageText, NOISE, breakpoint } = useTheSlopeDesignSystem()
+const { COLOR, ICONS, IMG, SIZES, TYPOGRAPHY, LAYOUTS, ALERTS, COMPONENTS, getRandomEmptyMessageText, getRainbowBand, NOISE } = useTheSlopeDesignSystem()
 
-// Maintenance helpers
 const {
     jobTypeLabels,
     jobStatusLabels,
     getJobStatusColor,
     getJobStatusIcon,
     formatDuration,
-    formatTriggeredBy,
     formatResultSummary,
-    parseResultSummary,
-    formatHeynaboStats,
-    formatDailyMaintenanceStats,
-    formatMonthlyBillingStats
+    jobRunStats
 } = useMaintenance()
-const {JobRunDisplaySchema} = useMaintenanceValidation()
+const {JobRunDisplaySchema, JobType} = useMaintenanceValidation()
 
-// Users store - for Heynabo import
 const usersStore = useUsersStore()
-const { isImportHeynaboLoading, heynaboImport, isImportHeynaboErrored, heynaboImportError } = storeToRefs(usersStore)
+const { isImportHeynaboLoading, heynaboImportError } = storeToRefs(usersStore)
 const { importHeynaboData } = usersStore
 
-// Households store - for refreshing after Heynabo import
 const householdsStore = useHouseholdsStore()
 const { loadHouseholds, refreshSelectedHousehold } = householdsStore
 
-// Bookings store - for daily maintenance and monthly billing
 const bookingsStore = useBookingsStore()
-const { isDailyMaintenanceRunning, hasDailyMaintenanceResult, hasDailyMaintenanceError, dailyMaintenanceResult, dailyMaintenanceError } = storeToRefs(bookingsStore)
-const { isMonthlyBillingRunning, hasMonthlyBillingResult, hasMonthlyBillingError, monthlyBillingResult, monthlyBillingError } = storeToRefs(bookingsStore)
+const { isDailyMaintenanceRunning, dailyMaintenanceError } = storeToRefs(bookingsStore)
+const { isMonthlyBillingRunning, monthlyBillingError } = storeToRefs(bookingsStore)
 const { runDailyMaintenance, runMonthlyBilling } = bookingsStore
 
 // ============================================================================
-// JOB HISTORY - fetched by the component (useFetch)
+// JOB RUNS - read here only, so component-local (ADR-007)
 // ============================================================================
 
-const { data: jobRuns, status: jobRunsStatus, refresh: refreshJobRuns } = useFetch<JobRunDisplay[]>(
-    '/api/admin/maintenance/job-run',
-    {
-        key: 'admin-system-job-runs',
-        query: { limit: 20 },
-        default: () => [],
-        transform: (data) => data.map(jr => JobRunDisplaySchema.parse(jr)),
-        immediate: true
-    }
+const {storeAsyncData} = useApiHandler()
+const {data: jobRuns, isLoading: isJobHistoryLoading, refresh: refreshJobHistory} = storeAsyncData(
+    'admin-system-job-runs', '/api/admin/maintenance/job-run?limit=20',
+    {schema: JobRunDisplaySchema.array(), default: () => []}
 )
 
-const isJobHistoryLoading = computed(() => jobRunsStatus.value === 'pending')
+// A job's box shows its latest run, which the latest runs of all jobs may not hold
+const latestJobRunOf = (jobType: JobRunDisplay['jobType']) => storeAsyncData(
+    `admin-system-latest-job-run-${jobType}`, `/api/admin/maintenance/job-run?jobType=${jobType}&limit=1`,
+    {schema: JobRunDisplaySchema.array(), default: () => []}
+)
+const latestJobRuns = {
+    [JobType.HEYNABO_IMPORT]: latestJobRunOf(JobType.HEYNABO_IMPORT),
+    [JobType.DAILY_MAINTENANCE]: latestJobRunOf(JobType.DAILY_MAINTENANCE),
+    [JobType.MONTHLY_BILLING]: latestJobRunOf(JobType.MONTHLY_BILLING)
+}
+type SystemJobType = keyof typeof latestJobRuns
+const latestJobRun = (jobType: SystemJobType) => latestJobRuns[jobType].data.value[0] ?? null
+const isLatestRunLoading = (jobType: SystemJobType) => latestJobRuns[jobType].isLoading.value
 
-// Refresh job runs after manual trigger
-const runDailyMaintenanceAndRefresh = async () => {
-    await runDailyMaintenance()
-    await refreshJobRuns()
+// A run writes its job run, succeeded or failed; the box and the list read again either way
+const runAndRefresh = async (jobType: SystemJobType, run: () => Promise<void>) => {
+    try {
+        await run()
+    } catch {
+        // The failure stays in its store, which has toasted it
+    } finally {
+        await Promise.all([refreshJobHistory(), latestJobRuns[jobType].refresh()])
+    }
 }
 
-const importHeynaboDataAndRefresh = async () => {
+// The import changes households and inhabitants on the server; the households store reads them again
+const importAndReloadHouseholds = async () => {
     await importHeynaboData()
-    await refreshJobRuns()
-    // Heynabo import mutates households + inhabitants server-side; refresh the
-    // households store so the table reflects them without a reload.
     await loadHouseholds()
     await refreshSelectedHousehold()
 }
 
-const runMonthlyBillingAndRefresh = async () => {
-    await runMonthlyBilling()
-    await refreshJobRuns()
-}
-
-// Get latest job run by type (for showing history when no fresh result)
-const getLatestJobRunByType = (jobType: string): JobRunDisplay | null => {
-    return jobRuns.value.find(jr => jr.jobType === jobType) ?? null
-}
-
-// Empty state for job history table
-const jobHistoryEmpty = getRandomEmptyMessageText('jobHistory')
+const now = useClock()
+const jobHistoryEmpty = getRandomEmptyMessageText('jobHistory', now.value)
 
 // ============================================================================
 // JOB HISTORY TABLE
 // ============================================================================
 
-// On a phone the chevron opens these in the expanded row; from md every column shows and the chevron hides
-const HIDDEN_ON_PHONE = ['durationMs', 'triggeredBy', 'resultSummary'] as const
-const HIDDEN_FROM_MD = ['expand'] as const
-
-const { expanded } = useExpandableRow()
-// A row opened on a phone has no chevron to close it from md (a phone turned to landscape)
-watch(breakpoint.isMd, () => { expanded.value = {} })
-
 const jobHistoryColumns = [
-  { id: 'expand' },
   { accessorKey: 'startedAt', header: 'Dato' },
   { accessorKey: 'jobType', header: 'Job' },
   { accessorKey: 'status', header: 'Status' },
-  { accessorKey: 'durationMs', header: 'Varighed' },
+  { accessorKey: 'duration', header: 'Varighed' },
   { accessorKey: 'triggeredBy', header: 'Kilde' },
   { accessorKey: 'resultSummary', header: 'Resultat' }
 ]
 
-// Format job runs for table display
 const jobHistoryRows = computed(() => {
   return jobRuns.value.map(jr => ({
     id: jr.id,
-    startedAt: formatDate(jr.startedAt, 'dd/MM/yyyy HH:mm'),
-    jobType: jobTypeLabels[jr.jobType as keyof typeof jobTypeLabels] ?? jr.jobType,
+    startedAt: formatDate(jr.startedAt, DATE_SETTINGS.DATE_TIME_MASK),
+    jobType: jobTypeLabels[jr.jobType],
     status: jr.status,
     statusColor: getJobStatusColor(jr.status),
     statusIcon: getJobStatusIcon(jr.status),
-    statusLabel: jobStatusLabels[jr.status as keyof typeof jobStatusLabels] ?? jr.status,
-    durationMs: formatDuration(jr.durationMs),
-    triggeredBy: formatTriggeredBy(jr.triggeredBy),
+    statusLabel: jobStatusLabels[jr.status],
+    duration: formatDuration(jr.durationMs),
+    triggeredBy: jr.triggeredBy,
     resultSummary: formatResultSummary(jr.jobType, jr.resultSummary)
   }))
 })
@@ -174,13 +173,14 @@ const jobHistoryRows = computed(() => {
 
 const appConfig = useAppConfig()
 
-// Convert object to tree items recursively
-const objectToTreeItems = (obj: Record<string, unknown>, prefix = ''): { label: string; children?: { label: string }[] }[] => {
-  return Object.entries(obj).map(([key, value]) => {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
+const isConfigBranch = (value: unknown): value is object => typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const objectToTreeItems = (branch: object): TreeItem[] => {
+  return Object.entries(branch).map(([key, value]: [string, unknown]) => {
+    if (isConfigBranch(value)) {
       return {
         label: key,
-        children: objectToTreeItems(value as Record<string, unknown>, `${prefix}${key}.`)
+        children: objectToTreeItems(value)
       }
     }
     const displayValue = Array.isArray(value) ? `[${value.length} items]` : String(value)
@@ -188,226 +188,115 @@ const objectToTreeItems = (obj: Record<string, unknown>, prefix = ''): { label: 
   })
 }
 
-const configTreeItems = computed(() => objectToTreeItems(appConfig.theslope as Record<string, unknown>))
+const configTreeItems = computed(() => objectToTreeItems(appConfig.theslope))
+const CONFIG_TREE_EXPANDED = ['defaultSeason', 'cookingDeadlines', 'kitchen', 'billing'] satisfies (keyof typeof appConfig.theslope)[]
 
 // ============================================================================
-// JOB STATS FORMATTING - shared by fresh runs and historical data (DRY)
+// JOB BOXES
 // ============================================================================
 
-const jobIconsMap = {
-  DAILY_MAINTENANCE: [ICONS.checkCircle, ICONS.ticket, ICONS.shoppingCart, ICONS.waitlist, ICONS.edit, ICONS.ticket],
-  MONTHLY_BILLING: [ICONS.calendar, ICONS.ticket, ICONS.shoppingCart, ICONS.economy],
-  HEYNABO_IMPORT: [ICONS.household, ICONS.users, ICONS.user]
-} as const
-
-// Format stats with icons for card display (used by both fresh and historical)
-const formatStatsWithIcons = (
-  stats: { label: string; value: string }[],
-  icons: readonly string[],
-  timestamp: Date
-): { icon: string; text: string }[] => [
-  { icon: ICONS.clock, text: formatDate(timestamp, 'dd/MM/yyyy HH:mm') },
-  { icon: ICONS.checkCircle, text: 'Gennemført' },
-  ...stats.map((stat, i) => ({
-    icon: icons[i] ?? ICONS.info,
-    text: `${stat.label}: ${stat.value}`
-  }))
-]
-
-// Get job run timestamp by ID (returns startedAt from job run record)
-const getJobRunTimestamp = (jobRunId: number): Date => {
-  const jobRun = jobRuns.value.find(jr => jr.id === jobRunId)
-  return jobRun?.startedAt ?? new Date()
+// The box shows its job's latest run: when it started, how it ended, then its stats, each with its own icon;
+// a run without a result shows when and how it ended
+const latestRunLines = (jobType: SystemJobType): { icon: string; text: string }[] => {
+  const run = latestJobRun(jobType)
+  if (!run) return []
+  return [
+    { icon: ICONS.clock, text: formatDate(run.startedAt, DATE_SETTINGS.DATE_TIME_MASK) },
+    { icon: getJobStatusIcon(run.status), text: jobStatusLabels[run.status] },
+    ...(jobRunStats(run.jobType, run.resultSummary) ?? []).map(stat => ({ icon: stat.icon, text: formatJobStat(stat) }))
+  ]
 }
-
-// Fresh run stats (from stores)
-const hasHeynaboImportResult = computed(() => heynaboImport.value !== null)
-
-const dailyMaintenanceStats = computed(() => {
-  if (!hasDailyMaintenanceResult.value || !dailyMaintenanceResult.value) return []
-  return formatStatsWithIcons(
-    formatDailyMaintenanceStats(dailyMaintenanceResult.value),
-    jobIconsMap.DAILY_MAINTENANCE,
-    getJobRunTimestamp(dailyMaintenanceResult.value.jobRunId)
-  )
-})
-
-const monthlyBillingStats = computed(() => {
-  if (!hasMonthlyBillingResult.value || !monthlyBillingResult.value?.results) return []
-  return formatStatsWithIcons(
-    formatMonthlyBillingStats(monthlyBillingResult.value),
-    jobIconsMap.MONTHLY_BILLING,
-    getJobRunTimestamp(monthlyBillingResult.value.jobRunId)
-  )
-})
-
-const heynaboImportStats = computed(() => {
-  if (!hasHeynaboImportResult.value || !heynaboImport.value) return []
-  return formatStatsWithIcons(
-    formatHeynaboStats(heynaboImport.value),
-    jobIconsMap.HEYNABO_IMPORT,
-    getJobRunTimestamp(heynaboImport.value.jobRunId)
-  )
-})
-
-// ============================================================================
-// JOB DEFINITIONS
-// ============================================================================
 
 const systemJobs = appConfig.theslope.systemJobs
 
-// Get latest job run result formatted for display (fallback when no fresh result)
-const getLatestJobStats = (jobType: string): { icon: string; text: string }[] => {
-  const latestRun = getLatestJobRunByType(jobType)
-  if (!latestRun || !latestRun.resultSummary) return []
-
-  const parsed = parseResultSummary(latestRun.jobType, latestRun.resultSummary)
-  if (!parsed) return []
-
-  const icons = jobIconsMap[jobType as keyof typeof jobIconsMap] ?? []
-  let stats: { label: string; value: string }[] = []
-
-  switch (jobType) {
-    case 'DAILY_MAINTENANCE':
-      stats = formatDailyMaintenanceStats(parsed as Parameters<typeof formatDailyMaintenanceStats>[0])
-      break
-    case 'MONTHLY_BILLING':
-      stats = formatMonthlyBillingStats(parsed as Parameters<typeof formatMonthlyBillingStats>[0])
-      break
-    case 'HEYNABO_IMPORT':
-      stats = formatHeynaboStats(parsed as Parameters<typeof formatHeynaboStats>[0])
-      break
+const jobDefinitions = computed(() => [
+  {
+    key: JobType.HEYNABO_IMPORT,
+    ...MAINTENANCE_WORDS.boxes[JobType.HEYNABO_IMPORT],
+    schedule: systemJobs.heynaboImport.description,
+    color: COLOR.ocean,
+    headerBg: getRainbowBand(2),
+    logo: IMG.heynabo,
+    icon: null,
+    isRunning: isImportHeynaboLoading.value,
+    isLoading: isImportHeynaboLoading.value || isLatestRunLoading(JobType.HEYNABO_IMPORT),
+    stats: latestRunLines(JobType.HEYNABO_IMPORT),
+    error: heynaboImportError.value,
+    trigger: () => runAndRefresh(JobType.HEYNABO_IMPORT, importAndReloadHouseholds)
+  },
+  {
+    key: JobType.DAILY_MAINTENANCE,
+    ...MAINTENANCE_WORDS.boxes[JobType.DAILY_MAINTENANCE],
+    schedule: systemJobs.dailyMaintenance.description,
+    color: COLOR.peach,
+    headerBg: getRainbowBand(4),
+    logo: null,
+    icon: ICONS.clipboard,
+    isRunning: isDailyMaintenanceRunning.value,
+    isLoading: isDailyMaintenanceRunning.value || isLatestRunLoading(JobType.DAILY_MAINTENANCE),
+    stats: latestRunLines(JobType.DAILY_MAINTENANCE),
+    error: dailyMaintenanceError.value,
+    trigger: () => runAndRefresh(JobType.DAILY_MAINTENANCE, runDailyMaintenance)
+  },
+  {
+    key: JobType.MONTHLY_BILLING,
+    ...MAINTENANCE_WORDS.boxes[JobType.MONTHLY_BILLING],
+    schedule: systemJobs.monthlyBilling.description,
+    color: COLOR.secondary,
+    headerBg: getRainbowBand(0),
+    logo: null,
+    icon: ICONS.ticket,
+    isRunning: isMonthlyBillingRunning.value,
+    isLoading: isMonthlyBillingRunning.value || isLatestRunLoading(JobType.MONTHLY_BILLING),
+    stats: latestRunLines(JobType.MONTHLY_BILLING),
+    error: monthlyBillingError.value,
+    trigger: () => runAndRefresh(JobType.MONTHLY_BILLING, runMonthlyBilling)
   }
-
-  return formatStatsWithIcons(stats, icons, latestRun.startedAt)
-}
-
-const jobDefinitions = computed(() => {
-  // Check for historical data from database for each job type
-  const hasHistoricalDailyMaintenance = getLatestJobRunByType('DAILY_MAINTENANCE') !== null
-  const hasHistoricalMonthlyBilling = getLatestJobRunByType('MONTHLY_BILLING') !== null
-  const hasHistoricalHeynaboImport = getLatestJobRunByType('HEYNABO_IMPORT') !== null
-
-  return [
-    {
-      key: 'HEYNABO_IMPORT',
-      title: 'Heynabo Import',
-      buttonLabel: 'Kør import',
-      description: 'Synkroniser husstande og beboere fra Heynabo',
-      schedule: systemJobs.heynaboImport.description,
-      color: COLOR.ocean,
-      headerBg: BG.ocean[50],
-      icon: ICONS.users,
-      // Wired up via users store
-      isRunning: isImportHeynaboLoading.value,
-      hasResult: hasHeynaboImportResult.value || hasHistoricalHeynaboImport,
-      hasError: isImportHeynaboErrored.value,
-      stats: hasHeynaboImportResult.value ? heynaboImportStats.value : getLatestJobStats('HEYNABO_IMPORT'),
-      error: heynaboImportError.value,
-      trigger: importHeynaboDataAndRefresh
-    },
-    {
-      key: 'DAILY_MAINTENANCE',
-      title: 'Daglig Vedligeholdelse',
-      buttonLabel: 'Kør daglig vedligeholdelse',
-      description: 'Markér middage som afholdt, luk ordrer, opret transaktioner, opret automatiske bookinger',
-      schedule: systemJobs.dailyMaintenance.description,
-      color: COLOR.peach,
-      headerBg: BG.peach[50],
-      icon: ICONS.clipboard,
-      // Wired up via bookings store
-      isRunning: isDailyMaintenanceRunning.value,
-      hasResult: hasDailyMaintenanceResult.value || hasHistoricalDailyMaintenance,
-      hasError: hasDailyMaintenanceError.value,
-      stats: hasDailyMaintenanceResult.value ? dailyMaintenanceStats.value : getLatestJobStats('DAILY_MAINTENANCE'),
-      error: dailyMaintenanceError.value,
-      trigger: runDailyMaintenanceAndRefresh
-    },
-    {
-      key: 'MONTHLY_BILLING',
-      title: 'Månedlig Fakturering',
-      buttonLabel: 'Kør fakturering',
-      description: 'Generer fakturaer for foregående måned',
-      schedule: systemJobs.monthlyBilling.description,
-      color: COLOR.secondary,
-      headerBg: BG.pink[50],
-      icon: ICONS.ticket,
-      // Wired up via bookings store
-      isRunning: isMonthlyBillingRunning.value,
-      hasResult: hasMonthlyBillingResult.value || hasHistoricalMonthlyBilling,
-      hasError: hasMonthlyBillingError.value,
-      stats: hasMonthlyBillingResult.value ? monthlyBillingStats.value : getLatestJobStats('MONTHLY_BILLING'),
-      error: monthlyBillingError.value,
-      trigger: runMonthlyBillingAndRefresh
-    }
-  ]
-})
+])
 </script>
 
 <template>
   <div data-testid="admin-system" :class="COMPONENTS.adminSystem.root">
-    <!-- Header -->
     <div :class="COMPONENTS.adminSystem.header">
       <UIcon :name="ICONS.sync" :class="TYPOGRAPHY.sectionIconLight" />
       <h1 :class="TYPOGRAPHY.sectionSubheadingLight">Systemjobs</h1>
     </div>
 
-    <!-- System Jobs - ActionCard grid -->
     <div :class="LAYOUTS.gridThreeCol">
       <UCard
         v-for="job in jobDefinitions"
         :key="job.key"
         v-bind="COMPONENTS.adminSystem.jobCard"
       >
-        <!-- Colored header with icon -->
         <template #header>
           <div
             :class="[job.headerBg, COMPONENTS.adminSystem.jobHeader]"
           >
+            <!-- The box's mark: the spinning sync icon while the job runs, else the service's logo or the job's icon -->
             <UIcon
-              :name="job.isRunning ? ICONS.sync : job.icon"
-              :class="[COMPONENTS.adminSystem.jobIcon, job.isRunning && COMPONENTS.adminSystem.jobIconRunning]"
+              v-if="job.isRunning"
+              :name="ICONS.sync"
+              :class="[COMPONENTS.adminSystem.jobIcon, COMPONENTS.adminSystem.jobIconRunning]"
             />
+            <UAvatar v-else-if="job.logo" v-bind="COMPONENTS.adminSystem.jobLogo" :src="job.logo" alt="" />
+            <UIcon v-else-if="job.icon" :name="job.icon" :class="COMPONENTS.adminSystem.jobIcon" />
             <span :class="TYPOGRAPHY.bodyTextSmall">
               {{ job.schedule }}
             </span>
           </div>
         </template>
 
-        <!-- Title -->
         <h3 :class="COMPONENTS.adminSystem.jobTitle">
           {{ job.title }}
         </h3>
 
-        <!-- Description - fixed height area -->
         <p :class="COMPONENTS.adminSystem.jobDescription">
           {{ job.description }}
         </p>
 
-        <!-- Status / Stats - this area grows to fill available space -->
         <div :class="COMPONENTS.adminSystem.jobBody">
-          <div v-if="job.hasResult && job.stats.length > 0" :class="COMPONENTS.adminSystem.stats">
-            <div
-              v-for="(stat, index) in job.stats"
-              :key="index"
-              :class="COMPONENTS.adminSystem.stat"
-            >
-              <UIcon :name="stat.icon" :class="COMPONENTS.adminSystem.statIcon" />
-              <span :class="TYPOGRAPHY.bodyTextSmall">{{ stat.text }}</span>
-            </div>
-          </div>
-
-          <!-- Error state -->
-          <UAlert
-            v-else-if="job.hasError && job.error"
-            v-bind="ALERTS.error"
-          >
-            <template #title>Fejl</template>
-            <template #description>{{ job.error.message }}</template>
-          </UAlert>
-
-          <!-- Skeleton placeholder for not-implemented jobs OR jobs that haven't run yet -->
-          <div v-else :class="COMPONENTS.adminSystem.skeletons">
+          <!-- Skeleton while the run is in flight or the box's latest run is being read -->
+          <div v-if="job.isLoading" :class="COMPONENTS.adminSystem.skeletons">
             <div :class="COMPONENTS.adminSystem.skeletonRow">
               <USkeleton :class="COMPONENTS.adminSystem.skeletonDot" />
               <USkeleton :class="COMPONENTS.adminSystem.skeletonLong" />
@@ -417,39 +306,42 @@ const jobDefinitions = computed(() => {
               <USkeleton :class="COMPONENTS.adminSystem.skeletonShort" />
             </div>
           </div>
+          <div v-else-if="job.stats.length > 0" :class="COMPONENTS.adminSystem.stats">
+            <div
+              v-for="(stat, index) in job.stats"
+              :key="index"
+              :class="COMPONENTS.adminSystem.stat"
+              data-testid="job-run-line"
+            >
+              <UIcon :name="stat.icon" :class="COMPONENTS.adminSystem.statIcon" />
+              <span :class="TYPOGRAPHY.bodyTextSmall">{{ stat.text }}</span>
+            </div>
+          </div>
+          <p v-else :class="TYPOGRAPHY.bodyTextSmall">Ingen kørsler endnu</p>
+
+          <UAlert v-if="!job.isLoading && job.error" v-bind="ALERTS.error">
+            <template #title>Fejl</template>
+            <template #description>{{ job.error.message }}</template>
+          </UAlert>
         </div>
 
-        <!-- Footer with CTA button -->
         <template #footer>
           <UButton
-            v-if="job.trigger"
             :color="job.color"
             :size="SIZES.standard"
             :trailing-icon="ICONS.arrowRight"
             :loading="job.isRunning"
             :disabled="job.isRunning || !props.canEdit"
-            :name="`trigger-${job.key.toLowerCase()}`"
+            :data-testid="`trigger-${job.key.toLowerCase()}`"
             block
             @click="job.trigger"
           >
-            {{ job.isRunning ? 'Kører...' : job.buttonLabel }}
-          </UButton>
-          <UButton
-            v-else
-            :color="job.color"
-            :size="SIZES.standard"
-            :trailing-icon="ICONS.arrowRight"
-            disabled
-            :name="`trigger-${job.key.toLowerCase()}`"
-            block
-          >
-            {{ job.buttonLabel }}
+            {{ job.isRunning ? MAINTENANCE_WORDS.running : job.buttonLabel }}
           </UButton>
         </template>
       </UCard>
     </div>
 
-    <!-- Job History Panel -->
     <UCard>
       <template #header>
         <div :class="COMPONENTS.adminSystem.panelHeader">
@@ -459,27 +351,13 @@ const jobDefinitions = computed(() => {
       </template>
 
       <UTable
-        v-model:expanded="expanded"
         :data="jobHistoryRows"
         :columns="jobHistoryColumns"
         :loading="isJobHistoryLoading"
         caption="Seneste jobkørsler"
         :class="COMPONENTS.adminSystem.historyTable"
         :ui="COMPONENTS.table.ui"
-        :column-visibility="columnVisibility(HIDDEN_ON_PHONE, HIDDEN_FROM_MD)"
       >
-        <template #expand-cell="{ row }">
-          <UButton
-            v-bind="BUTTONS.edit"
-            :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
-            :aria-label="row.getIsExpanded() ? 'Luk' : 'Vis detaljer'"
-            :aria-expanded="row.getIsExpanded()"
-            :data-testid="`job-history-expand-${row.original.id}`"
-            @click="row.toggleExpanded()"
-          />
-        </template>
-
-        <!-- Custom status cell with color and icon -->
         <template #status-cell="{ row }">
           <UBadge :color="row.original.statusColor" :variant="NOISE.subtle" :class="COMPONENTS.adminSystem.statusBadge">
             <UIcon :name="row.original.statusIcon" :class="COMPONENTS.adminSystem.statusIcon" />
@@ -495,21 +373,9 @@ const jobDefinitions = computed(() => {
         </template>
 
         <template #empty>{{ jobHistoryEmpty }}</template>
-
-        <!-- Phone: the columns hidden on a phone -->
-        <template #expanded="{ row }">
-          <div :class="COMPONENTS.adminSystem.details" data-testid="job-history-details">
-            <p>
-              <span :class="COMPONENTS.adminSystem.detailLabel">Varighed</span> {{ row.original.durationMs }} ·
-              <span :class="COMPONENTS.adminSystem.detailLabel">Kilde</span> {{ row.original.triggeredBy }}
-            </p>
-            <p>{{ row.original.resultSummary }}</p>
-          </div>
-        </template>
       </UTable>
     </UCard>
 
-    <!-- System Settings - App Config Tree -->
     <UCard>
       <template #header>
         <div :class="COMPONENTS.adminSystem.panelHeader">
@@ -518,7 +384,7 @@ const jobDefinitions = computed(() => {
         </div>
       </template>
 
-      <UTree :items="configTreeItems" :default-expanded="['defaultSeason', 'cookingDeadlines', 'kitchen', 'billing']" />
+      <UTree :items="configTreeItems" :default-expanded="CONFIG_TREE_EXPANDED" />
     </UCard>
   </div>
 </template>

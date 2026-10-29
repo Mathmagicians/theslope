@@ -2,9 +2,13 @@
 /**
  * Dinner Page - Master/Detail view of communal dinners
  *
- * UX: Master-detail pattern
- * - Master (Calendar): 1/4 width, shows calendar with dinner events
- * - Detail (Dinner info): 3/4 width, shows selected day details
+ * UX: Master-detail pattern (LAYOUTS.masterDetailPage on UPage)
+ * md and up                                                 phone
+ * +-- a third, at least 245px --+ +-- the rest ----------+  +----------------------------+
+ * | DinnerCalendarDisplay       | | the selected dinner  |  | DinnerCalendarDisplay      |
+ * | countdown, calendar, legend | | (detail view below)  |  +----------------------------+
+ * +-----------------------------+ +----------------------+  | the selected dinner        |
+ *                                                           +----------------------------+
  *
  * Detail view: DinnerDetailPanel lays out three slots; each component's header draws its own layout.
  * ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -21,13 +25,13 @@
 import {FORM_MODES} from '~/types/form'
 import type {DesiredOrder} from '~/composables/useBookingValidation'
 import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
-import {useDinnerDateParam, useBookingView, useCalendarOpenParam} from '~/composables/useBookingView'
 
 // Design system
-const { COLOR, COMPONENTS, ICONS, ALERTS, getRandomEmptyMessage, NOISE, SIZES } = useTheSlopeDesignSystem()
+const { COLOR, COMPONENTS, ICONS, ALERTS, LAYOUTS, getRandomEmptyMessage, NOISE, SIZES } = useTheSlopeDesignSystem()
 
 // Fun empty state for no team assigned
-const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
+const now = useClock()
+const noTeamMessage = getRandomEmptyMessage('noTeamAssigned', now.value)
 
 // Toast for user feedback
 const toast = useToast()
@@ -67,13 +71,13 @@ planStore.selectTeam(() => dinnerEventDetail.value?.cookingTeamId ?? null)
 // Derive needed data from store
 const seasonDates = computed(() => selectedSeason.value?.seasonDates)
 const holidays = computed(() => selectedSeason.value?.holidays ?? [])
-const cookingDays = computed(() => selectedSeason.value?.cookingDays)
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 
 const {deadlinesForSeason} = useSeason()
+const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value, now.value) : undefined)
 
 // Date selection via URL query parameter (curried pattern)
-const dinnerDates = computed(() => dinnerEvents.value.map(e => new Date(e.date)))
+const dinnerDates = computed(() => dinnerEvents.value.map(e => e.date))
 const syncWhen = () => isPlanStoreReady.value && dinnerDates.value.length > 0
 
 const {value: selectedDate, setValue: setDate} = useDinnerDateParam({
@@ -115,7 +119,7 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
   const toastTitle = isGuestBooking ? BOOKING_TOAST_TITLES.guest : BOOKING_TOAST_TITLES.booking
 
   try {
-    const response = await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders)
+    const response = await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders, false)
     toast.add(scaffoldToast(toastTitle, response.scaffoldResult, selectedHousehold.value?.inhabitants.map(({id}) => id)))
   } catch {
     // The request has toasted the failure
@@ -126,7 +130,7 @@ useHead({
   title: '🍽️ Fællesspisning',
   meta: [
     {
-      name: 'Fællesspisning',
+      name: 'description',
       content: 'Tilmelding til dagens fællesspisning'
     }
   ]
@@ -162,7 +166,7 @@ useHead({
       </UAlert>
     </div>
   </UPage>
-  <UPage v-else-if="isSelectedSeasonInitialized && selectedSeason">
+  <UPage v-else-if="isSelectedSeasonInitialized && selectedSeason" :ui="LAYOUTS.masterDetailPage">
     <!-- Master: Calendar (left slot) -->
     <template #left>
       <CalendarMasterPanel>
@@ -171,12 +175,10 @@ useHead({
             v-if="seasonDates && selectedDate"
             v-model:calendar-open="calendarOpen"
             :season-dates="seasonDates"
-            :cooking-days="cookingDays"
             :holidays="holidays"
             :dinner-events="dinnerEvents"
             :lock-status="lockStatus"
             :show-countdown="true"
-            :color="COLOR.peach"
             :selected-date="selectedDate"
             @date-selected="setDate"
           />
@@ -194,9 +196,9 @@ useHead({
       <!-- #hero: ChefMenuCard in VIEW mode with DinnerBookingForm -->
       <template #hero>
         <ChefMenuCard
-          v-if="dinnerEventDetail && selectedSeason"
+          v-if="dinnerEventDetail && selectedSeason && deadlines"
           :dinner-event="dinnerEventDetail"
-          :deadlines="deadlinesForSeason(selectedSeason)"
+          :deadlines="deadlines"
           :form-mode="FORM_MODES.VIEW"
           :show-state-controls="false"
           :show-allergens="true"
@@ -213,7 +215,7 @@ useHead({
             :dinner-event="dinnerEventDetail"
             :orders="householdOrders"
             :ticket-prices="selectedSeason?.ticketPrices ?? []"
-            :deadlines="deadlinesForSeason(selectedSeason)"
+            :deadlines="deadlines"
             :released-ticket-counts="lockStatus.get(dinnerEventDetail.id) ?? EMPTY_RELEASED_TICKET_COUNTS"
             :waitlist-entries="householdWaitlist"
             :loading="isBookingsReloading"

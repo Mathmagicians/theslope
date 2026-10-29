@@ -5,6 +5,7 @@ import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
 import {assignWaitlistPortions} from '~~/server/utils/waitlistAssignment'
 import {emailChannel} from '~~/server/utils/sender/config'
 import {notifyExtraPortions} from '~~/server/utils/sender/events/waitlist'
+import {deliverInBackground} from '~~/server/utils/sender/deliveries'
 import {useWaitlistValidation, type WaitlistAssignmentResult, type ExtraPortionsRequest} from '~/composables/useWaitlistValidation'
 
 const {throwH3Error} = eventHandlerHelper
@@ -33,7 +34,7 @@ export default defineEventHandler(async (event): Promise<WaitlistAssignmentResul
 
     try {
         const result = await assignWaitlistPortions(d1Client, dinner, body.portions, chef.id)
-        await notifyExtraPortions(d1Client, emailChannel(cloudflare.env), result)
+        deliverInBackground(event, () => notifyExtraPortions(d1Client, emailChannel(cloudflare.env), result))
         console.info(`${LOG} Chef ${chef.id} cooks ${body.portions} more portions on dinner ${id}: ${result.assigned.length} assigned, ${result.waiting} waiting`)
         setResponseStatus(event, 200)
         return WaitlistAssignmentResultSchema.parse(result)

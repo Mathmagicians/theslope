@@ -1,9 +1,10 @@
 // Factory for Order test data
-import type { OrderDisplay, BookingResult, BookingTotals, OrderDetail, OrderHistoryDisplay, TicketChange, TicketChangesResponse, OrderSnapshot, OrderCreateWithPrice, AuditContext, OrderAuditSource,CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
+import type { OrderDisplay, BookingResult, QueuePosition, TicketType, BookingTotals, OrderDetail, OrderHistoryDisplay, TicketChange, TicketChangesResponse, OrderSnapshot, OrderCreateWithPrice, AuditContext, OrderAuditSource,CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useTicket } from '~/composables/useTicket'
 import { useCoreValidation } from '~/composables/useCoreValidation'
-import type { BrowserContext } from '@playwright/test';
+import type { APIResponse, BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'
 import testHelpers from '../testHelpers'
 
@@ -14,6 +15,7 @@ import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFa
 import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
 import { TicketFactory } from '~~/tests/e2e/testDataFactories/ticketFactory'
 import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
+import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 
 const { headers, salt, temporaryAndRandom, getSessionUserInfo } = testHelpers
 
@@ -22,6 +24,7 @@ const HOUSEHOLD_SCAFFOLD_ENDPOINT = '/api/household/order/scaffold'
 
 // Get enum schemas from composable
 const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema, OrderAuditSourceSchema, BookingActionSchema, TicketChangeKindSchema } = useBookingValidation()
+const { findTicketPriceByType } = useTicket()
 
 // API endpoints
 const ORDER_ENDPOINT = '/api/order'
@@ -56,6 +59,9 @@ export class OrderFactory {
     const year = 5025 + randomYearOffset
     return new Date(year, randomMonth, randomDay)
   }
+
+  /** An order's price fields from a season's price row: a person's row is the price their order holds */
+  static readonly priceFieldsOf = (price: TicketPrice) => ({ticketPriceId: price.id, ticketType: price.ticketType, priceAtBooking: price.price})
 
   static readonly defaultOrder = (_testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderDisplay>): OrderDisplay => ({
     id: 1,
@@ -95,8 +101,8 @@ export class OrderFactory {
   })
 
   /** An order's price row: the default row of its type, carrying the portions a ticket at it weighs */
-  static readonly ticketPriceRow = (ticketType: OrderDetail['ticketType'] = TicketTypeSchema.enum.ADULT): NonNullable<OrderDetail['ticketPrice']> => {
-    const row = TicketFactory.defaultTicketPricesData.find(price => price.ticketType === ticketType)!
+  static readonly ticketPriceRow = (ticketType: TicketType = TicketTypeSchema.enum.ADULT): NonNullable<OrderDetail['ticketPrice']> => {
+    const row = TicketFactory.defaultPriceOf(ticketType)
     return {id: 1, ticketType: row.ticketType, price: 45, description: row.description ?? null, portions: row.portions}
   }
 
@@ -300,6 +306,46 @@ export class OrderFactory {
     return {householdId: data.householdId, createdIds}
   }
 
+  /**
+   * An inhabitant's ticket and its guest tickets on a dinner, booked by the admin's correction with the deadlines lifted
+   * (a past dinner included); the new orders' ids, the inhabitant's own first
+   */
+  static readonly bookTickets = async (
+    context: BrowserContext,
+    {householdId, dinnerEventId, inhabitantId, ticketPriceId, dinnerMode = DinnerModeSchema.enum.DINEIN, guestTickets = 0}:
+      {householdId: number, dinnerEventId: number, inhabitantId: number, ticketPriceId: number, dinnerMode?: DinnerMode, guestTickets?: number}
+  ): Promise<[number, ...number[]]> => {
+    // One request per ticket: the household's new orders on the dinner name each ticket's order
+    const book = async (isGuestTicket: boolean): Promise<number> => {
+      const result = await this.createOrder(context, {householdId, dinnerEventId, orders: [{inhabitantId, ticketPriceId, dinnerMode, isGuestTicket}]})
+      const [orderId, ...more] = result?.createdIds ?? []
+      if (orderId === undefined || more.length > 0) {
+        throw new Error(`The correction books one ${isGuestTicket ? 'guest ' : ''}ticket of inhabitant ${inhabitantId}, got ${JSON.stringify(result?.createdIds)}`)
+      }
+      return orderId
+    }
+    const own = await book(false)
+    const guests: number[] = []
+    for (let guest = 0; guest < guestTickets; guest++) guests.push(await book(true))
+    return [own, ...guests]
+  }
+
+  /** Every order of the inhabitant on the dinner, its guest tickets included */
+  static readonly getOrdersOf = async (
+    context: BrowserContext,
+    dinnerEventId: number,
+    inhabitant: {id: number, householdId: number}
+  ): Promise<OrderDisplay[]> =>
+    (await this.getOrders(context, {dinnerEventIds: dinnerEventId, householdId: inhabitant.householdId})).filter(order => order.inhabitantId === inhabitant.id)
+
+  /** The inhabitant's own order on the dinner, not a guest ticket booked on the inhabitant */
+  static readonly getOrderOf = async (
+    context: BrowserContext,
+    dinnerEventId: number,
+    inhabitant: {id: number, householdId: number}
+  ): Promise<OrderDisplay | undefined> =>
+    (await this.getOrdersOf(context, dinnerEventId, inhabitant)).find(order => !order.isGuestTicket)
+
   static readonly getOrder = async (
     context: BrowserContext,
     orderId: number,
@@ -399,6 +445,7 @@ export class OrderFactory {
       state?: string
       sortBy?: 'createdAt' | 'releasedAt'
       includeDinnerContext?: boolean
+      includeProvenance?: boolean
     } = {},
     expectedStatus: number = 200
   ): Promise<OrderDisplay[]> => {
@@ -415,6 +462,7 @@ export class OrderFactory {
     if (options.state) params.append('state', options.state)
     if (options.sortBy) params.append('sortBy', options.sortBy)
     if (options.includeDinnerContext) params.append('includeDinnerContext', 'true')
+    if (options.includeProvenance) params.append('includeProvenance', 'true')
 
     const response = await context.request.get(`${ORDER_ENDPOINT}?${params.toString()}`, { headers })
 
@@ -538,7 +586,14 @@ export class OrderFactory {
   /** One order's result in a scaffold run */
   static readonly defaultBookingResult = (overrides?: Partial<BookingResult>): BookingResult => ({
     inhabitantId: 1, inhabitantName: 'Anna', isGuestTicket: false, ticketType: TicketTypeSchema.enum.ADULT, dinnerEventId: 1,
-    dinnerMode: DinnerModeSchema.enum.DINEIN, action: BookingActionSchema.enum.BOOK,
+    priceAtBooking: TicketFactory.defaultPriceOf(TicketTypeSchema.enum.ADULT).price, dinnerMode: DinnerModeSchema.enum.DINEIN, action: BookingActionSchema.enum.BOOK,
+    ...overrides
+  })
+
+  /** A wish's place on a dinner's waiting list in a scaffold run */
+  static readonly defaultQueuePosition = (overrides?: Partial<QueuePosition>): QueuePosition => ({
+    inhabitantId: 1, dinnerEventId: 1, isGuestTicket: false, position: 1, ticketType: TicketTypeSchema.enum.ADULT,
+    priceAtBooking: TicketFactory.defaultPriceOf(TicketTypeSchema.enum.ADULT).price,
     ...overrides
   })
 
@@ -567,6 +622,7 @@ export class OrderFactory {
     transact: {created: 0},
     clearWaitlist: {cleared: 0, dinners: []},
     initPrefs: {initialized: 0},
+    notifications: {},
     scaffold: null,
     ...overrides
   })
@@ -585,39 +641,54 @@ export class OrderFactory {
     context: BrowserContext,
     request: ScaffoldOrdersRequest,
     expectedStatus: number = 200,
-    adminBypass?: boolean,
-    preview: boolean = false
+    adminBypass?: boolean
   ): Promise<ScaffoldOrdersResponse | null> => {
-    const { ScaffoldOrdersResponseSchema } = useBookingValidation()
     const query = new URLSearchParams()
     if (adminBypass !== undefined) query.append('adminBypass', String(adminBypass))
-    if (preview) query.append('preview', 'true')
 
     const response = await context.request.post(`${HOUSEHOLD_SCAFFOLD_ENDPOINT}${query.size > 0 ? `?${query}` : ''}`, {
       headers,
       data: request
     })
+    return OrderFactory.readScaffoldResponse(response, expectedStatus)
+  }
 
+  /**
+   * The scaffold's dry run as a URL (GET /api/household/order/scaffold): the request in the query, each desired order
+   * encoded by `encodeDesiredOrder`; `bypassDeadlines` previews an admin's change with the deadlines lifted
+   */
+  static readonly previewScaffoldUrl = (request: ScaffoldOrdersRequest, bypassDeadlines: boolean = false): string => {
+    const { encodeDesiredOrder } = useBookingValidation()
+    const query = new URLSearchParams({ householdId: String(request.householdId) })
+    if (request.seasonId !== undefined) query.append('seasonId', String(request.seasonId))
+    request.dinnerEventIds.forEach(id => query.append('dinnerEventIds', String(id)))
+    request.orders.forEach(order => query.append('orders', encodeDesiredOrder(order)))
+    if (bypassDeadlines) query.append('bypassDeadlines', 'true')
+    return `${HOUSEHOLD_SCAFFOLD_ENDPOINT}?${query}`
+  }
+
+  /**
+   * Preview a scaffold save: the reply the save would give, read with nothing written; any member reads any household.
+   * No orders reads the household's next run on the season's deadlines (the expected bookings)
+   */
+  static readonly previewScaffoldOrders = async (
+    context: BrowserContext,
+    request: ScaffoldOrdersRequest,
+    bypassDeadlines: boolean = false,
+    expectedStatus: number = 200
+  ): Promise<ScaffoldOrdersResponse | null> =>
+    OrderFactory.readScaffoldResponse(await context.request.get(OrderFactory.previewScaffoldUrl(request, bypassDeadlines)), expectedStatus)
+
+  /** The scaffold's reply, its status asserted; parsed when it answers 200 */
+  private static readonly readScaffoldResponse = async (response: APIResponse, expectedStatus: number): Promise<ScaffoldOrdersResponse | null> => {
+    const { ScaffoldOrdersResponseSchema } = useBookingValidation()
     const status = response.status()
     const responseBody = await response.text()
 
     expect(status, `Expected ${expectedStatus} but got ${status}: ${responseBody}`).toBe(expectedStatus)
 
-    if (expectedStatus === 200) {
-      const parsed = JSON.parse(responseBody)
-      return ScaffoldOrdersResponseSchema.parse(parsed)
-    }
-
-    return null
+    return expectedStatus === 200 ? ScaffoldOrdersResponseSchema.parse(JSON.parse(responseBody)) : null
   }
-
-  /** Preview a scaffold save: the reply the save would give, with nothing written */
-  static readonly previewScaffoldOrders = (
-    context: BrowserContext,
-    request: ScaffoldOrdersRequest,
-    adminBypass?: boolean
-  ): Promise<ScaffoldOrdersResponse | null> =>
-    OrderFactory.scaffoldOrders(context, request, 200, adminBypass, true)
 
   /**
    * Create a DesiredOrder for booking (BOOKED state, specific mode)
@@ -717,7 +788,7 @@ export class OrderFactory {
       menuTitle: salt(`Fixture-${daysFromNow}d`, testSalt)
     })
 
-    const ticketPriceId = season.ticketPrices?.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)?.id
+    const ticketPriceId = findTicketPriceByType(TicketTypeSchema.enum.ADULT, season.ticketPrices)?.id
     if (!ticketPriceId) throw new Error('No ADULT ticket price found')
 
     let order: OrderDisplay

@@ -43,6 +43,9 @@ export const useTicketPriceValidation = () => {
     const CreateTicketPriceSchema = TicketPriceSchema.omit({id: true, seasonId: true, portions: true})
     const CreateTicketPricesArraySchema = z.array(CreateTicketPriceSchema).min(1)
 
+    // The two fields a ticket's portions are looked up by
+    const PortionTicketSchema = TicketPriceSchema.pick({ticketType: true, price: true})
+
     /**
      * Reconcile ticket prices - never deletes, only creates/updates
      *
@@ -75,13 +78,11 @@ export const useTicketPriceValidation = () => {
         TicketPricesArraySchema,
         CreateTicketPriceSchema,
         CreateTicketPricesArraySchema,
+        PortionTicketSchema,
         createTicketPrice,
         reconcileTicketPrices
     }
 }
 
 export type TicketPrice = z.infer<ReturnType<typeof useTicketPriceValidation>['TicketPriceSchema']>
-// The two fields a ticket's portions are looked up by
-export type PortionTicket = Pick<TicketPrice, 'ticketType' | 'price'>
-// A price row's id and the portions a ticket at it weighs
-export type PricePortions = Pick<TicketPrice, 'id' | 'portions'>
+export type PortionTicket = z.infer<ReturnType<typeof useTicketPriceValidation>['PortionTicketSchema']>

@@ -1,13 +1,13 @@
 import {defineEventHandler, getValidatedRouterParams, getValidatedQuery, readValidatedBody, setResponseStatus} from "h3"
+import {z} from "zod"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {isAdmin} from '~/composables/usePermissions'
-import {AdminBypassQuerySchema, QueryFlagSchema, RouteIdSchema, idParams, useCoreValidation} from "~/composables/useCoreValidation"
+import {AdminBypassQuerySchema, RouteIdSchema, idParams, useCoreValidation} from "~/composables/useCoreValidation"
 import {useBookingValidation, type InhabitantUpdateResponse, type ScaffoldResult, type DinnerMode} from "~/composables/useBookingValidation"
 import {fetchInhabitant, updateInhabitant} from "~~/server/data/prismaRepository"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
-import {emailChannel} from "~~/server/utils/sender/config"
-import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
+import {notifyBookingOutcomesInBackground} from "~~/server/utils/sender/events/waitlist"
 import {changedWeekdays, type WeekDayMap} from "~/types/dateTypes"
 
 const {throwH3Error} = eventHandlerHelper
@@ -16,13 +16,13 @@ const LOG = '👩‍🏠 > INHABITANT > [PREFERENCES]'
 
 const paramSchema = idParams('id')
 
-const querySchema = AdminBypassQuerySchema.extend({seasonId: RouteIdSchema.optional(), preview: QueryFlagSchema})
+const querySchema = AdminBypassQuerySchema.extend({seasonId: RouteIdSchema.optional()})
 
 /**
  * POST /api/household/inhabitants/[id]/preferences
  * Update inhabitant dinner preferences (for household members)
  * Requires: authenticated user belongs to same household as inhabitant
- * With ?preview=true: the reply the save would give, with the stored inhabitant; nothing is written and no mail goes out
+ * Its dry run is the GET on the same path (`preferences.get.ts`)
  */
 export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (event) => {
     const {cloudflare} = event.context
@@ -31,20 +31,18 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
     let id!: number
     let seasonId: number | undefined
     let adminBypass!: boolean
-    let preview!: boolean
     let dinnerPreferences: WeekDayMap<DinnerMode>
     try {
-        const {InhabitantUpdateSchema} = useCoreValidation()
-        const bodySchema = InhabitantUpdateSchema.pick({dinnerPreferences: true}).required()
+        const {WeekDayMapSchemaOptional} = useCoreValidation()
+        const bodySchema = z.object({dinnerPreferences: WeekDayMapSchemaOptional})
 
         const params = await getValidatedRouterParams(event, paramSchema.parse)
         id = params.id
         const query = await getValidatedQuery(event, querySchema.parse)
         seasonId = query.seasonId
         adminBypass = query.adminBypass
-        preview = query.preview
         const body = await readValidatedBody(event, bodySchema.parse)
-        dinnerPreferences = body.dinnerPreferences!
+        dinnerPreferences = body.dinnerPreferences
     } catch (error) {
         return throwH3Error(`${LOG} Input validation error`, error)
     }
@@ -59,26 +57,23 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
         // Verify user belongs to same household (admin can bypass via ?adminBypass=true)
         const user = await requireHouseholdAccess(event, inhabitant.householdId, adminBypass ? isAdmin : undefined)
 
-        console.info(`${LOG} User ${user.email} ${preview ? 'previewing' : 'updating'} preferences for inhabitant ${inhabitant.name} ${inhabitant.lastName}`)
-        const storedInhabitant = preview ? inhabitant : await updateInhabitant(d1Client, id, {dinnerPreferences})
+        console.info(`${LOG} User ${user.email} updating preferences for inhabitant ${inhabitant.name} ${inhabitant.lastName}`)
+        const updatedInhabitant = await updateInhabitant(d1Client, id, {dinnerPreferences})
 
-        // Re-scaffold the household on the weekdays the draft changes, the nightly run keeps the rest in step (ADR-015);
-        // a preview runs the same scaffold on the draft and writes nothing
+        // Re-scaffold the household on the weekdays the draft changes, the DAILY_MAINTENANCE job keeps the rest in step (ADR-015)
         const weekdays = changedWeekdays(inhabitant.dinnerPreferences, dinnerPreferences)
-        console.info(`${LOG} Re-scaffolding household ${storedInhabitant.householdId} on ${weekdays.join(', ') || 'no weekday'}`)
+        console.info(`${LOG} Re-scaffolding household ${updatedInhabitant.householdId} on ${weekdays.join(', ') || 'no weekday'}`)
         const scaffoldResult: ScaffoldResult = await scaffoldPrebookings(d1Client, {
             seasonId,
-            householdId: storedInhabitant.householdId,
-            weekdays,
-            preferences: preview ? [{inhabitantId: id, dinnerPreferences}] : undefined,
-            preview
+            householdId: updatedInhabitant.householdId,
+            weekdays
         })
-        if (!preview) await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffoldResult.outcomes)
+        notifyBookingOutcomesInBackground(event, scaffoldResult.outcomes)
 
         const {InhabitantUpdateResponseSchema} = useBookingValidation()
         setResponseStatus(event, 200)
         return InhabitantUpdateResponseSchema.parse({
-            inhabitant: storedInhabitant,
+            inhabitant: updatedInhabitant,
             scaffoldResult
         })
     } catch (error) {

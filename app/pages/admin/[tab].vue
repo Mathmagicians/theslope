@@ -143,7 +143,7 @@ useHead({
   title: "😎 Administration",
   meta: [
     {
-      name: "Administration",
+      name: "description",
       content: "you can view households and their dinner preferences here",
     },
   ],
@@ -159,7 +159,7 @@ useHead({
       v-if="!canEdit"
       v-bind="ALERTS.neutral"
       data-testid="admin-readonly-banner"
-      icon="i-heroicons-eye"
+      :icon="ICONS.viewOnly"
       title="Hej, du er ikke administrator"
       description="Se, men ikke røre"
       class="mb-4"

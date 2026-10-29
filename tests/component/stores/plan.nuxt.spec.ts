@@ -8,8 +8,11 @@ import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactor
 import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { usePlanStore } from '~/stores/plan'
+import { API_ERROR_WORDS } from '~/config/apiErrorWords'
+import { SEASON_WORDS } from '~/config/seasonWords'
+import { TEAM_WORDS } from '~/config/teamWords'
 import { useAuthStore } from '~/stores/auth'
-import { ROLE_LABELS, useCookingTeamValidation } from '~/composables/useCookingTeamValidation'
+import { useCookingTeamValidation } from '~/composables/useCookingTeamValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
 
 // IMPORTANT: Register endpoints BEFORE importing the store
@@ -62,7 +65,7 @@ const createdJokerSlot = {...jokerSlot, id: JOKER_SLOT_ID, cookingTeamId: TEAM_I
 // The response leaves the allocation to the schema default, so the result shows the parse
 const {allocationPercentage: _allocation, ...assignmentResponse} = assignment
 const addTeamMemberEndpoint = vi.fn(() => assignmentResponse)
-const removeTeamMemberEndpoint = vi.fn(() => 1)
+const removeTeamMemberEndpoint = vi.fn(() => ASSIGNMENT_ID)
 const updatedAssignment = {...assignment, role: useCookingTeamValidation().TeamRoleSchema.enum.COOK, allocationPercentage: 50}
 const updateTeamMemberEndpoint = vi.fn(() => updatedAssignment)
 const createJokerSlotEndpoint = vi.fn(() => createdJokerSlot)
@@ -186,8 +189,8 @@ describe('Plan Store - Team creation', () => {
         expect(result.teams.map(team => team.id)).toEqual([11, 12])
         expect(result.eventsAssigned).toBe(6)
         expect(useToast().toasts.value.at(-1)).toMatchObject({
-            title: 'Madhold oprettet',
-            description: '2 madhold oprettet · 6 madlavninger tildelt'
+            title: TEAM_WORDS.admin.created.title,
+            description: TEAM_WORDS.admin.created.description(2, 6)
         })
     })
 })
@@ -219,14 +222,14 @@ describe('Plan Store - Season save and activation', () => {
         expect(seasonIndexEndpoint.mock.calls.length).toBeGreaterThan(seasonFetchesBefore)
         expect(store.isSavingSeasonFlowInProgress).toBe(false)
         expect(useToast().toasts.value.at(-1)).toMatchObject({
-            title: 'Sæson opdateret',
-            description: '3 datoer tilføjet, 1 fjernet. Husk at tildele madhold til nye datoer.'
+            title: SEASON_WORDS.toasts.updated.title,
+            description: `${SEASON_WORDS.toasts.updated.reconciled(3, 1)} ${SEASON_WORDS.toasts.updated.assignTeams}`
         })
     })
 
     it.each([
-        {action: 'updateSeason', endpoint: updateSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.updateSeason(season1), title: 'Sæson opdateret'},
-        {action: 'createSeason', endpoint: createSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.createSeason(season2), title: 'Sæson oprettet'}
+        {action: 'updateSeason', endpoint: updateSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.updateSeason(season1), title: SEASON_WORDS.toasts.updated.title},
+        {action: 'createSeason', endpoint: createSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.createSeason(season2), title: SEASON_WORDS.toasts.created}
     ])('$action resolves null when the save fails, with no success toast', async ({endpoint, save, title}) => {
         useToast().clear()
         endpoint.mockImplementation(failure)
@@ -377,7 +380,7 @@ describe('Plan Store - a selected season that no longer exists', () => {
         await vi.waitFor(() => expect(store.selectedSeason?.id).toBe(season1.id))
         expect(store.selectedSeasonId).toBe(season1.id)
         expect(seasonIndexEndpoint.mock.calls.length).toBeGreaterThan(before.seasons)
-        expect(useToast().toasts.value.at(-1)?.title).toBe(`Kan ikke finde sæsonen ${goneSeason.shortName}`)
+        expect(useToast().toasts.value.at(-1)?.title).toBe(API_ERROR_WORDS.notFoundOf(SEASON_WORDS.notFound, goneSeason.shortName))
     })
 
     it('after a 404 the page\'s getter still drives the selection', async () => {
@@ -417,7 +420,7 @@ describe('Plan Store - write actions', () => {
             parsed: season2,
             refreshes: 'the seasons',
             refreshed: seasonIndexEndpoint,
-            toast: {title: 'Sæson oprettet'}
+            toast: {title: SEASON_WORDS.toasts.created}
         },
         {
             action: 'activateSeason',
@@ -453,7 +456,7 @@ describe('Plan Store - write actions', () => {
             parsed: teamDetail,
             refreshes: 'the selected season',
             refreshed: seasonByIdEndpoint,
-            toast: {title: 'Madlavningsdage for teams opdateret'}
+            toast: {title: TEAM_WORDS.admin.affinityUpdated}
         },
         {
             action: 'updateTeam (name)',
@@ -471,7 +474,7 @@ describe('Plan Store - write actions', () => {
             parsed: TEAM_ID,
             refreshes: 'the selected season',
             refreshed: seasonByIdEndpoint,
-            toast: {title: 'Madhold slettet'}
+            toast: {title: TEAM_WORDS.admin.deleted}
         },
         {
             action: 'addTeamMember',
@@ -482,7 +485,7 @@ describe('Plan Store - write actions', () => {
             parsed: assignment,
             refreshes: 'the selected season',
             refreshed: seasonByIdEndpoint,
-            toast: {title: 'Medlem tilføjet til hold', description: `${assignment.inhabitant.name} ${assignment.inhabitant.lastName}`}
+            toast: {title: TEAM_WORDS.admin.memberAdded, description: `${assignment.inhabitant.name} ${assignment.inhabitant.lastName}`}
         },
         {
             action: 'updateTeamMember',
@@ -491,16 +494,16 @@ describe('Plan Store - write actions', () => {
             parsed: updatedAssignment,
             refreshes: 'the selected season',
             refreshed: seasonByIdEndpoint,
-            toast: {title: 'Medlem opdateret', description: `${assignment.inhabitant.name} ${assignment.inhabitant.lastName}`}
+            toast: {title: TEAM_WORDS.admin.memberUpdated, description: `${assignment.inhabitant.name} ${assignment.inhabitant.lastName}`}
         },
         {
             action: 'removeTeamMember',
             endpoint: removeTeamMemberEndpoint,
             write: (store: PlanStore) => store.removeTeamMember(ASSIGNMENT_ID),
-            parsed: 1,
+            parsed: ASSIGNMENT_ID,
             refreshes: 'the selected season',
             refreshed: seasonByIdEndpoint,
-            toast: {title: 'Medlem fjernet fra hold'}
+            toast: {title: TEAM_WORDS.admin.memberRemoved}
         },
         {
             action: 'createJokerSlot',
@@ -509,7 +512,7 @@ describe('Plan Store - write actions', () => {
             parsed: createdJokerSlot,
             refreshes: 'the selected season',
             refreshed: seasonByIdEndpoint,
-            toast: {title: 'Joker tilføjet', description: ROLE_LABELS[jokerSlot.role]}
+            toast: {title: TEAM_WORDS.admin.jokerAdded, description: TEAM_WORDS.roles[jokerSlot.role].label}
         },
         {
             action: 'deleteJokerSlot',
@@ -518,7 +521,7 @@ describe('Plan Store - write actions', () => {
             parsed: JOKER_SLOT_ID,
             refreshes: 'the selected season',
             refreshed: seasonByIdEndpoint,
-            toast: {title: 'Joker fjernet'}
+            toast: {title: TEAM_WORDS.admin.jokerRemoved}
         },
         {
             action: 'assignRoleToDinner',
@@ -545,7 +548,7 @@ describe('Plan Store - write actions', () => {
             parsed: dinner,
             refreshes: 'the selected season',
             refreshed: seasonByIdEndpoint,
-            toast: {title: 'Du har meldt afbud. Tjansen som chefkok er nu ledig.'}
+            toast: {title: TEAM_WORDS.toasts.resigned.title}
         }
     ]
 
@@ -570,7 +573,7 @@ describe('Plan Store - write actions', () => {
         await expect(store.assignTeamAffinitiesAndEvents(season1.id)).rejects.toThrow()
     })
 
-    const TEAM_WRITES = ['updateTeam (affinity)', 'updateTeam (name)', 'addTeamMember', 'updateTeamMember', 'removeTeamMember', 'createJokerSlot', 'deleteJokerSlot']
+    const TEAM_WRITES = ['updateTeam (affinity)', 'updateTeam (name)', 'addTeamMember', 'updateTeamMember', 'removeTeamMember', 'createJokerSlot', 'deleteJokerSlot', 'assignRoleToDinner', 'claimRoleForMe', 'resignRoleForMe']
 
     it.each(writeActions.filter(({action}) => TEAM_WRITES.includes(action)))('$action refreshes the selected team', async ({write}) => {
         const store = await setupStore()

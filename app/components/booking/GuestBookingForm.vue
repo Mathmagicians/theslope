@@ -16,10 +16,11 @@ import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData,
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import type {BookingContext, ReleasedTicketCounts} from '~/composables/useBooking'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import type {FormSubmitEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 interface Props {
   householdId: number
@@ -30,7 +31,7 @@ interface Props {
   releasedTicketCounts: ReleasedTicketCounts
   bookerId: number
   bookerName: string
-  isHouseholdInResidency: boolean
+  bookingContext: BookingContext // The household's booking context on the dinner (bookingContextOf)
   adminBypass?: boolean
 }
 
@@ -47,27 +48,29 @@ const emit = defineEmits<{
 const {SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, LAYOUTS, NOISE, COMPONENTS, ORIENTATIONS} = useTheSlopeDesignSystem()
 const guestForm = COMPONENTS.guestBookingForm
 
+const now = useClock()
+
 // Empty state message when no booking action available
-const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets'))
+const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets', now.value))
 
 // Booking logic
-const {getBookingOptions} = useBooking()
+const {getBookingOptions, buildGuestOrder} = useBooking()
+const {findTicketPriceByType} = useTicket()
 const {createBookingBadges, guestSaveLabel} = useBookingUi()
 const bookingsStore = useBookingsStore()
 
 // Validation schemas
-const {DinnerModeSchema, OrderStateSchema, GuestBookingFormSchema, TicketTypeSchema} = useBookingValidation()
+const {DinnerModeSchema, GuestBookingFormSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
-const OrderStateEnum = OrderStateSchema.enum
 
-// The guests a save books: how many, at which ticket price, how they eat and their allergies
-type GuestDraft = Pick<DesiredOrder, 'dinnerMode'> & {count: number, ticketPriceId: number, allergyTypeIds: number[]}
+// The guests a save books, as the form schema reads them; the mode holds Ingen while the form tries each mode
+type GuestDraft = Omit<GuestBookingFormData, 'dinnerMode'> & {dinnerMode: DinnerMode}
 
 // Form state - reactive object for UForm binding
 const formState = reactive<Omit<GuestDraft, 'ticketPriceId'> & {ticketPriceId: number | undefined}>({
   count: 1,
   // The form opens on the adult ticket
-  ticketPriceId: props.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)?.id,
+  ticketPriceId: findTicketPriceByType(TicketTypeSchema.enum.ADULT, props.ticketPrices)?.id,
   allergyTypeIds: [],
   dinnerMode: DinnerModeEnum.DINEIN
 })
@@ -87,32 +90,25 @@ const validateForm = () => {
 }
 
 
-// Deadline badges using existing factory
-const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
+// Deadline badges using existing factory, counted from the page's clock
+const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, now.value, props.releasedTicketCounts))
 // The header's badge while tickets are for sale
 const forSaleWords = computed(() => ticketsForSale(props.releasedTicketCounts))
 
 // The guests the form books: count orders at the picked ticket price, booked by the booker
 const guestOrdersOf = ({count, ticketPriceId, dinnerMode, allergyTypeIds}: GuestDraft): DesiredOrder[] =>
-  Array.from({length: count}, () => ({
-    inhabitantId: props.bookerId,
-    dinnerEventId: props.dinnerEvent.id,
-    dinnerMode,
-    ticketPriceId,
-    isGuestTicket: true,
-    allergyTypeIds: allergyTypeIds.length > 0 ? allergyTypeIds : undefined,
-    state: OrderStateEnum.BOOKED
-  }))
+  Array.from({length: count}, () =>
+    buildGuestOrder(props.bookerId, props.dinnerEvent.id, ticketPriceId, dinnerMode, allergyTypeIds.length > 0 ? allergyTypeIds : undefined))
 
-// The modes the guest may take: the guest the save books in each mode, as the decision matrix lands it. The decision
-// reads no price, so a season price stands in while none is picked
+// The modes the guest may take: the guest the save books in each mode, as the decision matrix lands it, at the picked
+// price; while none is picked, the season's first price stands in
 const enabledModes = computed((): DinnerMode[] => {
   const ticketPriceId = formState.ticketPriceId ?? props.ticketPrices[0]?.id
   return getBookingOptions({
     order: null,
     waitlistEntry: null,
     candidate: dinnerMode => ticketPriceId === undefined ? null : guestOrdersOf({...formState, count: 1, ticketPriceId, dinnerMode})[0] ?? null
-  }, {event: props.dinnerEvent, deadlines: props.deadlines, isHouseholdInResidency: () => props.isHouseholdInResidency})
+  }, props.bookingContext)
 })
 
 // The preview: the server's dry run of the guests a valid draft books
@@ -274,7 +270,7 @@ const handleCancel = () => emit('cancel')
               data-testid="guest-form-cancel"
               @click="handleCancel"
             >
-              Annuller
+              {{ BUTTON_WORDS.cancel }}
             </UButton>
             <UButton
               v-bind="BUTTONS.save"

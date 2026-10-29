@@ -2,15 +2,22 @@
 /**
  * HouseholdBookings - Booking management (Tilmeldinger tab content)
  *
- * UX: Master-detail pattern
- * - Master (Calendar): 1/3 width on large screens, shows 1 month
- * - Detail (Booking panel): 2/3 width, shows selected day details
+ * Day and week views with the calendar open: the calendar is the master, the booking panel the detail
+ * (LAYOUTS.masterDetailPage). The month view and a closed calendar leave the panel the whole row.
+ *
+ * md and up                                                 phone
+ * +-- a third, at least 245px --+ +-- the rest ----------+  +----------------------------+
+ * | DinnerCalendarDisplay       | | Familiens bookinger  |  | DinnerCalendarDisplay      |
+ * | one month                   | |               [view] |  +----------------------------+
+ * |                             | | BookingGridView      |  | Familiens bookinger [view] |
+ * +-----------------------------+ +----------------------+  | BookingGridView            |
+ *                                                           +----------------------------+
  */
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import type {DesiredOrder} from '~/composables/useBookingValidation'
 import {EMPTY_RELEASED_TICKET_COUNTS, type BookingChanges} from '~/composables/useBooking'
-import {useQueryParam} from '~/composables/useQueryParam'
-import {useDinnerDateParam, useCalendarOpenParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
+import {BookingViewSchema, type BookingView} from '~/composables/useBookingView'
+import {FORM_MODES, type FormMode} from '~/types/form'
 
 interface Props {
   household: HouseholdDetail
@@ -24,9 +31,10 @@ const props = withDefaults(defineProps<Props>(), {
 })
 const {household} = toRefs(props)
 
-const {deadlinesForSeason} = useSeason()
+const {deadlinesForSeason, getDinnerOnDate} = useSeason()
+const now = useClock()
 const {BOOKING_TOAST_TITLES, buildBookingChanges} = useBooking()
-const {ICONS, ALERTS, COMPONENTS} = useTheSlopeDesignSystem()
+const {ICONS, ALERTS, COMPONENTS, LAYOUTS} = useTheSlopeDesignSystem()
 
 const planStore = usePlanStore()
 const {selectedSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
@@ -43,9 +51,11 @@ const householdsStore = useHouseholdsStore()
 const {myInhabitant} = storeToRefs(householdsStore)
 const bookerId = computed(() => myInhabitant.value?.id)
 
-const seasonDates = computed(() => selectedSeason.value?.seasonDates ?? { start: new Date(), end: new Date() })
+// Without a season the calendar shows the day of the first render; a fallback that followed the clock would move the view every minute
+const today = now.value
+const seasonDates = computed(() => selectedSeason.value?.seasonDates ?? { start: today, end: today })
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
-const dinnerDates = computed(() => dinnerEvents.value.map(e => new Date(e.date)))
+const dinnerDates = computed(() => dinnerEvents.value.map(e => e.date))
 const holidays = computed(() => selectedSeason.value?.holidays ?? [])
 
 // URL-synced view and date (curried pattern)
@@ -57,7 +67,7 @@ const {value: view, setValue: setView} = useQueryParam<BookingView>('view', {
     const parsed = BookingViewSchema.safeParse(s)
     return parsed.success ? parsed.data : null
   },
-  defaultValue: 'day',
+  defaultValue: BookingViewSchema.enum.day,
   syncWhen
 })
 
@@ -77,6 +87,7 @@ const {dateRange, hasPrev, hasNext, navigate} = useBookingView({
 })
 
 const {value: calendarOpen} = useCalendarOpenParam(syncWhen)
+const showCalendar = computed(() => view.value !== BookingViewSchema.enum.month && calendarOpen.value)
 
 const handleDateSelected = (date: Date) => setDate(date)
 const handleNavigate = (direction: 'prev' | 'next') => navigate(direction === 'next' ? 1 : -1)
@@ -84,13 +95,11 @@ const handleNavigate = (direction: 'prev' | 'next') => navigate(direction === 'n
 // Find dinner event for selected date
 const selectedDinnerEvent = computed(() => {
   if (!selectedDate.value) return null
-  return dinnerEvents.value.find(e =>
-    new Date(e.date).toDateString() === selectedDate.value.toDateString()
-  ) ?? null
+  return getDinnerOnDate(dinnerEvents.value)(selectedDate.value) ?? null
 })
 
 // Grid view (week/month) is full-width without calendar
-const isGridView = computed(() => view.value === 'week' || view.value === 'month')
+const isGridView = computed(() => view.value === BookingViewSchema.enum.week || view.value === BookingViewSchema.enum.month)
 
 // Visible dinner event IDs based on view and date range (day=1, week=~4, month=~16)
 const visibleDinnerEventIds = computed(() =>
@@ -107,10 +116,10 @@ bookingsStore.loadOrdersForDinners(() => ({
 
 // Season data for view components
 const ticketPrices = computed(() => selectedSeason.value?.ticketPrices ?? [])
-const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value) : undefined)
+const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value, now.value) : undefined)
 
 // Grid view form mode
-const gridFormMode = ref<'view' | 'edit'>('view')
+const gridFormMode = ref<FormMode>(FORM_MODES.VIEW)
 
 // The order a save's toast names the people in
 const householdOrder = computed(() => household.value.inhabitants.map(({id}) => id))
@@ -153,7 +162,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
   if (!eventId) return
 
   const event = dinnerEvents.value.find(e => e.id === eventId)
-  const dateStr = event ? formatDate(new Date(event.date)) : ''
+  const dateStr = event ? formatDate(event.date) : ''
 
   await bookingsStore.processSingleEventBookings(
     household.value.id,
@@ -169,10 +178,10 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
   <Loader v-if="isSelectedSeasonLoading" text="Henter sæsondata..." />
   <ViewError v-else-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
   <div v-else-if="isSelectedSeasonInitialized && selectedSeason" data-testid="household-bookings">
-    <!-- Layout: Flex row on desktop, stack on mobile -->
-    <div :class="COMPONENTS.householdBookings.layout">
-      <!-- Calendar sidebar (day/week views only, collapsible) -->
-      <div v-if="view !== 'month' && calendarOpen" :class="COMPONENTS.householdBookings.calendar">
+    <!-- Master-detail while the calendar shows; without it the panel holds the row alone -->
+    <div :class="showCalendar && LAYOUTS.masterDetailPage.root">
+      <!-- Master: the calendar (day/week views only, collapsible) -->
+      <div v-if="showCalendar" :class="LAYOUTS.masterDetailPage.left">
         <DinnerCalendarDisplay
           :season-dates="seasonDates"
           :holidays="holidays"
@@ -184,8 +193,8 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
         />
       </div>
 
-      <!-- Booking panel (grows to fill) -->
-      <div :class="COMPONENTS.householdBookings.panel">
+      <!-- Detail: the booking panel -->
+      <div :class="LAYOUTS.masterDetailPage.center">
         <div :class="COMPONENTS.householdBookings.panelHeader">
           <h3 :class="COMPONENTS.householdBookings.panelTitle">Familiens bookinger</h3>
           <BookingViewSwitcher v-model="view" />

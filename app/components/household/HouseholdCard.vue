@@ -92,7 +92,9 @@
 import {FORM_MODES} from '~/types/form'
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
-import type {DinnerMode, ScaffoldResult} from '~/composables/useBookingValidation'
+import type {DinnerMode} from '~/composables/useBookingValidation'
+import type {TicketPresentation} from '~/composables/useBookingUi'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 interface Props {
   household: HouseholdDetail
@@ -105,8 +107,6 @@ const props = withDefaults(defineProps<Props>(), {
   adminBypass: false
 })
 
-
-// Store integration
 const householdsStore = useHouseholdsStore()
 const {lastPreferenceResult} = storeToRefs(householdsStore)
 const planStore = usePlanStore()
@@ -114,55 +114,58 @@ const {activeSeason} = storeToRefs(planStore)
 // The order the preview, the toast and the "Sidste ændring" alert name the people in
 const householdOrder = computed(() => props.household.inhabitants.map(({id}) => id))
 
-// Ticket business logic
-
-// Household business logic
 const {computeAggregatedPreferences} = useHousehold()
 
-// Design system
 const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES, ALERTS, NOISE, ORIENTATIONS, TABLE_COLUMNS } = useTheSlopeDesignSystem()
+const now = useClock()
 const { powerMode } = COMPONENTS
 
-// Prepare table data with synthetic "all inhabitants" power row + individual inhabitants
-const tableData = computed(() => {
-  const inhabitants = props.household.inhabitants.map(inhabitant => ({
-    ...inhabitant,
-    ticketConfig: resolveTicketTypePresentation(inhabitant.birthDate ?? null, activeSeason.value?.ticketPrices),
-    isSynthetic: false,
-    consensus: undefined  // Only power row has consensus
+// No inhabitant has a negative id, so the power row's id never meets a person's
+const POWER_ROW_ID = -1
+
+// A row of the table: an inhabitant, or the power row that edits every member at once
+interface PreferencesRow {
+  id: number
+  name: string
+  dinnerPreferences: WeekDayMap<DinnerMode> | null
+  ticketConfig: TicketPresentation
+  consensus: WeekDayMap<boolean> | null
+  isSynthetic: boolean
+}
+
+const tableData = computed((): PreferencesRow[] => {
+  const inhabitants = props.household.inhabitants.map(({id, name, dinnerPreferences, birthDate}) => ({
+    id,
+    name,
+    dinnerPreferences,
+    ticketConfig: resolveTicketTypePresentation(birthDate ?? null, activeSeason.value?.ticketPrices, now.value),
+    consensus: null,
+    isSynthetic: false
   }))
 
-  // Create synthetic "all inhabitants" power row
-  const { preferences: aggregatedPrefs, consensus } = computeAggregatedPreferences(props.household.inhabitants)
+  const {preferences, consensus} = computeAggregatedPreferences(props.household.inhabitants)
   const powerRow = {
-    id: -1,
+    id: POWER_ROW_ID,
     name: 'Alle medlemmer',
-    lastName: '',
-    heynaboId: -1,
-    pictureUrl: null,
-    birthDate: null,
-    dinnerPreferences: aggregatedPrefs,
-    consensus,
+    dinnerPreferences: preferences,
     ticketConfig: powerMode.ticketConfig,
-    isSynthetic: true,
-    inhabitants: props.household.inhabitants // For group display
+    consensus,
+    isSynthetic: true
   }
 
   return [powerRow, ...inhabitants]
 })
 
-// Draft preferences (edited before save)
 const draftPreferences = ref<WeekDayMap<DinnerMode> | null>(null)
 const editingInhabitantId = ref<number | null>(null)
 const isSaving = ref(false)
 
-// Expandable row state - single expansion enforced by composable
 const { expanded } = useExpandableRow({
-  onExpand: (rowIndex) => {
-    const row = tableData.value[rowIndex]
+  onExpand: (rowId) => {
+    const row = findRowById(tableData.value, rowId)
     if (row) {
       editingInhabitantId.value = row.id
-      draftPreferences.value = row.dinnerPreferences ?? null
+      draftPreferences.value = row.dinnerPreferences
     }
   },
   onCollapse: () => {
@@ -176,47 +179,37 @@ const previewRequest = computed(() => {
   const draft = draftPreferences.value
   const saved = tableData.value.find(row => row.id === editingInhabitantId.value)?.dinnerPreferences
   if (editingInhabitantId.value === null || !draft || WEEKDAYS.every(day => draft[day] === saved?.[day])) return null
-  const inhabitantIds = editingInhabitantId.value === -1 ? props.household.inhabitants.map(({id}) => id) : [editingInhabitantId.value]
+  const inhabitantIds = editingInhabitantId.value === POWER_ROW_ID ? householdOrder.value : [editingInhabitantId.value]
   return {inhabitantIds, preferences: draft}
 })
 const {result: preview, pending: isPreviewPending} = useScaffoldPreview(
   () => previewRequest.value,
-  ({inhabitantIds, preferences}) => householdsStore.previewPreferences(inhabitantIds, preferences, props.adminBypass)
+  ({inhabitantIds, preferences}) => householdsStore.previewPreferences(inhabitantIds, preferences)
 )
 const previewDays = computed(() => preview.value
   ? formatPreviewLines(preview.value, householdOrder.value)
   : [])
 
-// Toast notifications
 const toast = useToast()
 
-// Save preferences
 const savePreferences = async () => {
   if (editingInhabitantId.value === null || !draftPreferences.value) return
 
   isSaving.value = true
-  const isPowerMode = editingInhabitantId.value === -1
+  const isPowerMode = editingInhabitantId.value === POWER_ROW_ID
 
   try {
-    let result: ScaffoldResult
-
-    // Power mode: update all inhabitants
-    if (isPowerMode) {
-      result = await householdsStore.updateAllInhabitantPreferences(props.household.id, draftPreferences.value, props.adminBypass)
-    }
-    // Regular mode: update single inhabitant
-    else {
-      result = await householdsStore.updateInhabitantPreferences(editingInhabitantId.value, draftPreferences.value, props.adminBypass)
-    }
+    const result = isPowerMode
+      ? await householdsStore.updateAllInhabitantPreferences(props.household.id, draftPreferences.value, props.adminBypass)
+      : await householdsStore.updateInhabitantPreferences(editingInhabitantId.value, draftPreferences.value, props.adminBypass)
 
     toast.add(scaffoldToast(isPowerMode ? 'Alle præferencer opdateret' : 'Præferencer opdateret', result, householdOrder.value))
 
-    // Close the row after save
     expanded.value = {}
     editingInhabitantId.value = null
     draftPreferences.value = null
   } catch (error) {
-    console.error('Failed to update preferences:', error)
+    console.error('🏠 > HOUSEHOLD_CARD > [savePreferences] Failed to update preferences', error)
     toast.add({
       title: 'Kunne ikke gemme',
       description: 'Der opstod en fejl. Prøv igen senere.',
@@ -228,15 +221,13 @@ const savePreferences = async () => {
   }
 }
 
-// Update draft when editing
 const updateDraft = (preferences: WeekDayMap<DinnerMode>) => {
   draftPreferences.value = preferences
 }
 
-// Filter weekdays based on active season cooking days
 const visibleDays = computed(() => {
-  if (!activeSeason.value?.cookingDays) return WEEKDAYS
-  return WEEKDAYS.filter(day => activeSeason.value!.cookingDays[day])
+  const cookingDays = activeSeason.value?.cookingDays
+  return cookingDays ? WEEKDAYS.filter(day => cookingDays[day]) : WEEKDAYS
 })
 
 // Table columns - 3 columns on mobile (toggle, name+ticket, modes), 4 on desktop
@@ -249,7 +240,6 @@ const columns = computed(() => [
 </script>
 
 <template>
-  <!-- Weekly Preferences Section -->
   <UCard
 data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
     <template #header>
@@ -257,21 +247,19 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
     </template>
 
     <div :class="COMPONENTS.householdCard.stack">
-      <!-- Inhabitants table with expandable preference editing -->
       <UTable
           v-model:expanded="expanded"
           :data="tableData"
           :columns="columns"
-          row-key="id"
+          :get-row-id="rowIdOf"
           :ui="COMPONENTS.table.householdPreferencesUi"
       >
-        <!-- Expand button column - only shown when canEdit -->
         <template #expand-cell="{ row }">
           <UButton
               v-if="canEdit"
               v-bind="BUTTONS.edit"
               :icon="row.getIsExpanded() ? ICONS.chevronDown : (row.original.isSynthetic ? COMPONENTS.powerMode.buttonIcon : BUTTONS.edit.icon)"
-              :aria-label="row.getIsExpanded() ? 'Luk' : (row.original.isSynthetic ? 'Power mode' : 'Rediger præferencer')"
+              :aria-label="row.getIsExpanded() ? BUTTON_WORDS.close : (row.original.isSynthetic ? 'Power mode' : 'Rediger præferencer')"
               :data-testid="row.original.isSynthetic ? 'power-mode-toggle' : `inhabitant-${row.original.id}-edit-preferences`"
               :class="[
                 COMPONENTS.openTurn(row.getIsExpanded()),
@@ -281,53 +269,47 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
           />
         </template>
 
-        <!-- Ticket type column (desktop only) -->
         <template #ticketType-cell="{ row }">
           <div :class="COMPONENTS.householdCard.ticketDesktop">
             <UBadge
-                :color="row.original.ticketConfig?.color ?? COLOR.neutral"
+                :color="row.original.ticketConfig.color"
                 :variant="NOISE.subtle"
                 :size="SIZES.sm"
                 :data-testid="`ticket-type-${row.original.id}`"
             >
-              {{ row.original.ticketConfig?.label ?? 'Ukendt' }}
+              {{ row.original.ticketConfig.label }}
             </UBadge>
           </div>
         </template>
 
-        <!-- Name column - includes ticket badge on mobile -->
         <template #name-cell="{ row }">
           <div :class="COMPONENTS.householdCard.nameCell">
-            <!-- Power mode: show all the household's inhabitants in a group -->
             <UserListItem
                 v-if="row.original.isSynthetic"
                 :inhabitants="household.inhabitants"
                 compact
                 :show-names="false"
                 :max="COMPONENTS.avatar.powerRowMax"
-                :ring-color="COLOR.warning"
+                ring="household"
                 label="beboere"
             />
-            <!-- Regular mode: show single inhabitant -->
             <UserListItem
                 v-else
                 :inhabitants="household.inhabitants.find(i => i.id === row.original.id) ?? household.inhabitants[0]!"
                 compact
-                :ring-color="COLOR.primary"
+                ring="inhabitant"
             />
-            <!-- Ticket badge - mobile only (under name) -->
             <UBadge
                 :class="COMPONENTS.householdCard.ticketPhone"
-                :color="row.original.ticketConfig?.color ?? COLOR.neutral"
+                :color="row.original.ticketConfig.color"
                 :variant="NOISE.subtle"
                 :size="SIZES.xs"
             >
-              {{ row.original.ticketConfig?.label ?? 'Ukendt' }}
+              {{ row.original.ticketConfig.label }}
             </UBadge>
           </div>
         </template>
 
-        <!-- Preferences header (weekday labels) -->
         <template #preferences-header>
           <UFieldGroup :size="SIZES.standard" :orientation="ORIENTATIONS.horizontal" :class="WEEKDAY.fieldGroupClasses">
             <DinnerModeSelector
@@ -340,7 +322,6 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
           </UFieldGroup>
         </template>
 
-        <!-- Preferences column (collapsed state - VIEW badges) -->
         <template #preferences-cell="{ row }">
           <WeekDayMapDinnerModeDisplay
               :model-value="row.original.dinnerPreferences"
@@ -353,14 +334,12 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
           />
         </template>
 
-        <!-- Expanded row: EDIT mode preferences -->
         <template #expanded="{ row }">
           <UFormField
               :label="row.original.isSynthetic ? 'Power mode: Opdater præferencer for hele husstanden' : `Opdater fællesspisning præferencer for ${row.original.name}`"
               :class="COMPONENTS.householdCard.editorField"
           >
             <div :class="COMPONENTS.householdCard.editorStack">
-              <!-- Power mode warning alert -->
               <UAlert
                   v-if="row.original.isSynthetic"
                   v-bind="ALERTS.warning"
@@ -369,7 +348,6 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
                   :description="`Her kan du editere hele familien på en gang. Ændringer påvirker alle ${household.inhabitants.length} medlemmer i husstanden. Individuelle præferencer overskrives.`"
               />
 
-              <!-- Preference editor -->
               <WeekDayMapDinnerModeDisplay
                   :model-value="draftPreferences"
                   :form-mode="FORM_MODES.EDIT"
@@ -383,22 +361,19 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
 
               <ActionPreview :days="previewDays" :pending="isPreviewPending" />
 
-              <!-- Actions grouped -->
               <div :class="COMPONENTS.householdCard.actionsRow">
-                <UFieldGroup :size="SIZES.cardFieldGroup">
+                <UFieldGroup>
                   <UButton
-                      :color="COLOR.neutral"
-                      :variant="NOISE.quiet"
-                      :icon="ICONS.xMark"
+                      v-bind="BUTTONS.cancel"
                       data-testid="cancel-preferences"
                       @click="row.toggleExpanded()"
                   >
-                    Annuller
+                    {{ BUTTON_WORDS.cancel }}
                   </UButton>
                   <UButton
                       v-if="canEdit"
-                      :color="row.original.isSynthetic ? COMPONENTS.powerMode.color : COLOR.primary"
-                      :variant="NOISE.loud"
+                      v-bind="BUTTONS.save"
+                      :color="row.original.isSynthetic ? COMPONENTS.powerMode.color : BUTTONS.save.color"
                       :loading="isSaving"
                       :disabled="isSaving"
                       :class="COMPONENTS.householdCard.saveButton"
@@ -415,7 +390,7 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
                         ]"
                       />
                     </template>
-                    {{ isSaving ? 'Arbejder...' : (row.original.isSynthetic ? 'Gem for alle' : 'Gem') }}
+                    {{ isSaving ? 'Arbejder...' : (row.original.isSynthetic ? 'Gem for alle' : BUTTON_WORDS.save) }}
                   </UButton>
                 </UFieldGroup>
               </div>
@@ -424,7 +399,6 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
         </template>
       </UTable>
 
-      <!-- Last operation result (persistent, subtle) -->
       <UAlert
           v-if="lastPreferenceResult"
           v-bind="lastPreferenceResult.errored > 0 ? ALERTS.error : ALERTS.neutral"
@@ -437,7 +411,6 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
         </template>
       </UAlert>
 
-      <!-- Info alert -->
       <UAlert
           v-bind="ALERTS.info"
           title="Sådan redigerer du præferencer"

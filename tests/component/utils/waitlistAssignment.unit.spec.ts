@@ -8,6 +8,7 @@ import {
 } from '~~/server/data/waitlistRepository'
 import {assignWaitlistPortions, joinWaitlist, sellTicketsToWaitlist} from '~~/server/utils/waitlistAssignment'
 import {useBookingValidation, OrderAuditAction} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import {useWaitlistValidation, type PlacementOrder} from '~/composables/useWaitlistValidation'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
@@ -49,8 +50,9 @@ vi.mock('~~/server/data/waitlistRepository', async importOriginal => ({
     fetchOrdersServingEntry: vi.fn()
 }))
 
-const {DinnerStateSchema, TicketTypeSchema, OrderAuditChangeSchema, createOrderAuditData} = useBookingValidation()
+const {DinnerStateSchema, TicketTypeSchema, OrderAuditChangeSchema, OrderAuditSourceSchema, createOrderAuditData} = useBookingValidation()
 const {TicketWaitlistCreateSchema, serializeTicketWaitlist} = useWaitlistValidation()
+const {findTicketPriceByType} = useTicket()
 const DinnerState = DinnerStateSchema.enum
 
 const d1Client = {} as D1Database
@@ -59,13 +61,14 @@ const SEASON_ID = 9
 const RELEASED_ORDER_ID = 501
 const CREATED_ORDER_ID = 77
 const ticketPrices = TicketFactory.defaultTicketPrices({seasonId: SEASON_ID})
-const priceIdOf = (ticketType: keyof typeof TicketTypeSchema.enum) => ticketPrices.find(price => price.ticketType === ticketType)!.id!
-const ADULT_PRICE_ID = priceIdOf(TicketTypeSchema.enum.ADULT)
+const priceOf = (ticketType: keyof typeof TicketTypeSchema.enum) => findTicketPriceByType(ticketType, ticketPrices)!
+const ADULT_PRICE = priceOf(TicketTypeSchema.enum.ADULT)
+const ADULT_PRICE_ID = ADULT_PRICE.id!
 const portionDinner = {...DinnerEventFactory.defaultDinnerEventDetail(), id: DINNER_ID, seasonId: SEASON_ID}
 
 // Two regular entries in the dinner's adult line, first joined first, and one in its child line
 const [first, second, child] = [41, 42, 43].map((inhabitantId, index) => WaitlistFactory.defaultEntry({
-    id: index + 1, dinnerEventId: DINNER_ID, inhabitantId, ticketPriceId: index < 2 ? ADULT_PRICE_ID : priceIdOf(TicketTypeSchema.enum.CHILD),
+    id: index + 1, dinnerEventId: DINNER_ID, inhabitantId, ticketPrice: index < 2 ? ADULT_PRICE : priceOf(TicketTypeSchema.enum.CHILD),
     createdAt: new Date(2026, 9, 1, 12, index)
 }))
 // A grab older than the lease is the trace of a run that stopped midway; a younger grab belongs to a run at work
@@ -109,7 +112,7 @@ describe('joinWaitlist', () => {
     const audit = {action: OrderAuditAction.USER_BOOKED, performedByUserId: 7, seasonId: SEASON_ID}
 
     it('decides by the dinner it is handed and writes the entries and their QUEUE rows once each, reading neither a holder, the dinner nor its season; the entries come back in join order', async () => {
-        const entries = await joinWaitlist(d1Client, joins, {state: DinnerState.SCHEDULED}, audit)
+        const entries = await joinWaitlist(d1Client, joins, DinnerState.SCHEDULED, audit)
 
         expect(fakePrisma.ticketWaitlist.createManyAndReturn).toHaveBeenCalledTimes(1)
         expect(fakePrisma.ticketWaitlist.createManyAndReturn).toHaveBeenCalledWith({data: joins.map(({entry}) => serializeTicketWaitlist(entry))})
@@ -123,7 +126,7 @@ describe('joinWaitlist', () => {
     })
 
     it.each([DinnerState.CONSUMED, DinnerState.CANCELLED])('refuses a %s dinner and writes nothing', async (state) => {
-        await expect(joinWaitlist(d1Client, joins, {state}, audit)).rejects.toMatchObject({statusCode: 400})
+        await expect(joinWaitlist(d1Client, joins, state, audit)).rejects.toMatchObject({statusCode: 400})
         expect(fakePrisma.ticketWaitlist.createManyAndReturn).not.toHaveBeenCalled()
         expect(fakePrisma.orderHistory.createMany).not.toHaveBeenCalled()
     })
@@ -137,12 +140,15 @@ describe('sellTicketsToWaitlist', () => {
         const {waitlistTicketsSold: sales} = await sell()
 
         expect(sales).toEqual([{
-            dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID,
+            dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID, orderId: RELEASED_ORDER_ID, dinnerMode: first!.order.dinnerMode, isGuestTicket: first!.isGuestTicket,
             buyerInhabitantId: first!.inhabitantId, buyerHouseholdId: first!.order.householdId, sellerHouseholdId: 3, sellerInhabitantId: 30
         }])
         expect(protocolSteps()).toEqual(['grab', 'claim', 'remove'])
         expect(grabWaitlistEntry).toHaveBeenCalledWith(d1Client, first!.id, expect.any(Date), RELEASED_ORDER_ID)
-        expect(claimReleasedOrder).toHaveBeenCalledWith(d1Client, RELEASED_ORDER_ID, first!.inhabitantId, first!.order.bookedByUserId, first!.order.dinnerMode, first!.isGuestTicket)
+        expect(claimReleasedOrder).toHaveBeenCalledWith(
+            d1Client, RELEASED_ORDER_ID, first!.inhabitantId, first!.order.bookedByUserId, first!.order.dinnerMode, first!.isGuestTicket,
+            OrderAuditSourceSchema.enum['waitlist-assignment']
+        )
         expect(removedIds()).toEqual([first!.id])
     })
 
@@ -219,7 +225,7 @@ describe('an entry whose regular order is already placed', () => {
         const {waitlistTicketsSold: sales} = await sell()
 
         expect(sales).toEqual([{
-            dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID,
+            dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID, orderId: RELEASED_ORDER_ID, dinnerMode: second!.order.dinnerMode, isGuestTicket: second!.isGuestTicket,
             buyerInhabitantId: second!.inhabitantId, buyerHouseholdId: second!.order.householdId, sellerHouseholdId: 3, sellerInhabitantId: 30
         }])
         expect(removedIds()).toEqual([first!.id, second!.id])
@@ -312,7 +318,7 @@ describe.each([
 describe('the recovery\'s search for an order no entry records', () => {
     it('passes over the orders recorded on other entries and the orders it matched earlier in the pass', async () => {
         const guestEntry = (id: number) => WaitlistFactory.defaultEntry({
-            id, dinnerEventId: DINNER_ID, inhabitantId: first!.inhabitantId, isGuestTicket: true, ticketPriceId: ADULT_PRICE_ID, createdAt: new Date(2026, 9, 1, 13, id)
+            id, dinnerEventId: DINNER_ID, inhabitantId: first!.inhabitantId, isGuestTicket: true, ticketPrice: ADULT_PRICE, createdAt: new Date(2026, 9, 1, 13, id)
         })
         const [guest, secondGuest] = [5, 6].map(id => ({...guestEntry(id), placingAt: STALE}))
         const servedElsewhere = {...guestEntry(7), placingAt: HELD, placingOrderId: CREATED_ORDER_ID}

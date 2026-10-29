@@ -16,7 +16,7 @@ icon for an ended season, and the season's status glyph follows the name
 
 <script setup lang="ts">
 import type {Season} from '~/composables/useSeasonValidation'
-import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import {SEASON_STATUS} from '~/config/seasonWords'
 import type {SeasonStatusValue} from '~/utils/season'
 
 interface Props {
@@ -38,14 +38,15 @@ const emit = defineEmits<{
 }>()
 
 const {getSeasonStatus, sortSeasonsByActivePriority} = useSeason()
+const now = useClock()
 const {COLOR, SIZES, ICONS, COMPONENTS, SEASON_STATUS_GLYPHS} = useTheSlopeDesignSystem()
 
 // Sorted for USelect, each season carrying its status and its leading icon, the archive box for an ended season
 type SeasonWithIcon = Season & { status: SeasonStatusValue; icon: string }
 
 const sortedSeasonsWithIcons = computed<SeasonWithIcon[]>(() => {
-  return sortSeasonsByActivePriority(props.seasons).map(season => {
-    const status = getSeasonStatus(season)
+  return sortSeasonsByActivePriority(props.seasons, now.value).map(season => {
+    const status = getSeasonStatus(season, now.value)
     return {...season, status, icon: status === SEASON_STATUS.PAST ? ICONS.seasonPast : ICONS.calendar}
   })
 })

@@ -55,8 +55,7 @@ test.describe('Waiting list assignment', () => {
     const holdTicket = async (context: Parameters<typeof WaitlistFactory.queue>[0], inhabitantId: number, dinnerId: number, price: TicketPrice) => {
         const booked = await WaitlistFactory.queue(context, householdId, activeSeasonId, OrderFactory.createBookingOrder(inhabitantId, dinnerId, price.id!), true)
         expect(booked.totals[Action.BOOK]).toBe(1)
-        const orders = await OrderFactory.getOrders(context, {dinnerEventIds: dinnerId, householdId})
-        return orders.find(order => order.inhabitantId === inhabitantId)!
+        return (await OrderFactory.getOrderOf(context, dinnerId, {id: inhabitantId, householdId}))!
     }
     let childSaleDinnerId: number
 
@@ -64,8 +63,8 @@ test.describe('Waiting list assignment', () => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
         // The spec's own season starts beyond its deadline, so its activation books and queues nobody; the dinners the
-        // spec queues on lie 2 and 3 days out, inside the deadline
-        ;({season: activeSeason} = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 10, deadline: 4, startInDays: 5}))
+        // spec queues on lie 2 and 3 days out, inside the deadline; its one generated dinner goes unused
+        ;({season: activeSeason} = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 0, deadline: 4, cookingDays: 'all', startInDays: 5}))
         createdSeasonIds.push(activeSeason.id!)
         adultPrice = activeSeason.ticketPrices.find(price => price.ticketType === TicketType.ADULT)!
         childPrice = activeSeason.ticketPrices.find(price => price.ticketType === TicketType.CHILD)!
@@ -171,7 +170,7 @@ test.describe('Waiting list assignment', () => {
 
         expect(released.totals[Action.RELEASE]).toBe(1)
         expect(released.outcomes.waitlistTicketsSold).toEqual([{
-            dinnerEventId: childSaleDinnerId, ticketPriceId: childPrice.id,
+            dinnerEventId: childSaleDinnerId, ticketPriceId: childPrice.id, orderId: held.id, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false,
             buyerInhabitantId: child.id, buyerHouseholdId: householdId, sellerHouseholdId: householdId, sellerInhabitantId: holder.id
         }])
         const bought = (await OrderFactory.getOrdersForDinnerEvent(context, childSaleDinnerId)).filter(order => order.inhabitantId === child.id)
@@ -186,7 +185,7 @@ test.describe('Waiting list assignment', () => {
         const maintenance = await SeasonFactory.runDailyMaintenance(context)
 
         expect(maintenance.scaffold?.outcomes.waitlistTicketsSold.filter(sale => sale.dinnerEventId === childSaleDinnerId)).toEqual([])
-        // The nightly run queues the household's other members on the closed dinner; the adult still waits, the child holds its ticket
+        // The DAILY_MAINTENANCE job queues the household's other members on the closed dinner; the adult still waits, the child holds its ticket
         const waiting = (await householdEntries(context, childSaleDinnerId)).map(entry => entry.inhabitantId)
         expect(waiting).toContain(adult.id)
         expect(waiting).not.toContain(child.id)
@@ -212,7 +211,7 @@ test.describe('Waiting list assignment', () => {
         expect((await householdEntries(context, dinnerId)).map(entry => entry.inhabitantId)).toEqual([claimer.id])
     })
 
-    test('GIVEN a household holding a ticket past the deadline and a waiting entry at its price WHEN an admin sets the household\'s preferences to Ingen THEN the first in the waiting list holds the ticket and the household\'s open orders are cancelled', async ({browser}) => {
+    test('GIVEN a household holding a ticket and a guest ticket past the deadline and a waiting entry at its price WHEN an admin sets the household\'s preferences to Ingen THEN the first in the waiting list holds the ticket, the guest ticket stays booked and the household\'s open orders are cancelled', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
         const dinnerAt = async (days: number, title: string) => {
@@ -228,10 +227,13 @@ test.describe('Waiting list assignment', () => {
         const preferences = (mode: DinnerMode) => HouseholdFactory.updateInhabitantPreferences(
             context, sellerInhabitant!.id, createDefaultWeekdayMap(mode), 200, activeSeasonId, undefined, true
         )
-        // The scaffold books the seller while both dinners are open, as the nightly run does; the season's own deadline then closes the near one
+        // The scaffold books the seller while both dinners are open, as the DAILY_MAINTENANCE job does; the season's own deadline then closes the near one
         await SeasonFactory.updateSeason(context, {...activeSeason, ticketIsCancellableDaysBefore: 0})
         await preferences(DinnerModeSchema.enum.NONE)
         await preferences(DinnerModeSchema.enum.DINEIN)
+        // A guest ticket booked on the seller is the household's guest's, not the seller's own
+        const guest = await WaitlistFactory.queue(context, seller.id, activeSeasonId, OrderFactory.createGuestOrder(sellerInhabitant!.id, closedDinner.id!, adultPrice.id!), true)
+        expect(guest.totals[Action.BOOK]).toBe(1)
         await SeasonFactory.updateSeason(context, activeSeason)
         const waiting = inhabitants[3]!
         expect((await queue(context, OrderFactory.createBookingOrder(waiting.id!, closedDinner.id!, adultPrice.id!))).totals[Action.QUEUE]).toBe(1)
@@ -246,12 +248,15 @@ test.describe('Waiting list assignment', () => {
         ]))
         // The seller holds a ticket on every dinner of the season, so its release also serves the lines the earlier cases leave
         const salesOnDinner = response!.scaffoldResult.outcomes.waitlistTicketsSold.filter(sale => sale.dinnerEventId === closedDinner.id)
+        const bought = (await OrderFactory.getOrdersForDinnerEvent(context, closedDinner.id!)).filter(order => order.inhabitantId === waiting.id)
         expect(salesOnDinner).toEqual([{
-            dinnerEventId: closedDinner.id, ticketPriceId: adultPrice.id,
+            dinnerEventId: closedDinner.id, ticketPriceId: adultPrice.id, orderId: bought[0]?.id, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false,
             buyerInhabitantId: waiting.id, buyerHouseholdId: householdId, sellerHouseholdId: seller.id, sellerInhabitantId: sellerInhabitant!.id
         }])
-        const bought = (await OrderFactory.getOrdersForDinnerEvent(context, closedDinner.id!)).filter(order => order.inhabitantId === waiting.id)
         expect(bought.map(order => order.state)).toEqual([OrderStateSchema.enum.BOOKED])
+        // The seller's own ticket is sold; the guest ticket on the seller stays as it is
+        const sellerOrders = (await OrderFactory.getOrders(context, {dinnerEventIds: closedDinner.id!, householdId: seller.id})).filter(order => order.inhabitantId === sellerInhabitant!.id)
+        expect(sellerOrders.map(order => [order.isGuestTicket, order.state])).toEqual([[true, OrderStateSchema.enum.BOOKED]])
         expect(await householdEntries(context, closedDinner.id!)).toEqual([])
         expect(await OrderFactory.getOrders(context, {dinnerEventIds: openDinner.id!, householdId: seller.id})).toEqual([])
 
@@ -266,7 +271,7 @@ test.describe('Waiting list assignment', () => {
 /**
  * A preference decides a place on the waiting list as a member's change does, and a member's own act on a place outranks
  * it: a leave on the booking page records a cancellation, a join a booking. The household's preference run on every
- * weekday stands in for the nightly one: both decide by the same rules, and a save runs on the weekdays it changes. Each
+ * weekday stands in for the DAILY_MAINTENANCE job: both decide by the same rules, and a save runs on the weekdays it changes. Each
  * case runs on its own season, every dinner past its deadline.
  */
 test.describe('Preferences and the waiting list', () => {

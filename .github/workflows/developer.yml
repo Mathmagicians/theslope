@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: 'The CI/CD run to publish again'
-        required: true
+        description: 'The CI/CD run to publish again; empty publishes the latest successful deploying run on the branch'
+        required: false
         type: string
 
 concurrency:
@@ -23,14 +23,35 @@ jobs:
       actions: read
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      # The workflow's own branch: main when the pipeline completes, the branch chosen on workflow_dispatch
       - uses: actions/checkout@v7
         with:
-          ref: main
           fetch-depth: 1
       - name: Read what the run published
-        run: make developer-resolve run="${{ inputs.run_id || github.event.workflow_run.id }}" | tee -a "$GITHUB_ENV"
+        # The id reaches the script through env, and make writes it into its recipe, so only digits pass. Without an id
+        # the branch's recent successful pipeline runs are the candidates, and the first with a deployment artifact wins
+        env:
+          RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if [ -n "$RUN_ID" ]; then
+            candidates="$RUN_ID"
+          else
+            candidates=$(gh run list --workflow "The CI/CD Pipeline" --branch "$BRANCH" --status success --limit 10 --json databaseId --jq '.[].databaseId')
+          fi
+          for id in $candidates; do
+            [[ "$id" =~ ^[0-9]+$ ]] || { echo "❌ Not a run id: $id"; exit 1; }
+            resolved=$(make developer-resolve run="$id")
+            if grep -qx 'PUBLISH=true' <<< "$resolved"; then
+              echo "$resolved" | tee -a "$GITHUB_ENV"
+              exit 0
+            fi
+            echo "Run $id has no deployment artifact"
+          done
+          echo "PUBLISH=false" | tee -a "$GITHUB_ENV"
+          checked=$(echo $candidates)
+          echo "Nothing published: no successful pipeline run with a deployment artifact on $BRANCH (checked: ${checked:-none})" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-node@v7
         if: env.PUBLISH == 'true'
         with:
@@ -48,12 +69,44 @@ jobs:
       - name: Download the BDD results and the API spec
         if: env.PUBLISH == 'true'
         run: |
-          for name in bdd-api bdd-ui bdd-smoke openapi; do
+          for name in bdd-api bdd-ui bdd-ui-serial bdd-smoke openapi; do
             gh run download "$RUN_ID" -n "$name" -D ".output/developer/artifacts/$name" || echo "no $name artifact on run $RUN_ID"
           done
       - run: make developer-assemble env="$ENV" run="$RUN_ID" version="$RELEASE_VERSION" sha="$COMMIT_SHA" url="$URL"
         if: env.PUBLISH == 'true'
-      - run: make developer-build
+      - name: Build the site
         if: env.PUBLISH == 'true'
+        # With the custom domain the site lives at the root, on the repository's github.io address under /<repository>/;
+        # SITE is its address for the summary and the test
+        env:
+          DEVELOPER_DOMAIN: ${{ vars.DEVELOPER_DOMAIN }}
+        run: |
+          if [ -n "$DEVELOPER_DOMAIN" ]; then
+            [[ "$DEVELOPER_DOMAIN" =~ ^[a-z0-9.-]+$ ]] || { echo "❌ Not a host name: $DEVELOPER_DOMAIN"; exit 1; }
+            make developer-build base=/ domain="$DEVELOPER_DOMAIN"
+            echo "SITE=https://$DEVELOPER_DOMAIN" >> "$GITHUB_ENV"
+          else
+            make developer-build base="/${GITHUB_REPOSITORY#*/}/"
+            echo "SITE=https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}" >> "$GITHUB_ENV"
+          fi
       - run: make developer-publish env="$ENV"
+        if: env.PUBLISH == 'true'
+      - name: Summary
+        if: env.PUBLISH == 'true'
+        run: |
+          echo "Published run $RUN_ID ($ENV $RELEASE_VERSION): $SITE/environments/$ENV" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Wait for GitHub Pages to serve the site
+        if: env.PUBLISH == 'true'
+        # GitHub Pages deploys the gh-pages commit in its own workflow; the site is live once it serves this build's
+        # manifest. The query keeps each attempt past the CDN's cached copy
+        run: |
+          for attempt in $(seq 60); do
+            curl -fsSL "$SITE/environments/$ENV.json?attempt=$attempt" | cmp -s - ".output/developer/site/environments/$ENV.json" && exit 0
+            sleep 10
+          done
+          echo "❌ GitHub Pages serves no manifest of run $RUN_ID after 10 minutes" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 1
+      - run: npx playwright install chromium
+        if: env.PUBLISH == 'true'
+      - run: make developer-test url="$SITE"
         if: env.PUBLISH == 'true'

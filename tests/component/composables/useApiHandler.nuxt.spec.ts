@@ -8,6 +8,7 @@ import {useApiHandler, resolveApiError, type StoreAsyncDataOptions} from '~/comp
 import {useAllergyValidation, type AllergyTypeDetail} from '~/composables/useAllergyValidation'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {resetStores, useTestScope} from '~~/tests/component/testHelpers'
+import {API_ERROR_WORDS} from '~/config/apiErrorWords'
 
 const CATALOG = '/api/admin/allergy-type'
 const ERROR_MESSAGE = 'Kunne ikke hente allergi katalog'
@@ -211,7 +212,7 @@ describe('useApiHandler', () => {
             type Options = StoreAsyncDataOptions<AllergyTypeDetail[]>
             const TOAST = 'Kan ikke finde allergitypen'
             const MESSAGE = 'Den findes ikke længere'
-            const DEFAULT_TEXT = 'Kan ikke finde det, du leder efter'
+            const DEFAULT_TEXT = API_ERROR_WORDS.notFound
             // The selection a store holds: the url derives from it, recover replaces it
             const readSelection = (key: string, path: Ref<string>, options: Pick<Options, 'notFound' | 'errorMessage'>) =>
                 storeAsyncData(key, () => path.value, {schema: AllergyTypeDetailSchema.array(), default: () => [], ...options})
@@ -385,7 +386,7 @@ describe('useApiHandler', () => {
 
         it.each([
             {errorMessage: ERROR_MESSAGE, expected: ERROR_MESSAGE},
-            {errorMessage: undefined, expected: 'Ugyldig forespørgsel. Tjek venligst dine data'}
+            {errorMessage: undefined, expected: API_ERROR_WORDS.status.badRequest}
         ])('toasts $expected and rethrows the error', async ({errorMessage, expected}) => {
             createEndpoint.mockImplementation(failWith(400))
 
@@ -398,8 +399,17 @@ describe('useApiHandler', () => {
         const page = {path: '/admin/teams', fullPath: '/admin/teams?mode=create&team=5'}
         const login = {path: '/login', fullPath: '/login'}
         const actions = {login: vi.fn(), toast: vi.fn()}
+        // A FetchError reads its status through getters, which read undefined when no response came
+        const fetchErrorOf = (status: number | undefined) => Object.defineProperties(new Error('[GET] "/api/admin/team"'), {
+            status: {get: () => status},
+            statusCode: {get: () => status}
+        })
+        const deadSessionFetch = fetchErrorOf(401)
+        const unansweredFetch = fetchErrorOf(undefined)
 
         it.each([
+            {error: deadSessionFetch, route: page, expectedCall: () => expect(actions.login).toHaveBeenCalledWith(page.fullPath), description: 'a FetchError of a dead session re-authenticates'},
+            {error: unansweredFetch, route: page, expectedCall: () => expect(actions.toast).toHaveBeenCalledWith(unansweredFetch), description: 'a FetchError without a response surfaces as the standard toast'},
             {error: {statusCode: 401}, route: page, expectedCall: () => expect(actions.login).toHaveBeenCalledWith(page.fullPath), description: 'a dead session re-authenticates with a return path'},
             {error: {status: 401}, route: page, expectedCall: () => expect(actions.login).toHaveBeenCalledWith(page.fullPath), description: 'FetchError status spelling counts as 401'},
             {error: {statusCode: 401}, route: login, expectedCall: () => expect(actions.toast).toHaveBeenCalledWith({statusCode: 401}), description: 'on the login page a 401 is the sign-in\'s own failure and toasts'},
@@ -480,7 +490,7 @@ describe('useApiHandler', () => {
             await expect(apiRequest(GONE[0], {action: 'broken'})).rejects.toMatchObject({statusCode: 500})
 
             expect(reloadSpy).not.toHaveBeenCalled()
-            expect(lastToast()?.title).toBe('500: Uh, åh, fejl kan ske')
+            expect(lastToast()?.title).toBe(API_ERROR_WORDS.toastTitle(500))
         })
     })
 })

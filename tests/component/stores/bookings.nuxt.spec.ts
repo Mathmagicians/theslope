@@ -20,7 +20,12 @@ import {COLOR, COMPONENTS, EMPTY_STATE_MESSAGES} from '~/composables/useTheSlope
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
+import {useBookingValidation, DinnerState} from '~/composables/useBookingValidation'
+import {adminBypassQuery} from '~/composables/useCoreValidation'
+import {TEAM_WORDS} from '~/config/teamWords'
+import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
+import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {addDays} from 'date-fns'
 import {flushPromises} from '@vue/test-utils'
@@ -85,11 +90,12 @@ const selectSeason = (dinnerEvents: DinnerEventDisplay[] = []) => {
     activeSeasonIdEndpoint.mockReturnValue(SEASON_ID)
     seasonByIdEndpoint.mockReturnValue({...SEASON, dinnerEvents})
 }
-const {TicketTypeSchema} = useBookingValidation()
+const {TicketTypeSchema, DinnerModeSchema, encodeDesiredOrder} = useBookingValidation()
+const {findTicketPriceByType} = useTicket()
 const TicketType = TicketTypeSchema.enum
 // Ids on the season's prices: a waiting-list entry names its price by id, the store reads the ticket type off it
 const ticketPrices = SEASON.ticketPrices.map((price, index) => ({...price, id: index + 1}))
-const priceOf = (ticketType: typeof TicketType[keyof typeof TicketType]) => ticketPrices.find(price => price.ticketType === ticketType)!.id!
+const priceOf = (ticketType: typeof TicketType[keyof typeof TicketType]) => findTicketPriceByType(ticketType, ticketPrices)!
 // The session user's household is the households store's default selection
 const MY_HOUSEHOLD_ID = UserFactory.defaultUserWithInhabitant('bookings-store').Inhabitant!.household!.id
 registerEndpoint(`/api/admin/household/${MY_HOUSEHOLD_ID}`, () => ({...HouseholdFactory.defaultHouseholdDetail('bookings-store'), id: MY_HOUSEHOLD_ID}))
@@ -102,6 +108,9 @@ registerEndpoint('/api/order', ordersEndpoint)
 registerEndpoint(`/api/team/cooking/${DINNER_ID}/assign-role`, {method: 'POST', handler: assignRoleEndpoint})
 registerEndpoint(`/api/chef/dinner/${DINNER_ID}`, {method: 'POST', handler: updateDinnerEndpoint})
 registerEndpoint('/api/household/order/scaffold', {method: 'POST', handler: scaffoldEndpoint})
+// The scaffold's dry run is a read (ADR-004): the expected bookings and the draft previews
+const scaffoldReadEndpoint = vi.fn()
+registerEndpoint('/api/household/order/scaffold', {method: 'GET', handler: scaffoldReadEndpoint})
 registerEndpoint('/api/admin/maintenance/daily', {method: 'POST', handler: dailyMaintenanceEndpoint})
 registerEndpoint('/api/billing', householdBillingEndpoint)
 registerEndpoint('/api/order/77', () => OrderFactory.defaultOrderDetail('order-history', {id: 77}))
@@ -142,6 +151,7 @@ beforeEach(() => {
     assignRoleEndpoint.mockImplementation(() => dinnerResponse())
     updateDinnerEndpoint.mockImplementation(() => dinnerResponse())
     scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.BOOK]: 2}}))
+    scaffoldReadEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse())
     dailyMaintenanceEndpoint.mockImplementation(() => OrderFactory.defaultDailyMaintenanceResult())
 })
 
@@ -271,7 +281,7 @@ describe('Bookings store — scaffold bookings', () => {
     it('returns the scaffold response and clears the processing flag', async () => {
         const store = useBookingsStore()
 
-        const promise = store.processSingleEventBookings(1, DINNER_ID, [OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID})])
+        const promise = store.processSingleEventBookings(1, DINNER_ID, [OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID})], false)
         expect(store.isProcessingBookings).toBe(true)
         const response = await promise
 
@@ -305,7 +315,7 @@ describe('Bookings store — scaffold bookings', () => {
     it('shows no toast when none is given', async () => {
         const store = useBookingsStore()
 
-        await store.processMultipleEventsBookings(1, [DINNER_ID], [])
+        await store.processMultipleEventsBookings(1, [DINNER_ID], [], false)
 
         expect(useToast().toasts.value).toHaveLength(0)
     })
@@ -319,8 +329,8 @@ describe('Bookings store — scaffold bookings', () => {
             OrderFactory.defaultBookingResult({...anna, dinnerEventId: 2, action: Action.LEAVE})
         ]
         const positions = [
-            {inhabitantId: anna.inhabitantId, dinnerEventId: 1, isGuestTicket: false, position: 3, ticketType: TicketType.ADULT},
-            {inhabitantId: bo.inhabitantId, dinnerEventId: 1, isGuestTicket: false, position: 1, ticketType: TicketType.CHILD}
+            OrderFactory.defaultQueuePosition({inhabitantId: anna.inhabitantId, position: 3}),
+            OrderFactory.defaultQueuePosition({inhabitantId: bo.inhabitantId, ticketType: TicketType.CHILD, priceAtBooking: priceOf(TicketType.CHILD).price})
         ]
         scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({dinners: runDinners, totals: {[Action.QUEUE]: 2, [Action.LEAVE]: 1}, results, positions}))
         const store = useBookingsStore()
@@ -342,32 +352,51 @@ describe('Bookings store — scaffold bookings', () => {
 
         const result = await store.processAdminCorrection(7, DINNER_ID, [regular, guest], 3)
 
-        expect(sent).toEqual([{query: {adminBypass: 'true'}, body: {householdId: 7, dinnerEventIds: [DINNER_ID], orders: [regular, {...guest, inhabitantId: 3}]}}])
+        expect(sent).toEqual([{query: adminBypassQuery(true), body: {householdId: 7, dinnerEventIds: [DINNER_ID], orders: [regular, {...guest, inhabitantId: 3}]}}])
         expect(result.totals[Action.CANCEL]).toBe(1)
     })
 
-    // A preview reads what the save of the request would do: the save's request with ?preview=true, outside the booking write
+    // An admin's save on a household carries the override; the household's own save carries no parameter (ADR-004)
     it.each([
-        {who: 'a member', adminBypass: false, query: {adminBypass: 'false', preview: 'true'}},
-        {who: 'an admin correcting', adminBypass: true, query: {adminBypass: 'true', preview: 'true'}}
-    ])('previews a save for $who: sends the request with ?preview=true outside the booking write and returns its result without a toast', async ({adminBypass, query}) => {
-        const sent: {query: Record<string, unknown>, body: unknown}[] = []
+        {save: 'a member\'s day view save', adminBypass: false, run: (store: ReturnType<typeof useBookingsStore>) => store.processSingleEventBookings(1, DINNER_ID, [], false)},
+        {save: 'a member\'s grid save', adminBypass: false, run: (store: ReturnType<typeof useBookingsStore>) => store.processMultipleEventsBookings(1, [DINNER_ID], [], false)},
+        {save: 'an admin\'s day view save', adminBypass: true, run: (store: ReturnType<typeof useBookingsStore>) => store.processSingleEventBookings(1, DINNER_ID, [], true)},
+        {save: 'an admin\'s grid save', adminBypass: true, run: (store: ReturnType<typeof useBookingsStore>) => store.processMultipleEventsBookings(1, [DINNER_ID], [], true)}
+    ])('GIVEN $save WHEN saved THEN the scaffold receives the override query of its role', async ({adminBypass, run}) => {
+        const store = useBookingsStore()
+
+        await run(store)
+
+        expect(scaffoldEndpoint.mock.calls.map(([event]) => getQuery(event as H3Event))).toEqual([adminBypassQuery(adminBypass)])
+    })
+
+    // The scaffold's dry run is a read (ADR-004): the request travels in the query of a GET, each desired order encoded,
+    // outside the booking write. No orders is the household's expected bookings; an admin's draft previews with the
+    // deadlines lifted, a dry-run parameter and no override
+    const READ_DINNER_IDS = [DINNER_ID, DINNER_ID + 1]
+    const draft = READ_DINNER_IDS.map(dinnerEventId => OrderFactory.defaultDesiredOrder({dinnerEventId, inhabitantId: 2}))
+    type Store = ReturnType<typeof useBookingsStore>
+    it.each([
+        {what: 'the expected bookings', read: (store: Store) => store.fetchExpectedBookings(7, READ_DINNER_IDS), orders: () => ({})},
+        {what: 'a member\'s draft', read: (store: Store) => store.previewBookings({householdId: 7, dinnerEventIds: READ_DINNER_IDS, orders: draft}),
+            orders: () => ({orders: draft.map(order => encodeDesiredOrder(order))})},
+        {what: 'an admin\'s draft', read: (store: Store) => store.previewBookings({householdId: 7, dinnerEventIds: READ_DINNER_IDS, orders: draft}, true),
+            orders: () => ({orders: draft.map(order => encodeDesiredOrder(order)), bypassDeadlines: 'true'})}
+    ])('reads $what through the scaffold\'s GET outside the booking write and returns its result without a toast', async ({read, orders}) => {
         const previewed = OrderFactory.defaultScaffoldOrdersResponse({
             totals: {[Action.BUY]: 1, [Action.QUEUE]: 1},
-            positions: [{inhabitantId: 2, dinnerEventId: DINNER_ID, isGuestTicket: false, position: 3, ticketType: TicketType.ADULT}]
+            positions: [OrderFactory.defaultQueuePosition({inhabitantId: 2, dinnerEventId: DINNER_ID, position: 3})]
         })
-        scaffoldEndpoint.mockImplementation(async (event: H3Event) => {
-            sent.push({query: getQuery(event), body: await readBody(event)})
-            return previewed
-        })
+        scaffoldReadEndpoint.mockImplementation(() => previewed)
         const store = useBookingsStore()
-        const request = {householdId: 7, dinnerEventIds: [DINNER_ID], orders: [OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID})]}
 
-        const preview = store.previewBookings(request, adminBypass)
+        const preview = read(store)
         expect(store.isProcessingBookings).toBe(false)
 
         expect(await preview).toEqual(previewed.scaffoldResult)
-        expect(sent).toEqual([{query, body: request}])
+        expect(scaffoldReadEndpoint.mock.calls.map(([event]) => getQuery(event as H3Event)))
+            .toEqual([{householdId: '7', dinnerEventIds: READ_DINNER_IDS.map(String), ...orders()}])
+        expect(scaffoldEndpoint).not.toHaveBeenCalled()
         expect(useToast().toasts.value).toHaveLength(0)
     })
 
@@ -375,7 +404,7 @@ describe('Bookings store — scaffold bookings', () => {
         scaffoldEndpoint.mockImplementation(failure)
         const store = useBookingsStore()
 
-        await expect(store.processMultipleEventsBookings(1, [DINNER_ID], [])).rejects.toBeTruthy()
+        await expect(store.processMultipleEventsBookings(1, [DINNER_ID], [], false)).rejects.toBeTruthy()
         expect(store.isProcessingBookings).toBe(false)
     })
 })
@@ -409,7 +438,7 @@ describe('Bookings store — one booking write', () => {
         waitlistEntriesEndpoint.mockClear()
         dinnerEventDetailEndpoint.mockClear()
 
-        await expect(store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, []))[outcome].toBeTruthy()
+        await expect(store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [], false))[outcome].toBeTruthy()
 
         expect(store.isProcessingBookings).toBe(false)
         expect(queries(ordersEndpoint)).toEqual(expect.arrayContaining([
@@ -430,7 +459,7 @@ describe('Bookings store — one booking write', () => {
         {when: 'a booking save\'s re-read of the orders', before: async (store: Store) => {
             loadDinner(store)
             await vi.waitFor(() => expect(asyncDataStatus('bookings-store-orders')).toBe('success'))
-        }, read: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [])}
+        }, read: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [], false)}
     ])('WHEN $when are on the way THEN the bookings read as reloading, until they land', async ({before, read}) => {
         const store = useBookingsStore()
         await before(store)
@@ -496,8 +525,8 @@ describe('Bookings store — a cancelled dinner', () => {
     })
 
     const vias = [
-        {via: 'a preview', run: (store: Store) => store.previewBookings({householdId: MY_HOUSEHOLD_ID, dinnerEventIds: [dinner.id], orders: []})},
-        {via: 'a save', run: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [])}
+        {via: 'a read of the expected bookings', run: (store: Store) => store.fetchExpectedBookings(MY_HOUSEHOLD_ID, [dinner.id])},
+        {via: 'a save', run: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [], false)}
     ]
     const replies = [
         {reply: 'leaves the asked dinner out', dinners: [], reads: 1},
@@ -505,7 +534,8 @@ describe('Bookings store — a cancelled dinner', () => {
     ]
 
     it.each(vias.flatMap(via => replies.map(reply => ({...via, ...reply}))))('WHEN $via\'s reply $reply THEN the selected season is read $reads more time(s), so a cancelled dinner shows at once', async ({run, dinners, reads}) => {
-        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({dinners}))
+        // The save writes through the POST, the read through the GET
+        ;[scaffoldEndpoint, scaffoldReadEndpoint].forEach(endpoint => endpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({dinners})))
         const store = await storeOnSeason()
 
         await run(store)
@@ -516,6 +546,8 @@ describe('Bookings store — a cancelled dinner', () => {
 })
 
 describe('Bookings store — daily maintenance', () => {
+    const dailyMaintenanceDone = MAINTENANCE_WORDS.job.done(MAINTENANCE_WORDS.jobTypes[useMaintenanceValidation().JobType.DAILY_MAINTENANCE])
+
     it('keeps the result and reports it in a toast', async () => {
         const store = useBookingsStore()
 
@@ -523,7 +555,7 @@ describe('Bookings store — daily maintenance', () => {
 
         expect(store.hasDailyMaintenanceResult).toBe(true)
         expect(store.hasDailyMaintenanceError).toBe(false)
-        expect(toastTitles()).toContain('Daglig vedligeholdelse afsluttet')
+        expect(toastTitles()).toContain(dailyMaintenanceDone)
     })
 
     it('exposes the error of a failed run', async () => {
@@ -535,7 +567,7 @@ describe('Bookings store — daily maintenance', () => {
         expect(store.hasDailyMaintenanceError).toBe(true)
         expect(store.hasDailyMaintenanceResult).toBe(false)
         expect(store.dailyMaintenanceError?.message).toBeTruthy()
-        expect(toastTitles()).not.toContain('Daglig vedligeholdelse afsluttet')
+        expect(toastTitles()).not.toContain(dailyMaintenanceDone)
     })
 })
 
@@ -829,7 +861,7 @@ describe('Bookings store — tickets for sale and waiting lists on locked dinner
         seasonByIdEndpoint.mockReturnValue({...SEASON, ticketPrices, dinnerEvents: [lockedDinner]})
         const queue = [TicketType.ADULT, TicketType.ADULT, TicketType.CHILD]
         waitlistEntriesEndpoint.mockImplementation(() => queue.map((ticketType, index) =>
-            WaitlistFactory.defaultEntry({id: 21 + index, dinnerEventId: lockedDinner.id, ticketPriceId: priceOf(ticketType)})))
+            WaitlistFactory.defaultEntry({id: 21 + index, dinnerEventId: lockedDinner.id, ticketPrice: priceOf(ticketType)})))
         const store = useBookingsStore()
         const queuedFormatted = useBilling().formatTicketCounts({[TicketType.ADULT]: 2, [TicketType.CHILD]: 1})
 
@@ -845,6 +877,16 @@ const addExpenseEndpoint = vi.fn(() => EXPENSE_LINE)
 const removeExpenseEndpoint = vi.fn(() => EXPENSE_LINE)
 registerEndpoint(`/api/chef/dinner/${DINNER_ID}/expenses`, {method: 'PUT', handler: addExpenseEndpoint})
 registerEndpoint(`/api/chef/dinner/${DINNER_ID}/expenses/${EXPENSE_LINE.id}`, {method: 'DELETE', handler: removeExpenseEndpoint})
+
+// A chef's write that fails resolves null, shows no success toast and ends the updating flag
+type ChefWrite = {act: (store: ReturnType<typeof useBookingsStore>) => Promise<unknown>, endpoint: {mockImplementation: (implementation: typeof failure) => unknown}, title: string}
+const expectFailedWithoutSuccessToast = async ({act, endpoint, title}: ChefWrite) => {
+    endpoint.mockImplementation(failure)
+    const store = useBookingsStore()
+    expect(await act(store)).toBeNull()
+    expect(toastTitles()).not.toContain(title)
+    expect(store.isDinnerUpdating).toBe(false)
+}
 
 describe('Bookings store — expense lines', () => {
     beforeEach(() => {
@@ -872,12 +914,91 @@ describe('Bookings store — expense lines', () => {
     it.each([
         {desc: 'add', act: (store: ReturnType<typeof useBookingsStore>) => store.addExpense(DINNER_ID, ExpenseFactory.defaultExpenseCreate()), endpoint: addExpenseEndpoint, title: 'Indkøb gemt'},
         {desc: 'remove', act: (store: ReturnType<typeof useBookingsStore>) => store.removeExpense(DINNER_ID, EXPENSE_LINE.id), endpoint: removeExpenseEndpoint, title: 'Indkøb slettet'}
-    ])('resolves null without a success toast when the $desc fails', async ({act, endpoint, title}) => {
-        endpoint.mockImplementation(failure)
+    ])('resolves null without a success toast when the $desc fails', expectFailedWithoutSuccessToast)
+})
+
+// ---- The chef's dinner actions: each toasts its own result ----
+
+// The dinner on view, already announced: announcing it again republishes the menu
+registerEndpoint(`/api/admin/dinner-event/${DINNER_ID}`, () => ({...dinnerResponse(), state: DinnerState.ANNOUNCED}))
+
+describe('Bookings store — the chef\'s dinner actions', () => {
+    type Store = ReturnType<typeof useBookingsStore>
+    const Toasts = TEAM_WORDS.toasts
+    const HEYNABO_EVENT_ID = 4711
+    // The dinner the write answers: a titled one, and one without a menu title named untitledDinner in the toast
+    const answered = (menuTitle: string) => ({...dinnerResponse(), menuTitle, heynaboEventId: HEYNABO_EVENT_ID})
+    const titled = answered('Updated Menu')
+    const untitled = answered('')
+    const dinnerOf = (dinner: typeof titled) => [dinner.menuTitle || Toasts.untitledDinner, formatDate(dinner.date)] as const
+
+    const saveAllergens = (allergenIds: number[]) => (store: Store) => store.updateDinnerEventAllergens(DINNER_ID, allergenIds)
+    const announce = (store: Store) => store.announceDinner(DINNER_ID)
+    const cancel = (store: Store) => store.cancelDinner(DINNER_ID)
+    const undoCancel = (store: Store) => store.undoCancelDinner(DINNER_ID)
+
+    beforeEach(() => {
+        resetStores()
+    })
+
+    const expectToast = (toast: {title: string, description: string}) =>
+        expect(useToast().toasts.value).toContainEqual(expect.objectContaining(toast))
+
+    it.each([
+        {action: 'allergens are saved', act: saveAllergens([1, 2]), dinner: titled,
+            toast: {title: Toasts.allergensSaved.title, description: Toasts.allergensSaved.withAllergens}},
+        {action: 'the menu is saved without allergens', act: saveAllergens([]), dinner: titled,
+            toast: {title: Toasts.allergensSaved.title, description: Toasts.allergensSaved.withoutAllergens}},
+        {action: 'a dinner not announced is announced', act: announce, dinner: titled,
+            toast: {title: Toasts.announced.title(false), description: Toasts.announced.description(HEYNABO_EVENT_ID)}},
+        ...[{named: 'a titled dinner', dinner: titled}, {named: 'a dinner without a menu title', dinner: untitled}].flatMap(({named, dinner}) => [
+            {action: `${named} is cancelled`, act: cancel, dinner,
+                toast: {title: Toasts.cancelled.title, description: Toasts.cancelled.description(...dinnerOf(dinner))}},
+            {action: `the cancel of ${named} is undone`, act: undoCancel, dinner,
+                toast: {title: Toasts.reopened.title, description: Toasts.reopened.description(...dinnerOf(dinner))}}
+        ])
+    ])('WHEN $action THEN the store toasts the result', async ({act, dinner, toast}) => {
+        updateDinnerEndpoint.mockImplementation(() => dinner)
         const store = useBookingsStore()
-        expect(await act(store)).toBeNull()
-        expect(toastTitles()).not.toContain(title)
-        expect(store.isDinnerUpdating).toBe(false)
+
+        expect(await act(store)).not.toBeNull()
+
+        expectToast(toast)
+    })
+
+    it('WHEN the dinner on view is already ANNOUNCED THEN announcing it again toasts the update of the menu', async () => {
+        const onView = {...DinnerEventFactory.defaultDinnerEventDisplay('republish'), id: DINNER_ID}
+        selectSeason([onView])
+        updateDinnerEndpoint.mockImplementation(() => titled)
+        const store = useBookingsStore()
+        store.selectDinnerDate(() => new Date(onView.date))
+        await vi.waitFor(() => expect(store.selectedDinnerEventDetail?.state).toBe(DinnerState.ANNOUNCED))
+
+        await announce(store)
+
+        expectToast({title: Toasts.announced.title(true), description: Toasts.announced.description(HEYNABO_EVENT_ID)})
+    })
+
+    it.each([
+        {desc: 'save of allergens', act: saveAllergens([1]), endpoint: updateDinnerEndpoint, title: Toasts.allergensSaved.title},
+        {desc: 'announce', act: announce, endpoint: updateDinnerEndpoint, title: Toasts.announced.title(false)},
+        {desc: 'cancel', act: cancel, endpoint: updateDinnerEndpoint, title: Toasts.cancelled.title},
+        {desc: 'undo of a cancel', act: undoCancel, endpoint: updateDinnerEndpoint, title: Toasts.reopened.title}
+    ])('resolves null without a success toast when the $desc fails', expectFailedWithoutSuccessToast)
+
+    it.each([
+        {desc: 'save of allergens', act: saveAllergens([1]), failed: Toasts.allergensSaved.failed},
+        {desc: 'announce', act: announce, failed: Toasts.announced.failed},
+        {desc: 'cancel', act: cancel, failed: Toasts.cancelled.failed},
+        {desc: 'undo of a cancel', act: undoCancel, failed: Toasts.reopened.failed},
+        {desc: 'save of the menu', act: (store: Store) => store.updateDinnerEventField(DINNER_ID, {menuTitle: 'X'}, ME), failed: Toasts.menuSaved.failed}
+    ])('WHEN the $desc fails THEN the failure toast names the action', async ({act, failed}) => {
+        updateDinnerEndpoint.mockImplementation(failure)
+        const store = useBookingsStore()
+
+        await act(store)
+
+        expect(useToast().toasts.value.map(toast => toast.description)).toContain(failed)
     })
 })
 
@@ -917,8 +1038,8 @@ describe('Bookings store — waiting list', () => {
     const OTHER_HOUSEHOLD_ID = MY_HOUSEHOLD_ID + 1
     // The dinner's queue: another household's adult first, then this household's child
     const QUEUE = [
-        WaitlistFactory.defaultEntry({id: 21, dinnerEventId: WAITLIST_DINNER_ID, householdId: OTHER_HOUSEHOLD_ID, ticketPriceId: priceOf(TicketType.ADULT), createdAt: new Date('2026-10-01T10:00:00Z')}),
-        WaitlistFactory.defaultEntry({id: 22, dinnerEventId: WAITLIST_DINNER_ID, householdId: MY_HOUSEHOLD_ID, ticketPriceId: priceOf(TicketType.CHILD), createdAt: new Date('2026-10-01T11:00:00Z')})
+        WaitlistFactory.defaultEntry({id: 21, dinnerEventId: WAITLIST_DINNER_ID, householdId: OTHER_HOUSEHOLD_ID, ticketPrice: priceOf(TicketType.ADULT), createdAt: new Date('2026-10-01T10:00:00Z')}),
+        WaitlistFactory.defaultEntry({id: 22, dinnerEventId: WAITLIST_DINNER_ID, householdId: MY_HOUSEHOLD_ID, ticketPrice: priceOf(TicketType.CHILD), createdAt: new Date('2026-10-01T11:00:00Z')})
     ]
     const releasedBodies: unknown[] = []
 
@@ -934,7 +1055,9 @@ describe('Bookings store — waiting list', () => {
             releasedBodies.push(await readBody(event))
             return WaitlistFactory.defaultAssignmentResult({
                 dinnerEventId: WAITLIST_DINNER_ID,
-                assigned: [1, 2].map(entryId => ({entryId, inhabitantId: entryId, isGuestTicket: false, portions: 1, orderId: 100 + entryId, ticketPriceId: 1})),
+                assigned: [1, 2].map(entryId => ({
+                    entryId, inhabitantId: entryId, isGuestTicket: false, portions: 1, orderId: 100 + entryId, ticketPriceId: 1, dinnerMode: DinnerModeSchema.enum.DINEIN
+                })),
                 portionsUsed: 2,
                 waiting: 1
             })

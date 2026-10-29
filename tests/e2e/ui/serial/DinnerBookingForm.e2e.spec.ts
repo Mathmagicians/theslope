@@ -1,4 +1,4 @@
-import {test, expect, type BrowserContext, type Page} from '@playwright/test'
+import {test, expect, type BrowserContext, type Page} from '~~/tests/e2e/uiTest'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -11,7 +11,7 @@ import {formatDate} from '~/utils/date'
 import {BookingViewSchema} from '~/composables/useBookingView'
 
 const {memberUIFile, adminUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, getSessionUserInfo, gotoHydrated, selectDropdownOption, temporaryAndRandom, salt, isScaffoldSave, isExpectedRead, PAST_THE_SCAFFOLD_WINDOW_DAYS} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, getSessionUserInfo, gotoHydrated, selectDropdownOption, temporaryAndRandom, salt, isScaffoldSave, isExpectedRead, expectApiError, PAST_THE_SCAFFOLD_WINDOW_DAYS} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, BookingActionSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -256,7 +256,9 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
                 await expect(page.getByTestId('season-selector')).toContainText(testSeason.season.shortName)
 
                 await SeasonFactory.deleteSeason(adminContext, goneSeason.id!, 200)
-                const goneRequested = page.waitForResponse(r => r.url().endsWith(`/api/admin/season/${goneSeason.id}`))
+                const goneUrl = `/api/admin/season/${goneSeason.id}`
+                expectApiError(page.context(), 404, goneUrl)
+                const goneRequested = page.waitForResponse(r => r.url().endsWith(goneUrl))
                 await selectDropdownOption(page, 'season-selector', goneSeason.shortName)
 
                 expect((await goneRequested).status()).toBe(404)

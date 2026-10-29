@@ -4,6 +4,7 @@ import {useSeason} from '~/composables/useSeason'
 import {useCookingTeam} from '~/composables/useCookingTeam'
 import type {CookingTeamCreate, CookingTeamUpdate, CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
+import type {H3Error} from 'h3'
 
 export interface TeamOperationResult {
     teams: CookingTeamDetail[]
@@ -86,9 +87,14 @@ export async function assignAffinitiesAndEvents(
     const teamsWithAffinities = assignAffinitiesToTeams(season)
     const affinityBatches = chunkTeamAffinities(teamsWithAffinities)
 
+    // A team deleted by a parallel request since the season was read has no affinity to save
     for (const batch of affinityBatches) {
         await Promise.all(
-            batch.map(team => updateTeam(d1Client, team.id!, {id: team.id!, affinity: team.affinity}))
+            batch.map(team => updateTeam(d1Client, team.id, {id: team.id, affinity: team.affinity})
+                .catch((error: H3Error) => {
+                    if (error.statusCode !== 404) throw error
+                    console.warn(`${LOG} Team ${team.id} deleted since the season was read, affinity skipped`)
+                }))
         )
     }
     console.info(`${LOG} Assigned affinities to ${teamsWithAffinities.length} teams`)

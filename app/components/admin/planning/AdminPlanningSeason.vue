@@ -28,6 +28,7 @@ import type {Season} from "~/composables/useSeasonValidation"
 import type {FormMode} from "~/types/form"
 import {FORM_MODES} from "~/types/form"
 import type {WeekDayMap} from "~/types/dateTypes"
+import {BUTTON_WORDS} from "~/config/buttonWords"
 
 //COMPONENT DEPENDENCIES
 const {SeasonSchema, createSeasonName, computeCookingDates} = useSeason()
@@ -68,7 +69,6 @@ watch(() => model.value.seasonDates, (newDates) => {
 
 // The title says what the form is doing (Redigerer); the edit control says what it does (Rediger)
 const SEASON_LABEL = 'fællesspisning sæson'
-const EDIT_VERB = 'Rediger'
 const TITLE_VERBS: Record<FormMode, string> = {
   [FORM_MODES.VIEW]: '',
   [FORM_MODES.EDIT]: 'Redigerer',
@@ -80,7 +80,7 @@ const formTitle = computed(() =>
     capitalize([TITLE_VERBS[props.mode], SEASON_LABEL, model.value.shortName].filter(Boolean).join(' '))
 )
 
-const editLabel = computed(() => `${EDIT_VERB} ${model.value.shortName}`)
+const editLabel = computed(() => `${BUTTON_WORDS.edit} ${model.value.shortName}`)
 
 // ACTIONS
 const onSubmitSeason = () => {
@@ -225,7 +225,7 @@ class="mx-auto"
             </div>
             <div :class="LAYOUTS.formButtonRow">
               <UButton v-bind="BUTTONS.cancel" data-testid="cancel-season" @click="emit('cancel')">
-                Annuller
+                {{ BUTTON_WORDS.cancel }}
               </UButton>
               <UButton
                   v-bind="BUTTONS.save"
@@ -233,7 +233,7 @@ class="mx-auto"
                   type="submit"
                   :loading="isSavingSeason"
                   :disabled="isSavingSeason">
-                Gem
+                {{ BUTTON_WORDS.save }}
               </UButton>
             </div>
           </div>

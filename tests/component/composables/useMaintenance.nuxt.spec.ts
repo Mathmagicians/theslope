@@ -1,20 +1,26 @@
 import {beforeAll, describe, expect, it} from 'vitest'
-import {useMaintenance} from '~/composables/useMaintenance'
+import {useMaintenance, type JobStat} from '~/composables/useMaintenance'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
+import {NOTIFICATION_COUNT_WORDS} from '~/config/notificationTemplates'
+import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not at module level
 type Maintenance = ReturnType<typeof useMaintenance>
 let formatMonthlyBillingStats: Maintenance['formatMonthlyBillingStats']
-let parseResultSummary: Maintenance['parseResultSummary']
+let formatDailyMaintenanceStats: Maintenance['formatDailyMaintenanceStats']
+let jobRunStats: Maintenance['jobRunStats']
 let formatResultSummary: Maintenance['formatResultSummary']
 beforeAll(() => {
-    ({formatMonthlyBillingStats, parseResultSummary, formatResultSummary} = useMaintenance())
+    ({formatMonthlyBillingStats, formatDailyMaintenanceStats, jobRunStats, formatResultSummary} = useMaintenance())
 })
 const {JobType} = useMaintenanceValidation()
+const billingLabel = MAINTENANCE_WORDS.stats[JobType.MONTHLY_BILLING]
 
 const billed = {billingPeriodSummaryId: 8, billingPeriod: '18/08/2026-17/09/2026', invoiceCount: 3, transactionCount: 12, totalAmount: 41230}
-const stat = (stats: Array<{label: string, value: string}>, label: string) => stats.find(s => s.label === label)?.value
+const stat = (stats: JobStat[] | null, label: string) => stats?.find(s => s.label === label)?.value
 
 describe('formatMonthlyBillingStats', () => {
     it('reports what the run billed and what it did to R2 and the mailbox', () => {
@@ -27,10 +33,10 @@ describe('formatMonthlyBillingStats', () => {
             ]
         })
 
-        expect(stat(stats, 'Perioder')).toBe('1')
-        expect(stat(stats, 'CSV uploadet')).toBe('2')
-        expect(stat(stats, 'Mails sendt')).toBe('1')
-        expect(stat(stats, 'Afventer')).toBe('0')
+        expect(stat(stats, billingLabel.periods)).toBe('1')
+        expect(stat(stats, billingLabel.csvUploaded)).toBe('2')
+        expect(stat(stats, billingLabel.mailsSent)).toBe('1')
+        expect(stat(stats, billingLabel.pending)).toBe('0')
     })
 
     it('counts a period whose CSV or mail is still behind as pending', () => {
@@ -40,24 +46,61 @@ describe('formatMonthlyBillingStats', () => {
             BillingFactory.defaultPeriodSideEffects({billingPeriodSummaryId: 3})
         ]})
 
-        expect(stat(stats, 'Afventer')).toBe('2')
+        expect(stat(stats, billingLabel.pending)).toBe('2')
     })
 })
 
-describe('parseResultSummary for MONTHLY_BILLING', () => {
-    it.each([
-        ['a run stored before periods existed', JSON.stringify({results: [billed]}), 0],
-        ['a run with period states', JSON.stringify({results: [billed], periods: [BillingFactory.defaultPeriodSideEffects()]}), 1]
-    ])('parses %s', (_name, stored, periodCount) => {
-        const parsed = parseResultSummary(JobType.MONTHLY_BILLING, stored) as {results: unknown[], periods: unknown[]}
+// The job runs page's notifications line is compact like the bookings line and always shows: per sender event its
+// symbol and the notifications sent; an event that sent none is left out, and a line with no event left reads none
+describe('formatDailyMaintenanceStats', () => {
+    const {BOOKING_STATUS, MONTHLY_BILLING, CHEF_DEADLINES} = useDeliveryValidation().SenderEventSchema.enum
+    const {symbols: symbol, none} = NOTIFICATION_COUNT_WORDS
 
-        expect(parsed.results).toHaveLength(1)
-        expect(parsed.periods).toHaveLength(periodCount)
+    it.each([
+        {run: 'sent booking status notifications', notifications: {[BOOKING_STATUS]: {sent: 8}}, line: `${symbol[BOOKING_STATUS]} 8`},
+        {run: 'sent no booking status notification and monthly billing ones', notifications: {[BOOKING_STATUS]: {sent: 0}, [MONTHLY_BILLING]: {sent: 3}}, line: `${symbol[MONTHLY_BILLING]} 3`},
+        {run: 'sent booking status and chef deadlines notifications', notifications: {[BOOKING_STATUS]: {sent: 8}, [CHEF_DEADLINES]: {sent: 2}}, line: `${symbol[BOOKING_STATUS]} 8, ${symbol[CHEF_DEADLINES]} 2`},
+        {run: 'sent no notification', notifications: {[BOOKING_STATUS]: {sent: 0}}, line: none},
+        {run: 'counted no sender event, as a run before the counts', notifications: {}, line: none}
+    ])('GIVEN a run that $run WHEN its stats format THEN the notifications line reads $line', ({notifications, line}) => {
+        const stats = formatDailyMaintenanceStats(OrderFactory.defaultDailyMaintenanceResult({notifications}))
+
+        expect(stat(stats, NOTIFICATION_COUNT_WORDS.label)).toBe(line)
+    })
+})
+
+describe('jobRunStats for MONTHLY_BILLING', () => {
+    it.each([
+        ['a run stored before periods existed', JSON.stringify({results: [billed]}), '0'],
+        ['a run with a period still behind', JSON.stringify({results: [billed], periods: [BillingFactory.defaultPeriodSideEffects({csvUploaded: false})]}), '1']
+    ])('reads %s', (_name, stored, pending) => {
+        const stats = jobRunStats(JobType.MONTHLY_BILLING, stored)
+
+        expect(stat(stats, billingLabel.periods)).toBe('1')
+        expect(stat(stats, billingLabel.pending)).toBe(pending)
     })
 
     it('renders the side effects in the job-run line', () => {
         const stored = JSON.stringify({results: [], periods: [BillingFactory.defaultPeriodSideEffects({archive: {key: 'k', filename: 'f', sizeBytes: 1, version: 1, archived: true, degraded: false}})]})
 
-        expect(formatResultSummary(JobType.MONTHLY_BILLING, stored)).toContain('CSV uploadet: 1')
+        expect(formatResultSummary(JobType.MONTHLY_BILLING, stored)).toContain(`${billingLabel.csvUploaded}: 1`)
+    })
+})
+
+// A run whose result cannot be read shows a dash in the job history; a job without stats shows its stored JSON
+describe('formatResultSummary', () => {
+    it.each([
+        {stored: 'no result', jobType: JobType.DAILY_MAINTENANCE, resultSummary: null},
+        {stored: 'a result that is not JSON', jobType: JobType.HEYNABO_IMPORT, resultSummary: '{'},
+        {stored: 'a result its job\'s schema does not read', jobType: JobType.MONTHLY_BILLING, resultSummary: JSON.stringify({periods: []})},
+        {stored: 'no result on a job without stats', jobType: JobType.MAINTENANCE_EXPORT, resultSummary: null}
+    ])('GIVEN a run with $stored WHEN its result formats THEN it reads a dash', ({jobType, resultSummary}) => {
+        expect(formatResultSummary(jobType, resultSummary)).toBe('-')
+    })
+
+    it('GIVEN a run of a job without stats WHEN its result formats THEN it reads the stored JSON', () => {
+        const stored = JSON.stringify({imported: 3})
+
+        expect(formatResultSummary(JobType.MAINTENANCE_IMPORT, stored)).toBe(stored)
     })
 })

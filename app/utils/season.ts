@@ -2,14 +2,14 @@ import {type DateRange, type WeekDayMap, type WeekDay, WEEKDAYS, createWeekDayMa
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {Season, SeasonStatus} from '~/composables/useSeasonValidation'
-import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import {SEASON_STATUS} from '~/config/seasonWords'
 import {
     getEachDayOfIntervalWithSelectedWeekdays,
     excludeDatesFromInterval,
     createDateInTimezone,
     areSameWeek
 } from '~/utils/date'
-import {getISODay, differenceInDays, isWithinInterval, isBefore, isAfter, isSameDay} from "date-fns"
+import {getISODay, differenceInDays, isWithinInterval, isBefore, isAfter, isSameDay, startOfDay, endOfDay, addDays} from "date-fns"
 import {subDays} from "date-fns/subDays"
 import {subMinutes} from "date-fns/subMinutes"
 import {addMinutes} from "date-fns/addMinutes"
@@ -124,15 +124,15 @@ export const computeAffinitiesForTeams = (teams: CookingTeamDisplay[], cookingDa
     if (teamsWithoutAffinities.length === 0) return teams // all teams already have affinities
 
     const affinitiesForTeams = teams
-        .filter(team => !team.affinity && team.id)
-        .map(team => team.id!)
+        .filter(team => !team.affinity)
+        .map(team => team.id)
         .reduce<Record<number, WeekDay[]>>((acc, teamId, i) => {
             const rotationIndex = rotationStartIndex + i * consecutiveCookingDays
             acc[teamId] = Array.from({length: consecutiveCookingDays}, (_, k) => weekdaysForRotation[(rotationIndex + k) % wdfCount]!)
             return acc
         }, {})
     return teams.map(team => {
-        const computedAffinity = team.id && affinitiesForTeams[team.id] ? createWeekDayMapFromSelection(affinitiesForTeams[team.id]!) : undefined
+        const computedAffinity = affinitiesForTeams[team.id] ? createWeekDayMapFromSelection(affinitiesForTeams[team.id]!) : undefined
         return {
             ...team,
             affinity: team.affinity ?? computedAffinity
@@ -276,96 +276,96 @@ export const computeTeamAssignmentsForEvents = (teams: CookingTeamDisplay[], coo
 
 /**
  * Active Season Management - Pure Functions
- * All functions accept referenceDate parameter for testability (defaults to new Date())
+ * Every function takes the current moment as `now`
  */
 
 /**
- * Check if a season is in the past (ended before reference date)
+ * Check if a season is in the past (ended before now)
  * @param season - Season to check
- * @param referenceDate - Date to compare against (defaults to now)
- * @returns true if season ended before reference date
+ * @param now - The current moment
+ * @returns true if season ended before now
  */
-export const isPast = (season: Season, referenceDate: Date = new Date()): boolean => {
-    return isBefore(season.seasonDates.end, referenceDate)
+export const isPast = (season: Season, now: Date): boolean => {
+    return isBefore(season.seasonDates.end, now)
 }
 
 /**
- * Check if a season is in the future (starts after reference date)
+ * Check if a season is in the future (starts after now)
  * @param season - Season to check
- * @param referenceDate - Date to compare against (defaults to now)
- * @returns true if season starts after reference date
+ * @param now - The current moment
+ * @returns true if season starts after now
  */
-export const isFuture = (season: Season, referenceDate: Date = new Date()): boolean => {
-    return isAfter(season.seasonDates.start, referenceDate)
+export const isFuture = (season: Season, now: Date): boolean => {
+    return isAfter(season.seasonDates.start, now)
 }
 
 /**
- * Calculate distance in days from reference date to season
+ * Calculate distance in days from now to season
  * @param season - Season to check
- * @param referenceDate - Date to compare against (defaults to now)
+ * @param now - The current moment
  * @returns Days until season starts (positive), days since ended (negative), or 0 if current
  */
-export const distanceToToday = (season: Season, referenceDate: Date = new Date()): number => {
-    // Current season (reference date within season)
-    if (isWithinInterval(referenceDate, season.seasonDates)) {
+export const distanceToToday = (season: Season, now: Date): number => {
+    // Current season (now within season)
+    if (isWithinInterval(now, season.seasonDates)) {
         return 0
     }
 
-    // Future season (starts after reference date)
-    if (isFuture(season, referenceDate)) {
-        return differenceInDays(season.seasonDates.start, referenceDate)
+    // Future season (starts after now)
+    if (isFuture(season, now)) {
+        return differenceInDays(season.seasonDates.start, now)
     }
 
-    // Past season (ended before reference date)
-    return differenceInDays(season.seasonDates.end, referenceDate)
+    // Past season (ended before now)
+    return differenceInDays(season.seasonDates.end, now)
 }
 
 /**
  * Check if a season can be set as active (not in the past)
  * @param season - Season to check
- * @param referenceDate - Date to compare against (defaults to now)
+ * @param now - The current moment
  * @returns true if season is current or future (not past)
  */
-export const canSeasonBeActive = (season: Season, referenceDate: Date = new Date()): boolean => {
-    return !isPast(season, referenceDate)
+export const canSeasonBeActive = (season: Season, now: Date): boolean => {
+    return !isPast(season, now)
 }
 
 /**
  * Get the status category of a season
  * @param season - Season to categorize
- * @param referenceDate - Date to compare against (defaults to now)
+ * @param now - The current moment
  * @returns 'aktiv' | 'kommende' | 'i gang' | 'afsluttet'
  */
-export const getSeasonStatus = (season: Season, referenceDate: Date = new Date()): SeasonStatusValue => {
+export const getSeasonStatus = (season: Season, now: Date): SeasonStatusValue => {
     // Active takes precedence regardless of dates
     if (season.isActive) {
         return SEASON_STATUS.ACTIVE
     }
 
-    // Past: ended before reference date
-    if (isPast(season, referenceDate)) {
+    // Past: ended before now
+    if (isPast(season, now)) {
         return SEASON_STATUS.PAST
     }
 
-    // Future: starts after reference date
-    if (isFuture(season, referenceDate)) {
+    // Future: starts after now
+    if (isFuture(season, now)) {
         return SEASON_STATUS.FUTURE
     }
 
-    // Current: reference date within season dates
+    // Current: now within season dates
     return SEASON_STATUS.CURRENT
 }
 
 /**
  * Sort seasons by active priority: aktiv → i gang → kommende (closest) → afsluttet (recent)
  * @param seasons - Seasons to sort
- * @param referenceDate - Date to compare against (defaults to now)
+ * @param now - The current moment
  * @returns Sorted seasons array (does not mutate input)
  */
-export const sortSeasonsByActivePriority = (seasons: Season[], referenceDate: Date = new Date()): Season[] => {
+export const sortSeasonsByActivePriority = (seasons: Season[], now: Date): Season[] => {
     return [...seasons].sort((a, b) => {
-        const statusA = getSeasonStatus(a, referenceDate)
-        const statusB = getSeasonStatus(b, referenceDate)
+        const statusA = getSeasonStatus(a, now)
+        const statusB = getSeasonStatus(b, now)
 
         // Priority order: aktiv > i gang > kommende > afsluttet
         const statusPriority: Record<SeasonStatus, number> = {
@@ -379,8 +379,8 @@ export const sortSeasonsByActivePriority = (seasons: Season[], referenceDate: Da
         if (priorityDiff !== 0) return priorityDiff
 
         // Within same status, sort by distance to today
-        const distanceA = Math.abs(distanceToToday(a, referenceDate))
-        const distanceB = Math.abs(distanceToToday(b, referenceDate))
+        const distanceA = Math.abs(distanceToToday(a, now))
+        const distanceB = Math.abs(distanceToToday(b, now))
 
         // For future: closest first (ascending distance)
         // For past: most recent first (ascending distance from end)
@@ -393,19 +393,19 @@ export const sortSeasonsByActivePriority = (seasons: Season[], referenceDate: Da
  * Priority: 1) Active, 2) Current, 3) Future closest to today
  * IMPORTANT: Past seasons cannot be activated (business rule)
  * @param seasons - Seasons to choose from
- * @param referenceDate - Date to compare against (defaults to now)
+ * @param now - The current moment
  * @returns Most appropriate eligible season, or null if no eligible seasons
  */
-export const selectMostAppropriateActiveSeason = (seasons: Season[], referenceDate: Date = new Date()): Season | null => {
+export const selectMostAppropriateActiveSeason = (seasons: Season[], now: Date): Season | null => {
     if (seasons.length === 0) return null
 
     // An active season that has ended is not eligible, so the pick moves on
-    const eligible = seasons.filter(s => canSeasonBeActive(s, referenceDate))
+    const eligible = seasons.filter(s => canSeasonBeActive(s, now))
 
     if (eligible.length === 0) return null
 
     // Sort and return first (active, else current, else future closest)
-    const sorted = sortSeasonsByActivePriority(eligible, referenceDate)
+    const sorted = sortSeasonsByActivePriority(eligible, now)
     return sorted[0]!
 }
 
@@ -424,6 +424,10 @@ export const getDinnerTimeRange = (date: Date, startHour: number, durationMinute
 
     return {start, end}
 }
+
+/** The dinner on a date's calendar day; a day has at most one dinner */
+export const getDinnerOnDate = <T extends { date: Date }>(dinnerEvents: T[]) =>
+    (date: Date): T | undefined => dinnerEvents.find(event => isSameDay(event.date, date))
 
 /**
  * Result type for splitDinnerEvents
@@ -454,27 +458,16 @@ export type SplitDinnerEventsResult<T> = {
  *
  * @example
  * const split = splitDinnerEvents(18, 60)
- * const { nextDinner, nextDinnerDateRange, pastDinners, futureDinners } = split(events)
+ * const { nextDinner, nextDinnerDateRange, pastDinners, futureDinners } = split(events, now)
  */
 export const splitDinnerEvents = (dinnerStartHour: number, dinnerDurationMinutes: number) =>
     <T extends { date: Date }>(
         dinnerEvents: T[],
-        maxDaysAhead?: number,
-        referenceTime?: Date
+        now: Date,
+        maxDaysAhead?: number
     ): SplitDinnerEventsResult<T> => {
-        const now = referenceTime ?? new Date()
-        const today = new Date(now)
-        today.setHours(0, 0, 0, 0)
-
-        // Calculate max future date if maxDaysAhead is provided
-        const maxFutureDate = maxDaysAhead !== undefined
-            ? (() => {
-                const max = new Date(now)
-                max.setDate(max.getDate() + maxDaysAhead)
-                max.setHours(23, 59, 59, 999)
-                return max
-            })()
-            : null
+        const today = startOfDay(now)
+        const maxFutureDate = maxDaysAhead !== undefined ? endOfDay(addDays(now, maxDaysAhead)) : null
 
         const isWithinWindow = (date: Date): boolean =>
             maxFutureDate === null || !isAfter(date, maxFutureDate)
@@ -540,12 +533,12 @@ export const splitDinnerEvents = (dinnerStartHour: number, dinnerDurationMinutes
  *
  * @example
  * const getNext = getNextDinnerDate(18, 60)
- * const nextDinnerRange = getNext(dinnerDates) // {start: Date, end: Date} or null
+ * const nextDinnerRange = getNext(dinnerDates, now) // {start: Date, end: Date} or null
  */
 export const getNextDinnerDate = (dinnerStartHour: number, dinnerDurationMinutes: number) =>
-    (dinnerDates: Date[], referenceTime?: Date): DateRange | null => {
+    (dinnerDates: Date[], now: Date): DateRange | null => {
         const events = dinnerDates.map(d => ({ date: d }))
-        return splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, undefined, referenceTime).nextDinnerDateRange
+        return splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, now).nextDinnerDateRange
     }
 
 /**
@@ -576,7 +569,7 @@ export const getAdjacentDinner = (dinnerStartHour: number, dinnerDurationMinutes
 
         const sorted = [...dinnerEvents].sort((a, b) => a.date.getTime() - b.date.getTime())
         const {nextDinner, pastDinners, futureDinners} =
-            splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(sorted, undefined, boundary)
+            splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(sorted, boundary)
 
         if (direction === 1) {
             return nextDinner?.date ?? futureDinners[0]?.date ?? null
@@ -584,40 +577,36 @@ export const getAdjacentDinner = (dinnerStartHour: number, dinnerDurationMinutes
         return pastDinners.at(-1)?.date ?? null
     }
 
-/**
- * Temporal category for dinner events
- * Re-exported from useSeason composable (ADR-001)
- */
-type TemporalCategory = 'next' | 'future' | 'past'
+/** A dinner's place in time against now: the next dinner, a later one, or one gone */
+export const TEMPORAL_CATEGORY = {next: 'next', future: 'future', past: 'past'} as const
+export type TemporalCategory = typeof TEMPORAL_CATEGORY[keyof typeof TEMPORAL_CATEGORY]
 
-/**
- * Dinner event with temporal category
- * Re-exported from useSeason composable (ADR-001)
- */
+/** A dinner event with its temporal category */
 type TemporalDinnerEvent<T> = T & { temporalCategory: TemporalCategory }
 
 /**
  * Sort dinner events in temporal order: next (today), future (ascending), past (descending)
  * @param dinnerEvents - Array of dinner events to sort
  * @param nextDinnerDateRange - The date range of the next dinner (from getNextDinnerDate)
+ * @param now - The current moment
  * @returns Events sorted in temporal order with category attached
  */
 export const sortDinnerEventsByTemporal = <T extends { date: Date }>(
     dinnerEvents: T[],
-    nextDinnerDateRange: DateRange | null
+    nextDinnerDateRange: DateRange | null,
+    now: Date
 ): TemporalDinnerEvent<T>[] => {
-    const now = new Date()
     const next: TemporalDinnerEvent<T>[] = []
     const future: TemporalDinnerEvent<T>[] = []
     const past: TemporalDinnerEvent<T>[] = []
 
     for (const event of dinnerEvents) {
         if (nextDinnerDateRange && isSameDay(event.date, nextDinnerDateRange.start)) {
-            next.push({ ...event, temporalCategory: 'next' })
-        } else if (event.date < now) {
-            past.push({ ...event, temporalCategory: 'past' })
+            next.push({ ...event, temporalCategory: TEMPORAL_CATEGORY.next })
+        } else if (isBefore(event.date, now)) {
+            past.push({ ...event, temporalCategory: TEMPORAL_CATEGORY.past })
         } else {
-            future.push({ ...event, temporalCategory: 'future' })
+            future.push({ ...event, temporalCategory: TEMPORAL_CATEGORY.future })
         }
     }
 
@@ -633,12 +622,11 @@ export const sortDinnerEventsByTemporal = <T extends { date: Date }>(
  *
  * @param offsetDays - Number of days before dinner (default: 0)
  * @param offsetMinutes - Number of minutes before dinner (default: 0)
- * @param referenceTime - Optional reference time for testing (defaults to current time)
+ * @param now - The current moment
  * @returns Function that checks if now is before the deadline for a given dinner start time
  */
-export const isBeforeDeadline = (offsetDays: number = 0, offsetMinutes: number = 0, referenceTime?: Date) =>
+export const isBeforeDeadline = (offsetDays: number, offsetMinutes: number, now: Date) =>
     (dinnerStartTime: Date): boolean => {
-        const now = referenceTime ?? new Date()
         let freezeTime = subDays(dinnerStartTime, offsetDays)
         freezeTime = subMinutes(freezeTime, offsetMinutes)
         return isBefore(now, freezeTime)  // Strict <: before but not equal
@@ -668,17 +656,15 @@ const hoursToOffset = (hours: number): { days: number; minutes: number } => ({
  * @param dinnerStartTime - The dinner event start time
  * @param criticalHours - Hours threshold for critical urgency
  * @param warningHours - Hours threshold for warning urgency
- * @param referenceTime - Optional reference time for testing (defaults to current time)
+ * @param now - The current moment
  * @returns Urgency level: 0 (on track) | 1 (warning) | 2 (critical)
  */
 export const calculateDeadlineUrgency = (
     dinnerStartTime: Date,
     criticalHours: number,
     warningHours: number,
-    referenceTime?: Date
+    now: Date
 ): DeadlineUrgency => {
-    const now = referenceTime ?? new Date()
-
     // Past events have no urgency
     if (isAfter(now, dinnerStartTime)) return 0
 

@@ -1,19 +1,23 @@
 import {
     addDays, setISOWeek, startOfISOWeekYear, isSameDay, isSameWeek, eachDayOfInterval, getISODay,
     isValid, parse, format, isWithinInterval, areIntervalsOverlapping, eachWeekOfInterval, getISOWeek, parseISO,
-    formatDistanceToNowStrict, differenceInHours, differenceInDays, intervalToDuration,
+    formatDistanceStrict, differenceInHours, differenceInDays, intervalToDuration,
     startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth
 } from "date-fns"
 import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
 import {capitalize} from "~/utils/utils"
-import {CalendarDate, type DateValue, toZoned, toCalendarDateTime, Time} from '@internationalized/date'
+import {DATE_WORDS} from "~/config/dateWords"
+import {CalendarDate, type DateValue, toZoned, toCalendarDateTime, Time, fromDate} from '@internationalized/date'
 
 export const DATE_SETTINGS =
     {
         DATE_MASK: 'dd/MM/yyyy',
         DAY_MONTH_MASK: 'dd/MM',
+        DATE_TIME_MASK: 'dd/MM/yyyy HH:mm',
+        DATE_AT_TIME_MASK: "dd/MM/yyyy 'kl.' HH:mm",
+        ISO_MONTH_MASK: 'yyyy-MM',
         locale: da,
         localeString: 'da-DK',
         USER_MASK: 'dd/mm/åååå',
@@ -33,7 +37,7 @@ export function calculateDayFromWeekNumber(weekday: number, weekNumber: number, 
     return addDays(firstDay, weekday)
 }
 
-export function createDateRange(start: Date = new Date(), end: Date = new Date()): DateRange {
+export function createDateRange(start: Date, end: Date): DateRange {
     return {
         start: start,
         end: end
@@ -48,10 +52,11 @@ export function copyPartialDateRange(range: Partial<DateRange>): Partial<DateRan
 export const formatDate = (date: Date | undefined, mask: string = DATE_SETTINGS.DATE_MASK) =>
     date !== undefined && isValid(date) ? format(date, mask, {locale: DATE_SETTINGS.locale}) : ''
 
-export const parseDate = (dateStr: string) => parse(dateStr, DATE_SETTINGS.DATE_MASK, new Date())
+// The mask sets every field of the date, so the reference date only types the result
+export const parseDate = (dateStr: string) => parse(dateStr, DATE_SETTINGS.DATE_MASK, new Date(0))
 
 export function formatDateRange(range: DateRange | undefined, mask: string = DATE_SETTINGS.DATE_MASK): string {
-    return !range ? '?->?' : `${formatDate(range?.start, mask)}-${formatDate(range?.end, mask)}`
+    return !range ? DATE_WORDS.noRange : `${formatDate(range.start, mask)}-${formatDate(range.end, mask)}`
 }
 
 export function getEachDayOfIntervalWithSelectedWeekdays(
@@ -223,11 +228,12 @@ export function calculateAgeOnDate(birthDate: Date, eventDate: Date): number {
 /**
  * Check if a date is considered "new" (within 7 days)
  * @param dateString - ISO date string or Date object
- * @returns True if the date is within 7 days from now
+ * @param now - The current moment
+ * @returns True if the date is within 7 days of now
  */
-export function isNew(dateString: string | Date): boolean {
+export function isNew(dateString: string | Date, now: Date): boolean {
     const date = typeof dateString === 'string' ? new Date(dateString) : dateString
-    const days = differenceInDays(new Date(), date)
+    const days = differenceInDays(now, date)
     return days <= 7
 }
 
@@ -275,29 +281,29 @@ export function formatMonthYear(date: Date): string {
  */
 export function formatWeekRange(start: Date, end: Date): string {
     const weekNum = getISOWeek(start)
-    return `Uge ${weekNum}: ${formatDate(start, DATE_SETTINGS.DAY_MONTH_MASK)}-${formatDate(end, DATE_SETTINGS.DAY_MONTH_MASK)}`
+    return `${DATE_WORDS.week} ${weekNum}: ${formatDate(start, DATE_SETTINGS.DAY_MONTH_MASK)}-${formatDate(end, DATE_SETTINGS.DAY_MONTH_MASK)}`
 }
 
 /**
  * Calculate countdown from current time to target time
  * Shows days when >24h away, hours and minutes when <24h away
  * @param targetDate - Target date/time (e.g., dinner time)
- * @param currentDate - Current date/time (defaults to now)
+ * @param currentDate - The current moment
  * @returns Countdown object with hours, minutes, and formatted Danish string
  */
 export function calculateCountdown(
     targetDate: Date,
-    currentDate: Date = new Date()
+    currentDate: Date
 ): { hours: number; minutes: number; formatted: string } {
     if (targetDate <= currentDate) {
-        return { hours: 0, minutes: 0, formatted: 'Overskredet' }
+        return { hours: 0, minutes: 0, formatted: DATE_WORDS.overdue }
     }
 
     const totalHours = differenceInHours(targetDate, currentDate)
 
     // More than 24 hours away - show days
     if (totalHours >= 24) {
-        const daysText = formatDistanceToNowStrict(targetDate, {
+        const daysText = formatDistanceStrict(targetDate, currentDate, {
             locale: DATE_SETTINGS.locale,
             unit: 'day'
         })
@@ -313,7 +319,7 @@ export function calculateCountdown(
 
     const hours = duration.hours ?? 0
     const minutes = duration.minutes ?? 0
-    const formatted = hours > 0 ? `${hours}T ${minutes}M` : `${minutes}M`
+    const formatted = hours > 0 ? `${hours}${DATE_WORDS.hour} ${minutes}${DATE_WORDS.minute}` : `${minutes}${DATE_WORDS.minute}`
 
     return { hours, minutes, formatted }
 }
@@ -341,6 +347,23 @@ export function createDateInTimezone(
 }
 
 /**
+ * Format a moment as the clock in the timezone shows it, whatever the runtime's own zone: the server runs in UTC.
+ * The local date of the zone's wall-clock fields carries them to the mask.
+ */
+export const formatDateInTimezone = (date: Date, mask: string = DATE_SETTINGS.DATE_MASK, timezone: string = DATE_SETTINGS.timezone): string => {
+    const zoned = fromDate(date, timezone)
+    return formatDate(new Date(zoned.year, zoned.month - 1, zoned.day, zoned.hour, zoned.minute, zoned.second), mask)
+}
+
+/** Whether two moments share a day of the app's timezone, whatever the runtime's own zone */
+export const isSameDayInTimezone = (a: Date, b: Date): boolean =>
+    formatDateInTimezone(a, DATE_SETTINGS.DATE_MASK) === formatDateInTimezone(b, DATE_SETTINGS.DATE_MASK)
+
+/** The time from a moment to now in the locale's words: "2 dage siden" */
+export const formatTimeSince = (moment: Date, now: Date): string =>
+    formatDistanceStrict(moment, now, {addSuffix: true, locale: DATE_SETTINGS.locale})
+
+/**
  * Period view for calendar navigation
  */
 export type PeriodView = 'day' | 'week' | 'month'
@@ -349,7 +372,7 @@ export type PeriodView = 'day' | 'week' | 'month'
  * Return the boundary timestamp for a view/direction pair.
  *
  * Used by calendar navigation to find the "adjacent" dinner: feed this into
- * `splitDinnerEvents(events, undefined, boundary)` and pick from the resulting
+ * `splitDinnerEvents(events, boundary)` and pick from the resulting
  * past/future buckets.
  *
  * Forward boundary is `endOf*` so that today/this-week/this-month's dinners fall

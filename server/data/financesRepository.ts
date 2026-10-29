@@ -13,8 +13,10 @@ import type {
     CreateOrdersResult,
     DinnerEventCreate,
     DinnerEventDisplay,
+    DinnerEventDate,
     DinnerEventDetail,
     DinnerState,
+    SerializedDinnerEvent,
     OrderHistoryDisplay,
     OrderForTransaction,
     DinnerMode,
@@ -23,9 +25,10 @@ import type {
     OrderAuditChange,
     OrderAuditSource,
     OrderSnapshot,
+    SnapshotOrder,
     TicketType
 } from '~/composables/useBookingValidation'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, OrderSortBy} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import {useBooking} from '~/composables/useBooking'
 import {byTimeThenId} from '~/composables/useWaitlist'
@@ -33,6 +36,7 @@ import {useHousehold} from '~/composables/useHousehold'
 import {getHouseholdShortName} from '~/composables/useCoreValidation'
 import {fetchActiveSeasonId, costRowsInclude, readByIds} from '~~/server/data/prismaRepository'
 import {useBilling} from '~/composables/useBilling'
+import {formatDate} from '~/utils/date'
 import {
     useBillingValidation,
     type HouseholdBillingResponse,
@@ -63,7 +67,7 @@ import {
 const {throwH3Error, isPrismaNotFound} = eventHandlerHelper
 
 // The dinner embedded in an order read: its cost is the sum of the selected expense amounts, never the stored column
-const embeddedDinnerEvent = (dinnerEvent: Record<string, unknown>) => useBookingValidation().deserializeDinnerEvent(dinnerEvent)
+const embeddedDinnerEvent = (dinnerEvent: SerializedDinnerEvent) => useBookingValidation().deserializeDinnerEvent(dinnerEvent)
 
 // The user who wrote a history row with the name of their inhabitant, as the order timeline and Billetændringer name them
 const performedByUserSelect = {select: {id: true, email: true, Inhabitant: {select: {name: true, lastName: true}}}} as const
@@ -129,7 +133,6 @@ export const snapshotInhabitantSelect = {
 } satisfies Prisma.InhabitantSelect
 
 type SnapshotInhabitant = Prisma.InhabitantGetPayload<{select: typeof snapshotInhabitantSelect}>
-type SnapshotOrder = Pick<OrderSnapshot, 'id' | 'inhabitantId' | 'dinnerEventId' | 'ticketPriceId' | 'priceAtBooking' | 'dinnerMode' | 'state' | 'isGuestTicket'>
 
 /** An order as its history row keeps it, with its holder's name and household (ADR-011) */
 export const orderSnapshotOf = (order: SnapshotOrder, inhabitant: SnapshotInhabitant): OrderSnapshot => ({
@@ -402,7 +405,8 @@ export async function findReleasedOrderId(d1Client: D1Database, dinnerEventId: n
  *
  * @returns Claimed order with the household and the inhabitant that sold it, or null when the order is no longer for sale
  *
- * ADR-011: Creates USER_CLAIMED audit entry with original household provenance
+ * ADR-011: Creates USER_CLAIMED audit entry with original household provenance; a sale to the waiting list names its
+ * source, so the history tells it from a direct buy
  */
 export async function claimReleasedOrder(
     d1Client: D1Database,
@@ -410,7 +414,8 @@ export async function claimReleasedOrder(
     newInhabitantId: number,
     claimedByUserId: number | null,
     dinnerMode: DinnerMode,
-    isGuestTicket: boolean = false
+    isGuestTicket: boolean = false,
+    source?: OrderAuditSource
 ): Promise<ClaimedOrder | null> {
     const LOG = '🎟️ > ORDER > [CLAIM]'
     const {OrderStateSchema, OrderAuditActionSchema, OrderAuditChangeSchema, createOrderAuditData} = useBookingValidation()
@@ -452,7 +457,7 @@ export async function claimReleasedOrder(
                 inhabitantId: newInhabitantId,
                 dinnerEventId: existingOrder.dinnerEventId,
                 seasonId: existingOrder.dinnerEvent?.seasonId ?? null,
-                auditData: createOrderAuditData(OrderAuditChangeSchema.enum.BUY, orderSnapshotOf(existingOrder, existingOrder.inhabitant))
+                auditData: createOrderAuditData(OrderAuditChangeSchema.enum.BUY, orderSnapshotOf(existingOrder, existingOrder.inhabitant), source)
             }
         })
 
@@ -630,8 +635,8 @@ export async function deleteOrder(
  * Sort comparator for OrderDisplay by sortBy field.
  * Extracted for unit testing (ADR-003).
  */
-export const getOrderSortComparator = (sortBy: 'createdAt' | 'releasedAt') =>
-    byTimeThenId<OrderDisplay>(sortBy === 'releasedAt' ? order => order.releasedAt?.getTime() ?? 0 : order => order.createdAt.getTime())
+export const getOrderSortComparator = (sortBy: OrderSortBy) =>
+    byTimeThenId<OrderDisplay>(sortBy === OrderSortBy.releasedAt ? order => order.releasedAt?.getTime() ?? 0 : order => order.createdAt.getTime())
 
 /**
  * Fetch orders, optionally filtered by dinner event ID(s) and/or household.
@@ -652,7 +657,7 @@ export const getOrderSortComparator = (sortBy: 'createdAt' | 'releasedAt') =>
  * @param dinnerEventIds - Single ID, array of IDs, or undefined for all events
  * @param householdId - Optional household filter (required for user-facing endpoints)
  * @param state - Optional state filter (e.g., RELEASED for claim queue)
- * @param sortBy - Sort field: 'createdAt' (default) or 'releasedAt' (FIFO claim queue)
+ * @param sortBy - Sort field: createdAt (default) or releasedAt (FIFO claim queue)
  * @param includeProvenance - Include provenance for claimed tickets (default: false)
  * @param includeDinnerContext - Include dinner event context (date, menuTitle) for economy views (default: false)
  */
@@ -661,7 +666,7 @@ export async function fetchOrders(
     dinnerEventIds?: number | number[],
     householdId?: number,
     state?: OrderState,
-    sortBy: 'createdAt' | 'releasedAt' = 'createdAt',
+    sortBy: OrderSortBy = OrderSortBy.createdAt,
     includeProvenance: boolean = false,
     includeDinnerContext: boolean = false
 ): Promise<OrderDisplay[]> {
@@ -691,7 +696,7 @@ async function fetchOrdersBatch(
     dinnerEventIds: number[] | undefined,
     householdId: number | undefined,
     state: OrderState | undefined,
-    sortBy: 'createdAt' | 'releasedAt',
+    sortBy: OrderSortBy,
     includeProvenance: boolean,
     includeDinnerContext: boolean
 ): Promise<OrderDisplay[]> {
@@ -717,30 +722,28 @@ async function fetchOrdersBatch(
         }
 
         const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''
-        const orderByColumn = sortBy === 'releasedAt' ? 'o.releasedAt' : 'o.createdAt'
+        const orderByColumn = sortBy === OrderSortBy.releasedAt ? 'o.releasedAt' : 'o.createdAt'
 
-        // Raw SQL with proper JOINs - avoids D1 100 variable limit
-        // LEFT JOIN to latest USER_CLAIMED history entry per order (for provenance)
-        // LEFT JOIN to DinnerEvent for context (date, menuTitle) when includeDinnerContext=true
+        // Raw SQL with JOINs, within D1's 100 variable limit. The provenance is the order's latest USER_CLAIMED row, by
+        // time then by row, looked up per order on the history's orderId index; the dinner context (date, menuTitle)
+        // joins DinnerEvent when includeDinnerContext=true
         const sql = `
             SELECT
                 o.id, o.dinnerEventId, o.inhabitantId, o.bookedByUserId, o.ticketPriceId,
                 o.priceAtBooking, o.dinnerMode, o.state, o.isGuestTicket,
                 o.releasedAt, o.closedAt, o.createdAt, o.updatedAt,
                 tp.ticketType,
-                ${includeProvenance ? 'oh.auditData as provenanceData' : 'NULL as provenanceData'},
+                ${includeProvenance ? `(
+                    SELECT oh.auditData FROM OrderHistory oh
+                    WHERE oh.orderId = o.id AND oh.action = '${OrderAuditActionSchema.enum.USER_CLAIMED}'
+                    ORDER BY oh.timestamp DESC, oh.id DESC
+                    LIMIT 1
+                ) as provenanceData` : 'NULL as provenanceData'},
                 ${includeDinnerContext ? 'de.id as dinnerId, de.date as dinnerDate, de.menuTitle as dinnerMenuTitle' : 'NULL as dinnerId, NULL as dinnerDate, NULL as dinnerMenuTitle'}
             FROM "Order" o
             JOIN Inhabitant i ON i.id = o.inhabitantId
             LEFT JOIN TicketPrice tp ON tp.id = o.ticketPriceId
             ${includeDinnerContext ? 'LEFT JOIN DinnerEvent de ON de.id = o.dinnerEventId' : ''}
-            ${includeProvenance ? `
-            LEFT JOIN (
-                SELECT orderId, auditData, ROW_NUMBER() OVER (PARTITION BY orderId ORDER BY timestamp DESC) as rn
-                FROM OrderHistory
-                WHERE action = '${OrderAuditActionSchema.enum.USER_CLAIMED}'
-            ) oh ON oh.orderId = o.id AND oh.rn = 1
-            ` : ''}
             ${whereClause}
             ORDER BY ${orderByColumn} ASC
         `
@@ -1083,7 +1086,7 @@ export async function updateDinnerEventAllergens(d1Client: D1Database, dinnerEve
  */
 export async function fetchPendingDinnersInActiveSeason(
     d1Client: D1Database
-): Promise<{id: number, date: Date}[]> {
+): Promise<DinnerEventDate[]> {
     const {CONSUMABLE_DINNER_STATES} = useBooking()
     const activeSeasonId = await fetchActiveSeasonId(d1Client)
 
@@ -1365,7 +1368,7 @@ export async function fetchUnbilledTransactions(
     const {deserializeTransaction} = useBillingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
-    console.info(`💰 > BILLING > Fetching unbilled transactions for dinners <= ${cutoffDate.toISOString().split('T')[0]}`)
+    console.info(`💰 > BILLING > Fetching unbilled transactions for dinners <= ${formatDate(cutoffDate)}`)
 
     // Ordered by household address, then pbsId as tiebreaker.
     const transactions = await prisma.transaction.findMany({
@@ -1430,23 +1433,24 @@ export async function bumpBillingPeriodVersion(d1Client: D1Database, id: number)
 
 /*** DELIVERIES (ADR-015 convergence): one row per version of a subject that reached a channel ***/
 
-/** All deliveries of one subject — a handful of rows (one per version and channel, plus re-sends) */
-export async function fetchDeliveries(d1Client: D1Database, subjectType: Delivery['subjectType'], subjectId: number): Promise<Delivery[]> {
+/** The deliveries of the subjects of one type, in the order they were recorded; the ids read in chunks (ADR-014) */
+export async function fetchDeliveries(d1Client: D1Database, subjectType: Delivery['subjectType'], subjectIds: number[]): Promise<Delivery[]> {
     const {DeliverySchema} = useDeliveryValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
-    const rows = await prisma.delivery.findMany({where: {subjectType, subjectId}, orderBy: {id: 'asc'}})
-    return rows.map(row => DeliverySchema.parse(row))
+    const rows = await readByIds(subjectIds, batch => prisma.delivery.findMany({where: {subjectType, subjectId: {in: batch}}}))
+    return rows.map(row => DeliverySchema.parse(row)).sort((a, b) => a.id - b.id)
 }
 
-/** jobRunId null = re-sent by an admin (ADR-012: written as null, never as undefined) */
-export async function recordDelivery(d1Client: D1Database, data: DeliveryCreate): Promise<Delivery> {
+/** The rows in one write (ADR-014); jobRunId null = sent outside a job run (ADR-012: written as null, never as undefined) */
+export async function recordDeliveries(d1Client: D1Database, rows: DeliveryCreate[]): Promise<Delivery[]> {
+    if (rows.length === 0) return []
     const {DeliverySchema} = useDeliveryValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
-    const row = await prisma.delivery.create({data: {...data, jobRunId: data.jobRunId ?? null}})
-    console.info(`📬 > DELIVERY > [RECORD] ${data.subjectType} ${data.subjectId} v${data.version} ${data.kind}`)
-    return DeliverySchema.parse(row)
+    const created = await prisma.delivery.createManyAndReturn({data: rows.map(row => ({...row, jobRunId: row.jobRunId ?? null}))})
+    console.info(`📬 > DELIVERY > [RECORD] ${created.length} rows: ${rows.map(row => `${row.subjectType} ${row.subjectId} v${row.version} ${row.kind}`).join(', ')}`)
+    return created.map(row => DeliverySchema.parse(row))
 }
 
 export async function createInvoices(
@@ -1573,7 +1577,7 @@ export async function fetchHouseholdBilling(
         return null
     }
 
-    const currentPeriod = calculateCurrentBillingPeriod()
+    const currentPeriod = calculateCurrentBillingPeriod(new Date())
 
     // Order selection: id + isGuestTicket + dinnerMode + relations (matches deserializeTransaction signature)
     const orderSelect = {
@@ -1681,20 +1685,20 @@ export async function deleteExpense(d1Client: D1Database, dinnerEventId: number,
     }
 }
 
-/*** ORDER HISTORY OF A DINNER: the rows the chef's Billetændringer replay ***/
+/*** ORDER HISTORY OF DINNERS: the rows the chef's Billetændringer replay and the booking mails count their versions by ***/
 
-// Every history row of the dinner in time order; a deleted order's rows stay through the denormalized dinnerEventId
-export async function fetchOrderHistoryForDinner(d1Client: D1Database, dinnerEventId: number): Promise<OrderHistoryDisplay[]> {
+// Every history row of the dinners in time order; a deleted order's rows stay through the denormalized dinnerEventId.
+// The ids read in chunks (ADR-014)
+export async function fetchOrderHistoryForDinners(d1Client: D1Database, dinnerEventIds: number[]): Promise<OrderHistoryDisplay[]> {
     const {OrderHistoryDisplaySchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
     try {
-        const rows = await prisma.orderHistory.findMany({
-            where: {dinnerEventId},
-            include: {performedByUser: performedByUserSelect},
-            orderBy: [{timestamp: 'asc'}, {id: 'asc'}]
-        })
-        return rows.map(row => OrderHistoryDisplaySchema.parse(row))
+        const rows = await readByIds(dinnerEventIds, batch => prisma.orderHistory.findMany({
+            where: {dinnerEventId: {in: batch}},
+            include: {performedByUser: performedByUserSelect}
+        }))
+        return rows.map(row => OrderHistoryDisplaySchema.parse(row)).sort(byTimeThenId(row => row.timestamp.getTime()))
     } catch (error) {
-        return throwH3Error(`🎟️ > ORDER_HISTORY > [GET] Error fetching the order history of dinner ${dinnerEventId}`, error)
+        return throwH3Error(`🎟️ > ORDER_HISTORY > [GET] Error fetching the order history of ${dinnerEventIds.length} dinner(s)`, error)
     }
 }

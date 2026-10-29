@@ -1,7 +1,6 @@
 import {z} from "zod";
 import type { HouseholdCreate, InhabitantCreate, UserCreate, UserDisplay } from './useCoreValidation'
 import { useCoreValidation } from './useCoreValidation'
-import { DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS } from './useUserPreferenceValidation'
 
 // HN serves S3 presigned avatar URLs (1h expiry, rotating signature per call).
 // Bucket is publicly readable — strip the query so we store stable base URLs.
@@ -111,11 +110,7 @@ export const useHeynaboValidation = () => {
                 email: member.email,
                 phone: member.phone,
                 passwordHash: 'removeme',
-                systemRoles: mapHeynaboRoleToSystemRole(member.role),
-                // A new user starts on the column defaults; an existing user's own settings are
-                // never touched by the import (the update bucket is id-keyed, ADR-013)
-                notificationChannels: [...DEFAULT_NOTIFICATION_CHANNELS],
-                appearance: {...DEFAULT_APPEARANCE}
+                systemRoles: mapHeynaboRoleToSystemRole(member.role)
             }
             inhabitant.user = userDomain
         }
@@ -142,13 +137,14 @@ export const useHeynaboValidation = () => {
      *
      * @param locations - Array of HeynaboLocation data from API
      * @param members - Array of HeynaboMember data from API
+     * @param now - The import's moment, a new household's move-in date
      * @returns Array of HouseholdCreate ready for database creation
      */
-    const createHouseholdsFromImport = (locations: HeynaboLocation[], members: HeynaboMember[]): HouseholdCreate[] => {
+    const createHouseholdsFromImport = (locations: HeynaboLocation[], members: HeynaboMember[], now: Date): HouseholdCreate[] => {
         const households = locations.map(location => {
             const newHousehold: HouseholdCreate = {
                 heynaboId: location.id,
-                movedInDate: new Date(), // Date of first import (preserved on subsequent imports)
+                movedInDate: now, // Date of first import (preserved on subsequent imports)
                 pbsId: location.id, // Default initial value (preserved on subsequent imports)
                 name: location.address.replace(/[^a-zA-Z]*/g, location.address.substring(0, 1)),
                 address: location.address,

@@ -4,10 +4,11 @@ import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick, toValue} from 'vue'
 import AdminAllergies from '~/components/admin/AdminAllergies.vue'
+import AllergyCatalogTable from '~/components/allergy/AllergyCatalogTable.vue'
 import {useAllergiesStore} from '~/stores/allergies'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from '../allergy/allergyTestIds'
-import {mountWithTooltipProvider, mountedStore, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS, expectMasterDetail, findOpenRows} from '~~/tests/component/testHelpers'
 
 // The test environment has no router: navigateTo lands the written query on the route the component reads
 const {mockRoute, mockNavigateTo, landNavigation, useRoute} = await vi.hoisted(async () =>
@@ -99,7 +100,7 @@ describe('AdminAllergies', () => {
                 await openDetail(wrapper)
 
                 expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.edit)).toHaveLength(1)
-                expect(wrapper.find(`tbody [data-testid="${ALLERGY_TEST_IDS.edit}"]`).exists()).toBe(!isMd)
+                expect(findByTestId(wrapper.find('tbody'), ALLERGY_TEST_IDS.edit).exists()).toBe(!isMd)
                 expect(findByTestId(wrapper, ALLERGY_TEST_IDS.form).exists()).toBe(false)
 
                 await clickByTestId(wrapper, ALLERGY_TEST_IDS.edit)
@@ -116,6 +117,15 @@ describe('AdminAllergies', () => {
                 expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.form)).toHaveLength(1)
             })
         })
+    })
+
+    it('md: the catalog is the master and the open detail pane the detail', async () => {
+        const wrapper = await mountAdmin({}, true)
+
+        // The catalog renders UTable's several roots, so its wrapper's element is the one holding it: the master
+        const master = wrapper.findComponent(AllergyCatalogTable).element
+        expectMasterDetail(master, master.nextElementSibling)
+        expect(master.nextElementSibling?.contains(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).element)).toBe(true)
     })
 
     // The phone layout: the detail opens by tapping the first row
@@ -256,10 +266,12 @@ describe('AdminAllergies', () => {
             expect(wrapper.text()).not.toContain('Detaljer')
         })
 
-        it('tapping the selected row again collapses the detail', async () => {
+        it('tapping a row docks the detail in the row after it, and tapping it again collapses the detail', async () => {
             const wrapper = await mountAdmin({}, false)
             await clickByTestId(wrapper, firstRow)
-            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).exists()).toBe(true)
+            const open = findOpenRows(wrapper)
+            expect(open.map(({row}) => findByTestId(row, firstRow).exists())).toEqual([true])
+            expect(open.map(({detail}) => findByTestId(detail, ALLERGY_TEST_IDS.edit).exists())).toEqual([true])
 
             await clickByTestId(wrapper, firstRow)
 

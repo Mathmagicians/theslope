@@ -4,6 +4,7 @@
  * Returns a result in every case, so billing completes independently of the archive.
  */
 import {useBillingValidation, type BillingArchiveResult, type BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
+import {DATE_SETTINGS, formatDate} from '~/utils/date'
 
 const {generateBillingCsv, generateCsvFilename} = useBillingValidation()
 const LOG = '💰 > BILLING > [ARCHIVE]'
@@ -11,7 +12,7 @@ const CONTENT_TYPE = 'text/csv; charset=utf-8'
 
 /** ASCII key from the cutoff month and the version (billingPeriod's `dd/MM/yyyy-dd/MM/yyyy` carries slashes) */
 export const getBillingArchiveKey = (cutoffDate: Date, version: number): string => {
-    const month = cutoffDate.toISOString().slice(0, 7)
+    const month = formatDate(cutoffDate, DATE_SETTINGS.ISO_MONTH_MASK)
     return `billing/${month}/pbs-opgoerelse-${month}-v${version}.csv`
 }
 

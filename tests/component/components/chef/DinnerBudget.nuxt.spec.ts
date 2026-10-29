@@ -8,15 +8,17 @@ import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useOrder} from '~/composables/useOrder'
 import {useTicket, ticketTypeLabel} from '~/composables/useTicket'
 import {useBookingValidation, type OrderDetail, type OrderState, type TicketType} from '~/composables/useBookingValidation'
-import {dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, registerEmptyStoreEndpoints, kitchenConfig, resetStores} from '~~/tests/component/testHelpers'
-import {formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
+import {cookingRoundWords, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, registerEmptyStoreEndpoints, kitchenConfig, resetStores, tableHeaders, cellsByHeader, rowAt} from '~~/tests/component/testHelpers'
+import {formatDate, DATE_SETTINGS} from '~/utils/date'
+import {formatPortions} from '~/utils/utils'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 /**
  * DinnerBudget: the three boxes in both units, the RÅDIGHEDSBELØB box with start, Brugt and Tilbage, and under the
  * one chevron the ticket table named by type, the summary, the ticket changes and the team's round.
  */
-const {calculateBudget} = useOrder()
+const {calculateBudget, calculateTotalPortions} = useOrder()
 const {formatPrice} = useTicket()
 const {TicketTypeSchema, OrderStateSchema} = useBookingValidation()
 
@@ -35,12 +37,12 @@ const orders = [
     ticket(3, TicketTypeSchema.enum.CHILD, 2500)
 ]
 const expenses = [ExpenseFactory.defaultExpense({id: 1, amount: 4000})]
-const round: CookingRoundRow[] = [
-    {dinnerEventId: 7, date: new Date('2026-04-12T18:00:00'), menuTitle: 'Lasagne', isCurrent: true, budgetGross: 11875, spentGross: 4000},
-    {dinnerEventId: 8, date: new Date('2026-04-13T18:00:00'), menuTitle: 'Risotto', isCurrent: false, budgetGross: 15000, spentGross: 0}
-]
-const ownHeading = `Lasagne, ${formatDate(round[0]!.date, DATE_SETTINGS.DAY_MONTH_MASK)}`
-const roundHeading = `Hele Madhold 2, periode ${formatDateRange({start: round[0]!.date, end: round[1]!.date}, DATE_SETTINGS.DAY_MONTH_MASK)}`
+// The team's round, Lasagne the dinner on view
+const LASAGNE: CookingRoundRow = {dinnerEventId: 7, date: new Date('2026-04-12T18:00:00'), menuTitle: 'Lasagne', isCurrent: true, budgetGross: 11875, spentGross: 4000}
+const RISOTTO: CookingRoundRow = {dinnerEventId: 8, date: new Date('2026-04-13T18:00:00'), menuTitle: 'Risotto', isCurrent: false, budgetGross: 15000, spentGross: 0}
+const round = [LASAGNE, RISOTTO]
+const ownHeading = `Lasagne, ${formatDate(LASAGNE.date, DATE_SETTINGS.DAY_MONTH_MASK)}`
+const roundWords = cookingRoundWords('Madhold 2', 2, LASAGNE.date, RISOTTO.date)
 
 // The ticket changes pane reaches the bookings store; its datasets answer empty here
 registerEmptyStoreEndpoints()
@@ -53,7 +55,7 @@ beforeEach(() => {
 })
 
 const mount = (props: Record<string, unknown> = {}) => mountWithTooltipProvider(DinnerBudget, {
-    props: {orders, mode: 'full', expenses, dinnerEventId: 7, bookingDeadline: new Date('2026-04-03T18:00:00'), dinnerFragment: dinnerSpendingFragment(round[0]!, expenses), teamFragment: teamSpendingFragment(round, {team: 'Hele Madhold 2', heading: roundHeading}), ...props},
+    props: {orders, mode: 'full', expenses, dinnerEventId: 7, bookingDeadline: new Date('2026-04-03T18:00:00'), dinnerFragment: dinnerSpendingFragment(LASAGNE, expenses), teamFragment: teamSpendingFragment(round, roundWords), ...props},
     isMd: true
 })
 
@@ -65,14 +67,25 @@ describe('DinnerBudget', () => {
         expect(findByTestId(wrapper, 'budget-box-revenue').text()).not.toContain('/')
         expect(findByTestId(wrapper, 'budget-box-available').text()).toContain(`/ ${formatPrice(budget.availableBudget)} kr`)
         expect(findByTestId(wrapper, 'budget-box-contribution').text()).toContain(`/ ${formatPrice(budget.kitchenContribution)} kr`)
+        // Both split boxes name the units under their amount
+        expect(findByTestId(wrapper, 'budget-box-available').text()).toContain(BOOKING_WORDS.vatUnits)
+        expect(findByTestId(wrapper, 'budget-box-contribution').text()).toContain(BOOKING_WORDS.vatUnits)
         expect(budget.totalRevenue).toBe(12500)
+        // The pane's title and chevron, each box's label, the kuverter and the contribution's rate
+        expect(wrapper.find('h4').text()).toBe(BOOKING_WORDS.budget.title)
+        expect(wrapper.find('button[name="toggle-budget-details"]').attributes('aria-label')).toBe(BOOKING_WORDS.budget.toggle(false))
+        expect(findByTestId(wrapper, 'budget-box-revenue').text()).toContain(BOOKING_WORDS.budget.boxes.revenue)
+        expect(findByTestId(wrapper, 'budget-box-revenue').text()).toContain(BOOKING_WORDS.budget.portions(formatPortions(calculateTotalPortions(orders))))
+        expect(findByTestId(wrapper, 'budget-box-available').text()).toContain(BOOKING_WORDS.budget.boxes.allowance)
+        expect(findByTestId(wrapper, 'budget-box-contribution').text()).toContain(BOOKING_WORDS.budget.boxes.contribution)
+        expect(findByTestId(wrapper, 'budget-box-contribution').text()).toContain(BOOKING_WORDS.budget.contributionRate(baseRate))
 
         // Brugt and Tilbage with its icon; both carry the icon slot, so their kr line up
         expect(findByTestId(wrapper, 'budget-spent').text()).toContain(`/ ${formatPrice(4000)} kr`)
         expect(findByTestId(wrapper, 'budget-left').text()).toContain(`/ +${formatPrice(budget.availableBudget - 4000)} kr`)
-        expect(findByTestId(wrapper, 'budget-left').find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
-        expect(findByTestId(wrapper, 'budget-spent').find('[data-testid="vat-amount-slot"]').exists()).toBe(true)
-        expect(findByTestId(wrapper, 'budget-left').find('[data-testid="vat-amount-slot"]').exists()).toBe(true)
+        expect(findByTestId(findByTestId(wrapper, 'budget-left'), 'vat-amount-ok').exists()).toBe(true)
+        expect(findByTestId(findByTestId(wrapper, 'budget-spent'), 'vat-amount-slot').exists()).toBe(true)
+        expect(findByTestId(findByTestId(wrapper, 'budget-left'), 'vat-amount-slot').exists()).toBe(true)
 
         expect(findByTestId(wrapper, 'budget-details').exists()).toBe(false)
     })
@@ -82,22 +95,30 @@ describe('DinnerBudget', () => {
         await wrapper.find('button[name="toggle-budget-details"]').trigger('click')
         await wrapper.vm.$nextTick()
 
-        const rows = findByTestId(wrapper, 'budget-ticket-table').findAll('tbody tr').filter(tr => tr.attributes('data-testid') === undefined && !tr.text().includes('Køkkenbidrag'))
-        expect(rows.map(row => row.find('td').text())).toEqual([ticketTypeLabel(TicketTypeSchema.enum.ADULT), ticketTypeLabel(TicketTypeSchema.enum.CHILD)])
+        expect(wrapper.find('button[name="toggle-budget-details"]').attributes('aria-label')).toBe(BOOKING_WORDS.budget.toggle(true))
+        // The ticket table: its headers, a row per type, then its sums: Indtægter, Køkkenbidrag at its rate, Rådighedsbeløb
+        const ticketTable = findByTestId(wrapper, 'budget-ticket-table')
+        expect(tableHeaders(ticketTable)).toEqual(Object.values(BOOKING_WORDS.budget.ticketColumns))
+        expect([0, 1].map(index => cellsByHeader(ticketTable, index)[BOOKING_WORDS.budget.ticketColumns.ticketType])).toEqual([ticketTypeLabel(TicketTypeSchema.enum.ADULT), ticketTypeLabel(TicketTypeSchema.enum.CHILD)])
+        expect(rowAt(ticketTable, 2).attributes('data-testid')).toBe('budget-summary-revenue')
+        expect(rowAt(ticketTable, 2).text()).toContain(BOOKING_WORDS.budget.revenue)
+        expect(rowAt(ticketTable, 3).text()).toContain(BOOKING_WORDS.budget.contribution(baseRate))
         expect(findByTestId(wrapper, 'budget-summary-left').exists()).toBe(false)
         expect(findByTestId(wrapper, 'budget-summary-available').exists()).toBe(true)
-        expect(findAllByTestId(wrapper, 'cooking-round')).toHaveLength(2)
-        // This dinner: its heading, its one receipt as a row, its figures in the total row; the arrow only in the team's
-        const own = findAllByTestId(wrapper, 'cooking-round')[0]!
-        expect(own.find('[data-testid="cooking-round-heading"]').text()).toBe(ownHeading)
-        expect(own.text()).toContain(`/ ${formatPrice(4000)} kr`)
-        expect(own.find('[data-testid="cooking-round-marker"]').exists()).toBe(false)
-        expect(findAllByTestId(wrapper, 'cooking-round')[1]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(true)
+        // This dinner: its heading, its one receipt as a row, its figures in the total row; the team's round: its badge,
+        // its period and the arrow, which only the team's carries
+        const sections = findAllByTestId(wrapper, 'cooking-round').map(section => ({
+            heading: findByTestId(section, 'cooking-round-heading').text(),
+            text: section.text(),
+            marked: findByTestId(section, 'cooking-round-marker').exists()
+        }))
+        expect(sections).toEqual([
+            {heading: ownHeading, text: expect.stringContaining(`/ ${formatPrice(4000)} kr`), marked: false},
+            {heading: expect.stringContaining(roundWords.period), text: expect.any(String), marked: true}
+        ])
         expect(findByTestId(wrapper, 'ticket-changes').exists()).toBe(true)
-        expect(findByTestId(wrapper, 'cooking-round').exists()).toBe(true)
         // The dinner's figures, then the team's, then the ticket changes last
         expect(wrapper.html().indexOf('data-testid="ticket-changes"')).toBeGreaterThan(wrapper.html().indexOf('data-testid="cooking-round"'))
-        expect(findAllByTestId(wrapper, 'cooking-round-heading')[1]!.text()).toBe(roundHeading)
     })
 
     it('GIVEN no tickets WHEN opened THEN there are no ticket changes to see', async () => {
@@ -108,7 +129,7 @@ describe('DinnerBudget', () => {
     })
 
     it('GIVEN a lone dinner WHEN opened THEN only this dinner\'s fragment shows, headed by the dinner', async () => {
-        const wrapper = await mount({dinnerFragment: dinnerSpendingFragment(round[0]!, expenses), teamFragment: null})
+        const wrapper = await mount({dinnerFragment: dinnerSpendingFragment(LASAGNE, expenses), teamFragment: null})
         await wrapper.find('button[name="toggle-budget-details"]').trigger('click')
         await wrapper.vm.$nextTick()
         expect(findAllByTestId(wrapper, 'cooking-round')).toHaveLength(1)

@@ -3,12 +3,13 @@ import {z} from 'zod'
 import {idParams} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {getRequiredUser} from '~~/server/utils/authorizationHelper'
-import {fetchDinnerEvent, fetchOrderHistoryForDinner} from '~~/server/data/financesRepository'
+import {fetchDinnerEvent, fetchOrderHistoryForDinners} from '~~/server/data/financesRepository'
 import {fetchHouseholdsByIds, fetchHouseholdsByInhabitantIds, fetchSeason} from '~~/server/data/prismaRepository'
 import {getSystemUserId} from '~~/server/utils/systemUser'
 import {useBookingValidation, type TicketChangesResponse} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 import {useSeason} from '~/composables/useSeason'
+import {useTicket} from '~/composables/useTicket'
 
 const {throwH3Error} = eventHandlerHelper
 const LOG = '🎟️ > CHEF > ORDER_HISTORY > [GET]'
@@ -27,6 +28,7 @@ export default defineEventHandler(async (event): Promise<TicketChangesResponse> 
     const {TicketChangesResponseSchema, OrderAuditActionSchema, readOrderAudit} = useBookingValidation()
     const {replayTicketChanges} = useBooking()
     const {deadlinesForSeason} = useSeason()
+    const {findTicketPriceById} = useTicket()
 
     let id!: number
     let since: Date | undefined
@@ -42,23 +44,24 @@ export default defineEventHandler(async (event): Promise<TicketChangesResponse> 
     try {
         const dinner = await fetchDinnerEvent(d1Client, id)
         if (!dinner?.seasonId) throw createError({statusCode: 404, message: `Dinner event ${id} not found in a season`})
-        const [season, history, systemUserId] = await Promise.all([fetchSeason(d1Client, dinner.seasonId), fetchOrderHistoryForDinner(d1Client, id), getSystemUserId(d1Client)])
+        // The reads go one after another (ADR-014)
+        const season = await fetchSeason(d1Client, dinner.seasonId)
+        const history = await fetchOrderHistoryForDinners(d1Client, [id])
+        const systemUserId = await getSystemUserId(d1Client)
         // A legacy creation row names its household by id; a snapshot carries the short name itself
         const unnamedHouseholdIds = history.map(readOrderAudit)
             .flatMap(audit => audit?.householdId && !audit.householdShortname ? [audit.householdId] : [])
         // A sale's row names the buyer's inhabitant; its snapshot names the seller's household
         const buyerIds = history.flatMap(row => row.action === OrderAuditActionSchema.enum.USER_CLAIMED && row.inhabitantId !== null ? [row.inhabitantId] : [])
-        const [households, buyerHouseholds] = await Promise.all([
-            fetchHouseholdsByIds(d1Client, unnamedHouseholdIds),
-            fetchHouseholdsByInhabitantIds(d1Client, buyerIds)
-        ])
-        const ticketPriceOf = (ticketPriceId: number) => season?.ticketPrices.find(price => price.id === ticketPriceId) ?? null
+        const households = await fetchHouseholdsByIds(d1Client, unnamedHouseholdIds)
+        const buyerHouseholds = await fetchHouseholdsByInhabitantIds(d1Client, buyerIds)
+        const ticketPriceOf = (ticketPriceId: number) => findTicketPriceById(ticketPriceId, season?.ticketPrices ?? []) ?? null
         const shortNames = new Map(households.map(household => [household.id, household.shortName]))
         const householdShortnameOf = (householdId: number) => shortNames.get(householdId) ?? null
         const householdByInhabitant = new Map(buyerHouseholds.flatMap(household => household.inhabitants.map(inhabitant => [inhabitant.id, household] as const)))
         const householdOfInhabitant = (inhabitantId: number) => householdByInhabitant.get(inhabitantId) ?? null
         // The moment Framelding closes: after it only the admin's correction deletes an order
-        const bookingDeadline = season ? deadlinesForSeason(season).getBookingDeadlineTime(dinner.date) : undefined
+        const bookingDeadline = season ? deadlinesForSeason(season, new Date()).getBookingDeadlineTime(dinner.date) : undefined
 
         const all = replayTicketChanges(history, ticketPriceOf, systemUserId, householdShortnameOf, householdOfInhabitant, bookingDeadline).reverse()
         const changes = since ? all.filter(change => change.timestamp >= since) : all

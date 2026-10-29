@@ -4,8 +4,10 @@
  * Following ADR-001: Import enums from validation composables (NOT from generated layer)
  */
 import {useBookingValidation, TicketState, type OrderDisplay, type OrderDetail, type TicketType} from '~/composables/useBookingValidation'
-import {ticketStateOf} from '~/composables/useBooking'
+import {isPendingOrder, ticketStateOf} from '~/composables/useBooking'
+import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {sumBy} from '~/utils/ledger'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 /**
  * Statistics for one dining mode in kitchen display
@@ -35,7 +37,7 @@ export const useOrder = () => {
    * @returns "Gæst af {bookerName}" or "Gæst"
    */
   const formatGuestLabel = (bookerName?: string): string =>
-    bookerName ? `Gæst af ${bookerName}` : 'Gæst'
+    bookerName ? BOOKING_WORDS.guests.ofBooker(bookerName) : BOOKING_WORDS.guests.name
 
   /**
    * The orders the kitchen cooks for: every order not released
@@ -51,6 +53,12 @@ export const useOrder = () => {
    */
   const getReleasedOrders = <T extends OrderDisplay>(orders: T[]): T[] => {
     return orders.filter(o => ticketStateOf(o) === TicketState.released)
+  }
+
+  // A person's counts over their own orders and places: the tickets waiting for the close, the released among them, the places
+  const personTicketCounts = (orders: OrderDisplay[], entries: TicketWaitlistDisplay[]): {total: number, released: number, queued: number} => {
+    const tickets = orders.filter(isPendingOrder)
+    return {total: tickets.length, released: getReleasedOrders(tickets).length, queued: entries.length}
   }
 
   // The kitchen's count of the orders: a ticket weighs its price's portions; a ticket whose price row is gone weighs 0
@@ -246,6 +254,7 @@ export const useOrder = () => {
     // State filtering
     getActiveOrders,
     getReleasedOrders,
+    personTicketCounts,
 
     // Grouping and calculations
     groupByTicketType,

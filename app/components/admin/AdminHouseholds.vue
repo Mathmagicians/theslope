@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { getPaginationRowModel } from '@tanstack/vue-table'
-import type {HouseholdDisplay} from '~/composables/useCoreValidation'
+import type {HouseholdDisplay, HouseholdCreate, HouseholdMoveOut} from '~/composables/useCoreValidation'
 
 interface Props {
   canEdit?: boolean
@@ -14,8 +14,9 @@ const {households, isHouseholdsLoading, isHouseholdsErrored, householdsError} = 
 
 
 const {COMPONENTS, SIZES, BUTTONS, ICONS, TYPOGRAPHY, TEXT, getResidencyDisplay, NOISE} = useTheSlopeDesignSystem()
+const now = useClock()
 
-// Row expansion for edit panel
+// The open edit panels, keyed by the household's row id
 const expanded = ref<Record<string, boolean>>({})
 
 // Event handlers — store owns API calls, toasts, error handling
@@ -30,15 +31,8 @@ const handleDeleteHousehold = async (householdId: number) => {
 
 const isCreateFormOpen = ref(false)
 
-const handleCreateHousehold = async (payload: {
-  pbsId: number
-  address: string
-  movedInDate: Date
-  heynaboId: number
-  name: string
-  prevOwnerMoveOutUpdates: {id: number, moveOutDate: Date}[]
-}) => {
-  const created = await householdsStore.createHousehold(payload)
+const handleCreateHousehold = async (household: HouseholdCreate, prevOwnerMoveOutUpdates: HouseholdMoveOut[]) => {
+  const created = await householdsStore.createHousehold(household, prevOwnerMoveOutUpdates)
   if (created) isCreateFormOpen.value = false
 }
 
@@ -66,8 +60,8 @@ const filteredHouseholds = computed(() => {
 
   // Sort: non-active residency status first (pending, leaving, moved-out), then by address
   result = [...result].sort((a, b) => {
-    const aInteresting = getResidencyStatus(a.movedInDate, a.moveOutDate) !== 'active'
-    const bInteresting = getResidencyStatus(b.movedInDate, b.moveOutDate) !== 'active'
+    const aInteresting = getResidencyStatus(a.movedInDate, a.moveOutDate, now.value) !== 'active'
+    const bInteresting = getResidencyStatus(b.movedInDate, b.moveOutDate, now.value) !== 'active'
     if (aInteresting !== bInteresting) return aInteresting ? -1 : 1
     return (a.address ?? '').localeCompare(b.address ?? '')
   })
@@ -130,7 +124,6 @@ v-if="isHouseholdsErrored"
         <UButton
             v-if="props.canEdit && !isCreateFormOpen"
             v-bind="BUTTONS.save"
-            :size="SIZES.standard"
             data-testid="open-create-household"
             @click="isCreateFormOpen = true"
         >
@@ -168,6 +161,7 @@ v-if="isHouseholdsErrored"
         ref="table"
         v-model:pagination="pagination"
         v-model:expanded="expanded"
+        :get-row-id="rowIdOf"
         :columns="columns"
         :data="filteredHouseholds"
         :loading="isHouseholdsLoading"
@@ -195,7 +189,7 @@ v-if="isHouseholdsErrored"
       <template #pbsId-cell="{ row }">
         <div :class="COMPONENTS.adminHouseholds.pbsCell">
           <span>{{ row.original.pbsId }}</span>
-          <template v-for="residency in [getResidencyDisplay(row.original.movedInDate, row.original.moveOutDate)]" :key="residency?.badgeText">
+          <template v-for="residency in [getResidencyDisplay(row.original.movedInDate, row.original.moveOutDate, now)]" :key="residency?.badgeText">
             <UBadge
               v-if="residency"
               :color="residency.color"

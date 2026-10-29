@@ -17,7 +17,7 @@
  *   Tilbage                                           +115 /  +143 kr (check)
  *
  *   ──────────────────────────────────────────────────────────────────
- *   Hele Madhold 2, periode 12/04-14/04
+ *   Madhold 2, periode 12/04-14/04
  *   Rådighedsbeløb                                   4.435 / 5.544 kr
  *   Brugt                                            4.245 / 5.307 kr
  *   ──────────────────────────────────────────────────────────────────
@@ -31,13 +31,15 @@
  *
  * Tokens: the folded row and the editor head bind cardSection like the allergen row; the edit button is
  * BUTTONS.secondaryAction, Luk BUTTONS.cancel, Tilføj BUTTONS.save, slet BUTTONS.remove; every amount is a VatAmount
- * in the expenseLines grid; the whole-team heading is the text cookingRoundWords builds, shared with CookingRoundSpending.
+ * in the expenseLines grid; the round's heading is the text cookingRoundWords builds.
  */
 import type {Expense, ExpenseCreate, ExpenseLineForm, VatMode} from '~/composables/useBillingValidation'
 import type {SpendingFigures} from '~/composables/useOrder'
 import {allowanceRows} from '~/composables/useBookingUi'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 import type {Form, FormSubmitEvent, TableColumn} from '@nuxt/ui'
+import {BOOKING_WORDS} from '~/config/bookingWords'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 const props = withDefaults(defineProps<{
   expenses: Expense[]
@@ -68,17 +70,16 @@ const emit = defineEmits<{
 }>()
 
 const {COMPONENTS, BUTTONS, ICONS, COLOR, LAYOUTS, SIZES, ALERTS, getRandomEmptyMessageText} = useTheSlopeDesignSystem()
-const noReceipts = getRandomEmptyMessageText('noReceipts')
+const now = useClock()
+const noReceipts = getRandomEmptyMessageText('noReceipts', now.value)
 const {ExpenseLineFormSchema, VatModeSchema} = useBillingValidation()
 const {formatPrice} = useTicket()
 const {typedKrToGrossOre, typedKrOtherUnitOre} = useOrder()
 const appConfig = useAppConfig()
-const vatPercent = appConfig.theslope?.kitchen?.vatPercent ?? 25
+const {vatPercent} = appConfig.theslope.kitchen
 const VatModeValue = VatModeSchema.enum
-const vatModeItems = [
-  {value: VatModeValue.inkl, label: 'Inkl. moms'},
-  {value: VatModeValue.ex, label: 'Ex moms'}
-]
+const WORDS = BOOKING_WORDS.budget
+const vatModeItems = VatModeSchema.options.map(value => ({value, label: WORDS.vatModes[value]}))
 
 const glyphName = computed(() => props.glyph ?? ICONS.shoppingCart)
 const buttonColor = computed(() => props.color ?? COLOR.primary)
@@ -99,7 +100,7 @@ const alternative = computed(() => {
   const kr = Number(draft.amountKr)
   if (!(kr > 0)) return null
   const other = formatPrice(typedKrOtherUnitOre(kr, isExVat(draft.vatMode), vatPercent))
-  return isExVat(draft.vatMode) ? `= ${other} kr inkl. moms` : `= ${other} kr ex moms`
+  return WORDS.otherUnit[draft.vatMode](other)
 })
 
 const handleSubmit = ({data}: FormSubmitEvent<ExpenseLineForm>) => {
@@ -114,10 +115,10 @@ const spent = computed(() => sumAmounts(props.expenses))
 const sumRows = computed(() => allowanceRows({budgetGross: props.budgetGross, spentGross: spent.value}))
 const roundRows = computed(() => props.round ? allowanceRows(props.round.figures) : [])
 const lineColumns: TableColumn<Expense>[] = [
-  {id: 'date', header: 'Dato'},
-  {id: 'payer', header: 'Bestiller'},
-  {id: 'note', header: 'Note'},
-  {id: 'amount', header: 'ex / inkl. moms', meta: COMPONENTS.table.amountColumn},
+  {id: 'date', header: WORDS.columns.date},
+  {id: 'payer', header: WORDS.columns.payer},
+  {id: 'note', header: WORDS.columns.note},
+  {id: 'amount', header: BOOKING_WORDS.vatUnits, meta: COMPONENTS.table.amountColumn},
   {id: 'remove', header: ''}
 ]
 </script>
@@ -132,7 +133,7 @@ const lineColumns: TableColumn<Expense>[] = [
       <div :class="COMPONENTS.cardSection.line">
         <template v-if="expenses.length">
           <VatAmount :gross="spent" data-testid="expense-total" />
-          <span :class="COMPONENTS.vatAmount.unitHeader">ex / inkl. moms</span>
+          <span :class="COMPONENTS.vatAmount.unitHeader">{{ BOOKING_WORDS.vatUnits }}</span>
         </template>
         <span v-else :class="COMPONENTS.expenseLines.empty" data-testid="expense-empty">{{ emptyText }}</span>
       </div>
@@ -154,7 +155,7 @@ const lineColumns: TableColumn<Expense>[] = [
       <div :class="COMPONENTS.cardSection.editorHead">
         <h4 :class="COMPONENTS.cardSection.editorTitle">{{ hint }}</h4>
         <div :class="LAYOUTS.formButtonRow">
-          <UButton v-bind="BUTTONS.cancel" data-testid="expense-back" @click="isOpen = false">Luk</UButton>
+          <UButton v-bind="BUTTONS.cancel" data-testid="expense-back" @click="isOpen = false">{{ BUTTON_WORDS.close }}</UButton>
         </div>
       </div>
 
@@ -168,16 +169,16 @@ const lineColumns: TableColumn<Expense>[] = [
       >
         <div :class="COMPONENTS.expenseLines.formRow">
           <UFormField name="amountKr" :class="COMPONENTS.expenseLines.amountField">
-            <UInput v-model.number="draft.amountKr" type="number" min="0" placeholder="beløb" name="expense-amount-input" :size="SIZES.small" :class="COMPONENTS.expenseLines.control" />
+            <UInput v-model.number="draft.amountKr" type="number" min="0" :placeholder="WORDS.placeholders.amount" name="expense-amount-input" :size="SIZES.small" :class="COMPONENTS.expenseLines.control" />
           </UFormField>
           <UFormField name="vatMode" :class="COMPONENTS.expenseLines.vatField">
             <USelect v-model="draft.vatMode" :items="vatModeItems" value-key="value" name="expense-vat-select" :size="SIZES.small" :class="COMPONENTS.expenseLines.control" />
           </UFormField>
           <UFormField name="note" :class="COMPONENTS.expenseLines.noteField">
-            <UInput v-model="draft.note" placeholder="note" name="expense-note-input" :size="SIZES.small" :class="COMPONENTS.expenseLines.control" />
+            <UInput v-model="draft.note" :placeholder="WORDS.placeholders.note" name="expense-note-input" :size="SIZES.small" :class="COMPONENTS.expenseLines.control" />
           </UFormField>
           <UButton v-bind="BUTTONS.save" :size="SIZES.small" :loading="pending" :disabled="pending" data-testid="expense-add" @click="formRef?.submit()">
-            Tilføj
+            {{ BUTTON_WORDS.add }}
           </UButton>
         </div>
         <div v-if="alternative" :class="COMPONENTS.expenseLines.alternative" data-testid="expense-alternative">{{ alternative }}</div>
@@ -190,7 +191,7 @@ const lineColumns: TableColumn<Expense>[] = [
         <template #note-cell="{ row }"><span :class="COMPONENTS.expenseLines.textCell" data-testid="expense-note">{{ row.original.description }}</span></template>
         <template #amount-cell="{ row }"><VatAmount :gross="row.original.amount" /></template>
         <template #remove-cell="{ row }">
-          <UButton v-bind="BUTTONS.remove" aria-label="Slet" :disabled="pending" data-testid="expense-remove" @click="emit('remove', row.original.id)" />
+          <UButton v-bind="BUTTONS.remove" :aria-label="BUTTON_WORDS.remove" :disabled="pending" data-testid="expense-remove" @click="emit('remove', row.original.id)" />
         </template>
         <template #empty>
           <UAlert v-bind="ALERTS.emptyStateCompact" :title="noReceipts" data-testid="expense-table-empty" />

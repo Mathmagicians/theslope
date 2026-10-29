@@ -1,9 +1,10 @@
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
+import {afterEach, beforeEach, describe, expect, it} from 'vitest'
 import {emit} from '~~/server/utils/sender/emit'
 import {buildTestEmail} from '~~/server/utils/sender/events/test'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 import {fakeSenderQueue, sentBatches} from '~~/tests/component/utils/sender/fakeSenderQueue'
 import type {EmailMessage} from '~/composables/useNotificationValidation'
+import {spyOnLogs} from '~~/tests/component/logSpies'
 
 // Each message composes its own dedupe key
 const message = () => buildTestEmail(NotificationFactory.config())
@@ -14,7 +15,7 @@ const queued = (sent: EmailMessage) => ({queued: true, dedupeKey: sent.meta.dedu
 const notQueued = (sent: EmailMessage, degraded = false) => ({queued: false, dedupeKey: sent.meta.dedupeKey, degraded})
 
 describe('emit', () => {
-    const logs = {warn: vi.spyOn(console, 'warn'), error: vi.spyOn(console, 'error'), info: vi.spyOn(console, 'info')}
+    const logs = spyOnLogs()
     beforeEach(() => Object.values(logs).forEach(spy => spy.mockImplementation(() => {})))
     afterEach(() => Object.values(logs).forEach(spy => spy.mockClear()))
 

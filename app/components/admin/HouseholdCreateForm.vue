@@ -7,7 +7,8 @@
  * when no addresses exist (e.g. before first Heynabo sync).
  */
 import type {FormSubmitEvent, Form} from '@nuxt/ui'
-import type {HouseholdDisplay, HouseholdCreateFormData} from '~/composables/useCoreValidation'
+import type {HouseholdDisplay, HouseholdCreateFormData, HouseholdCreate, HouseholdMoveOut} from '~/composables/useCoreValidation'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 interface Props {
     existingHouseholds: HouseholdDisplay[]
@@ -15,23 +16,15 @@ interface Props {
 
 const props = defineProps<Props>()
 
-interface CreatePayload {
-    pbsId: number
-    address: string
-    movedInDate: Date
-    heynaboId: number
-    name: string
-    // Move-out dates to apply to existing prevOwners whose date changed or was null.
-    prevOwnerMoveOutUpdates: {id: number, moveOutDate: Date}[]
-}
-
+// The create carries the move-outs of the prevOwners whose date changed or was null
 const emit = defineEmits<{
-    create: [payload: CreatePayload]
+    create: [household: HouseholdCreate, prevOwnerMoveOutUpdates: HouseholdMoveOut[]]
     cancel: []
 }>()
 
-const {BUTTONS, SIZES, COLOR, ICONS, ALERTS, TYPOGRAPHY, LAYOUTS} = useTheSlopeDesignSystem()
+const {BUTTONS, SIZES, COLOR, ICONS, ALERTS, TYPOGRAPHY, LAYOUTS, COMPONENTS} = useTheSlopeDesignSystem()
 const {HouseholdCreateFormSchema} = useCoreValidation()
+const now = useClock()
 
 const formRef = useTemplateRef<Form<HouseholdCreateFormData>>('formRef')
 
@@ -75,7 +68,7 @@ const prevOwners = computed((): HouseholdDisplay[] => {
 })
 
 const isImmutable = (s: HouseholdDisplay) =>
-    getResidencyStatus(s.movedInDate, s.moveOutDate ?? null) === 'moved-out'
+    getResidencyStatus(s.movedInDate, s.moveOutDate ?? null, now.value) === 'moved-out'
 
 // Admin overrides per prevOwner. Falls back to original moveOutDate or new movedInDate.
 const prevOwnerDates = reactive<Record<number, Date | null>>({})
@@ -120,9 +113,8 @@ const handleSubmit = async (event: FormSubmitEvent<HouseholdCreateFormData>) => 
             address: address.trim(),
             movedInDate,
             heynaboId: prevOwner.heynaboId,
-            name: prevOwner.name,
-            prevOwnerMoveOutUpdates
-        })
+            name: prevOwner.name
+        }, prevOwnerMoveOutUpdates)
     } finally {
         isSaving.value = false
     }
@@ -151,13 +143,12 @@ const handleCancel = () => emit('cancel')
     >
         <UCard
             :color="COLOR.info"
-            variant="soft"
-            :ui="{body: 'p-4 flex flex-col gap-4', footer: 'p-4'}"
+            v-bind="COMPONENTS.guestBookingForm.card"
         >
             <template #header>
-                <div class="flex items-center gap-2">
-                    <UIcon :name="ICONS.plusCircle" class="size-5 text-info" />
-                    <h4 class="text-md font-semibold">Ny husstand</h4>
+                <div :class="COMPONENTS.guestBookingForm.header">
+                    <UIcon :name="ICONS.plusCircle" :class="COMPONENTS.guestBookingForm.headerIcon" />
+                    <h4 :class="COMPONENTS.guestBookingForm.title">Ny husstand</h4>
                 </div>
             </template>
 
@@ -169,14 +160,14 @@ const handleCancel = () => emit('cancel')
                     value-key="value"
                     name="address"
                     placeholder="Vælg adresse..."
-                    class="w-full"
+                    :class="COMPONENTS.guestBookingForm.select"
                     :size="SIZES.standard"
                     data-testid="create-household-address"
                 />
             </UFormField>
 
             <!-- New household: PBS + move-in date (primary focus, above prevOwners) -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div :class="LAYOUTS.gridTwoCol">
                 <UFormField label="PBS" name="pbsId" required :size="SIZES.standard">
                     <UInput
                         v-model.number="formState.pbsId"
@@ -199,11 +190,11 @@ const handleCancel = () => emit('cancel')
             </div>
 
             <!-- Existing households at the same address (secondary, below new) -->
-            <section v-if="prevOwners.length" class="flex flex-col gap-4 pt-2 border-t border-info-200">
+            <section v-if="prevOwners.length" :class="[COMPONENTS.householdCreateForm.prevOwners, LAYOUTS.sectionDivider]">
                 <h5 :class="TYPOGRAPHY.sectionSubheading">
                     {{ prevOwners.length === 1 ? 'Eksisterende husstand' : 'Eksisterende husstande' }} på adressen
                 </h5>
-                <div v-for="prevOwner in prevOwners" :key="prevOwner.id" class="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 md:items-center">
+                <div v-for="prevOwner in prevOwners" :key="prevOwner.id" :class="COMPONENTS.householdCreateForm.prevOwner">
                     <span :class="TYPOGRAPHY.bodyTextMedium">
                         {{ prevOwner.shortName }} &middot; HN {{ prevOwner.heynaboId }} &middot; PBS {{ prevOwner.pbsId }}
                     </span>
@@ -226,15 +217,13 @@ const handleCancel = () => emit('cancel')
                 <div :class="LAYOUTS.formButtonRow">
                     <UButton
                         v-bind="BUTTONS.cancel"
-                        :size="SIZES.standard"
                         data-testid="create-household-cancel"
                         @click="handleCancel"
                     >
-                        Annuller
+                        {{ BUTTON_WORDS.cancel }}
                     </UButton>
                     <UButton
                         v-bind="BUTTONS.save"
-                        :size="SIZES.standard"
                         :loading="isSaving"
                         data-testid="create-household-submit"
                         @click="formRef?.submit()"

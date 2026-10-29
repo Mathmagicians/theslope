@@ -17,17 +17,23 @@
 import {generateBilling} from '~~/server/utils/generateBilling'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {fetchBillingPeriodSummaries, fetchBillingPeriodSummary} from '~~/server/data/prismaRepository'
-import {fetchDeliveries, recordDelivery} from '~~/server/data/financesRepository'
+import {fetchDeliveries, recordDeliveries} from '~~/server/data/financesRepository'
 import {archiveBillingCsv} from '~~/server/utils/billingArchive'
 import {useBilling} from '~/composables/useBilling'
-import {emitBillingPeriodClosed} from '~~/server/utils/sender/events/monthly-billing'
+import {billingMailKind, notificationsForAccountant} from '~~/server/utils/sender/events/monthly-billing'
+import {deliverDesired, type DeliveryOptions} from '~~/server/utils/sender/deliveries'
+import {notSent} from '~~/server/utils/sender/emit'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import type {BillingPeriodSideEffects, BillingPeriodSummaryDetail, MonthlyBillingResponse} from '~/composables/useBillingValidation'
 import type {SenderEmitResult} from '~/composables/useNotificationValidation'
 import type {EmailChannel} from '~~/server/utils/sender/config'
-import {deliveredVersions} from '~/composables/useDeliveryValidation'
+import {deliveredVersions, useDeliveryValidation} from '~/composables/useDeliveryValidation'
 
 const {decideBillingSideEffects} = useBilling()
+const {DeliverySubjectSchema, DeliveryKindSchema, SenderEventSchema} = useDeliveryValidation()
+const {BILLING_PERIOD} = DeliverySubjectSchema.enum
+const {ARCHIVE} = DeliveryKindSchema.enum
+const {MONTHLY_BILLING} = SenderEventSchema.enum
 const LOG = '💰 > MONTHLY > [BILLING]'
 
 /** The bindings the side effects need — the archive from cloudflare.env and the e-mail channel from emailChannel(env) at the call site */
@@ -36,28 +42,32 @@ export type MonthlyBillingSideEffects = {
     email: EmailChannel
 }
 
-/** Queue the accountant mail for a period's current version and record the delivery — the monthly run and the re-send endpoint share this */
-export const notifyBillingPeriod = async (d1Client: D1Database, email: EmailChannel, summary: BillingPeriodSummaryDetail, jobRunId?: number): Promise<SenderEmitResult> => {
-    const notification = await emitBillingPeriodClosed(email, summary)
-    if (notification.queued) await recordDelivery(d1Client, {subjectType: 'BILLING_PERIOD', subjectId: summary.id, version: summary.version, kind: 'EMAIL', reference: notification.dedupeKey, jobRunId})
-    return notification
+/**
+ * The accountant notification of a period's current version, sent and recorded by the delivery step; the monthly run
+ * and the admin's re-send share it. Its result is the queue's answer, or not sent when nothing went
+ */
+export const notifyBillingPeriod = async (
+    d1Client: D1Database, email: EmailChannel, summary: BillingPeriodSummaryDetail, options: DeliveryOptions = {}
+): Promise<SenderEmitResult> => {
+    const {emitted} = await deliverDesired(d1Client, email, MONTHLY_BILLING, notificationsForAccountant(summary), options)
+    return emitted?.[0] ?? notSent(billingMailKind(summary.version), summary.billingPeriod)
 }
 
 /** Bring one closed period to its end state: CSV in R2 and accountant mail, at the period's current version */
 const syncBillingPeriod = async (d1Client: D1Database, summary: BillingPeriodSummaryDetail, jobRunId: number, sideEffects: MonthlyBillingSideEffects): Promise<BillingPeriodSideEffects> => {
-    const delivered = deliveredVersions(await fetchDeliveries(d1Client, 'BILLING_PERIOD', summary.id))
+    const delivered = deliveredVersions(await fetchDeliveries(d1Client, BILLING_PERIOD, [summary.id]))
     const plan = decideBillingSideEffects({version: summary.version, archivedVersion: delivered.ARCHIVE, notifiedVersion: delivered.EMAIL})
     const state: BillingPeriodSideEffects = {billingPeriodSummaryId: summary.id, billingPeriod: summary.billingPeriod, version: summary.version, csvUploaded: !plan.archive, emailSent: !plan.notify}
 
     if (plan.archive) {
         state.archive = await archiveBillingCsv(sideEffects.archive, summary, jobRunId)
         if (state.archive.archived) {
-            await recordDelivery(d1Client, {subjectType: 'BILLING_PERIOD', subjectId: summary.id, version: summary.version, kind: 'ARCHIVE', reference: state.archive.key, jobRunId})
+            await recordDeliveries(d1Client, [{subjectType: BILLING_PERIOD, subjectId: summary.id, version: summary.version, kind: ARCHIVE, reference: state.archive.key, jobRunId}])
             state.csvUploaded = true
         }
     }
     if (plan.notify) {
-        state.notification = await notifyBillingPeriod(d1Client, sideEffects.email, summary, jobRunId)
+        state.notification = await notifyBillingPeriod(d1Client, sideEffects.email, summary, {jobRunId})
         state.emailSent = state.notification.queued
     }
     if (plan.archive || plan.notify) console.info(`${LOG} Period ${summary.billingPeriod} v${summary.version}: csvUploaded=${state.csvUploaded} emailSent=${state.emailSent}`)

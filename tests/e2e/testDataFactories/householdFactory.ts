@@ -1,17 +1,19 @@
 // Helpers to work with bdd tests for Household aggregate root and strongly related entities (Inhabitants)
 
-import type { BrowserContext} from "@playwright/test"
+import type {APIResponse, BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
-import type {HouseholdDetail, HouseholdDisplay, InhabitantDetail, InhabitantCreate, UserDisplay} from "~/composables/useCoreValidation"
+import type {HouseholdDetail, HouseholdDisplay, InhabitantDetail, InhabitantCreate, InhabitantUpdate, UserCreate, UserDisplay} from "~/composables/useCoreValidation"
 import {useCoreValidation} from "~/composables/useCoreValidation"
-import {useBookingValidation, type InhabitantUpdateResponse, type HouseholdUpdateResponse} from "~/composables/useBookingValidation"
+import {useBookingValidation, type InhabitantUpdateResponse, type HouseholdUpdateResponse, type DinnerMode as DinnerModeType} from "~/composables/useBookingValidation"
+import type {WeekDayMap} from "~/types/dateTypes"
+import {dateToWeekDay} from "~/utils/season"
 import {useHeynaboValidation, type HeynaboImportResponse} from "~/composables/useHeynaboValidation"
 import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
 const Action = useActionValidation().BookingActionSchema.enum
 
 const {salt, saltedId, temporaryAndRandom, headers} = testHelpers
-const {createDefaultWeekdayMap, InhabitantDetailSchema, UserDisplaySchema, HouseholdDisplaySchema} = useCoreValidation()
+const {createDefaultWeekdayMap, serializeWeekDayMap, InhabitantDetailSchema, UserDisplaySchema, HouseholdDisplaySchema} = useCoreValidation()
 const {DinnerModeSchema, InhabitantUpdateResponseSchema, HouseholdUpdateResponseSchema} = useBookingValidation()
 const {HeynaboImportResponseSchema} = useHeynaboValidation()
 const DinnerMode = DinnerModeSchema.enum
@@ -111,7 +113,7 @@ export class HouseholdFactory {
      */
     static readonly createAtExistingAddress = async (
         context: BrowserContext,
-        sibling: Pick<HouseholdDetail, 'heynaboId' | 'name' | 'address'>,
+        sibling: HouseholdDetail,
         overrides: {pbsId: number, movedInDate: Date, moveOutDate?: Date | null},
         expectedStatus: number = 201
     ): Promise<HouseholdDetail> => this.createHousehold(context, {
@@ -237,25 +239,26 @@ export class HouseholdFactory {
             name: this.defaultInhabitantName(testSalt),
             lastName: salt('And', testSalt),
             pictureUrl: null,
-            birthDate: new Date('1990-01-15'),
-            dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
+            birthDate: new Date('1990-01-15')
         }
     }
 
     /**
      * Create inhabitant with config object pattern (ADR-003)
-     * Preferred method - allows setting any inhabitant field including dinnerPreferences
+     * Preferred method - allows setting any inhabitant field. The create carries no dinnerPreferences, so preferences the
+     * caller passes are written by the update after it, which re-scaffolds the household on the active season
      */
     static readonly createInhabitantWithConfig = async (
         context: BrowserContext,
         householdId: number,
-        partialInhabitant: Partial<Omit<InhabitantCreate, 'householdId'>> = {},
+        partialInhabitant: Partial<Omit<InhabitantCreate, 'householdId'>> & Omit<InhabitantUpdate, 'id' | 'householdId'> = {},
         expectedStatus: number = 201
     ): Promise<InhabitantDetail> => {
+        const {dinnerPreferences, ...fields} = partialInhabitant
         // Merge partial with defaults, householdId always from parameter
         const inhabitantData: InhabitantCreate = {
             ...this.defaultInhabitantData(temporaryAndRandom()),
-            ...partialInhabitant,
+            ...fields,
             householdId: householdId
         }
 
@@ -274,7 +277,50 @@ export class HouseholdFactory {
             expect(responseBody.id, 'Response should contain the new inhabitant ID').toBeDefined()
         }
 
-        return responseBody
+        if (expectedStatus !== 201 || !dinnerPreferences) return responseBody
+        const updated = await this.updateInhabitant(context, responseBody.id, {dinnerPreferences})
+        return updated!.inhabitant
+    }
+
+    /**
+     * A person of a spec's household who eats on no day, named by its role in `lastName`, with a login when given a
+     * user: the household's first user hears the notifications about the people without one
+     */
+    static readonly createPersonInHousehold = (
+        context: BrowserContext,
+        householdId: number,
+        lastName: string,
+        user?: UserCreate
+    ): Promise<InhabitantDetail> =>
+        this.createInhabitantWithConfig(context, householdId, {lastName, dinnerPreferences: createDefaultWeekdayMap(DinnerMode.NONE), user})
+
+    /**
+     * The person's preference on the dinner's weekday, NONE on the others, written by the admin's override on the
+     * season's deadlines: the household's run books the person while the dinner is open, queues the person past its
+     * deadline, and with NONE releases the person's ticket or leaves its place
+     */
+    static readonly updatePreferenceOnDinnerDay = (
+        context: BrowserContext,
+        inhabitantId: number,
+        seasonId: number,
+        dinnerDate: Date,
+        mode: DinnerModeType
+    ): Promise<InhabitantUpdateResponse | null> => this.updateInhabitantPreferences(
+        context, inhabitantId, {...createDefaultWeekdayMap(DinnerMode.NONE), [dateToWeekDay(new Date(dinnerDate))]: mode}, 200, seasonId, undefined, true
+    )
+
+    /**
+     * The user who hears about the inhabitant: its own user, else its household's member of the lowest id with a user
+     * (the sender's closest user); null when the household has none
+     */
+    static readonly closestUserIdOf = async (
+        context: BrowserContext,
+        inhabitant: InhabitantDetail
+    ): Promise<number | null> => {
+        if (inhabitant.userId) return inhabitant.userId
+        const household = await this.getHouseholdById(context, inhabitant.householdId)
+        const firstUser = (household?.inhabitants ?? []).filter(member => member.userId).sort((a, b) => a.id - b.id)[0]
+        return firstUser?.userId ?? null
     }
 
     /**
@@ -448,7 +494,6 @@ export class HouseholdFactory {
      * @param seasonId - Optional seasonId query param for parallel-safe testing
      * @param assertResponse - Optional callback to assert response properties
      * @param adminBypass - An admin changing another household's preferences
-     * @param preview - The reply the save would give, with nothing written
      */
     static readonly updateInhabitantPreferences = async (
         context: BrowserContext,
@@ -457,41 +502,57 @@ export class HouseholdFactory {
         expectedStatus: number = 200,
         seasonId?: number,
         assertResponse?: (response: InhabitantUpdateResponse) => void,
-        adminBypass: boolean = false,
-        preview: boolean = false
+        adminBypass: boolean = false
     ): Promise<InhabitantUpdateResponse | null> => {
         const query = new URLSearchParams()
         if (seasonId !== undefined) query.append('seasonId', String(seasonId))
         if (adminBypass) query.append('adminBypass', 'true')
-        if (preview) query.append('preview', 'true')
-        const url = `/api/household/inhabitants/${inhabitantId}/preferences${query.size > 0 ? `?${query}` : ''}`
 
-        const response = await context.request.post(url, {
-            headers,
-            data: {dinnerPreferences}
-        })
-
-        const status = response.status()
-        const responseBody = await response.text()
-        expect(status, `updateInhabitantPreferences failed: ${responseBody}`).toBe(expectedStatus)
-
-        if (expectedStatus !== 200) return null
-
-        const parsed = InhabitantUpdateResponseSchema.parse(JSON.parse(responseBody))
-        if (assertResponse) {
-            assertResponse(parsed)
+        const response = await HouseholdFactory.postInhabitantPreferences(context, inhabitantId, {dinnerPreferences}, expectedStatus, query)
+        if (response && assertResponse) {
+            assertResponse(response)
         }
-        return parsed
+        return response
     }
 
-    /** Preview a preference change via the household endpoint: the reply the save would give, with nothing written */
-    static readonly previewInhabitantPreferences = (
+    /**
+     * The preference write (POST /api/household/inhabitants/[id]/preferences) with the body as given: the validation
+     * cases send the bodies the endpoint refuses
+     */
+    static readonly postInhabitantPreferences = async (
         context: BrowserContext,
         inhabitantId: number,
-        dinnerPreferences: Record<string, string>,
-        seasonId?: number
-    ): Promise<InhabitantUpdateResponse | null> =>
-        HouseholdFactory.updateInhabitantPreferences(context, inhabitantId, dinnerPreferences, 200, seasonId, undefined, false, true)
+        body: Record<string, unknown>,
+        expectedStatus: number = 200,
+        query: URLSearchParams = new URLSearchParams()
+    ): Promise<InhabitantUpdateResponse | null> => {
+        const url = `${HOUSEHOLD_ENDPOINT}/inhabitants/${inhabitantId}/preferences${query.size > 0 ? `?${query}` : ''}`
+        return HouseholdFactory.readInhabitantUpdate(await context.request.post(url, {headers, data: body}), expectedStatus)
+    }
+
+    /**
+     * Preview a preference change (GET /api/household/inhabitants/[id]/preferences): the reply the save would give, read
+     * with nothing written; any member reads any household's preview. The draft travels serialized in the query
+     */
+    static readonly previewInhabitantPreferences = async (
+        context: BrowserContext,
+        inhabitantId: number,
+        dinnerPreferences: WeekDayMap<DinnerModeType>,
+        seasonId?: number,
+        expectedStatus: number = 200
+    ): Promise<InhabitantUpdateResponse | null> => {
+        const query = new URLSearchParams({dinnerPreferences: serializeWeekDayMap(dinnerPreferences)})
+        if (seasonId !== undefined) query.append('seasonId', String(seasonId))
+        return HouseholdFactory.readInhabitantUpdate(await context.request.get(`${HOUSEHOLD_ENDPOINT}/inhabitants/${inhabitantId}/preferences?${query}`), expectedStatus)
+    }
+
+    /** The preference endpoint's reply, its status asserted; parsed when it answers 200 */
+    private static readonly readInhabitantUpdate = async (response: APIResponse, expectedStatus: number): Promise<InhabitantUpdateResponse | null> => {
+        const status = response.status()
+        const responseBody = await response.text()
+        expect(status, `The preference endpoint answered ${status}: ${responseBody}`).toBe(expectedStatus)
+        return expectedStatus === 200 ? InhabitantUpdateResponseSchema.parse(JSON.parse(responseBody)) : null
+    }
 
     /**
      * Release orders for an inhabitant by setting their preferences to NONE

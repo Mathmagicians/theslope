@@ -3,7 +3,8 @@ import {TicketFactory} from '../../e2e/testDataFactories/ticketFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {ticketTypeLabel, ticketTypeLetter, ticketTypeCount} from '~/composables/useTicket'
-import appConfig from '~/app.config'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {addDays, addMonths, subYears} from 'date-fns'
 
 describe('useTicket', () => {
     const referenceDate = new Date('2025-01-15')
@@ -75,6 +76,20 @@ describe('useTicket', () => {
         })
     })
 
+    describe('findTicketPriceById', () => {
+        it('GIVEN a price row id THEN returns that row', () => {
+            const child = TicketFactory.defaultPriceOf(TicketType.CHILD)
+            expect(useTicket().findTicketPriceById(child.id!, ticketPrices)).toEqual(child)
+        })
+
+        it.each([
+            {desc: 'an id the season holds no row for', ticketPriceId: ticketPrices.length + 1},
+            {desc: 'no id', ticketPriceId: null}
+        ])('GIVEN $desc THEN returns undefined', ({ticketPriceId}) => {
+            expect(useTicket().findTicketPriceById(ticketPriceId, ticketPrices)).toBeUndefined()
+        })
+    })
+
     // The priorities (birthDate, priceAtBooking, fallback) are resolveTicketPrice's, below
     describe('resolveTicketType', () => {
         it('GIVEN ticket prices THEN resolves to the type of the resolved price', () => {
@@ -114,17 +129,17 @@ describe('useTicket', () => {
     })
 
     describe('resolveTicketPrice', () => {
-        // Sorted by price asc (as from DB): BABY 0, BABY 1500, CHILD 3000, ADULT 5000
+        // Sorted by price asc (as from DB): BABY 0, BABY 900, CHILD 1700, ADULT 4000
         const sortedPrices = TicketFactory.defaultTicketPrices()
 
         it.each([
             // Priority 1: birthDate → ticketType → cheapest for type
-            ['8yo with birthDate', new Date('2017-01-01'), undefined, TicketType.CHILD, 3000],
+            ['8yo with birthDate', new Date('2017-01-01'), undefined, TicketType.CHILD, 1700],
             // Priority 2: priceAtBooking (no birthDate) matches the exact price, not the cheapest of its type
-            ['priceAtBooking 1500 (hungry baby)', null, 1500, TicketType.BABY, 1500],
+            ['priceAtBooking 900 (hungry baby)', null, 900, TicketType.BABY, 900],
             // Fallback: ADULT when no birthDate and no matching price
-            ['no birthDate, no priceAtBooking', null, undefined, TicketType.ADULT, 5000],
-            ['no birthDate, unmatched price', null, 9999, TicketType.ADULT, 5000]
+            ['no birthDate, no priceAtBooking', null, undefined, TicketType.ADULT, 4000],
+            ['no birthDate, unmatched price', null, 9999, TicketType.ADULT, 4000]
         ])('GIVEN %s THEN returns ticketType=%s price=%i',
             (_, birthDate, priceAtBooking, expectedType, expectedPrice) => {
                 const {resolveTicketPrice} = useTicket()
@@ -137,10 +152,10 @@ describe('useTicket', () => {
 
         it('GIVEN birthDate for BABY THEN returns cheapest BABY (free, not hungry)', () => {
             const {resolveTicketPrice} = useTicket()
-            // 1yo = BABY, sorted prices have BABY at 0 and 1500, should return 0 (cheapest)
+            // 1yo = BABY, sorted prices have BABY at 0 and 900, should return 0 (cheapest)
             const result = resolveTicketPrice(new Date('2024-01-01'), undefined, sortedPrices, referenceDate)
             expect(result!.ticketType).toBe(TicketType.BABY)
-            expect(result!.price).toBe(0) // Cheapest BABY, not 1500
+            expect(result!.price).toBe(0) // Cheapest BABY, not 900
         })
 
         it('GIVEN no ticketPrices THEN returns undefined', () => {
@@ -160,31 +175,89 @@ describe('useTicket', () => {
         it('GIVEN birthDate takes priority over priceAtBooking', () => {
             const {resolveTicketPrice} = useTicket()
             // 25yo = ADULT, but priceAtBooking is 0 (baby price)
-            // birthDate should win → ADULT 5000
+            // birthDate should win → ADULT 4000
             const result = resolveTicketPrice(new Date('2000-01-01'), 0, sortedPrices, referenceDate)
             expect(result!.ticketType).toBe(TicketType.ADULT)
-            expect(result!.price).toBe(5000)
+            expect(result!.price).toBe(4000)
+        })
+    })
+
+    // A booked ticket keeps its own price row whatever the person's age; a dinner without one takes the row for the
+    // person's age on the dinner's date, as the save prices it
+    describe('resolveTicketPriceOn', () => {
+        const dinnerDate = addMonths(new Date(), 1)
+        const [childPrice, adultPrice] = [TicketType.CHILD, TicketType.ADULT].map(TicketFactory.defaultPriceOf)
+        const turnsAdultOnTheDinner = subYears(dinnerDate, childPrice!.maximumAgeLimit!)
+        const bookedAt = (ticketPriceId: number | null) =>
+            OrderFactory.defaultOrder(undefined, {ticketPriceId, ticketType: childPrice!.ticketType, priceAtBooking: childPrice!.price})
+
+        it.each([
+            {given: 'an adult booked at the CHILD price row', birthDate: new Date('1990-01-01'), order: bookedAt(childPrice!.id!), expected: childPrice},
+            {given: 'an adult booked at a price row since deleted', birthDate: new Date('1990-01-01'), order: bookedAt(null), expected: childPrice},
+            {given: 'a child today who turns 12 on the dinner, without a booking', birthDate: turnsAdultOnTheDinner, order: undefined, expected: adultPrice}
+        ])('GIVEN $given THEN the price row is $expected.ticketType', ({birthDate, order, expected}) => {
+            expect(useTicket().resolveTicketPriceOn(birthDate, order, ticketPrices, dinnerDate)).toEqual(expected)
+        })
+    })
+
+    // A person's first dinner at a new ticket type: the first dinner whose type, by the person's age on its date, differs
+    // from the type on the dinner before it
+    describe('ticketTypeChangeOf', () => {
+        const today = new Date()
+        // Three dinners a week apart, sorted; the birthdays fall around the second
+        const dinnerDates = [7, 14, 21].map(days => addDays(today, days))
+        const [firstDinner, secondDinner] = dinnerDates as [Date, Date, Date]
+        const betweenTheFirstTwo = addDays(firstDinner, 3)
+        // The birth date of a person who reaches a price row's age limit on a day
+        const reaching = (ticketType: typeof TicketType[keyof typeof TicketType], day: Date) =>
+            subYears(day, TicketFactory.defaultPriceOf(ticketType).maximumAgeLimit!)
+
+        it.each([
+            {name: 'turning 12 on a day without a dinner gives the next dinner, at ADULT', birthDate: reaching(TicketType.CHILD, betweenTheFirstTwo),
+                change: {date: secondDinner, ticketType: TicketType.ADULT}},
+            {name: 'a birthday on a dinner\'s date gives that dinner', birthDate: reaching(TicketType.CHILD, secondDinner),
+                change: {date: secondDinner, ticketType: TicketType.ADULT}},
+            {name: 'turning 2 gives CHILD', birthDate: reaching(TicketType.BABY, betweenTheFirstTwo),
+                change: {date: secondDinner, ticketType: TicketType.CHILD}},
+            {name: 'no change across the dinners, 12 the day before the first, gives null', birthDate: reaching(TicketType.CHILD, addDays(firstDinner, -1)),
+                change: null},
+            {name: 'no birth date gives null', birthDate: null, change: null}
+        ])('$name', ({birthDate, change}) => {
+            expect(useTicket().ticketTypeChangeOf(birthDate, ticketPrices)(dinnerDates)).toEqual(change)
         })
     })
 
     describe('portionsOf', () => {
         // The config's default prices hold the weight of their tickets; a price matches on its type and amount
-        const defaults = appConfig.theslope.defaultSeason.ticketPrices
-        const firstOfType = (ticketType: typeof TicketType[keyof typeof TicketType]) => defaults.find(price => price.ticketType === ticketType)!
-
         it('a ticket priced as a default weighs the portions of that default', () => {
-            const misses = defaults.filter(({ticketType, price, portions}) => useTicket().portionsOf({ticketType, price}) !== portions)
+            const misses = ticketPrices.filter(({ticketType, price, portions}) => useTicket().portionsOf({ticketType, price}) !== portions)
             expect(misses).toEqual([])
         })
 
         it('a ticket at a price no default names weighs the first default price of its type', () => {
-            const {ticketType, price} = defaults.find(candidate => candidate.ticketType === TicketType.BABY && candidate.portions > 0)!
-            expect(useTicket().portionsOf({ticketType, price: price + 1})).toBe(firstOfType(TicketType.BABY).portions)
+            const {ticketType, price} = ticketPrices.find(candidate => candidate.ticketType === TicketType.BABY && candidate.portions > 0)!
+            expect(useTicket().portionsOf({ticketType, price: price + 1})).toBe(TicketFactory.defaultPriceOf(TicketType.BABY).portions)
         })
 
         it('two prices of one type weigh apart', () => {
-            const babies = defaults.filter(price => price.ticketType === TicketType.BABY)
+            const babies = ticketPrices.filter(price => price.ticketType === TicketType.BABY)
             expect(new Set(babies.map(price => useTicket().portionsOf(price))).size).toBe(babies.length)
+        })
+    })
+
+    // A ticket of 0 portions takes nothing from the kitchen; the predicate answers by the id of the ticket's price row
+    describe('takesNoPortionOf', () => {
+        // The factory lists the baby who tastes, the hungry baby, the child and the adult
+        const [tasting, hungry, child, adult] = ticketPrices
+
+        it.each([
+            {ticket: 'the baby who tastes', ticketPriceId: tasting!.id!, takesNoPortion: true},
+            {ticket: 'the hungry baby', ticketPriceId: hungry!.id!, takesNoPortion: false},
+            {ticket: 'the child', ticketPriceId: child!.id!, takesNoPortion: false},
+            {ticket: 'the adult', ticketPriceId: adult!.id!, takesNoPortion: false},
+            {ticket: 'a price row the prices do not hold', ticketPriceId: 99, takesNoPortion: false}
+        ])('GIVEN $ticket THEN it takes no portion: $takesNoPortion', ({ticketPriceId, takesNoPortion}) => {
+            expect(useTicket().takesNoPortionOf(ticketPrices)(ticketPriceId)).toBe(takesNoPortion)
         })
     })
 

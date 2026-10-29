@@ -1,12 +1,16 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach, onTestFinished} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick, ref} from 'vue'
-import {mountWithTooltipProvider, clickByTestId, findAllByTestId, pollFor, resetStores, VIEWPORTS, holdEndpoint, findLoadingRow} from '~~/tests/component/testHelpers'
+import type {ButtonProps} from '@nuxt/ui'
+import {mountWithTooltipProvider, clickByTestId, findAllByTestId, findByTestId, findComponentByTestId, pollFor, resetStores, VIEWPORTS, holdEndpoint, findLoadingRow, expectMasterDetail, findOpenRows} from '~~/tests/component/testHelpers'
 import AdminTeams from '~/components/admin/AdminTeams.vue'
+import CookingTeamCard from '~/components/cooking-team/CookingTeamCard.vue'
+import TeamCalendarDisplay from '~/components/calendar/TeamCalendarDisplay.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
+import {TEAM_WORDS} from '~/config/teamWords'
 import {useAuthStore} from '~/stores/auth'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -49,7 +53,14 @@ const mountTeams = async (isMd = true) => {
     return wrapper
 }
 
-const clickCreateTeams = async (wrapper: Awaited<ReturnType<typeof mountTeams>>) => {
+type Wrapper = Awaited<ReturnType<typeof mountTeams>>
+
+const openCreateMode = async (wrapper: Wrapper) => {
+    await clickByTestId(wrapper, 'create-team')
+    await flushPromises()
+}
+
+const clickCreateTeams = async (wrapper: Wrapper) => {
     await clickByTestId(wrapper, 'submit-create-teams')
     await flushPromises()
     await nextTick()
@@ -74,10 +85,9 @@ describe('AdminTeams', () => {
         useToast().clear()
     })
 
-    it('reports created teams and assigned dinners in the toast', async () => {
+    it('reports created teams and assigned dinners in the toast and leaves create mode', async () => {
         const wrapper = await mountTeams()
-        await clickByTestId(wrapper, 'create-team')
-        await flushPromises()
+        await openCreateMode(wrapper)
 
         expect(wrapper.find('#team-count').exists()).toBe(true)
         await wrapper.find('#team-count').setValue(2)
@@ -86,8 +96,28 @@ describe('AdminTeams', () => {
         await clickCreateTeams(wrapper)
 
         const toast = await lastToast()
-        expect(toast?.title).toBe('Madhold oprettet')
-        expect(toast?.description).toBe('2 madhold oprettet · 6 madlavninger tildelt')
+        expect(toast?.title).toBe(TEAM_WORDS.admin.created.title)
+        expect(toast?.description).toBe(TEAM_WORDS.admin.created.description(2, 6))
+        await vi.waitFor(() => expect(wrapper.find('#team-count').exists()).toBe(false))
+    })
+
+    // The store's apiRequest toasts the failure; an error the save leaves unhandled reaches Nuxt's root as vue:error
+    it('GIVEN the create endpoint fails WHEN the admin saves the new teams THEN the form stays in create mode and the save raises no unhandled error', async () => {
+        createTeamsEndpoint.mockImplementation(() => {
+            throw createError({statusCode: 500})
+        })
+        const vueError = vi.fn()
+        onTestFinished(useNuxtApp().hook('vue:error', vueError))
+        const wrapper = await mountTeams()
+        await openCreateMode(wrapper)
+
+        await clickCreateTeams(wrapper)
+        await lastToast()
+        // The rethrow travels from the store's catch to the click handler after the toast
+        await flushPromises()
+
+        expect(wrapper.find('#team-count').exists()).toBe(true)
+        expect(vueError).not.toHaveBeenCalled()
     })
 })
 
@@ -104,8 +134,8 @@ describe('AdminTeams master table', () => {
 
         const wrapper = await mountTeams()
 
-        expect(wrapper.find(`[data-testid="team-row-${withJokers.id}"] [data-testid="team-badge-jokers"]`).exists()).toBe(true)
-        expect(wrapper.find(`[data-testid="team-row-${withoutJokers.id}"] [data-testid="team-badge-jokers"]`).exists()).toBe(false)
+        expect(findByTestId(findByTestId(wrapper, `team-row-${withJokers.id}`), 'team-badge-jokers').exists()).toBe(true)
+        expect(findByTestId(findByTestId(wrapper, `team-row-${withoutJokers.id}`), 'team-badge-jokers').exists()).toBe(false)
 
         // The Madhold column takes the row's slack, so the badges stay on one line while the weekdays fit their letters
         const columns = wrapper.findComponent({name: 'UTable'}).props('columns') as Array<{header?: string, meta?: {class?: unknown}}>
@@ -117,18 +147,18 @@ describe('AdminTeams master table', () => {
     it('GIVEN a season without teams WHEN it reloads THEN the loading row stands where the empty state was, until the season lands', async () => {
         seasonByIdEndpoint.mockReturnValue(season)
         const wrapper = await mountTeams()
-        expect(wrapper.find('[data-testid="teams-empty-state"]').exists()).toBe(true)
+        expect(findByTestId(wrapper, 'teams-empty-state').exists()).toBe(true)
         const held = holdEndpoint('/api/admin/season/1', season)
 
         try {
             void usePlanStore().selectedSeasonDataset.refresh()
 
             await vi.waitFor(() => expect(findLoadingRow(wrapper).text()).toContain('Henter madhold...'))
-            expect(wrapper.find('[data-testid="teams-empty-state"]').exists()).toBe(false)
+            expect(findByTestId(wrapper, 'teams-empty-state').exists()).toBe(false)
 
             held.release()
 
-            await vi.waitFor(() => expect(wrapper.find('[data-testid="teams-empty-state"]').exists()).toBe(true))
+            await vi.waitFor(() => expect(findByTestId(wrapper, 'teams-empty-state').exists()).toBe(true))
         } finally {
             held.release()
             held.unregister()
@@ -163,24 +193,56 @@ describe('AdminTeams team selection', () => {
         await vi.waitFor(() => expect(mockRoute.query.team).toBeUndefined())
     })
 
-    describe.each(VIEWPORTS)('$viewport: an open row', ({isMd}) => {
-        const openTeam = async () => {
-            const wrapper = await mountTeams(isMd)
+    // The master table stays in the master slot; the detail slot beside it swaps between the overview and the open team
+    it.each([
+        {state: 'no team open: the all-teams calendar', open: false, holds: (detail: Element, wrapper: Wrapper) => detail.contains(wrapper.findComponent(TeamCalendarDisplay).element)},
+        {state: 'a team open: the framed team detail', open: true, holds: (detail: Element, wrapper: Wrapper) => detail.contains(findByTestId(wrapper, 'edit-team').element)}
+    ])('md, $state stands in the detail slot beside the master table', async ({open, holds}) => {
+        const wrapper = await mountTeams(true)
+        if (open) {
             await clickByTestId(wrapper, `team-row-${team.id}`)
-            await vi.waitFor(() => expect(mockRoute.query.team).toBe(String(team.id)))
-            await flushPromises()
-            return wrapper
+            await vi.waitFor(() => expect(findAllByTestId(wrapper, 'edit-team')).toHaveLength(1))
         }
 
+        // UTable renders more than one root, so its wrapper's element is the one holding it: the master
+        const master = wrapper.findComponent({name: 'UTable'}).element
+        expectMasterDetail(master, master.nextElementSibling)
+        expect(holds(master.nextElementSibling!, wrapper)).toBe(true)
+    })
+
+    const openTeam = async (isMd: boolean) => {
+        const wrapper = await mountTeams(isMd)
+        await clickByTestId(wrapper, `team-row-${team.id}`)
+        await vi.waitFor(() => expect(mockRoute.query.team).toBe(String(team.id)))
+        await flushPromises()
+        return wrapper
+    }
+
+    describe.each(VIEWPORTS)('$viewport: an open row', ({isMd}) => {
         it(`turns its toggle to the open-detail chevron of its viewport and renders its detail once, ${isMd ? 'in the pane beside the table' : 'docked in the table row'}`, async () => {
-            const wrapper = await openTeam()
-            const toggle = wrapper.findAllComponents({name: 'UButton'})
-                .find(button => button.attributes('data-testid') === `team-toggle-${team.id}`)
-            expect(toggle?.props('icon')).toBe(createResponsiveIcons(ref(isMd)).detailOpen)
+            const wrapper = await openTeam(isMd)
+            const toggle = findComponentByTestId<ButtonProps>(wrapper, 'UButton', `team-toggle-${team.id}`)
+            expect(toggle.props('icon')).toBe(createResponsiveIcons(ref(isMd)).detailOpen)
 
             await vi.waitFor(() => expect(findAllByTestId(wrapper, 'edit-team')).toHaveLength(1))
-            expect(wrapper.find('tbody [data-testid="edit-team"]').exists()).toBe(!isMd)
+            // The phone docks the detail in the row after the tapped team's row; md opens no row
+            const open = findOpenRows(wrapper)
+            expect(open.map(({row}) => findByTestId(row, `team-toggle-${team.id}`).exists())).toEqual(isMd ? [] : [true])
+            expect(open.map(({detail}) => findByTestId(detail, 'edit-team').exists())).toEqual(isMd ? [] : [true])
         })
+    })
+
+    it('phone: GIVEN a team open WHEN the season reloads with a team listed above it THEN the docked detail stays under the open team\'s row', async () => {
+        const listedAbove = SeasonFactory.defaultCookingTeamDisplay({id: 32, name: 'Hold 2'})
+        const wrapper = await openTeam(false)
+
+        seasonByIdEndpoint.mockReturnValue({...season, CookingTeams: [listedAbove, team]})
+        await usePlanStore().selectedSeasonDataset.refresh()
+        await vi.waitFor(() => expect(findByTestId(wrapper, `team-row-${listedAbove.id}`).exists()).toBe(true))
+
+        const open = findOpenRows(wrapper)
+        expect(open.map(({row}) => findByTestId(row, `team-toggle-${team.id}`).exists())).toEqual([true])
+        expect(open[0]!.detail.findComponent(CookingTeamCard).props('teamId')).toBe(team.id)
     })
 })
 
@@ -211,11 +273,11 @@ describe('AdminTeams team colours', () => {
 
     it.each(numbered)('the row of "$name" wears the stop of number $number, and selecting it accents the row with that stop', async ({id, number}) => {
         const wrapper = await mountTeams()
-        const badge = wrapper.find(`[data-testid="team-row-${id}"] [data-testid="team-badge-name"]`)
+        const badge = findByTestId(findByTestId(wrapper, `team-row-${id}`), 'team-badge-name')
         expect(badge.classes()).toEqual(expect.arrayContaining(getRainbowBand(number - 1).split(' ')))
 
         await clickByTestId(wrapper, `team-row-${id}`)
-        await vi.waitFor(() => expect(wrapper.find(`[data-testid="team-row-${id}"]`).classes())
+        await vi.waitFor(() => expect(findByTestId(wrapper, `team-row-${id}`).classes())
             .toEqual(expect.arrayContaining(getRainbowAccent(number - 1).split(' '))))
     })
 })

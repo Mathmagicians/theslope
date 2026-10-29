@@ -43,6 +43,8 @@ A behaviour a unit or component spec proves gets no e2e case. A glyph, a colour,
 spec plus the browser check; the e2e case asserts the flow around it, in GIVEN/WHEN/THEN, as what the system does for
 the user.
 
+An outcome is asserted in one case; a case that reaches an outcome another case asserts extends that case.
+
 ### Rule 1: Tests MUST Be DRY
 
 **STOP** before writing ANY test code and ask:
@@ -88,10 +90,14 @@ const season = await SeasonFactory.createSeason(context, SeasonFactory.defaultSe
 
 **Factories on disk:** `AllergyFactory`, `BillingFactory`, `DinnerEventFactory`, `ExpenseFactory`, `FeedbackFactory`, `HouseholdFactory`, `NotificationFactory`, `OrderFactory`, `SeasonFactory`, `SeasonImportFactory`, `SenderFactory`, `SettingFactory`, `TicketFactory`, `UserFactory`, `WaitlistFactory`; `reconciliationTestData.ts` holds the data for the four reconciliation outcomes of households, inhabitants and users, shared by unit and e2e specs.
 
+**Config values:** a factory reads the app's config from the plain modules in `app/config/`, which `app.config.ts` imports: `TicketFactory` prices at `SEASON_CONFIG.defaultSeason.ticketPrices`, and `SeasonFactory` and the helpers read their deadlines and pre-booking window from `SEASON_CONFIG` (`season.ts`); `NotificationFactory` reads `notificationTemplates.ts`. A spec takes a ticket type's price row from `TicketFactory.defaultPriceOf` (the default rows) or `useTicket().findTicketPriceByType` (a season's rows). Playwright runs without Nuxt, so `app.config.ts` itself stays out of the specs.
+
 **Scenario methods:**
-- `SeasonFactory.createActiveSeason(context)` - the singleton active season `TestSeason-E2E-Singleton`: the `setup-season` project (`tests/e2e/season.setup.ts`) creates and activates it once per run, before the spec workers start; a spec's call returns it, and global teardown deletes it after the run. Its dinners are open (`ticketIsCancellableDaysBefore` 0); a case on a closed dinner creates its own season
+- `SeasonFactory.createActiveSeason(context)` - the singleton active season `TestSeason-E2E-Singleton`: the `setup-season` project (`tests/e2e/season.setup.ts`) creates and activates it once per run, before the spec workers start; a spec's call returns it, and global teardown deletes it after the run. A spec resolves it in `beforeAll` and a feature in the `BeforeAll` of `fixtures.ts`, so a run without setup-season (`--no-deps`) creates it there, outside a test's timeout. Its dinners are open (`ticketIsCancellableDaysBefore` 0); a case on a closed dinner creates its own season
 - `SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days, deadline?, cookingDays?, startInDays?})` - a serial spec's own active season, returned as `{season, dinnerEvents}`: starts `startInDays` days from today at midnight (1 by default) and ends `days` days after the start, inside the pre-booking window (ADR-015); `cookingDays` picks `'all'` or `'weekdays'` over the default Mon/Wed/Fri; `deadline` is the cancel deadline in days. Serial only: activating it displaces the singleton active season
 - `SeasonFactory.createCookingTeamWithChefAndDinner(context, season, chefInhabitantId, {teamName?, dinner?, day?})` - a cooking team of the season with the chef as CHEF and a dinner of the team with that chef, returned as `{team, dinner}`: `dinner` sets the dinner's fields (`chefId: null` leaves the duty vacant); `day` places the dinner on a free day of the season (`'free'`, a browser spec) or alone on a given day (a serial spec), else on the date `dinner` names, tomorrow by default
+- `SeasonFactory.createCookingTeamsWithChefAndDinners(context, season, chefInhabitantId, [{teamName?, dinner?, day?}])` - the same teams in one team creation, the CHEF assignment in its body, returned in the order given: a team creation rewrites the affinities of the season's teams, so a scenario in the shared season creates its teams at once
+- `SeasonFactory.createCookingTeams(context, season, [{teamName?, assignments}])` - teams of the season in one team creation, each with its assignments, returned in the order given with their assignments; `createCookingTeamsWithChefAndDinners` and the chef steps create their teams through it
 - `DinnerEventFactory.createDinnerEventOnFreeDay(context, season, data?)` - a browser spec's dinner alone on a free day of the season, picked at random after the season's last dinner where one is free; a day that turns double in the meantime gives the dinner up and another day is tried
 - `DinnerEventFactory.createDinnerEventAloneOnDay(context, season, day, data?)` - a serial spec's dinner alone on `day`: the dinners the season holds on that day give way. Serial only: a parallel spec's dinner on the day goes with them
 
@@ -123,9 +129,23 @@ spec's own household goes with the household.
 
 `testDataNaming.unit.spec.ts` (Architecture Tests) checks the factory defaults against the patterns.
 
+**Households and users:** a preference write re-scaffolds its household, so a case that writes preferences creates its
+own household (`HouseholdFactory.createHousehold`), which the admin writes with `?adminBypass=true`; under the override
+the preference write keeps the season's deadlines. The session households hold the access cases. The admin and the
+member are the two users who log in: a role change runs inside `UserFactory.withSystemRoles`, which restores the roles,
+and the roles an endpoint accepts are proven in the `requireHouseholdAccess` unit table. The cases of a parallel suite
+that save the member's settings run in order in one worker: `test.describe.configure({mode: 'serial'})` in a spec,
+`@mode:serial` on a feature.
+
+**Serial:** a spec and a feature run in parallel on rows of their own, salted. A spec runs serially when what it tests
+rests on state the specs share whatever their salt: the active season (a season of its own is activated), a job
+over all entities (the scaffold, the maintenance), the settings of the one member login. The serial line (a serial
+folder, `@api-serial`, `@e2e-serial`, `mode: 'serial'`, `@mode:serial`) carries that argument in a comment and lands on
+the user's approval. A case that fails in parallel has a gap in its isolation, and the fix is rows of its own.
+
 **ALWAYS verify:** `npx playwright test path/to/test.e2e.spec.ts --workers=4`
 
-**One dinner per day in browser specs:** the dinner and chef pages select a dinner by date, and a new team receives the season's generated dinners. A browser spec creates its dinner with `DinnerEventFactory.createDinnerEventOnFreeDay(context, season, data)`, which puts it alone on a free day of the season, opens the page with `?date=` on that day, and deletes the dinner in `afterAll`.
+**One dinner per day in browser specs:** the dinner page selects a dinner by date across the season, a click on another team's dinner on the chef calendar takes the first dinner of its day, and a new team takes the season's dinners without a team. A browser spec creates such a dinner with `DinnerEventFactory.createDinnerEventOnFreeDay(context, season, data)`, which puts it alone on a free day of the season, opens the page with `?date=` on that day, and deletes the dinner in `afterAll`. The chef page selects among its team's dinners: a spec's own team takes its dinner on a cooking day of the season, beside the season's own dinner (`computeCookingDates(season.cookingDays, season.seasonDates, season.holidays)`, the days `SeasonFactory.createActiveSeason` cooks on), and the free days stay with the specs that select across the season. A spec that reads the season's own dinners takes the first dinner of each day, as the page shows it.
 
 ### Rule 3a: E2E Interactions Wait for Hydration
 
@@ -155,6 +175,9 @@ await page.getByRole('option', { name: seasonName }).first().click()
 // ✅ REQUIRED: Use helper
 await testHelpers.selectDropdownOption(page, 'season-selector', seasonName)
 ```
+
+**An extracted helper replaces every copy.** The change that extracts it greps every spec for the pattern its body
+wraps and moves each hit onto the helper in the same change; a local copy left beside the helper is a broken window.
 
 ### Rule 5: No console.log in Tests
 
@@ -199,21 +222,40 @@ const wrapper = await mountWithTooltipProvider(AdminAllergies, {props: {canEdit:
 
 `bddgen` (`npm run test:bdd:generate`) generates a Playwright spec per feature into `.output/bdd/<suite>/`; the Playwright
 projects, the setup projects and the factories run the scenarios. A project picks its scenarios by tag through
-`defineBddProject` in `playwright.config.ts` (`chromium-smoke`: `@smoke`). The smoke suite runs as features, the api
-and ui suites as `*.e2e.spec.ts`; a spec's cases become scenarios one to one when it migrates. Rules 0 to 5 hold for
-the steps.
+`defineBddProject` in `playwright.config.ts` (`chromium-smoke`: `@smoke`). A feature carries one suite tag: `@smoke`,
+`@api-parallel`, `@api-serial`, `@e2e-parallel` or `@e2e-serial`; a parallel feature whose scenarios save the member's
+settings also carries `@mode:serial` (Rule 3). A `*.e2e.spec.ts` migrates to features when a change
+touches it; its cases become the scenarios and example rows that check the same behaviours. Rules 0 to 5 hold for the
+steps.
 
 | Path | Holds |
 |---|---|
 | `tests/e2e/features/<domain>/*.feature` | The scenarios, tagged with their suite on the feature |
-| `tests/e2e/steps/<domain>.steps.ts` | The steps of a domain and its parameter types: `auth`, `health`, `household`, `maintenance`, `pages`, `season` |
-| `tests/e2e/fixtures.ts` | playwright-bdd's `test` with the fixtures, `Given`/`When`/`Then` (`createBdd`), `fromScene` |
+| `tests/e2e/steps/<domain>.steps.ts` | The steps of a domain and its parameter types: `auth`, `billing`, `booking`, `health`, `household`, `maintenance`, `notification`, `pages`, `season`, `user` |
+| `tests/e2e/fixtures.ts` | playwright-bdd's `test` merged with the UI specs' `test` (`tests/e2e/uiTest.ts`), the fixtures, the scene helpers, `Given`/`When`/`Then`/`BeforeAll` (`createBdd`) |
 | `.output/bdd/<suite>/` | The generated specs, gitignored |
 
-**Fixtures.** `adminContext` and `memberContext` are the stored sessions (`validatedBrowserContext`,
-`memberValidatedBrowserContext`), closed after the scenario. `scene` holds what the steps of one scenario hand each
-other; `fromScene(scene, key)` reads what an earlier step set. A GIVEN that signs in puts its context in
-`scene.context`, and the steps after it read through that context, so one step serves each actor.
+**Fixtures.** `test` carries the UI specs' API error guard: a scenario fails at its end on a 4xx or 5xx from `/api/`
+that `testHelpers.expectApiError` declares nowhere. `adminContext` is the admin's stored session
+(`validatedBrowserContext`), closed after the scenario. `contextOf(actor)` opens an actor's context on first use: the
+user's stored session (`memberValidatedBrowserContext`), or a visitor's context without a session (`openContext`). A
+GIVEN that signs in puts its context in `scene.context`, and `contextOfActor(scene, actor)` reads it, so one step serves
+each actor. `scene` holds what the steps of one scenario hand each other; `fromScene(scene, key)` reads what an earlier
+step set.
+
+The scene helpers create a scenario's data through the factories and record it for the cleanup:
+`createSceneHousehold`, `createScenePerson` and `createDinnerInThePastMonth`. A feature states the season its scenarios
+use in the Background: `a season is active` (the singleton, which the `BeforeAll` resolves per feature),
+`a season of its own is active` or `a season of its own is not active` (the dinner step builds that season around the
+dinner's day); a step reads the active season from `scene.activeSeason`. `personOf` reads an actor's inhabitant,
+`ticketPriceIdOf` the season's ticket price of an actor's part, and `periodOf` the billing period that bills the
+scenario's households.
+After the scenario, the scene puts back the member's settings. The rows the scenarios create go into the worker's
+`createdRows`, and the AfterAll deletes them when the worker ends, as the specs' afterAll does. Each cleanup step
+runs, and the failed steps fail their hook together (`AggregateError`). A team creation rewrites every team of the
+shared season: `workerTeams` holds the teams a Background sets up with their dinners, and the worker's scenarios share
+one creation (`chef-page.feature`). A dinner alone on its day goes into `scene.dayDinnerIds` and is removed when the
+scenario ends: the singleton season has fewer free days than the workers hold at once.
 
 ```gherkin
 @smoke
@@ -228,34 +270,80 @@ Feature: Cron jobs
 
     Examples:
       | job               |
-      | Heynabo import    |
-      | daily maintenance |
-      | monthly billing   |
+      | HEYNABO_IMPORT    |
+      | DAILY_MAINTENANCE |
+      | MONTHLY_BILLING   |
 ```
 
-**Step rules.**
+**Scenarios are DRY.** A feature states each behaviour once, and Gherkin carries the variation
+(`tests/e2e/features/notifications/booking-notifications.feature` is the model).
 
-- A step names a domain fact: `Then the active season has dinner events`, `When the daily maintenance job runs`. The
+- A Scenario Outline carries the values a behaviour is checked with: one row per case, one column per kind of value
+  (`| palette | text scale |`, `| channel | emails sent |`). Each group of related values has its own Outline: the
+  channels in one, the appearance in another.
+- A cell holds the bare value (`seller`, `colorblind`, `1`). The words every row shares live in the template:
+  `sent to the closest user of the <inhabitant>`.
+- A situation is composed from small numeric steps: `<waiting> inhabitants are on the waiting list` and
+  `<for sale> tickets are for sale` build every waiting-list state of the booking notifications.
+- An outcome is a count in an integer column, read by `{int}` with `(s)` and `is/are`:
+  `<emails sent> <notification> emails are sent to …` reads 0, 1 and 2.
+- A Background carries the GIVENs every scenario of the feature shares; a `Rule:` with its own Background groups the
+  scenarios that share more.
+- An Outline's name carries its columns, so each row names its scenario.
+- A THEN reads what is observable: the delivery records in the database, the CSV archives uploaded, the emails sent,
+  what the user sees on the page.
+- The words are the domain's, as the code names them: the models and enums of `prisma/schema.prisma` and the
+  validation composables, the words users read in `app/config/` (`bookingWords.ts`), the actors below. A noun, a value
+  or an event in a feature is one those sources hold, looked up before it is written: a ticket has a ticket type
+  (`ADULT`, `CHILD`, `BABY`) and a guest ticket is booked on an inhabitant; a dinner mode is `DINEIN`, `DINEINLATE`,
+  `TAKEAWAY` or `NONE`; the accountant link opens a billing period. A WHEN names the event (`the dinner is booked`,
+  `the ticket is released`).
+
+**Step definitions are reused.** One definition states one fact for every actor, value and suite.
+
+- A step names a domain fact: `Then the active season has dinner events`, `When the DAILY_MAINTENANCE job runs`. The
   page, the request and the locator live in the step body.
 - One phrasing per fact. `npx bddgen export` lists the steps; read it before writing a step, and reuse the one that
   states the fact. `npx bddgen export --unused-steps` lists the steps no scenario uses.
+- The actor is a parameter type bound to the domain: the user (`User`), the admin (`SystemRoleSchema.enum.ADMIN`), the
+  chef, an inhabitant and its roles on a dinner (the seller, the first in line), the user's inhabitant
+  (`Inhabitant.userId`), the babies of the user's household by their BABY ticket (the baby who tastes on 0 portions,
+  the hungry baby on a share), a visitor without a session. `{actor} saves the setting {setting}` serves each, and the step
+  reads the actor's context from `scene`.
+- A domain word is a parameter type (`defineParameterType`) built from its enum schema. A cell and a step text hold the
+  enum value as it is: `{job}` reads `DAILY_MAINTENANCE`, `{notification}` reads `WAITLIST_JOINED`, `{mode}` reads
+  `DINEIN`; `{setting}` reads the name and the value together (`palette colorblind`, `channel EMAIL`). The type's
+  regexp lists the enum values, so a value outside the enum fails at generation.
+- One text serves GIVEN and THEN: the GIVEN sets the fact, the THEN reads it (`the user has the setting channel
+  EMAIL`). The BDD projects set `matchKeywords: true`, so the keyword picks the body.
+- A UI body of a step carries the UI suites' tag (`{tags: '@e2e-parallel or @e2e-serial'}`) and serves the UI
+  features; the untagged body serves the api features.
+- An optional parameter is a second pattern on the same body: `the dinner is booked` and
+  `the dinner is booked for {actor}`.
 - Steps live in the file of their domain.
-- A domain word is a parameter type (`defineParameterType`) bound to its enum schema member: `{job}` reads "daily
-  maintenance" as `JobType.DAILY_MAINTENANCE`. A word outside the type fails at generation.
 - Scenario state and its cleanup live in fixtures (`scene`); data comes from the factories, salted (Rules 2 and 3).
-- A Background carries the GIVENs the scenarios of a feature share.
-- A Scenario Outline carries examples, one scenario per row; a `<column>` in the outline's name names each scenario.
 - GIVEN sets the scene, WHEN acts, THEN reads the outcome. A THEN that reads standing state needs no WHEN
   (`Then the users list is non-empty`).
+- A block of Gherkin comes for review with its reuse table: each step text, its definition, and the lines that use it.
 
-**Commands.**
+**Commands.** The specs are generated with `npm run test:bdd:generate`: it runs `bddgen` and writes
+`.output/bdd/package.json` (`"type": "module"`), by which Node loads the generated specs as ES modules. A
+`nuxt build` empties `.output`; the specs are generated again after a build.
 
 ```bash
-npm run test:bdd:generate                     # generate .output/bdd/ from the features
+npm run test:bdd:generate                     # generate .output/bdd/ from the features, with its package.json
 npx bddgen export                    # the step definitions
 npm run test:e2e:smoke               # generate, then run the smoke suite with its reports
-npm run test:bdd:generate && npx playwright test --project=chromium-smoke --grep "<scenario>" --reporter=line   # one scenario by its title
+npm run test:bdd:generate && npx playwright test --project=<bdd project> --grep "<scenario>" --reporter=line   # one scenario by its title
 ```
+
+| Project | Suite tag |
+|---|---|
+| `chromium-bdd-api` | `@api-parallel` |
+| `chromium-bdd-api-serial` | `@api-serial`; one scenario runs with `--no-deps`, since the project depends on the API suites |
+| `chromium-bdd-ui` | `@e2e-parallel` |
+| `chromium-bdd-ui-serial` | `@e2e-serial`; one scenario runs with `--no-deps`, since the project depends on the UI suites |
+| `chromium-smoke` | `@smoke` |
 
 **Reports.** A BDD suite's npm script sets `BDD_SUITE=<suite>` and passes no `--reporter`, so the reporter list of
 `playwright.config.ts` writes the Playwright html, line and json reports and the Cucumber reports
@@ -308,6 +396,18 @@ const context = await validatedBrowserContext(browser)
 const season = await SeasonFactory.createSeason(context)
 ```
 
+### UI cases and API errors: `openContext(browser, options?)`, `expectApiError(context, status, url)`
+
+A UI spec imports `test` from `tests/e2e/uiTest.ts`. Its auto fixture records the `/api/` responses of the case's pages:
+the built-in `context` and every context from `openContext`, through which `validatedBrowserContext`,
+`memberValidatedBrowserContext` and `freshMemberContext` open theirs. A 4xx or 5xx the case did not declare fails the
+case at its end, naming the method, the url and the status. A case that drives an error on purpose declares it before
+the action; requests through `context.request` (the factories) are not recorded.
+
+```typescript
+expectApiError(context, 401, '/api/')
+```
+
 ### `pollUntil(fetchFn, condition, maxAttempts?, initialDelay?)`
 
 Polling with exponential backoff. Preferred over `page.waitForTimeout()`.
@@ -336,16 +436,22 @@ await doScreenshot(page, 'dropdown-timeout')  // Debug: test-results/
 await doScreenshot(page, 'admin/page', true)  // Docs: docs/screenshots/
 ```
 
-### Hydration and request helpers
+### Hydration, request and dinner-time helpers
 
 | Helper | Use |
 |--------|-----|
 | `gotoHydrated(page, url)` | Navigates and waits for hydration: the entry point for a test that interacts with the page |
+| `gotoAllergyCatalog(page)` | Opens `/admin/allergies` and waits for the detail pane's content, the catalog's hydration signal |
+| `openPreferences(page)` | Opens "Mine indstillinger" through the settings button in the profile card header and waits for the card |
+| `savePreferences(page, testIds)` | Rediger, clicks the controls of `testIds`, Gem; returns the response of `POST /api/user/preferences` |
 | `collectHydrationWarnings(page)` | Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation |
 | `expectHydratedWithoutMismatch(page, url)` | Navigates, waits for hydration and asserts Vue logged no hydration mismatch on the way |
 | `waitForApi(page, path, method, options?)` | The next response to a `method` request whose url contains `path`; attach it before the action that sends the request |
-| `isScaffoldSave`, `isExpectedRead` | Response predicates for `page.waitForResponse`: the save of the household's booking write, and a booking view's read of the expected bookings (the dry run without orders) |
+| `pageCalendarToMonth(scope, shown, date)` | Pages a calendar from the month it shows to the month of `date` with Nuxt UI's month buttons, one click and one heading a month |
+| `isScaffoldSave`, `isExpectedRead` | Response predicates for `page.waitForResponse`: the save of the household's booking write (the POST), and a booking view's read of the expected bookings (the dry run's GET without orders) |
 | `PAST_THE_SCAFFOLD_WINDOW_DAYS` | A day past the prebooking window, where only the preferences speak for a dinner |
+| `dinnerStartOf(date)` | The start of the dinner on `date` as the server reads it: the dinner hour in Copenhagen |
+| `isBeforeDinnerDeadline(offsetDays)(date)` | Whether now lies before the deadline `offsetDays` before that dinner starts: the application's predicate |
 
 ### Component helpers: `/tests/component/testHelpers.ts`
 
@@ -355,12 +461,16 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 
 | Helper | Use |
 |--------|-----|
-| `mountWithTooltipProvider(Component, {props?, isMd?})` | `mountSuspended` under reka-ui's `TooltipProvider` (the context `UApp` supplies in the app). Returns the component's own wrapper, so `find`, `text`, `emitted` and `props` read the component, not the shell. `isMd` provides the layout's responsive breakpoint ref when given (`null` before the layout has measured); pass a ref to change the breakpoint after mount |
+| `mountWithTooltipProvider(Component, {props?, isMd?})` | `mountSuspended` under reka-ui's `TooltipProvider` (the context `UApp` supplies in the app). Returns the component's own wrapper, so `find`, `text`, `emitted` and `props` read the component, not the shell. `isMd` provides the layout's responsive breakpoint ref when given (`null` before the layout has measured); pass a ref to change the breakpoint after mount. `setProps` reaches the shell alone: a case that changes props after mount passes a `shallowReactive` object and changes its keys in place |
 | `withTooltipProvider(Component, props)` | The bare wrapper definition, for the rare spec that needs the root wrapper |
 | `findByTestId(wrapper, id)` / `findAllByTestId(wrapper, id)` | `data-testid` lookups - never hand-build the selector string |
+| `findComponentByTestId<Props>(wrapper, name, id)` | The `name` component whose root element carries the test id, its props typed `Props` (`ButtonProps`, `BadgeProps`); the case fails when none does. A CSS selector alone returns the topmost component on the element, which a table cell's renderer or a wrapping component can be |
 | `findLoadingRow(wrapper)` / `findAllLoadingRows(wrapper)` | The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows |
 | `isTableLoading(wrapper)` | Whether the UTable under the wrapper binds `loading`: its loading bar runs under the column headers and carries no attribute to find |
-| `registerScaffoldEndpoint()` | The scaffold endpoint for a component that previews: `answers.preview` and `answers.expected` set the replies of the dry run and the empty-draft read (`OrderFactory.defaultScaffoldOrdersResponse()` until set), and `sent` records each request's query and body |
+| `tableHeaders(wrapper)` / `cellsByHeader(wrapper, rowIndex = 0)` | A table's rendered column headers, a column without header text (an expand column) as `''`; a body row's cells by the header of their column |
+| `findOpenRows(wrapper)` | The body rows UTable marks open (`data-expanded`), each with the row after it that holds the `#expanded` slot |
+| `iconNamesIn(wrapper)` | The names of the `UIcon`s inside a wrapper. A DOM wrapper's `findAllComponents` returns the components its element contains, so `findByTestId(wrapper, id).findAllComponents(...)` reaches the components of one part; a part typed `BaseWrapper<Node>` keeps VTU's typed overloads, which `DOMWrapper` types `any`. The component whose root is a test-id part is `findComponentByTestId` |
+| `registerScaffoldEndpoint()` | The scaffold's dry run (`GET`) for a component that previews: `answers.preview` answers a read with orders and `answers.expected` one without (`OrderFactory.defaultScaffoldOrdersResponse()` until set); `sent` records each read's request, its orders decoded by `DesiredOrderQuerySchema`, and its other query parameters (`bypassDeadlines`); `hold(kind)` keeps a read pending until released |
 | `holdEndpoint(url, body)` | An endpoint that answers `body` once the test calls `release()`: the window in which a dataset is pending; `unregister()` in `afterEach` hands the url back to the registration before it |
 | `untilTrue(condition)` | Resolves once a reactive condition holds (store state, a flag), watching it rather than polling; the test's own timeout bounds it |
 | `clickByTestId(wrapper, id)` | Click + `await nextTick()` |
@@ -368,6 +478,7 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 | `resetStores()` | Fresh stores over a fresh data layer per test: the stores of the app's pinia and of the active one are disposed, the app's pinia stays active so a spec and the components it mounts share one store instance, and the keyed `useAsyncData` entries earlier stores registered go with them |
 | `registerEmptyStoreEndpoints()` | The datasets the stores request on creation, answered empty; a spec's own route for one of them registers after this call, as the last registration of a url answers |
 | `VIEWPORTS` | The two layouts a responsive token answers for, the phone (`isMd: false`) and md and up (`isMd: true`), as the table of a `describe.each` |
+| `expectMasterDetail(master, detail)` | The master and the detail stand side by side in one `LAYOUTS.masterDetailPage` root, in its left and center slots |
 | `lockedDinnerSupply(byType?, queuedByType?)` | A locked dinner's supply (`ReleasedTicketCounts`) from its tickets for sale and its waiting list per ticket type, with the totals and the compact counts |
 | `kitchenConfig()` | The kitchen's rates the money components calculate with, read from the app config inside a hook or a test |
 | `useTestScope()` | A scope per test for the composables a test body creates: the watchers they start stop with the test, as they do when a component unmounts |
@@ -392,6 +503,7 @@ mockNuxtImport('navigateTo', () => mockNavigateTo)
 |--------|-----|
 | `mockSession(user?)` | The session nuxt-auth-utils hydrates from a cookie the test runtime lacks; the auth store reading it is real. `session.user` is the one switch: `loggedIn` follows it, and a spec that gates on login alone writes `loggedIn` itself |
 | `mockRouteAndNavigation({path?, params?, query?})` | The route a page reads and the navigation it writes, with no router in the test runtime. `mockRoute` is reactive, so the computeds over `route.query` follow a write; `mockNavigateTo` records the calls, and `mockNavigateTo.mockImplementation(landNavigation)` lands each call on the route, as the router does |
+| `stubAppConfig()` | The app config from `app.config.ts` for a server module that reads it through `useAppConfig` as it loads: stubs `defineAppConfig` and `useAppConfig` before the imports. Returns the config |
 
 ---
 
@@ -688,6 +800,21 @@ registerEndpoint('/api/admin/season/1', { handler: () => mockObject })  // Never
 
 ---
 
+## Repository Testing
+
+`tests/component/data/*.unit.spec.ts` run the repository functions in the unit runtime, which has no D1. The spec mocks
+`getPrismaClientConnection` (`~~/server/utils/database`) and hands the repository a client of its own.
+
+| Statement | Runs on |
+|---|---|
+| A Prisma call | `fakePrismaClient(models)` (`tests/component/data/fakePrismaClient.ts`): one `vi.fn()` per model method the spec names, answered by the case. `statementsInCallOrder` reads the order of the calls, `callsInFlight` the most calls in flight at once |
+| A raw statement (`$queryRawUnsafe`, ADR-014) | An in-memory SQLite (`node:sqlite`) built from `migrations/*.sql` in a `beforeAll`: the case inserts its rows, the mock runs the statement on it, and the case reads the result and the statement's `EXPLAIN QUERY PLAN` |
+
+A raw statement's case asserts its result, and for a read on a table that grows, a plan that reaches the table through
+an index (`SEARCH … USING INDEX`). Reference: `fetchOrders with provenance` in `financesRepository.unit.spec.ts`.
+
+---
+
 ## E2E Testing (Playwright)
 
 ### Strategy: Setup → Interact → Verify
@@ -764,7 +891,7 @@ test.afterAll(async ({ browser }) => {
 
 ### Serial Tests
 
-Some E2E tests must run serially due to shared state. Two categories:
+A test runs serially on the terms of Rule 3 (Serial). Two categories:
 
 | Category | Location | Reason |
 |----------|----------|--------|
@@ -1018,6 +1145,8 @@ Before completing ANY test task:
 - [ ] **Salted:** E2E data uses `testSalt` for uniqueness
 - [ ] **Helpers:** Repeated patterns in testHelpers.ts
 - [ ] **Parallel:** E2E verified with `--workers=4`
+- [ ] **Once:** an outcome is asserted in one case, at the lowest level (Rule 0)
+- [ ] **Own household:** a case that writes preferences creates its own household (Rule 3)
 - [ ] **No console.log:** Only `expect()` assertions
 
 **If ANY fails → STOP and refactor.**

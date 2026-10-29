@@ -47,6 +47,10 @@
  *
  * For list displays (tabs, tables), use CookingTeamBadges component instead.
  *
+ * Visual check: at 375px and desktop with a role of seven members, the /dinner monitor face's role row and the
+ * /admin/teams edit header's faces show three and the overflow count on a phone, five from md; the names and the
+ * badges wrap under the faces inside the card and the page does not scroll sideways.
+ *
  * ADR Compliance:
  * - ADR-001: Types from validation composables
  * - ADR-007/ADR-009: every mode reads the Detail the plan store holds for the selected team
@@ -54,9 +58,10 @@
  * - Uses UserListItem for consistent inhabitant display
  */
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
-import type { TeamRole, CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
-import { ROLE_LABELS } from '~/composables/useCookingTeamValidation'
+import type { TeamRole, CookingTeamAssignment, CookingTeamDisplay } from '~/composables/useCookingTeamValidation'
 import type { JokerSlotCreate } from '~/composables/useDutyValidation'
+import { TEAM_WORDS } from '~/config/teamWords'
+import { BUTTON_WORDS } from '~/config/buttonWords'
 
 // Design system
 const { SIZES, ICONS, ALERTS, BUTTONS, TYPOGRAPHY, COMPONENTS, ROLE_ICONS, getRainbowBand, getCalendarCountBadge, getRandomEmptyMessage } = useTheSlopeDesignSystem()
@@ -68,17 +73,19 @@ interface Props {
   teamNumber: number       // Logical number 1..N in season (for display/color)
   mode?: DisplayMode       // Display mode
   useShortName?: boolean   // If true, display "Madhold X" instead of full name with season
+  visiting?: boolean       // The viewer is not on the team: the monitor header carries "Ikke dit hold"
   // EDIT mode only props:
   seasonId?: number
   seasonCookingDays?: WeekDayMap | null
   seasonDates?: DateRange
   holidays?: DateRange[]
-  teams?: Array<{ id: number, name: string }>
+  teams?: CookingTeamDisplay[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
   mode: 'regular',
   useShortName: false,
+  visiting: false,
   seasonId: undefined,
   seasonCookingDays: undefined,
   seasonDates: undefined,
@@ -187,7 +194,8 @@ const isEditable = computed(() => props.mode === 'edit')
 const hasNoMembers = computed(() => assignments.value.length === 0)
 
 // Random fun empty state message from design system
-const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
+const now = useClock()
+const emptyStateMessage = getRandomEmptyMessage('cookingTeam', now.value)
 
 // ========== INHABITANT SELECTOR (EDIT mode) ==========
 
@@ -277,6 +285,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
         :cooking-days-count="cookingDaysCount"
         size="large"
       />
+      <UBadge v-if="visiting" v-bind="COMPONENTS.visitBadge" :size="SIZES.small" :label="TEAM_WORDS.visit.badge" data-testid="team-card-visit-badge" />
     </div>
 
     <!-- Members display OR empty state -->
@@ -335,12 +344,12 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
         </UFormField>
 
         <!-- Compact team members view in header -->
-        <div :class="COMPONENTS.teamCard.memberSummary">
-          <UAvatarGroup :size="COMPONENTS.avatar.compact.size" :ui="{base: COMPONENTS.avatar.compact.fit}" :max="COMPONENTS.avatar.max">
+        <div :class="COMPONENTS.teamCard.memberSummary" data-testid="team-member-summary">
+          <UAvatarGroup v-bind="COMPONENTS.avatar.compact.group" :max="SIZES.avatarMax">
             <UTooltip
               v-for="assignment in assignments"
               :key="assignment.id"
-              :text="`${assignment.inhabitant?.name} ${assignment.inhabitant?.lastName} (${ROLE_LABELS[assignment.role]})`"
+              :text="`${assignment.inhabitant?.name} ${assignment.inhabitant?.lastName} (${TEAM_WORDS.roles[assignment.role].label})`"
             >
               <UAvatar
                 :src="assignment.inhabitant?.pictureUrl ?? undefined"
@@ -399,7 +408,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             >
               <h5 :class="COMPONENTS.roleBox.heading" :data-testid="`team-role-heading-${role}`">
                 <UIcon :name="ROLE_ICONS[role]" :class="COMPONENTS.roleBox.glyph" />
-                <span>{{ ROLE_LABELS[role] }}</span>
+                <span>{{ TEAM_WORDS.roles[role].label }}</span>
               </h5>
 
               <div v-if="members.length > 0" :class="COMPONENTS.roleBox.memberList">
@@ -435,7 +444,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
               </div>
 
               <div v-else :class="COMPONENTS.roleBox.empty">
-                Ingen {{ ROLE_LABELS[role].toLowerCase() }}
+                Ingen {{ TEAM_WORDS.roles[role].label.toLowerCase() }}
               </div>
             </div>
 
@@ -450,7 +459,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   <span>{{ formatDateRange({start: slot.startDate, end: slot.endDate}) }}</span>
                   <WeekDayMapDisplay :model-value="slot.affinity" compact disabled />
                   <UIcon :name="ROLE_ICONS[slot.role]" :class="COMPONENTS.roleBox.glyph" />
-                  <span>{{ ROLE_LABELS[slot.role] }}</span>
+                  <span>{{ TEAM_WORDS.roles[slot.role].label }}</span>
                   <span v-if="slot.note">{{ slot.note }}</span>
                   <UBadge
                     v-bind="getCalendarCountBadge(teamNumber)"
@@ -514,7 +523,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                 <template #leading>
                   <UIcon :name="row.getIsExpanded() ? ICONS.chevronDown : isInThisTeam(row.original.id) ? ICONS.edit : ICONS.plusCircle" />
                 </template>
-                {{ row.getIsExpanded() ? 'Luk' : isInThisTeam(row.original.id) ? 'Rediger' : 'Tilføj' }}
+                {{ row.getIsExpanded() ? BUTTON_WORDS.close : isInThisTeam(row.original.id) ? BUTTON_WORDS.edit : BUTTON_WORDS.add }}
               </UButton>
             </template>
 
@@ -554,7 +563,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   data-testid="joker-slot-add"
                   @click="isJokerFormOpen = !isJokerFormOpen"
                 >
-                  {{ isJokerFormOpen ? 'Luk' : 'Tilføj' }}
+                  {{ isJokerFormOpen ? BUTTON_WORDS.close : BUTTON_WORDS.add }}
                 </UButton>
               </div>
               <div v-if="isJokerFormOpen" :class="COMPONENTS.teamCard.memberForm">

@@ -5,9 +5,11 @@ import { ref } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { registerEndpoint, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { getQuery, readBody, type H3Event } from 'h3'
-import type {
-  HouseholdDisplay,
-  HouseholdDetail
+import {
+  useCoreValidation,
+  adminBypassQuery,
+  type HouseholdDisplay,
+  type HouseholdDetail
 } from '~/composables/useCoreValidation'
 import { useBookingValidation, type BookingAction, type BookingResult } from '~/composables/useBookingValidation'
 import { countTotals } from '~/composables/useBooking'
@@ -17,6 +19,8 @@ import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
 import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { useHouseholdsStore } from '~/stores/households'
+import { API_ERROR_WORDS } from '~/config/apiErrorWords'
+import { HOUSEHOLD_WORDS } from '~/config/householdWords'
 import { useBookingsStore } from '~/stores/bookings'
 const Action = useBookingValidation().BookingActionSchema.enum
 const DinnerMode = useBookingValidation().DinnerModeSchema.enum
@@ -29,6 +33,9 @@ session.loggedIn.value = true
 
 // Schema for validating mock responses
 const { InhabitantUpdateResponseSchema } = useBookingValidation()
+const { createDefaultWeekdayMap, serializeWeekDayMap } = useCoreValidation()
+// The draft a preference save sends: every weekday dines in
+const weekMap = createDefaultWeekdayMap(DinnerMode.DINEIN)
 
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
@@ -60,6 +67,11 @@ registerEndpoint('/api/admin/household', { handler: createHouseholdEndpoint, met
 registerEndpoint('/api/household/1/update', { handler: moveOutEndpoint, method: 'POST' })
 const calendarFeedEndpoint = vi.fn()
 registerEndpoint('/api/calendar/feed', calendarFeedEndpoint)
+// A preference preview is a read (ADR-004): the GET after the generic routes above (reverse-order lookup)
+const previewEndpoint1 = vi.fn()
+const previewEndpoint2 = vi.fn()
+registerEndpoint('/api/household/inhabitants/1/preferences', { handler: previewEndpoint1, method: 'GET' })
+registerEndpoint('/api/household/inhabitants/2/preferences', { handler: previewEndpoint2, method: 'GET' })
 
 // ========================================
 // Test Helpers - Use factory data + schema validation
@@ -199,7 +211,7 @@ describe('Households Store', () => {
       const mockResponse = createMockInhabitantUpdateResponse()
       preferencesEndpoint1.mockReturnValue(mockResponse)
 
-      const result = await store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN, TUESDAY: DinnerMode.TAKEAWAY })
+      const result = await store.updateInhabitantPreferences(1, weekMap, false)
 
       expect(preferencesEndpoint1).toHaveBeenCalled()
       expect(result).toEqual(mockResponse.scaffoldResult)
@@ -216,7 +228,7 @@ describe('Households Store', () => {
       // Clear previous calls
       householdByIdEndpoint.mockClear()
 
-      await store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
+      await store.updateInhabitantPreferences(1, weekMap, false)
 
       // Verify refresh was called
       expect(householdByIdEndpoint).toHaveBeenCalled()
@@ -232,7 +244,7 @@ describe('Households Store', () => {
       })
 
       await expect(
-        store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
+        store.updateInhabitantPreferences(1, weekMap, false)
       ).rejects.toThrow()
     })
   })
@@ -255,7 +267,7 @@ describe('Households Store', () => {
         scaffoldResult: OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 2, [Action.CANCEL]: 1, [Action.RELEASE]: 1, [Action.CHANGE_PRICE]: 1}, unchanged: 1})
       }))
 
-      await store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
+      await store.updateAllInhabitantPreferences(1, weekMap, false)
 
       // Verify aggregated result (includes all ScaffoldResult fields)
       expect(store.lastPreferenceResult).toEqual(OrderFactory.defaultScaffoldResult({
@@ -282,7 +294,7 @@ describe('Households Store', () => {
         return createMockInhabitantUpdateResponse()
       })
 
-      await store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
+      await store.updateAllInhabitantPreferences(1, weekMap, false)
 
       // Verify sequential execution (order preserved)
       expect(callOrder).toEqual([1, 2])
@@ -297,7 +309,7 @@ describe('Households Store', () => {
       // Clear previous calls from loadHousehold
       householdByIdEndpoint.mockClear()
 
-      await store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
+      await store.updateAllInhabitantPreferences(1, weekMap, false)
 
       // Should be called exactly once after all updates
       expect(householdByIdEndpoint).toHaveBeenCalledTimes(1)
@@ -307,7 +319,7 @@ describe('Households Store', () => {
       const store = await setupStore()
 
       await expect(
-        store.updateAllInhabitantPreferences(999, { MONDAY: DinnerMode.DINEIN })
+        store.updateAllInhabitantPreferences(999, weekMap, false)
       ).rejects.toThrow('Household 999 not found')
     })
 
@@ -327,16 +339,16 @@ describe('Households Store', () => {
       })
 
       await expect(
-        store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
+        store.updateAllInhabitantPreferences(1, weekMap, false)
       ).rejects.toThrow()
     })
   })
 
-  // A preview reads what the save of the draft would do: the save's request per inhabitant with ?preview=true, outside
-  // the booking write. Dinner 13 has not been scaffolded: each preview books the other member on it by their stored
-  // preferences, while both drafts want no dinner on its weekday
+  // A preview is a read (ADR-004): the draft travels serialized in the query of each inhabitant's GET, outside the booking
+  // write, with no override; any member reads it. Dinner 13 has not been scaffolded: each preview books the other member
+  // on it by their stored preferences, while both drafts want no dinner on its weekday
   describe('previewPreferences', () => {
-    const draft = { MONDAY: DinnerMode.NONE, TUESDAY: DinnerMode.TAKEAWAY }
+    const draft = { ...createDefaultWeekdayMap(DinnerMode.DINEIN), mandag: DinnerMode.NONE, tirsdag: DinnerMode.TAKEAWAY }
     const line = (inhabitantId: 1 | 2, dinnerEventId: number, action: BookingAction) =>
       OrderFactory.defaultBookingResult({inhabitantId, inhabitantName: inhabitantId === 1 ? 'Anna' : 'Bo', dinnerEventId, action})
     const ownLines = {1: [line(1, 11, Action.CANCEL), line(1, 12, Action.RELEASE)], 2: [line(2, 14, Action.CHANGE_MODE)]}
@@ -346,28 +358,29 @@ describe('Households Store', () => {
     const eachOwnLineOnce = resultOf([...ownLines[1], ...ownLines[2]])
 
     it.each([
-      {mode: 'one inhabitant', returns: 'its whole preview', inhabitantIds: [1], adminBypass: false, query: {preview: 'true'}, expected: previewOf[1]},
-      {mode: 'power mode', returns: 'each line once, from its own inhabitant\'s preview', inhabitantIds: [1, 2], adminBypass: false, query: {preview: 'true'}, expected: eachOwnLineOnce},
-      {mode: 'an admin\'s power mode', returns: 'each line once, from its own inhabitant\'s preview', inhabitantIds: [1, 2], adminBypass: true, query: {adminBypass: 'true', preview: 'true'}, expected: eachOwnLineOnce}
-    ])('$mode: sends the draft to each inhabitant\'s preview, outside the booking write, and returns $returns', async ({inhabitantIds, adminBypass, query, expected}) => {
-      const sent: {inhabitantId: number, query: Record<string, unknown>, body: unknown}[] = []
-      const answer = (inhabitantId: 1 | 2) => async (event: H3Event) => {
-        sent.push({inhabitantId, query: getQuery(event), body: await readBody(event)})
+      {mode: 'one inhabitant', returns: 'its whole preview', inhabitantIds: [1], expected: previewOf[1]},
+      {mode: 'power mode', returns: 'each line once, from its own inhabitant\'s preview', inhabitantIds: [1, 2], expected: eachOwnLineOnce}
+    ])('$mode: reads the draft\'s preview of each inhabitant through the GET, outside the booking write, and returns $returns', async ({inhabitantIds, expected}) => {
+      const sent: {inhabitantId: number, query: Record<string, unknown>}[] = []
+      const answer = (inhabitantId: 1 | 2) => (event: H3Event) => {
+        sent.push({inhabitantId, query: getQuery(event)})
         return InhabitantUpdateResponseSchema.parse({
           inhabitant: createMockInhabitant(inhabitantId, 1),
           scaffoldResult: previewOf[inhabitantId]
         })
       }
-      preferencesEndpoint1.mockImplementation(answer(1))
-      preferencesEndpoint2.mockImplementation(answer(2))
+      previewEndpoint1.mockImplementation(answer(1))
+      previewEndpoint2.mockImplementation(answer(2))
       const store = await setupStore()
       const lastSaved = store.lastPreferenceResult
 
-      const preview = store.previewPreferences(inhabitantIds, draft, adminBypass)
+      const preview = store.previewPreferences(inhabitantIds, draft)
       expect(useBookingsStore().isProcessingBookings).toBe(false)
 
       expect(await preview).toEqual(expected)
-      expect(sent).toEqual(inhabitantIds.map(inhabitantId => ({inhabitantId, query, body: {dinnerPreferences: draft}})))
+      expect(sent).toEqual(inhabitantIds.map(inhabitantId => ({inhabitantId, query: {dinnerPreferences: serializeWeekDayMap(draft)}})))
+      expect(preferencesEndpoint1).not.toHaveBeenCalled()
+      expect(preferencesEndpoint2).not.toHaveBeenCalled()
       expect(store.lastPreferenceResult).toBe(lastSaved)
     })
   })
@@ -451,9 +464,9 @@ describe('Households Store', () => {
   // A write that changes bookings goes through the bookings store's one write, which re-reads what a booking touches
   describe('booking writes', () => {
     it.each([
-      {write: 'a preference change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })},
-      {write: 'a power mode change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })},
-      {write: 'a move-out date', run: (store: ReturnType<typeof useHouseholdsStore>) => store.setMoveOutDate(1, new Date())},
+      {write: 'a preference change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateInhabitantPreferences(1, weekMap, false)},
+      {write: 'a power mode change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateAllInhabitantPreferences(1, weekMap, false)},
+      {write: 'a move-out date', run: (store: ReturnType<typeof useHouseholdsStore>) => store.setMoveOutDate(1, new Date(), false)},
       {write: 'a move to another household', run: (store: ReturnType<typeof useHouseholdsStore>) => store.moveInhabitant(1, 2)}
     ])('$write goes through the one booking write', async ({run}) => {
       moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult: OrderFactory.defaultScaffoldResult() })
@@ -474,7 +487,7 @@ describe('Households Store', () => {
       moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult })
       const store = await setupStore()
 
-      const result = await store.setMoveOutDate(1, new Date())
+      const result = await store.setMoveOutDate(1, new Date(), false)
 
       expect(result).toEqual(scaffoldResult)
       expect(store.lastMoveOutResult).toEqual(scaffoldResult)
@@ -486,7 +499,41 @@ describe('Households Store', () => {
       })
       const store = await setupStore()
 
-      await expect(store.setMoveOutDate(1, null)).rejects.toThrow()
+      await expect(store.setMoveOutDate(1, null, false)).rejects.toThrow()
+    })
+  })
+
+  // An admin's change of a household carries the override; the household's own change carries no parameter (ADR-004)
+  describe('the override on a write', () => {
+    type Store = ReturnType<typeof useHouseholdsStore>
+    const writes = [
+      {write: 'a preference change', endpoints: [preferencesEndpoint1], run: (store: Store, adminBypass: boolean) => store.updateInhabitantPreferences(1, weekMap, adminBypass)},
+      {write: 'a power mode change', endpoints: [preferencesEndpoint1, preferencesEndpoint2], run: (store: Store, adminBypass: boolean) => store.updateAllInhabitantPreferences(1, weekMap, adminBypass)},
+      {write: 'a move-out date', endpoints: [moveOutEndpoint], run: (store: Store, adminBypass: boolean) => store.setMoveOutDate(1, new Date(), adminBypass)}
+    ]
+
+    it.each(writes.flatMap(write => [false, true].map(adminBypass => ({...write, adminBypass}))))(
+      'GIVEN $write with adminBypass $adminBypass WHEN saved THEN each request carries the override query of its role', async ({endpoints, run, adminBypass}) => {
+        moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult: OrderFactory.defaultScaffoldResult() })
+        const store = await setupStore()
+
+        await run(store, adminBypass)
+
+        expect(endpoints.map(endpoint => getQuery(endpoint.mock.calls[0]![0] as H3Event))).toEqual(endpoints.map(() => adminBypassQuery(adminBypass)))
+      })
+
+    it('GIVEN a week map draft WHEN saved THEN the body carries the week map as it is, for the server to serialize', async () => {
+      const draft = {...weekMap, tirsdag: DinnerMode.TAKEAWAY}
+      const bodies: unknown[] = []
+      preferencesEndpoint1.mockImplementation(async (event: H3Event) => {
+        bodies.push(await readBody(event))
+        return createMockInhabitantUpdateResponse()
+      })
+      const store = await setupStore()
+
+      await store.updateInhabitantPreferences(1, draft, false)
+
+      expect(bodies).toEqual([{dinnerPreferences: draft}])
     })
   })
 
@@ -501,7 +548,7 @@ describe('Households Store', () => {
       const store = await setupStore()
       householdIndexEndpoint.mockClear()
 
-      const created = await store.createHousehold(payload())
+      const created = await store.createHousehold(payload(), [])
 
       expect(created?.id).toBe(createMockHouseholdDetail().id)
       expect(householdIndexEndpoint).toHaveBeenCalled()
@@ -513,7 +560,28 @@ describe('Households Store', () => {
       })
       const store = await setupStore()
 
-      await expect(store.createHousehold(payload())).resolves.toBeNull()
+      await expect(store.createHousehold(payload(), [])).resolves.toBeNull()
+    })
+
+    it('GIVEN a prev owner at the address WHEN created THEN the create carries the household alone and the prev owner moves out by override', async () => {
+      const created: unknown[] = []
+      createHouseholdEndpoint.mockImplementation(async (event: H3Event) => {
+        created.push(await readBody(event))
+        return createMockHouseholdDetail()
+      })
+      const movedOut: {query: unknown, body: unknown}[] = []
+      moveOutEndpoint.mockImplementation(async (event: H3Event) => {
+        movedOut.push({query: getQuery(event), body: await readBody(event)})
+        return { household: createMockHouseholdDetail(), scaffoldResult: OrderFactory.defaultScaffoldResult() }
+      })
+      const store = await setupStore()
+      const household = payload()
+      const moveOutDate = new Date('2026-11-01T00:00:00Z')
+
+      await store.createHousehold(household, [{id: 1, moveOutDate}])
+
+      expect(created).toEqual([JSON.parse(JSON.stringify(household))])
+      expect(movedOut).toEqual([{query: adminBypassQuery(true), body: {moveOutDate: moveOutDate.toISOString()}}])
     })
   })
 })
@@ -758,7 +826,7 @@ describe('Households Store - household selection', () => {
     await vi.waitFor(() => expect(householdIndexEndpoint.mock.calls.length).toBeGreaterThan(householdListRequests))
     await vi.waitFor(() => expect(store.selectedHousehold?.id).toBe(mine!.id))
     expect(store.selectedHouseholdId).toBe(mine!.id)
-    expect(useToast().toasts.value.at(-1)?.title).toBe(`Kan ikke finde husstanden ${gone.shortName}`)
+    expect(useToast().toasts.value.at(-1)?.title).toBe(API_ERROR_WORDS.notFoundOf(HOUSEHOLD_WORDS.notFound, gone.shortName))
   })
 
   it('after a 404 the page\'s getter still drives the selection', async () => {

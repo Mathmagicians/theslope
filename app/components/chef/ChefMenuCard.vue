@@ -100,6 +100,7 @@ import type { Form, FormSubmitEvent } from '#ui/types'
 import type { WaitlistQueueSummary, ExtraPortionsRequest } from '~/composables/useWaitlistValidation'
 import { FORM_MODES, type FormMode } from '~/types/form'
 import { BOOKING_WORDS } from '~/config/bookingWords'
+import { BUTTON_WORDS } from '~/config/buttonWords'
 
 interface Props {
   dinnerEvent: DinnerEventDetail
@@ -116,6 +117,7 @@ interface Props {
   calendarOpen?: boolean        // Calendar accordion state
   navColor?: NuxtUIColor        // Navigation button color
   roundRows?: CookingRoundRow[] // The team's cooking round around this dinner (chef page)
+  teamNumber?: number | null    // The cooking team's number in the season, its badge's colour in the round (chef page)
   expenseNote?: string          // The words a grocery line's note starts with (expenseNoteWords, built by the page)
   waitlist?: WaitlistQueueSummary | null // The dinner's queue: its size and portion need (chef page)
 }
@@ -133,6 +135,7 @@ const props = withDefaults(defineProps<Props>(), {
   calendarOpen: false,
   navColor: undefined,
   roundRows: () => [],
+  teamNumber: null,
   expenseNote: '',
   waitlist: null
 })
@@ -186,19 +189,21 @@ const {getTeamShortName} = useCookingTeam()
 const roundWords = computed(() => {
   const first = props.roundRows[0]
   const last = props.roundRows.at(-1)
-  if (props.roundRows.length <= 1 || !first || !last || !props.dinnerEvent.cookingTeam) return null
-  return cookingRoundWords(getTeamShortName(props.dinnerEvent.cookingTeam.name), first.date, last.date)
+  if (props.roundRows.length <= 1 || !first || !last || !props.dinnerEvent.cookingTeam || props.teamNumber === null) return null
+  return cookingRoundWords(getTeamShortName(props.dinnerEvent.cookingTeam.name), props.teamNumber, first.date, last.date)
 })
 // The spending fragments, built once: this dinner's receipts and the team's round, for the editor's sums and the Budget pane
 const ownRow = computed(() => props.roundRows.find(row => row.isCurrent) ?? null)
 const dinnerFragment = computed(() => ownRow.value ? dinnerSpendingFragment(ownRow.value, props.dinnerEvent.expenses) : null)
 const teamFragment = computed(() => roundWords.value ? teamSpendingFragment(props.roundRows, roundWords.value) : null)
-const round = computed(() => teamFragment.value ? {label: teamFragment.value.heading, figures: teamFragment.value.total.figures} : null)
+const round = computed(() => roundWords.value && teamFragment.value ? {label: roundWords.value.heading, figures: teamFragment.value.total.figures} : null)
 const bookingDeadline = computed(() => props.deadlines.getBookingDeadlineTime(props.dinnerEvent.date))
 
 // Time logic from useSeason (ADR-001: business logic in composables)
 const { getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
 const dinnerStartHour = getDefaultDinnerStartTime()
+// The page's clock: the server and the browser count down from the same moment
+const now = useClock()
 
 // Allergies store for allergen data
 const allergiesStore = useAllergiesStore()
@@ -222,7 +227,7 @@ const stateBadge = computed(() => {
 
 // Dinner step (from useBooking business logic)
 const _currentStep = computed(() => getStepConfig(props.dinnerEvent, props.deadlines).step)
-const isCancelled = computed(() => props.dinnerEvent.state === DinnerState.CANCELLED)
+const isCancelled = computed(() => isDinnerCancelled(props.dinnerEvent))
 
 // Menu display
 const hasMenuTitle = computed(() => !!props.dinnerEvent.menuTitle?.trim())
@@ -234,8 +239,8 @@ const formattedShortDate = computed(() => formatDate(props.dinnerEvent.date))
 // Menu status - uses getDeadlineUrgency from useSeason
 const menuStatus = computed(() => {
   const dinnerTimeRange = getDinnerTimeRange(props.dinnerEvent.date, dinnerStartHour, 0)
-  const countdown = calculateCountdown(dinnerTimeRange.start)
-  const urgency = getDeadlineUrgency(dinnerTimeRange.start)
+  const countdown = calculateCountdown(dinnerTimeRange.start, now.value)
+  const urgency = getDeadlineUrgency(dinnerTimeRange.start, now.value)
 
   // 0 = compliant (green), 1 = warning, 2 = critical
   return {
@@ -275,7 +280,7 @@ const menuAllergenOverview = computed(() =>
   computeAllergenOverview(props.dinnerEvent.tickets ?? [], props.dinnerEvent.allergens ?? [])
 )
 
-const noAllergensMessage = getRandomEmptyMessage('noAllergens')
+const noAllergensMessage = getRandomEmptyMessage('noAllergens', now.value)
 
 // Draft allergen selection for editing
 const draftAllergenIds = ref<number[]>([])
@@ -581,7 +586,7 @@ const handleCardClick = () => {
                     data-testid="dinner-aflys-dismiss"
                     @click="isMoreOpen = false"
                   >
-                    Annuller
+                    {{ BUTTON_WORDS.cancel }}
                   </UButton>
                   <DangerButton
                     :label="isUpdating ? 'Arbejder...' : 'Aflys middagen'"
@@ -601,7 +606,7 @@ const handleCardClick = () => {
           v-if="isEditing && hasQueue && !isAddingExtraPortions && canCancelDinner(dinnerEvent)"
           v-bind="{...ALERTS.info, ...ALERTS.withActions}"
           :icon="ICONS.waitlist"
-          :title="`${SUPPLY_WORDS.queuedCount({queuedFormatted})} · ${formatPortions(waitlist!.portions)} portioner`"
+          :title="`${SUPPLY_WORDS.queuedCount(queuedFormatted)} · ${formatPortions(waitlist!.portions)} portioner`"
           :description="SUPPLY_WORDS.chefAsk(waitlist!.entries)"
           :class="COMPONENTS.chefMenuCard.alertGap"
           data-testid="chef-waitlist-alert"
@@ -708,8 +713,8 @@ const handleCardClick = () => {
           <UTextarea v-model="formState.menuDescription" placeholder="Kort beskrivelse af retten og evt. tilbehør" :rows="3" :size="SIZES.standard" name="chef-menu-description-input" :class="COMPONENTS.chefMenuCard.field" />
         </UFormField>
         <div :class="LAYOUTS.formButtonRow">
-          <UButton v-bind="BUTTONS.cancel" data-testid="cancel-menu-edit" @click="handleMenuCancel">Annuller</UButton>
-          <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" type="submit" data-testid="save-menu-edit">Gem</UButton>
+          <UButton v-bind="BUTTONS.cancel" data-testid="cancel-menu-edit" @click="handleMenuCancel">{{ BUTTON_WORDS.cancel }}</UButton>
+          <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" type="submit" data-testid="save-menu-edit">{{ BUTTON_WORDS.save }}</UButton>
         </div>
       </UForm>
 
@@ -751,8 +756,8 @@ const handleCardClick = () => {
           <div :class="COMPONENTS.cardSection.editorHead">
             <h4 :class="COMPONENTS.cardSection.editorTitle">Allergener i menuen</h4>
             <div :class="LAYOUTS.formButtonRow">
-              <UButton v-bind="BUTTONS.cancel" data-testid="cancel-allergens-edit" @click="handleAllergenCancel">Annuller</UButton>
-              <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" data-testid="save-allergens-edit" @click="handleAllergenSave">Gem</UButton>
+              <UButton v-bind="BUTTONS.cancel" data-testid="cancel-allergens-edit" @click="handleAllergenCancel">{{ BUTTON_WORDS.cancel }}</UButton>
+              <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" data-testid="save-allergens-edit" @click="handleAllergenSave">{{ BUTTON_WORDS.save }}</UButton>
             </div>
           </div>
           <AllergenMultiSelector

@@ -4,6 +4,8 @@ import {useBilling, TICKET_COUNTS} from '~/composables/useBilling'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 
 describe('useBilling', () => {
     // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
@@ -232,14 +234,19 @@ describe('useBilling', () => {
     })
 
     describe('expenseNoteWords', () => {
-        const dinner = {date: new Date(2026, 3, 14, 18), menuTitle: 'Risotto', cookingTeam: {name: 'Madhold 2 - 08/25-06/26'}}
-        const payer = {email: 'anna@example.com', name: 'Anna H.'}
+        const dinner = {
+            ...DinnerEventFactory.defaultDinnerEventDetail(),
+            date: new Date(2026, 3, 14, 18),
+            menuTitle: 'Risotto',
+            cookingTeam: SeasonFactory.defaultCookingTeamDisplay({name: 'Madhold 2 - 08/25-06/26'})
+        }
+        const payer = {id: 1, email: 'anna@example.com', name: 'Anna H.'}
 
         it.each([
             {desc: 'a titled dinner with a team', dinner, payer, words: '"Risotto" 14/04/2026, Anna H. bestiller for Madhold 2'},
             {desc: 'a dinner without a team', dinner: {...dinner, cookingTeam: null}, payer, words: '"Risotto" 14/04/2026, Anna H. bestiller'},
             {desc: 'a dinner without a title', dinner: {...dinner, menuTitle: ''}, payer, words: '14/04/2026, Anna H. bestiller for Madhold 2'},
-            {desc: 'a payer without a name', dinner, payer: {email: 'anna@example.com'}, words: '"Risotto" 14/04/2026, anna@example.com bestiller for Madhold 2'}
+            {desc: 'a payer without a name', dinner, payer: {id: 1, email: 'anna@example.com'}, words: '"Risotto" 14/04/2026, anna@example.com bestiller for Madhold 2'}
         ])('GIVEN $desc WHEN building the words THEN they read as the ledger does', ({dinner: d, payer: p, words}) => {
             expect(expenseNoteWords(d, p)).toBe(words)
         })

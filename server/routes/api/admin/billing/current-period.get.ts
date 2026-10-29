@@ -1,6 +1,7 @@
 import {defineEventHandler, setResponseStatus} from 'h3'
 import {fetchUnbilledTransactions} from '~~/server/data/financesRepository'
 import {useBilling} from '~/composables/useBilling'
+import {formatDate} from '~/utils/date'
 import type {TransactionDisplay} from '~/composables/useBillingValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
@@ -21,9 +22,9 @@ export default defineEventHandler(async (event): Promise<TransactionDisplay[]> =
 
     try {
         const {calculateCurrentBillingPeriod} = useBilling()
-        const currentPeriod = calculateCurrentBillingPeriod()
+        const currentPeriod = calculateCurrentBillingPeriod(new Date())
 
-        console.info(`${LOG} Fetching unbilled transactions for period ${currentPeriod.start.toISOString().split('T')[0]} - ${currentPeriod.end.toISOString().split('T')[0]}`)
+        console.info(`${LOG} Fetching unbilled transactions for period ${formatDate(currentPeriod.start)} - ${formatDate(currentPeriod.end)}`)
 
         const transactions = await fetchUnbilledTransactions(d1Client, currentPeriod.end)
 

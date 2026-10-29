@@ -1,4 +1,4 @@
-import {test, expect, type Page} from '@playwright/test'
+import {test, expect, type Page} from '~~/tests/e2e/uiTest'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
@@ -8,10 +8,13 @@ import testHelpers from '../testHelpers'
 import {formatDate} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
 import {addDays} from 'date-fns/addDays'
+import {isSameDay} from 'date-fns'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, expectHydratedWithoutMismatch, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom, waitForApi} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, expectHydratedWithoutMismatch, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom, waitForApi, pageCalendarToMonth} = testHelpers
 const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
+const {findTicketPriceByType} = useTicket()
 
 /**
  * E2E UI Tests for Dinner Page URL-Based Navigation
@@ -41,7 +44,8 @@ test.describe('Dinner Page URL Navigation', () => {
         seasonId = season.id!
 
         // Poll for FUTURE dinner events - UI auto-syncs to next future dinner, not past events.
-        // The season's own dinners only: parallel specs add and remove dinners on its free days (createDinnerEventOnFreeDay)
+        // The season's own dinners only: parallel specs add and remove dinners on its free days (createDinnerEventOnFreeDay),
+        // and a chef spec's team cooks on its cooking days; the page shows the first dinner of a day
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         const events = await pollUntil(
@@ -50,6 +54,7 @@ test.describe('Dinner Page URL Navigation', () => {
                 const futureEvents = allEvents
                     .filter(e => new Date(e.date) >= today && season.cookingDays[dateToWeekDay(new Date(e.date))])
                     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                    .filter((e, index, sorted) => index === 0 || !isSameDay(new Date(e.date), new Date(sorted[index - 1]!.date)))
                 return futureEvents.slice(0, 3)
             },
             (events) => events.length >= 3,
@@ -154,7 +159,8 @@ test.describe('Dinner Page URL Navigation', () => {
         const currentUrl = page.url()
         expect(new URL(currentUrl).searchParams.get('date'), "Should initially show first date").toBe(testData.dates.first)
 
-        // WHEN: Click on second event's date in the calendar (calculate day from date)
+        // WHEN: Click on second event's date in the calendar, a month on when the two dinners straddle a month's end
+        await pageCalendarToMonth(page, testData.events[0]!.date, event2.date)
         const event2Day = event2.date.getDate()
         const day2Button = page.getByTestId(`calendar-dinner-date-${event2Day}`)
         // The panel fills from the selected dinner's detail, fetched on the click
@@ -183,7 +189,7 @@ test.describe('Dinner Page URL Navigation', () => {
             const memberContext = await memberValidatedBrowserContext(browser)
             const {householdId} = await getSessionUserInfo(memberContext)
             const season = await SeasonFactory.createActiveSeason(adminContext)
-            const adultPrice = season.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+            const adultPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, season.ticketPrices)!
             // The second future dinner: the first may be today and already past its serving time
             const dinnerEvent = testData.events[1]!
             dinnerDate = testData.dates.second
@@ -201,7 +207,7 @@ test.describe('Dinner Page URL Navigation', () => {
 
             allergyType = await AllergyFactory.createAllergyType(adminContext, AllergyFactory.defaultAllergyTypeData(testSalt))
             createdAllergyTypeIds.push(allergyType.id)
-            await AllergyFactory.createAllergy(adminContext, {inhabitantId: allergicId, allergyTypeId: allergyType.id, inhabitantComment: null})
+            await AllergyFactory.createAllergy(adminContext, {inhabitantId: allergicId, allergyTypeId: allergyType.id, inhabitantComment: null}, 201, true)
 
             await OrderFactory.createOrder(adminContext, {
                 householdId,
@@ -244,46 +250,5 @@ test.describe('Dinner Page URL Navigation', () => {
 
             await doScreenshot(page, 'dinner/ticket-allergies', true)
         })
-    })
-
-    // The calendar's open default follows the viewport the layout measures after mount; a URL that names it keeps it
-    test.describe('Calendar default', () => {
-        const DESKTOP = {width: 1280, height: 900}
-        const PHONE = {width: 375, height: 812}
-        const calendarDays = (page: Page) => page.locator('[data-testid^="calendar-dinner-date-"]').first()
-
-        for (const {face, viewport, expected} of [
-            {face: 'desktop', viewport: DESKTOP, expected: 'open'},
-            {face: 'phone', viewport: PHONE, expected: 'closed'}
-        ]) {
-            test(`GIVEN ${face} WHEN /dinner loads without parameters THEN the URL settles on cal=${expected}`, async ({browser}) => {
-                const context = await memberValidatedBrowserContext(browser)
-                const page = await context.newPage()
-                await page.setViewportSize(viewport)
-
-                await gotoHydrated(page, dinnerPageUrl)
-
-                await expect.poll(() => new URL(page.url()).searchParams.get('cal')).toBe(expected)
-                if (expected === 'open') await expect(calendarDays(page)).toBeVisible()
-                else await expect(calendarDays(page)).toBeHidden()
-            })
-        }
-
-        for (const {face, viewport, given} of [
-            {face: 'desktop', viewport: DESKTOP, given: 'closed'},
-            {face: 'phone', viewport: PHONE, given: 'open'}
-        ]) {
-            test(`GIVEN ${face} WHEN /dinner loads with cal=${given} THEN the URL keeps cal=${given}`, async ({browser}) => {
-                const context = await memberValidatedBrowserContext(browser)
-                const page = await context.newPage()
-                await page.setViewportSize(viewport)
-
-                await gotoHydrated(page, `${dinnerPageUrl}?date=${testData.dates.first}&cal=${given}`)
-
-                if (given === 'open') await expect(calendarDays(page)).toBeVisible()
-                else await expect(calendarDays(page)).toBeHidden()
-                expect(new URL(page.url()).searchParams.get('cal')).toBe(given)
-            })
-        }
     })
 })

@@ -64,7 +64,7 @@ test.describe('Season API Tests', () => {
 
         test("GIVEN a season priced at the default prices WHEN reading it THEN each price carries what a ticket at it weighs, and an update sending those prices saves", async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-            const ticketPrices = TicketFactory.defaultTicketPricesWithoutIds({hungryBabyPrice: 900, childPrice: 1700, adultPrice: 4000})
+            const ticketPrices = TicketFactory.defaultTicketPricesWithoutIds()
             const created = await SeasonFactory.createSeason(context, {...SeasonFactory.defaultSeason(), ticketPrices})
             trackSeason(created.id!)
 

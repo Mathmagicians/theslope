@@ -1,6 +1,5 @@
 import {describe, it, expect} from 'vitest'
-import {useCalendarEvents} from '~/composables/useCalendarEvents'
-import type {CalendarEventList} from '~/composables/useCalendarEvents'
+import {useCalendarEvents, type CalendarEventList} from '~/composables/useCalendarEvents'
 import {CalendarDate} from '@internationalized/date'
 
 // Test factories
@@ -15,33 +14,30 @@ const createTestDateValue = ({ day, month = 1, year = 2025 }: { day: number, mon
 // Helper assertions
 const expectEventListStructure = (
     result: CalendarEventList,
-    expected: { listId: string, renderStyle: string, eventCount: number }
+    expected: { listId: string, eventCount: number }
 ) => {
     expect(result.listId).toBe(expected.listId)
-    expect(result.renderStyle).toBe(expected.renderStyle)
     expect(result.events).toHaveLength(expected.eventCount)
 }
 
 describe('useCalendarEvents', () => {
     describe('createEventList', () => {
-        it('creates an event list from the dates, with no colour unless given', () => {
+        it('creates an event list from the dates, with no band unless given', () => {
             const {createEventList} = useCalendarEvents()
             const dates = createTestDates(3)
 
-            const result = createEventList(dates, 'test-list', 'ring')
+            const result = createEventList(dates, 'test-list')
 
-            expectEventListStructure(result, {listId: 'test-list', renderStyle: 'ring', eventCount: 3})
-            expect(result.color).toBeUndefined()
-            dates.forEach((date, i) => {
-                expect(result.events[i]!.date).toEqual(date)
-            })
+            expectEventListStructure(result, {listId: 'test-list', eventCount: 3})
+            expect(result.band).toBeUndefined()
+            expect(result.events.map(event => event.date)).toEqual(dates)
         })
 
         it('includes optional label in all events', () => {
             const {createEventList} = useCalendarEvents()
             const dates = createTestDates(2)
 
-            const result = createEventList(dates, 'team-1', 'badge', {label: 'Hold 1'})
+            const result = createEventList(dates, 'team-1', {label: 'Hold 1'})
 
             result.events.forEach(event => {
                 expect(event.label).toBe('Hold 1')
@@ -49,19 +45,14 @@ describe('useCalendarEvents', () => {
         })
 
         it.each([
-            {optionKey: 'color', optionValue: 2},
-            {optionKey: 'metadata', optionValue: {teamId: 42}}
-        ])('includes optional $optionKey', ({optionKey, optionValue}) => {
+            {option: 'band', options: {band: 2}, read: (list: CalendarEventList) => list.band, expected: 2},
+            {option: 'metadata', options: {metadata: {teamId: 42}}, read: (list: CalendarEventList) => list.events[0]?.metadata, expected: {teamId: 42}}
+        ])('includes optional $option', ({options, read, expected}) => {
             const {createEventList} = useCalendarEvents()
-            const date = createTestDate(15)
 
-            const result = createEventList([date], 'test-list', 'badge', {[optionKey]: optionValue})
+            const result = createEventList([createTestDate(15)], 'test-list', options)
 
-            if (optionKey === 'color') {
-                expect(result.color).toBe(optionValue)
-            } else {
-                expect(result.events[0]!.metadata).toEqual(optionValue)
-            }
+            expect(read(result)).toEqual(expected)
         })
     })
 
@@ -69,14 +60,14 @@ describe('useCalendarEvents', () => {
         it('merges multiple event lists with different listIds', () => {
             const {createEventList, createEventMap} = useCalendarEvents()
 
-            const list1 = createEventList([createTestDate(15)], 'holidays', 'background')
-            const list2 = createEventList([createTestDate(20)], 'team-1', 'badge')
+            const list1 = createEventList([createTestDate(15)], 'holidays')
+            const list2 = createEventList([createTestDate(20)], 'team-1')
 
             const result = createEventMap([list1, list2])
 
             expect(result.size).toBe(2)
-            expect(result.get('15/01/2025')![0]?.listId).toBe('holidays')
-            expect(result.get('20/01/2025')![0]?.listId).toBe('team-1')
+            expect(result.get('15/01/2025')?.[0]?.listId).toBe('holidays')
+            expect(result.get('20/01/2025')?.[0]?.listId).toBe('team-1')
         })
 
         it('handles multiple events on same date from different lists', () => {
@@ -84,17 +75,15 @@ describe('useCalendarEvents', () => {
             const date = createTestDate(15)
 
             const lists = [
-                createEventList([date], 'holidays', 'background'),
-                createEventList([date], 'team-1', 'badge'),
-                createEventList([date], 'bookings', 'chip')
+                createEventList([date], 'holidays'),
+                createEventList([date], 'team-1'),
+                createEventList([date], 'bookings')
             ]
 
             const result = createEventMap(lists)
 
             expect(result.size).toBe(1)
-            const events = result.get('15/01/2025')!
-            expect(events).toHaveLength(3)
-            expect(events.map(e => e.listId)).toEqual(['holidays', 'team-1', 'bookings'])
+            expect(result.get('15/01/2025')?.map(e => e.listId)).toEqual(['holidays', 'team-1', 'bookings'])
         })
     })
 
@@ -102,7 +91,7 @@ describe('useCalendarEvents', () => {
         it('returns empty array for day with no events', () => {
             const {createEventList, createEventMap, getEventsForDay} = useCalendarEvents()
 
-            const eventList = createEventList([createTestDate(15)], 'test-list', 'badge')
+            const eventList = createEventList([createTestDate(15)], 'test-list')
             const eventMap = createEventMap([eventList])
 
             const result = getEventsForDay(createTestDateValue({ day: 20 }), eventMap)
@@ -115,7 +104,7 @@ describe('useCalendarEvents', () => {
             const date = createTestDate(15)
 
             const lists = Array.from({length: 3}, (_, i) =>
-                createEventList([date], `list-${i}`, 'badge', {label: `Event ${i}`})
+                createEventList([date], `list-${i}`, {label: `Event ${i}`})
             )
             const eventMap = createEventMap(lists)
 
@@ -132,7 +121,7 @@ describe('useCalendarEvents', () => {
     describe('getEventListsForDay', () => {
         it('returns empty array for day with no events', () => {
             const {createEventList, createEventMap, getEventListsForDay} = useCalendarEvents()
-            const eventList = createEventList([createTestDate(15)], 'test-list', 'badge')
+            const eventList = createEventList([createTestDate(15)], 'test-list')
             const eventMap = createEventMap([eventList])
 
             const result = getEventListsForDay(createTestDateValue({ day: 20 }), [eventList], eventMap)
@@ -140,12 +129,12 @@ describe('useCalendarEvents', () => {
             expect(result).toEqual([])
         })
 
-        it('returns one DayEventList per source list, with its style, colour and labels', () => {
+        it('returns one DayEventList per source list, with its band and labels', () => {
             const {createEventList, createEventMap, getEventListsForDay} = useCalendarEvents()
             const date = createTestDate(15)
 
             const lists = Array.from({length: 3}, (_, i) =>
-                createEventList([date], `team-${i}`, 'badge', {label: `Team ${i}`, color: i})
+                createEventList([date], `team-${i}`, {label: `Team ${i}`, band: i})
             )
             const eventMap = createEventMap(lists)
 
@@ -154,9 +143,8 @@ describe('useCalendarEvents', () => {
             expect(result).toHaveLength(3)
             result.forEach((dayList, i) => {
                 expect(dayList.listId).toBe(`team-${i}`)
-                expect(dayList.renderStyle).toBe('badge')
-                expect(dayList.color).toBe(i)
-                expect(dayList.events[0]!.label).toBe(`Team ${i}`)
+                expect(dayList.band).toBe(i)
+                expect(dayList.events[0]?.label).toBe(`Team ${i}`)
             })
         })
     })

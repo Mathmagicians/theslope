@@ -1,17 +1,19 @@
-import {nextTick, h, defineComponent, ref, isRef, effectScope, watch, type Component, type Ref} from 'vue'
-import {expect, beforeEach, afterEach} from 'vitest'
+import {nextTick, h, defineComponent, ref, isRef, effectScope, watch, shallowReactive, type Component, type ComponentPublicInstance, type Ref} from 'vue'
+import {expect, beforeEach, afterEach, vi} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
-import {useNuxtApp, clearNuxtData, useAppConfig} from '#app'
+import {useNuxtApp, clearNuxtData, useAppConfig, useState} from '#app'
 import {getActivePinia, setActivePinia, type Pinia} from 'pinia'
-import {flushPromises, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
+import {flushPromises, type BaseWrapper, type DOMWrapper, type VueWrapper} from '@vue/test-utils'
 import {toCalendarDate} from '~/utils/date'
 import {sumBy} from '~/utils/ledger'
 import {TICKET_COUNTS} from '~/composables/useBilling'
+import {LAYOUTS} from '~/composables/useTheSlopeDesignSystem'
+import {CLOCK_STATE} from '~/composables/useClock'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
-import type {ScaffoldOrdersRequest, ScaffoldOrdersResponse, TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, type ScaffoldOrdersRequest, type ScaffoldOrdersResponse, type TicketType} from '~/composables/useBookingValidation'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {getQuery, readBody, type H3Event} from 'h3'
+import {getQuery, type H3Event} from 'h3'
 
 /**
  * Generic polling function for component tests
@@ -104,29 +106,54 @@ export const holdEndpoint = (url: string, body: unknown) => {
 
 type ScaffoldAnswer = (body: ScaffoldOrdersRequest) => ScaffoldOrdersResponse | Promise<ScaffoldOrdersResponse>
 
+/** A query value read as a list: absent, one value or a repeated key */
+const queryList = (value: unknown): string[] => value === undefined ? [] : [value].flat().map(String)
+
 /**
- * The scaffold endpoint a booking surface reads its previews from: each request is kept with its query and body; a
- * request with orders answers `answers.preview`, one without answers `answers.expected` (the household's expected
- * bookings). Both answer an empty run until a test sets them; `reset` empties both and the requests kept
+ * The scaffold's dry run a booking surface reads its previews from (GET /api/household/order/scaffold): each read is
+ * kept in `sent`, reactive so `untilTrue` can wait on it, as `body`, the request the query carries with its orders
+ * decoded by `DesiredOrderQuerySchema`, and `query`, the query's other parameters (`bypassDeadlines`). A read with orders
+ * answers `answers.preview`, one without answers `answers.expected` (the household's expected bookings). Both answer an
+ * empty run until a test sets them. `hold(kind)` holds that kind's answer, as set so far, until the test calls the
+ * release it returns: the window in which the read is pending. `reset` empties both answers and the reads kept
  */
 export const registerScaffoldEndpoint = () => {
-    const sent: {query: Record<string, unknown>, body: ScaffoldOrdersRequest}[] = []
+    const sent = shallowReactive<{query: Record<string, unknown>, body: ScaffoldOrdersRequest}[]>([])
     const empty: ScaffoldAnswer = () => OrderFactory.defaultScaffoldOrdersResponse()
     const answers: {preview: ScaffoldAnswer, expected: ScaffoldAnswer} = {preview: empty, expected: empty}
     registerEndpoint('/api/household/order/scaffold', {
-        method: 'POST',
-        handler: async (event: H3Event) => {
-            const body = await readBody<ScaffoldOrdersRequest>(event)
-            sent.push({query: getQuery(event), body})
+        method: 'GET',
+        handler: (event: H3Event) => {
+            const {householdId, seasonId, dinnerEventIds, orders, ...query} = getQuery(event)
+            const {DesiredOrderQuerySchema} = useBookingValidation()
+            const body: ScaffoldOrdersRequest = {
+                householdId: Number(householdId),
+                ...(seasonId === undefined ? {} : {seasonId: Number(seasonId)}),
+                dinnerEventIds: queryList(dinnerEventIds).map(Number),
+                orders: queryList(orders).map(code => DesiredOrderQuerySchema.parse(code))
+            }
+            sent.push({query, body})
             return body.orders.length > 0 ? answers.preview(body) : answers.expected(body)
         }
     })
+    const hold = (kind: keyof typeof answers): (() => void) => {
+        const answer = answers[kind]
+        let release: () => void = () => {}
+        const released = new Promise<void>(resolve => {
+            release = resolve
+        })
+        answers[kind] = async body => {
+            await released
+            return answer(body)
+        }
+        return () => release()
+    }
     const reset = () => {
         sent.length = 0
         answers.preview = empty
         answers.expected = empty
     }
-    return {sent, answers, reset}
+    return {sent, answers, hold, reset}
 }
 
 /** Resolves once `condition` holds, watching the reactive state it reads: no polling window, the test's timeout bounds it */
@@ -145,25 +172,62 @@ export const kitchenConfig = () => {
     return {baseRatePercent: kitchen?.baseRatePercent ?? 5, vatPercent: kitchen?.vatPercent ?? 25}
 }
 
-// Anything with find/findAll: a mountSuspended root, a findComponent() result or a DOMWrapper
-type Searchable = Pick<BaseWrapper<Node>, 'find' | 'findAll'>
-
-export const findByTestId = (wrapper: Searchable, testId: string) =>
+// A mountSuspended root, a findComponent() result or a DOMWrapper. A part typed BaseWrapper<Node> keeps the typed
+// findAllComponents overloads, which DOMWrapper types any
+export const findByTestId = (wrapper: BaseWrapper<Node>, testId: string) =>
     wrapper.find(`[data-testid="${testId}"]`)
 
-export const findAllByTestId = (wrapper: Searchable, testId: string) =>
+export const findAllByTestId = (wrapper: BaseWrapper<Node>, testId: string) =>
     wrapper.findAll(`[data-testid="${testId}"]`)
 
-/** The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows */
-export const findLoadingRow = (wrapper: Searchable) => wrapper.find('[data-slot="loading"]')
+/**
+ * The `name` component whose root element carries the test id, its props typed `Props`. A selector alone returns the
+ * topmost component on the element, which a table cell's renderer or a wrapping component can be
+ */
+export const findComponentByTestId = <Props>(wrapper: BaseWrapper<Node>, name: string, testId: string) => {
+    const found = wrapper.findAllComponents<ComponentPublicInstance<Props>>({name}).find(component => component.attributes('data-testid') === testId)
+    expect(found, `a ${name} with the test id ${testId}`).toBeDefined()
+    return found!
+}
 
-export const findAllLoadingRows = (wrapper: Searchable) => wrapper.findAll('[data-slot="loading"]')
+/** The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows */
+export const findLoadingRow = (wrapper: BaseWrapper<Node>) => wrapper.find('[data-slot="loading"]')
+
+export const findAllLoadingRows = (wrapper: BaseWrapper<Node>) => wrapper.findAll('[data-slot="loading"]')
+
+/** A table's rendered column headers, a column without header text (an expand column) as '' */
+export const tableHeaders = (wrapper: BaseWrapper<Node>) => wrapper.find('table').findAll('th').map(th => th.text())
+
+/** The cells of a table's body row by the header of their column */
+export const cellsByHeader = (wrapper: BaseWrapper<Node>, rowIndex = 0): Record<string, string | undefined> => {
+    const cells = wrapper.find('table').findAll('tbody tr')[rowIndex]?.findAll('td').map(td => td.text()) ?? []
+    return Object.fromEntries(tableHeaders(wrapper).map((header, index) => [header, cells[index]]))
+}
+
+/** A table's body row by its index, the first at 0: the element, for what a row holds beyond its cells' text */
+export const rowAt = (wrapper: BaseWrapper<Node>, rowIndex = 0) => wrapper.find('table').find(`tbody tr:nth-child(${rowIndex + 1})`)
+
+/** A body row's cell by the header of its column: the element, for what a cell holds beyond its text */
+export const cellAt = (wrapper: BaseWrapper<Node>, rowIndex: number, header: string) =>
+    rowAt(wrapper, rowIndex).find(`td:nth-child(${tableHeaders(wrapper).indexOf(header) + 1})`)
+
+/** The body rows UTable marks open (`data-expanded`), each with the row after it, where the table renders its #expanded slot */
+export const findOpenRows = (wrapper: BaseWrapper<Node>): {row: DOMWrapper<Element>, detail: DOMWrapper<Element>}[] => {
+    const rows = wrapper.findAll('tbody tr')
+    return rows.flatMap((row, index) => row.attributes('data-expanded') === 'true' ? [{row, detail: rows[index + 1]!}] : [])
+}
+
+type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
+
+/** The names of the icons rendered inside a wrapper or a part of it */
+export const iconNamesIn = (wrapper: BaseWrapper<Node>): string[] =>
+    (wrapper.findAllComponents({name: 'UIcon'}) as IconWrapper[]).map(icon => icon.props('name'))
 
 /** Whether the table binds `loading`: UTable runs its loading bar under the column headers, a bar that carries no attribute */
-export const isTableLoading = (wrapper: Pick<VueWrapper, 'findComponent'>): boolean =>
+export const isTableLoading = (wrapper: BaseWrapper<Node>): boolean =>
     wrapper.findComponent({name: 'UTable'}).props('loading') === true
 
-export const clickByTestId = async (wrapper: Searchable, testId: string) => {
+export const clickByTestId = async (wrapper: BaseWrapper<Node>, testId: string) => {
     await findByTestId(wrapper, testId).trigger('click')
     await nextTick()
 }
@@ -188,6 +252,17 @@ export const VIEWPORTS = [
     {viewport: 'phone', isMd: false},
     {viewport: 'md', isMd: true}
 ] as const
+
+const expectBinds = (element: Element | null, token: string) =>
+    expect(Array.from(element?.classList ?? [])).toEqual(expect.arrayContaining(token.split(' ')))
+
+/** The master and the detail stand side by side in one `LAYOUTS.masterDetailPage` root, in its left and center slots */
+export const expectMasterDetail = (master: Element, detail: Element | null) => {
+    expect(detail?.parentElement).toBe(master.parentElement)
+    expectBinds(master.parentElement, LAYOUTS.masterDetailPage.root)
+    expectBinds(master, LAYOUTS.masterDetailPage.left)
+    expectBinds(detail, LAYOUTS.masterDetailPage.center)
+}
 
 type TicketTypeCounts = Partial<Record<TicketType, number>>
 /** A locked dinner's supply from its tickets for sale and its waiting list per ticket type, with the totals and the compact counts */
@@ -215,7 +290,7 @@ export const mountWithTooltipProvider = async <T extends MountableComponent>(
 /**
  * Opens a UPopover by clicking its trigger, then lets reka-ui mount the teleported content.
  */
-export const openPopover = async (wrapper: Searchable) => {
+export const openPopover = async (wrapper: BaseWrapper<Node>) => {
     await wrapper.find('[aria-expanded]').trigger('click')
     await flushPromises()
     await nextTick()
@@ -229,7 +304,7 @@ export const asCalendarDays = (ranges: Array<{start: Date, end: Date}>) =>
     ranges.map(range => ({start: calendarDay(range.start), end: calendarDay(range.end)}))
 
 /** The typed date segments (reka DateField) of one kind, in field order: one per date field below `wrapper` */
-export const findDateSegments = (wrapper: Searchable, segment: 'day' | 'month' | 'year') =>
+export const findDateSegments = (wrapper: BaseWrapper<Node>, segment: 'day' | 'month' | 'year') =>
     wrapper.findAll(`[data-segment="${segment}"]`)
 
 /** Types digits into one segment and waits a tick; the field commits when every segment holds a value */
@@ -244,7 +319,7 @@ export const typeIntoSegment = async (segment: {trigger: (e: string, o: {key: st
  * UCalendar binds the token is the architecture spec's rule (designSystemUsage); how the
  * grid looks (hidden outside-view days, head-cell type) is the visual check's.
  */
-export const expectSharedCalendarGrid = (wrapper: Pick<VueWrapper, 'findAll'>) => {
+export const expectSharedCalendarGrid = (wrapper: BaseWrapper<Node>) => {
     // A picker's open calendar teleports to body (UPopover): read the document when the wrapper subtree holds no grid
     const inWrapper = wrapper.findAll('th').map(th => th.text())
     const headDays = (inWrapper.length ? inWrapper : Array.from(document.querySelectorAll('th')).map(th => th.textContent ?? ''))
@@ -252,4 +327,13 @@ export const expectSharedCalendarGrid = (wrapper: Pick<VueWrapper, 'findAll'>) =
     expect(headDays.length).toBeGreaterThan(0)
     expect(headDays.length % 7).toBe(0)
     headDays.filter((_, i) => i % 7 === 0).forEach(monday => expect(monday).toBe('M'))
+}
+
+/**
+ * The moment a time-dependent case runs at: the system time and the page's clock (useClock). The app seeds the clock
+ * on its first read and its interval ticks it on real timers, so a faked system time alone leaves the clock behind
+ */
+export const setClock = (date: Date) => {
+    vi.setSystemTime(date)
+    useState<Date>(CLOCK_STATE).value = date
 }

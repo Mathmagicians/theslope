@@ -1,20 +1,16 @@
-import {test, expect, type Page} from '@playwright/test'
+import {test, expect, type Page} from '~~/tests/e2e/uiTest'
 import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {AllergyFactory} from '../testDataFactories/allergyFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {SettingFactory} from '../testDataFactories/settingFactory'
-import {UserFactory} from '../testDataFactories/userFactory'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 
 const {adminUIFile} = authFiles
 const {
     validatedBrowserContext,
-    memberValidatedBrowserContext,
-    freshMemberContext,
-    getSessionUserInfo,
     pollUntil,
-    gotoHydrated,
+    gotoAllergyCatalog,
     waitForApi,
     salt,
     temporaryAndRandom
@@ -22,17 +18,6 @@ const {
 const {AllergyTypeDisplaySchema} = useAllergyValidation()
 
 const NOTES_KEY = 'allergy-poster-notes'
-
-/**
- * The catalog is master/detail with a client-only desktop detail pane. The container
- * testid is in the SSR HTML before listeners exist, so the pane's content is the signal
- * that the page is hydrated and interactive.
- */
-const gotoCatalog = async (page: Page) => {
-    await gotoHydrated(page, '/admin/allergies')
-    await expect(page.locator('[data-testid="admin-allergies"]')).toBeVisible()
-    await expect(page.getByText('Detaljer').or(page.getByText('Vælg en allergi')).first()).toBeAttached()
-}
 
 /**
  * E2E UI tests for the admin allergy catalog (/admin/allergies).
@@ -70,7 +55,7 @@ test.describe('AdminAllergies - catalog CRUD', () => {
         const testSalt = temporaryAndRandom()
         const name = `Peanuts-${testSalt}-Create`
 
-        await gotoCatalog(page)
+        await gotoAllergyCatalog(page)
         // The card footer carries the same notes box as the poster
         await expect(page.getByTestId('allergy-notes')).toContainText('Vigtige bemærkninger')
 
@@ -102,7 +87,7 @@ test.describe('AdminAllergies - catalog CRUD', () => {
         })
         createdAllergyTypeIds.push(allergyType.id!)
 
-        await gotoCatalog(page)
+        await gotoAllergyCatalog(page)
         await selectRow(page, allergyType.id!)
         await page.getByTestId('edit-allergy-type').click()
         await expect(page.getByTestId('allergy-type-form')).toBeVisible()
@@ -128,7 +113,7 @@ test.describe('AdminAllergies - catalog CRUD', () => {
         // Tracked in case the UI delete does not land; cleanup counts a type already gone as removed
         createdAllergyTypeIds.push(allergyType.id!)
 
-        await gotoCatalog(page)
+        await gotoAllergyCatalog(page)
         await selectRow(page, allergyType.id!)
         await page.getByTestId('delete-allergy-type').click()
 
@@ -166,8 +151,8 @@ test.describe('AdminAllergies - poster notes', () => {
     const renderedNotes = (page: Page) => page.getByTestId('allergy-notes-item')
 
     // The writer here is the admin session. Who may write (ALLERGYMANAGER 200, a member 403) is the
-    // API spec's business; this case owns the round trip from the pencil to the rendered bullets, so it
-    // touches nobody's roles and runs beside the member case below.
+    // API spec's business, and who gets the pencil the component specs' (admin-tab.nuxt.spec.ts,
+    // AdminAllergies.nuxt.spec.ts); this case owns the round trip from the pencil to the rendered bullets.
     test.describe('as a writer', () => {
         test.use({storageState: adminUIFile})
 
@@ -175,7 +160,7 @@ test.describe('AdminAllergies - poster notes', () => {
             const newNote = salt('Husk allergener', temporaryAndRandom())
             addedLines.push(newNote)
 
-            await gotoCatalog(page)
+            await gotoAllergyCatalog(page)
             await page.getByTestId('edit-allergy-notes').click()
 
             const textarea = page.getByTestId('allergy-notes-textarea')
@@ -194,23 +179,6 @@ test.describe('AdminAllergies - poster notes', () => {
             // The poster prints the same row
             await page.goto('/admin/allergies/pdf')
             await expect(renderedNotes(page).filter({hasText: newNote})).toHaveCount(1)
-        })
-    })
-
-    // The environment's member may hold ALLERGYMANAGER, so the test states the role it needs
-    test('GIVEN a member without the allergy role WHEN viewing the catalog THEN the notes have no pencil', async ({browser}) => {
-        const adminContext = await validatedBrowserContext(browser)
-        const memberSession = await memberValidatedBrowserContext(browser)
-        const {userId} = await getSessionUserInfo(memberSession)
-
-        await UserFactory.withSystemRoles(adminContext, userId, [], async () => {
-            const context = await freshMemberContext(browser)
-            const page = await context.newPage()
-
-            await gotoCatalog(page)
-
-            await expect(page.getByTestId('allergy-notes')).toContainText('Vigtige bemærkninger')
-            await expect(page.getByTestId('edit-allergy-notes')).toHaveCount(0)
         })
     })
 })

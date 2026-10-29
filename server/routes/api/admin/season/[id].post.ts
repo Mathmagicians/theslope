@@ -6,8 +6,7 @@ import {reconcileDinnerEventsForSeason} from "~~/server/utils/reconcileDinnerEve
 import {clipPreferences} from "~~/server/utils/initializePreferences"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {useBooking} from "~/composables/useBooking"
-import {emailChannel} from "~~/server/utils/sender/config"
-import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
+import {notifyBookingOutcomesInBackground} from "~~/server/utils/sender/events/waitlist"
 import {idParams} from '~/composables/useCoreValidation'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
@@ -72,7 +71,7 @@ export default defineEventHandler(async (event): Promise<SeasonUpdateResponse> =
         const seasonToSave: Season = {...seasonData, isActive: existingSeason.isActive}
 
         // Check if schedule changed (ADR-015: avoid unnecessary reconciliation)
-        const scheduleChanged = getScheduleChangeDesiredEvents(existingSeason, seasonToSave) !== null
+        const scheduleChanged = getScheduleChangeDesiredEvents(existingSeason, seasonToSave, new Date()) !== null
 
         // Update season first
         await updateSeason(d1Client, seasonToSave)
@@ -85,14 +84,15 @@ export default defineEventHandler(async (event): Promise<SeasonUpdateResponse> =
         }
 
         // A live season keeps its bookings in step with the new schedule right away
-        // instead of waiting for the nightly job (ADR-015: both jobs are idempotent)
+        // instead of waiting for the DAILY_MAINTENANCE job (ADR-015: both jobs are idempotent)
         let scaffold = null
         if (existingSeason.isActive && scheduleChanged) {
             const clipResult = await clipPreferences(d1Client, id)
             console.info(`🌞 > SEASON > [POST] Clipped ${clipResult.initialized} inhabitants`)
 
             scaffold = await scaffoldPrebookings(d1Client, {seasonId: id})
-            await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffold.outcomes)
+            const {outcomes} = scaffold
+            notifyBookingOutcomesInBackground(event, outcomes)
             console.info(`🌞 > SEASON > [POST] Scaffolded: ${useBooking().formatScaffoldResult(scaffold)}`)
         }
 

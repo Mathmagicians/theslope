@@ -6,6 +6,7 @@ import {enableAutoUnmount} from '@vue/test-utils'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 import {mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 enableAutoUnmount(afterEach)
 
@@ -77,8 +78,8 @@ describe('HouseholdEditPanel', () => {
 
     it('emits close on Annuller click', async () => {
         const wrapper = await mount()
-        const btn = wrapper.findAll('button').find(b => b.text().includes('Annuller'))
-        await btn!.trigger('click')
+        const btn = wrapper.findAll('button').find(b => b.text().includes(BUTTON_WORDS.cancel))
+        await btn?.trigger('click')
         await nextTick()
         expect(wrapper.emitted('close')).toBeTruthy()
     })

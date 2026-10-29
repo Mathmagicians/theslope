@@ -34,31 +34,20 @@ import {
   useUserPreferenceValidation,
   type Appearance,
   type NotificationChannel,
-  type Palette,
-  type TextScale
+  type Palette
 } from '~/composables/useUserPreferenceValidation'
+import {USER_WORDS} from '~/config/userWords'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 const authStore = useAuthStore()
 const {TYPOGRAPHY, LAYOUTS, BUTTONS, COMPONENTS, ICONS, COLOR, SIZES, NOISE} = useTheSlopeDesignSystem()
 const {NotificationChannelSchema, PaletteSchema, TextScaleSchema} = useUserPreferenceValidation()
-
-// Danish labels and the badge wording live here; the registry only knows what is verified (ADR-017)
-const CHANNEL_LABELS: Record<NotificationChannel, {label: string, icon: string}> = {
-  EMAIL: {label: 'E-mail', icon: ICONS.mail},
-  SMS: {label: 'SMS', icon: ICONS.phone}
+const Channel = NotificationChannelSchema.enum
+const WORDS = USER_WORDS.preferences
+const CHANNEL_ICONS: Record<NotificationChannel, string> = {
+  [Channel.EMAIL]: ICONS.mail,
+  [Channel.SMS]: ICONS.phone
 }
-const PALETTE_LABELS: Record<Palette, string> = {
-  default: 'Glade farver',
-  'high-contrast': 'Høj kontrast',
-  colorblind: 'Til farveblinde'
-}
-const TEXT_SCALE_LABELS: Record<TextScale, string> = {normal: 'Normal', large: 'Stor', larger: 'Større'}
-// The contrast badge claims contrast only - not full conformance - and names no WCAG version
-const LEVEL_BADGES: Record<'AA' | 'AAA', string> = {
-  AA: '🇪🇺 EN 301 549 · Kontrast AA ✓',
-  AAA: '🇪🇺 EN 301 549 · Kontrast AAA ✓'
-}
-const COLOUR_SAFE_BADGE = '👁 Nedsat farvesyn · Okabe–Ito ✓'
 
 const channels = computed<NotificationChannel[]>(() => authStore.notificationChannels)
 const appearance = computed<Appearance>(() => authStore.appearance)
@@ -72,18 +61,18 @@ const isSendingTest = ref(false)
 const draftChannels = ref<Set<NotificationChannel>>(new Set())
 const draftAppearance = ref<Appearance>({...DEFAULT_APPEARANCE})
 
-const paletteItems = computed(() => PaletteSchema.options.map(value => ({value, label: PALETTE_LABELS[value]})))
-const textScaleItems = computed(() => TextScaleSchema.options.map(value => ({value, label: TEXT_SCALE_LABELS[value]})))
+const paletteItems = computed(() => PaletteSchema.options.map(value => ({value, label: WORDS.palettes[value]})))
+const textScaleItems = computed(() => TextScaleSchema.options.map(value => ({value, label: WORDS.textScales[value]})))
 
 /** The badges a palette earns: its verified contrast level, and colour safety where it is verified */
 const paletteBadges = (palette: Palette): string[] => {
   const {level, colourSafe} = PALETTES[palette]
-  return [...(level ? [LEVEL_BADGES[level]] : []), ...(colourSafe ? [COLOUR_SAFE_BADGE] : [])]
+  return [...(level ? [WORDS.levelBadges[level]] : []), ...(colourSafe ? [WORDS.colourSafeBadge] : [])]
 }
 
 /** SMS needs a number, and phone numbers come from Heynabo */
-const isChannelAvailable = (channel: NotificationChannel) => channel !== 'SMS' || hasPhone.value
-const channelTarget = (channel: NotificationChannel) => channel === 'SMS' ? phone.value : email.value
+const isChannelAvailable = (channel: NotificationChannel) => channel !== Channel.SMS || hasPhone.value
+const channelTarget = (channel: NotificationChannel) => channel === Channel.SMS ? phone.value : email.value
 
 const startEditing = () => {
   draftChannels.value = new Set(channels.value)
@@ -132,12 +121,12 @@ const sendTest = async () => {
 <template>
   <UCard v-if="authStore.user" data-testid="pref-card">
     <template #header>
-      <div class="flex items-center justify-between gap-2">
-        <h3 :class="TYPOGRAPHY.cardTitle">Mine indstillinger</h3>
+      <div :class="COMPONENTS.userPreferencesCard.header">
+        <h3 :class="TYPOGRAPHY.cardTitle">{{ WORDS.title }}</h3>
         <UButton
           v-if="!isEditing"
           v-bind="BUTTONS.edit"
-          aria-label="Rediger"
+          :aria-label="BUTTON_WORDS.edit"
           data-testid="pref-edit"
           @click="startEditing"
         />
@@ -145,11 +134,11 @@ const sendTest = async () => {
     </template>
 
     <!-- VIEW: what is saved right now -->
-    <div v-if="!isEditing" class="space-y-3">
-      <div class="flex items-start gap-2 flex-wrap">
-        <UIcon :name="ICONS.notification" class="mt-1" />
-        <span :class="TYPOGRAPHY.sectionSubheading">Notifikationer</span>
-        <div class="flex items-center gap-2 flex-wrap">
+    <div v-if="!isEditing" :class="COMPONENTS.userPreferencesCard.view">
+      <div :class="COMPONENTS.userPreferencesCard.notificationRow">
+        <UIcon :name="ICONS.notification" :class="COMPONENTS.userPreferencesCard.notificationIcon" />
+        <span :class="TYPOGRAPHY.sectionSubheading">{{ WORDS.notifications }}</span>
+        <div :class="COMPONENTS.userPreferencesCard.line">
           <UBadge
             v-for="channel in channels"
             :key="channel"
@@ -157,17 +146,17 @@ const sendTest = async () => {
             :variant="NOISE.subtle"
             :size="SIZES.small"
           >
-            <UIcon :name="CHANNEL_LABELS[channel].icon" class="mr-1" />
-            {{ CHANNEL_LABELS[channel].label }}
+            <UIcon :name="CHANNEL_ICONS[channel]" :class="COMPONENTS.userPreferencesCard.badgeIcon" />
+            {{ WORDS.channels[channel] }}
           </UBadge>
           <span v-if="channels.length === 0" :class="TYPOGRAPHY.bodyTextMuted">Ingen notifikationer</span>
         </div>
       </div>
 
-      <div class="flex items-center gap-2 flex-wrap">
+      <div :class="COMPONENTS.userPreferencesCard.line">
         <UIcon :name="ICONS.palette" />
-        <span :class="TYPOGRAPHY.sectionSubheading">Farvevalg</span>
-        <span :class="TYPOGRAPHY.bodyText">{{ PALETTE_LABELS[appearance.palette] }}</span>
+        <span :class="TYPOGRAPHY.sectionSubheading">{{ WORDS.palette }}</span>
+        <span :class="TYPOGRAPHY.bodyText">{{ WORDS.palettes[appearance.palette] }}</span>
         <UBadge
           v-for="badge in paletteBadges(appearance.palette)"
           :key="badge"
@@ -179,13 +168,13 @@ const sendTest = async () => {
         </UBadge>
       </div>
 
-      <div class="flex items-center gap-2 flex-wrap">
+      <div :class="COMPONENTS.userPreferencesCard.line">
         <UIcon :name="ICONS.textScale" />
-        <span :class="TYPOGRAPHY.sectionSubheading">Tekst</span>
-        <span :class="TYPOGRAPHY.bodyText">{{ TEXT_SCALE_LABELS[appearance.textScale] }}</span>
+        <span :class="TYPOGRAPHY.sectionSubheading">{{ WORDS.textScale }}</span>
+        <span :class="TYPOGRAPHY.bodyText">{{ WORDS.textScales[appearance.textScale] }}</span>
       </div>
 
-      <div class="flex md:justify-end">
+      <div :class="COMPONENTS.userPreferencesCard.sendTestRow">
         <UButton
           v-bind="BUTTONS.secondaryAction"
           :color="COLOR.primary"
@@ -195,27 +184,27 @@ const sendTest = async () => {
           data-testid="pref-send-test"
           @click="sendTest"
         >
-          Send testbesked
+          {{ WORDS.sendTest }}
         </UButton>
       </div>
     </div>
 
     <!-- EDIT: the draft, saved by Gem -->
-    <div v-else class="space-y-5">
-      <div class="space-y-2">
-        <div class="flex items-center gap-2">
+    <div v-else :class="COMPONENTS.userPreferencesCard.edit">
+      <div :class="COMPONENTS.userPreferencesCard.section">
+        <div :class="COMPONENTS.userPreferencesCard.sectionHeading">
           <UIcon :name="ICONS.notification" />
-          <span :class="TYPOGRAPHY.sectionSubheading">Notifikationer</span>
+          <span :class="TYPOGRAPHY.sectionSubheading">{{ WORDS.notifications }}</span>
         </div>
         <div
           v-for="channel in NotificationChannelSchema.options"
           :key="channel"
-          class="flex items-center justify-between gap-3"
+          :class="COMPONENTS.userPreferencesCard.channelRow"
         >
-          <div class="flex items-center gap-2 min-w-0">
-            <UIcon :name="CHANNEL_LABELS[channel].icon" />
-            <span :class="TYPOGRAPHY.bodyText">{{ CHANNEL_LABELS[channel].label }}</span>
-            <span :class="[TYPOGRAPHY.bodyTextMuted, 'truncate']">{{ channelTarget(channel) }}</span>
+          <div :class="COMPONENTS.userPreferencesCard.channelLabel">
+            <UIcon :name="CHANNEL_ICONS[channel]" />
+            <span :class="TYPOGRAPHY.bodyText">{{ WORDS.channels[channel] }}</span>
+            <span :class="COMPONENTS.userPreferencesCard.channelTarget">{{ channelTarget(channel) }}</span>
           </div>
           <USwitch
             v-bind="COMPONENTS.choiceGroup.single"
@@ -227,15 +216,15 @@ const sendTest = async () => {
             @update:model-value="(on: boolean) => toggleChannel(channel, on)"
           />
         </div>
-        <p v-if="!hasPhone" :class="[TYPOGRAPHY.finePrint, 'pl-6']">
-          SMS kræver telefonnummer i Heynabo
+        <p v-if="!hasPhone" :class="COMPONENTS.userPreferencesCard.smsHint">
+          {{ WORDS.smsNeedsPhone }}
         </p>
       </div>
 
-      <div class="space-y-2">
-        <div class="flex items-center gap-2">
+      <div :class="COMPONENTS.userPreferencesCard.section">
+        <div :class="COMPONENTS.userPreferencesCard.sectionHeading">
           <UIcon :name="ICONS.palette" />
-          <span :class="TYPOGRAPHY.sectionSubheading">Farvevalg</span>
+          <span :class="TYPOGRAPHY.sectionSubheading">{{ WORDS.palette }}</span>
         </div>
         <URadioGroup
           v-bind="COMPONENTS.choiceGroup.stacked"
@@ -246,10 +235,10 @@ const sendTest = async () => {
           :size="SIZES.standard"
         >
           <template #label="{item}">
-            <span :data-testid="`pref-palette-${item.value}`" class="flex items-center gap-2 flex-wrap">
+            <span :data-testid="`pref-palette-${item.value}`" :class="COMPONENTS.userPreferencesCard.line">
               {{ item.label }}
               <UBadge
-                v-for="badge in paletteBadges(item.value as Palette)"
+                v-for="badge in paletteBadges(item.value)"
                 :key="badge"
                 :color="COLOR.success"
                 :variant="NOISE.subtle"
@@ -262,10 +251,10 @@ const sendTest = async () => {
         </URadioGroup>
       </div>
 
-      <div class="space-y-2">
-        <div class="flex items-center gap-2">
+      <div :class="COMPONENTS.userPreferencesCard.section">
+        <div :class="COMPONENTS.userPreferencesCard.sectionHeading">
           <UIcon :name="ICONS.textScale" />
-          <span :class="TYPOGRAPHY.sectionSubheading">Tekst</span>
+          <span :class="TYPOGRAPHY.sectionSubheading">{{ WORDS.textScale }}</span>
         </div>
         <URadioGroup
           v-bind="COMPONENTS.choiceGroup.inline"
@@ -288,7 +277,7 @@ const sendTest = async () => {
           data-testid="pref-cancel"
           @click="cancelEditing"
         >
-          Annuller
+          {{ BUTTON_WORDS.cancel }}
         </UButton>
         <UButton
           v-bind="BUTTONS.save"
@@ -296,7 +285,7 @@ const sendTest = async () => {
           data-testid="pref-save"
           @click="save"
         >
-          Gem
+          {{ BUTTON_WORDS.save }}
         </UButton>
       </div>
     </div>

@@ -6,27 +6,28 @@ import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFa
 import { WaitlistFactory } from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
 import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useTicket } from '~/composables/useTicket'
 import testHelpers from '~~/tests/e2e/testHelpers'
-import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import type { ScaffoldOrdersRequest, DinnerMode as DinnerModeType } from '~/composables/useBookingValidation'
 const Action = useBookingValidation().BookingActionSchema.enum
 
 const { validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, salt, getSessionUserInfo, daysFromNow } = testHelpers
 const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema } = useBookingValidation()
+const { findTicketPriceByType, findTicketPriceById } = useTicket()
 const DinnerMode = DinnerModeSchema.enum
 
 /**
- * E2E tests for POST /api/household/order/scaffold
- * ADR-016: Unified booking mutation endpoint
+ * E2E tests for /api/household/order/scaffold: POST is the booking write, GET its dry run (a read)
+ * ADR-016: Unified booking mutation endpoint; ADR-004: every member reads, a household changes its own bookings
  *
  * Tests cover:
- * - Authorization (user must belong to household)
+ * - Authorization (the write: user must belong to household; the read: any member)
  * - Single event booking flow
  * - Multi-event grid booking
  * - Guest ticket creation
  * - After the deadline: claim a released ticket, else queue; leave and requeue an entry
- * - A preview: the save's reply, nothing written
+ * - A preview: the save's reply, nothing written; an admin's draft previewed with the deadlines lifted
  * - A cancelled dinner: nothing lands on it
  * - Error cases
  */
@@ -59,8 +60,8 @@ test.describe('Household Scaffold API (ADR-016)', () => {
     createdSeasonIds.push(testSeason.id!)
 
     // Extract ticket prices
-    const adultPrice = testSeason.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.ADULT)
-    const childPrice = testSeason.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.CHILD)
+    const adultPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, testSeason.ticketPrices)
+    const childPrice = findTicketPriceByType(TicketTypeSchema.enum.CHILD, testSeason.ticketPrices)
     expect(adultPrice?.id, 'Season must have ADULT ticket price').toBeDefined()
     expect(childPrice?.id, 'Season must have CHILD ticket price').toBeDefined()
     testAdultTicketPriceId = adultPrice!.id!
@@ -116,6 +117,24 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
       expect(result).not.toBeNull()
       expect(result!.householdId).toBe(householdId)
+    })
+
+    // A preview is a read: any member reads any household's, and nothing changes. The expected bookings (no orders)
+    // read by an outsider are the Next run preview's case
+    test('GIVEN a member of another household WHEN reading the household\'s draft preview THEN it answers 200 and nothing changes', async ({ browser }) => {
+      const context = await validatedBrowserContext(browser)
+      const memberContext = await memberValidatedBrowserContext(browser)
+      const { household, inhabitants } = await HouseholdFactory.createHouseholdWithInhabitants(context, { name: salt('ReadHouse', temporaryAndRandom()) }, 1)
+      createdHouseholdIds.push(household.id)
+      const request: ScaffoldOrdersRequest = {
+        householdId: household.id, seasonId: testSeason.id!, dinnerEventIds: [testDinnerEventIds[0]!],
+        orders: [OrderFactory.createBookingOrder(inhabitants[0]!.id, testDinnerEventIds[0]!, testAdultTicketPriceId)]
+      }
+
+      const read = await OrderFactory.previewScaffoldOrders(memberContext, request)
+
+      expect(read!.householdId).toBe(household.id)
+      expect(await OrderFactory.getOrders(context, { dinnerEventIds: testDinnerEventIds[0]!, householdId: household.id })).toEqual([])
     })
   })
 
@@ -506,9 +525,10 @@ test.describe('Household Scaffold API (ADR-016)', () => {
         results: [{ inhabitantId, isGuestTicket: false, ticketType: TicketTypeSchema.enum.ADULT, action: Action.QUEUE }] })
       expect(second).toMatchObject({ totals: { [Action.QUEUE]: 1 }, positions: [{ inhabitantId: member.inhabitantId, position: 2 }] })
       const entries = await WaitlistFactory.entries(context, [dinnerEventId])
+      const adultPrice = findTicketPriceById(testAdultTicketPriceId, testSeason.ticketPrices)!.price
       expect(entries.map(entry => [entry.inhabitantId, entry.order.householdId, entry.order.priceAtBooking])).toEqual([
-        [inhabitantId, testHouseholdId, testSeason.ticketPrices.find(price => price.id === testAdultTicketPriceId)!.price],
-        [member.inhabitantId, member.householdId, testSeason.ticketPrices.find(price => price.id === testAdultTicketPriceId)!.price]
+        [inhabitantId, testHouseholdId, adultPrice],
+        [member.inhabitantId, member.householdId, adultPrice]
       ])
     })
 
@@ -617,7 +637,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       const preview = await OrderFactory.previewScaffoldOrders(context, request)
 
       expect(preview!.scaffoldResult.results.map(line => [line.inhabitantId, line.action])).toEqual([[buyerId, Action.BUY], [queuerId, Action.QUEUE]])
-      expect(preview!.scaffoldResult.positions).toEqual([{ inhabitantId: queuerId, dinnerEventId, isGuestTicket: false, position: 1, ticketType: TicketTypeSchema.enum.ADULT }])
+      expect(preview!.scaffoldResult.positions).toEqual([{ inhabitantId: queuerId, dinnerEventId, isGuestTicket: false, position: 1, ticketType: TicketTypeSchema.enum.ADULT, priceAtBooking: findTicketPriceByType(TicketTypeSchema.enum.ADULT, testSeason.ticketPrices)!.price }])
       expect(await supply()).toEqual(before)
 
       const saved = await OrderFactory.scaffoldOrders(context, request)
@@ -626,6 +646,35 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       expect(saved!.scaffoldResult.positions).toEqual(preview!.scaffoldResult.positions)
       expect((await OrderFactory.getOrder(context, ticketForSale!.id))?.inhabitantId).toBe(buyerId)
       expect((await WaitlistFactory.entries(context, [dinnerEventId])).map(entry => entry.inhabitantId)).toEqual([queuerId])
+    })
+
+    // bypassDeadlines is a dry-run parameter, not an override: an admin's draft previews with the deadlines lifted; a
+    // member's flag is ignored and the draft previews on the season's deadlines
+    test('GIVEN a closed dinner without a ticket for sale WHEN a booking is previewed without and with bypassDeadlines THEN the season\'s deadlines queue it, an admin\'s flag books it, a member\'s flag still queues it, and nothing changes', async ({ browser }) => {
+      const context = await validatedBrowserContext(browser)
+      const memberContext = await memberValidatedBrowserContext(browser)
+      const dinnerEventId = await closedDinner(context, 'Queue lifted')
+      const inhabitantId = await queuedInhabitant(context, 'Preview lifted')
+      const request: ScaffoldOrdersRequest = {
+        householdId: testHouseholdId, seasonId: testSeason.id!, dinnerEventIds: [dinnerEventId],
+        orders: [OrderFactory.createBookingOrder(inhabitantId, dinnerEventId, testAdultTicketPriceId)]
+      }
+      const supply = async () => ({
+        orders: await OrderFactory.getOrders(context, { dinnerEventIds: dinnerEventId, allHouseholds: true }),
+        entries: await WaitlistFactory.entries(context, [dinnerEventId])
+      })
+      const before = await supply()
+
+      const [onDeadlines, lifted, memberFlagged] = [
+        await OrderFactory.previewScaffoldOrders(context, request),
+        await OrderFactory.previewScaffoldOrders(context, request, true),
+        await OrderFactory.previewScaffoldOrders(memberContext, request, true)
+      ]
+
+      expect(onDeadlines!.scaffoldResult.results.map(line => [line.inhabitantId, line.action])).toEqual([[inhabitantId, Action.QUEUE]])
+      expect(lifted!.scaffoldResult.results.map(line => [line.inhabitantId, line.action])).toEqual([[inhabitantId, Action.BOOK]])
+      expect(memberFlagged!.scaffoldResult.results.map(line => [line.inhabitantId, line.action])).toEqual([[inhabitantId, Action.QUEUE]])
+      expect(await supply()).toEqual(before)
     })
   })
 
@@ -643,7 +692,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
         seasonId: testSeason.id!, date: daysFromNow(days), menuTitle: salt('Test NextRun', temporaryAndRandom())
       })).id
       const [bookedId, cancelledId] = [await openDinner(20), await openDinner(22)]
-      // The household is not the admin's own: the admin writes and reads it with adminBypass
+      // The household is not the admin's own: the admin writes it with adminBypass and reads it without
       const cancelled = await OrderFactory.scaffoldOrders(context, {
         householdId: household.id, seasonId: testSeason.id!, dinnerEventIds: [cancelledId],
         orders: [OrderFactory.createBookingOrder(inhabitantId, cancelledId, testAdultTicketPriceId, DinnerMode.NONE)]
@@ -654,7 +703,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
       const preview = await OrderFactory.previewScaffoldOrders(context, {
         householdId: household.id, seasonId: testSeason.id!, dinnerEventIds: [bookedId, cancelledId], orders: []
-      }, true)
+      })
 
       expect(preview!.scaffoldResult.results.map(line => [line.inhabitantId, line.dinnerEventId, line.action])).toEqual([[inhabitantId, bookedId, Action.BOOK]])
       expect(await ordersOf()).toEqual(before)

@@ -1,6 +1,6 @@
 import {expect} from '@playwright/test'
 import {defineParameterType} from 'playwright-bdd'
-import {Then, fromScene} from '~~/tests/e2e/fixtures'
+import {Given, Then, fromScene, personOf, createScenePerson, type Actor} from '~~/tests/e2e/fixtures'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 
@@ -15,6 +15,11 @@ const firstEntry = <T>(entries: T[]): T => {
     expect(entries.length).toBeGreaterThan(0)
     return entries[0]!
 }
+
+// A new member with a login, as the Heynabo import adds one: the household's first user from then on
+Given('{actor}\'s household gets a user', async ({adminContext: admin, scene}, actor: Actor) => {
+    await createScenePerson(admin, scene, personOf(scene, actor).householdId, 'new user', true)
+})
 
 Then('the {adminList} list is non-empty', async ({scene}, list: AdminList) => {
     const context = fromScene(scene, 'context')

@@ -109,7 +109,7 @@ Klik **Bliv chefkok**, bekræft — og dit ansigt pryder portrættet. Tjansen er
 
 1. Klik **Frigiv portioner** i boksen - eller find den under **tandhjulet** i knaprækken
 2. Skriv hvor mange portioner du kan frigive (feltet er udfyldt med det, ventelisten mangler)
-3. Klik **Frigiv** - portionerne går til de første i køen, og de får en mail
+3. Klik **Frigiv** - portionerne går til de første i køen
 
 ---
 

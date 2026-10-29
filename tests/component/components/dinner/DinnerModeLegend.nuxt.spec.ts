@@ -1,7 +1,7 @@
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {enableAutoUnmount} from '@vue/test-utils'
-import {findByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {DOMWrapper, enableAutoUnmount, type BaseWrapper} from '@vue/test-utils'
+import {findByTestId, iconNamesIn, resetStores} from '~~/tests/component/testHelpers'
 import DinnerModeLegend from '~/components/dinner/DinnerModeLegend.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
 import {DinnerMode} from '~/composables/useBookingValidation'
@@ -62,7 +62,7 @@ describe('DinnerModeLegend', () => {
             expect(row.children).toHaveLength(2)
             expect(Array.from(row.classList)).toEqual(COMPONENTS.legend.entry.split(' '))
             expect(Array.from(sample!.classList)).toEqual(COMPONENTS.legend.sample.split(' '))
-            expect(sample!.querySelector('[data-testid="dinner-mode-selector"]')).not.toBeNull()
+            expect(findByTestId(new DOMWrapper(sample!), 'dinner-mode-selector').exists()).toBe(true)
             expect(sample!.textContent?.trim()).toBe('')
             expect(Array.from(explanation!.classList)).toEqual(expect.arrayContaining(TYPOGRAPHY.finePrint.split(' ')))
         }
@@ -76,29 +76,39 @@ describe('DinnerModeLegend', () => {
             props: {showModified: true, hint: GRID_HINT}
         })
 
-        expect(grid.find('[data-testid="dinner-mode-legend-modified"]').exists()).toBe(true)
+        expect(findByTestId(grid, 'dinner-mode-legend-modified').exists()).toBe(true)
         expect(grid.text()).toContain(GRID_HINT)
-        expect(plain.find('[data-testid="dinner-mode-legend-modified"]').exists()).toBe(false)
+        expect(findByTestId(plain, 'dinner-mode-legend-modified').exists()).toBe(false)
     })
 
     it('explains the queue marker only where the surface shows queued cells', async () => {
         const plain = await mountSuspended(DinnerModeLegend)
         const grid = await mountSuspended(DinnerModeLegend, {props: {showWaitlist: true}})
 
-        expect(grid.find('[data-testid="dinner-mode-legend-waitlist"]').text()).toContain(BOOKING_WORDS.legend.waitlist)
+        expect(findByTestId(grid, 'dinner-mode-legend-waitlist').text()).toContain(BOOKING_WORDS.legend.waitlist)
         expect(grid.findAllComponents(DinnerModeSelector).some(selector => selector.props('ghost'))).toBe(true)
-        expect(plain.find('[data-testid="dinner-mode-legend-waitlist"]').exists()).toBe(false)
+        expect(findByTestId(plain, 'dinner-mode-legend-waitlist').exists()).toBe(false)
+    })
+
+    // The birthday badge on a person's first dinner at a new ticket type: its glyph beside the legend's words
+    it('explains the birthday badge only where the surface shows it', async () => {
+        const plain = await mountSuspended(DinnerModeLegend)
+        const withBirthday = await mountSuspended(DinnerModeLegend, {props: {showBirthday: true}})
+        const entry: BaseWrapper<Node> = findByTestId(withBirthday, 'dinner-mode-legend-birthday')
+
+        expect(entry.text()).toContain(BOOKING_WORDS.legend.birthday)
+        expect(iconNamesIn(entry)).toContain(ICONS.birthday)
+        expect(findByTestId(plain, 'dinner-mode-legend-birthday').exists()).toBe(false)
     })
 
     // The expected booking is a standing entry: a surface explains it whether or not one of its rows is expected now
     it('explains the expected booking with the sliders beside the expected mode on every surface', async () => {
         const wrapper = await mountSuspended(DinnerModeLegend)
-        const entry = findByTestId(wrapper, 'dinner-mode-legend-expected')
-        const sliders = wrapper.findAllComponents({name: 'UIcon'})
-            .find(icon => entry.element.contains(icon.element) && icon.props('name') === ICONS.preferences)
+        const entry: BaseWrapper<Node> = findByTestId(wrapper, 'dinner-mode-legend-expected')
+        const sliders = entry.findAllComponents({name: 'UIcon'}).find(icon => icon.props('name') === ICONS.preferences)
 
         expect(entry.text()).toContain(BOOKING_WORDS.expectedBooking)
         expect(sliders?.classes()).toEqual(expect.arrayContaining(COMPONENTS.ticket.stateIcon.expected.split(' ')))
-        expect(wrapper.findAllComponents(DinnerModeSelector).some(selector => entry.element.contains(selector.element) && selector.props('expected'))).toBe(true)
+        expect(entry.findAllComponents(DinnerModeSelector).some(selector => selector.props('expected'))).toBe(true)
     })
 })

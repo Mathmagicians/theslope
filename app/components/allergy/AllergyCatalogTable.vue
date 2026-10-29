@@ -8,7 +8,7 @@ One table for both selection modes:
 The count column reads the community's inhabitants per allergen, or with `portionsById` the kuverter a dinner's
 diners carry (AllergenMultiSelector); `showCount` false drops the column.
 
-Forwards UTable's expanded model (keyed by row index, house convention) and the
+Forwards UTable's expanded model (keyed by the allergy type's row id, rowIdOf) and the
 #expanded slot so a detail panel can dock under the selected row on mobile.
 -->
 <script setup lang="ts">
@@ -26,8 +26,8 @@ const props = withDefaults(defineProps<{
   portionsById?: Map<number, number>
   readonly?: boolean
   loading?: boolean
-  /** UTable expansion record keyed by row index */
-  expanded?: Record<number, boolean>
+  /** UTable expansion record keyed by the allergy type's row id */
+  expanded?: Record<string, boolean>
 }>(), {
   mode: 'single',
   modelValue: null,
@@ -41,7 +41,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: number | number[] | null]
-  'update:expanded': [value: Record<number, boolean>]
+  'update:expanded': [value: Record<string, boolean>]
 }>()
 
 // Design system
@@ -49,6 +49,7 @@ const {COLOR, COMPONENTS, ICONS, SIZES} = useTheSlopeDesignSystem()
 
 // Business logic
 const {hasNewAllergyInhabitants} = useAllergy()
+const now = useClock()
 
 const isMulti = computed(() => props.mode === 'multi')
 
@@ -75,7 +76,7 @@ const handleRowClick = (id: number) => {
 // v-model:expanded proxy so the parent owns expansion state
 const expandedModel = computed({
   get: () => props.expanded ?? {},
-  set: (value: Record<number, boolean>) => emit('update:expanded', value)
+  set: (value: Record<string, boolean>) => emit('update:expanded', value)
 })
 
 const columns = computed(() => [
@@ -95,6 +96,7 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
 <template>
   <UTable
       v-model:expanded="expandedModel"
+      :get-row-id="rowIdOf"
       :columns="columns"
       :data="allergyTypes"
       :loading="loading"
@@ -104,11 +106,11 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
     <template #checkbox-cell="{ row }">
       <div :class="COMPONENTS.allergyCatalog.checkboxCell">
         <UCheckbox
-            :model-value="selectedIds.has(row.original.id!)"
+            :model-value="selectedIds.has(row.original.id)"
             :name="`select-allergen-${row.original.id}`"
             :disabled="readonly"
             :color="COLOR.secondary"
-            @change="handleRowClick(row.original.id!)"
+            @change="handleRowClick(row.original.id)"
         />
       </div>
     </template>
@@ -119,9 +121,9 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
           :class="[
             COMPONENTS.allergyCatalog.iconCell,
             clickableCellClass,
-            isSelected(row.original.id!) && COMPONENTS.table.selectedRow
+            isSelected(row.original.id) && COMPONENTS.table.selectedRow
           ]"
-          @click="handleRowClick(row.original.id!)"
+          @click="handleRowClick(row.original.id)"
       >
         <div :class="COMPONENTS.allergyCatalog.iconRing">
           <UIcon
@@ -142,11 +144,11 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
           :class="[
             COMPONENTS.allergyCatalog.nameCell,
             clickableCellClass,
-            isSelected(row.original.id!) && COMPONENTS.table.selectedRow
+            isSelected(row.original.id) && COMPONENTS.table.selectedRow
           ]"
           :data-testid="`allergy-row-${row.original.id}`"
-          :data-selected="isSelected(row.original.id!) ? 'true' : undefined"
-          @click="handleRowClick(row.original.id!)"
+          :data-selected="isSelected(row.original.id) ? 'true' : undefined"
+          @click="handleRowClick(row.original.id)"
       >
         {{ row.original.name }}
       </div>
@@ -157,7 +159,7 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
       <div
           :class="[COMPONENTS.allergyCatalog.centredCell, clickableCellClass]"
           :data-testid="`allergy-count-${row.original.id}`"
-          @click="handleRowClick(row.original.id!)"
+          @click="handleRowClick(row.original.id)"
       >
         {{ countOf(row.original) }}
       </div>
@@ -167,10 +169,10 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
     <template #new-cell="{ row }">
       <div
           :class="[COMPONENTS.allergyCatalog.centredCell, clickableCellClass]"
-          @click="handleRowClick(row.original.id!)"
+          @click="handleRowClick(row.original.id)"
       >
         <UIcon
-            v-if="hasNewAllergyInhabitants(row.original)"
+            v-if="hasNewAllergyInhabitants(row.original, now)"
             :name="ICONS.new"
             :class="COMPONENTS.rowIconClass"
         />

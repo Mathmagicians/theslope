@@ -2,10 +2,11 @@
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from "@nuxt/test-utils/runtime"
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
+import type {BadgeProps} from '@nuxt/ui'
+import {mountWithTooltipProvider, findByTestId, findComponentByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
 import {createResponsiveSizes, ICONS, SEASON_STATUS_GLYPHS} from '~/composables/useTheSlopeDesignSystem'
 import {getSeasonStatus} from '~/utils/season'
-import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import {SEASON_STATUS} from '~/config/seasonWords'
 import SeasonSelector from '~/components/form/SeasonSelector.vue'
 import {nextTick, ref} from 'vue'
 import {SeasonFactory} from '../../../e2e/testDataFactories/seasonFactory'
@@ -128,11 +129,11 @@ describe('SeasonSelector', () => {
         const items = wrapper.findComponent({name: 'USelect'}).props('items') as Array<Season & {status: string, icon: string}>
         expect(items).toHaveLength(mockSeasons.length)
         for (const item of items) {
-            expect(item.status).toBe(getSeasonStatus(item))
+            expect(item.status).toBe(getSeasonStatus(item, new Date()))
             expect(item.icon).toBe(item.status === SEASON_STATUS.PAST ? ICONS.seasonPast : ICONS.calendar)
         }
-        const glyph = wrapper.findAllComponents({name: 'UBadge'}).find(badge => badge.attributes('data-testid') === 'season-status-mark')
-        expect(glyph?.exists()).toBe(true)
-        expect(glyph!.classes()).toEqual(expect.arrayContaining(SEASON_STATUS_GLYPHS[getSeasonStatus(mockSeasons[0]!)].class.split(' ')))
+        const glyph = findComponentByTestId<BadgeProps>(wrapper, 'UBadge', 'season-status-mark')
+        expect(glyph.exists()).toBe(true)
+        expect(glyph.classes()).toEqual(expect.arrayContaining(SEASON_STATUS_GLYPHS[getSeasonStatus(mockSeasons[0]!, new Date())].class.split(' ')))
     })
 })

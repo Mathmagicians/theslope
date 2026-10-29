@@ -7,6 +7,8 @@ import type {UserDetail} from '~/composables/useCoreValidation'
 
 const PRISMA_RECORD_NOT_FOUND = 'P2025'
 const PRISMA_UNIQUE_VIOLATION = 'P2002'
+// The D1 adapter's fetch to the database fails when the connection drops; Prisma reports it inside the query error
+const D1_CONNECTION_LOST = 'fetch failed'
 
 /**
  * Check if error is Prisma "record not found" (P2025)
@@ -133,6 +135,13 @@ const nuxtErrorFromPrismaError = (prepend: string = 'uh oh, a prisma error', err
         statusCode: 409,
         statusMessage: 'Conflict',
         message: `${prepend}: Record already exists: ${error.message} (Code: ${error.code})`,
+        cause: getSerializableCause(error)
+    })
+
+    if (error.message.includes(D1_CONNECTION_LOST)) return createError({
+        statusCode: 503,
+        statusMessage: 'Service Unavailable',
+        message: `${prepend}: Database unreachable: ${error.message} (Code: ${error.code})`,
         cause: getSerializableCause(error)
     })
 

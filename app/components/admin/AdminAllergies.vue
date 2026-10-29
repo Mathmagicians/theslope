@@ -4,8 +4,8 @@ Allergy catalog - master/detail with a responsive detail MOUNT POINT.
 Selection is the single state; AllergyDetailPanel is the single detail component.
 Only WHERE it mounts differs - guards keep exactly one instance live.
 
-DESKTOP (md+) - LAYOUTS.masterDetailPage 3/9 grid, sticky detail pane
-┌──────────────────────────┬─────────────────────────────────────┐
+DESKTOP (md+) - LAYOUTS.masterDetailPage, sticky detail pane
+┌─ a third, min 245px ─────┬─ the rest ──────────────────────────┐
 │ MASTER (CatalogTable)    │ DETAIL (AllergyDetailPanel)         │
 │ 🥛 Mælk        2  🆕     │ ┌─ sticky top-4 ─────────────────┐  │
 │ 🥜 Jordnødder  2  ◀ sel  │ │ Detaljer            [✏️]  [🗑] │  │
@@ -218,16 +218,16 @@ const handleSelect = (id: number | number[] | null) => {
 // first-item fallback feeds only the desktop pane). CREATE suppresses it so the
 // panel under the toolbar is the single live mount.
 const expanded = computed({
-  get: (): Record<number, boolean> => {
+  get: (): Record<string, boolean> => {
     if (COMPONENTS.masterDetail.detailAsPane || panelMode.value === FORM_MODES.CREATE || selectedAllergyTypeId.value === null) return {}
-    const index = sortedAllergyTypes.value.findIndex(at => at.id === selectedAllergyTypeId.value)
-    return index === -1 ? {} : {[index]: true}
+    const selected = sortedAllergyTypes.value.find(at => at.id === selectedAllergyTypeId.value)
+    return selected ? {[rowIdOf(selected)]: true} : {}
   },
-  set: (value: Record<number, boolean>) => {
+  set: (value: Record<string, boolean>) => {
     // UTable-initiated collapse deselects; expansion goes through handleSelect
-    const openIndex = Object.keys(value).find(key => value[Number(key)])
-    setAllergyParam(openIndex !== undefined
-        ? sortedAllergyTypes.value[Number(openIndex)]?.id ?? null
+    const openRowId = Object.keys(value).find(key => value[key])
+    setAllergyParam(openRowId !== undefined
+        ? findRowById(sortedAllergyTypes.value, openRowId)?.id ?? null
         : null)
   }
 })
@@ -363,7 +363,7 @@ const catalogEmptyState = {
           :show-new-badge="true"
       />
 
-      <!-- MASTER-DETAIL - LAYOUTS.masterDetailPage: 3/9 grid from md, stacked below.
+      <!-- MASTER-DETAIL - LAYOUTS.masterDetailPage: the catalog beside the detail from md, stacked below.
            The detail panel docks in the expanded row on mobile, in the sticky pane on md+ -->
       <div v-else :class="LAYOUTS.masterDetailPage.root">
         <!-- CREATE (mobile) - docks under the toolbar, adjacent to the button that opened it -->
@@ -372,7 +372,7 @@ const catalogEmptyState = {
         </div>
 
         <!-- MASTER -->
-        <div :class="[LAYOUTS.masterDetailPage.left, COMPONENTS.allergyCatalogPage.column]">
+        <div :class="LAYOUTS.masterDetailPage.left">
           <AllergyCatalogTable
               v-model:expanded="expanded"
               mode="single"

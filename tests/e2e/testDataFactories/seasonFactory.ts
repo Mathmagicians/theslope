@@ -1,7 +1,7 @@
 import {useSeasonValidation, type Season, type SeasonUpdateResponse} from "~/composables/useSeasonValidation"
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
-import {DeletedCountSchema, IdSchema} from "~/composables/useCoreValidation"
+import {IdSchema} from "~/composables/useCoreValidation"
 import type {
     CookingTeamDisplay,
     CookingTeamDetail,
@@ -15,7 +15,9 @@ import {useMaintenanceValidation, type JobRunDisplay} from "~/composables/useMai
 import {useDutyValidation, type JokerSlot, type JokerSlotCreate} from "~/composables/useDutyValidation"
 import {getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
 import type {DateRange} from '~/types/dateTypes'
-import {addDays, nextMonday} from 'date-fns'
+import {dateToWeekDay} from '~/utils/season'
+import {SEASON_CONFIG} from '~/config/season'
+import {addDays, nextMonday, startOfDay} from 'date-fns'
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 import {HouseholdFactory} from "./householdFactory"
@@ -24,6 +26,12 @@ import {DinnerEventFactory} from "./dinnerEventFactory"
 
 // Nested assignment type for CookingTeamCreate (omits id, cookingTeamId, inhabitant)
 type CookingTeamCreateAssignment = NonNullable<CookingTeamCreate['assignments']>[number]
+
+/** A team to create: its name, salted on creation, and its members */
+type TeamWithAssignments = {teamName?: string, assignments: CookingTeamCreateAssignment[]}
+
+/** A chef's team and its dinner: the team's name, the dinner's fields and the day the dinner goes on */
+type ChefTeamWithDinner = {teamName?: string, dinner?: Partial<Omit<DinnerEventCreate, 'seasonId' | 'cookingTeamId'>>, day?: 'free' | Date}
 
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
@@ -54,10 +62,12 @@ export class SeasonFactory {
 
     // Fixed singleton name for parallel-safe active season (shared across all test workers)
     static readonly E2E_SINGLETON_NAME = 'TestSeason-E2E-Singleton'
-    // The booking deadline of a factory season (app.config.ts default); the e2e singleton alone is created open
-    static readonly DEFAULT_BOOKING_DEADLINE_DAYS = 8
+    // The booking deadline of a factory season (the config's default); the e2e singleton alone is created open
+    static readonly DEFAULT_BOOKING_DEADLINE_DAYS = SEASON_CONFIG.defaultSeason.ticketIsCancellableDaysBefore
     // createActiveSeason retries once: the list→activate window races with workers recreating or cleaning the singleton
     static readonly CREATE_ACTIVE_SEASON_RETRIES = 1
+    // The two sides of a deadline a spec's dinner lies on
+    static readonly DEADLINE_SIDES = ['before', 'past'] as const
 
     // Singleton cache for active season (only one can exist at a time)
     private static activeSeason: Season | null = null
@@ -131,7 +141,7 @@ export class SeasonFactory {
         consecutiveCookingDays: 1,
         ticketPrices: TicketFactory.defaultTicketPrices(),
         ticketIsCancellableDaysBefore: this.DEFAULT_BOOKING_DEADLINE_DAYS,
-        diningModeIsEditableMinutesBefore: 90
+        diningModeIsEditableMinutesBefore: SEASON_CONFIG.defaultSeason.diningModeIsEditableMinutesBefore
     }
 
     // Default cooking team data for unit tests (no HTTP calls)
@@ -371,7 +381,7 @@ export class SeasonFactory {
             } catch (error) {
                 lastError = error
                 this.activeSeason = null
-                console.warn(`🌞 > SEASON_FACTORY > Active-season resolve failed (attempt ${attempt + 1} of ${this.CREATE_ACTIVE_SEASON_RETRIES + 1})`)
+                console.warn(`🌞 > SEASON_FACTORY > Active-season resolve failed (attempt ${attempt + 1} of ${this.CREATE_ACTIVE_SEASON_RETRIES + 1}):`, error)
             }
         }
         throw lastError
@@ -576,7 +586,7 @@ export class SeasonFactory {
 
         // Use selectMostAppropriateActiveSeason to find the best candidate
         const {selectMostAppropriateActiveSeason} = await import('~/utils/season')
-        const seasonToActivate = selectMostAppropriateActiveSeason(nonTestSeasons)
+        const seasonToActivate = selectMostAppropriateActiveSeason(nonTestSeasons, new Date())
         const activeSeasonId = await this.getActiveSeasonId(context)
 
         if (seasonToActivate && seasonToActivate.id !== activeSeasonId) {
@@ -811,12 +821,11 @@ export class SeasonFactory {
     }
 
     /**
-     * A serial spec's own active season: starts `startInDays` days from today at midnight (tomorrow by default) and
-     * ends `days` days after the start, inside the pre-booking window (ADR-015). `cookingDays` picks all seven days
-     * or Monday to Friday over the default Mon/Wed/Fri; `deadline` is the cancel deadline in days. Serial only:
-     * activating it displaces the singleton active season.
+     * A spec's own season: starts `startInDays` days from today at midnight (tomorrow by default) and ends `days` days
+     * after the start, inside the pre-booking window (ADR-015). `cookingDays` picks all seven days or Monday to Friday
+     * over the default Mon/Wed/Fri; `deadline` is the cancel deadline in days.
      */
-    static readonly createActiveSeasonFromTomorrow = async (
+    static readonly createSeasonFromTomorrow = async (
         context: BrowserContext,
         testSalt: string,
         {days, deadline, cookingDays, startInDays = 1}: {days: number, deadline?: number, cookingDays?: 'all' | 'weekdays', startInDays?: number}
@@ -830,13 +839,38 @@ export class SeasonFactory {
             all: createDefaultWeekdayMap([true, true, true, true, true, true, true]),
             weekdays: createDefaultWeekdayMap([true, true, true, true, true, false, false])
         }
-        const created = await this.createSeasonWithDinnerEvents(context, testSalt, {
+        return this.createSeasonWithDinnerEvents(context, testSalt, {
             seasonDates: {start, end},
             cookingDays: cookingDays === undefined ? this.defaultSeasonData.cookingDays : cookingDayMaps[cookingDays],
             ticketIsCancellableDaysBefore: deadline ?? this.DEFAULT_BOOKING_DEADLINE_DAYS
         })
+    }
+
+    /** A serial spec's own season (`createSeasonFromTomorrow`), activated: serial only, it displaces the singleton active season */
+    static readonly createActiveSeasonFromTomorrow = async (
+        context: BrowserContext,
+        testSalt: string,
+        options: Parameters<typeof SeasonFactory.createSeasonFromTomorrow>[2]
+    ): Promise<{ season: Season, dinnerEvents: DinnerEventDisplay[] }> => {
+        const created = await this.createSeasonFromTomorrow(context, testSalt, options)
         await this.activateSeason(context, created.season.id!)
         return created
+    }
+
+    /**
+     * The day of a serial spec's dinner on one side of a deadline `deadlineDays` before the dinner starts: past it, the
+     * last such day; before it, the first day a day clear of it, so a run across the deadline's hour keeps its side.
+     * From tomorrow inside the pre-booking window, on a weekday the e2e singleton does not cook: the singleton clips the
+     * residents' preferences to its cooking days, so the scaffolds book and queue no resident on the dinner
+     */
+    static readonly dinnerDayBy = (deadlineDays: number, side: typeof SeasonFactory.DEADLINE_SIDES[number]): Date => {
+        const days = Array.from({length: testHelpers.PREBOOKING_WINDOW_DAYS}, (_, index) => startOfDay(addDays(new Date(), index + 1)))
+            .filter(day => !this.defaultSeasonData.cookingDays[dateToWeekDay(day)])
+        const day = side === 'past'
+            ? days.filter(candidate => !testHelpers.isBeforeDinnerDeadline(deadlineDays)(candidate)).at(-1)
+            : days.find(testHelpers.isBeforeDinnerDeadline(deadlineDays + 1))
+        if (!day) throw new Error(`No day from tomorrow lies ${side} a deadline ${deadlineDays} days before the dinner`)
+        return day
     }
 
     /**
@@ -849,19 +883,56 @@ export class SeasonFactory {
         context: BrowserContext,
         season: Season,
         chefInhabitantId: number,
-        {teamName = 'ChefTeam', dinner = {}, day}: {teamName?: string, dinner?: Partial<Omit<DinnerEventCreate, 'seasonId' | 'cookingTeamId'>>, day?: 'free' | Date} = {}
-    ): Promise<{ team: CookingTeamDetail, dinner: DinnerEventDisplay }> => {
-        const created = await this.createCookingTeamForSeason(context, season.id!, teamName)
-        await this.assignMemberToTeam(context, created.id!, chefInhabitantId, TeamRoleSchema.enum.CHEF)
-        const dinnerData = {chefId: chefInhabitantId, ...dinner, cookingTeamId: created.id!}
-        const placeDinner = () => {
-            if (day === 'free') return DinnerEventFactory.createDinnerEventOnFreeDay(context, season, dinnerData)
-            if (day) return DinnerEventFactory.createDinnerEventAloneOnDay(context, season, day, dinnerData)
-            return DinnerEventFactory.createDinnerEvent(context, {...dinnerData, seasonId: season.id!})
+        teamWithDinner: ChefTeamWithDinner = {}
+    ): Promise<{ team: CookingTeamDetail, dinner: DinnerEventDisplay }> =>
+        (await this.createCookingTeamsWithChefAndDinners(context, season, chefInhabitantId, [teamWithDinner]))[0]!
+
+    /**
+     * Teams in `season` in one team creation, each with its assignments in the body: a team creation rewrites the
+     * affinities of every team of the season, so a scenario in the shared season creates its teams at once. Returned in
+     * the order given, with their assignments.
+     */
+    static readonly createCookingTeams = async (
+        context: BrowserContext,
+        season: Season,
+        teams: TeamWithAssignments[]
+    ): Promise<CookingTeamDetail[]> => {
+        const response = await context.request.put(ADMIN_TEAM_ENDPOINT, {
+            headers: headers,
+            data: teams.map(({teamName = 'TestTeam', assignments}) => ({name: salt(teamName), seasonId: season.id!, assignments}))
+        })
+        expect(response.status(), `Unexpected status. Response: ${await response.text()}`).toBe(201)
+        return CreateTeamsResponseSchema.parse(await response.json()).teams
+    }
+
+    /**
+     * Several of `createCookingTeamWithChefAndDinner`'s teams in one team creation (`createCookingTeams`), the chef's
+     * CHEF assignment in its body. Returned in the order given.
+     */
+    static readonly createCookingTeamsWithChefAndDinners = async (
+        context: BrowserContext,
+        season: Season,
+        chefInhabitantId: number,
+        teamsWithDinner: ChefTeamWithDinner[]
+    ): Promise<{ team: CookingTeamDetail, dinner: DinnerEventDisplay }[]> => {
+        const chef = this.defaultCookingTeamCreateAssignment({inhabitantId: chefInhabitantId, role: TeamRoleSchema.enum.CHEF})
+        const teams = await this.createCookingTeams(context, season, teamsWithDinner.map(({teamName = 'ChefTeam'}) => ({teamName, assignments: [chef]})))
+
+        const created: { team: CookingTeamDetail, dinner: DinnerEventDisplay }[] = []
+        // One at a time: a dinner on a free day checks the day it took before the next dinner looks for one
+        for (const [index, {dinner = {}, day}] of teamsWithDinner.entries()) {
+            const teamId = teams[index]!.id!
+            const dinnerData = {chefId: chefInhabitantId, ...dinner, cookingTeamId: teamId}
+            const placeDinner = () => {
+                if (day === 'free') return DinnerEventFactory.createDinnerEventOnFreeDay(context, season, dinnerData)
+                if (day) return DinnerEventFactory.createDinnerEventAloneOnDay(context, season, day, dinnerData)
+                return DinnerEventFactory.createDinnerEvent(context, {...dinnerData, seasonId: season.id!})
+            }
+            const teamDinner = await placeDinner()
+            const team = await this.getCookingTeamById(context, teamId)
+            created.push({team: team!, dinner: teamDinner})
         }
-        const teamDinner = await placeDinner()
-        const team = await this.getCookingTeamById(context, created.id!)
-        return {team: team!, dinner: teamDinner}
+        return created
     }
 
     /**
@@ -1046,7 +1117,7 @@ export class SeasonFactory {
         expect(status, 'Unexpected status').toBe(expectedStatus)
 
         if (expectedStatus === 200) {
-            return DeletedCountSchema.parse(await response.json())
+            return IdSchema.parse(await response.json())
         }
         return null
     }

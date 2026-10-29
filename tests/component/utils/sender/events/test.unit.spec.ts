@@ -1,9 +1,10 @@
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
+import {afterEach, beforeEach, describe, expect, it} from 'vitest'
 import {buildTestEmail, emitTestEmail} from '~~/server/utils/sender/events/test'
 import {useNotificationValidation} from '~/composables/useNotificationValidation'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 import {fakeSenderQueue, sentMessages} from '~~/tests/component/utils/sender/fakeSenderQueue'
 import {useUserPreferenceValidation} from '~/composables/useUserPreferenceValidation'
+import {spyOnLogs} from '~~/tests/component/logSpies'
 
 const {NotificationMessageSchema} = useNotificationValidation()
 const {EMAIL} = useUserPreferenceValidation().NotificationChannelSchema.enum
@@ -17,13 +18,13 @@ describe('buildTestEmail', () => {
 
         it('is a contract-valid TEST e-mail to the admin mailbox from the environment\'s sender', () => {
             expect(NotificationMessageSchema.safeParse(message).success).toBe(true)
-            expect(message).toMatchObject({channel: EMAIL, to: config.adminEmail, from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {kind: 'TEST', environment}})
+            expect(message).toMatchObject({channel: EMAIL, to: config.adminEmail, from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {kind: NotificationFactory.Kind.TEST, environment}})
         })
 
         it('addresses the recipient the caller names, keeping the admin mailbox as Reply-To', () => {
             const mine = buildTestEmail(config, 'anna@example.com')
 
-            expect(mine).toMatchObject({to: 'anna@example.com', replyTo: config.adminEmail, meta: {kind: 'TEST'}})
+            expect(mine).toMatchObject({to: 'anna@example.com', replyTo: config.adminEmail, meta: {kind: NotificationFactory.Kind.TEST}})
         })
 
         it('names the environment in the subject and the site in the signature', () => {
@@ -35,7 +36,7 @@ describe('buildTestEmail', () => {
 })
 
 describe('emitTestEmail', () => {
-    const logs = {warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
+    const logs = spyOnLogs()
     beforeEach(() => Object.values(logs).forEach(spy => spy.mockImplementation(() => {})))
     afterEach(() => Object.values(logs).forEach(spy => spy.mockClear()))
 
@@ -68,9 +69,9 @@ describe('emitTestEmail', () => {
     })
 
     it('reports not sent and logs the missing setting when e-mail is off', async () => {
-        const result = await emitTestEmail({on: false, missing: 'DEPLOY_URL'})
+        const result = await emitTestEmail(NotificationFactory.channelOff)
 
         expect(result).toMatchObject({queued: false, degraded: true})
-        expect(logs.warn).toHaveBeenCalledWith(expect.stringContaining('DEPLOY_URL'))
+        expect(logs.error).toHaveBeenCalledWith(expect.stringContaining(NotificationFactory.channelOff.missing))
     })
 })

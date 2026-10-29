@@ -4,7 +4,6 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {useBookingValidation, type DinnerEventCreate} from '~/composables/useBookingValidation'
 import type {Season} from '~/composables/useSeasonValidation'
-import {getDinnerTimeRange} from '~/utils/season'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
 /**
@@ -18,9 +17,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
  * a separate (non-chef) team to verify 403, and a teamless dinner to verify 404.
  */
 
-const DEFAULT_DINNER_START_TIME = 18
-
-const {validatedBrowserContext, memberValidatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo, dinnerStartOf} = testHelpers
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -88,7 +85,7 @@ test.describe('Chef Dinner Endpoint', () => {
         expect(announcedDinner!.menuPictureUrl).toBeNull()
 
         const heynaboEvent = await DinnerEventFactory.getHeynaboEvent(memberContext, announcedDinner!.heynaboEventId!)
-        const expectedStart = getDinnerTimeRange(new Date(scheduledDinner.date), DEFAULT_DINNER_START_TIME, 0).start
+        const expectedStart = dinnerStartOf(new Date(scheduledDinner.date))
         const heynaboStart = new Date(heynaboEvent.start!)
         expect(heynaboStart.getFullYear()).toBe(expectedStart.getFullYear())
         expect(heynaboStart.getMonth()).toBe(expectedStart.getMonth())

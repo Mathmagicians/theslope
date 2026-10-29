@@ -12,7 +12,7 @@ user starts the dev server.
 
 **Skills you follow on every task** - read them before the first edit and apply them as written:
 
-- `/architecture` - the ADR a change follows, its compliance rows and every caller; an endpoint keeps its resource, a server utility is called, the browser renders what the server answers
+- `/architecture` - the ADR a change follows, its compliance rows and every caller; an endpoint keeps its resource, a server utility is called, the browser renders what the server answers; § Code rules, the user's review rules
 - `/plan-and-supervise` - the brief, the coverage rule, the per-package gate, the hard rules, the design-system rule
 - `/peer-sessions` - who owns what across the peer sessions: claims, holds, the e2e slot, the docs
 - `/dry` - reuse before you add; sweep what you extract

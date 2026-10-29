@@ -4,11 +4,13 @@ import {formatDate} from '~/utils/date'
 // Age categories - the active season's ticket prices carry the age limits
 const {groupInhabitantsByTicketCategory} = useTicket()
 const {formatTicketCounts} = useBilling()
-const {TYPOGRAPHY, BUTTONS, COLOR, ICONS, TEXT, BG, BORDER} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, BUTTONS, COLOR, ICONS, COMPONENTS} = useTheSlopeDesignSystem()
+const poster = COMPONENTS.allergyPoster
 
-// No layout for printing
+// A printed sheet: no layout, and light mode whatever the member's mode, since a dark face reads pale on white paper
 definePageMeta({
-  layout: false
+  layout: false,
+  colorMode: 'light'
 })
 
 // STORES
@@ -16,9 +18,10 @@ const store = useAllergiesStore()
 const {allergyTypes, isAllergyTypesLoading, posterNotes} = storeToRefs(store)
 const planStore = usePlanStore()
 const {activeSeason} = storeToRefs(planStore)
+const now = useClock()
 
 // Current date for header (formatted in Danish)
-const currentDate = computed(() => formatDate(new Date(), 'd. MMMM yyyy'))
+const currentDate = computed(() => formatDate(now.value, 'd. MMMM yyyy'))
 
 // QR Code URL (uses current request URL for correct environment - local/dev/prod)
 const requestUrl = useRequestURL()
@@ -31,7 +34,8 @@ const allergyData = computed(() => {
       .map(allergyType => {
         const categories = groupInhabitantsByTicketCategory(
             allergyType.inhabitants ?? [],
-            activeSeason.value?.ticketPrices
+            activeSeason.value?.ticketPrices,
+            now.value
         )
         const members = categories.flatMap(category => category.inhabitants)
         return {
@@ -43,7 +47,6 @@ const allergyData = computed(() => {
       .sort((a, b) => b.members.length - a.members.length)
 })
 
-// Print function
 const printPage = () => {
   if (import.meta.client) {
     window.print()
@@ -52,14 +55,14 @@ const printPage = () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-white">
+  <div :class="poster.sheet">
 
-    <div class="max-w-5xl mx-auto p-8">
-      <!-- No-print controls -->
-      <div class="no-print mb-6 flex justify-between items-center">
+    <div :class="poster.frame">
+      <!-- No-print controls; the print CSS below names its hooks (no-print, poster-row) -->
+      <div class="no-print" :class="poster.controls">
         <UButton
-            v-bind="BUTTONS.secondaryAction"
-            :color="COLOR.secondary"
+            v-bind="BUTTONS.primaryAction"
+            :color="COLOR.primary"
             :icon="ICONS.arrowLeft"
             to="/admin/allergies"
         >
@@ -79,43 +82,43 @@ const printPage = () => {
 
       <div v-else>
         <!-- Header -->
-        <div class="mb-6">
-          <h1 :class="`${TYPOGRAPHY.sectionTitle} mb-2`">
+        <div :class="poster.header">
+          <h1 :class="poster.title">
             ALLERGI-LISTE for skrånere
           </h1>
           <p :class="TYPOGRAPHY.bodyTextMuted">pr. {{ currentDate }}</p>
         </div>
 
         <!-- Main content with QR code -->
-        <div class="poster-row flex flex-col md:flex-row gap-6 mb-6">
+        <div class="poster-row" :class="poster.row">
           <!-- Allergy table -->
-          <div class="flex-1">
-            <table data-testid="allergy-table" class="w-full border-collapse">
+          <div :class="poster.tableColumn">
+            <table data-testid="allergy-table" :class="poster.table">
               <thead>
               <tr>
-                <th :class="`w-1/3 border-2 p-3 text-left font-bold ${BORDER.gray[700]} ${BG.gray[100]}`">ALLERGEN / INTOLERANCE</th>
-                <th :class="`w-2/3 border-2 p-3 text-left font-bold ${BORDER.gray[700]} ${BG.gray[100]}`">PERSON</th>
+                <th :class="poster.headCell.allergen">ALLERGEN / INTOLERANCE</th>
+                <th :class="poster.headCell.person">PERSON</th>
               </tr>
               </thead>
               <tbody>
               <tr v-for="allergy in allergyData" :key="allergy.id">
-                <td :class="`border-2 p-3 align-top ${BORDER.gray[700]}`">
-                  <div :class="`${TYPOGRAPHY.cardTitle} mb-2`">
+                <td :class="poster.bodyCell">
+                  <div :class="poster.allergyName">
                     {{ allergy.icon }} {{ allergy.name.toUpperCase() }}
                   </div>
-                  <div :class="`${TYPOGRAPHY.bodyTextMuted} whitespace-pre-line`">
+                  <div :class="poster.description">
                     {{ allergy.description }}
                   </div>
                 </td>
-                <td :class="`border-2 p-3 align-top ${BORDER.gray[700]}`">
-                  <div class="space-y-2">
+                <td :class="poster.bodyCell">
+                  <div :class="poster.members">
                     <!-- List inhabitants with compact category marker (V/B/b) -->
                     <div>
                       <span v-for="(person, idx) in allergy.members" :key="person.id">
                         {{ person.name }} ({{ ticketTypeLetter(person.ticketType) }})
                         <span
                             v-if="person.inhabitantComment"
-                            :class="`${TYPOGRAPHY.finePrint} ${TEXT.gray[600]}`">
+                            :class="poster.comment">
                           - {{ person.inhabitantComment }}
                         </span>
                         <span v-if="idx < allergy.members.length - 1">, </span>
@@ -123,7 +126,7 @@ const printPage = () => {
                     </div>
 
                     <!-- Count summary, e.g. [2V 1B] -->
-                    <div :class="`${TYPOGRAPHY.bodyTextMedium} mt-2`">
+                    <div :class="poster.counts">
                       [{{ allergy.ticketCounts }}]
                     </div>
                   </div>
@@ -134,24 +137,24 @@ const printPage = () => {
           </div>
 
           <!-- QR code to the online list - drawn inline, so it prints with the poster -->
-          <div class="shrink-0">
+          <div :class="poster.qrColumn">
             <QrCode
                 :value="qrCodeUrl"
                 label="Scan for online version"
-                :class="`border-2 ${BORDER.gray[300]}`"
+                :class="poster.qrFrame"
             />
-            <p :class="`${TYPOGRAPHY.caption} ${TEXT.gray[600]} mt-2 text-center`">Scan for online version</p>
+            <p :class="poster.qrCaption">Scan for online version</p>
           </div>
         </div>
 
         <!-- Footer notes - same component and same Setting row as the catalog header; edited there -->
-        <AllergyNotes :notes="posterNotes" class="mt-4"/>
+        <AllergyNotes :notes="posterNotes" :class="poster.notes"/>
 
         <!-- Allergy manager contact -->
         <AllergyManagersList
             kind="legend"
             message="Tal med allergiansvarlig for hjælp til at spotte allergener i opskrifterne og udtænke allergihensyn!"
-            class="mt-6"
+            :class="poster.managers"
         />
       </div>
     </div>

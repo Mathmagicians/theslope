@@ -11,6 +11,7 @@ Audit the current branch for duplication and for refactorings left half-done. Re
 
 - **No broken windows.** When the branch introduces a helper, component, constant, factory or test id, every place the old pattern still lives is a violation - including code the branch never touched. "Pre-existing" and "out of scope" are not defences; the branch is what made it a duplicate.
 - **A refactoring is done when nothing of the old shape remains:** no local copies, no dead exports, no unreferenced files, no stale comments or docs describing the old way.
+- **An extracted helper is checked against every other case that needs it.** Whoever extracts a helper - in app code or in a spec (`docs/testing.md` Rule 4) - runs the Step 3 sweep for its body's pattern in the same change and moves each hit onto the helper; a brief that extracts a helper names the sweep.
 - **Report, then ask.** Never fix while auditing. The user signs off on the plan.
 
 ## Step 1: Scope

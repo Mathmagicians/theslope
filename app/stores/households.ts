@@ -1,9 +1,13 @@
 import type {
     HouseholdDisplay,
-    HouseholdDetail
+    HouseholdDetail,
+    HouseholdCreate,
+    HouseholdMoveOut
 } from '~/composables/useCoreValidation'
-import {useBookingValidation, type ScaffoldResult} from '~/composables/useBookingValidation'
+import {useBookingValidation, type ScaffoldResult, type DinnerMode} from '~/composables/useBookingValidation'
+import type {WeekDayMap} from '~/types/dateTypes'
 import {useBooking, countTotals} from '~/composables/useBooking'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 /**
  * Household store - manages household data and API operations
@@ -14,8 +18,9 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     // DEPENDENCIES
     const {storeAsyncData, loadOrThrow, apiRequest, toastSaved, notFoundToast} = useApiHandler()
+    const now = useClock()
     const {formatScaffoldResult, sumScaffoldResults} = useBooking()
-    const {HouseholdDisplaySchema, HouseholdDetailSchema} = useCoreValidation()
+    const {HouseholdDisplaySchema, HouseholdDetailSchema, serializeWeekDayMap} = useCoreValidation()
     const {InhabitantUpdateResponseSchema, HouseholdUpdateResponseSchema} = useBookingValidation()
 
     // Last preference update result (persists across component remounts)
@@ -36,7 +41,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         schema: HouseholdDisplaySchema.array(),
         default: () => [],
         enabled: () => loggedIn.value,
-        errorMessage: 'Kunne ikke hente husstande'
+        errorMessage: HOUSEHOLD_WORDS.failed.households
     })
     const {
         data: households,
@@ -79,7 +84,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
             default: () => null,
             enabled: () => !!selectedHouseholdId.value,
             dependsOn: [householdsDataset],
-            errorMessage: 'Kunne ikke hente husstand',
+            errorMessage: HOUSEHOLD_WORDS.failed.household,
             // The page's getter keeps driving the choice; the gone household re-derives to my household
             notFound: {
                 recover: async () => {
@@ -87,8 +92,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
                     await refreshHouseholds()
                 },
                 retries: 1,
-                toast: notFoundToast(households, selectedHouseholdId, 'husstanden'),
-                message: () => getRandomEmptyMessageText('household')
+                toast: notFoundToast(households, selectedHouseholdId, HOUSEHOLD_WORDS.notFound),
+                message: () => getRandomEmptyMessageText('household', now.value)
             }
         }
     )
@@ -138,7 +143,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         return apiRequest(`/api/admin/household/${householdId}`, {
             schema: HouseholdDetailSchema,
             action: 'fetchHouseholdDetail',
-            errorMessage: `Kunne ikke hente husstand ${householdId}`
+            errorMessage: HOUSEHOLD_WORDS.failed.householdDetail(householdId)
         })
     }
 
@@ -146,9 +151,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const fetchCalendarFeed = (): Promise<string | null> =>
         apiRequest<string>('/api/calendar/feed', {action: 'fetchCalendarFeed'}).catch(() => null)
 
-    const preferencesUrl = (inhabitantId: number, adminBypass: boolean) => adminBypass
-        ? `/api/household/inhabitants/${inhabitantId}/preferences?adminBypass=true`
-        : `/api/household/inhabitants/${inhabitantId}/preferences`
+    const preferencesUrl = (inhabitantId: number) => `/api/household/inhabitants/${inhabitantId}/preferences`
 
     /**
      * Update inhabitant dinner preferences
@@ -156,21 +159,21 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param inhabitantId - ID of the inhabitant to update
      * @param preferences - WeekDayMap of DinnerMode preferences
      */
-    const updateInhabitantPreferences = async (inhabitantId: number, preferences: Record<string, string>, adminBypass = false) => {
+    const updateInhabitantPreferences = async (inhabitantId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean) => {
         console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}${adminBypass ? ' (admin bypass)' : ''}`)
 
-        const result = await useBookingsStore().writeBookings(() => apiRequest(preferencesUrl(inhabitantId, adminBypass), {
+        // The week map travels as it is; the endpoint serializes it (ADR-010)
+        const result = await useBookingsStore().writeBookings(() => apiRequest(preferencesUrl(inhabitantId), {
             method: 'POST',
-            body: { dinnerPreferences: preferences },
+            body: {dinnerPreferences: preferences},
+            query: adminBypassQuery(adminBypass),
             schema: InhabitantUpdateResponseSchema,
             action: 'updateInhabitantPreferences'
         }))
 
-        // Store result for persistent UI display
         lastPreferenceResult.value = result.scaffoldResult
         console.info(`🏠 > HOUSEHOLDS_STORE > Preferences updated for inhabitant ${inhabitantId}: ${formatScaffoldResult(result.scaffoldResult)}`)
 
-        // Refresh the selected household to get updated data
         if (selectedHouseholdId.value) {
             await refreshSelectedHousehold()
         }
@@ -184,8 +187,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param householdId - ID of the household
      * @param preferences - WeekDayMap of DinnerMode preferences to apply to all inhabitants
      */
-    const updateAllInhabitantPreferences = async (householdId: number, preferences: Record<string, string>, adminBypass = false) => {
-        // Get the household to access inhabitants
+    const updateAllInhabitantPreferences = async (householdId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean) => {
         const household = households.value.find(h => h.id === householdId)
         if (!household) throw new Error(`Household ${householdId} not found`)
 
@@ -197,9 +199,10 @@ export const useHouseholdsStore = defineStore("Households", () => {
         const results = await useBookingsStore().writeBookings(async () => {
             const responses = []
             for (const inhabitant of household.inhabitants) {
-                responses.push(await apiRequest(preferencesUrl(inhabitant.id, adminBypass), {
+                responses.push(await apiRequest(preferencesUrl(inhabitant.id), {
                     method: 'POST',
-                    body: { dinnerPreferences: preferences },
+                    body: {dinnerPreferences: preferences},
+                    query: adminBypassQuery(adminBypass),
                     schema: InhabitantUpdateResponseSchema,
                     action: 'updateAllInhabitantPreferences'
                 }))
@@ -215,7 +218,6 @@ export const useHouseholdsStore = defineStore("Households", () => {
         // Power mode updates a single household
         const aggregatedResult = {...sumScaffoldResults(results.map(r => r.scaffoldResult)), households: 1}
 
-        // Store result for persistent UI display
         lastPreferenceResult.value = aggregatedResult
         console.info(`🏠 > HOUSEHOLDS_STORE > Power mode complete: ${household.inhabitants.length} inhabitants, scaffold: ${formatScaffoldResult(aggregatedResult)}`)
 
@@ -223,16 +225,14 @@ export const useHouseholdsStore = defineStore("Households", () => {
     }
 
     /**
-     * What a save of the draft preferences would do, read without writing: the preview of each inhabitant the save
-     * writes, combined. One inhabitant, or every inhabitant of the household in power mode
+     * What a save of the draft preferences would do, read without writing: the dry run (GET) of each inhabitant the
+     * save writes, combined. One inhabitant, or every inhabitant of the household in power mode
      */
-    const previewPreferences = async (inhabitantIds: number[], preferences: Record<string, string>, adminBypass = false): Promise<ScaffoldResult> => {
-        console.info(`🏠 > HOUSEHOLDS_STORE > Previewing preferences for inhabitants ${inhabitantIds.join(', ')}${adminBypass ? ' (admin bypass)' : ''}`)
+    const previewPreferences = async (inhabitantIds: number[], preferences: WeekDayMap<DinnerMode>): Promise<ScaffoldResult> => {
+        console.info(`🏠 > HOUSEHOLDS_STORE > Previewing preferences for inhabitants ${inhabitantIds.join(', ')}`)
         // A preview writes nothing, so the previews run side by side where the saves run one after another
-        const responses = await Promise.all(inhabitantIds.map(inhabitantId => apiRequest(preferencesUrl(inhabitantId, adminBypass), {
-            method: 'POST',
-            body: {dinnerPreferences: preferences},
-            query: {preview: true},
+        const responses = await Promise.all(inhabitantIds.map(inhabitantId => apiRequest(preferencesUrl(inhabitantId), {
+            query: {dinnerPreferences: serializeWeekDayMap(preferences)},
             schema: InhabitantUpdateResponseSchema,
             action: 'previewPreferences'
         })))
@@ -250,26 +250,24 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     /**
      * Set or clear move-out date for a household
-     * Uses admin household update endpoint (POST /api/admin/household/:id)
+     * Uses the household update endpoint (POST /api/household/:id/update)
      * Triggers re-scaffolding of prebookings when moveOutDate changes (server-side)
      * @param householdId - ID of the household
      * @param moveOutDate - Date to set, or null to clear
      */
-    const setMoveOutDate = async (householdId: number, moveOutDate: Date | null, adminBypass = false) => {
+    const setMoveOutDate = async (householdId: number, moveOutDate: Date | null, adminBypass: boolean) => {
         console.info(`🏠 > HOUSEHOLDS_STORE > Setting moveOutDate for household ${householdId}: ${moveOutDate?.toISOString() ?? 'null'}`)
         const result = await useBookingsStore().writeBookings(() => apiRequest(`/api/household/${householdId}/update`, {
             method: 'POST',
             body: { moveOutDate },
-            query: {adminBypass},
+            query: adminBypassQuery(adminBypass),
             schema: HouseholdUpdateResponseSchema,
             action: 'setMoveOutDate'
         }))
 
-        // Store scaffold result for persistent UI display
         lastMoveOutResult.value = result.scaffoldResult
         console.info(`🏠 > HOUSEHOLDS_STORE > moveOutDate updated for household ${householdId}: ${formatScaffoldResult(result.scaffoldResult)}`)
 
-        // Refresh selected household to get updated data
         if (selectedHouseholdId.value === householdId) {
             await refreshSelectedHousehold()
         }
@@ -306,13 +304,14 @@ export const useHouseholdsStore = defineStore("Households", () => {
         await refreshHouseholds()
 
         const targetHousehold = households.value.find(h => h.id === targetHouseholdId)
-        const targetLabel = targetHousehold ? `${targetHousehold.shortName} (PBS ${targetHousehold.pbsId})` : `husstand ${targetHouseholdId}`
+        const movedWords = HOUSEHOLD_WORDS.toasts.moved
+        const targetLabel = targetHousehold ? movedWords.household(targetHousehold.shortName, targetHousehold.pbsId) : movedWords.goneHousehold(targetHouseholdId)
         const scaffoldSummary = formatResultLines(result.scaffoldResult, targetHousehold?.inhabitants.map(({id}) => id))
         const {BookingActionSchema} = useBookingValidation()
         const Action = BookingActionSchema.enum
         const hasOrderChanges = [Action.BOOK, Action.CANCEL, Action.RELEASE].some(action => result.scaffoldResult.totals[action] > 0)
 
-        toastSaved(`${result.inhabitant.name} ${result.inhabitant.lastName} flyttet til ${targetLabel}`, hasOrderChanges ? scaffoldSummary : undefined,
+        toastSaved(movedWords.title(result.inhabitant.name, result.inhabitant.lastName, targetLabel), hasOrderChanges ? scaffoldSummary : undefined,
             scaffoldToastLook(result.scaffoldResult).ui)
 
         return result
@@ -334,7 +333,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
         skipGoneId(householdChoice, householdId, resolveHouseholdId)
         await refreshHouseholds()
 
-        toastSaved('Husstand slettet', deleted ? `${deleted.shortName} · PBS ${deleted.pbsId}` : undefined)
+        const words = HOUSEHOLD_WORDS.toasts.deleted
+        toastSaved(words.title, deleted ? words.description(deleted.shortName, deleted.pbsId) : undefined)
     }
 
     /**
@@ -342,20 +342,15 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * move-out updates to prev owners at the same address (reuses setMoveOutDate).
      * Resolves null when a request fails; the request has already toasted it.
      */
-    const createHousehold = async (payload: {
-        pbsId: number
-        address: string
-        movedInDate: Date
-        heynaboId: number
-        name: string
-        prevOwnerMoveOutUpdates?: {id: number, moveOutDate: Date}[]
-    }): Promise<HouseholdDetail | null> => {
-        const {prevOwnerMoveOutUpdates = [], ...createBody} = payload
+    const createHousehold = async (
+        household: HouseholdCreate,
+        prevOwnerMoveOutUpdates: HouseholdMoveOut[]
+    ): Promise<HouseholdDetail | null> => {
         try {
-            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Creating household at ${payload.address} (PBS ${payload.pbsId})`)
+            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Creating household at ${household.address} (PBS ${household.pbsId})`)
             const created = await apiRequest<HouseholdDetail>('/api/admin/household', {
                 method: 'PUT',
-                body: createBody,
+                body: household,
                 action: 'createHousehold'
             })
             console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Created household ${created.id} at ${created.address}`)
@@ -365,7 +360,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
             }
 
             await refreshHouseholds()
-            toastSaved('Husstand oprettet', `${created.shortName} · PBS ${created.pbsId}`)
+            const words = HOUSEHOLD_WORDS.toasts.created
+            toastSaved(words.title, words.description(created.shortName, created.pbsId))
             return created
         } catch {
             return null

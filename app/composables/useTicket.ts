@@ -1,6 +1,7 @@
-import {useBookingValidation, type TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, type TicketType, type OrderDisplay} from '~/composables/useBookingValidation'
 import type {TicketPrice, PortionTicket} from '~/composables/useTicketPriceValidation'
 import {calculateAgeOnDate} from '~/utils/date'
+import {SEASON_CONFIG} from '~/config/season'
 
 const {TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
@@ -33,13 +34,10 @@ export const ticketTypeCount = (type: TicketType, count: number): string =>
  */
 export const useTicket = () => {
     /**
-     * Get default ticket prices from app config
+     * The season config's default ticket prices
      * Used as fallback when no season ticket prices are available
      */
-    const getDefaultTicketPrices = (): TicketPrice[] => {
-        const appConfig = useAppConfig()
-        return appConfig.theslope?.defaultSeason?.ticketPrices ?? []
-    }
+    const getDefaultTicketPrices = (): TicketPrice[] => SEASON_CONFIG.defaultSeason.ticketPrices
 
     // The default price with the ticket's type and price names its portions, else its type's first default price
     const portionsOf = ({ticketType, price}: PortionTicket): number => {
@@ -49,6 +47,12 @@ export const useTicket = () => {
 
     // A price row read from the database, with the portions the row does not store
     const withPortions = <T extends PortionTicket>(ticketPrice: T): T & {portions: number} => ({...ticketPrice, portions: portionsOf(ticketPrice)})
+
+    // The price rows whose ticket takes no portion from the kitchen, asked by price row id
+    const takesNoPortionOf = (ticketPrices: TicketPrice[]): (ticketPriceId: number) => boolean => {
+        const noPortion = new Set(ticketPrices.filter(ticketPrice => ticketPrice.portions === 0).map(ticketPrice => ticketPrice.id))
+        return ticketPriceId => noPortion.has(ticketPriceId)
+    }
 
     /**
      * Determine ticket type based on age and season ticket prices
@@ -66,13 +70,13 @@ export const useTicket = () => {
      *
      * @param birthDate - Date of birth (null/undefined → ADULT)
      * @param ticketPrices - Season ticket prices with age limits (falls back to defaults if not provided)
-     * @param referenceDate - Date to calculate age on (default: today)
+     * @param referenceDate - Date to calculate age on (a dinner's date, or now)
      * @returns Ticket type enum value
      */
     const determineTicketType = (
         birthDate: Date | null | undefined,
-        ticketPrices?: TicketPrice[],
-        referenceDate: Date = new Date()
+        ticketPrices: TicketPrice[] | undefined,
+        referenceDate: Date
     ): typeof TicketType[keyof typeof TicketType] => {
         // Default to ADULT if no birthDate
         if (!birthDate) return TicketType.ADULT
@@ -103,13 +107,13 @@ export const useTicket = () => {
      *
      * @param birthDate - Date of birth (preferred for inhabitants)
      * @param ticketPrices - Season ticket prices
-     * @param referenceDate - Date to calculate age on (default: today)
+     * @param referenceDate - Date to calculate age on (a dinner's date, or now)
      * @param priceAtBooking - Frozen price from order (fallback for guests/orphans)
      */
     const resolveTicketType = (
         birthDate: Date | null,
-        ticketPrices?: TicketPrice[],
-        referenceDate?: Date,
+        ticketPrices: TicketPrice[] | undefined,
+        referenceDate: Date,
         priceAtBooking?: number | null
     ): TicketType => {
         const resolved = resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
@@ -126,8 +130,8 @@ export const useTicket = () => {
      */
     const groupInhabitantsByTicketCategory = <T extends {birthDate?: Date | null}>(
         inhabitants: T[],
-        ticketPrices?: TicketPrice[],
-        referenceDate?: Date
+        ticketPrices: TicketPrice[] | undefined,
+        referenceDate: Date
     ) => {
         const classified = inhabitants.map(inhabitant => ({
             ...inhabitant,
@@ -159,6 +163,10 @@ export const useTicket = () => {
         return ticketPrices.find(tp => tp.ticketType === ticketType)
     }
 
+    // The season's price row an order or a place on the waiting list holds
+    const findTicketPriceById = (ticketPriceId: number | null, ticketPrices: TicketPrice[]): TicketPrice | undefined =>
+        ticketPrices.find(ticketPrice => ticketPrice.id === ticketPriceId)
+
     /**
      * Resolve a TicketPrice using available information in priority order:
      * 1. birthDate → determineTicketType → find cheapest price for that type
@@ -174,7 +182,7 @@ export const useTicket = () => {
      * @param birthDate - Date of birth (preferred, determines ticket type by age)
      * @param priceAtBooking - Frozen price from existing order (fallback when no birthDate)
      * @param ticketPrices - Season ticket prices to search (must be sorted by price asc)
-     * @param referenceDate - Date to calculate age on (default: today)
+     * @param referenceDate - Date to calculate age on; without it the price decides
      * @returns Matching TicketPrice or undefined if no prices available
      */
     const resolveTicketPrice = (
@@ -186,7 +194,7 @@ export const useTicket = () => {
         if (!ticketPrices?.length) return undefined
 
         // Priority 1: birthDate → ticketType → cheapest price for type
-        if (birthDate) {
+        if (birthDate && referenceDate) {
             const ticketType = determineTicketType(birthDate, ticketPrices, referenceDate)
             const match = findTicketPriceByType(ticketType, ticketPrices)
             if (match) return match
@@ -201,6 +209,27 @@ export const useTicket = () => {
         // Fallback: ADULT price, then last available price
         return findTicketPriceByType(TicketType.ADULT, ticketPrices) ?? ticketPrices.at(-1)
     }
+
+    /**
+     * The price row a person holds on a dinner: a booked order's own row whatever the person's age (by its id, else by
+     * its frozen price when the row is gone), else the row for the person's age on the dinner's date, as the save prices it
+     */
+    const resolveTicketPriceOn = (
+        birthDate: Date | null,
+        order: OrderDisplay | null | undefined,
+        ticketPrices: TicketPrice[],
+        dinnerDate: Date
+    ): TicketPrice | undefined => order
+        ? findTicketPriceById(order.ticketPriceId, ticketPrices) ?? resolveTicketPrice(null, order.priceAtBooking, ticketPrices)
+        : resolveTicketPrice(birthDate, undefined, ticketPrices, dinnerDate)
+
+    /** The first of the sorted dinners at another ticket type than the dinner before it: the birthday crosses an age limit */
+    const ticketTypeChangeOf = (birthDate: Date | null | undefined, ticketPrices: TicketPrice[]) =>
+        (dinnerDates: Date[]): {date: Date, ticketType: TicketType} | null => {
+            if (!birthDate) return null
+            const days = dinnerDates.map(date => ({date, ticketType: determineTicketType(birthDate, ticketPrices, date)}))
+            return days.find((day, index) => index > 0 && day.ticketType !== days[index - 1]!.ticketType) ?? null
+        }
 
     /**
      * Convert price from øre to DKK (integer)
@@ -221,9 +250,13 @@ export const useTicket = () => {
         resolveTicketType,
         groupInhabitantsByTicketCategory,
         findTicketPriceByType,
+        findTicketPriceById,
         resolveTicketPrice,
+        resolveTicketPriceOn,
+        ticketTypeChangeOf,
         portionsOf,
         withPortions,
+        takesNoPortionOf,
         convertPriceToDecimalFormat,
         formatPrice
     }

@@ -42,6 +42,7 @@ which patterns are shared. A component's own layout lives in its header mockup a
 | `COLOR`, `NOISE` | a Nuxt UI `color` prop; a Nuxt UI `variant` prop read as an emphasis ladder |
 | `TEXT`, `BG`, `BORDER`, `RING` | ink, surfaces, edges and rings: shared rungs, single-owner values named by their owner, family rungs |
 | `TYPOGRAPHY`, `LAYOUTS`, `SIZES`, `ICONS` | text styles, layout classes, responsive sizes, icon names |
+| `IMG` | brand and service images (the Heynabo logo), on a UAvatar or a UButton avatar |
 | `BUTTONS`, `ALERTS` | button kinds and alert kinds; a toggle kind takes its open state, a modifier spreads after a kind |
 | `COMPONENTS` | one key per component or shared element that owns a layout, named after it; the keys inside name the parts its header mockup draws |
 | the calendar tokens | days, pickers, countdowns, one palette per calendar surface |
@@ -95,12 +96,14 @@ site that adds to a kind's `ui` merges on top of it.
 The empty state renders in the `UTable` `#empty` slot. A table bound to a dataset that reloads binds that dataset's `loading`: UTable's loading bar runs under the column headers while the rows stay. Its `#loading` slot, the spinning sync glyph and a line of text from the table tokens, fills a table that has no rows yet, so the empty state shows only once the data has answered. `COMPONENTS.table.ui` cells wrap between words and keep words, dates
 and e-mails whole; a dense variant per surface sits beside it (`table.catalogUi`, `table.bookingUi`, …). A data table wider
 than a phone scrolls inside its own box; `table.historyUi` keeps each row on one line, so a history scrolls sideways on a
-phone. A column sizes through its `meta.class` (`{th, td}`); `COMPONENTS.masterDetail` holds the master table's
+phone. A history cell that lists many names (Husstand in `TicketChanges.vue`) shows the first two and a link counting
+the rest; opened, the list wraps inside the cell's capped width while the other cells keep their line. A column sizes through its `meta.class` (`{th, td}`); `COMPONENTS.masterDetail` holds the master table's
 `primaryColumn` and `compactColumn`. A row that spans the table, the moment line in `TicketChanges.vue`, sets the first
 column's `meta.colspan.td` to the column count and binds `table.spannedCell` on the other cells. An `#expanded` row
 spans every column: in a table that scrolls sideways, its content keeps to the part of the box in view, sticky at the
-cell's inset and no wider than the box (`table.gridUi` makes its box a size container on a phone,
-`bookingGrid.expandedPanel` holds the booking grid's guest form).
+cell's inset and no wider than the box (`table.gridUi` and `table.adminUsersUi` make their box a size container on a
+phone; `bookingGrid.expandedPanel` holds the booking grid's guest form, `adminUsers.expandedPanel` the user's profile
+card).
 
 ### Choice groups
 
@@ -111,7 +114,8 @@ them takes `TYPOGRAPHY.sectionSubheading`.
 
 A `UTabs` whose triggers render `CookingTeamBadges` binds `COMPONENTS.teamTabs`: the link variant, triggers that keep their
 full label, and a horizontal row that scrolls sideways when more tabs than fit. On a phone the trigger stacks `ICONS.team`
-over the compact badge (`MyTeamSelector`, `COMPONENTS.myTeamSelector`).
+over the compact badge (`MyTeamSelector`, `COMPONENTS.myTeamSelector`). A team on view the person is not on rides as
+the last tab, with "Ikke dit hold" on its name's line (`COMPONENTS.visitBadge`), and counts toward the vertical list.
 
 ### A cancelled dinner
 
@@ -119,6 +123,25 @@ A cancelled dinner reads as a past day struck through on every member surface: t
 with the cancelled strike (`CALENDAR.day`), a ticket and a grid cell's mode badge bind the cancelled faces of their own
 tokens, built from the same past-day colours and strike, the grid's column header carries the dinner state badge in the
 lock chip's place, and the booking form and the chef's card wear the cancel corner ribbon (`getRibbonClasses`).
+
+### Master-detail pages
+
+A page or tab that sets a calendar or a list beside the item it opens binds `LAYOUTS.masterDetailPage`: on `UPage :ui`, or
+on its own containers through the same `root`, `left` and `center` slots. A phone stacks the master over the detail; from
+md the master takes a third of the row, never narrower than a week of the calendar's day circles, and the detail takes the
+rest, never wider. The calendar's day circle steps up a size at lg. A master table whose detail docks under its row on a
+phone mounts the detail through `COMPONENTS.masterDetail`.
+
+### Faces
+
+A face in `UserListItem` rings from md in a colour already on the surface its faces sit on: the caller passes the
+surface's key in `COMPONENTS.userListItem.ring`, built on the `RING` family. On a phone no face rings.
+
+### A printed page
+
+A page made to print renders in light mode whatever the member's mode, through `colorMode: 'light'` in its page meta,
+and sits on `BG.page`, the page surface the contrast gate measures. The allergy poster
+(`app/pages/admin/allergies/pdf.vue`, `COMPONENTS.allergyPoster`) is the reference.
 
 ### Component layouts
 

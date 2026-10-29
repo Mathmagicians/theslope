@@ -10,7 +10,7 @@ import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {mountWithTooltipProvider, mountedStore, resetStores, registerEmptyStoreEndpoints, holdEndpoint, findAllLoadingRows, untilTrue, isTableLoading, findByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, resetStores, registerEmptyStoreEndpoints, holdEndpoint, findAllLoadingRows, untilTrue, isTableLoading, findByTestId, cellsByHeader} from '~~/tests/component/testHelpers'
 
 // The test environment has no router to land a deep link on, and no session cookie
 const {mockRoute, mockNavigateTo, landNavigation, useRoute, session, useUserSession} = await vi.hoisted(async () => {
@@ -107,8 +107,7 @@ describe('AdminEconomy - an opened invoice while its transactions load', () => {
     })
 })
 
-// The upcoming orders table binds its dataset's loading: a correction's re-read runs the loading bar while the rows stay
-describe('AdminEconomy - the upcoming orders while a correction re-reads them', () => {
+describe('AdminEconomy - the upcoming orders', () => {
     const season = {...SeasonFactory.defaultSeason('admin-economy'), id: 7}
     const dinnerEvent = {id: 31, date: new Date(2030, 0, 7), menuTitle: 'Lasagne'}
     const upcoming = [OrderFactory.defaultOrder('admin-economy', {id: 501, dinnerEventId: dinnerEvent.id, dinnerEvent})]
@@ -116,6 +115,12 @@ describe('AdminEconomy - the upcoming orders while a correction re-reads them', 
     const upcomingTable = (wrapper: Wrapper) =>
         wrapper.findAllComponents({name: 'EconomyTable'}).find(table => table.props('loadingText') === 'Henter fremtidige bestillinger')!
     const dinnerRow = (wrapper: Wrapper) => findByTestId(wrapper, `future-orders-expand-${dinnerEvent.id}`)
+    const mountLoaded = async () => {
+        const wrapper = await mountWithTooltipProvider(AdminEconomy)
+        await untilTrue(() => mountedStore(usePlanStore).isPlanStoreReady && mountedStore(useBookingsStore).isUpcomingOrdersLoaded)
+        await nextTick()
+        return wrapper
+    }
     const unregister: Array<() => void> = []
 
     beforeEach(() => {
@@ -136,12 +141,16 @@ describe('AdminEconomy - the upcoming orders while a correction re-reads them', 
         unregister.splice(0).forEach(remove => remove())
     })
 
+    it('GIVEN the upcoming orders have loaded THEN the dinner\'s row reads the dinner\'s menu title under Menu', async () => {
+        const wrapper = await mountLoaded()
+
+        expect(cellsByHeader(upcomingTable(wrapper)).Menu).toBe(dinnerEvent.menuTitle)
+    })
+
+    // The upcoming orders table binds its dataset's loading: a correction's re-read runs the loading bar while the rows stay
     it('GIVEN the upcoming orders have loaded WHEN a correction saves THEN its re-read runs the table\'s loading bar while the dinner\'s row stays, until the orders land', async () => {
-        const wrapper = await mountWithTooltipProvider(AdminEconomy)
+        const wrapper = await mountLoaded()
         const store = mountedStore(useBookingsStore)
-        const plan = mountedStore(usePlanStore)
-        await untilTrue(() => plan.isPlanStoreReady && store.isUpcomingOrdersLoaded)
-        await nextTick()
         expect(isTableLoading(upcomingTable(wrapper))).toBe(false)
         expect(dinnerRow(wrapper).exists()).toBe(true)
 

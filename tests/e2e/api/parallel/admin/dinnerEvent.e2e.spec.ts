@@ -4,14 +4,17 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import type {Season} from '~/composables/useSeasonValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 const Action = useBookingValidation().BookingActionSchema.enum
 
 const {validatedBrowserContext, getSessionUserInfo} = testHelpers
 const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
+const {findTicketPriceByType} = useTicket()
 
 // Variables to store for cleanup and test data
 let testSeasonId: number
@@ -58,9 +61,9 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
         expect(testSeason.ticketPrices.length).toBe(4) // BABY (free), BABY (hungry), CHILD, ADULT
 
-        const adultPrice = testSeason.ticketPrices.find(tp => tp.ticketType === TicketType.ADULT)
+        const adultPrice = findTicketPriceByType(TicketType.ADULT, testSeason.ticketPrices)
         expect(adultPrice).toBeDefined()
-        expect(adultPrice!.price).toBe(5000)
+        expect(adultPrice!.price).toBe(findTicketPriceByType(TicketType.ADULT, TicketFactory.defaultTicketPrices())!.price)
         expect(adultPrice!.id).toBeDefined()
 
         // AND: Create tickets for the dinner event using database ticket price
@@ -107,7 +110,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(ticket!.inhabitant.name).toBeDefined()
         expect(ticket!.ticketPrice?.id).toBe(adultPrice!.id)
         expect(ticket!.ticketPrice?.ticketType).toBe(TicketType.ADULT)
-        expect(ticket!.ticketPrice?.price).toBe(5000)
+        expect(ticket!.ticketPrice?.price).toBe(adultPrice!.price)
         // No manual cleanup needed - cascade delete handles orders when season is deleted
     })
 
@@ -184,13 +187,13 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         const inhabitant = inhabitants[0]!
         const allergyType = await AllergyFactory.createAllergyType(context)
         testAllergyTypeIds.push(allergyType.id)
-        await AllergyFactory.createAllergy(context, AllergyFactory.defaultAllergyData(inhabitant.id, allergyType.id))
+        await AllergyFactory.createAllergy(context, AllergyFactory.defaultAllergyData(inhabitant.id, allergyType.id), 201, true)
 
         const dinnerEvent = await DinnerEventFactory.createDinnerEvent(context, {
             ...DinnerEventFactory.defaultDinnerEvent(),
             seasonId: testSeasonId
         })
-        const adultPrice = testSeason.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+        const adultPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, testSeason.ticketPrices)!
         // Admin session doesn't belong to the test household → adminBypass
         await OrderFactory.createOrder(context, {
             householdId: household.id,

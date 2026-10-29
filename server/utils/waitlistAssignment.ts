@@ -1,6 +1,6 @@
 import {useWaitlist} from '~/composables/useWaitlist'
 import {createError} from 'h3'
-import {useBookingValidation, type CreateOrdersResult, type DinnerEventDetail, type DinnerEventDisplay, type TicketSale, type TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, CLOSED_DINNER_STATES, type CreateOrdersResult, type DinnerEventDetail, type DinnerEventDisplay, type DinnerState, type TicketSale, type TicketType} from '~/composables/useBookingValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import {
     PlacementRecovery, type GrabbedWaitlistEntry, type TicketWaitlistCreate, type TicketWaitlistDisplay, type WaitlistAssigned,
@@ -25,7 +25,7 @@ export interface DinnerForWaitlist {
     seasonId: number
     ticketPrices: TicketPrice[]
     chefId: number | null
-    state: DinnerEventDetail['state']
+    state: DinnerState
 }
 
 // One step of a placement walk: the line stops when another run holds the entry or nothing is for sale
@@ -36,29 +36,24 @@ const MOVE_ON = {stop: false, placed: null} as const
 const placingLease = () => useWaitlist().placingLease(new Date(), useAppConfig().theslope.waitlistPlacingLeaseMinutes)
 
 /** The dinner, its season's ticket prices and the label the mails use; a dinner outside a season it was read with has none */
-export const dinnerForWaitlist = (
-    dinner: Pick<DinnerEventDisplay, 'id' | 'date' | 'menuTitle' | 'chefId' | 'state' | 'seasonId'>, season: Pick<Season, 'id' | 'ticketPrices'> | null | undefined
-): DinnerForWaitlist => {
+export const dinnerForWaitlist = (dinner: DinnerEventDisplay, season: Season | null | undefined): DinnerForWaitlist => {
     if (!dinner.seasonId || season?.id !== dinner.seasonId) throw new Error(`${LOG} Season ${dinner.seasonId} of dinner ${dinner.id} not found`)
     return {
-        context: {dinnerEventId: dinner.id, date: dinner.date, menuTitle: dinner.menuTitle},
+        context: {dinnerEventId: dinner.id, date: dinner.date, menuTitle: dinner.menuTitle, cookingTeamId: dinner.cookingTeamId},
         seasonId: season.id,
         ticketPrices: season.ticketPrices,
-        chefId: dinner.chefId ?? null,
+        chefId: dinner.chefId,
         state: dinner.state
     }
 }
 
 /** A cancelled or consumed dinner takes no booking: no order, no place on its waiting list, no sale */
-export const isClosedDinner = (dinner: Pick<DinnerForWaitlist, 'state'>): boolean => {
-    const {DinnerStateSchema} = useBookingValidation()
-    return dinner.state === DinnerStateSchema.enum.CONSUMED || dinner.state === DinnerStateSchema.enum.CANCELLED
-}
+export const isClosedDinner = (state: DinnerState): boolean => CLOSED_DINNER_STATES.includes(state)
 
 // A wish joins the queue of a dinner still to come, booked by a member
-const assertJoinable = (request: TicketWaitlistCreate, dinner: Pick<DinnerForWaitlist, 'state'>): void => {
-    if (isClosedDinner(dinner)) {
-        throw createError({statusCode: 400, message: `Dinner event ${request.dinnerEventId} is ${dinner.state}`})
+const assertJoinable = (request: TicketWaitlistCreate, dinnerState: DinnerState): void => {
+    if (isClosedDinner(dinnerState)) {
+        throw createError({statusCode: 400, message: `Dinner event ${request.dinnerEventId} is ${dinnerState}`})
     }
     if (!request.order.bookedByUserId) {
         throw createError({statusCode: 400, message: `A waiting entry on dinner ${request.dinnerEventId} needs its booking member`})
@@ -67,28 +62,28 @@ const assertJoinable = (request: TicketWaitlistCreate, dinner: Pick<DinnerForWai
 
 /** The claims of a dinner that found no ticket for sale: the wishes join its queue at their frozen prices in one write, in join order */
 export async function joinWaitlist(
-    d1Client: D1Database, joins: WaitlistJoin[], dinner: Pick<DinnerForWaitlist, 'state'>, audit: WaitlistAuditContext
+    d1Client: D1Database, joins: WaitlistJoin[], dinnerState: DinnerState, audit: WaitlistAuditContext
 ): Promise<TicketWaitlistDisplay[]> {
-    for (const {entry} of joins) assertJoinable(entry, dinner)
+    for (const {entry} of joins) assertJoinable(entry, dinnerState)
     return createWaitlistEntries(d1Client, joins, audit)
 }
 
 /**
  * Joins without the write: the entries the queue would hold at the end of their lines, in join order, on the queue as
- * the caller reads it. Each entry carries the id and the join time the caller stamps on it.
+ * the caller reads it. Each entry is the one the caller makes of its request, as the write would make it.
  */
 export function previewJoinWaitlist(
-    queue: TicketWaitlistDisplay[], requests: TicketWaitlistCreate[], dinner: Pick<DinnerForWaitlist, 'state'>,
-    stampOf: (index: number) => Pick<TicketWaitlistDisplay, 'id' | 'createdAt'>
+    queue: TicketWaitlistDisplay[], requests: TicketWaitlistCreate[], dinnerState: DinnerState,
+    entryOf: (request: TicketWaitlistCreate, index: number) => TicketWaitlistDisplay
 ): TicketWaitlistDisplay[] {
     return requests.reduce<TicketWaitlistDisplay[]>((entries, request, index) => {
-        assertJoinable(request, dinner)
+        assertJoinable(request, dinnerState)
         // The database's unique index holds one regular entry per inhabitant and dinner
         const queued = [...queue, ...entries].some(entry => entry.dinnerEventId === request.dinnerEventId && entry.inhabitantId === request.inhabitantId && !entry.isGuestTicket)
         if (!request.isGuestTicket && queued) {
             throw createError({statusCode: 409, message: `Inhabitant ${request.inhabitantId} already queues for dinner ${request.dinnerEventId}`})
         }
-        return [...entries, {...request, ...stampOf(index), placingAt: null, placingOrderId: null}]
+        return [...entries, entryOf(request, index)]
     }, [])
 }
 
@@ -166,7 +161,10 @@ const placeEntry = async (
     await removePlacedWaitlistEntry(d1Client, entry.id)
     return {
         stop: false,
-        placed: {entryId: entry.id, inhabitantId: entry.inhabitantId, isGuestTicket: entry.isGuestTicket, portions, orderId, ticketPriceId: entry.order.ticketPriceId}
+        placed: {
+            entryId: entry.id, inhabitantId: entry.inhabitantId, isGuestTicket: entry.isGuestTicket, portions, orderId, ticketPriceId: entry.order.ticketPriceId,
+            dinnerMode: entry.order.dinnerMode
+        }
     }
 }
 
@@ -181,7 +179,7 @@ export async function assignWaitlistPortions(
 ): Promise<WaitlistAssignmentResult> {
     const {resolveWaitlistAssignment, portionsOfEntryFor} = useWaitlist()
     const dinnerEventId = dinnerEvent.id
-    if (isClosedDinner(dinnerEvent)) {
+    if (isClosedDinner(dinnerEvent.state)) {
         const waiting = (await fetchWaitlistForDinners(d1Client, [dinnerEventId])).length
         console.info(`${LOG} Dinner ${dinnerEventId} is ${dinnerEvent.state}: ${supplyPortions} portions place nobody, ${waiting} entries keep their place`)
         return {dinnerEventId, supplyPortions, assigned: [], portionsUsed: 0, waiting, waitlistTicketsSold: []}
@@ -216,11 +214,15 @@ export async function assignWaitlistPortions(
 // Sells the oldest released ticket of the entry's type to the entry: grab the entry with the ticket, claim the ticket,
 // remove the entry. A ticket another buyer took first hands the entry back to its place, and the next ticket for sale is tried
 const sellToEntry = async (d1Client: D1Database, entry: TicketWaitlistDisplay, ticketType: TicketType): Promise<PlacementStep<TicketSale>> => {
+    const {OrderAuditSourceSchema} = useBookingValidation()
     const releasedOrderId = await findReleasedOrderId(d1Client, entry.dinnerEventId, ticketType)
     if (releasedOrderId === null || !await grabWaitlistEntry(d1Client, entry.id, new Date(), releasedOrderId)) return STOP
     let claimed: ClaimedOrder | null
     try {
-        claimed = await claimReleasedOrder(d1Client, releasedOrderId, entry.inhabitantId, entry.order.bookedByUserId ?? null, entry.order.dinnerMode, entry.isGuestTicket)
+        claimed = await claimReleasedOrder(
+            d1Client, releasedOrderId, entry.inhabitantId, entry.order.bookedByUserId ?? null, entry.order.dinnerMode, entry.isGuestTicket,
+            OrderAuditSourceSchema.enum['waitlist-assignment']
+        )
     } catch (error) {
         await leaveWhenAlreadyPlaced(d1Client, entry, error)
         return MOVE_ON
@@ -234,8 +236,8 @@ const sellToEntry = async (d1Client: D1Database, entry: TicketWaitlistDisplay, t
     return {
         stop: false,
         placed: {
-            dinnerEventId: entry.dinnerEventId, ticketPriceId: claimed.ticketPriceId,
-            buyerInhabitantId: entry.inhabitantId, buyerHouseholdId: entry.order.householdId, sellerHouseholdId: claimed.sellerHouseholdId,
+            dinnerEventId: entry.dinnerEventId, ticketPriceId: claimed.ticketPriceId, orderId: releasedOrderId, dinnerMode: entry.order.dinnerMode,
+            isGuestTicket: entry.isGuestTicket, buyerInhabitantId: entry.inhabitantId, buyerHouseholdId: entry.order.householdId, sellerHouseholdId: claimed.sellerHouseholdId,
             sellerInhabitantId: claimed.sellerInhabitantId
         }
     }
@@ -249,7 +251,7 @@ const sellToEntry = async (d1Client: D1Database, entry: TicketWaitlistDisplay, t
  * The caller names open dinners only: the scaffold, which reads the dinners' states, drops the closed ones.
  */
 export async function sellTicketsToWaitlist(
-    d1Client: D1Database, dinnerEventIds: number[], ticketPrices: Pick<TicketPrice, 'id' | 'ticketType' | 'portions'>[]
+    d1Client: D1Database, dinnerEventIds: number[], ticketPrices: TicketPrice[]
 ): Promise<WaitlistPlacementOutcomes> {
     const {placementLines, ticketTypeOfEntry, portionsOfEntryFor} = useWaitlist()
     if (dinnerEventIds.length === 0) return {waitlistTicketsSold: [], waitlistPortionsAssigned: []}

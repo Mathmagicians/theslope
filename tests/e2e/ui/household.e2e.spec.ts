@@ -1,4 +1,4 @@
-import {test, expect, type Page} from '@playwright/test'
+import {test, expect, type Page} from '~~/tests/e2e/uiTest'
 import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
@@ -6,7 +6,7 @@ import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {BookingViewSchema} from '~/composables/useBookingView'
 
 const {adminUIFile, memberUIFile} = authFiles
-const {validatedBrowserContext, gotoHydrated, pollUntil, salt, temporaryAndRandom, doScreenshot, getSessionUserInfo, waitForApi} = testHelpers
+const {validatedBrowserContext, gotoHydrated, salt, temporaryAndRandom, doScreenshot, getSessionUserInfo, waitForApi} = testHelpers
 
 test.describe('Household tab navigation', () => {
     // Unique salt per worker to avoid parallel test conflicts
@@ -30,14 +30,14 @@ test.describe('Household tab navigation', () => {
     const buildUrl = (tabPath: string) => `/household/${encodeURIComponent(shortName)}/${tabPath}?pbs=${pbsId}`
 
     const waitForTabVisible = async (page: Page, tab: Tab) => {
-        await pollUntil(() => page.locator(tab.selector).isVisible(), visible => visible)
+        await expect(page.locator(tab.selector)).toBeVisible()
     }
 
     /**
      * Navigate to tab and wait for it to be visible
      */
     const navigateToTab = async (page: Page, tab: Tab) => {
-        await page.goto(buildUrl(tab.path))
+        await gotoHydrated(page, buildUrl(tab.path))
         await expect(page).toHaveURL(buildUrl(tab.path))
         await waitForTabVisible(page, tab)
     }
@@ -65,9 +65,9 @@ test.describe('Household tab navigation', () => {
 
 
     test('Base URL redirects to default tab', async ({page}) => {
-        await page.goto(`/household/${encodeURIComponent(shortName)}?pbs=${pbsId}`)
+        await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}?pbs=${pbsId}`)
 
-        await pollUntil(async () => page.url(), url => url.includes(buildUrl(defaultTab.path)))
+        await expect(page).toHaveURL(url => url.href.includes(buildUrl(defaultTab.path)))
 
         // Screenshot before waiting for component (debug flakiness)
         await page.screenshot({ path: `test-results/base-url-redirect-before-wait-${Date.now()}.png`, fullPage: true })
@@ -76,9 +76,9 @@ test.describe('Household tab navigation', () => {
     })
 
     test('Invalid tab redirects to default tab', async ({page}) => {
-        await page.goto(buildUrl('unicorn'))
+        await gotoHydrated(page, buildUrl('unicorn'))
 
-        await pollUntil(async () => page.url(), url => url.includes(buildUrl(defaultTab.path)))
+        await expect(page).toHaveURL(url => url.href.includes(buildUrl(defaultTab.path)))
         await waitForTabVisible(page, defaultTab)
     })
 
@@ -94,7 +94,7 @@ test.describe('Household tab navigation', () => {
 
     for (const tab of tabs) {
         test(`Tab "${tab.name}" at /${tab.path} is the selected tab`, async ({page}) => {
-            await page.goto(buildUrl(tab.path))
+            await gotoHydrated(page, buildUrl(tab.path))
             await waitForTabVisible(page, tab)
 
             const activeTab = page.locator('button[role="tab"]').filter({hasText: tab.name}).first()
@@ -137,19 +137,19 @@ test.describe('Household PBS query param resolution', () => {
     })
 
     test('Valid ?pbs= loads that household', async ({page}) => {
-        await page.goto(`/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}`)
+        await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}`)
 
-        await pollUntil(() => page.locator('[data-testid="household-bookings"]').isVisible(), visible => visible)
+        await expect(page.locator('[data-testid="household-bookings"]')).toBeVisible()
 
         expect(page.url()).toContain(`pbs=${pbsId}`)
     })
 
     test('Missing ?pbs= defaults to user own household', async ({page}) => {
-        await page.goto(`/household/${encodeURIComponent(myShortName)}/bookings`)
+        await gotoHydrated(page, `/household/${encodeURIComponent(myShortName)}/bookings`)
 
-        await pollUntil(() => page.locator('[data-testid="household-bookings"]').isVisible(), visible => visible)
+        await expect(page.locator('[data-testid="household-bookings"]')).toBeVisible()
 
-        await pollUntil(async () => page.url(), url => url.includes(`pbs=${myPbsId}`))
+        await expect(page).toHaveURL(url => url.href.includes(`pbs=${myPbsId}`))
     })
 
     const invalidPbsCases = [
@@ -159,11 +159,11 @@ test.describe('Household PBS query param resolution', () => {
 
     for (const {description, pbs} of invalidPbsCases) {
         test(`${description} ?pbs= falls back to user own household`, async ({page}) => {
-            await page.goto(`/household/${encodeURIComponent(myShortName)}/bookings?pbs=${pbs}`)
+            await gotoHydrated(page, `/household/${encodeURIComponent(myShortName)}/bookings?pbs=${pbs}`)
 
-            await pollUntil(() => page.locator('[data-testid="household-bookings"]').isVisible(), visible => visible)
+            await expect(page.locator('[data-testid="household-bookings"]')).toBeVisible()
 
-            await pollUntil(async () => page.url(), url => url.includes(`pbs=${myPbsId}`))
+            await expect(page).toHaveURL(url => url.href.includes(`pbs=${myPbsId}`))
         })
     }
 })

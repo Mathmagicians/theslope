@@ -8,6 +8,7 @@ assets = { directory = "./.output/public/", binding = "ASSETS" }
 
 [vars]
 NUXT_PUBLIC_HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
+SHOULD_SEND_BOOKING_EMAILS_FLAG = "true"
 
 [limits]
 # Increase the default CPU time limit to 60s
@@ -50,6 +51,7 @@ routes = [
 [env.dev.vars]
 DEPLOY_URL = "https://dev.skraaningen.dk"
 NUXT_PUBLIC_HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
+SHOULD_SEND_BOOKING_EMAILS_FLAG = "false"
 
 [[env.dev.d1_databases]]
 binding = "DB"
@@ -80,6 +82,7 @@ routes = [
 [env.prod.vars]
 DEPLOY_URL = "https://www.skraaningen.dk"
 NUXT_PUBLIC_HEY_NABO_API = "https://skraaningeni.spaces.heynabo.com/api"
+SHOULD_SEND_BOOKING_EMAILS_FLAG = "false"
 
 [[env.prod.d1_databases]]
 binding = "DB"

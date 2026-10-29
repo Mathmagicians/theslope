@@ -36,9 +36,7 @@ const isLoading = computed(() => status.value === 'pending')
 const getActionConfig = (action: string): OrderActionLabel =>
     (ORDER_ACTION_LABELS as Record<string, OrderActionLabel>)[action] ?? {icon: ICONS.info, color: COLOR.neutral, label: action}
 
-const formatTimestamp = (date: Date) => date.toLocaleString('da-DK', {
-    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-})
+const formatTimestamp = (date: Date) => formatDate(date, DATE_SETTINGS.DATE_TIME_MASK)
 
 // Transform history to UTimeline items
 const timelineItems = computed(() =>

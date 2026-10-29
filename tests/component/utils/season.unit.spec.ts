@@ -1,4 +1,4 @@
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
+import {describe, expect, it} from 'vitest'
 import {z} from 'zod'
 import {
     calculateDeadlineUrgency,
@@ -23,9 +23,10 @@ import {
     sortSeasonsByActivePriority,
     splitDinnerEvents,
     sortDinnerEventsByTemporal,
-    getEventsForGridView
+    getEventsForGridView,
+    TEMPORAL_CATEGORY
 } from '~/utils/season'
-import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import {SEASON_STATUS} from '~/config/seasonWords'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import type {DateRange, WeekDay, WeekDayMap} from '~/types/dateTypes'
 import {createDateInTimezone, getPeriodBoundary} from '~/utils/date'
@@ -53,6 +54,9 @@ const createEvent = (id: number, date: Date, teamId: number | null = null) => ({
     cookingTeamId: teamId,
     seasonId: 1
 })
+
+// The first dinner of a roster's events, where its rotation starts
+const firstDayOf = (events: ReturnType<typeof createEvent>[]) => new Date(Math.min(...events.map(event => event.date.getTime())))
 
 describe('computeCookingDates', () => {
     it('should return dates for cooking days: Mon-Fri in one week', () => {
@@ -494,7 +498,7 @@ describe('computeTeamAssignmentsForEvents', () => {
         }
     ])('should assign teams in round-robin: $scenario', ({ teams, cookingDays, events, consecutiveCookingDays, expectedAssignments }) => {
         // GIVEN: Teams with computed affinities
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, consecutiveCookingDays, events[0]!.date)
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, consecutiveCookingDays, firstDayOf(events))
 
         // WHEN: Assigning teams to events
         const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, consecutiveCookingDays, events)
@@ -513,16 +517,18 @@ describe('computeTeamAssignmentsForEvents', () => {
             createEvent(3, new Date(2025, 0, 10)),    // Fri
             createEvent(4, new Date(2025, 0, 13))     // Mon
         ]
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, events[0]!.date)
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, firstDayOf(events))
 
         // WHEN: Assigning teams with consecutiveCookingDays=2
         const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, 2, events)
 
         // THEN: Already assigned event is skipped but quota increments
-        expect(result[0]!.cookingTeamId).toBe(1)  // Event 1 → Team 1 (quota=1)
-        expect(result[1]!.cookingTeamId).toBe(99) // Event 2 → Unchanged (quota=2, rotates)
-        expect(result[2]!.cookingTeamId).toBe(2)  // Event 3 → Team 2 (new cycle)
-        expect(result[3]!.cookingTeamId).toBe(2)  // Event 4 → Team 2 (quota=1)
+        expect(result.map(event => event.cookingTeamId)).toEqual([
+            1,  // Event 1 → Team 1 (quota=1)
+            99, // Event 2 → Unchanged (quota=2, rotates)
+            2,  // Event 3 → Team 2 (new cycle)
+            2   // Event 4 → Team 2 (quota=1)
+        ])
     })
 
     it.each([
@@ -542,7 +548,7 @@ describe('computeTeamAssignmentsForEvents', () => {
         // GIVEN: Teams with computed affinities (if any)
         const cookingDays = createDefaultWeekdayMap([true, false, true, false, true, false, false])
         const teamsWithAffinities = teams.length > 0 && events.length > 0
-            ? computeAffinitiesForTeams(teams, cookingDays, 1, events[0]!.date)
+            ? computeAffinitiesForTeams(teams, cookingDays, 1, firstDayOf(events))
             : teams
 
         // WHEN: Assigning teams in edge case scenario
@@ -564,16 +570,18 @@ describe('computeTeamAssignmentsForEvents', () => {
             createEvent(2, new Date(2025, 0, 10)), // Fri Jan 10
             createEvent(3, new Date(2025, 0, 13))  // Mon Jan 13
         ]
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, events[0]!.date)
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, firstDayOf(events))
 
         // WHEN: Assigning teams with consecutiveCookingDays=2
         const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, 2, events, holidays)
 
         // THEN: Short holiday counts as ghost duty - rotation happens
-        expect(result[0]!.cookingTeamId).toBe(1) // Mon Jan 6 → Team 1 (quota=1)
-        // Holiday Wed Jan 8 → SHORT (1 day) → ghost duty → Team 1 quota=2, rotation triggers
-        expect(result[1]!.cookingTeamId).toBe(2) // Fri Jan 10 → Team 2 (new cycle, quota=1)
-        expect(result[2]!.cookingTeamId).toBe(2) // Mon Jan 13 → Team 2 (quota=2)
+        expect(result.map(event => event.cookingTeamId)).toEqual([
+            1, // Mon Jan 6 → Team 1 (quota=1)
+            // Holiday Wed Jan 8 → SHORT (1 day) → ghost duty → Team 1 quota=2, rotation triggers
+            2, // Fri Jan 10 → Team 2 (new cycle, quota=1)
+            2  // Mon Jan 13 → Team 2 (quota=2)
+        ])
     })
 
     it('should handle WEEK-OFF holidays (>= 7 days) by NOT incrementing quota (keeps weekday alignment)', () => {
@@ -591,17 +599,19 @@ describe('computeTeamAssignmentsForEvents', () => {
             createEvent(3, new Date(2025, 0, 17)), // Fri Jan 17
             createEvent(4, new Date(2025, 0, 20))  // Mon Jan 20
         ]
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, events[0]!.date)
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, firstDayOf(events))
 
         // WHEN: Assigning teams with consecutiveCookingDays=2
         const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, 2, events, holidays)
 
         // THEN: Week-off holiday does NOT advance counter - teams keep their weekday alignment
         // No ghost duties from week-off, so rotation starts fresh from first event
-        expect(result[0]!.cookingTeamId).toBe(1) // Mon Jan 13 → Team 1 (quota=1)
-        expect(result[1]!.cookingTeamId).toBe(1) // Wed Jan 15 → Team 1 (quota=2, rotation)
-        expect(result[2]!.cookingTeamId).toBe(2) // Fri Jan 17 → Team 2 (quota=1)
-        expect(result[3]!.cookingTeamId).toBe(2) // Mon Jan 20 → Team 2 (quota=2)
+        expect(result.map(event => event.cookingTeamId)).toEqual([
+            1, // Mon Jan 13 → Team 1 (quota=1)
+            1, // Wed Jan 15 → Team 1 (quota=2, rotation)
+            2, // Fri Jan 17 → Team 2 (quota=1)
+            2  // Mon Jan 20 → Team 2 (quota=2)
+        ])
     })
 
     it('should handle 8-day holiday as 1 week-off + 1 short day (partial ghost duty)', () => {
@@ -619,7 +629,7 @@ describe('computeTeamAssignmentsForEvents', () => {
             createEvent(3, new Date(2025, 0, 20)), // Mon Jan 20
             createEvent(4, new Date(2025, 0, 22))  // Wed Jan 22
         ]
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, events[0]!.date)
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, firstDayOf(events))
 
         // WHEN: Assigning teams with consecutiveCookingDays=2
         const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, 2, events, holidays)
@@ -627,10 +637,12 @@ describe('computeTeamAssignmentsForEvents', () => {
         // THEN: Mon Jan 13 (8th day) counts as ghost duty for Team 1 (quota=1)
         // Week-off days (Jan 6, 8, 10) don't count
         // So Team 1 has 1 ghost duty, then first real event continues their quota
-        expect(result[0]!.cookingTeamId).toBe(1) // Wed Jan 15 → Team 1 (quota=2 after ghost, rotation)
-        expect(result[1]!.cookingTeamId).toBe(2) // Fri Jan 17 → Team 2 (quota=1)
-        expect(result[2]!.cookingTeamId).toBe(2) // Mon Jan 20 → Team 2 (quota=2, rotation)
-        expect(result[3]!.cookingTeamId).toBe(1) // Wed Jan 22 → Team 1 (quota=1)
+        expect(result.map(event => event.cookingTeamId)).toEqual([
+            1, // Wed Jan 15 → Team 1 (quota=2 after ghost, rotation)
+            2, // Fri Jan 17 → Team 2 (quota=1)
+            2, // Mon Jan 20 → Team 2 (quota=2, rotation)
+            1  // Wed Jan 22 → Team 1 (quota=1)
+        ])
     })
 
     /**
@@ -751,7 +763,7 @@ describe('computeTeamAssignmentsForEvents', () => {
         )
 
         // Compute affinities starting from first event
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, consecutiveCookingDays, events[0]!.date)
+        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, consecutiveCookingDays, firstDayOf(events))
 
         // WHEN: Assigning teams to events
         const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, consecutiveCookingDays, events, holidays)
@@ -947,7 +959,7 @@ describe('Active Season Management utilities', () => {
                     expectedFutureCount: 0
                 }
             ])('$scenario', ({ referenceTime, events, expectedNextDinnerId, expectedPastCount, expectedFutureCount }) => {
-                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, undefined, referenceTime)
+                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, referenceTime)
 
                 // Validate structure
                 const parseResult = SplitDinnerEventsResultSchema.safeParse(result)
@@ -981,7 +993,7 @@ describe('Active Season Management utilities', () => {
                     expectedFutureCount: 0
                 }
             ])('$scenario', ({ referenceTime, events, expectedPastCount, expectedFutureCount }) => {
-                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, undefined, referenceTime)
+                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, referenceTime)
 
                 expect(result.nextDinner?.id).toBe(events.length > 0 && expectedPastCount < events.length ? events[expectedPastCount]?.id : undefined)
                 expect(result.pastDinners).toHaveLength(expectedPastCount)
@@ -1037,7 +1049,7 @@ describe('Active Season Management utilities', () => {
                     expectedFutureCount: 0
                 }
             ])('$scenario', ({ referenceTime, events, maxDaysAhead, expectedNextDinnerId, expectedFutureCount }) => {
-                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, maxDaysAhead, referenceTime)
+                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, referenceTime, maxDaysAhead)
                 expect(result.nextDinner?.id).toBe(expectedNextDinnerId)
                 expect(result.futureDinners).toHaveLength(expectedFutureCount)
             })
@@ -1077,7 +1089,7 @@ describe('Active Season Management utilities', () => {
                     expectedEnd: null
                 }
             ])('$scenario', ({ referenceTime, events, expectedStart, expectedEnd }) => {
-                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, undefined, referenceTime)
+                const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, referenceTime)
 
                 if (expectedStart === null) {
                     expect(result.nextDinnerDateRange).toBeNull()
@@ -1188,17 +1200,7 @@ describe('Active Season Management utilities', () => {
     })
 
     describe('sortDinnerEventsByTemporal', () => {
-        // Use fixed reference date for predictable tests
         const referenceDate = new Date(2025, 5, 15, 12, 0) // June 15, 2025 noon
-
-        beforeEach(() => {
-            vi.useFakeTimers()
-            vi.setSystemTime(referenceDate)
-        })
-
-        afterEach(() => {
-            vi.useRealTimers()
-        })
 
         it('should sort events in temporal order: next, future (ascending), past (descending)', () => {
             const pastEvent1 = { id: 1, date: new Date(2025, 5, 10, 18, 0) } // June 10
@@ -1210,27 +1212,28 @@ describe('Active Season Management utilities', () => {
             const events = [futureEvent2, pastEvent1, nextEvent, pastEvent2, futureEvent1]
             const nextDinnerDateRange = { start: nextEvent.date, end: new Date(2025, 5, 15, 19, 0) }
 
-            const result = sortDinnerEventsByTemporal(events, nextDinnerDateRange)
+            const result = sortDinnerEventsByTemporal(events, nextDinnerDateRange, referenceDate)
 
             // Order: next, future (ascending), past (descending - most recent first)
             expect(result.map(e => e.id)).toEqual([3, 4, 5, 2, 1])
-            expect(result.map(e => e.temporalCategory)).toEqual(['next', 'future', 'future', 'past', 'past'])
+            expect(result.map(e => e.temporalCategory)).toEqual([TEMPORAL_CATEGORY.next, TEMPORAL_CATEGORY.future, TEMPORAL_CATEGORY.future, TEMPORAL_CATEGORY.past, TEMPORAL_CATEGORY.past])
         })
 
         it('should handle null nextDinnerDateRange', () => {
             const pastEvent = { id: 1, date: new Date(2025, 5, 10, 18, 0) }
             const futureEvent = { id: 2, date: new Date(2025, 5, 20, 18, 0) }
 
-            const result = sortDinnerEventsByTemporal([pastEvent, futureEvent], null)
+            const result = sortDinnerEventsByTemporal([pastEvent, futureEvent], null, referenceDate)
 
             expect(result.map(e => e.id)).toEqual([2, 1])
-            expect(result.map(e => e.temporalCategory)).toEqual(['future', 'past'])
+            expect(result.map(e => e.temporalCategory)).toEqual([TEMPORAL_CATEGORY.future, TEMPORAL_CATEGORY.past])
         })
     })
 
     describe('getNextDinnerDate', () => {
         const dinnerStartHour = 18
         const dinnerDurationMinutes = 60
+        const now = new Date(2025, 0, 1, 12, 0)
 
         it('should find next dinner when there are future dates', () => {
             const futureDate = new Date(2030, 10, 17)
@@ -1239,7 +1242,7 @@ describe('Active Season Management utilities', () => {
                 futureDate
             ]
 
-            const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)(dinnerDates)
+            const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)(dinnerDates, now)
 
             expect(result).not.toBeNull()
             expect(result?.start).toEqual(createDateInTimezone(futureDate, dinnerStartHour))
@@ -1251,7 +1254,7 @@ describe('Active Season Management utilities', () => {
                 new Date(2020, 0, 3, 18, 0)
             ]
 
-            const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)(dinnerDates)
+            const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)(dinnerDates, now)
 
             expect(result).toBeNull()
         })
@@ -1305,27 +1308,17 @@ describe('Active Season Management utilities', () => {
                     expectedUtcHour: 16
                 }
             ])('$scenario: 18:00 Copenhagen → $expectedUtcHour:00 UTC', ({ dinnerDate, expectedUtcHour }) => {
-                const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)([dinnerDate])
+                const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)([dinnerDate], now)
 
                 expect(result).not.toBeNull()
-                expect(result!.start.getUTCHours()).toBe(expectedUtcHour)
+                expect(result?.start.getUTCHours()).toBe(expectedUtcHour)
             })
         })
     })
 
     describe('isBeforeDeadline', () => {
-        let mockNow: Date
-
-        beforeEach(() => {
-            // Set a fixed "now" for testing: Jan 15, 2025 at 12:00
-            mockNow = new Date(2025, 0, 15, 12, 0, 0)
-            vi.useFakeTimers()
-            vi.setSystemTime(mockNow)
-        })
-
-        afterEach(() => {
-            vi.useRealTimers()
-        })
+        // A fixed "now" for testing: Jan 15, 2025 at 12:00
+        const mockNow = new Date(2025, 0, 15, 12, 0, 0)
 
         it.each([
             {
@@ -1365,19 +1358,19 @@ describe('Active Season Management utilities', () => {
             }
         ])('$scenario', ({ dinnerStartTime, offsetDays, offsetMinutes, expected }) => {
             // WHEN: Checking if now is before deadline
-            const checkDeadline = isBeforeDeadline(offsetDays, offsetMinutes)
+            const checkDeadline = isBeforeDeadline(offsetDays, offsetMinutes, mockNow)
             const result = checkDeadline(dinnerStartTime)
 
             // THEN: Returns expected result
             expect(result).toBe(expected)
         })
 
-        it('should use default parameters (0 days, 0 minutes)', () => {
+        it('without an offset checks against the dinner start', () => {
             // GIVEN: Dinner tomorrow at 18:00
             const dinnerStartTime = new Date(2025, 0, 16, 18, 0)
 
-            // WHEN: Calling with default parameters
-            const checkDeadline = isBeforeDeadline()
+            // WHEN: Calling with no offset
+            const checkDeadline = isBeforeDeadline(0, 0, mockNow)
             const result = checkDeadline(dinnerStartTime)
 
             // THEN: Checks against dinner time directly (no offset)

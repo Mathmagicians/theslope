@@ -12,6 +12,7 @@ import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactor
 import { asyncDataStatus, resetStores, registerEmptyStoreEndpoints } from '~~/tests/component/testHelpers'
 
 import { useAllergiesStore } from '~/stores/allergies'
+import { ALLERGY_WORDS } from '~/config/allergyWords'
 
 // The test runtime has no session cookie, so the session is the one thing faked; the households store
 // selecting the household from it is real
@@ -182,7 +183,7 @@ describe('Allergies Store - selected allergy type', () => {
         await vi.waitFor(() => expect(allergyTypesEndpoint.mock.calls.length).toBeGreaterThan(catalogRequests))
         await vi.waitFor(() => expect(store.selectedAllergyTypeId).toBeNull())
         expect(goneAllergyTypeEndpoint).toHaveBeenCalledTimes(1)
-        expect(useToast().toasts.value.at(-1)?.title).toBe('Kan ikke finde allergitypen')
+        expect(useToast().toasts.value.at(-1)?.title).toBe(ALLERGY_WORDS.notFound.allergyType)
     })
 
     it('after a 404 the page\'s getter still drives the selection', async () => {
@@ -327,16 +328,16 @@ describe('Allergies Store - cache coherence between allergies and the catalog', 
         {
             mutation: 'createAllergy',
             act: (store: ReturnType<typeof useAllergiesStore>) =>
-                store.createAllergy({inhabitantId: 1, allergyTypeId: 2, inhabitantComment: 'Mild'})
+                store.createAllergy({inhabitantId: 1, allergyTypeId: 2, inhabitantComment: 'Mild'}, false)
         },
         {
             mutation: 'updateAllergy',
             act: (store: ReturnType<typeof useAllergiesStore>) =>
-                store.updateAllergy(1, {allergyTypeId: 2, inhabitantComment: 'Worse'})
+                store.updateAllergy(1, {allergyTypeId: 2, inhabitantComment: 'Worse'}, false)
         },
         {
             mutation: 'deleteAllergy',
-            act: (store: ReturnType<typeof useAllergiesStore>) => store.deleteAllergy(1)
+            act: (store: ReturnType<typeof useAllergiesStore>) => store.deleteAllergy(1, false)
         }
     ])('$mutation refetches the allergy-type catalog', async ({act}) => {
         const store = await setupHouseholdAllergies()

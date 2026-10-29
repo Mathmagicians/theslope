@@ -1,4 +1,4 @@
-import {test, expect, type Page, type Locator} from '@playwright/test'
+import {test, expect, type Page, type Locator} from '~~/tests/e2e/uiTest'
 import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
@@ -16,8 +16,9 @@ const {validatedBrowserContext, doScreenshot, gotoHydrated, getSessionUserInfo, 
  * row, the settings card). The index routes redirect to a covered tab.
  *
  * Per screen:
- * - the document never scrolls horizontally, in any frame from the first paint on (skeletons and loaders
- *   included): `document.documentElement.scrollWidth <= window.innerWidth`, sampled every animation frame;
+ * - the document never scrolls horizontally, in any frame from the first paint to the screenshot (skeletons and
+ *   loaders included): `document.documentElement.scrollWidth <= document.documentElement.clientWidth`, sampled every
+ *   animation frame;
  * - no alert clips its content: the alert root is `overflow-hidden`, so an alert wider than its content box
  *   hides the overflow instead of widening the document. Alert responsiveness lives in the design system's
  *   `ALERTS` token (ADR-018), so a red here points at the token;
@@ -59,7 +60,7 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
     const householdTab = (tab: string, query = '') =>
         `${getHouseholdUrl(ownHousehold.shortName, ownHousehold.pbsId, tab)}${query}`
     const publicBillingPath = () => {
-        if (!publicBillingToken) throw new Error('No billing period with a share token - run maintenance.e2e.spec.ts first')
+        if (!publicBillingToken) throw new Error('No billing period with a share token - run monthly-billing.feature first')
         return `/public/billing/${publicBillingToken}`
     }
 
@@ -112,35 +113,53 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
         test.setTimeout(90_000)
     })
 
-    type WindowWithOverflow = Window & {__maxOverflow?: number, __overflowCulprits?: string[]}
+    type WindowWithOverflow = Window & {__maxOverflow?: number, __overflowCulprit?: string, __stopOverflowSampler?: () => void}
 
     /**
-     * Samples the document overflow every animation frame from the first paint on. On the widest frame it records
-     * the innermost elements that reach past the viewport, so a red case names its cause.
+     * Samples the document overflow every animation frame from the first paint on, until the case stops it with a
+     * last measurement of the settled page. On the widest frame it names the outermost element that reaches past the
+     * layout's right edge, so a red case names its cause.
      */
     const sampleOverflowEveryFrame = (page: Page) => page.addInitScript(() => {
         const win = window as WindowWithOverflow
         win.__maxOverflow = 0
-        win.__overflowCulprits = []
-        const pastViewport = (element: Element) => element.getBoundingClientRect().right > window.innerWidth + 0.5
+        // clientWidth and scrollWidth read the same layout; innerWidth follows the window before the layout catches up
+        const layoutWidth = () => document.documentElement.clientWidth
+        const pastLayout = (element: Element | null) => !!element && element.getBoundingClientRect().right > layoutWidth() + 0.5
+        // A box that clips or scrolls its content keeps that content out of the document's width
+        const clippedByAncestor = (element: Element) => {
+            for (let ancestor = element.parentElement; ancestor && ancestor !== document.body; ancestor = ancestor.parentElement) {
+                if (getComputedStyle(ancestor).overflowX !== 'visible') return true
+            }
+            return false
+        }
         const describe = (element: Element) => {
             const testid = element.closest('[data-testid]')?.getAttribute('data-testid') ?? 'no testid'
             const slot = element.getAttribute('data-slot')
             const classes = (element.getAttribute('class') ?? '').split(/\s+/).filter(Boolean).slice(0, 5).join('.')
             return `${element.tagName.toLowerCase()}${slot ? `[data-slot=${slot}]` : ''}${classes ? `.${classes}` : ''} in ${testid}`
         }
-        const sample = () => {
-            const overflow = document.documentElement.scrollWidth - window.innerWidth
-            if (overflow > (win.__maxOverflow ?? 0)) {
-                win.__maxOverflow = overflow
-                win.__overflowCulprits = [...document.querySelectorAll('body *')]
-                    .filter(element => pastViewport(element) && ![...element.children].some(pastViewport))
-                    .slice(0, 5)
-                    .map(describe)
-            }
-            requestAnimationFrame(sample)
+        // The outermost overflowing elements sit in a parent that fits; the one reaching furthest sets the scroll width
+        const outermostCulprit = () => [...document.querySelectorAll('body, body *')]
+            .filter(element => pastLayout(element) && !pastLayout(element.parentElement) && !clippedByAncestor(element))
+            .sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right)[0]
+        const measure = () => {
+            const overflow = document.documentElement.scrollWidth - layoutWidth()
+            if (overflow <= (win.__maxOverflow ?? 0)) return
+            win.__maxOverflow = overflow
+            const culprit = outermostCulprit()
+            win.__overflowCulprit = culprit ? describe(culprit) : 'no element outside a clipping box'
         }
-        requestAnimationFrame(sample)
+        let frame = 0
+        const sample = () => {
+            measure()
+            frame = requestAnimationFrame(sample)
+        }
+        frame = requestAnimationFrame(sample)
+        win.__stopOverflowSampler = () => {
+            cancelAnimationFrame(frame)
+            measure()
+        }
     })
 
     /**
@@ -185,15 +204,19 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
             await expect(page.getByTestId(ready)).toBeVisible()
             await reveal?.(page)
 
+            // The sampler stops before the screenshot: a full-page screenshot resizes the window, and the frames in
+            // between are narrower than the page's layout
+            const {overflow, culprit} = await page.evaluate(() => {
+                const win = window as WindowWithOverflow
+                win.__stopOverflowSampler?.()
+                return {overflow: win.__maxOverflow ?? 0, culprit: win.__overflowCulprit}
+            })
+
             // Evidence for the visual check - taken before the assertions so it exists on failure
             await doScreenshot(page, `mobile/${name}`)
 
             // THEN: no frame rendered wider than the viewport, the skeletons included
-            const {overflow, culprits} = await page.evaluate(() => {
-                const win = window as WindowWithOverflow
-                return {overflow: win.__maxOverflow ?? 0, culprits: win.__overflowCulprits ?? []}
-            })
-            expect.soft(overflow, `${url} scrolled horizontally by ${overflow}px in some frame: ${culprits.join(' | ')}`).toBeLessThanOrEqual(0)
+            expect.soft(overflow, `${url} scrolled horizontally by ${overflow}px in some frame: ${culprit}`).toBeLessThanOrEqual(0)
 
             // THEN: no alert clips its content (the ALERTS token owns alert wrapping)
             expect.soft(await measureInnerOverflow(page.locator(ALERT_ROOT)), `${url}: alerts that clip their content`).toEqual([])

@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, iconNamesIn} from '~~/tests/component/testHelpers'
 import ChefMenuCard from '~/components/chef/ChefMenuCard.vue'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import AllergenMultiSelector from '~/components/allergy/AllergenMultiSelector.vue'
@@ -46,7 +46,7 @@ describe('ChefMenuCard', () => {
     let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
     beforeAll(() => {
         const {deadlinesForSeason} = useSeason()
-        defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+        defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason(), new Date())
     })
 
     const createWrapper = (props: Record<string, unknown> = {}) => mountCard({
@@ -86,7 +86,7 @@ describe('ChefMenuCard', () => {
             }
 
             const wrapper = await createWrapper({dinnerEvent})
-            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens').text)
+            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens', new Date()).text)
 
             // An empty selection, no crash
             const selector = await openAllergenEditor(wrapper)
@@ -125,16 +125,15 @@ describe('ChefMenuCard', () => {
             const label = findByTestId(wrapper, ALLERGEN_LABEL)
             expect(label.text()).toBe('Allergener')
             expect(label.element.firstElementChild).toBe(label.findComponent({name: 'UIcon'}).element)
-            expect(label.findComponent({name: 'UIcon'}).props('name')).toBe(ICONS.allergy)
-            const icons = overview.findAllComponents({name: 'UIcon'}) as VueWrapper<ComponentPublicInstance<{name: string}>>[]
-            expect(icons.filter(icon => icon.props('name') === ICONS.allergy)).toHaveLength(0)
+            expect(iconNamesIn(label)).toEqual([ICONS.allergy])
+            expect(iconNamesIn(overview)).not.toContain(ICONS.allergy)
         })
 
         it('GIVEN a menu without allergens THEN reads the no-allergens message', async () => {
             const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [], tickets}
             const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW})
 
-            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens').text)
+            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens', new Date()).text)
             expect(findByTestId(wrapper, ALLERGEN_OVERVIEW).exists()).toBe(false)
         })
 
@@ -180,15 +179,13 @@ describe('ChefMenuCard', () => {
     })
 
     describe('Chef portrait', () => {
-        type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
-        const chef = {id: 7, heynaboId: 7, householdId: 1, name: 'Anna', lastName: 'Kok', pictureUrl: null, birthDate: null}
+        const chef ={id: 7, heynaboId: 7, householdId: 1, name: 'Anna', lastName: 'Kok', pictureUrl: null, birthDate: null}
 
         it('renders a wanted poster without a chef, the chef glyph as its hat', async () => {
             const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), chef: null}
             const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW})
 
-            const icons = findByTestId(wrapper, 'chef-wanted').findAllComponents({name: 'UIcon'})
-            expect(icons.some((icon: IconWrapper) => icon.props('name') === ICONS.chef)).toBe(true)
+            expect(iconNamesIn(findByTestId(wrapper, 'chef-wanted'))).toContain(ICONS.chef)
         })
 
         it('renders the chef', async () => {
@@ -205,7 +202,7 @@ describe('ChefMenuCard', () => {
 describe('ChefMenuCard — Madbestilling', () => {
     let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
     beforeAll(() => {
-        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason())
+        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason(), new Date())
     })
 
     const mountChefCard = (props: Record<string, unknown> = {}) => mountCard({
@@ -256,14 +253,15 @@ describe('ChefMenuCard — Madbestilling', () => {
         ]
         const wrapper = await mountChefCard({
             dinnerEvent: {...DinnerEventFactory.defaultDinnerEventDetail(), cookingTeam: team, cookingTeamId: team.id},
-            roundRows
+            roundRows,
+            teamNumber: 2
         })
         await clickByTestId(wrapper, 'expense-edit')
         await flushPromises()
         await wrapper.vm.$nextTick()
         expect(findByTestId(wrapper, 'expense-table').text()).toContain('Rådighedsbeløb')
         const [first, last] = roundRows.map(row => formatDate(row.date, DATE_SETTINGS.DAY_MONTH_MASK))
-        expect(findByTestId(wrapper, 'expense-hint-heading').text()).toBe(`Hele ${useCookingTeam().getTeamShortName('Madhold 2')}, periode ${first}-${last}`)
+        expect(findByTestId(wrapper, 'expense-hint-heading').text()).toBe(`${useCookingTeam().getTeamShortName('Madhold 2')}, periode ${first}-${last}`)
         expect(findAllByTestId(wrapper, 'expense-hint-row')).toHaveLength(6)
     })
 })
@@ -273,7 +271,7 @@ describe('ChefMenuCard — Madbestilling', () => {
 describe('ChefMenuCard — release portions', () => {
     let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
     beforeAll(() => {
-        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason())
+        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason(), new Date())
     })
 
     const QUEUE = WaitlistFactory.defaultQueueSummary({entries: 4, portions: 2.5})
@@ -309,7 +307,7 @@ describe('ChefMenuCard — release portions', () => {
         const wrapper = await mountChefCard(queue)
 
         expect(findByTestId(wrapper, WAITLIST_TEST_IDS.chefAlert).text())
-            .toContain(`${SUPPLY_WORDS.queuedCount({queuedFormatted})} · ${formatPortions(queue.portions)} portioner`)
+            .toContain(`${SUPPLY_WORDS.queuedCount(queuedFormatted)} · ${formatPortions(queue.portions)} portioner`)
     })
 
     it.each([

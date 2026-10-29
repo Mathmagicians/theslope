@@ -4,6 +4,7 @@ import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick} from 'vue'
 import {getQuery, type H3Event} from 'h3'
+import type {ButtonProps} from '@nuxt/ui'
 import TicketChanges from '~/components/chef/TicketChanges.vue'
 import {useBookingValidation, type TicketChange, type TicketType} from '~/composables/useBookingValidation'
 import {ticketChangeWord, ticketChangeSeller} from '~/composables/useBookingUi'
@@ -13,7 +14,7 @@ import {useBilling} from '~/composables/useBilling'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {formatPortions} from '~/utils/utils'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, findComponentByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
 
 /**
  * TicketChanges: closed until its toggle opens; then the dinner's changes from the menu deadline, newest first, with
@@ -82,6 +83,35 @@ const changeRows = (wrapper: Wrapper) => bodyRows(wrapper).filter(row => !isDead
 const DEADLINE_ROW = 'the deadline row'
 const emptyCell = (wrapper: Wrapper) => wrapper.find('td[data-slot="empty"]')
 const classesOf = (token: string) => token.split(' ')
+
+const HOUSEHOLD_WORDS = WORDS.households
+const HOUSEHOLDS = 'ticket-change-households'
+const HOUSEHOLDS_TOGGLE = 'ticket-change-households-toggle'
+// A user's run (a season activation, an admin run) touches many households in one line
+const shortNames = (count: number) => Array.from({length: count}, (_, index) => `S_${index + 1}`)
+// Husstand's names, the wrapper's text without its control's, and the control
+const readHouseholds = (row: BodyRow) => {
+    const households = findByTestId(row, HOUSEHOLDS)
+    const toggle = findByTestId(households, HOUSEHOLDS_TOGGLE)
+    return {
+        names: households.text().replace(toggle.text(), '').trim(),
+        control: toggle.text(),
+        expanded: toggle.attributes('aria-expanded'),
+        label: toggle.attributes('aria-label')
+    }
+}
+const foldedHouseholds = (households: string[]) => ({
+    names: households.slice(0, 2).join(', '),
+    control: HOUSEHOLD_WORDS.more(households.length - 2),
+    expanded: 'false',
+    label: HOUSEHOLD_WORDS.toggle(false, households.length)
+})
+const unfoldedHouseholds = (households: string[]) => ({
+    names: households.join(', '),
+    control: HOUSEHOLD_WORDS.fewer,
+    expanded: 'true',
+    label: HOUSEHOLD_WORDS.toggle(true, households.length)
+})
 
 describe('TicketChanges', () => {
     let formatMoment: (date: Date) => string
@@ -181,7 +211,7 @@ describe('TicketChanges', () => {
         expect(readRows(wrapper)).toEqual([DEADLINE_ROW, ...momentsOf([...recent, ...older])])
     })
 
-    it('GIVEN lines of several ticket events WHEN opened THEN Ændring reads each event\'s word with its tickets in the action order, a ticket type change from → to and the close by its word; Husstand names one household, the system\'s line over several as System and a user\'s by their names', async () => {
+    it('GIVEN lines of several ticket events WHEN opened THEN Ændring reads each event\'s word with its tickets in the action order, a ticket type change from → to and the close by its word; Husstand names one household, the system\'s line over several as System and a user\'s two by their names, none with a control to more households', async () => {
         const lines = [
             change({id: 14, performedByUserId: SYSTEM_USER_ID, bySystem: true, households: ['S_31', 'S_22', 'S_14'], events: [{change: Kind.CLOSE, tickets: counts(30, 11, 3)}]}),
             change({id: 13, performedByUserId: 22, households: ['S_22'], events: [{change: Kind.CHANGE_PRICE, tickets: counts(1, 0, 0), from: counts(0, 1, 0)}]}),
@@ -210,7 +240,32 @@ describe('TicketChanges', () => {
             ]},
             {household: 'S_31, S_22', events: [{word: ticketChangeWord(Kind.CANCEL), chips: [chip(1, TicketType.ADULT)], arrow: false}]}
         ])
+        expect(findAllByTestId(wrapper, HOUSEHOLDS_TOGGLE)).toHaveLength(0)
         expect(findByTestId(rows[2]!, 'ticket-change-event').element.closest('td')!.textContent).toContain(`${chip(1, TicketType.CHILD)}, ${ticketChangeWord(Kind.RELEASE)}`)
+    })
+
+    it('GIVEN a user\'s lines over more than two households WHEN opened THEN each Husstand reads its first two households and a folded control counting the rest, inside the capped households wrapper; WHEN a line\'s control is clicked THEN that line names every household and its control folds them, while the other line stays folded; WHEN clicked again THEN the line reads its first two and the count again', async () => {
+        const {COMPONENTS} = useTheSlopeDesignSystem()
+        const {color, variant} = COMPONENTS.ticketChanges.householdsToggle
+        const [five, many] = [shortNames(5), shortNames(56)]
+        const lines = [change({id: 42, households: five}), change({id: 41, households: many})]
+        historyEndpoint.mockImplementationOnce(() => ({dinnerEventId: DINNER_ID, since: SINCE.toISOString(), changes: lines, olderCount: 0}))
+        const wrapper = await mount()
+        await open(wrapper)
+        const readLines = () => changeRows(wrapper).map(readHouseholds)
+        const clickFirstLine = () => clickByTestId(changeRows(wrapper)[0]!, HOUSEHOLDS_TOGGLE)
+
+        const wrappers = findAllByTestId(wrapper, HOUSEHOLDS)
+        expect(wrappers).toHaveLength(lines.length)
+        wrappers.forEach(households => expect(households.classes()).toEqual(expect.arrayContaining(classesOf(COMPONENTS.ticketChanges.households))))
+        changeRows(wrapper).forEach(row => expect(findComponentByTestId<ButtonProps>(row, 'UButton', HOUSEHOLDS_TOGGLE).props()).toMatchObject({color, variant}))
+        expect(readLines()).toEqual([foldedHouseholds(five), foldedHouseholds(many)])
+
+        await clickFirstLine()
+        expect(readLines()).toEqual([unfoldedHouseholds(five), foldedHouseholds(many)])
+
+        await clickFirstLine()
+        expect(readLines()).toEqual([foldedHouseholds(five), foldedHouseholds(many)])
     })
 
     it.each([
@@ -248,7 +303,7 @@ describe('TicketChanges', () => {
         historyEndpoint.mockImplementationOnce(() => ({dinnerEventId: DINNER_ID, since: SINCE.toISOString(), changes: [], olderCount: 2}))
         const wrapper = await mount()
         await open(wrapper)
-        expect(findByTestId(emptyCell(wrapper), 'ticket-changes-none-since').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noTicketChanges').text)
+        expect(findByTestId(emptyCell(wrapper), 'ticket-changes-none-since').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noTicketChanges', new Date()).text)
         expect(findByTestId(emptyCell(wrapper), 'ticket-changes-deadline').text()).toContain(WORDS.deadline(formatMoment(SINCE)))
         expect(findByTestId(wrapper, 'ticket-changes-more').exists()).toBe(true)
     })
@@ -257,7 +312,7 @@ describe('TicketChanges', () => {
         historyEndpoint.mockImplementationOnce(() => ({dinnerEventId: DINNER_ID, since: SINCE.toISOString(), changes: [], olderCount: 0}))
         const wrapper = await mount()
         await open(wrapper)
-        expect(findByTestId(wrapper, 'ticket-changes-none-since').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noTicketChanges').text)
+        expect(findByTestId(wrapper, 'ticket-changes-none-since').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noTicketChanges', new Date()).text)
         expect(findByTestId(wrapper, 'ticket-changes-more').exists()).toBe(false)
     })
 })

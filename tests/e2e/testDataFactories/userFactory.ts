@@ -48,8 +48,8 @@ export class UserFactory {
             email: overrides?.email ?? userData.email,
             phone: overrides?.phone !== undefined ? overrides.phone : userData.phone,
             systemRoles: overrides?.systemRoles ?? userData.systemRoles,
-            notificationChannels: overrides?.notificationChannels ?? userData.notificationChannels,
-            appearance: overrides?.appearance ?? userData.appearance,
+            notificationChannels: overrides?.notificationChannels ?? [...DEFAULT_NOTIFICATION_CHANNELS],
+            appearance: overrides?.appearance ?? {...DEFAULT_APPEARANCE},
             createdAt: overrides?.createdAt ?? new Date(),
             updatedAt: overrides?.updatedAt ?? new Date(),
             Inhabitant: overrides?.Inhabitant ?? {
@@ -131,6 +131,15 @@ export class UserFactory {
         if (expectedStatus !== 200) return null
         const {UserDetailSchema} = useCoreValidation()
         return UserDetailSchema.parse(await response.json())
+    }
+
+    /** POST /api/user/preferences, its answer unasserted: a scenario reads the save or its refusal in its THEN */
+    static readonly updateMyPreferencesRaw = async (
+        context: BrowserContext,
+        preferences: UserPreferencesUpdate
+    ): Promise<{status: number, body: unknown}> => {
+        const response = await context.request.post('/api/user/preferences', {headers, data: preferences})
+        return {status: response.status(), body: await response.json().catch(() => null)}
     }
 
     /** POST /api/user/notifications/test - one test message to the session user */

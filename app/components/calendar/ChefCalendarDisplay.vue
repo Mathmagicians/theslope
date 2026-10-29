@@ -21,8 +21,10 @@
  * │  │  8   9  10  11  12  13  14             │                  │
  * │  │ 15 ⭕16 ⭕18  19  20  21  22            │                  │
  * │  │     🔴  🟡                              │  ← Rings        │
- * │  │ 22 ⭕25  26  27  28  29  30             │                  │
- * │  └────────────────────────────────────────┘                  │
+ * │  │ 22 ⭕25  26 (27) 28  29  30             │  (27) another   │
+ * │  └────────────────────────────────────────┘  team's dinner  │
+ * │  Forklaring: … Aflyst madlavning, Andet madholds             │
+ * │  fællesspisning (the plain circle)                           │
  * ├──────────────────────────────────────────────────────────────┤
  * │  AGENDA VIEW (Same visual as calendar!)                      │
  * │  ┌────────────────────────────────────────────────────────┐  │
@@ -43,7 +45,10 @@
  * Color System (Ocean - Professional Chef):
  * - Ocean blue circles: Next (bold), Future (light), Past (mocha)
  * - Deadline chips: 🔴 Red (critical <24h), 🟡 Yellow (warning 24-72h)
+ * - The other teams' dinners: a plain circle (CHEF_CALENDAR.day.otherTeam), calendar view only; a click selects it
  * - Visual continuity: Same colored circles + chips in both views
+ *
+ * Visual check: /chef calendar view with the other teams' dinners and the legend, phone and desktop, light and dark.
  *
  * Features:
  * - Countdown timer (train station style) to next cooking
@@ -66,35 +71,42 @@ import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
+import {LEGEND_KIND, type CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
+import {COUNTDOWN_PALETTE} from '~/components/calendar/CountdownTimer.vue'
+import {TEAM_WORDS} from '~/config/teamWords'
+import {DATE_WORDS} from '~/config/dateWords'
 import {getPaginationRowModel} from '@tanstack/vue-table'
 
 interface Props {
   seasonDates: DateRange
   team: CookingTeamDisplay
   dinnerEvents: DinnerEventDisplay[]
+  otherTeamDinners?: DinnerEventDisplay[]
   deadlines: SeasonDeadlines
   selectedDinnerId?: number | null
   showSelection?: boolean
-  viewMode: 'agenda' | 'calendar'
+  viewMode: ChefCalendarView
   accordionOpen: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  otherTeamDinners: () => [],
   selectedDinnerId: null,
   showSelection: false
 })
 
 const emit = defineEmits<{
   select: [dinnerId: number]
-  'tab-click': [mode: 'agenda' | 'calendar']
+  'tab-click': [mode: ChefCalendarView]
   'update:accordion-open': [open: boolean]
 }>()
 
-const {useTemporalSplit, createTemporalEventLists, getDinnerForDay, isCancelledDay} = useTemporalCalendar()
+const {useTemporalSplit, createTemporalEventLists, dayTypeOf, getDinnerForDay, isCancelledDay} = useTemporalCalendar()
+const {createEventList} = useCalendarEvents()
 const {sortDinnerEventsByTemporal} = useSeason()
 const {getChefDeadlineAlarm} = useBooking()
-const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, TEXT, BUTTONS, COLOR, NOISE, ICONS, URGENCY_TO_CHIP_COLOR, dayCircleClasses} = useTheSlopeDesignSystem()
+const now = useClock()
+const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, TEXT, BUTTONS, COLOR, NOISE, ICONS, URGENCY_TO_CHIP_COLOR, dayCircleClasses, dayColorClass} = useTheSlopeDesignSystem()
 
 // Selected dinner for detail display
 const selectedDinner = computed(() => props.dinnerEvents.find(e => e.id === props.selectedDinnerId))
@@ -103,8 +115,8 @@ const selectedDinner = computed(() => props.dinnerEvents.find(e => e.id === prop
 // Both viewMode and accordionOpen are one-way props to prevent race conditions
 // Changes emit via events for atomic updates in parent
 const viewTabs = [
-  { label: 'Agenda', value: 'agenda', icon: ICONS.agenda },
-  { label: 'Kalender', value: 'calendar', icon: ICONS.calendar }
+  {label: TEAM_WORDS.calendar.views[CHEF_CALENDAR_VIEW.agenda], value: CHEF_CALENDAR_VIEW.agenda, icon: ICONS.agenda},
+  {label: TEAM_WORDS.calendar.views[CHEF_CALENDAR_VIEW.calendar], value: CHEF_CALENDAR_VIEW.calendar, icon: ICONS.calendar}
 ]
 const viewMode = toRef(props, 'viewMode')
 const accordionOpen = toRef(props, 'accordionOpen')
@@ -121,42 +133,25 @@ const {
 
 // Focus date for calendar navigation (selected dinner → next dinner → first dinner)
 // Must be after useTemporalSplit since it depends on nextDinner
-const focusDate = computed(() => {
-  // Priority: selected dinner > next dinner > first dinner in list
-  if (selectedDinner.value) return new Date(selectedDinner.value.date)
-  if (nextDinner.value) return new Date(nextDinner.value.date)
-  if (props.dinnerEvents.length > 0) return new Date(props.dinnerEvents[0]!.date)
-  return null
-})
+const focusDate = computed(() => selectedDinner.value?.date ?? nextDinner.value?.date ?? props.dinnerEvents[0]?.date ?? null)
 
-// Create event lists with ocean color (professional chef palette)
-const allEventLists = computed(() =>
-  createTemporalEventLists(
+// The team's dinners split into past, next and future; the other teams' dinners carry no temporal state
+const OTHER_TEAM_DINNERS = 'other-team-dinners'
+const allEventLists = computed(() => [
+  ...createTemporalEventLists(
     pastDinnerDates.value,
     futureDinnerDates.value,
-    nextDinner.value,
-    'ocean'
-  )
-)
+    nextDinner.value
+  ),
+  createEventList(props.otherTeamDinners.map(dinner => dinner.date), OTHER_TEAM_DINNERS)
+])
 
-// Day type detection - returns 'next' | 'future' | 'past' | null
-type DayType = 'next' | 'future' | 'past'
-const getDayType = (eventLists: DayEventList[]): DayType | null => {
-  if (eventLists.some(list => list.listId === 'next-dinner')) return 'next'
-  if (eventLists.some(list => list.listId === 'future-dinners')) return 'future'
-  if (eventLists.some(list => list.listId === 'past-dinners')) return 'past'
-  return null
-}
+const isOtherTeamDay = (eventLists: DayEventList[]): boolean => eventLists.some(list => list.listId === OTHER_TEAM_DINNERS)
 
-// Get day color class (past is shared, next/future are palette-specific)
-const getDayColorClass = (type: DayType): string => {
-  return type === 'past' ? CALENDAR.day.past : CHEF_CALENDAR.day[type]
-}
-
-// Selection support
+// Selection support: a day of the team on view, or another team's dinner
 const handleDateClick = (day: DateValue) => {
   if (!props.showSelection) return
-  const dinner = getDinnerForDay(props.dinnerEvents, day)
+  const dinner = getDinnerForDay(props.dinnerEvents, day) ?? getDinnerForDay(props.otherTeamDinners, day)
   if (dinner) emit('select', dinner.id)
 }
 
@@ -166,10 +161,9 @@ const isSelected = (day: DateValue): boolean => {
   return dinner?.id === props.selectedDinnerId
 }
 
-// Agenda view - temporal order: next (today), future, past
-// Each event has temporalCategory ('next' | 'future' | 'past') attached
+// The agenda in temporal order (the next dinner, the later ones, the past ones), each event carrying its TemporalCategory
 const sortedDinnerEvents = computed(() =>
-  sortDinnerEventsByTemporal(props.dinnerEvents, nextDinnerDateRange.value)
+  sortDinnerEventsByTemporal(props.dinnerEvents, nextDinnerDateRange.value, now.value)
 )
 
 // Agenda table configuration (UTable + UPagination pattern from AdminHouseholds)
@@ -179,39 +173,55 @@ const agendaPagination = ref({
   pageSize: SIZES.agendaPageSize
 })
 
-const agendaColumns = [
-  {
-    accessorKey: 'dinner',
-    header: 'Fællesspisning'
-  }
-]
+// The column's #dinner-header slot heads it: the agenda's title and its pagination
+const agendaColumns = [{accessorKey: 'dinner'}]
 
 // Deadline alarm for day using chef deadline logic (menu + groceries)
 const getAlarmForDay = (day: DateValue): -1 | 0 | 1 | 2 | 3 => {
   const dinner = getDinnerForDay(props.dinnerEvents, day)
   if (!dinner) return -1
-  return getChefDeadlineAlarm(dinner, props.deadlines)
+  return getChefDeadlineAlarm(dinner, props.deadlines, now.value)
+}
+
+// The day read once per cell, keyed by its date, so the template narrows them: its dinner type, and the deadline
+// chip's colour on an upcoming dinner that is not cancelled (null when on track)
+const dayCellOf = (day: DateValue, eventLists: DayEventList[]) => {
+  const type = dayTypeOf(eventLists)
+  const upcoming = type !== null && type !== TEMPORAL_CATEGORY.past && !isCancelledDay(props.dinnerEvents, day)
+  return {key: day.toString(), type, chipColor: upcoming ? URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)] : null}
 }
 
 // Legend items: the deadline chips wrap a planned-day circle, as the day cells do
 const legendItems = computed((): CalendarLegendItem[] => {
   const chipCircle = dayCircleClasses(CHEF_CALENDAR.day.future)
+  const words = TEAM_WORDS.calendarLegend
   return [
-    {label: 'Næste madlavning', kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.next)},
-    {label: 'Valgt dato', kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.next, CHEF_CALENDAR.selection)},
-    {label: 'Planlagt madlavning', kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.future)},
-    {label: 'Tidligere madlavning', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past)},
-    {label: 'Deadline overskredet', kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[3], circleClass: chipCircle, chipSize: SIZES.md},
-    {label: 'Deadline kritisk (<24t)', kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[2], circleClass: chipCircle, chipSize: SIZES.md},
-    {label: 'Deadline snart (24-72t)', kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[1], circleClass: chipCircle, chipSize: SIZES.md},
-    {label: 'Aflyst madlavning', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past, CALENDAR.day.cancelled)}
+    {label: words.next, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CHEF_CALENDAR.day.next)},
+    {label: DATE_WORDS.calendarLegend.selected, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CHEF_CALENDAR.day.next, CHEF_CALENDAR.selection)},
+    {label: words.planned, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CHEF_CALENDAR.day.future)},
+    {label: words.past, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CALENDAR.day.past)},
+    {label: words.overdue, kind: LEGEND_KIND.chip, chipColor: URGENCY_TO_CHIP_COLOR[3], circleClass: chipCircle, chipSize: SIZES.md},
+    {label: words.critical, kind: LEGEND_KIND.chip, chipColor: URGENCY_TO_CHIP_COLOR[2], circleClass: chipCircle, chipSize: SIZES.md},
+    {label: words.soon, kind: LEGEND_KIND.chip, chipColor: URGENCY_TO_CHIP_COLOR[1], circleClass: chipCircle, chipSize: SIZES.md},
+    {label: words.cancelled, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CALENDAR.day.past, CALENDAR.day.cancelled)},
+    {label: words.otherTeam, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CHEF_CALENDAR.day.otherTeam)}
   ]
 })
 
 // The parent owns the open state: the chevron asks for the toggled value, a tab click asks for its mode
 const toggleOpen = () => emit('update:accordion-open', !accordionOpen.value)
-const handleTabClick = (mode: 'agenda' | 'calendar') => emit('tab-click', mode)
+// UTabs hands back the value as a string or a number; the tab carrying it names the view
+const handleTabClick = (value: string | number) => {
+  const tab = viewTabs.find(candidate => candidate.value === value)
+  if (tab) emit('tab-click', tab.value)
+}
 
+</script>
+
+<script lang="ts">
+/** The two views the chef calendar shows the team's dinners in */
+export const CHEF_CALENDAR_VIEW = {agenda: 'agenda', calendar: 'calendar'} as const
+export type ChefCalendarView = typeof CHEF_CALENDAR_VIEW[keyof typeof CHEF_CALENDAR_VIEW]
 </script>
 
 <template>
@@ -219,12 +229,12 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => emit('tab-click', mode)
     <!-- Countdown Timer (Train Station Style) -->
     <CountdownTimer
       data-testid="chef-next-cooking-countdown"
-      title="Næste Madlavning"
-      time-label="madlavning"
-      empty-text="Ingen"
+      :title="TEAM_WORDS.calendar.countdownTitle"
+      :time-label="TEAM_WORDS.calendar.countdownTimeLabel"
+      :empty-text="DATE_WORDS.countdown.none"
       :next-event="nextDinner"
       :event-start-hour="dinnerStartHour"
-      palette="chef"
+      :palette="COUNTDOWN_PALETTE.chef"
       clickable
       @select="emit('select', $event)"
     />
@@ -234,14 +244,14 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => emit('tab-click', mode)
         v-bind="COMPONENTS.chefCalendar.viewTabs"
         :model-value="viewMode"
         :items="viewTabs"
-        @update:model-value="(m) => handleTabClick(m as 'agenda' | 'calendar')"
+        @update:model-value="handleTabClick"
       />
       <UButton
         v-bind="BUTTONS.flipOpen(accordionOpen)"
         :color="COLOR.neutral"
         :variant="NOISE.quiet"
         :size="SIZES.standard"
-        :aria-label="accordionOpen ? 'Skjul kalender' : 'Vis kalender'"
+        :aria-label="accordionOpen ? TEAM_WORDS.calendar.hide : TEAM_WORDS.calendar.show"
         data-testid="chef-calendar-toggle"
         @click="toggleOpen"
       />
@@ -250,7 +260,7 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => emit('tab-click', mode)
     <UCollapsible v-bind="COMPONENTS.collapsible.chefCalendar" :open="accordionOpen">
       <template #content>
         <!-- Agenda View (UTable + UPagination) -->
-        <div v-if="viewMode === 'agenda'" :class="COMPONENTS.chefCalendar.agenda" data-testid="chef-calendar-content">
+        <div v-if="viewMode === CHEF_CALENDAR_VIEW.agenda" :class="COMPONENTS.chefCalendar.agenda" data-testid="chef-calendar-content">
           <UTable
             ref="agendaTable"
             v-model:pagination="agendaPagination"
@@ -264,7 +274,7 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => emit('tab-click', mode)
             <!-- Custom header: title + pagination -->
             <template #dinner-header>
               <div :class="COMPONENTS.chefCalendar.agendaHeader">
-                <span :class="TYPOGRAPHY.bodyTextSmall">Maddage</span>
+                <span :class="TYPOGRAPHY.bodyTextSmall">{{ TEAM_WORDS.calendar.agendaTitle }}</span>
                 <UPagination
                   v-if="(agendaTable?.tableApi?.getFilteredRowModel().rows.length || 0) > agendaPagination.pageSize"
                   :default-page="(agendaTable?.tableApi?.getState().pagination.pageIndex || 0) + 1"
@@ -301,38 +311,50 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => emit('tab-click', mode)
         <div v-else :class="COMPONENTS.chefCalendar.calendar" data-testid="chef-calendar-content">
           <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="1" :focus-date="focusDate">
             <template #day="{ day, eventLists }">
-              <!-- Deadline chip for warning/critical (alarm 1, 2, 3) - only for non-past, non-cancelled -->
-              <!-- Chip wraps styled circle (same pattern as DinnerCalendarDisplay) -->
-              <UChip
-                v-if="getDayType(eventLists) && getDayType(eventLists) !== 'past' && !isCancelledDay(dinnerEvents, day) && URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)]"
-                show
-                :size="SIZES.md"
-                :color="URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)]!"
-              >
+              <template v-for="{key, type, chipColor} in [dayCellOf(day, eventLists)]" :key="key">
+                <!-- Deadline chip for warning/critical (alarm 1, 2, 3) - only for non-past, non-cancelled -->
+                <!-- Chip wraps styled circle (same pattern as DinnerCalendarDisplay) -->
+                <UChip
+                  v-if="type && chipColor"
+                  show
+                  :size="SIZES.md"
+                  :color="chipColor"
+                >
+                  <div
+                    :data-testid="`calendar-dinner-date-${day.day}`"
+                    :class="dayCircleClasses(dayColorClass(CHEF_CALENDAR, type), isSelected(day) && CHEF_CALENDAR.selection)"
+                    @click="handleDateClick(day)"
+                  >
+                    {{ day.day }}
+                  </div>
+                </UChip>
+
+                <!-- Regular day circle (on-track, past, or cancelled) -->
                 <div
+                  v-else-if="type"
                   :data-testid="`calendar-dinner-date-${day.day}`"
-                  :class="dayCircleClasses(getDayColorClass(getDayType(eventLists)!), isSelected(day) && CHEF_CALENDAR.selection)"
+                  :class="dayCircleClasses(
+                    isCancelledDay(dinnerEvents, day) ? `${CALENDAR.day.past} ${CALENDAR.day.cancelled}` : dayColorClass(CHEF_CALENDAR, type),
+                    isSelected(day) && CHEF_CALENDAR.selection
+                  )"
                   @click="handleDateClick(day)"
                 >
                   {{ day.day }}
                 </div>
-              </UChip>
 
-              <!-- Regular day circle (on-track, past, or cancelled) -->
-              <div
-                v-else-if="getDayType(eventLists)"
-                :data-testid="`calendar-dinner-date-${day.day}`"
-                :class="dayCircleClasses(
-                  isCancelledDay(dinnerEvents, day) ? `${CALENDAR.day.past} ${CALENDAR.day.cancelled}` : getDayColorClass(getDayType(eventLists)!),
-                  isSelected(day) && CHEF_CALENDAR.selection
-                )"
-                @click="handleDateClick(day)"
-              >
-                {{ day.day }}
-              </div>
+                <!-- Another team's dinner: a plain circle -->
+                <div
+                  v-else-if="isOtherTeamDay(eventLists)"
+                  :data-testid="`calendar-other-team-dinner-${day.day}`"
+                  :class="dayCircleClasses(CHEF_CALENDAR.day.otherTeam)"
+                  @click="handleDateClick(day)"
+                >
+                  {{ day.day }}
+                </div>
 
-              <!-- Non-dinner day -->
-              <span v-else :class="COMPONENTS.chefCalendar.plainDay">{{ day.day }}</span>
+                <!-- Non-dinner day -->
+                <span v-else :class="COMPONENTS.chefCalendar.plainDay">{{ day.day }}</span>
+              </template>
             </template>
 
             <template #legend>

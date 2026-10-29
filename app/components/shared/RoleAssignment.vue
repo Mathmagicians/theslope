@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {DinnerEventDetail, MenuSwapStrategy} from '~/composables/useBookingValidation'
-import {ROLE_LABELS, type TeamRole} from '~/composables/useCookingTeamValidation'
+import type {TeamRole} from '~/composables/useCookingTeamValidation'
+import {TEAM_WORDS} from '~/config/teamWords'
 
 interface Props {
     dinnerEvent: DinnerEventDetail
@@ -20,6 +21,7 @@ const heroPrimary = COMPONENTS.heroPanel.light.primaryButton
 const planStore = usePlanStore()
 const authStore = useAuthStore()
 const {isDinnerPast} = useSeason()
+const now = useClock()
 
 // volunteer: no chef. resign: I am the chef. swap: someone else is chef.
 const mode = computed<'volunteer' | 'resign' | 'swap'>(() => {
@@ -32,11 +34,11 @@ const mode = computed<'volunteer' | 'resign' | 'swap'>(() => {
 // Binary trigger: volunteer when vacant, change otherwise. Panel sub-branches by mode.
 const triggerLabel = computed(() =>
     mode.value === 'volunteer'
-        ? `Bliv ${ROLE_LABELS[props.role].toLowerCase()}`
+        ? `Bliv ${TEAM_WORDS.roles[props.role].label.toLowerCase()}`
         : 'Rediger chefkokketjans'
 )
 
-const isActionable = computed(() => !isDinnerPast(props.dinnerEvent.date))
+const isActionable = computed(() => !isDinnerPast(props.dinnerEvent.date, now.value))
 
 const isOpen = ref(false)
 watch(() => props.dinnerEvent.id, () => { isOpen.value = false })

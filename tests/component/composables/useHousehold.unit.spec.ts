@@ -71,6 +71,8 @@ describe('useHousehold', () => {
 
   describe('computeAggregatedPreferences', () => {
     const { computeAggregatedPreferences } = useHousehold()
+    const inhabitantWith = (dinnerPreferences: InhabitantDetail['dinnerPreferences']): InhabitantDetail =>
+      ({ ...HouseholdFactory.defaultInhabitantData(), id: 1, dinnerPreferences })
 
     describe('edge cases', () => {
       it('returns all DINEIN for empty inhabitants array', () => {
@@ -82,10 +84,7 @@ describe('useHousehold', () => {
       })
 
       it('returns default (DINEIN) when all inhabitants have null preferences', () => {
-        const inhabitants: Pick<InhabitantDetail, 'dinnerPreferences'>[] = [
-          { dinnerPreferences: null },
-          { dinnerPreferences: null }
-        ]
+        const inhabitants = [inhabitantWith(null), inhabitantWith(null)]
 
         const result = computeAggregatedPreferences(inhabitants)
 
@@ -103,10 +102,7 @@ describe('useHousehold', () => {
         const prefs2Base = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
         const prefs2 = {...prefs2Base, mandag: null as unknown as typeof DinnerMode.DINEIN}
 
-        const inhabitants = [
-          { dinnerPreferences: prefs1 },
-          { dinnerPreferences: prefs2 }
-        ]
+        const inhabitants = [inhabitantWith(prefs1), inhabitantWith(prefs2)]
 
         const result = computeAggregatedPreferences(inhabitants)
 
@@ -143,9 +139,7 @@ describe('useHousehold', () => {
           expected: [D,D,T,T,N,N,D]
         }
       ])('$scenario: aggregates preferences correctly', ({ prefs, expected }) => {
-        const inhabitants = prefs.map(p =>
-          ({ dinnerPreferences: p ? createDefaultWeekdayMap(p) : null })
-        )
+        const inhabitants = prefs.map(p => inhabitantWith(p ? createDefaultWeekdayMap(p) : null))
 
         const result = computeAggregatedPreferences(inhabitants)
 
@@ -160,7 +154,7 @@ describe('useHousehold', () => {
     const { matchInhabitantByNameWithInitials, createInhabitantMatcher } = useHousehold()
 
     // Obfuscated test data based on production patterns
-    const testInhabitants: Pick<InhabitantDisplay, 'id' | 'name' | 'lastName'>[] = [
+    const testInhabitants: InhabitantDisplay[] = [
       { id: 4, name: 'Signe', lastName: 'Dalby Madsen' },
       { id: 12, name: 'Signe', lastName: 'Hansen' },
       { id: 3, name: 'Erik', lastName: 'Anders Hansen' },
@@ -179,7 +173,7 @@ describe('useHousehold', () => {
       // Single initial with multi-part lastName (Strategy 2b)
       { id: 202, name: 'Orion', lastName: 'Nebula Star' },     // ambiguous with id 203
       { id: 203, name: 'Orion', lastName: 'Nova Prime' }       // ambiguous: both "Orion N."
-    ]
+    ].map(names => ({ ...HouseholdFactory.defaultInhabitantData(), ...names }))
 
     describe('exact match', () => {
       it('matches "Signe Hansen" exactly, apart from the other Signe', () => {
@@ -282,7 +276,7 @@ describe('useHousehold', () => {
       { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }], expected: 'Familien Hansen & Jensen', scenario: 'two lastNames' },
       { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }, { lastName: 'Larsen' }], expected: 'Familien Hansen & Jensen m.fl.', scenario: '3+ lastNames' }
     ])('$scenario → $expected', ({ inhabitants, expected }) => {
-      expect(formatHouseholdFamilyName(inhabitants)).toBe(expected)
+      expect(formatHouseholdFamilyName(inhabitants.map((names, index) => ({ ...HouseholdFactory.defaultInhabitantData(), id: index + 1, ...names })))).toBe(expected)
     })
   })
 })

@@ -20,6 +20,6 @@ Volunteer/claim/resign for the CHEF role, single entry point at the `ChefMenuCar
 ## Not shipped here
 
 - **Phase 3b (assignment swap endpoint + swap panel):** superseded — cross-team duty swap in
-  `../feature-proposal-duty-roster.md` Phase 5 covers the swap need.
-- **Phase 4 (move-out cascade + "Flytter" badge):** moved to `../feature-proposal-duty-roster.md`
+  `../release-0.9.3/feature-proposal-duty-roster.md` Phase 5 covers the swap need.
+- **Phase 4 (move-out cascade + "Flytter" badge):** moved to `../release-0.9.3/feature-proposal-duty-roster.md`
   (move-out section under Phase 5).

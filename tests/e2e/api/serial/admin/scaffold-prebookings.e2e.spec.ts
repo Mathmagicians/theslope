@@ -1,6 +1,7 @@
 import {test, expect} from '@playwright/test'
 import {useCoreValidation} from '~~/app/composables/useCoreValidation'
 import {useBookingValidation} from '~~/app/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import {useWeekDayMapValidation} from '~~/app/composables/useWeekDayMapValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -15,6 +16,7 @@ const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap: createDefaultDinnerModeMap} = useCoreValidation()
 const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom, assertNoOrdersWithOrphanPrices, daysFromNow} = testHelpers
 const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
+const {findTicketPriceByType} = useTicket()
 
 /**
  * Admin Scaffold Pre-bookings API Tests
@@ -565,7 +567,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
         const {dinner: beyondWindow} = await SeasonFactory.createCookingTeamWithChefAndDinner(context, season, adminInhabitantId, {
             teamName: salt('Beyond', testSalt), dinner: {date: daysFromNow(70), menuTitle: salt('Beyond the window', testSalt)}
         })
-        const adultPriceId = season.ticketPrices.find(price => price.ticketType === useBookingValidation().TicketTypeSchema.enum.ADULT)!.id!
+        const adultPriceId = findTicketPriceByType(useBookingValidation().TicketTypeSchema.enum.ADULT, season.ticketPrices)!.id!
 
         const cancelled = await OrderFactory.scaffoldOrders(memberContext, {
             householdId, seasonId: season.id!, dinnerEventIds: [beyondWindow.id],
@@ -630,7 +632,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             const [holder, buyer] = await Promise.all(['Holder', 'Buyer'].map(lastName =>
                 HouseholdFactory.createInhabitantWithConfig(context, householdId, {name: salt('Anders', testSalt), lastName})))
             createdInhabitantIds.push(holder!.id, buyer!.id)
-            const adultPriceId = season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!.id!
+            const adultPriceId = findTicketPriceByType(TicketTypeSchema.enum.ADULT, season.ticketPrices)!.id!
             const created = await OrderFactory.createOrder(context, {
                 householdId, dinnerEventId: dinner.id,
                 orders: [OrderFactory.defaultOrderItem({inhabitantId: holder!.id, ticketPriceId: adultPriceId})]

@@ -2,7 +2,7 @@ import {z} from 'zod'
 import {isBefore, isAfter} from 'date-fns'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import {groupBy} from '~/utils/batchUtils'
-import type {InhabitantDetail, InhabitantDisplay, HouseholdDisplay} from '~/composables/useCoreValidation'
+import type {InhabitantDetail, InhabitantDisplay, InhabitantName, HouseholdDisplay} from '~/composables/useCoreValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
@@ -37,10 +37,10 @@ export type ResidencyStatus = 'pending' | 'active' | 'leaving' | 'moved-out'
 export const getResidencyStatus = (
     movedInDate: Date,
     moveOutDate: Date | null,
-    referenceDate: Date = new Date()
+    now: Date
 ): ResidencyStatus => {
-    if (isAfter(movedInDate, referenceDate)) return 'pending'
-    if (moveOutDate && isBefore(moveOutDate, referenceDate)) return 'moved-out'
+    if (isAfter(movedInDate, now)) return 'pending'
+    if (moveOutDate && isBefore(moveOutDate, now)) return 'moved-out'
     if (moveOutDate) return 'leaving'
     return 'active'
 }
@@ -58,10 +58,10 @@ export const getResidencyStatus = (
  * 4. N candidates, all with moveOutDate → newest moveOutDate, tie-break lowest id
  * 5. N candidates, 2+ without moveOutDate → lowest id (deterministic)
  */
-export const resolveHouseholdForHeynaboId = <T extends Pick<HouseholdDisplay, 'id' | 'moveOutDate'>>(
+export const resolveHouseholdForHeynaboId = (
     _heynaboId: number,
-    candidates: T[]
-): T | null => {
+    candidates: HouseholdDisplay[]
+): HouseholdDisplay | null => {
     if (candidates.length === 0) return null
     if (candidates.length === 1) return candidates[0]!
 
@@ -162,7 +162,7 @@ export const useHousehold = () => {
      * Uses computeConsensus for each weekday
      */
     const computeAggregatedPreferences = (
-        inhabitants: Pick<InhabitantDetail, 'dinnerPreferences'>[]
+        inhabitants: InhabitantDetail[]
     ): { preferences: WeekDayMap<DinnerMode>, consensus: WeekDayMap<boolean> } => {
         const preferences = createDinnerModeMap(DinnerMode.DINEIN)
         const consensus = createBooleanMap(true)
@@ -188,7 +188,7 @@ export const useHousehold = () => {
      * Used when disambiguating inhabitants with same first name
      * Example: "Mads Bruun Hovgaard" → "Mads B.H."
      */
-    const formatNameWithInitials = (inhabitant: Pick<InhabitantDisplay, 'name' | 'lastName'>): string => {
+    const formatNameWithInitials = (inhabitant: InhabitantName): string => {
         const lastNameParts = inhabitant.lastName.split(/\s+/)
         const initials = lastNameParts.map(part => `${part.charAt(0).toUpperCase()}.`).join('')
         return `${inhabitant.name} ${initials}`
@@ -214,7 +214,7 @@ export const useHousehold = () => {
      * @param inhabitants - List of inhabitants to match against
      * @returns Matched inhabitant ID or null if no match/ambiguous
      */
-    const matchInhabitantByNameWithInitials = (shortName: string, inhabitants: Pick<InhabitantDisplay, 'id' | 'name' | 'lastName'>[]): number | null => {
+    const matchInhabitantByNameWithInitials = (shortName: string, inhabitants: InhabitantDisplay[]): number | null => {
         const normalizedInput = normalizeName(shortName)
         if (!normalizedInput) return null
 
@@ -307,7 +307,7 @@ export const useHousehold = () => {
     /**
      * Create a matcher function bound to a specific inhabitants list
      */
-    const createInhabitantMatcher = (inhabitants: Pick<InhabitantDisplay, 'id' | 'name' | 'lastName'>[]) => {
+    const createInhabitantMatcher = (inhabitants: InhabitantDisplay[]) => {
         return (shortName: string): number | null => matchInhabitantByNameWithInitials(shortName, inhabitants)
     }
 
@@ -326,7 +326,7 @@ export const useHousehold = () => {
      * @returns Formatted family name string or null if no inhabitants
      */
     const formatHouseholdFamilyName = (
-        inhabitants: Pick<InhabitantDisplay, 'lastName'>[]
+        inhabitants: InhabitantDisplay[]
     ): string | null => {
         if (inhabitants.length === 0) return null
 

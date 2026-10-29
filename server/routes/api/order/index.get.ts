@@ -20,21 +20,21 @@ import {useSeason} from "~/composables/useSeason"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 import type { OrderDisplay } from '~/composables/useBookingValidation'
-import type { UserDetail } from '~/composables/useCoreValidation'
+import {QueryFlagSchema, type UserDetail} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
-const {OrderStateSchema, IdOrIdsSchema} = useBookingValidation()
+const {OrderStateSchema, OrderSortBySchema, IdOrIdsSchema} = useBookingValidation()
 
-const sortBySchema = z.enum(['createdAt', 'releasedAt']).default('createdAt')
+const sortBySchema = OrderSortBySchema.default(OrderSortBySchema.enum.createdAt)
 
 const querySchema = z.object({
     dinnerEventIds: IdOrIdsSchema,
     upcomingForSeason: z.coerce.number().int().positive().optional(),
     state: OrderStateSchema.optional(),
     sortBy: sortBySchema.optional(),
-    allHouseholds: z.coerce.boolean().optional().default(false),
-    includeProvenance: z.coerce.boolean().optional().default(false),
-    includeDinnerContext: z.coerce.boolean().optional().default(false),
+    allHouseholds: QueryFlagSchema,
+    includeProvenance: QueryFlagSchema,
+    includeDinnerContext: QueryFlagSchema,
     householdId: z.coerce.number().int().positive().optional()
 }).refine(
     (data) => !(data.householdId && data.allHouseholds),
@@ -89,7 +89,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
             }
 
             const {splitDinnerEvents} = useSeason()
-            const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents ?? [])
+            const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents ?? [], new Date())
             eventIds = [
                 ...(nextDinner ? [nextDinner.id] : []),
                 ...futureDinners.map(e => e.id)

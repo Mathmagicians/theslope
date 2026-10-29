@@ -1,6 +1,6 @@
 import {z} from 'zod'
 import {useQueryParam} from '~/composables/useQueryParam'
-import {startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, addDays} from 'date-fns'
+import {startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, addDays, isSameDay} from 'date-fns'
 import type {DateRange} from '~/types/dateTypes'
 import {getPeriodBoundary} from '~/utils/date'
 
@@ -9,6 +9,13 @@ import {getPeriodBoundary} from '~/utils/date'
  */
 export const BookingViewSchema = z.enum(['day', 'week', 'month'])
 export type BookingView = z.infer<typeof BookingViewSchema>
+
+/**
+ * The rows of the day view and the grid: the power row, a person, a guest's tickets and the add-guest row.
+ * A row's test ids start with its type and id (`guest-add-guest-toggle`).
+ */
+export const BookingRowTypeSchema = z.enum(['power', 'inhabitant', 'guest-order', 'guest-add'])
+export type BookingRowType = z.infer<typeof BookingRowTypeSchema>
 
 /**
  * useDinnerDateParam - Reusable date query param for dinner navigation
@@ -21,6 +28,7 @@ export const useDinnerDateParam = (options: {
   syncWhen: () => boolean
 }) => {
   const {getNextDinnerDate} = useSeason()
+  const now = useClock()
 
   return useQueryParam<Date>('date', {
     serialize: formatDate,
@@ -28,10 +36,10 @@ export const useDinnerDateParam = (options: {
       const parsed = parseDate(s)
       return parsed && !isNaN(parsed.getTime()) ? parsed : null
     },
-    validate: (date) => options.dinnerDates().some(d => d.toDateString() === date.toDateString()),
+    validate: (date) => options.dinnerDates().some(d => isSameDay(d, date)),
     defaultValue: () => {
-      const nextDinner = getNextDinnerDate(options.dinnerDates())
-      return nextDinner?.start ?? options.dinnerDates()[0] ?? new Date()
+      const nextDinner = getNextDinnerDate(options.dinnerDates(), now.value)
+      return nextDinner?.start ?? options.dinnerDates()[0] ?? now.value
     },
     syncWhen: options.syncWhen
   })

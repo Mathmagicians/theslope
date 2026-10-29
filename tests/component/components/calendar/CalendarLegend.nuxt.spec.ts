@@ -4,9 +4,9 @@ import {h} from 'vue'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
 import CalendarLegend from '~/components/calendar/CalendarLegend.vue'
-import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
-import {mountWithTooltipProvider, findAllByTestId, findByTestId, resetStores} from '~~/tests/component/testHelpers'
-import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {LEGEND_KIND, type CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
+import {mountWithTooltipProvider, findAllByTestId, findByTestId, resetStores, iconNamesIn} from '~~/tests/component/testHelpers'
+import {COLOR, COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
 
 enableAutoUnmount(afterEach)
 
@@ -18,14 +18,14 @@ enableAutoUnmount(afterEach)
  */
 describe('CalendarLegend', () => {
     const chips = [
-        {label: 'Ledige billetter', kind: 'chip', chipColor: 'yellow', circleClass: ['circle-future'], count: '1'},
-        {label: 'Venteliste, ingen ledige billetter', kind: 'chip', chipColor: 'yellow', circleClass: ['circle-future'], icon: ICONS.waitlist},
-        {label: 'Lukket for framelding', kind: 'chip', chipColor: 'error', circleClass: ['circle-future']}
+        {label: 'Ledige billetter', kind: LEGEND_KIND.chip, chipColor: COLOR.yellow, circleClass: ['circle-future'], count: '1'},
+        {label: 'Venteliste, ingen ledige billetter', kind: LEGEND_KIND.chip, chipColor: COLOR.yellow, circleClass: ['circle-future'], icon: ICONS.waitlist},
+        {label: 'Lukket for framelding', kind: LEGEND_KIND.chip, chipColor: COLOR.error, circleClass: ['circle-future']}
     ] satisfies CalendarLegendItem[]
     const items: CalendarLegendItem[] = [
-        {label: 'Planlagt fællesspisning', kind: 'circle', circleClass: ['circle-planned']},
+        {label: 'Planlagt fællesspisning', kind: LEGEND_KIND.circle, circleClass: ['circle-planned']},
         ...chips,
-        {label: 'Madhold 1', kind: 'badge', badgeClass: 'band-one'}
+        {label: 'Madhold 1', kind: LEGEND_KIND.badge, badgeClass: 'band-one'}
     ]
     const HINT = 'Klik på en celle'
 
@@ -51,7 +51,7 @@ describe('CalendarLegend', () => {
             // UChip passes attrs through to the slot, so the indicator is reached by its slot name
             const indicator = entry.find('[data-slot="base"]')
             expect(indicator.text(), chip.label).toBe('count' in chip ? chip.count : '')
-            expect(wrapper.findAllComponents({name: 'UIcon'}).filter(icon => indicator.element.contains(icon.element)).map(icon => icon.props('name')), chip.label)
+            expect(iconNamesIn(indicator), chip.label)
                 .toEqual('icon' in chip ? [chip.icon] : [])
         })
     })

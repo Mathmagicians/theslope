@@ -8,6 +8,7 @@ import {isAdmin, isAllergyManager} from '~/composables/usePermissions'
 import {useCoreValidation, type InhabitantDisplay, type HouseholdDetail} from '~/composables/useCoreValidation'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
+import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 
 const {validatedBrowserContext, saltedId, salt, temporaryAndRandom, headers} = testHelpers
 const {SystemRoleSchema} = useCoreValidation()
@@ -63,6 +64,7 @@ const RECREATE_HOUSEHOLD_HEYNABO_IDS = [4, 28]
 // Cleanup arrays - populated during setup, cleaned in afterAll
 const createdHouseholdIds: number[] = []
 const createdUserIds: number[] = []
+const createdAllergyTypeIds: number[] = []
 
 // Test data containers - populated in beforeAll, verified in tests
 const testData = {
@@ -552,7 +554,7 @@ test.describe.serial('Heynabo Integration API', () => {
             const oldHousehold = getOldHousehold()
             const testSalt = temporaryAndRandom()
 
-            // GIVEN: an inhabitant in the old household, linked to a user, neither known to Heynabo
+            // GIVEN: an inhabitant in the old household, linked to a user and with an allergy, neither known to Heynabo
             const inhabitant = await HouseholdFactory.createInhabitantWithConfig(context, oldHousehold.id, {
                 name: salt('Anders', testSalt), lastName: 'DepartedUser', birthDate: null
             })
@@ -561,18 +563,22 @@ test.describe.serial('Heynabo Integration API', () => {
             const user = await UserFactory.createUser(context, {...UserFactory.defaultUser(), email})
             createdUserIds.push(user.id)
             await HouseholdFactory.updateInhabitant(context, inhabitant.id, {userId: user.id})
+            const allergyType = await AllergyFactory.createAllergyType(context, AllergyFactory.defaultAllergyTypeData(testSalt))
+            createdAllergyTypeIds.push(allergyType.id)
+            await AllergyFactory.createAllergy(context, AllergyFactory.defaultAllergyData(inhabitant.id, allergyType.id, testSalt), 201, true)
 
             // WHEN: import runs
             const result = await HouseholdFactory.runHeynaboImport(context)
 
             // THEN: the inhabitant is gone from TheSlope
             await HouseholdFactory.getInhabitantById(context, inhabitant.id, 404)
-            expect(result.inhabitantsDeleted, 'Deletion reported in import result').toBeGreaterThanOrEqual(1)
+            expect(result.inhabitantsDeleted, 'The deleted inhabitant counted once, its allergy aside').toBe(1)
             expect(result.sanityCheck.passed, 'No count drift between TheSlope and Heynabo').toBe(true)
 
             // AND: so is its user
             const users = await UserFactory.getUsers(context)
             expect(users.find(u => u.email === email), 'User deleted').toBeUndefined()
+            expect(result.usersDeleted, 'The deleted user counted once, its inhabitant link aside').toBe(1)
         })
     })
 
@@ -675,5 +681,6 @@ test.describe.serial('Heynabo Integration API', () => {
         const context = await validatedBrowserContext(browser)
         await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
         await UserFactory.cleanupUsers(context, createdUserIds)
+        await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
     })
 })

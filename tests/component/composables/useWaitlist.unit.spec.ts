@@ -1,11 +1,12 @@
 import {describe, it, expect} from 'vitest'
 import {subMinutes} from 'date-fns'
-import {useWaitlist, type TicketForSale} from '~/composables/useWaitlist'
+import {useWaitlist} from '~/composables/useWaitlist'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
-import {useWaitlistValidation, type PlacementOrder, type TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
+import {useWaitlistValidation, type PlacementOrder, type TicketForSale, type TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 
 const {OrderStateSchema} = useBookingValidation()
 const {TicketTypeSchema} = useTicketPriceValidation()
@@ -13,10 +14,8 @@ const {PlacementRecoverySchema} = useWaitlistValidation()
 const TicketType = TicketTypeSchema.enum
 const Recovery = PlacementRecoverySchema.enum
 
-// Ticket price ids stand for a type; the season's prices carry each price's portions
-const PRICE_ID = {[TicketType.ADULT]: 1, [TicketType.CHILD]: 2, [TicketType.BABY]: 3} as const
-const PORTIONS = {[TicketType.ADULT]: 1, [TicketType.CHILD]: 0.5, [TicketType.BABY]: 0} as const
-const TICKET_PRICES = Object.values(TicketType).map(ticketType => ({id: PRICE_ID[ticketType], ticketType, portions: PORTIONS[ticketType]}))
+// The season's default prices carry each price's portions; a ticket type stands for its first price row
+const TICKET_PRICES = TicketFactory.defaultTicketPrices()
 const portionsOf = useWaitlist().portionsOfEntryFor(TICKET_PRICES)
 const ticketTypeOf = useWaitlist().ticketTypeOfEntry(TICKET_PRICES)
 
@@ -27,9 +26,9 @@ const grabbedAgo = (minutes: number) => ({placingAt: subMinutes(NOW, minutes)})
 const {isHeld, isExpired} = useWaitlist().placingLease(NOW, LEASE_MINUTES)
 
 type EntryOverrides = Partial<Pick<TicketWaitlistDisplay, 'isGuestTicket' | 'placingAt' | 'placingOrderId'>>
-const entry = (id: number, ticketType: keyof typeof PRICE_ID, minute: number, overrides: EntryOverrides = {}): TicketWaitlistDisplay =>
+const entry = (id: number, ticketType: keyof typeof TicketType, minute: number, overrides: EntryOverrides = {}): TicketWaitlistDisplay =>
     WaitlistFactory.defaultEntry({
-        id, dinnerEventId: 100, inhabitantId: 40 + id, householdId: 9, ticketPriceId: PRICE_ID[ticketType],
+        id, dinnerEventId: 100, inhabitantId: 40 + id, householdId: 9, ticketPrice: TicketFactory.defaultPriceOf(ticketType),
         createdAt: new Date(2026, 9, 1, 12, minute), ...overrides
     })
 
@@ -62,7 +61,7 @@ describe('useWaitlist', () => {
     })
 
     it('weighs an entry at the portions its price carries', () => {
-        expect(portionsOf(entry(1, TicketType.CHILD, 0))).toBe(PORTIONS[TicketType.CHILD])
+        expect(portionsOf(entry(1, TicketType.CHILD, 0))).toBe(TicketFactory.defaultPriceOf(TicketType.CHILD).portions)
     })
 
     it('weighs an entry whose price is outside the season at nothing', () => {
@@ -76,23 +75,32 @@ describe('useWaitlist', () => {
     it('reports the entries that joined behind the line in join order, each at its place in its ticket type\'s line, with the size and the portion need of the queue that holds it at its join', () => {
         const {joinedOf} = useWaitlist()
         const [adult1, child2, adult3, child4] = queue
-        const joined = (entry: TicketWaitlistDisplay, ticketType: keyof typeof PRICE_ID, position: number, queueSize: number, portionNeed: number) => ({
-            position, joined: {dinnerEventId: 100, inhabitantId: entry.inhabitantId, bookedByUserId: 7, position, ticketType, queueSize, portionNeed}
+        const joined = (
+            entry: TicketWaitlistDisplay, ticketType: keyof typeof TicketType, position: number, queueSize: number, queuedByType: Partial<Record<keyof typeof TicketType, number>>,
+            portionNeed: number
+        ) => ({
+            position, joined: {
+                dinnerEventId: 100, inhabitantId: entry.inhabitantId, bookedByUserId: 7, entryId: entry.id, position, ticketType, isGuestTicket: entry.isGuestTicket,
+                ticketPriceId: entry.order.ticketPriceId, dinnerMode: entry.order.dinnerMode, queueSize, queuedByType, portionNeed
+            }
         })
 
         expect(joinedOf([adult1!, child2!], [adult3!, child4!], TICKET_PRICES, 7)).toEqual([
-            joined(adult3!, TicketType.ADULT, 2, 3, 2.5),
-            joined(child4!, TicketType.CHILD, 2, 4, 3)
+            joined(adult3!, TicketType.ADULT, 2, 3, {[TicketType.ADULT]: 2, [TicketType.CHILD]: 1}, 2.5),
+            joined(child4!, TicketType.CHILD, 2, 4, {[TicketType.ADULT]: 2, [TicketType.CHILD]: 2}, 3)
         ])
     })
 
     // What the sale to the waiting list would sell, read without writing; sellers are households 5, 6 and 7, each by its inhabitant 50, 60 and 70
+    // and each with its released ticket 70, 71 and 72
     describe('previewSale', () => {
         const {previewSale} = useWaitlist()
-        const ticket = (id: number, ticketType: keyof typeof PRICE_ID, minute: number, householdId: number, dinnerEventId = 100): TicketForSale =>
-            ({id, dinnerEventId, ticketPriceId: PRICE_ID[ticketType], releasedAt: new Date(2026, 9, 1, 14, minute), inhabitantId: 10 * householdId, householdId})
-        const sale = (buyer: TicketWaitlistDisplay, ticketType: keyof typeof PRICE_ID, sellerHouseholdId: number) => ({
-            dinnerEventId: buyer.dinnerEventId, ticketPriceId: PRICE_ID[ticketType], buyerInhabitantId: buyer.inhabitantId,
+        const ticket = (id: number, ticketType: keyof typeof TicketType, minute: number, householdId: number, dinnerEventId = 100): TicketForSale =>
+            ({id, dinnerEventId, ticketPriceId: TicketFactory.defaultPriceOf(ticketType).id!, releasedAt: new Date(2026, 9, 1, 14, minute), inhabitantId: 10 * householdId, householdId})
+        const ticketOfSeller = (sellerHouseholdId: number): number => 65 + sellerHouseholdId
+        const sale = (buyer: TicketWaitlistDisplay, ticketType: keyof typeof TicketType, sellerHouseholdId: number) => ({
+            dinnerEventId: buyer.dinnerEventId, ticketPriceId: TicketFactory.defaultPriceOf(ticketType).id!, orderId: ticketOfSeller(sellerHouseholdId), dinnerMode: buyer.order.dinnerMode,
+            isGuestTicket: buyer.isGuestTicket, buyerInhabitantId: buyer.inhabitantId,
             buyerHouseholdId: buyer.order.householdId, sellerHouseholdId, sellerInhabitantId: 10 * sellerHouseholdId
         })
         const [adult1, child2, adult3] = queue
@@ -114,11 +122,11 @@ describe('useWaitlist', () => {
                 sold: []
             }
         ])('$description', ({tickets, sold}) => {
-            expect(previewSale(queue, tickets, TICKET_PRICES)).toEqual({waitlistTicketsSold: sold})
+            expect(previewSale(queue, tickets, TICKET_PRICES)).toEqual(sold)
         })
 
         it('sells nothing while nobody waits', () => {
-            expect(previewSale([], [ticket(70, TicketType.ADULT, 0, 5)], TICKET_PRICES)).toEqual({waitlistTicketsSold: []})
+            expect(previewSale([], [ticket(70, TicketType.ADULT, 0, 5)], TICKET_PRICES)).toEqual([])
         })
     })
 
@@ -196,7 +204,7 @@ describe('useWaitlist', () => {
         const order = (createdAt: Date, overrides: Partial<PlacementOrder> = {}): PlacementOrder => ({
             ...OrderFactory.defaultOrder(undefined, {
                 id: ORDER_ID, inhabitantId: grabbed(null).inhabitantId, isGuestTicket: false, state: OrderStateSchema.enum.BOOKED,
-                ticketPriceId: PRICE_ID[TicketType.ADULT], createdAt
+                ticketPriceId: TicketFactory.defaultPriceOf(TicketType.ADULT).id!, createdAt
             }),
             sellerHouseholdId: null,
             sellerInhabitantId: null,
@@ -218,19 +226,25 @@ describe('useWaitlist', () => {
         })
 
         describe('finishedPlacementOutcomes', () => {
-            const portionsOfAdult = PORTIONS[TicketType.ADULT]
-            const {dinnerEventId, id: entryId, inhabitantId, isGuestTicket, order: {householdId, ticketPriceId}} = grabbed(null)
+            const portionsOfAdult = TicketFactory.defaultPriceOf(TicketType.ADULT).portions
+            const {dinnerEventId, id: entryId, inhabitantId, isGuestTicket, order: {householdId, ticketPriceId, dinnerMode}} = grabbed(null)
 
             it.each([
                 {
                     description: 'the order written after the grab is the extra portion assigned to the entry',
                     found: order(writtenAfterGrab),
-                    outcomes: {waitlistTicketsSold: [], waitlistPortionsAssigned: [{dinnerEventId, entryId, inhabitantId, isGuestTicket, portions: portionsOfAdult, orderId: ORDER_ID, ticketPriceId}]}
+                    outcomes: {waitlistTicketsSold: [], waitlistPortionsAssigned: [{dinnerEventId, entryId, inhabitantId, isGuestTicket, portions: portionsOfAdult, orderId: ORDER_ID, ticketPriceId, dinnerMode}]}
                 },
                 {
                     description: 'the released ticket older than the grab is sold to the entry by the household its claim names',
-                    found: order(releasedBeforeGrab, {ticketPriceId: PRICE_ID[TicketType.CHILD], sellerHouseholdId: 3, sellerInhabitantId: 30}),
-                    outcomes: {waitlistTicketsSold: [{dinnerEventId, ticketPriceId: PRICE_ID[TicketType.CHILD], buyerInhabitantId: inhabitantId, buyerHouseholdId: householdId, sellerHouseholdId: 3, sellerInhabitantId: 30}], waitlistPortionsAssigned: []}
+                    found: order(releasedBeforeGrab, {ticketPriceId: TicketFactory.defaultPriceOf(TicketType.CHILD).id!, sellerHouseholdId: 3, sellerInhabitantId: 30}),
+                    outcomes: {
+                        waitlistTicketsSold: [{
+                            dinnerEventId, ticketPriceId: TicketFactory.defaultPriceOf(TicketType.CHILD).id!, orderId: ORDER_ID, dinnerMode, isGuestTicket, buyerInhabitantId: inhabitantId,
+                            buyerHouseholdId: householdId, sellerHouseholdId: 3, sellerInhabitantId: 30
+                        }],
+                        waitlistPortionsAssigned: []
+                    }
                 },
                 {
                     description: 'a sold ticket whose claim names no household reports nothing',

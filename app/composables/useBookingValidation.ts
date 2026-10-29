@@ -11,15 +11,10 @@ import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {useCoreValidation, IdSchema} from '~/composables/useCoreValidation'
 import {useTicketPriceValidation, type PortionTicket} from '~/composables/useTicketPriceValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {chunkArray, ReconciliationBucketSchema} from '~/utils/batchUtils'
 import {sumAmounts} from '~/utils/ledger'
-import {ExpenseFragmentSchema, deserializeExpense} from '~/composables/fragments/domainFragments'
-
-// A dinner row as Prisma hands it out: the relations a read includes, the expense amounts behind the computed cost
-type DinnerEventRow = Record<string, unknown> & {
-    allergens?: Array<{allergyType: unknown}> | null
-    expenses?: Array<Record<string, unknown> & {amount: number}> | null
-}
+import {ExpenseFragmentSchema, SerializedExpenseFragmentSchema, AllergyTypeFragmentSchema, deserializeExpense} from '~/composables/fragments/domainFragments'
 
 // What a ticket is now: released and for sale, bought from another household, waited for on the waiting list, or none
 const TicketStateSchema = z.enum(['released', 'claimed', 'queued', 'normal'])
@@ -27,6 +22,8 @@ const TicketStateSchema = z.enum(['released', 'claimed', 'queued', 'normal'])
 const SupplyStateSchema = z.enum(['FOR_SALE_AND_WAITLIST', 'FOR_SALE', 'WAITLIST', 'NONE'])
 // Why an order of a booking failed: it conflicts with the state it meets, a place on the waiting list a run is assigning
 const BookingFailureSchema = z.enum(['CONFLICT'])
+// The order a read lists orders in: by booking time, or by release time, the claim queue's first come first served
+const OrderSortBySchema = z.enum(['createdAt', 'releasedAt'])
 
 export const DinnerMode = DinnerModeSchema.enum
 export const DinnerState = DinnerStateSchema.enum
@@ -35,6 +32,10 @@ export const OrderAuditAction = OrderAuditActionSchema.enum
 export const TicketState = TicketStateSchema.enum
 export const SupplyState = SupplyStateSchema.enum
 export const BookingFailure = BookingFailureSchema.enum
+export const OrderSortBy = OrderSortBySchema.enum
+
+/** The states of a dinner that takes no booking: no order, no place on its waiting list, no sale */
+export const CLOSED_DINNER_STATES: DinnerState[] = [DinnerState.CONSUMED, DinnerState.CANCELLED]
 
 /**
  * Validation schemas for Bookings domain (DinnerEvent + Order)
@@ -45,8 +46,8 @@ export const BookingFailure = BookingFailureSchema.enum
  * - Detail ALWAYS EXTENDS Display
  */
 export const useBookingValidation = () => {
-    const {CookingTeamDisplaySchema, deserializeCookingTeamDisplay} = useCookingTeamValidation()
-    const {InhabitantDisplaySchema, deserializeInhabitantDisplay} = useCoreValidation()
+    const {CookingTeamDisplaySchema, SerializedCookingTeamDisplaySchema, deserializeCookingTeamDisplay} = useCookingTeamValidation()
+    const {InhabitantDisplaySchema, InhabitantNameSchema, SerializedInhabitantSchema, SerializedInhabitantWithAllergiesSchema, deserializeInhabitantDisplay} = useCoreValidation()
     const {TicketPriceSchema} = useTicketPriceValidation()
     const {AllergyTypeDisplaySchema, InhabitantWithAllergiesSchema, deserializeInhabitantWithAllergies} = useAllergyValidation()
 
@@ -78,6 +79,16 @@ export const useBookingValidation = () => {
     const DinnerEventDisplaySchema = DinnerEventBaseSchema.extend({
         id: IdSchema
     })
+    type DinnerEventDisplay = z.infer<typeof DinnerEventDisplaySchema>
+
+    // A dinner row (ADR-010): the expense rows whose amounts are its cost and, where a read includes them, its allergens
+    // through their join rows; a read may leave the deprecated cost column out (ADR-010 rule 6)
+    const SerializedDinnerEventSchema = DinnerEventDisplaySchema.extend({
+        totalCost: DinnerEventDisplaySchema.shape.totalCost.optional(),
+        allergens: z.array(z.object({allergyType: AllergyTypeDisplaySchema})).nullish(),
+        expenses: z.array(SerializedExpenseFragmentSchema.pick({amount: true})).nullish()
+    })
+    type SerializedDinnerEvent = z.infer<typeof SerializedDinnerEventSchema>
 
     /**
      * DinnerEvent Info - minimal fields for grouping (economy views, cost entries)
@@ -88,6 +99,9 @@ export const useBookingValidation = () => {
         date: true,
         menuTitle: true
     })
+
+    // A dinner by its id and its date: what a run over dinners reads (the pending dinners, the dinners a scaffold decided)
+    const DinnerEventDateSchema = DinnerEventDisplaySchema.pick({id: true, date: true})
 
     /**
      * DinnerEvent Create - For API input validation (PUT /api/admin/dinner-event)
@@ -143,6 +157,14 @@ export const useBookingValidation = () => {
         dinnerEvent: DinnerEventInfoSchema.optional()
     })
 
+    // A ticket's order as its state and its badge read it: a booked order, a desired order, a cost line's order
+    const TicketOrderSchema = OrderDisplaySchema.pick({
+        state: true,
+        dinnerMode: true,
+        provenanceHousehold: true,
+        isGuestTicket: true
+    })
+
     /**
      * OrderHistory Display - lightweight for lists (ADR-009)
      * Scalars only, no nested Order relation
@@ -158,7 +180,7 @@ export const useBookingValidation = () => {
         performedByUser: z.object({
             id: IdSchema,
             email: z.string(),
-            Inhabitant: InhabitantDisplaySchema.pick({name: true, lastName: true}).nullable()
+            Inhabitant: InhabitantNameSchema.nullable()
         }).nullable(),
         auditData: z.string(),
         timestamp: z.coerce.date(),
@@ -204,6 +226,26 @@ export const useBookingValidation = () => {
         // The lines behind the cost (ADR-009: Detail carries them, Display the sum)
         expenses: z.array(ExpenseFragmentSchema).default([])
     })
+    type DinnerEventDetail = z.infer<typeof DinnerEventDetailSchema>
+
+    // Database rows of a dinner's Detail read (ADR-010): a ticket with its holder's row and allergies, its payer and its
+    // price row; the dinner with its allergens through their join rows, the expense rows whose amounts are its cost, the
+    // chef's row and the team's row
+    const SerializedDinnerTicketSchema = OrderBaseSchema.extend({
+        id: IdSchema,
+        inhabitant: SerializedInhabitantWithAllergiesSchema,
+        bookedByUser: OrderDetailSchema.shape.bookedByUser,
+        ticketPrice: TicketPriceSchema.omit({portions: true}).nullable()
+    })
+
+    const SerializedDinnerEventDetailSchema = DinnerEventDisplaySchema.extend({
+        allergens: z.array(z.object({allergyType: AllergyTypeFragmentSchema})),
+        expenses: z.array(SerializedExpenseFragmentSchema),
+        chef: SerializedInhabitantSchema.nullable(),
+        cookingTeam: SerializedCookingTeamDisplaySchema.nullable(),
+        tickets: z.array(SerializedDinnerTicketSchema)
+    })
+    type SerializedDinnerEventDetail = z.infer<typeof SerializedDinnerEventDetailSchema>
 
     /**
      * Order Create - Repository layer (used internally)
@@ -230,8 +272,9 @@ export const useBookingValidation = () => {
      * seasonId: Required for user intent tracking (fetchUserIntentKeys filters by seasonId)
      */
     // What wrote an order's history row: a member's booking, an admin's correction (`?adminBypass=true`), a preference
-    // change, the nightly scaffold, the chef's extra portions for the waiting list, the billing import
+    // change, the DAILY_MAINTENANCE job's scaffold, the chef's extra portions for the waiting list, the billing import
     const OrderAuditSourceSchema = z.enum(['user-booking', 'admin-correction', 'preference-update', 'scaffold-prebookings', 'waitlist-assignment', 'csv_billing'])
+    type OrderAuditSource = z.infer<typeof OrderAuditSourceSchema>
 
     const AuditContextSchema = z.object({
         action: OrderAuditActionSchema,
@@ -293,12 +336,8 @@ export const useBookingValidation = () => {
     // inhabitantId optional, defaults to caller. Reuses AssignRoleSchema (DRY).
     const RemoveRoleRequestSchema = AssignRoleSchema.partial({inhabitantId: true})
 
-    /**
-     * Order snapshot for audit data - captures order state at deletion/release time
-     * Derived from OrderDisplaySchema, picking essential fields + provenance data
-     * Provenance enables "🔄 fra AR_1" display on claimed tickets
-     */
-    const OrderSnapshotSchema = OrderDisplaySchema.pick({
+    // The order an audit snapshot keeps: its essential fields
+    const SnapshotOrderSchema = OrderDisplaySchema.pick({
         id: true,
         inhabitantId: true,
         dinnerEventId: true,
@@ -308,13 +347,22 @@ export const useBookingValidation = () => {
         state: true,
         isGuestTicket: true
     }).extend({
-        id: IdSchema.nullable(),                          // Null for a row without an order: a waiting entry's, or a cancellation of nothing booked
+        id: IdSchema.nullable()                           // Null for a row without an order: a waiting entry's, or a cancellation of nothing booked
+    })
+
+    /**
+     * Order snapshot for audit data - captures order state at deletion/release time
+     * The snapshot's order + provenance data
+     * Provenance enables "🔄 fra AR_1" display on claimed tickets
+     */
+    const OrderSnapshotSchema = SnapshotOrderSchema.extend({
         // Provenance fields for ticket claim feature (pre-formatted for immutable audit trail)
         inhabitantNameWithInitials: z.string(),           // "Anna B.H." - colloquial format
         householdShortname: z.string(),                   // "AR_1" - for "fra AR_1" display
         householdId: IdSchema,         // For filtering released tickets
         allergies: z.array(z.string()).optional()         // ["Peanuts", "Gluten"] - captured at CREATE, omitted at UPDATE/DELETE
     })
+    type OrderSnapshotInput = z.input<typeof OrderSnapshotSchema>
 
     // ============================================================================
     // Serialization (ADR-010 - Repository layer)
@@ -324,8 +372,7 @@ export const useBookingValidation = () => {
      * Transform DinnerEvent from Prisma format to domain format (ADR-010)
      * Handles join table flattening for allergens only (for Display schema)
      */
-    function deserializeDinnerEvent(prismaEvent: Record<string, unknown>): z.infer<typeof DinnerEventDisplaySchema> {
-        const {allergens, expenses, ...event} = prismaEvent as DinnerEventRow
+    function deserializeDinnerEvent({allergens, expenses, ...event}: SerializedDinnerEvent): DinnerEventDisplay {
         return DinnerEventDisplaySchema.parse({
             ...event,
             // The cost is the sum of the expense rows; the stored column is deprecated and its value never leaves the repository
@@ -343,54 +390,28 @@ export const useBookingValidation = () => {
      * - tickets: Transform to include ticketType (flattened from ticketPrice) and dinnerEvent reference
      */
     function deserializeDinnerEventDetail(
-        prismaEvent: Record<string, unknown>,
+        serialized: SerializedDinnerEventDetail,
         withPortions: (ticketPrice: PortionTicket) => PortionTicket & {portions: number}
-    ): Record<string, unknown> {
-        const {allergens, expenses: expenseRows, ...event} = prismaEvent as DinnerEventRow
-        const totalCost = sumAmounts(expenseRows)
-        const chef = prismaEvent.chef as Record<string, unknown> | null | undefined
-        const cookingTeam = prismaEvent.cookingTeam as Record<string, unknown> | null | undefined
-        const tickets = prismaEvent.tickets as Array<Record<string, unknown>> | undefined
+    ): DinnerEventDetail {
+        const {allergens, expenses, chef, cookingTeam, tickets, ...event} = serialized
+        // The tickets' dinner reference leaves the tickets out, so it holds no circular reference
+        const dinnerEvent = {...event, totalCost: sumAmounts(expenses)}
 
-        // Build dinnerEvent reference for tickets (excludes tickets to avoid circular ref)
-        const dinnerEventForTickets = {
-            id: prismaEvent.id,
-            date: prismaEvent.date,
-            menuTitle: prismaEvent.menuTitle,
-            menuDescription: prismaEvent.menuDescription,
-            menuPictureUrl: prismaEvent.menuPictureUrl,
-            state: prismaEvent.state,
-            totalCost,
-            chefId: prismaEvent.chefId,
-            cookingTeamId: prismaEvent.cookingTeamId,
-            heynaboEventId: prismaEvent.heynaboEventId,
-            seasonId: prismaEvent.seasonId,
-            createdAt: prismaEvent.createdAt,
-            updatedAt: prismaEvent.updatedAt
-        }
-
-        return {
-            ...event,
-            totalCost,
-            expenses: (expenseRows ?? []).map(deserializeExpense),
-            allergens: allergens ? allergens.map((a) => a.allergyType) : [],
+        return DinnerEventDetailSchema.parse({
+            ...dinnerEvent,
+            expenses: expenses.map(deserializeExpense),
+            allergens: allergens.map(({allergyType}) => allergyType),
             chef: chef ? deserializeInhabitantDisplay(chef) : null,
             cookingTeam: cookingTeam ? deserializeCookingTeamDisplay(cookingTeam) : null,
-            tickets: tickets?.map(ticket => {
-                const ticketPrice = ticket.ticketPrice as (PortionTicket & Record<string, unknown>) | null | undefined
-                return {
-                    ...ticket,
-                    // Flatten ticketType from ticketPrice relation (null when TicketPrice deleted)
-                    ticketType: ticketPrice?.ticketType ?? null,
-                    ticketPrice: ticketPrice ? withPortions(ticketPrice) : ticketPrice,
-                    // Add parent dinnerEvent reference
-                    dinnerEvent: dinnerEventForTickets,
-                    inhabitant: ticket.inhabitant
-                        ? deserializeInhabitantWithAllergies(ticket.inhabitant as Record<string, unknown>)
-                        : ticket.inhabitant
-                }
-            }) ?? []
-        }
+            tickets: tickets.map(({ticketPrice, inhabitant, ...ticket}) => ({
+                ...ticket,
+                // Flatten ticketType from ticketPrice relation (null when TicketPrice deleted)
+                ticketType: ticketPrice?.ticketType ?? null,
+                ticketPrice: ticketPrice ? withPortions(ticketPrice) : null,
+                dinnerEvent,
+                inhabitant: deserializeInhabitantWithAllergies(inhabitant)
+            }))
+        })
     }
 
     // ============================================================================
@@ -480,27 +501,48 @@ export const useBookingValidation = () => {
         isGuestTicket: z.boolean().default(false)
     })
 
+    // A locked dinner's tickets for sale: their number and their breakdown by ticket type
+    const ForSaleCountsSchema = z.object({
+        total: z.number().int().nonnegative(),
+        formatted: z.string(),                                                   // The tickets for sale by ticket type, as formatTicketCounts writes it ("2V 1B")
+        byType: z.partialRecord(TicketTypeSchema, z.number().int().nonnegative())  // A claim buys from its own ticket type
+    })
+
+    // A locked dinner's waiting list: its size and its breakdown by ticket type
+    const WaitlistCountsSchema = z.object({
+        queued: z.number().int().nonnegative(),
+        queuedFormatted: z.string(),                                                   // The waiting list by ticket type, as formatTicketCounts writes it ("2V 1B")
+        queuedByType: z.partialRecord(TicketTypeSchema, z.number().int().nonnegative())  // The waiting list per ticket type
+    })
+
     // ============================================================================
     // SCAFFOLD PRE-BOOKINGS RESULT
     // ============================================================================
 
-    // A queued entry's place in the line of its ticket type on a dinner; the type is null when the entry's price is gone
+    // A queued entry's place in the line of its ticket type on a dinner, at the price its entry froze; the type is null when
+    // the entry's price is gone
     const QueuePositionSchema = z.object({
         inhabitantId: IdSchema,
         dinnerEventId: IdSchema,
         isGuestTicket: z.boolean(),
         position: z.number().int().positive(),
-        ticketType: TicketTypeSchema.nullable()
+        ticketType: TicketTypeSchema.nullable(),
+        priceAtBooking: z.number().int()
     })
 
-    // A wish joined a dinner's waiting list
+    // A wish joined a dinner's waiting list: its place, the ticket it waits for, and the queue at its join
     const WaitlistJoinedSchema = z.object({
         dinnerEventId: IdSchema,
         inhabitantId: IdSchema,
         bookedByUserId: IdSchema,
+        entryId: z.number().int(),                                   // A preview's entries are unsaved and carry negative ids
         position: z.number().int().positive(),
         ticketType: TicketTypeSchema.nullable(),
+        isGuestTicket: z.boolean(),
+        ticketPriceId: IdSchema,
+        dinnerMode: DinnerModeSchema,
         queueSize: z.number().int().positive(),
+        queuedByType: z.partialRecord(TicketTypeSchema, z.number().int().positive()),
         portionNeed: z.number().nonnegative()
     })
 
@@ -508,20 +550,24 @@ export const useBookingValidation = () => {
     const TicketSaleSchema = z.object({
         dinnerEventId: IdSchema,
         ticketPriceId: IdSchema,
+        orderId: IdSchema,                                           // The released order, the buyer's now
+        dinnerMode: DinnerModeSchema,
+        isGuestTicket: z.boolean(),
         buyerInhabitantId: IdSchema,
         buyerHouseholdId: IdSchema,
         sellerHouseholdId: IdSchema,
         sellerInhabitantId: IdSchema.nullable()                      // The released order's inhabitant; null when a recovered sale's history row names none
     })
 
-    // The chef's extra portion went to a waiting entry: a regular order at the price written at join
+    // The chef's extra portion went to a waiting entry: a regular order at the price and eating mode written at join
     const WaitlistAssignedSchema = z.object({
         entryId: IdSchema,
         inhabitantId: IdSchema,
         isGuestTicket: z.boolean(),
         portions: z.number().nonnegative(),
         orderId: IdSchema,
-        ticketPriceId: IdSchema
+        ticketPriceId: IdSchema,
+        dinnerMode: DinnerModeSchema
     })
 
     // What one scaffold run did that its caller notifies about, one list per event; a run that finishes another run's
@@ -547,8 +593,10 @@ export const useBookingValidation = () => {
     // ORDER AUDIT - the auditData of an OrderHistory row (ADR-011)
     // ============================================================================
 
-    // What a history row did to its order: a booking action, or the nightly close
+    // What a history row did to its order: a booking action, or the DAILY_MAINTENANCE job's close
     const OrderAuditChangeSchema = z.enum([...BookingActionSchema.options, 'CLOSE'])
+    type OrderAuditChange = z.infer<typeof OrderAuditChangeSchema>
+    type OrderAuditAction = z.infer<typeof OrderAuditActionSchema>
     const Change = OrderAuditChangeSchema.enum
 
     // The change, the order as it stands after it (as it stood before a sale or a deletion), and the source of a booking
@@ -559,9 +607,9 @@ export const useBookingValidation = () => {
     })
 
     const createOrderAuditData = (
-        change: z.infer<typeof OrderAuditChangeSchema>,
-        orderSnapshot: z.input<typeof OrderSnapshotSchema>,
-        source?: z.infer<typeof OrderAuditSourceSchema>
+        change: OrderAuditChange,
+        orderSnapshot: OrderSnapshotInput,
+        source?: OrderAuditSource
     ): string => JSON.stringify(OrderAuditDataSchema.parse({change, orderSnapshot, source}))
 
     // A field the row does not carry, or carries in another shape, reads null
@@ -583,15 +631,18 @@ export const useBookingValidation = () => {
         isGuestTicket: unknownAsNull(z.boolean()),
         allergies: unknownAsNull(z.array(z.string()))
     })
+    type OrderAudit = z.infer<typeof OrderAuditSchema>
 
     // The row's action and audit data, and the ids the row keeps once its order is deleted
-    type OrderAuditRow = Pick<z.infer<typeof OrderHistoryDisplaySchema>, 'action' | 'auditData'>
-        & Partial<Pick<z.infer<typeof OrderHistoryDisplaySchema>, 'orderId' | 'inhabitantId' | 'dinnerEventId'>>
+    const OrderAuditRowSchema = OrderHistoryDisplaySchema
+        .pick({action: true, auditData: true, orderId: true, inhabitantId: true, dinnerEventId: true})
+        .partial({orderId: true, inhabitantId: true, dinnerEventId: true})
+    type OrderAuditRow = z.infer<typeof OrderAuditRowSchema>
 
     const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 
     // A legacy snapshot's change follows its row's action: a sale keeps the seller's order, a deletion the deleted one
-    const snapshotChangeOf = (action: z.infer<typeof OrderAuditActionSchema>): z.infer<typeof OrderAuditChangeSchema> | null => {
+    const snapshotChangeOf = (action: OrderAuditAction): OrderAuditChange | null => {
         switch (action) {
             case OrderAuditActionSchema.enum.USER_CLAIMED:
                 return Change.BUY
@@ -604,7 +655,7 @@ export const useBookingValidation = () => {
     }
 
     // A legacy batch update's change follows its new state
-    const scalarsChangeOf = (state: unknown): z.infer<typeof OrderAuditChangeSchema> | null => {
+    const scalarsChangeOf = (state: unknown): OrderAuditChange | null => {
         switch (state) {
             case OrderStateSchema.enum.RELEASED:
                 return Change.RELEASE
@@ -621,7 +672,7 @@ export const useBookingValidation = () => {
      * with the row's ids where the shape holds none. A null order id is a row of no order (a place on the waiting list, a
      * cancellation of nothing booked) or a legacy row whose order is deleted. Audit data holding no object reads null.
      */
-    const readOrderAudit = (row: OrderAuditRow): z.infer<typeof OrderAuditSchema> | null => {
+    const readOrderAudit = (row: OrderAuditRow): OrderAudit | null => {
         let parsed: unknown
         try {
             parsed = JSON.parse(row.auditData)
@@ -659,7 +710,7 @@ export const useBookingValidation = () => {
         [TicketTypeSchema.enum.BABY]: z.number().int()
     })
 
-    // What a ticket event does: a booking action, the chef's extra portions for the waiting list, or the nightly close
+    // What a ticket event does: a booking action, the chef's extra portions for the waiting list, or the DAILY_MAINTENANCE job's close
     const TicketChangeKindSchema = z.enum([...BookingActionSchema.options, 'EXTRA_PORTIONS', Change.CLOSE])
 
     // The tickets one event touched by type; a ticket type change also names the tickets it changed from, a sale the
@@ -698,13 +749,16 @@ export const useBookingValidation = () => {
         olderCount: z.number().int().min(0)
     })
 
-    // One order's result in a scaffold run: who, the ticket type, which dinner, the eating mode and the action; the ticket
-    // type groups a booker's guests and is null when the order's price is gone
+    // One order's result in a scaffold run: who, the ticket type and the price, which dinner, the eating mode and the action.
+    // The type and the price group a booker's guests. The type is null when the order's price row is gone. The price is the
+    // one the ticket holds after the run: a held order's or place's frozen price, unless the run moves it to another of the
+    // season's price rows; a new ticket's price row's; null when neither the order nor a price row holds one
     const BookingResultSchema = z.object({
         inhabitantId: IdSchema,
         inhabitantName: z.string(),
         isGuestTicket: z.boolean(),
         ticketType: TicketTypeSchema.nullable(),
+        priceAtBooking: z.number().int().nullable(),
         dinnerEventId: IdSchema,
         dinnerMode: DinnerModeSchema,
         action: BookingActionSchema,
@@ -717,7 +771,7 @@ export const useBookingValidation = () => {
     // What a scaffold run did, as the endpoints that scaffold reply it
     const ScaffoldResultSchema = z.object({
         seasonId: IdSchema.nullable(),
-        dinners: z.array(DinnerEventDisplaySchema.pick({id: true, date: true})).default([]),  // The dinners the run decided
+        dinners: z.array(DinnerEventDateSchema).default([]),  // The dinners the run decided
         totals: BookingTotalsSchema,
         positions: z.array(QueuePositionSchema).default([]),        // The place in the dinner's queue of each queued entry
         unchanged: z.number().int().nonnegative(),
@@ -779,10 +833,47 @@ export const useBookingValidation = () => {
         ticketPriceId: IdSchema,
         allergyTypeIds: IdSchema.array().optional()
     })
+    type DesiredOrder = z.infer<typeof DesiredOrderSchema>
+
+    // A user's booking change for one inhabitant at one dinner; a queued inhabitant's names the person's place
+    const BookingIntentSchema = DesiredOrderSchema.pick({
+        inhabitantId: true,
+        dinnerEventId: true,
+        dinnerMode: true,
+        waitlistEntryId: true
+    })
+
+    // A desired order as one query value, its fields dot-separated:
+    // inhabitantId.dinnerEventId.dinnerMode.ticketPriceId.guest(1|0).state.orderId.waitlistEntryId.allergyTypeIds(-joined),
+    // an absent id empty. The pattern names every mode and state, so a decoded segment is one of them
+    const DESIRED_ORDER_CODE = new RegExp(
+        `^\\d+\\.\\d+\\.(${DinnerModeSchema.options.join('|')})\\.\\d+\\.[01]\\.(${OrderStateSchema.options.join('|')})\\.\\d*\\.\\d*\\.(\\d+(-\\d+)*)?$`
+    )
+    const DesiredOrderQuerySchema = z.codec(z.string().regex(DESIRED_ORDER_CODE), DesiredOrderSchema, {
+        decode: (code) => {
+            const [inhabitantId, dinnerEventId, dinnerMode, ticketPriceId, guest, state, orderId, waitlistEntryId, allergyTypeIds] = code.split('.')
+            return {
+                inhabitantId: Number(inhabitantId),
+                dinnerEventId: Number(dinnerEventId),
+                dinnerMode: DinnerModeSchema.parse(dinnerMode),
+                ticketPriceId: Number(ticketPriceId),
+                isGuestTicket: guest === '1',
+                state: OrderStateSchema.parse(state),
+                ...(orderId ? {orderId: Number(orderId)} : {}),
+                ...(waitlistEntryId ? {waitlistEntryId: Number(waitlistEntryId)} : {}),
+                ...(allergyTypeIds ? {allergyTypeIds: allergyTypeIds.split('-').map(Number)} : {})
+            }
+        },
+        encode: (order) => [
+            order.inhabitantId, order.dinnerEventId, order.dinnerMode, order.ticketPriceId, order.isGuestTicket ? 1 : 0, order.state,
+            order.orderId ?? '', order.waitlistEntryId ?? '', order.allergyTypeIds?.join('-') ?? ''
+        ].join('.')
+    })
+    const encodeDesiredOrder = (order: DesiredOrder): string => DesiredOrderQuerySchema.encode(order)
 
     /**
      * Scaffold orders request - unified booking endpoint
-     * POST /api/household/order/scaffold
+     * POST /api/household/order/scaffold; its dry run GET carries it in the query, each order a `DesiredOrderQuerySchema` value
      *
      * Use cases:
      * - UC1: Single inhabitant booking
@@ -887,6 +978,8 @@ export const useBookingValidation = () => {
         dinners: z.array(z.object({dinnerEventId: IdSchema, date: z.coerce.date(), cleared: z.number().int().positive()})).default([])
     })
 
+    const {SenderEventSchema, DeliveryCountsSchema} = useDeliveryValidation()
+
     /**
      * Combined result of daily maintenance endpoint
      * Includes jobRunId for observability and parallel-safe test assertions
@@ -898,7 +991,9 @@ export const useBookingValidation = () => {
         transact: CreateTransactionsResultSchema,
         clearWaitlist: ClearWaitlistResultSchema.default({cleared: 0, dinners: []}),
         initPrefs: InitPreferencesResultSchema.default({initialized: 0}),
-        scaffold: ScaffoldResultSchema.nullable()
+        scaffold: ScaffoldResultSchema.nullable(),
+        // The notifications the run sent per sender event; a stored result without the field reads none
+        notifications: z.partialRecord(SenderEventSchema, DeliveryCountsSchema).default({})
     })
 
     /**
@@ -925,11 +1020,17 @@ export const useBookingValidation = () => {
         // DinnerEvent
         DinnerEventDisplaySchema,
         DinnerEventInfoSchema,
+        DinnerEventDateSchema,
         DinnerEventDetailSchema,
+        SerializedDinnerEventSchema,
+        SerializedDinnerTicketSchema,
+        SerializedDinnerEventDetailSchema,
         TicketCountsSchema,
         TicketChangeKindSchema,
         TicketStateSchema,
         SupplyStateSchema,
+        ForSaleCountsSchema,
+        WaitlistCountsSchema,
         BookingFailureSchema,
         TicketEventSchema,
         TicketChangeSchema,
@@ -940,6 +1041,8 @@ export const useBookingValidation = () => {
 
         // Order
         OrderDisplaySchema,
+        TicketOrderSchema,
+        OrderSortBySchema,
         OrderDetailSchema,
         OrderCreateSchema,
         AssignRoleSchema,
@@ -948,7 +1051,9 @@ export const useBookingValidation = () => {
 
         // OrderHistory
         OrderHistoryDisplaySchema,
+        SnapshotOrderSchema,
         OrderSnapshotSchema,
+        OrderAuditRowSchema,
         OrderAuditChangeSchema,
         OrderAuditDataSchema,
         OrderAuditSchema,
@@ -991,6 +1096,9 @@ export const useBookingValidation = () => {
 
         // Unified Booking Scaffold (ADR-016)
         DesiredOrderSchema,
+        BookingIntentSchema,
+        DesiredOrderQuerySchema,
+        encodeDesiredOrder,
         ScaffoldOrdersRequestSchema,
         ScaffoldOrdersResponseSchema,
         GuestBookingFormSchema,
@@ -1026,12 +1134,19 @@ export type OrderState = z.infer<ReturnType<typeof useBookingValidation>['OrderS
 export type TicketType = z.infer<ReturnType<typeof useBookingValidation>['TicketTypeSchema']>
 export type TicketState = z.infer<ReturnType<typeof useBookingValidation>['TicketStateSchema']>
 export type SupplyState = z.infer<ReturnType<typeof useBookingValidation>['SupplyStateSchema']>
+export type ForSaleCounts = z.infer<ReturnType<typeof useBookingValidation>['ForSaleCountsSchema']>
+export type WaitlistCounts = z.infer<ReturnType<typeof useBookingValidation>['WaitlistCountsSchema']>
 export type BookingFailure = z.infer<ReturnType<typeof useBookingValidation>['BookingFailureSchema']>
 
 // DinnerEvent
 export type DinnerEventDisplay = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventDisplaySchema']>
 export type DinnerEventInfo = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventInfoSchema']>
+export type DinnerEventDate = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventDateSchema']>
 export type DinnerEventDetail = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventDetailSchema']>
+// Database rows of the dinner reads: a dinner, and a ticket and a dinner of the Detail read (ADR-010)
+export type SerializedDinnerEvent = z.infer<ReturnType<typeof useBookingValidation>['SerializedDinnerEventSchema']>
+export type SerializedDinnerTicket = z.infer<ReturnType<typeof useBookingValidation>['SerializedDinnerTicketSchema']>
+export type SerializedDinnerEventDetail = z.infer<ReturnType<typeof useBookingValidation>['SerializedDinnerEventDetailSchema']>
 export type DinnerEventCreate = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventCreateSchema']>
 export type DinnerEventUpdate = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventUpdateSchema']>
 export type TicketCounts = z.infer<ReturnType<typeof useBookingValidation>['TicketCountsSchema']>
@@ -1043,11 +1158,15 @@ export type ChefMenuForm = z.infer<ReturnType<typeof useBookingValidation>['Chef
 
 // Order
 export type OrderDisplay = z.infer<ReturnType<typeof useBookingValidation>['OrderDisplaySchema']>
+export type TicketOrder = z.infer<ReturnType<typeof useBookingValidation>['TicketOrderSchema']>
+export type OrderSortBy = z.infer<ReturnType<typeof useBookingValidation>['OrderSortBySchema']>
 export type OrderDetail = z.infer<ReturnType<typeof useBookingValidation>['OrderDetailSchema']>
 export type AssignRole = z.infer<ReturnType<typeof useBookingValidation>['AssignRoleSchema']>
 export type MenuSwapStrategy = z.infer<ReturnType<typeof useBookingValidation>['MenuSwapStrategySchema']>
 export type OrderHistoryDisplay = z.infer<ReturnType<typeof useBookingValidation>['OrderHistoryDisplaySchema']>
+export type SnapshotOrder = z.infer<ReturnType<typeof useBookingValidation>['SnapshotOrderSchema']>
 export type OrderSnapshot = z.infer<ReturnType<typeof useBookingValidation>['OrderSnapshotSchema']>
+export type OrderAuditRow = z.infer<ReturnType<typeof useBookingValidation>['OrderAuditRowSchema']>
 export type OrderAuditChange = z.infer<ReturnType<typeof useBookingValidation>['OrderAuditChangeSchema']>
 export type OrderAudit = z.infer<ReturnType<typeof useBookingValidation>['OrderAuditSchema']>
 
@@ -1076,6 +1195,7 @@ export type HouseholdUpdateResponse = z.infer<ReturnType<typeof useBookingValida
 
 // Unified Booking Scaffold (ADR-016)
 export type DesiredOrder = z.infer<ReturnType<typeof useBookingValidation>['DesiredOrderSchema']>
+export type BookingIntent = z.infer<ReturnType<typeof useBookingValidation>['BookingIntentSchema']>
 export type ScaffoldOrdersRequest = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldOrdersRequestSchema']>
 export type ScaffoldOrdersResponse = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldOrdersResponseSchema']>
 export type GuestBookingFormData = z.infer<ReturnType<typeof useBookingValidation>['GuestBookingFormSchema']>

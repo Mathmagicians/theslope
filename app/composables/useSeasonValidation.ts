@@ -7,23 +7,16 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {IdSchema} from '~/composables/useCoreValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
+import {SEASON_STATUS} from '~/config/seasonWords'
 
-// Season status constants - single source of truth
-export const SEASON_STATUS = {
-    ACTIVE: 'aktiv',
-    FUTURE: 'kommende',
-    CURRENT: 'i gang',
-    PAST: 'afsluttet'
-} as const
-
-const seasonStatusValues = Object.values(SEASON_STATUS)
+const seasonStatusValues = [SEASON_STATUS.ACTIVE, SEASON_STATUS.FUTURE, SEASON_STATUS.CURRENT, SEASON_STATUS.PAST] as const
 
 /**
  * Validation schemas and serialization functions for Season objects
  */
 export const useSeasonValidation = () => {
     // Season status enum - computed status based on dates and isActive flag
-    const SeasonStatusSchema = z.enum(seasonStatusValues as [string, ...string[]])
+    const SeasonStatusSchema = z.enum(seasonStatusValues)
 
     // Get validation schemas with explicit boolean options for Season cookingDays
     const {
@@ -37,9 +30,9 @@ export const useSeasonValidation = () => {
         isRequired: (map: WeekDayMap<boolean>) => Object.values(map).some(Boolean),
         requiredMessage: "Man skal lave mad mindst en dag om ugen"
     })
-    const {DinnerEventDisplaySchema, deserializeDinnerEvent, ScaffoldResultSchema} = useBookingValidation()
-    const {TicketPricesArraySchema} = useTicketPriceValidation()
-    const {deserializeCookingTeamDisplay, CookingTeamDisplaySchema} = useCookingTeamValidation()
+    const {DinnerEventDisplaySchema, SerializedDinnerEventSchema, deserializeDinnerEvent, ScaffoldResultSchema} = useBookingValidation()
+    const {TicketPriceSchema, TicketPricesArraySchema} = useTicketPriceValidation()
+    const {deserializeCookingTeamDisplay, CookingTeamDisplaySchema, SerializedCookingTeamDisplaySchema} = useCookingTeamValidation()
 
     const holidaysSchema = z.array(dateRangeSchema)
         .default([])
@@ -74,8 +67,9 @@ export const useSeasonValidation = () => {
     // Type definition
     type Season = z.infer<typeof SeasonSchema>
 
-    // Serialization schema for transforming to database format
-    const SerializedSeasonSchema = SeasonSchema.transform((season: Season) => ({
+    // The columns a season write stores, its JSON columns serialized, with its price rows; the dinners and the teams are
+    // read-only relations a write leaves out
+    const SerializedSeasonSchema = SeasonSchema.transform(({dinnerEvents: _dinnerEvents, CookingTeams: _cookingTeams, ...season}: Season) => ({
         ...season,
         cookingDays: serializeWeekDayMap(season.cookingDays),
         // Canonical chronological storage: imports and legacy rows read back ordered
@@ -89,6 +83,26 @@ export const useSeasonValidation = () => {
         })
     }))
     type SerializedSeason = z.infer<typeof SerializedSeasonSchema>
+
+    // A date range as its JSON column stores it
+    const StoredDateRangeSchema = z.object({start: z.string(), end: z.string()})
+    type StoredDateRange = z.infer<typeof StoredDateRangeSchema>
+    const readDateRange = ({start, end}: StoredDateRange) => ({start: parseDate(start), end: parseDate(end)})
+
+    // A Season row (ADR-010): its dates, cooking days and holidays as JSON and a shortName it may lack; a read includes
+    // the price rows, the detail read the dinner rows and the team rows
+    const SeasonRowSchema = BaseSeasonSchema
+        .omit({shortName: true, seasonDates: true, cookingDays: true, holidays: true, dinnerEvents: true, CookingTeams: true, ticketPrices: true})
+        .extend({
+            shortName: z.string().nullable(),
+            seasonDates: z.string(),
+            cookingDays: z.string(),
+            holidays: z.string(),
+            dinnerEvents: z.array(SerializedDinnerEventSchema).optional(),
+            CookingTeams: z.array(SerializedCookingTeamDisplaySchema).optional(),
+            ticketPrices: z.array(TicketPriceSchema.omit({portions: true}))
+        })
+    type SeasonRow = z.infer<typeof SeasonRowSchema>
 
     // What reconciling the season's dinner events changed (ADR-015 idempotent counts)
     const ReconciliationResultSchema = z.object({
@@ -113,43 +127,23 @@ export const useSeasonValidation = () => {
 
     // The price rows hold no portions; withPortions adds what a ticket at each price weighs
     const deserializeSeason = (
-        serialized: Record<string, unknown>,
-        withPortions: (ticketPrice: PortionTicket) => PortionTicket & {portions: number}
+        {shortName, seasonDates, cookingDays, holidays, dinnerEvents, CookingTeams, ticketPrices, ...columns}: SeasonRow,
+        withPortions: <T extends PortionTicket>(ticketPrice: T) => T & {portions: number}
     ): Season => {
-        const parsedSeasonDates = JSON.parse(serialized.seasonDates as string) as { start: string; end: string }
-
-        const baseSeason = {
-            ...serialized,
-            // Compute shortName from seasonDates if not provided
-            shortName: serialized.shortName || formatDateRange({
-                start: parseDate(parsedSeasonDates.start),
-                end: parseDate(parsedSeasonDates.end)
-            }, DATE_SETTINGS.SEASON_NAME_MASK),
-            cookingDays: deserializeWeekDayMap(serialized.cookingDays as string),
-            holidays: sortDateRanges((JSON.parse(serialized.holidays as string) as { start: string; end: string }[]).map((holiday) => ({
-                start: parseDate(holiday.start),
-                end: parseDate(holiday.end)
-            }))),
-            seasonDates: {
-                start: parseDate(parsedSeasonDates.start),
-                end: parseDate(parsedSeasonDates.end)
-            }
+        const dates = readDateRange(StoredDateRangeSchema.parse(JSON.parse(seasonDates)))
+        return {
+            ...columns,
+            // A season without a stored shortName is named by its dates
+            shortName: shortName || formatDateRange(dates, DATE_SETTINGS.SEASON_NAME_MASK),
+            seasonDates: dates,
+            cookingDays: BaseSeasonSchema.shape.cookingDays.parse(deserializeWeekDayMap(cookingDays)),
+            holidays: sortDateRanges(StoredDateRangeSchema.array().parse(JSON.parse(holidays)).map(readDateRange)),
+            // Dinner rows: dates become Date objects, the cost becomes the sum of the expense rows
+            dinnerEvents: dinnerEvents?.map(deserializeDinnerEvent),
+            // Team rows: the affinities parsed, the counts from `_count`
+            CookingTeams: CookingTeams?.map(deserializeCookingTeamDisplay),
+            ticketPrices: ticketPrices.map(withPortions)
         }
-
-        // If relations exist, deserialize them
-        const dinnerEvents = serialized.dinnerEvents as unknown[] | undefined
-        const CookingTeams = serialized.CookingTeams as Record<string, unknown>[] | undefined
-        if (dinnerEvents || CookingTeams || serialized.ticketPrices) {
-            return {
-                ...baseSeason,
-                // Dinner rows from the repository: dates become Date objects, the cost becomes the sum of the expense rows
-                dinnerEvents: dinnerEvents?.map((event) => deserializeDinnerEvent(event as Record<string, unknown>)),
-                // Deserialize nested CookingTeams (including affinity fields)
-                CookingTeams: CookingTeams?.map((team) => deserializeCookingTeamDisplay(team)),
-                ticketPrices: (serialized.ticketPrices as PortionTicket[] | undefined)?.map(withPortions) as Season['ticketPrices']
-            } as Season
-        }
-        return baseSeason as Season
     }
 
     // Return all schemas and utility functions
@@ -159,6 +153,7 @@ export const useSeasonValidation = () => {
         BaseSeasonSchema,
         SeasonSchema,
         SerializedSeasonSchema,
+        SeasonRowSchema,
         ReconciliationResultSchema,
         SeasonUpdateResponseSchema,
         ActiveSeasonIdSchema,
@@ -172,6 +167,7 @@ export const useSeasonValidation = () => {
 // Re-export the Season and serializedSeason types
 export type Season = z.infer<ReturnType<typeof useSeasonValidation>['SeasonSchema']>
 export type SerializedSeason = z.infer<ReturnType<typeof useSeasonValidation>['SerializedSeasonSchema']>
+export type SeasonRow = z.infer<ReturnType<typeof useSeasonValidation>['SeasonRowSchema']>
 export type SeasonStatus = z.infer<ReturnType<typeof useSeasonValidation>['SeasonStatusSchema']>
 export type ReconciliationResult = z.infer<ReturnType<typeof useSeasonValidation>['ReconciliationResultSchema']>
 export type SeasonUpdateResponse = z.infer<ReturnType<typeof useSeasonValidation>['SeasonUpdateResponseSchema']>

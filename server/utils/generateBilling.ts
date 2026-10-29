@@ -8,6 +8,7 @@ import {
     bumpBillingPeriodVersion
 } from '~~/server/data/financesRepository'
 import {useBilling} from '~/composables/useBilling'
+import {formatDate} from '~/utils/date'
 import type {BillingGenerationResult, InvoiceCreate, TransactionDisplay} from '~/composables/useBillingValidation'
 
 const LOG = '💰 > BILLING > [GENERATE]'
@@ -48,18 +49,18 @@ export const generateBilling = async (d1Client: D1Database): Promise<BillingGene
     const {getBillingPeriodForDate, calculateClosedBillingPeriod, chunkTransactionIds} = useBilling()
 
     // Calculate cutoff date (end of last closed billing period)
-    const {dateRange: closedPeriod} = calculateClosedBillingPeriod()
+    const {dateRange: closedPeriod} = calculateClosedBillingPeriod(new Date())
     const cutoffDate = closedPeriod.end
 
     // Fetch unbilled transactions up to cutoff (only closed periods)
     const unbilledTransactions = await fetchUnbilledTransactions(d1Client, cutoffDate)
 
     if (unbilledTransactions.length === 0) {
-        console.info(`${LOG} No unbilled transactions up to ${cutoffDate.toISOString().split('T')[0]}`)
+        console.info(`${LOG} No unbilled transactions up to ${formatDate(cutoffDate)}`)
         return []
     }
 
-    console.info(`${LOG} Found ${unbilledTransactions.length} unbilled transactions up to ${cutoffDate.toISOString().split('T')[0]}`)
+    console.info(`${LOG} Found ${unbilledTransactions.length} unbilled transactions up to ${formatDate(cutoffDate)}`)
 
     // Group transactions by billing period (based on dinner date)
     const periodMap = new Map<string, PeriodBillingData>()

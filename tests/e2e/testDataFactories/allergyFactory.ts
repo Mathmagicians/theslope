@@ -12,6 +12,19 @@ import type {
 const {salt, headers, temporaryAndRandom} = testHelpers
 const ALLERGY_TYPE_ENDPOINT = '/api/admin/allergy-type'
 const ALLERGY_ENDPOINT = '/api/household/allergy'
+// A change to another household's allergies carries the override (ADR-004)
+const allergyUrl = (path: string, adminBypass: boolean): string => adminBypass ? `${path}?adminBypass=true` : path
+
+// The access cases' changes to an inhabitant's allergy: the status a landed change answers, whether the allergy exists
+// before it, and the comments of the inhabitant's allergy of the type after it, as it lands and as it is refused
+const ACCESS_COMMENT = 'Mild'
+const ACCESS_UPDATED_COMMENT = 'Alvorlig'
+const ALLERGY_CHANGES = [
+    {change: 'adds', status: 201, given: false, after: {allowed: [ACCESS_COMMENT], refused: []}},
+    {change: 'updates', status: 200, given: true, after: {allowed: [ACCESS_UPDATED_COMMENT], refused: [ACCESS_COMMENT]}},
+    {change: 'removes', status: 200, given: true, after: {allowed: [], refused: [ACCESS_COMMENT]}}
+] as const
+export type AllergyChange = typeof ALLERGY_CHANGES[number]
 
 export class AllergyFactory {
 
@@ -283,9 +296,10 @@ export class AllergyFactory {
             allergyTypeId: number,
             inhabitantComment?: string | null
         },
-        expectedStatus: number = 201
+        expectedStatus: number = 201,
+        adminBypass: boolean = false
     ): Promise<AllergyDetail> => {
-        const response = await context.request.put(ALLERGY_ENDPOINT, {
+        const response = await context.request.put(allergyUrl(ALLERGY_ENDPOINT, adminBypass), {
             headers: headers,
             data: allergyData
         })
@@ -353,9 +367,10 @@ export class AllergyFactory {
             allergyTypeId?: number,
             inhabitantComment?: string | null
         },
-        expectedStatus: number = 200
+        expectedStatus: number = 200,
+        adminBypass: boolean = false
     ): Promise<AllergyDetail> => {
-        const response = await context.request.post(`${ALLERGY_ENDPOINT}/${id}`, {
+        const response = await context.request.post(allergyUrl(`${ALLERGY_ENDPOINT}/${id}`, adminBypass), {
             headers: headers,
             data: updateData
         })
@@ -375,9 +390,10 @@ export class AllergyFactory {
     static readonly deleteAllergy = async (
         context: BrowserContext,
         id: number,
-        expectedStatus: number = 200
+        expectedStatus: number = 200,
+        adminBypass: boolean = false
     ): Promise<AllergyDisplay | null> => {
-        const response = await context.request.delete(`${ALLERGY_ENDPOINT}/${id}`)
+        const response = await context.request.delete(allergyUrl(`${ALLERGY_ENDPOINT}/${id}`, adminBypass))
 
         const status = response.status()
         expect(status, 'Unexpected status').toBe(expectedStatus)
@@ -392,10 +408,51 @@ export class AllergyFactory {
         context: BrowserContext,
         allergyIds: number[]
     ): Promise<void> => {
-        // An allergy already gone counts as removed
+        // An allergy already gone counts as removed; the cleanup reaches any household's allergies through the override
         for (const id of allergyIds) {
-            const response = await context.request.delete(`${ALLERGY_ENDPOINT}/${id}`)
+            const response = await context.request.delete(allergyUrl(`${ALLERGY_ENDPOINT}/${id}`, true))
             expect([200, 404], `Unexpected status cleaning up allergy ${id}: ${await response.text()}`).toContain(response.status())
         }
+    }
+
+    // === ACCESS SCENARIO (ADR-004) ===
+
+    static readonly ALLERGY_CHANGES = ALLERGY_CHANGES
+
+    /**
+     * One access case: a fresh allergy type (an inhabitant holds one allergy per type) and, for a change that needs it,
+     * the allergy, both through the admin's override; then the actor's change without the override, its status asserted.
+     * Returns the comments of the inhabitant's allergies of the type after the change
+     */
+    static readonly changeAllergyAs = async (
+        adminContext: BrowserContext,
+        actorContext: BrowserContext,
+        {change, given}: AllergyChange,
+        {inhabitantId, testSalt, expectedStatus, createdAllergyTypeIds}: {
+            inhabitantId: number, testSalt: string, expectedStatus: number, createdAllergyTypeIds: number[]
+        }
+    ): Promise<Array<string | null | undefined>> => {
+        const allergyType = await AllergyFactory.createAllergyType(adminContext, AllergyFactory.defaultAllergyTypeData(testSalt))
+        createdAllergyTypeIds.push(allergyType.id)
+        const allergyTypeId = allergyType.id
+        const allergyId = given
+            ? (await AllergyFactory.createAllergy(adminContext, {inhabitantId, allergyTypeId, inhabitantComment: ACCESS_COMMENT}, 201, true)).id
+            : 0
+
+        switch (change) {
+            case 'adds':
+                await AllergyFactory.createAllergy(actorContext, {inhabitantId, allergyTypeId, inhabitantComment: ACCESS_COMMENT}, expectedStatus)
+                break
+            case 'updates':
+                await AllergyFactory.updateAllergy(actorContext, allergyId, {inhabitantComment: ACCESS_UPDATED_COMMENT}, expectedStatus)
+                break
+            case 'removes':
+                await AllergyFactory.deleteAllergy(actorContext, allergyId, expectedStatus)
+                break
+        }
+
+        return (await AllergyFactory.getAllergiesForInhabitant(adminContext, inhabitantId))
+            .filter(allergy => allergy.allergyTypeId === allergyTypeId)
+            .map(allergy => allergy.inhabitantComment)
     }
 }

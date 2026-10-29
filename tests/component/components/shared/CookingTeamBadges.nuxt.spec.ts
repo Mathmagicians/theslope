@@ -1,9 +1,8 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
-import type {ComponentPublicInstance} from 'vue'
-import {enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
+import {enableAutoUnmount} from '@vue/test-utils'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {findByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {findByTestId, resetStores, iconNamesIn} from '~~/tests/component/testHelpers'
 import CookingTeamBadges from '~/components/shared/CookingTeamBadges.vue'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 
@@ -14,8 +13,6 @@ enableAutoUnmount(afterEach)
 beforeEach(() => {
     resetStores()
 })
-
-type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
 
 const JOKER_BADGE = 'team-badge-jokers'
 
@@ -35,10 +32,7 @@ describe('CookingTeamBadges', () => {
 
             expect(badge.exists()).toBe(true)
             expect(badge.text()).toBe('2')
-            const icons = (wrapper.findAllComponents({name: 'UIcon'}) as IconWrapper[])
-                .filter(icon => badge.element.contains(icon.element))
-                .map(icon => icon.props('name'))
-            expect(icons).toEqual([ICONS.joker])
+            expect(iconNamesIn(badge)).toEqual([ICONS.joker])
         })
 
         it.each(VARIANTS)('size=$size renders no joker badge for a team without slots', async ({size}) => {

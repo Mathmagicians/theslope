@@ -1,6 +1,10 @@
+import {joinURL} from 'ufo'
+
 /**
  * The manifests `make developer-assemble` writes under environments/: one per environment plus index.json with the
- * names. Every path is relative to the site root, so the same code reads the gh-pages site and a local build.
+ * names. Every path is relative to the site root; `$fetch` and NuxtLink add the base path, so the same code reads the
+ * site on either address and a local build. A link that opens a file in a new tab is external to Nuxt UI's ULink,
+ * which renders its path as given, so it takes its address from `siteHref`.
  */
 export interface SuiteResult {
     passed: number
@@ -32,7 +36,7 @@ export const useManifests = () => {
         return settled.flatMap(result => result.status === 'fulfilled' ? [result.value] : [])
     }
 
-    const exists = (path: string) => fetch(path, {method: 'HEAD'}).then(response => response.ok).catch(() => false)
+    const exists = (path: string) => $fetch(path, {method: 'HEAD'}).then(() => true).catch(() => false)
 
     const scenarios = (suite: SuiteResult) => suite.passed + suite.failed + suite.flaky + suite.skipped
 
@@ -48,6 +52,11 @@ export const useManifests = () => {
     const reportPath = (environment: string, suite: string, result: SuiteResult) =>
         `/environments/${environment}/${suite}/${result.report}`
 
+    const openApiPath = (environment: string) => `/environments/${environment}/openapi.json`
+
+    const {app} = useRuntimeConfig()
+    const siteHref = (path: string) => joinURL(app.baseURL, path)
+
     return {
         fetchEnvironmentNames,
         fetchManifest,
@@ -58,6 +67,8 @@ export const useManifests = () => {
         resultColor,
         displayVersion,
         shortSha,
-        reportPath
+        reportPath,
+        openApiPath,
+        siteHref
     }
 }
