@@ -14,6 +14,7 @@
  */
 import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
 import type { ButtonProps } from '@nuxt/ui'
+import { BUTTON_WORDS } from '~/config/buttonWords'
 
 const { ICONS, SIZES, RING } = useTheSlopeDesignSystem()
 
@@ -49,7 +50,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   confirmLabel: 'Er du sikker? Tryk igen for at bekræfte',
-  loadingLabel: 'Arbejder...',
+  loadingLabel: BUTTON_WORDS.working,
   loading: false,
   disabled: false,
   autoResetMs: 10000,

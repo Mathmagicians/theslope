@@ -450,7 +450,7 @@ const tableData = computed((): TableRow[] => {
     ...defaultSyntheticRow,
     rowType: BookingRow.power,
     id: 'power-mode',
-    name: 'Hele familien',
+    name: BOOKING_WORDS.power.formName,
     inhabitants: allInhabitants,
     ticketConfig: COMPONENTS.powerMode.ticketConfig,
     dinnerMode: consensusMode,
@@ -466,7 +466,7 @@ const tableData = computed((): TableRow[] => {
   // Synthetic inhabitant for UserListItem consistency
   const guestAddInhabitant: InhabitantDisplay = {
     id: 0,
-    name: 'Tilføj gæst',
+    name: BOOKING_WORDS.guests.add,
     lastName: '',
     heynaboId: 0,
     pictureUrl: null,
@@ -479,7 +479,7 @@ const tableData = computed((): TableRow[] => {
     powerRow,
     ...inhabitantRows,
     ...guestOrderRows,
-    {...defaultSyntheticRow, rowType: BookingRow['guest-add'], id: 'guest', name: 'Tilføj gæst', inhabitant: guestAddInhabitant, dinnerMode: DinnerModeEnum.DINEIN, enabledModes: newGuestModes.value}
+    {...defaultSyntheticRow, rowType: BookingRow['guest-add'], id: 'guest', name: BOOKING_WORDS.guests.add, inhabitant: guestAddInhabitant, dinnerMode: DinnerModeEnum.DINEIN, enabledModes: newGuestModes.value}
   ]
 })
 
@@ -968,7 +968,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
                   <template #leading>
                     <UIcon :name="row.original.rowType === BookingRow.power ? COMPONENTS.powerMode.buttonIcon : ICONS.check" />
                   </template>
-                  {{ row.original.rowType === BookingRow.power ? 'Gem for alle' : saveLabel }}
+                  {{ row.original.rowType === BookingRow.power ? BOOKING_WORDS.power.save : saveLabel }}
                 </UButton>
               </div>
             </div>

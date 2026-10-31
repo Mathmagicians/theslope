@@ -247,6 +247,17 @@ describe('the people a run\'s mails name', () => {
         expect(readsOf()).toEqual(reads)
     })
 
+    // A dinner deleted between the save and its mails takes its outcomes with it; the save's other dinners notify
+    it('GIVEN a save with a join on the dinner and a sale on a dinner deleted since WHEN its mails resolve THEN the join is mailed and a warning names the deleted dinner', async () => {
+        const DELETED_DINNER_ID = 99
+        const queue = fakeQueue()
+
+        await notify(queue, outcomesOf({joined: [joinedEvent(parent, parent.userId!, 1)], ticketsSold: [saleTo(buyer, {dinnerEventId: DELETED_DINNER_ID})]}))
+
+        expect(sentMessages(queue).map(message => message.meta.kind)).toEqual([Kind.WAITLIST_JOINED])
+        expect(logs.warn).toHaveBeenCalledExactlyOnceWith(`📮 > SENDER > [EVENT ${SenderEvent.BOOKING_STATUS}] Dinner ${DELETED_DINNER_ID} not found: its notifications are left out`)
+    })
+
     // Three joins, a buildup, a direct buy (sold and bought), a sale to the first in line (sold and assigned), an extra
     // portion: nine notifications
     const everyKind = () => outcomesOf({

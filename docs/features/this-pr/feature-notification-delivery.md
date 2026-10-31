@@ -1,10 +1,10 @@
 # Notification delivery
 
-**Status:** Implementing | **Date:** 2026-10-25 | **Updated:** 2026-10-28 | **Branch:** chore/work-roster-leftovers
+**Status:** Implementing | **Date:** 2026-10-25 | **Updated:** 2026-10-29 | **Branch:** chore/work-roster-leftovers
 
 Priority high, issue #170. The rules: ADR-015 (Notifications), ADR-016 compliance 9. The templates:
 `app/config/notificationTemplates.ts`. The features: `tests/e2e/features/notifications/`. Open defects: `defects.md`
-§ Notification delivery.
+§ Notification delivery and § Pre-merge review (155–157).
 
 | Package | What | State |
 |---|---|---|

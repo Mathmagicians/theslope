@@ -7,6 +7,10 @@ export const WEEKDAYS = ['mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'l√
 export type WeekDay = typeof WEEKDAYS[number]
 export type WeekDayMap<T = boolean> = Record<WeekDay, T>
 
+/** The calendar periods a view shows and navigation steps through */
+export const PERIOD_VIEWS = ['day', 'week', 'month'] as const
+export type PeriodView = typeof PERIOD_VIEWS[number]
+
 /** The weekdays on which a draft differs from the stored map; every weekday when nothing is stored */
 export const changedWeekdays = <T>(stored: Partial<WeekDayMap<T>> | null | undefined, draft: WeekDayMap<T>): WeekDay[] =>
     WEEKDAYS.filter(day => !stored || stored[day] !== draft[day])

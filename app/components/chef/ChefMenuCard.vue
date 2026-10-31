@@ -521,7 +521,7 @@ const handleCardClick = () => {
                   name="announce-dinner"
                   @click="handleAdvanceState"
                 >
-                  {{ isUpdating ? 'Arbejder...' : (dinnerEvent.heynaboEventId ? 'Publiceret' : 'Publicer') }}
+                  {{ isUpdating ? BUTTON_WORDS.working : (dinnerEvent.heynaboEventId ? 'Publiceret' : 'Publicer') }}
                 </UButton>
 
                 <!-- More - the settings wheel + chevron (BUTTONS.settings), reveals the danger zone -->
@@ -539,7 +539,7 @@ const handleCardClick = () => {
                 <DangerButton
                   v-if="isCancelled"
                   :class="LAYOUTS.cardActionButton"
-                  :label="isUpdating ? 'Arbejder...' : 'Annuller aflysning'"
+                  :label="isUpdating ? BUTTON_WORDS.working : 'Annuller aflysning'"
                   :confirm-label="`Tryk igen for at genåbne ${formattedShortDate}...`"
                   :loading="isUpdating"
                   :disabled="isUpdating"
@@ -589,7 +589,7 @@ const handleCardClick = () => {
                     {{ BUTTON_WORDS.cancel }}
                   </UButton>
                   <DangerButton
-                    :label="isUpdating ? 'Arbejder...' : 'Aflys middagen'"
+                    :label="isUpdating ? BUTTON_WORDS.working : 'Aflys middagen'"
                     :confirm-label="`Tryk igen for at aflyse ${formattedShortDate}`"
                     :loading="isUpdating"
                     :disabled="isUpdating"

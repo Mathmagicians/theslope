@@ -1,6 +1,7 @@
 import {describe, it, expect} from 'vitest'
 import {useSeasonValidation, type Season} from '~/composables/useSeasonValidation'
-import {SEASON_STATUS} from '~/config/seasonWords'
+import {SEASON_STATUS, SEASON_WORDS} from '~/config/seasonWords'
+import {createDefaultWeekdayMap} from '~/types/dateTypes'
 import {createDateRange, formatDate} from '~/utils/date'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useTicketPriceValidation, type PortionTicket} from '~/composables/useTicketPriceValidation'
@@ -88,8 +89,14 @@ describe('useSeasonValidation', () => {
       const result = SeasonSchema.safeParse(seasonWithOverlappingHolidays)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.issues[0]?.message).toBe("Ferieperioder må ikke overlappe hinanden")
+        expect(result.error.issues[0]?.message).toBe(SEASON_WORDS.form.holidaysOverlap)
       }
+    })
+
+    it('should reject a season without a cooking day', () => {
+      const result = SeasonSchema.safeParse({...SeasonFactory.defaultSeason(), cookingDays: createDefaultWeekdayMap(false)})
+      expect(result.success).toBe(false)
+      expect(result.error?.issues.map(issue => issue.message)).toContain(SEASON_WORDS.form.noCookingDay)
     })
 
     it('should reject holidays outside season', () => {
@@ -105,7 +112,7 @@ describe('useSeasonValidation', () => {
       const result = SeasonSchema.safeParse(seasonWithOutsideHolidays)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.issues[0]?.message).toBe("Ferieperioder skal være inden for fællesspisningssæsonen")
+        expect(result.error.issues[0]?.message).toBe(SEASON_WORDS.form.holidayOutsideSeason)
       }
     })
   })

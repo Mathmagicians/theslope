@@ -241,7 +241,7 @@ const emit = defineEmits<{
   save: [changes: BookingChanges]
   cancel: []
   'update:formMode': [mode: FormMode]
-  navigate: [direction: 'prev' | 'next']
+  navigate: [direction: PeriodDirection]
   addGuest: [orders: DesiredOrder[]]
 }>()
 
@@ -569,7 +569,7 @@ const tableData = computed((): GridRow[] => {
   rows.push({
     rowType: BookingRow.power,
     id: 'power-mode',
-    name: 'Alle',
+    name: BOOKING_WORDS.power.name,
     isSynthetic: true
   })
 
@@ -581,7 +581,7 @@ const tableData = computed((): GridRow[] => {
     rows.push({
       rowType: BookingRow['guest-add'],
       id: GUEST_ADD_ROW_ID,
-      name: 'Tilføj gæst',
+      name: BOOKING_WORDS.guests.add,
       isSynthetic: true
     })
   }
@@ -722,8 +722,8 @@ const getEventSummary = (eventId: number) => {
         :has-prev="props.hasPrev"
         :has-next="props.hasNext"
         :disabled="props.isSaving"
-        @prev="emit('navigate', 'prev')"
-        @next="emit('navigate', 'next')"
+        @prev="emit('navigate', PERIOD_DIRECTION.prev)"
+        @next="emit('navigate', PERIOD_DIRECTION.next)"
         @toggle="calendarOpen = !calendarOpen"
       >
         {{ navigationLabel }}

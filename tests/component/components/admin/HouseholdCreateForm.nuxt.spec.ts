@@ -2,6 +2,7 @@
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
 import HouseholdCreateForm from '~/components/admin/HouseholdCreateForm.vue'
+import CalendarDatePicker from '~/components/calendar/CalendarDatePicker.vue'
 import {nextTick} from 'vue'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 import {mountWithTooltipProvider, findDateSegments, resetStores} from '~~/tests/component/testHelpers'
@@ -52,9 +53,8 @@ const fillPbs = async (wrapper: Awaited<ReturnType<typeof mount>>, pbsId: string
 }
 
 const pickDateByName = async (wrapper: Awaited<ReturnType<typeof mount>>, name: string, date: Date) => {
-    const picker = wrapper.findAllComponents({name: 'CalendarDatePicker'}).find(p => p.props('name') === name)
-    const vm = picker!.vm as unknown as {updateDate: (d: Date) => boolean}
-    vm.updateDate(date)
+    const picker = wrapper.findAllComponents(CalendarDatePicker).find(p => p.props('name') === name)
+    picker?.vm.updateDate(date)
     await nextTick()
     await nextTick()
 }
@@ -67,7 +67,7 @@ const pickMoveInDate = (wrapper: Awaited<ReturnType<typeof mount>>, date: Date) 
 // UForm.submit() validates schema + contextual rules asynchronously, so flush promises.
 const clickSubmit = async (wrapper: Awaited<ReturnType<typeof mount>>) => {
     const submitBtn = wrapper.findAll('button').find(b => b.text().includes('Opret husstand'))
-    await submitBtn!.trigger('click')
+    await submitBtn?.trigger('click')
     await flushPromises()
     await nextTick()
 }
@@ -135,15 +135,15 @@ describe('HouseholdCreateForm', () => {
 
         const moveInDate = new Date('2026-05-15')
         await pickMoveInDate(wrapper, moveInDate)
-        const movedInPicker = wrapper.findAllComponents({name: 'CalendarDatePicker'}).find(p => p.props('name') === 'movedInDate')!
-        expect(findDateSegments(movedInPicker, 'day')[0]!.attributes('aria-valuenow')).toBe(String(moveInDate.getDate()))
-        expect(findDateSegments(movedInPicker, 'year')[0]!.attributes('aria-valuenow')).toBe(String(moveInDate.getFullYear()))
+        // The one move-in picker reads the day and the year it was given
+        const movedInPickers = wrapper.findAllComponents(CalendarDatePicker).filter(p => p.props('name') === 'movedInDate')
+        const segmentValues = (segment: Parameters<typeof findDateSegments>[1]) => movedInPickers.flatMap(picker => findDateSegments(picker, segment)).map(found => found.attributes('aria-valuenow'))
+        expect(segmentValues('day')).toEqual([String(moveInDate.getDate())])
+        expect(segmentValues('year')).toEqual([String(moveInDate.getFullYear())])
 
         await clickSubmit(wrapper)
 
-        const emitted = wrapper.emitted('create')
-        expect(emitted).toBeTruthy()
-        expect(emitted![0]).toEqual([
+        expect(wrapper.emitted('create')?.[0]).toEqual([
             {pbsId: 116, address: 'Skråningen 14', movedInDate: moveInDate, heynaboId: 42, name: 'Familien Hansen'},
             [{id: 7, moveOutDate: moveInDate}]
         ])

@@ -2,6 +2,7 @@ import {describe, it, expect} from 'vitest'
 import {useDutyValidation, type JokerSlot} from '~/composables/useDutyValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {SeasonFactory} from "~~/tests/e2e/testDataFactories/seasonFactory"
+import {DUTY_WORDS} from '~/config/dutyWords'
 
 const {RoleSchema, JokerSlotCreateSchema, SerializedJokerSlotSchema, serializeJokerSlot, deserializeJokerSlot} = useDutyValidation()
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
@@ -47,12 +48,12 @@ describe('useDutyValidation', () => {
         })
 
         it.each([
-            {name: 'an empty weekday map', input: {...slot, affinity: createDefaultWeekdayMap(false)}, path: 'affinity'},
-            {name: 'an end before the start', input: {...slot, endDate: new Date(slot.startDate.getTime() - 86_400_000)}, path: 'endDate'}
-        ])('rejects $name and reports the issue on $path', ({input, path}) => {
+            {name: 'an empty weekday map', input: {...slot, affinity: createDefaultWeekdayMap(false)}, path: 'affinity', message: DUTY_WORDS.jokerSlot.noWeekday},
+            {name: 'an end before the start', input: {...slot, endDate: new Date(slot.startDate.getTime() - 86_400_000)}, path: 'endDate', message: DUTY_WORDS.jokerSlot.endBeforeStart}
+        ])('rejects $name and reports the issue on $path', ({input, path, message}) => {
             const result = JokerSlotCreateSchema.safeParse(input)
             expect(result.success).toBe(false)
-            expect(result.error?.issues.map(issue => issue.path.join('.'))).toContain(path)
+            expect(result.error?.issues.map(issue => ({path: issue.path.join('.'), message: issue.message}))).toContainEqual({path, message})
         })
     })
 })

@@ -64,10 +64,8 @@ describe('TeamMemberAddForm', () => {
         const submitBtn = wrapper.findAll('button').find(b => b.text().includes(BUTTON_WORDS.add))
         await submitBtn?.trigger('click')
         await nextTick()
-        const emitted = wrapper.emitted('submit')
-        expect(emitted).toBeTruthy()
-        expect(emitted![0]![0]).toBe(Role.COOK)
-        expect(emitted![0]![1]).toBe(100)
+        // The role and the percentage lead the payload
+        expect(wrapper.emitted('submit')?.[0]?.slice(0, 2)).toEqual([Role.COOK, 100])
     })
 
     // ========== WEEKDAY RESTRICTION ==========
@@ -86,7 +84,7 @@ describe('TeamMemberAddForm', () => {
         const wrapper = await mount({initialRole: Role.COOK})
         const select = wrapper.findAllComponents({name: 'USelectMenu'})
             .find(menu => findByTestId(menu, 'team-member-role-select').exists())
-        select!.vm.$emit('update:modelValue', Role.CHEF)
+        select?.vm.$emit('update:modelValue', Role.CHEF)
         await nextTick()
         const glyphs = triggerGlyphs(wrapper)
         expect(glyphs).toContain(ROLE_ICONS[Role.CHEF])

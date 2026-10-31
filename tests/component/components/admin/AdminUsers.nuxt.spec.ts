@@ -6,6 +6,7 @@ import {mountWithTooltipProvider, resetStores, registerEmptyStoreEndpoints, hold
 import AdminUsers from '~/components/admin/AdminUsers.vue'
 import UserProfileCard from '~/components/user/UserProfileCard.vue'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 // Only HTTP is faked (testing.md Rule 6)
 registerEmptyStoreEndpoints()
@@ -75,7 +76,7 @@ describe('AdminUsers open row', () => {
         const wrapper = await mountUsers(true)
         await vi.waitFor(() => expect(wrapper.find('tbody').text()).toContain(second.email))
         await findByTestId(wrapper, 'user-search').setValue(second.email)
-        await wrapper.find('tbody button[aria-label="Åbn detaljer"]').trigger('click')
+        await wrapper.find(`tbody button[aria-label="${BUTTON_WORDS.openDetails}"]`).trigger('click')
 
         await findByTestId(wrapper, 'user-search').setValue('')
 

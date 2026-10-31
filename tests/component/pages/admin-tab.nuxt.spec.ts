@@ -12,7 +12,8 @@ import {SettingKeySchema, SETTING_REGISTRY} from '~/composables/useSettingValida
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
-import {mountedStore, mountWithTooltipProvider, registerEmptyStoreEndpoints, resetStores} from '~~/tests/component/testHelpers'
+import {findByTestId, mountedStore, mountWithTooltipProvider, registerEmptyStoreEndpoints, resetStores} from '~~/tests/component/testHelpers'
+import {ADMIN_WORDS} from '~/config/adminWords'
 
 // The test environment has no router to land a deep link on, and no session cookie
 const {mockRoute, mockNavigateTo, useRoute, session, useUserSession} = await vi.hoisted(async () => {
@@ -148,5 +149,35 @@ describe('admin/[tab] - who edits the allergy catalog', () => {
 
         await vi.waitFor(() => expect(wrapper.findComponent(AdminAllergies).exists()).toBe(true))
         expect(wrapper.findComponent(AdminAllergies).props('canEdit')).toBe(canEdit)
+    })
+})
+
+// Every member reads the admin pages; a member without the admin role reads them under the read-only banner
+describe('admin/[tab] - the tabs and the read-only banner', () => {
+    beforeEach(() => {
+        mockRoute.path = '/admin/allergies'
+        mockRoute.params = {tab: 'allergies'}
+        mockRoute.query = {}
+    })
+
+    it('names every tab', async () => {
+        const wrapper = await mountWithTooltipProvider(AdminPage)
+        Object.values(ADMIN_WORDS.tabs).forEach(label => expect(wrapper.text()).toContain(label))
+    })
+
+    it.each([
+        {viewer: 'a member without a role', roles: [], banner: true},
+        {viewer: 'an admin', roles: [SystemRole.ADMIN], banner: false}
+    ])('GIVEN $viewer THEN the read-only banner shows: $banner', async ({roles, banner}) => {
+        session.user.value = userWith(roles)
+
+        const wrapper = await mountWithTooltipProvider(AdminPage)
+
+        const bannerAlert = findByTestId(wrapper, 'admin-readonly-banner')
+        expect(bannerAlert.exists()).toBe(banner)
+        if (banner) {
+            expect(bannerAlert.text()).toContain(ADMIN_WORDS.readOnly.title)
+            expect(bannerAlert.text()).toContain(ADMIN_WORDS.readOnly.description)
+        }
     })
 })

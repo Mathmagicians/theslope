@@ -22,7 +22,7 @@ import ActionPreview from '~/components/booking/ActionPreview.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import {createBirthdayBadge, formatPreviewLines, lockChip, ticketBadgeLabel, ticketTypePresentation} from '~/composables/useBookingUi'
 import type DeadlineBadge from '~/components/deadline/DeadlineBadge.vue'
-import {getPeriodBoundary} from '~/utils/date'
+import {getPeriodBoundary, PERIOD_DIRECTION} from '~/utils/date'
 import {DINNER_MODE_ORDER, type ReleasedTicketCounts} from '~/composables/useBooking'
 import {addDays, subYears} from 'date-fns'
 
@@ -124,8 +124,8 @@ describe('BookingGridView', () => {
   // Navigation is handled by CalendarDateNav; the edit button renders in the week and month views only
   it.each`
     view    | button             | event                | payload
-    ${day}  | ${'date-nav-prev'} | ${'navigate'}        | ${['prev']}
-    ${day}  | ${'date-nav-next'} | ${'navigate'}        | ${['next']}
+    ${day}  | ${'date-nav-prev'} | ${'navigate'}        | ${[PERIOD_DIRECTION.prev]}
+    ${day}  | ${'date-nav-next'} | ${'navigate'}        | ${[PERIOD_DIRECTION.next]}
     ${week} | ${'grid-edit'}     | ${'update:formMode'} | ${[FORM_MODES.EDIT]}
   `('in $view view the $button button emits $event $payload', async ({view, button, event, payload}) => {
     const wrapper = await mount({view})

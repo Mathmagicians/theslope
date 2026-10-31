@@ -11,6 +11,7 @@ import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import type {NotificationKind} from '~/config/notificationTemplates'
 import type {EmailSetting} from '~~/server/utils/sender/config'
 import {chunkArray} from '~/utils/batchUtils'
+import {errorMessage} from '~/utils/utils'
 
 const {NotificationMessageSchema} = useNotificationValidation()
 const {DeliveryKindSchema, deliveryReferencePrefix} = useDeliveryValidation()
@@ -55,7 +56,7 @@ export const emit = async (queue: Queue | undefined, messages: NotificationMessa
             for (const {index} of batch) results[index]!.queued = true
             console.info(`${LOG} queued ${batch.length} message(s)`, {kinds: [...new Set(batch.map(({message}) => message.meta.kind))], dedupeKeys})
         } catch (error) {
-            console.error(`${LOG} queue batch failed — ${batch.length} message(s) not queued`, {dedupeKeys, reason: error instanceof Error ? error.message : String(error)})
+            console.error(`${LOG} queue batch failed — ${batch.length} message(s) not queued`, {dedupeKeys, reason: errorMessage(error)})
         }
     }
     return results

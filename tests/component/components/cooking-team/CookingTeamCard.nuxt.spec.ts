@@ -4,10 +4,11 @@ import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
 import {nextTick, ref, type ComponentPublicInstance} from 'vue'
 import type {BadgeProps, ButtonProps} from '@nuxt/ui'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, findComponentByTestId, clickByTestId, resetStores, iconNamesIn} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, findComponentByTestId, clickByTestId, resetStores, iconNamesIn, untilTrue} from '~~/tests/component/testHelpers'
 import CookingTeamCard from '~/components/cooking-team/CookingTeamCard.vue'
 import {usePlanStore} from '~/stores/plan'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {COMPONENTS, ICONS, ROLE_ICONS, getCalendarCountBadge, getRainbowBand, createResponsiveSizes} from '~/composables/useTheSlopeDesignSystem'
 import {useCookingTeamValidation, type CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 import type {JokerSlot} from '~/composables/useDutyValidation'
@@ -22,7 +23,8 @@ const Role = TeamRoleSchema.enum
 const ROLES = [Role.CHEF, Role.COOK, Role.JUNIORHELPER]
 
 // A face carries its icon; the overflow avatar of a group carries the count as its text
-type AvatarWrapper = VueWrapper<ComponentPublicInstance<{icon?: string, text?: string}>>
+type AvatarInstance = ComponentPublicInstance<{icon?: string, text?: string}>
+type AvatarWrapper = VueWrapper<AvatarInstance>
 const classesOf = (token: string) => token.split(' ')
 
 const TEST_IDS = {
@@ -44,8 +46,8 @@ const TEST_IDS = {
 const season = SeasonFactory.defaultSeason()
 
 // The team cooks tuesdays and thursdays, from monday 5 October 2026
-const dinnerTemplate = SeasonFactory.defaultCookingTeamDetail().dinnerEvents[0]!
-const dinnerEvents = [6, 8, 13, 15, 20, 22].map((day, index) => ({...dinnerTemplate, id: index + 1, date: new Date(2026, 9, day)}))
+const dinnerEvents = [6, 8, 13, 15, 20, 22].map((day, index) =>
+    ({...DinnerEventFactory.defaultDinnerEventDisplay(), id: index + 1, date: new Date(2026, 9, day), cookingTeamId: 1, seasonId: 1}))
 
 const jokerSlot = (overrides: Partial<JokerSlot> = {}): JokerSlot => ({
     id: 1,
@@ -61,21 +63,22 @@ const jokerSlot = (overrides: Partial<JokerSlot> = {}): JokerSlot => ({
     ...overrides
 })
 
-const slots = [
-    {slot: jokerSlot(), shifts: 3},
-    {slot: jokerSlot({
-        id: 2, role: Role.JUNIORHELPER, note: 'Emil på lejr',
-        affinity: createDefaultWeekdayMap([false, true, false, true, false, false, false])
-    }), shifts: 5}
-]
+const annaSlot = {slot: jokerSlot(), shifts: 3}
+const emilSlot = {slot: jokerSlot({
+    id: 2, role: Role.JUNIORHELPER, note: 'Emil på lejr',
+    affinity: createDefaultWeekdayMap([false, true, false, true, false, false, false])
+}), shifts: 5}
+const slots = [annaSlot, emilSlot]
 
-const assignments = ROLES.map((role, index) =>
-    SeasonFactory.defaultCookingTeamAssignment({id: index + 1, role, inhabitantId: index + 40}))
+// One member per role, its assignment id by its role: the assignment type leaves the id optional
+const MEMBER_IDS = {[Role.CHEF]: 1, [Role.COOK]: 2, [Role.JUNIORHELPER]: 3}
+const assignments = ROLES.map(role =>
+    SeasonFactory.defaultCookingTeamAssignment({id: MEMBER_IDS[role], role, inhabitantId: MEMBER_IDS[role] + 39}))
 
 let team: CookingTeamDetail = SeasonFactory.defaultCookingTeamDetail()
 
 // Only HTTP is faked (testing.md Rule 6) - specific routes first, generic last; the plan store reads the team
-registerEndpoint(`/api/admin/team/1/joker-slot/${slots[1]!.slot.id}`, {method: 'DELETE', handler: () => 1})
+registerEndpoint(`/api/admin/team/1/joker-slot/${emilSlot.slot.id}`, {method: 'DELETE', handler: () => 1})
 registerEndpoint('/api/admin/team/1', () => team)
 // No active season by default; a case that needs the season's teams sets one
 const SEASON_ID = 9
@@ -96,14 +99,14 @@ const mountCard = async (mode: 'monitor' | 'regular' | 'edit', detail: Partial<C
     })
     const store = usePlanStore()
     store.selectTeam(() => TEAM_ID)
-    await vi.waitFor(() => expect(store.selectedTeam?.id).toBe(TEAM_ID))
+    await untilTrue(() => store.selectedTeam?.id === TEAM_ID)
     await flushPromises()
     await nextTick()
     return wrapper
 }
 
 const avatarsIn = (element: BaseWrapper<Node>): AvatarWrapper[] =>
-    element.findAllComponents({name: 'UAvatar'}) as AvatarWrapper[]
+    element.findAllComponents<AvatarInstance>({name: 'UAvatar'})
 
 const expectHeadingWithGlyph = (wrapper: VueWrapper, testId: string, glyph: string) => {
     const heading = findByTestId(wrapper, testId)
@@ -133,20 +136,18 @@ describe('CookingTeamCard', () => {
             expect(new Set(rows.map(row => row.element.children.length)).size).toBe(1)
 
             // No remove, slet, add or "Tilføj jokere" controls
-            assignments.forEach(({id}) => expect(findByTestId(wrapper, TEST_IDS.memberRemove(id!)).exists()).toBe(false))
+            ROLES.forEach(role => expect(findByTestId(wrapper, TEST_IDS.memberRemove(MEMBER_IDS[role])).exists()).toBe(false))
             slots.forEach(({slot}) => expect(findByTestId(wrapper, JOKER_SLOT_IDS.delete(slot.id)).exists()).toBe(false))
             expect(findByTestId(wrapper, JOKER_SLOT_IDS.add).exists()).toBe(false)
             expect(findByTestId(wrapper, TEST_IDS.jokerAddRow).exists()).toBe(false)
             expect(wrapper.findAll('h4').some(heading => heading.text() === 'Tilføj jokere')).toBe(false)
 
             const lines = findAllByTestId(findByTestId(wrapper, TEST_IDS.jokerBox), TEST_IDS.jokerSlot)
-            expect(lines).toHaveLength(slots.length)
-            slots.forEach(({slot}, index) => {
-                const line = lines[index]!
-                expect(line.text()).toContain(`${formatDate(slot.startDate)}-${formatDate(slot.endDate)}`)
-                expect(line.text()).toContain(slot.note!)
-                expect(iconNamesIn(line)).toContain(ROLE_ICONS[slot.role])
-            })
+            // One line per slot in its order: its period, its note and its role's glyph
+            const texts = lines.map(line => line.text())
+            expect(texts).toEqual(slots.map(({slot}) => expect.stringContaining(`${formatDate(slot.startDate)}-${formatDate(slot.endDate)}`)))
+            expect(texts).toEqual(slots.map(({slot}) => expect.stringContaining(slot.note ?? '')))
+            expect(lines.map(line => iconNamesIn(line))).toEqual(slots.map(({slot}) => expect.arrayContaining([ROLE_ICONS[slot.role]])))
         })
 
         // The default slots cover several shifts; a slot ending on its first tuesday covers one
@@ -157,17 +158,26 @@ describe('CookingTeamCard', () => {
             const wrapper = await mountCard('regular', {jokerSlots: lines.map(({slot}) => slot)})
             const countBadge = getCalendarCountBadge(1)
             const rendered = findAllByTestId(findByTestId(wrapper, TEST_IDS.jokerBox), TEST_IDS.jokerSlot)
-            expect(rendered).toHaveLength(lines.length)
-            lines.forEach(({shifts}, index) => {
-                const line = rendered[index]!
+            // Each line in its slot's order: the badge reads the count, names the shifts and wears the calendar's count badge
+            const badges = rendered.map(line => {
                 const badge = findByTestId(line, TEST_IDS.jokerShifts)
-                expect(badge.text()).toBe(String(shifts))
-                expect(badge.attributes('aria-label')).toBe(labels[index])
-                expect(badge.classes()).toEqual(expect.arrayContaining(classesOf(countBadge.class)))
-                expect(findComponentByTestId<BadgeProps>(line, 'UBadge', TEST_IDS.jokerShifts).props('size')).toBe(createResponsiveSizes(ref(true)).small)
-                expect(iconNamesIn(badge)).toEqual([countBadge.icon])
-                expect(line.text()).not.toContain('vagt')
+                return {
+                    count: badge.text(),
+                    label: badge.attributes('aria-label'),
+                    classes: badge.classes(),
+                    size: findComponentByTestId<BadgeProps>(line, 'UBadge', TEST_IDS.jokerShifts).props('size'),
+                    icons: iconNamesIn(badge),
+                    line: line.text()
+                }
             })
+            expect(badges).toEqual(lines.map(({shifts}, index) => ({
+                count: String(shifts),
+                label: labels[index],
+                classes: expect.arrayContaining(classesOf(countBadge.class)),
+                size: createResponsiveSizes(ref(true)).small,
+                icons: [countBadge.icon],
+                line: expect.not.stringContaining('vagt')
+            })))
         })
 
         it('an empty Jokere box reads "Ingen jokere"', async () => {
@@ -182,19 +192,20 @@ describe('CookingTeamCard', () => {
         it('every slot line carries a slet that emits remove:jokerSlot, and every member row a labelled trash button that emits remove:member, with its id', async () => {
             const wrapper = await mountCard('edit')
             const lines = findAllByTestId(findByTestId(wrapper, TEST_IDS.jokerBox), TEST_IDS.jokerSlot)
-            slots.forEach(({slot}, index) => {
-                expect(findByTestId(lines[index]!, JOKER_SLOT_IDS.delete(slot.id)).attributes('aria-label')).toBeTruthy()
-            })
-            await clickByTestId(wrapper, JOKER_SLOT_IDS.delete(slots[1]!.slot.id))
-            expect(wrapper.emitted('remove:jokerSlot')).toEqual([[slots[1]!.slot.id]])
+            // Each line holds its own slot's slet, and each slet has an accessible name
+            expect(lines.map(line => slots.filter(({slot}) => findByTestId(line, JOKER_SLOT_IDS.delete(slot.id)).exists()).map(({slot}) => slot.id)))
+                .toEqual(slots.map(({slot}) => [slot.id]))
+            slots.forEach(({slot}) => expect(findByTestId(wrapper, JOKER_SLOT_IDS.delete(slot.id)).attributes('aria-label')).toBeTruthy())
+            await clickByTestId(wrapper, JOKER_SLOT_IDS.delete(emilSlot.slot.id))
+            expect(wrapper.emitted('remove:jokerSlot')).toEqual([[emilSlot.slot.id]])
 
-            assignments.forEach(({id}) => {
-                const remove = findComponentByTestId<ButtonProps>(wrapper, 'UButton', TEST_IDS.memberRemove(id!))
+            ROLES.forEach(role => {
+                const remove = findComponentByTestId<ButtonProps>(wrapper, 'UButton', TEST_IDS.memberRemove(MEMBER_IDS[role]))
                 expect(remove.attributes('aria-label')).toBeTruthy()
                 expect(remove.props('icon')).toBe(ICONS.trash)
             })
-            await clickByTestId(wrapper, TEST_IDS.memberRemove(assignments[1]!.id!))
-            expect(wrapper.emitted('remove:member')).toEqual([[assignments[1]!.id]])
+            await clickByTestId(wrapper, TEST_IDS.memberRemove(MEMBER_IDS[Role.COOK]))
+            expect(wrapper.emitted('remove:member')).toEqual([[MEMBER_IDS[Role.COOK]]])
         })
     })
 
@@ -202,7 +213,7 @@ describe('CookingTeamCard', () => {
         it('the Jokere box and member rows follow the store team after a write refreshes it', async () => {
             const wrapper = await mountCard('edit')
             const store = usePlanStore()
-            const [removedSlot, keptSlot] = [slots[1]!.slot, slots[0]!.slot]
+            const [removedSlot, keptSlot] = [emilSlot.slot, annaSlot.slot]
             team = {...team, assignments: assignments.slice(1), jokerSlots: [keptSlot]}
 
             await store.deleteJokerSlot(TEAM_ID, removedSlot.id)
@@ -238,8 +249,8 @@ describe('CookingTeamCard', () => {
                 .filter(badge => badge.attributes('data-testid') === TEST_IDS.visitBadge)
 
             expect(badges.map(badge => badge.text())).toEqual(texts)
-            const header = wrapper.findComponent({name: 'CookingTeamBadges'}).element.parentElement!
-            badges.forEach(badge => expect(header.contains(badge.element)).toBe(true))
+            const header = wrapper.findComponent({name: 'CookingTeamBadges'}).element.parentElement
+            badges.forEach(badge => expect(header?.contains(badge.element)).toBe(true))
         })
     })
 
@@ -265,8 +276,8 @@ describe('CookingTeamCard', () => {
     describe('edit face, Holdnavn', () => {
         it('shows the resolved team name, and emits the trimmed draft once on blur after a focus seeds it', async () => {
             const wrapper = await mountCard('edit', {name: 'Team Alpha'})
-            const input = findByTestId(wrapper, TEST_IDS.nameInput)
-            expect((input.element as HTMLInputElement).value).toBe('Team Alpha')
+            const input = findByTestId<HTMLInputElement>(wrapper, TEST_IDS.nameInput)
+            expect(input.element.value).toBe('Team Alpha')
             await input.trigger('focus')
             await input.setValue(' Team Alpha Q ')
             await input.trigger('blur')
@@ -282,18 +293,19 @@ describe('CookingTeamCard', () => {
             await input.setValue('   ')
             await input.trigger('blur')
             expect(wrapper.emitted('update:teamName')).toBeUndefined()
-            expect((findByTestId(wrapper, TEST_IDS.nameInput).element as HTMLInputElement).value).toBe('Team Alpha')
+            expect(findByTestId<HTMLInputElement>(wrapper, TEST_IDS.nameInput).element.value).toBe('Team Alpha')
         })
     })
 })
 
 describe('CookingTeamCard edit face, Tilføj jokere', () => {
-    const headingNamed = (wrapper: VueWrapper, text: string) => wrapper.findAll('h4').find(heading => heading.text() === text)!
+    const headingNamed = (wrapper: VueWrapper, text: string) => wrapper.findAll('h4').find(heading => heading.text() === text)
     const addButton = (wrapper: VueWrapper) => findByTestId(findByTestId(wrapper, TEST_IDS.jokerAddRow), JOKER_SLOT_IDS.add)
     const addButtonIcon = (wrapper: VueWrapper) =>
         findComponentByTestId<ButtonProps>(findByTestId(wrapper, TEST_IDS.jokerAddRow), 'UButton', JOKER_SLOT_IDS.add)
-    const follows = (earlier: Element, later: Element) =>
-        (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+    // A missing element follows nothing, so the order assertion fails on it
+    const follows = (earlier: Element | undefined, later: Element | undefined) =>
+        !!earlier && !!later && (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
 
     beforeEach(() => {
         resetStores()
@@ -306,11 +318,11 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
         const jokerHeading = headingNamed(wrapper, 'Tilføj jokere')
 
         expect(row.exists()).toBe(true)
-        expect(finderHeading.element.parentElement!.contains(row.element)).toBe(true)
-        expect(follows(finderHeading.element, jokerHeading.element)).toBe(true)
-        expect(follows(jokerHeading.element, row.element)).toBe(true)
+        expect(finderHeading?.element.parentElement?.contains(row.element)).toBe(true)
+        expect(follows(finderHeading?.element, jokerHeading?.element)).toBe(true)
+        expect(follows(jokerHeading?.element, row.element)).toBe(true)
 
-        expect(avatarsIn(row)[0]!.props('icon')).toBe(ICONS.joker)
+        expect(avatarsIn(row)[0]?.props('icon')).toBe(ICONS.joker)
         expect(row.text()).toContain('Joker · en plads uden navn')
         expect(addButton(wrapper).text()).toBe(BUTTON_WORDS.add)
         expect(addButton(wrapper).attributes('aria-expanded')).toBe('false')
@@ -330,7 +342,7 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
         expect(addButtonIcon(wrapper).props('icon')).toBe(ICONS.chevronDown)
         const form = findByTestId(wrapper, JOKER_SLOT_IDS.form)
         expect(form.exists()).toBe(true)
-        expect([...form.element.parentElement!.classList]).toEqual(expect.arrayContaining(classesOf(COMPONENTS.teamCard.memberForm)))
+        expect(form.element.parentElement?.className.split(' ')).toEqual(expect.arrayContaining(classesOf(COMPONENTS.teamCard.memberForm)))
         expect(findByTestId(form, JOKER_SLOT_IDS.submit).text()).toBe(BUTTON_WORDS.add)
         expect(findByTestId(form, JOKER_SLOT_IDS.cancel).text()).toBe(BUTTON_WORDS.cancel)
     })
@@ -343,9 +355,8 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
 
         await submitJokerSlotForm(wrapper)
 
-        const emitted = wrapper.emitted('add:jokerSlot')
-        expect(emitted).toHaveLength(1)
-        expect(emitted![0]![0]).toMatchObject({
+        expect(wrapper.emitted('add:jokerSlot')).toHaveLength(1)
+        expect(wrapper.emitted('add:jokerSlot')?.[0]?.[0]).toMatchObject({
             role: Role.COOK,
             allocationPercentage: 100,
             startDate: season.seasonDates.start,

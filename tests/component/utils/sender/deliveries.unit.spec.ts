@@ -252,14 +252,19 @@ describe('deliverDesired', () => {
     })
 })
 
-// The user does not wait for notifications: the work runs after the response, and its failure is the step's log line
+// The user does not wait for notifications: the work runs after the response, and its failure is one log line naming it
 describe('deliverInBackground', () => {
-    it('GIVEN work that fails WHEN handed to the background THEN the request waits on it and the failure does not reject', async () => {
+    it.each([
+        {failure: 'rejects', work: (): Promise<unknown> => Promise.reject(new Error('D1 down'))},
+        {failure: 'throws before it returns a promise', work: (): Promise<unknown> => {
+            throw new Error('D1 down')
+        }}
+    ])('GIVEN work that $failure WHEN handed to the background THEN the request waits on it, the failure does not reject and its error line names the work', async ({work}) => {
         const waitUntil = vi.fn()
 
-        deliverInBackground({waitUntil} as unknown as H3Event, () => Promise.reject(new Error('D1 down')))
+        deliverInBackground({waitUntil} as unknown as H3Event, 'booking outcomes', work)
 
-        expect(waitUntil).toHaveBeenCalledTimes(1)
-        await expect(waitUntil.mock.calls[0]![0]).resolves.toBeUndefined()
+        await expect(Promise.all(waitUntil.mock.calls.map(([background]) => background))).resolves.toEqual([undefined])
+        expect(errorLines()).toEqual(['📬 > DELIVERY > [BACKGROUND booking outcomes] failed: D1 down'])
     })
 })

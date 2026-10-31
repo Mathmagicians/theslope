@@ -90,7 +90,6 @@ const {value: calendarOpen} = useCalendarOpenParam(syncWhen)
 const showCalendar = computed(() => view.value !== BookingViewSchema.enum.month && calendarOpen.value)
 
 const handleDateSelected = (date: Date) => setDate(date)
-const handleNavigate = (direction: 'prev' | 'next') => navigate(direction === 'next' ? 1 : -1)
 
 // Find dinner event for selected date
 const selectedDinnerEvent = computed(() => {
@@ -221,7 +220,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
           :has-next="hasNext"
           :admin-bypass="adminBypass"
           @save="handleGridSave"
-          @navigate="handleNavigate"
+          @navigate="navigate"
           @add-guest="handleAddGuest"
         >
           <!-- Day view content via slot -->

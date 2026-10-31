@@ -3,6 +3,7 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import {useBookingValidation, type DinnerMode as DinnerModeType} from '~/composables/useBookingValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
+import {SEASON_WORDS} from '~/config/seasonWords'
 
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
@@ -23,7 +24,7 @@ describe('useWeekDayMapValidation - boolean (backward compatibility)', () => {
             const result = WeekDayMapSchemaRequired!.safeParse(allUnselected)
             expect(result.success).toBe(false)
             if (!result.success) {
-                expect(result.error.issues[0]?.message).toBe('Man skal lave mad mindst en dag om ugen')
+                expect(result.error.issues[0]?.message).toBe(SEASON_WORDS.form.noCookingDay)
             }
         })
     })

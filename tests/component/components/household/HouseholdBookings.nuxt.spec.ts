@@ -3,7 +3,7 @@ import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import type {Ref} from 'vue'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores,VIEWPORTS, holdEndpoint, isTableLoading, expectMasterDetail, registerScaffoldEndpoint, untilTrue} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores,VIEWPORTS, holdEndpoint, isTableLoading, expectMasterDetail, registerScaffoldEndpoint, untilTrue, mountedStore} from '~~/tests/component/testHelpers'
 import HouseholdBookings from '~/components/household/HouseholdBookings.vue'
 import DinnerCalendarDisplay from '~/components/calendar/DinnerCalendarDisplay.vue'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
@@ -57,7 +57,8 @@ const household = HouseholdFactory.defaultHouseholdDetail('household-bookings')
 
 const mountBookings = async (isMd: boolean | null | Ref<boolean | null>, props: {canEdit?: boolean, adminBypass?: boolean} = {}) => {
     const wrapper = await mountWithTooltipProvider(HouseholdBookings, {props: {household, ...props}, isMd})
-    await vi.waitFor(() => expect(findByTestId(wrapper, 'household-bookings').exists()).toBe(true), {timeout: 10_000})
+    const planStore = mountedStore(usePlanStore)
+    await untilTrue(() => planStore.isSelectedSeasonInitialized)
     await flushPromises()
     return wrapper
 }
@@ -77,7 +78,7 @@ describe('HouseholdBookings calendar in ?cal=', () => {
     it.each(VIEWPORTS)('$viewport: lands with the calendar of its viewport and spells it out in ?cal=', async ({isMd}) => {
         const wrapper = await mountBookings(isMd)
 
-        await vi.waitFor(() => expect(mockRoute.query.cal).toBe(isMd ? 'open' : 'closed'))
+        await untilTrue(() => mockRoute.query.cal === (isMd ? 'open' : 'closed'))
         expect(wrapper.findComponent(DinnerCalendarDisplay).exists()).toBe(isMd)
     })
 })
@@ -149,11 +150,11 @@ describe('HouseholdBookings date arrows', () => {
 
         await vi.waitFor(() => expect(findByTestId(wrapper, 'date-nav-next').exists()).toBe(true))
         await clickByTestId(wrapper, 'date-nav-next')
-        await vi.waitFor(() => expect(mockRoute.query.date).toBe(formatDate(lastDinner.date)))
+        await untilTrue(() => mockRoute.query.date === formatDate(lastDinner.date))
 
         await vi.waitFor(() => expect(findByTestId(wrapper, 'date-nav-prev').exists()).toBe(true))
         await clickByTestId(wrapper, 'date-nav-prev')
-        await vi.waitFor(() => expect(mockRoute.query.date).toBe(formatDate(firstDinner.date)))
+        await untilTrue(() => mockRoute.query.date === formatDate(firstDinner.date))
     })
 
     it('week: the next arrow is gone on the season\'s last dinner', async () => {

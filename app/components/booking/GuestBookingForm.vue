@@ -178,7 +178,7 @@ const handleCancel = () => emit('cancel')
       <template #header>
         <div :class="guestForm.header">
           <UIcon :name="ICONS.userPlus" :class="guestForm.headerIcon" />
-          <h4 :class="guestForm.title">Tilføj gæst</h4>
+          <h4 :class="guestForm.title">{{ BOOKING_WORDS.guests.add }}</h4>
           <UBadge v-if="forSaleWords" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
             {{ forSaleWords }}
           </UBadge>

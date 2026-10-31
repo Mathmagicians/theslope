@@ -4,6 +4,7 @@ import {getPrismaClientConnection} from "../utils/database"
 import {useDeliveryValidation, type Delivery, type DeliveryCreate} from '~/composables/useDeliveryValidation'
 import {chunkArray, groupBy} from '~/utils/batchUtils'
 import {sumAmounts} from '~/utils/ledger'
+import {errorMessage} from '~/utils/utils'
 
 import type {
     OrderDisplay,
@@ -1009,7 +1010,7 @@ export async function deleteDinnerEvent(
             const heynaboDeletes = eventsToDelete
                 .filter(e => e.heynaboEventId)
                 .map(e => deleteHeynaboEvent(e.heynaboEventId!)
-                    .catch(err => console.warn(`🍽️ > DINNER_EVENT > [DELETE] Failed to delete Heynabo event ${e.heynaboEventId}: ${err instanceof Error ? err.message : String(err)}`))
+                    .catch(err => console.warn(`🍽️ > DINNER_EVENT > [DELETE] Failed to delete Heynabo event ${e.heynaboEventId}: ${errorMessage(err)}`))
                 )
             await Promise.all(heynaboDeletes)
         }

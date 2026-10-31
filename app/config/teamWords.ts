@@ -125,9 +125,10 @@ export const TEAM_WORDS = {
             }
         }
     },
-    /** The admin's team page: a failed team read and the toasts of its team, member and joker saves */
+    /** The admin's team page: a failed team read, the create button, and the toasts of its team, member and joker saves */
     admin: {
         failed: 'Kunne ikke hente hold',
+        create: 'Opret madhold',
         created: {
             title: 'Madhold oprettet',
             description: (teams: number, eventsAssigned: number) => `${teams} madhold oprettet · ${eventsAssigned} madlavninger tildelt`

@@ -34,7 +34,7 @@ export default defineEventHandler(async (event): Promise<WaitlistAssignmentResul
 
     try {
         const result = await assignWaitlistPortions(d1Client, dinner, body.portions, chef.id)
-        deliverInBackground(event, () => notifyExtraPortions(d1Client, emailChannel(cloudflare.env), result))
+        deliverInBackground(event, 'extra portions', () => notifyExtraPortions(d1Client, emailChannel(cloudflare.env), result))
         console.info(`${LOG} Chef ${chef.id} cooks ${body.portions} more portions on dinner ${id}: ${result.assigned.length} assigned, ${result.waiting} waiting`)
         setResponseStatus(event, 200)
         return WaitlistAssignmentResultSchema.parse(result)

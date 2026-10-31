@@ -5,6 +5,7 @@
  */
 import {useBillingValidation, type BillingArchiveResult, type BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 import {DATE_SETTINGS, formatDate} from '~/utils/date'
+import {errorMessage} from '~/utils/utils'
 
 const {generateBillingCsv, generateCsvFilename} = useBillingValidation()
 const LOG = '💰 > BILLING > [ARCHIVE]'
@@ -34,7 +35,7 @@ export const archiveBillingCsv = async (bucket: R2Bucket | undefined, summary: B
         console.info(`${LOG} archived`, {key, sizeBytes: result.sizeBytes})
         return {...result, archived: true, degraded: false}
     } catch (error) {
-        console.error(`${LOG} put failed`, {key, reason: error instanceof Error ? error.message : String(error)})
+        console.error(`${LOG} put failed`, {key, reason: errorMessage(error)})
         return {...result, archived: false, degraded: false}
     }
 }

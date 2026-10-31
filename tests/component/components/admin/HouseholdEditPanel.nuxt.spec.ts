@@ -71,7 +71,7 @@ describe('HouseholdEditPanel', () => {
     it('emits move:inhabitant on Flyt hertil click', async () => {
         const wrapper = await mount()
         const btn = wrapper.findAll('button').find(b => b.text().includes('Flyt hertil'))
-        await btn!.trigger('click')
+        await btn?.trigger('click')
         await nextTick()
         expect(wrapper.emitted('move:inhabitant')).toBeTruthy()
     })

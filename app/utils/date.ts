@@ -5,8 +5,8 @@ import {
     startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth
 } from "date-fns"
 import {da} from "date-fns/locale"
-import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
-import {WEEKDAYS} from "~/types/dateTypes"
+import type {DateRange, PeriodView, WeekDay, WeekDayMap} from "~/types/dateTypes"
+import {PERIOD_VIEWS, WEEKDAYS} from "~/types/dateTypes"
 import {capitalize} from "~/utils/utils"
 import {DATE_WORDS} from "~/config/dateWords"
 import {CalendarDate, type DateValue, toZoned, toCalendarDateTime, Time, fromDate} from '@internationalized/date'
@@ -363,10 +363,11 @@ export const isSameDayInTimezone = (a: Date, b: Date): boolean =>
 export const formatTimeSince = (moment: Date, now: Date): string =>
     formatDistanceStrict(moment, now, {addSuffix: true, locale: DATE_SETTINGS.locale})
 
-/**
- * Period view for calendar navigation
- */
-export type PeriodView = 'day' | 'week' | 'month'
+/** A step to the previous or the next period: the sign the boundary and the adjacent dinner lookup read */
+export const PERIOD_DIRECTION = {prev: -1, next: 1} as const
+export type PeriodDirection = typeof PERIOD_DIRECTION[keyof typeof PERIOD_DIRECTION]
+
+const [DAY, WEEK, MONTH] = PERIOD_VIEWS
 
 /**
  * Return the boundary timestamp for a view/direction pair.
@@ -381,14 +382,14 @@ export type PeriodView = 'day' | 'week' | 'month'
  *
  * Week uses Monday-start (`DATE_SETTINGS.weekStartsOn = 1`).
  */
-export const getPeriodBoundary = (date: Date, view: PeriodView, direction: 1 | -1): Date => {
+export const getPeriodBoundary = (date: Date, view: PeriodView, direction: PeriodDirection): Date => {
     const weekOpts = {weekStartsOn: DATE_SETTINGS.weekStartsOn}
     switch (view) {
-        case 'day':
-            return direction === 1 ? endOfDay(date) : startOfDay(date)
-        case 'week':
-            return direction === 1 ? endOfWeek(date, weekOpts) : startOfWeek(date, weekOpts)
-        case 'month':
-            return direction === 1 ? endOfMonth(date) : startOfMonth(date)
+        case DAY:
+            return direction === PERIOD_DIRECTION.next ? endOfDay(date) : startOfDay(date)
+        case WEEK:
+            return direction === PERIOD_DIRECTION.next ? endOfWeek(date, weekOpts) : startOfWeek(date, weekOpts)
+        case MONTH:
+            return direction === PERIOD_DIRECTION.next ? endOfMonth(date) : startOfMonth(date)
     }
 }

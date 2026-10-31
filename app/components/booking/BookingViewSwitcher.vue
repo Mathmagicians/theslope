@@ -18,7 +18,7 @@
 
 import {type BookingView, BookingViewSchema} from '~/composables/useBookingView'
 
-const model = defineModel<BookingView>({default: 'day'})
+const model = defineModel<BookingView>({default: BookingViewSchema.enum.day})
 
 const {COLOR, ICONS, SIZES, COMPONENTS} = useTheSlopeDesignSystem()
 

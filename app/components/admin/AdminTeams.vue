@@ -45,6 +45,7 @@ import type {TeamRole, CookingTeamCreate, CookingTeamDisplay} from "~/composable
 import type {WeekDayMap} from "~/types/dateTypes"
 import type {JokerSlotCreate} from "~/composables/useDutyValidation"
 import {BUTTON_WORDS} from "~/config/buttonWords"
+import {TEAM_WORDS} from "~/config/teamWords"
 
 // Props - canEdit from parent for authorization
 interface Props {
@@ -296,7 +297,7 @@ const columns = [
         variant: NOISE.quiet,
         icon: isOpen ? RESPONSIVE_ICONS.detailOpen : ICONS.chevronDown,
         square: true,
-        'aria-label': isOpen ? BUTTON_WORDS.close : 'Åbn detaljer',
+        'aria-label': isOpen ? BUTTON_WORDS.close : BUTTON_WORDS.openDetails,
         'data-testid': `team-toggle-${row.original.id}`,
         onClick: () => handleToggleTeam(row.original.id)
       })
@@ -535,7 +536,7 @@ const columns = [
     <template #footer>
       <div v-if="formMode === FORM_MODES.CREATE" :class="COMPONENTS.adminTeams.createFooter">
         <UButton v-bind="BUTTONS.save" :color="COLOR.secondary" data-testid="submit-create-teams" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
-          {{ isActionLoading ? 'Arbejder...' : 'Opret madhold' }}
+          {{ isActionLoading ? BUTTON_WORDS.working : TEAM_WORDS.admin.create }}
         </UButton>
         <UButton v-bind="BUTTONS.cancel" @click="handleCancel">
           {{ BUTTON_WORDS.cancel }}

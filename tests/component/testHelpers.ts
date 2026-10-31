@@ -174,8 +174,8 @@ export const kitchenConfig = () => {
 
 // A mountSuspended root, a findComponent() result or a DOMWrapper. A part typed BaseWrapper<Node> keeps the typed
 // findAllComponents overloads, which DOMWrapper types any
-export const findByTestId = (wrapper: BaseWrapper<Node>, testId: string) =>
-    wrapper.find(`[data-testid="${testId}"]`)
+export const findByTestId = <T extends Element = Element>(wrapper: BaseWrapper<Node>, testId: string) =>
+    wrapper.find<T>(`[data-testid="${testId}"]`)
 
 export const findAllByTestId = (wrapper: BaseWrapper<Node>, testId: string) =>
     wrapper.findAll(`[data-testid="${testId}"]`)
@@ -186,8 +186,8 @@ export const findAllByTestId = (wrapper: BaseWrapper<Node>, testId: string) =>
  */
 export const findComponentByTestId = <Props>(wrapper: BaseWrapper<Node>, name: string, testId: string) => {
     const found = wrapper.findAllComponents<ComponentPublicInstance<Props>>({name}).find(component => component.attributes('data-testid') === testId)
-    expect(found, `a ${name} with the test id ${testId}`).toBeDefined()
-    return found!
+    if (!found) throw new Error(`No ${name} with the test id ${testId}`)
+    return found
 }
 
 /** The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows */
@@ -214,7 +214,10 @@ export const cellAt = (wrapper: BaseWrapper<Node>, rowIndex: number, header: str
 /** The body rows UTable marks open (`data-expanded`), each with the row after it, where the table renders its #expanded slot */
 export const findOpenRows = (wrapper: BaseWrapper<Node>): {row: DOMWrapper<Element>, detail: DOMWrapper<Element>}[] => {
     const rows = wrapper.findAll('tbody tr')
-    return rows.flatMap((row, index) => row.attributes('data-expanded') === 'true' ? [{row, detail: rows[index + 1]!}] : [])
+    return rows.flatMap((row, index) => {
+        const detail = rows[index + 1]
+        return row.attributes('data-expanded') === 'true' && detail ? [{row, detail}] : []
+    })
 }
 
 type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
@@ -297,7 +300,7 @@ export const openPopover = async (wrapper: BaseWrapper<Node>) => {
 }
 
 /** A Date as its calendar day ('2025-01-05'): the model may carry local or UTC midnight of the same day */
-export const calendarDay = (date: Date) => toCalendarDate(date)!.toString()
+export const calendarDay = (date: Date) => toCalendarDate(date)?.toString()
 
 /** Ranges as calendar days, for asserting emitted DateRange payloads */
 export const asCalendarDays = (ranges: Array<{start: Date, end: Date}>) =>

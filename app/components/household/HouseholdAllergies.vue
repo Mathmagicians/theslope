@@ -39,6 +39,7 @@ import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreVali
 import type {AllergyDisplay, AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {TicketPresentation} from '~/composables/useBookingUi'
 import {BUTTON_WORDS} from '~/config/buttonWords'
+import {ALLERGY_WORDS} from '~/config/allergyWords'
 
 // Design system
 const {SIZES, COLOR, COMPONENTS, NOISE, TYPOGRAPHY, ICONS} = useTheSlopeDesignSystem()
@@ -227,7 +228,7 @@ const columns = computed(() => [
           <template #expand-cell="{ row }">
             <UButton
                 v-bind="display.rowToggle(row.getIsExpanded())"
-                :aria-label="row.getIsExpanded() ? BUTTON_WORDS.close : 'Rediger allergier'"
+                :aria-label="row.getIsExpanded() ? BUTTON_WORDS.close : ALLERGY_WORDS.edit"
                 :data-testid="`inhabitant-${row.original.id}-allergy-toggle`"
                 @click="row.toggleExpanded()"
             />

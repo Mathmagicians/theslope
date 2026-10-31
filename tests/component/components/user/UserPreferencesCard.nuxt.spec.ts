@@ -14,6 +14,7 @@ import UserPreferencesCard from '~/components/user/UserPreferencesCard.vue'
 import {mountWithTooltipProvider, findByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import type {UserDetail} from '~/composables/useCoreValidation'
+import type {User} from '#auth-utils'
 import {PALETTES, useUserPreferenceValidation} from '~/composables/useUserPreferenceValidation'
 import {PREF_TEST_IDS} from './userPreferencesTestIds'
 import {USER_WORDS} from '~/config/userWords'
@@ -58,7 +59,7 @@ registerEndpoint('/api/user/notifications/test', {
 const userWith = (overrides: Partial<UserDetail>): UserDetail =>
     UserFactory.defaultUserWithInhabitant('prefs', overrides)
 
-const mountCard = async (user: UserDetail) => {
+const mountCard = async (user: User) => {
     session.user.value = user
     const wrapper = await mountWithTooltipProvider(UserPreferencesCard, {isMd: false})
     await flushPromises()
@@ -119,7 +120,7 @@ describe('UserPreferencesCard', () => {
     it('GIVEN a session snapshot from before the columns existed THEN the card falls back to the column defaults', async () => {
         const {notificationChannels: _channels, appearance: _appearance, ...stale} = userWith({})
 
-        const wrapper = await mountCard(stale as UserDetail)
+        const wrapper = await mountCard(stale)
 
         expect(wrapper.text()).toContain(WORDS.channels[EMAIL])
         expect(wrapper.text()).toContain(WORDS.palettes[Palette.default])
@@ -128,7 +129,7 @@ describe('UserPreferencesCard', () => {
 
     it('GIVEN a session holding a palette that is not offered THEN the card shows the default palette and keeps the text scale', async () => {
         // Set after the factory, which parses the user: the session holds the value unparsed
-        const stale = {...userWith({}), appearance: {palette: 'tydelig', textScale: TextScale.large}} as unknown as UserDetail
+        const stale = {...userWith({}), appearance: {palette: 'tydelig', textScale: TextScale.large}}
         const wrapper = await mountCard(stale)
 
         expect(wrapper.text()).toContain(WORDS.palettes[Palette.default])

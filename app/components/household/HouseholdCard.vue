@@ -95,6 +95,8 @@ import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import type {DinnerMode} from '~/composables/useBookingValidation'
 import type {TicketPresentation} from '~/composables/useBookingUi'
 import {BUTTON_WORDS} from '~/config/buttonWords'
+import {BOOKING_WORDS} from '~/config/bookingWords'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 interface Props {
   household: HouseholdDetail
@@ -211,8 +213,8 @@ const savePreferences = async () => {
   } catch (error) {
     console.error('🏠 > HOUSEHOLD_CARD > [savePreferences] Failed to update preferences', error)
     toast.add({
-      title: 'Kunne ikke gemme',
-      description: 'Der opstod en fejl. Prøv igen senere.',
+      title: HOUSEHOLD_WORDS.failed.save.title,
+      description: HOUSEHOLD_WORDS.failed.save.description,
       icon: ICONS.exclamationCircle,
       color: COLOR.error
     })
@@ -259,7 +261,7 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
               v-if="canEdit"
               v-bind="BUTTONS.edit"
               :icon="row.getIsExpanded() ? ICONS.chevronDown : (row.original.isSynthetic ? COMPONENTS.powerMode.buttonIcon : BUTTONS.edit.icon)"
-              :aria-label="row.getIsExpanded() ? BUTTON_WORDS.close : (row.original.isSynthetic ? 'Power mode' : 'Rediger præferencer')"
+              :aria-label="row.getIsExpanded() ? BUTTON_WORDS.close : (row.original.isSynthetic ? BOOKING_WORDS.power.toggle : HOUSEHOLD_WORDS.preferences.edit)"
               :data-testid="row.original.isSynthetic ? 'power-mode-toggle' : `inhabitant-${row.original.id}-edit-preferences`"
               :class="[
                 COMPONENTS.openTurn(row.getIsExpanded()),
@@ -336,7 +338,7 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
 
         <template #expanded="{ row }">
           <UFormField
-              :label="row.original.isSynthetic ? 'Power mode: Opdater præferencer for hele husstanden' : `Opdater fællesspisning præferencer for ${row.original.name}`"
+              :label="row.original.isSynthetic ? HOUSEHOLD_WORDS.preferences.editor.household : HOUSEHOLD_WORDS.preferences.editor.inhabitant(row.original.name)"
               :class="COMPONENTS.householdCard.editorField"
           >
             <div :class="COMPONENTS.householdCard.editorStack">
@@ -390,7 +392,7 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
                         ]"
                       />
                     </template>
-                    {{ isSaving ? 'Arbejder...' : (row.original.isSynthetic ? 'Gem for alle' : BUTTON_WORDS.save) }}
+                    {{ isSaving ? BUTTON_WORDS.working : (row.original.isSynthetic ? BOOKING_WORDS.power.save : BUTTON_WORDS.save) }}
                   </UButton>
                 </UFieldGroup>
               </div>
@@ -418,7 +420,7 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
         <template #description>
           <div :class="COMPONENTS.householdCard.hintList">
             <span :class="COMPONENTS.householdCard.hintLine">
-              <UIcon :name="COMPONENTS.powerMode.buttonIcon" :class="COMPONENTS.householdCard.hintIcon" /> Power mode opdaterer alle medlemmer samtidigt - ændringer opdaterer fremtidige tilmeldinger
+              <UIcon :name="COMPONENTS.powerMode.buttonIcon" :class="COMPONENTS.householdCard.hintIcon" /> {{ HOUSEHOLD_WORDS.preferences.powerHint }}
             </span>
             <span :class="COMPONENTS.householdCard.hintLine">
               <UIcon :name="ICONS.edit" :class="COMPONENTS.householdCard.hintIcon" /> Klik på blyanten for at redigere enkeltpersoner

@@ -26,23 +26,43 @@ QA with human eyes: [qa.md](qa.md). Review defects: [defects.md](defects.md).
 | Tables keep their columns on a phone | Job history and users scroll sideways | – | done d159610, signed off 2026-10-27 |
 | Tables key their rows by id | `getRowId`, `useExpandableRow` | – | done ea978dd, d159610, 6a4f22e, 542b274, signed off 2026-10-27 |
 | The grid shows the day view's tickets | `BookingGridView.vue` header | – | done ea978dd, aa1e6e3, 002c4ae, 6a4f22e, signed off 2026-10-27 |
-| Chef calendar visit | A member opens another team's dinners from the chef calendar; mockups in `pages/chef/index.vue`, `MyTeamSelector.vue` | – | done 002c4ae, fba24af, 34ff620, signed off 2026-10-28 |
+| Chef calendar visit | A member opens another team's dinners from the chef calendar; mockups in `pages/chef/index.vue`, `MyTeamSelector.vue` | – | done 002c4ae, fba24af, 34ff620, 148f965, 65bfaa1, signed off 2026-10-28 |
 | One path for the grid and the day view | ADR-016 compliance 13; `personOnDinner`, `guestItemsOf`, `useExpectedBookings`, `isDinnerCancelled` | – | done 9e75cef, fba24af, a7f6285, 2c32354 |
 | Scaffold: a save naming an order bought by another household | The save lists it in `failed` and the rest lands; unit case `scaffoldPrebookings.unit.spec.ts:314` | – | done f5b5205 |
 | Minimal test seasons | A season spans the dinners its cases prove (`docs/testing.md` § Strategy: Control the Season, Control the Deadline): `AdminEconomy`, `HouseholdBookingsCrossHousehold`, `HouseholdScaffolding`, `seasonLiveEdit`, `waitlistAssignment` | – | done 2c32354 |
 | The app reads the time through `useClock` | ADR-017 compliance 8; the server render and the client agree on the minute | – | done 542b274 |
 | Delete responses | A bulk delete reports the ids it read before the delete; a single delete answers the deleted id (ADR-009 rule 7) | – | done f4bb23f |
 | Avatar ring colours | Each face rings in its surface's semantic colour (`docs/ui.md` § Faces) | – | done f4bb23f, signed off 2026-10-28 |
-| Heynabo logo on the import's job box | `/admin/system`; mockup in `AdminSystem.vue` | – | done 3dbea43, in your test (QA #154) |
+| Heynabo logo on the import's job box | `/admin/system`; mockup in `AdminSystem.vue` | – | done 3dbea43, signed off 2026-10-29 |
 
 ## In flight
 
-Updated 2026-10-28. Release 0.9 shipped in f5b5205 (#168).
+Updated 2026-10-31. Release 0.9 shipped in f5b5205 (#168).
 
 | Delivery | Description or spec | Gherkin | Status |
 |---|---|---|---|
-| Notification delivery | [feature-notification-delivery.md](feature-notification-delivery.md) | `booking-notifications.feature`, `billing-notifications.feature`, `chef-deadline-notifications.feature`, `delivery-records.feature`, `test-message.feature` (16586f1) | partly committed (8fa59aa, 39e14a6, 16586f1, 542b274, f4bb23f, 34ff620); open: the ship's e2e run (defects 136–140) |
+| Notification delivery | [feature-notification-delivery.md](feature-notification-delivery.md) | `booking-notifications.feature`, `billing-notifications.feature`, `chef-deadline-notifications.feature`, `delivery-records.feature`, `test-message.feature` (16586f1) | partly committed (8fa59aa, 39e14a6, 16586f1, 542b274, f4bb23f, 34ff620); open: the ship's e2e run (defects 136–140); defects 155–157 ([defects.md](defects.md) § Pre-merge review): red specs in the working tree, the fixes not started |
+| Calendar and spending leftovers | Words in `app/config/`, typed calendar and booking-view helpers; [defects.md](defects.md) 109, 158 | – | partly committed (3dbea43, fe67464); open: round 5 gated, round 6 edited and not gated (in the working tree); the busy label's spacing waits for your choice: the grid's "Arbejder ..." keeps its own word, or reads the shared "Arbejder..." |
+| Store and validation leftovers | Typed row schemas (ADR-010 compliance 3), words in `app/config/` (ADR-017 compliance 6, 7); [defects.md](defects.md) 74, 158 | – | partly committed (5eb3841, 3dbea43, fe67464); open: defect 158 in the validation composables and the listed components, not started; the visited team on the server render (the chef calendar visit): the selected team's read waits for the selected season and the member's teams (ADR-007 compliance 9), after defect 158 |
+| Unit spec waits and session mock | `untilTrue` in `HouseholdBookings.nuxt.spec.ts`; the session mock holds nuxt-auth-utils' `User` (`hoistedMocks.ts`), so `UserPreferencesCard.nuxt.spec.ts` builds a stale session without a cast | – | in the working tree, not gated |
+| Pre-merge review | [defects.md](defects.md) § Pre-merge review | – | open: defects 155–158 in fix; defect 159 waits for your choice, a household-level preview now or deferred to 0.9.3 |
+| Guides | `docs/chef-guide.md`, `docs/user-guide.md`, `docs/admin-guide.md` in step with 0.9.1; § Guides | – | open: the chef guide's draft waits for your yes; the user and admin guides' drafts follow |
+| Ship | The ship's e2e run on the final commit; the PR body's Tests | – | open: after your commit; closes defects 136–140, 48–51, 56 |
 
 ## Notification delivery
 
 Priority: high, issue #170. Spec: [feature-notification-delivery.md](feature-notification-delivery.md).
+
+## Guides
+
+The sync check of 2026-10-29 against the app's words:
+
+- Chef guide: the chef calendar visit (grey circles, **Ikke dit hold**, a read-only menu card, the roles open on a
+  visit, a member on no team lands on the next dinner's team); **Rediger chefkokketjans** for the guide's "Ændre tjans";
+  Billetændringer since framelding closed; the team round's heading; the waiting-list mail to the chef leaves while
+  booking mails are off. The menu card's cancel text still names «Ændre tjans» (`ChefMenuCard.vue:581`)
+- User guide: the tab **Præferencer** for "Husstanden"; the allergy tab's icon; a member reads every household behind
+  the **Kigge, ikke røre** banner; the "fra &lt;husstand&gt;" badge, the released corner icon and the grid's column
+  chips; the birthday badge **Ny billetpris**; the Menu column in the economy
+- Admin guide: "Fejlet" in a job box, the Heynabo logo, the box named **Heynabo Import**; the users table's chevron
+  opens the profile card at every width; visiting another household is for every member

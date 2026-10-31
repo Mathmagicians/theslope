@@ -12,15 +12,16 @@
  */
 import {reactive, ref, watch} from 'vue'
 import {vi} from 'vitest'
-import type {UserDetail} from '~/composables/useCoreValidation'
+import type {User} from '#auth-utils'
 
 /**
  * The session nuxt-auth-utils would hydrate from a cookie the test runtime has none of; the auth store reading it is real.
- * `session.user` is the one switch: `loggedIn` follows it, and a spec that gates on login alone writes `loggedIn` itself.
+ * It holds the user unparsed, as nuxt-auth-utils hands it out. `session.user` is the one switch: `loggedIn` follows it,
+ * and a spec that gates on login alone writes `loggedIn` itself.
  */
-export const mockSession = (user: UserDetail | null = null) => {
+export const mockSession = (user: User | null = null) => {
     const session = {
-        user: ref<UserDetail | null>(user),
+        user: ref<User | null>(user),
         loggedIn: ref(user !== null),
         fetch: vi.fn(),
         clear: vi.fn()

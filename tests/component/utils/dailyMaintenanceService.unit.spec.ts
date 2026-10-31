@@ -16,6 +16,7 @@ import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFa
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {fakeSenderQueue} from '~~/tests/component/utils/sender/fakeSenderQueue'
+import {spyOnLogs} from '~~/tests/component/logSpies'
 
 // The unit runtime has no D1: each step of the run and the job run record answer from the test
 vi.mock('~~/server/utils/consumeDinners', () => ({consumeDinners: vi.fn()}))
@@ -34,10 +35,11 @@ await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).s
 const {JobStatus} = useMaintenanceValidation()
 const {BOOKING_STATUS, CHEF_DEADLINES} = useDeliveryValidation().SenderEventSchema.enum
 const d1Client = {} as D1Database
+const logs = spyOnLogs()
 
 beforeEach(() => {
     vi.resetAllMocks()
-    vi.spyOn(console, 'info').mockImplementation(() => {})
+    Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
 })
 
 describe('runDailyMaintenance', () => {
@@ -80,14 +82,32 @@ describe('runDailyMaintenance', () => {
         expect(vi.mocked(sendChefDeadlines).mock.calls).toEqual(seasonsRun.map(seasonId => [d1Client, email, seasonId, {jobRunId: jobRun.id}]))
     })
 
-    // A step's failure is the run's: the job run records it, and the caller hears it
-    it('GIVEN the notifications step fails WHEN the daily maintenance runs THEN the job run completes FAILED with the reason, and the run rethrows', async () => {
+    // A notification step's failure leaves the data as the steps before it wrote it: the run logs it, runs the next
+    // notification step and completes PARTIAL with the failure
+    it.each([
+        {failing: BOOKING_STATUS, send: sendNotifications, notifications: {[CHEF_DEADLINES]: chefCounts}},
+        {failing: CHEF_DEADLINES, send: sendChefDeadlines, notifications: {[BOOKING_STATUS]: counts}}
+    ])('GIVEN the $failing step fails WHEN the daily maintenance runs THEN the other notification step runs, the failure is logged, and the job run completes PARTIAL with the result of each step that ran and the failure', async ({failing, send, notifications}) => {
+        answerSteps(ACTIVE_SEASON_ID)
+        vi.mocked(send).mockRejectedValue(new Error('D1 down'))
+        const result = {...steps, scaffold, notifications}
+
+        expect(await runDailyMaintenance(d1Client, jobRun.triggeredBy, NotificationFactory.channel(fakeSenderQueue()))).toEqual(result)
+
+        expect([sendNotifications, sendChefDeadlines].map(step => vi.mocked(step).mock.calls.length)).toEqual([1, 1])
+        expect(logs.error).toHaveBeenCalledExactlyOnceWith(`🔧 > DAILY > [MAINTENANCE] notifications: ${failing} failed: D1 down`)
+        expect(completeJobRun).toHaveBeenCalledExactlyOnceWith(d1Client, jobRun.id, JobStatus.PARTIAL, result, `${failing}: D1 down`)
+    })
+
+    // A data step's failure is the run's: the job run records it, and the caller hears it
+    it('GIVEN the scaffold fails WHEN the daily maintenance runs THEN no notification step runs, the job run completes FAILED with the reason, and the run rethrows', async () => {
         answerSteps(ACTIVE_SEASON_ID)
         const failure = new Error('D1 down')
-        vi.mocked(sendNotifications).mockRejectedValue(failure)
+        vi.mocked(scaffoldPrebookings).mockRejectedValue(failure)
 
         await expect(runDailyMaintenance(d1Client, jobRun.triggeredBy, NotificationFactory.channel(fakeSenderQueue()))).rejects.toThrow(failure)
 
+        expect([sendNotifications, sendChefDeadlines].map(step => vi.mocked(step).mock.calls.length)).toEqual([0, 0])
         expect(completeJobRun).toHaveBeenCalledExactlyOnceWith(d1Client, jobRun.id, JobStatus.FAILED, undefined, failure.message)
     })
 })

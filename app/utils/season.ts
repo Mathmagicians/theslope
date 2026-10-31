@@ -7,7 +7,9 @@ import {
     getEachDayOfIntervalWithSelectedWeekdays,
     excludeDatesFromInterval,
     createDateInTimezone,
-    areSameWeek
+    areSameWeek,
+    PERIOD_DIRECTION,
+    type PeriodDirection
 } from '~/utils/date'
 import {getISODay, differenceInDays, isWithinInterval, isBefore, isAfter, isSameDay, startOfDay, endOfDay, addDays} from "date-fns"
 import {subDays} from "date-fns/subDays"
@@ -548,8 +550,8 @@ export const getNextDinnerDate = (dinnerStartHour: number, dinnerDurationMinutes
  *
  * Pipes boundary through `splitDinnerEvents` (reusing the same temporal logic
  * as "next dinner" categorisation) and picks from the resulting buckets:
- * - direction =  1 → `nextDinner ?? futureDinners[0] ?? null`
- * - direction = -1 → `pastDinners.at(-1) ?? null`
+ * - next → `nextDinner ?? futureDinners[0] ?? null`
+ * - prev → `pastDinners.at(-1) ?? null`
  *
  * Returns `null` when there is no adjacent dinner — the caller treats this as
  * "arrow hidden / navigation blocked".
@@ -563,7 +565,7 @@ export const getAdjacentDinner = (dinnerStartHour: number, dinnerDurationMinutes
     <T extends { date: Date }>(
         dinnerEvents: T[],
         boundary: Date,
-        direction: 1 | -1
+        direction: PeriodDirection
     ): Date | null => {
         if (dinnerEvents.length === 0) return null
 
@@ -571,7 +573,7 @@ export const getAdjacentDinner = (dinnerStartHour: number, dinnerDurationMinutes
         const {nextDinner, pastDinners, futureDinners} =
             splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(sorted, boundary)
 
-        if (direction === 1) {
+        if (direction === PERIOD_DIRECTION.next) {
             return nextDinner?.date ?? futureDinners[0]?.date ?? null
         }
         return pastDinners.at(-1)?.date ?? null

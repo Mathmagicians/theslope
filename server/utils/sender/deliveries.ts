@@ -17,6 +17,7 @@ import {
 import {useUserPreferenceValidation, wantsChannel, type NotificationChannel} from '~/composables/useUserPreferenceValidation'
 import {fetchDeliveries, recordDeliveries} from '~~/server/data/financesRepository'
 import {groupBy} from '~/utils/batchUtils'
+import {errorMessage} from '~/utils/utils'
 
 const LOG = '📬 > DELIVERY >'
 
@@ -158,10 +159,16 @@ export const deliverDesired = async (
         if (sent.length > 0) console.info(`${LOG} [EVENT ${senderEvent}] sent ${sent.length}`)
         return {counts: {sent: sent.length}, emitted}
     } catch (error) {
-        console.error(`${LOG} [EVENT ${senderEvent}] failed: ${error instanceof Error ? error.message : String(error)}`)
+        console.error(`${LOG} [EVENT ${senderEvent}] failed: ${errorMessage(error)}`)
         throw error
     }
 }
 
-/** The user does not wait for notifications: the work runs after the response, and its failure is its own log line */
-export const deliverInBackground = (event: H3Event, work: () => Promise<unknown>): void => event.waitUntil(work().catch(() => undefined))
+/**
+ * The user does not wait for notifications: the work runs after the response, and its failure is one log line naming
+ * it. The promise wraps the call, so a work that throws before it returns a promise logs the same way
+ */
+export const deliverInBackground = (event: H3Event, name: string, work: () => Promise<unknown>): void =>
+    event.waitUntil(new Promise<unknown>(resolve => resolve(work())).catch((error: unknown) => {
+        console.error(`${LOG} [BACKGROUND ${name}] failed: ${errorMessage(error)}`)
+    }))

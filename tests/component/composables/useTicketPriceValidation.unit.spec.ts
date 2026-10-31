@@ -2,6 +2,7 @@ import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
 import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import {describe, expect, it} from "vitest"
 import {TicketFactory} from "../../e2e/testDataFactories/ticketFactory"
+import {SEASON_WORDS} from "~/config/seasonWords"
 
 describe('useTicketPriceValidation', () => {
     const {TicketTypeSchema} = useTicketPriceValidation()
@@ -37,6 +38,14 @@ describe('useTicketPriceValidation', () => {
         ]
         const result = TicketPricesArraySchema.safeParse(mixedSeasonPrices)
         expect(result.success).toBe(false)
+        expect(result.error?.issues[0]?.message).toBe(SEASON_WORDS.form.ticketPricesAcrossSeasons)
+    })
+
+    it('should reject a season without ticket prices', () => {
+        const { TicketPricesArraySchema } = useTicketPriceValidation()
+        const result = TicketPricesArraySchema.safeParse([])
+        expect(result.success).toBe(false)
+        expect(result.error?.issues[0]?.message).toBe(SEASON_WORDS.form.noTicketPrice)
     })
 
     describe('CreateTicketPriceSchema', () => {

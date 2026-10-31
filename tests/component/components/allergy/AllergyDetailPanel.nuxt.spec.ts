@@ -44,7 +44,7 @@ describe('AllergyDetailPanel', () => {
         it('renders the selected allergy, with the edit entry as the pencil with an accessible name', async () => {
             const wrapper = await mountPanel()
 
-            expect(wrapper.text()).toContain(firstType!.name)
+            expect(wrapper.text()).toContain(firstType?.name)
             expect(wrapper.text()).toContain('Detaljer')
             expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).attributes('aria-label')).toBe(BUTTON_WORDS.edit)
         })
@@ -93,9 +93,7 @@ describe('AllergyDetailPanel', () => {
 
             await clickByTestId(wrapper, ALLERGY_TEST_IDS.save)
 
-            const emitted = wrapper.emitted('save')
-            expect(emitted).toBeTruthy()
-            expect(emitted![0]![0]).toMatchObject({name: firstType!.name})
+            expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({name: firstType?.name})
         })
     })
 
@@ -105,8 +103,8 @@ describe('AllergyDetailPanel', () => {
 
             const confirmPanel = findByTestId(wrapper, ALLERGY_TEST_IDS.deleteConfirm)
             expect(confirmPanel.exists()).toBe(true)
-            expect(confirmPanel.text()).toContain(firstType!.name)
-            expect(confirmPanel.text()).toContain(String(firstType!.inhabitants!.length))
+            expect(confirmPanel.text()).toContain(firstType?.name)
+            expect(confirmPanel.text()).toContain(String(firstType?.inhabitants?.length))
         })
 
         it.each([

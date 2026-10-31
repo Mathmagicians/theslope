@@ -17,9 +17,11 @@ import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {deleteWaitlistForConsumedDinners} from '~~/server/data/waitlistRepository'
 import type {DailyMaintenanceResult} from '~/composables/useBookingValidation'
-import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
+import {useDeliveryValidation, type SenderEvent} from '~/composables/useDeliveryValidation'
 import {useBooking} from '~/composables/useBooking'
+import {errorMessage} from '~/utils/utils'
 import type {EmailChannel} from '~~/server/utils/sender/config'
+import type {DeliveryResult} from '~~/server/utils/sender/deliveries'
 import {sendNotifications} from '~~/server/utils/sender/events/waitlist'
 import {sendChefDeadlines} from '~~/server/utils/sender/events/chef-deadlines'
 
@@ -58,7 +60,21 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
         const activeSeasonId = await fetchActiveSeasonId(d1Client)
         let initPrefsResult = {initialized: 0}
         let scaffoldResult = null
-        let notifications: DailyMaintenanceResult['notifications'] = {}
+        const notifications: DailyMaintenanceResult['notifications'] = {}
+        const failures: string[] = []
+        // A notification step stands alone: the data steps have landed, so its failure is logged and the run goes on to
+        // complete PARTIAL
+        const notify = async (senderEvent: SenderEvent, send: () => Promise<DeliveryResult>): Promise<void> => {
+            try {
+                const {counts} = await send()
+                notifications[senderEvent] = counts
+                console.info(`${LOG} notifications: ${senderEvent} sent ${counts.sent}`)
+            } catch (error) {
+                const message = errorMessage(error)
+                console.error(`${LOG} notifications: ${senderEvent} failed: ${message}`)
+                failures.push(`${senderEvent}: ${message}`)
+            }
+        }
 
         if (activeSeasonId) {
             initPrefsResult = await clipPreferences(d1Client, activeSeasonId)
@@ -68,13 +84,10 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             console.info(`${LOG} scaffold: ${useBooking().formatScaffoldResult(scaffoldResult)}`)
 
             // The dinners as they stand after the scaffold send the notifications of its outcomes too
-            const {counts} = await sendNotifications(d1Client, email, activeSeasonId, {jobRunId: jobRun.id})
-            console.info(`${LOG} notifications: ${BOOKING_STATUS} sent ${counts.sent}`)
+            await notify(BOOKING_STATUS, () => sendNotifications(d1Client, email, activeSeasonId, {jobRunId: jobRun.id}))
 
             // The chef hears the deadlines as the scaffold left the dinners
-            const {counts: chefCounts} = await sendChefDeadlines(d1Client, email, activeSeasonId, {jobRunId: jobRun.id})
-            console.info(`${LOG} notifications: ${CHEF_DEADLINES} sent ${chefCounts.sent}`)
-            notifications = {[BOOKING_STATUS]: counts, [CHEF_DEADLINES]: chefCounts}
+            await notify(CHEF_DEADLINES, () => sendChefDeadlines(d1Client, email, activeSeasonId, {jobRunId: jobRun.id}))
         } else {
             console.info(`${LOG} initPrefs/scaffold/notifications skipped: no active season`)
         }
@@ -90,10 +103,11 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             notifications
         }
 
-        // Complete job run with success
-        await completeJobRun(d1Client, jobRun.id, JobStatus.SUCCESS, result)
+        const failed = failures.join('; ')
+        if (failed) await completeJobRun(d1Client, jobRun.id, JobStatus.PARTIAL, result, failed)
+        else await completeJobRun(d1Client, jobRun.id, JobStatus.SUCCESS, result)
 
-        console.info(`${LOG} Daily maintenance complete (jobRunId=${jobRun.id})`)
+        console.info(`${LOG} Daily maintenance complete (jobRunId=${jobRun.id}${failed ? `, partial: ${failed}` : ''})`)
         return result
     } catch (error) {
         // Complete job run with failure

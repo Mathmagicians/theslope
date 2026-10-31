@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest'
-import {findRowById, rowIdOf} from '~/utils/utils'
+import {errorMessage, findRowById, rowIdOf} from '~/utils/utils'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 
 // A row a table keys by rowIdOf: a number or a string id
@@ -19,5 +19,14 @@ describe('findRowById', () => {
         {among: 'no rows', rows: [], rowId: rowIdOf(peanuts!), finds: 'none', expected: undefined}
     ])('among $among the row id $rowId finds $finds', ({rows, rowId, expected}) => {
         expect(findRowById(rows, rowId)).toBe(expected)
+    })
+})
+
+describe('errorMessage', () => {
+    it.each([
+        {thrown: 'an error', error: new Error('D1 down'), message: 'D1 down'},
+        {thrown: 'a value that is no error', error: 'D1 down', message: 'D1 down'}
+    ])('GIVEN $thrown thrown WHEN its message is read THEN it reads $message', ({error, message}) => {
+        expect(errorMessage(error)).toBe(message)
     })
 })

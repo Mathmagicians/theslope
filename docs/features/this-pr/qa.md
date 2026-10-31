@@ -5,18 +5,10 @@
 The checks with human eyes of what users see and the tests leave unproven, as a walk through the app. A check passes with its date in **Signed off** and becomes one
 line under § Signed off.
 
-## /chef (2)
+## Signed off 2026-10-29
 
-| # | Package | State, viewport | What to see | Signed off |
-|---|---|---|---|---|
-| 122 | Defect 109 | A dinner's Budget at 375px, a dinner with a long menu title | The title wraps in full with ", dd/mm" at its end; "ex / inkl. moms" sits on its own line, on the right. The team's round: "ex / inkl. moms" under the badge and the period, on the right | |
-| 153 | Defect 109 | A dinner's Budget at 1280px, a short menu title | The title and "ex / inkl. moms" share one line | |
-
-## /admin/system (1)
-
-| # | Package | State, viewport | What to see | Signed off |
-|---|---|---|---|---|
-| 154 | Heynabo logo | The job boxes at 1280px; then Kør import | The Heynabo box shows the round Heynabo logo in full colour at the size of Daglig's and Månedlig's icons; during the import the spinning sync icon takes its place, and the logo returns after the run | |
+- #122, #153 A dinner's Budget heading: a long menu title wraps in full with the date at its end at 375px, a short one shares its line with "ex / inkl. moms" at 1280px (defect 109)
+- #154 The Heynabo logo on the import's job box: round, in full colour, at the icons' size
 
 ## Signed off 2026-10-28
 

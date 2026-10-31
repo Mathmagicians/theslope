@@ -85,6 +85,11 @@ export const BOOKING_WORDS = {
     } satisfies Record<DinnerMode, string>,
     /** The eating mode of a household whose rows disagree: DinnerModeSelector's label in power mode and its legend entry */
     mixedModes: 'Blandet',
+    /**
+     * Power mode, one row for the whole household: the booking grid's row name (`name`), the booking form's (`formName`),
+     * the household card's toggle, and the save of the booking form's and the household card's power row
+     */
+    power: {name: 'Alle', formName: 'Hele familien', toggle: 'Power mode', save: 'Gem for alle'},
     /** A booking action: the preview line's words after the name, the toast's words after the count */
     actions: {
         [Action.BOOK]: {preview: () => 'tilmeldes', toast: 'tilmeldt'},
@@ -110,9 +115,11 @@ export const BOOKING_WORDS = {
     /**
      * The guest form's button, a booker's guests of one ticket type counted in a preview or toast line, the guests a
      * ticket's badge names, a guest row's name, and the booker a guest comes with: before the booker's face in the
-     * views (`of`), before the booker's name in a line (`ofBooker`)
+     * views (`of`), before the booker's name in a line (`ofBooker`); the add-guest row's name and the guest form's
+     * title (`add`)
      */
     guests: {
+        add: 'Tilføj gæst',
         save: (count: number) => count === 1 ? 'Tilmeld gæst' : 'Tilmeld gæster',
         count: (count: number) => `×${count}`,
         label: (count: number) => count === 1 ? 'Gæst' : `${count} Gæster`,

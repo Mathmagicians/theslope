@@ -204,7 +204,8 @@ interface ReadAlready {
     dinners?: DinnerEventDisplay[]
 }
 
-// The dinners not read already in one read and the ticket prices of their seasons, one season read after another
+// The dinners not read already in one read and the ticket prices of their seasons, one season read after another; a
+// dinner deleted since the operation is left out
 const loadDinners = async (
     d1Client: D1Database, dinnerEventIds: number[], {season, dinners: given = []}: ReadAlready
 ): Promise<Map<number, DinnerForWaitlist>> => {
@@ -214,25 +215,45 @@ const loadDinners = async (
     for (const seasonId of idsOf([...dinners.values()].map(dinner => dinner.seasonId))) {
         if (!seasons.has(seasonId)) seasons.set(seasonId, await fetchSeason(d1Client, seasonId))
     }
-    return new Map(idsOf(dinnerEventIds).map(id => {
+    return new Map(idsOf(dinnerEventIds).flatMap((id): [number, DinnerForWaitlist][] => {
         const dinner = dinners.get(id)
-        if (!dinner) throw new Error(`${LOG} Dinner ${id} not found`)
-        return [id, dinnerForWaitlist(dinner, dinner.seasonId ? seasons.get(dinner.seasonId) : null)]
+        if (!dinner) {
+            console.warn(`${LOG} Dinner ${id} not found: its notifications are left out`)
+            return []
+        }
+        return [[id, dinnerForWaitlist(dinner, dinner.seasonId ? seasons.get(dinner.seasonId) : null)]]
     }))
 }
 
+// The outcomes on the dinners found
+const onDinners = (notified: NotifiedOutcomes, dinners: Map<number, DinnerForWaitlist>): NotifiedOutcomes => {
+    const found = ({dinnerEventId}: {dinnerEventId: number}): boolean => dinners.has(dinnerEventId)
+    return {
+        joined: notified.joined.filter(found),
+        buildups: notified.buildups.filter(found),
+        ticketsSold: notified.ticketsSold.filter(found),
+        waitlistTicketsSold: notified.waitlistTicketsSold.filter(found),
+        waitlistPortionsAssigned: notified.waitlistPortionsAssigned.filter(found)
+    }
+}
+
 // Every dinner, inhabitant, household and user the notifications name, read before they compose: the chefs come with
-// their dinners, the households of the inhabitants with their members
-const load = async (d1Client: D1Database, notified: NotifiedOutcomes, readAlready: ReadAlready): Promise<NotificationRecords> => {
+// their dinners, the households of the inhabitants with their members. The outcomes come back on the dinners found
+const load = async (
+    d1Client: D1Database, outcomes: NotifiedOutcomes, readAlready: ReadAlready
+): Promise<{notified: NotifiedOutcomes, records: NotificationRecords}> => {
+    const dinnerEventIds = [...outcomes.joined, ...outcomes.buildups, ...outcomes.ticketsSold, ...outcomes.waitlistTicketsSold, ...outcomes.waitlistPortionsAssigned]
+        .map(outcome => outcome.dinnerEventId)
+    const dinners = await loadDinners(d1Client, dinnerEventIds, readAlready)
+    const notified = onDinners(outcomes, dinners)
     const sales = [...notified.ticketsSold, ...notified.waitlistTicketsSold]
-    const dinners = await loadDinners(d1Client, [...notified.joined, ...notified.buildups, ...sales, ...notified.waitlistPortionsAssigned].map(outcome => outcome.dinnerEventId), readAlready)
     const people = await readPeople(d1Client, [
         ...notified.joined.map(event => event.inhabitantId),
         ...sales.flatMap(sale => [sale.buyerInhabitantId, sale.sellerInhabitantId]),
         ...notified.waitlistPortionsAssigned.map(portion => portion.inhabitantId),
         ...notified.buildups.map(buildup => dinners.get(buildup.dinnerEventId)?.chefId)
     ], sales.map(sale => sale.sellerHouseholdId))
-    return {dinners, ...people}
+    return {notified, records: {dinners, ...people}}
 }
 
 // The notifications composed from the records of their operation
@@ -310,8 +331,9 @@ const composer = (records: NotificationRecords) => {
 
 // The notifications an operation sends, resolved and versioned for the delivery step, with the recorded rows of their
 // subjects read once: an order's and a dinner's versions read their history, a dinner's the delivery of its first buildup
-const desiredOf = async (d1Client: D1Database, notified: NotifiedOutcomes, readAlready: ReadAlready = {}): Promise<LoadedDeliveries> => {
-    const notifications = pendingOf(composer(await load(d1Client, notified, readAlready))(notified))
+const desiredOf = async (d1Client: D1Database, outcomes: NotifiedOutcomes, readAlready: ReadAlready = {}): Promise<LoadedDeliveries> => {
+    const {notified, records} = await load(d1Client, outcomes, readAlready)
+    const notifications = pendingOf(composer(records)(notified))
     const versioned = idsOf([...notified.buildups, ...notified.ticketsSold, ...notified.waitlistTicketsSold, ...notified.waitlistPortionsAssigned].map(outcome => outcome.dinnerEventId))
     const rows = readAlready.history ?? (versioned.length === 0 ? [] : await fetchOrderHistoryForDinners(d1Client, versioned))
     const recorded = await readRecorded(d1Client, notifications.map(({subject}) => subject))
@@ -352,7 +374,7 @@ export const notifyBookingOutcomes = async (d1Client: D1Database, channel: Email
 /** A route's booking notifications, sent after its response on the e-mail channel of its environment */
 export const notifyBookingOutcomesInBackground = (event: H3Event, outcomes: BookingOutcomes): void => {
     const {env} = event.context.cloudflare
-    deliverInBackground(event, () => notifyBookingOutcomes(env.DB, emailChannel(env), outcomes))
+    deliverInBackground(event, 'booking outcomes', () => notifyBookingOutcomes(env.DB, emailChannel(env), outcomes))
 }
 
 /**

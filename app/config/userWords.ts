@@ -42,6 +42,11 @@ export const USER_WORDS = {
         } satisfies Record<ContrastLevel, string>,
         colourSafeBadge: '👁 Nedsat farvesyn · Okabe–Ito ✓'
     },
+    /** The admin's users page: the intro in its header and the table's caption */
+    admin: {
+        intro: 'Her kan du se de brugere, som vi har importeret fra Heynabo. Du kan også se, hvilke systemroller brugerne har. Brug System-fanen til at køre Heynabo import.',
+        caption: 'Brugere - importeret fra Heynabo'
+    },
     /** The toast of a saved role change */
     toasts: {
         rolesUpdated: {

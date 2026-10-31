@@ -8,6 +8,8 @@ export const ALLERGY_WORDS = {
         posterNotes: 'Kunne ikke hente bemærkninger',
         allergies: 'Kunne ikke hente allergier'
     },
+    /** The toggle that opens an inhabitant's allergies on the household page */
+    edit: 'Rediger allergier',
     /** What the URL names and is gone, also on a failed read: the allergy type on view */
     notFound: {
         allergyType: 'Kan ikke finde allergitypen'

@@ -68,11 +68,11 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through `deserializeInhabitantDetail` |
 | `/api/admin/household/inhabitants/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Admin - seasons** | | | | | |
-| `/api/admin/season/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/season/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/season/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deserialized season, parsed once (ADR-010) |
+| `/api/admin/season/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deserialized season, parsed once (ADR-010) |
 | `/api/admin/season/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes its typed row (ADR-010 compliance 3) |
-| `/api/admin/season/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/season/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/season/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deserialized season, parsed once (ADR-010) |
+| `/api/admin/season/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deserialized season, parsed once (ADR-010) |
 | `/api/admin/season/active.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/season/active.post.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed; the activation's scaffold drops cancelled and consumed dinners |
 | `/api/admin/season/deactivate.post.ts` | ✅ | N/A | ❓ | ❓ | ❓ audit needed |

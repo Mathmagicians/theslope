@@ -20,6 +20,7 @@ The chevron opens one row at a time, holding the user's UserProfileCard; on a ph
 import {h, resolveComponent} from 'vue'
 import {getPaginationRowModel} from '@tanstack/vue-table'
 import {BUTTON_WORDS} from '~/config/buttonWords'
+import {USER_WORDS} from '~/config/userWords'
 
 interface Props {
   canEdit?: boolean
@@ -98,7 +99,7 @@ const userColumns = [
           variant: NOISE.quiet,
           icon: row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight,
           square: true,
-          'aria-label': row.getIsExpanded() ? BUTTON_WORDS.close : 'Åbn detaljer',
+          'aria-label': row.getIsExpanded() ? BUTTON_WORDS.close : BUTTON_WORDS.openDetails,
           onClick: () => row.toggleExpanded()
         })
   },
@@ -131,7 +132,7 @@ const pagination = ref({
             v-bind="ALERTS.info"
             :icon="ICONS.authorized"
             title=" Brugere"
-            description="Her kan du se de brugere, som vi har importeret fra Heynabo. Du kan også se, hvilke systemroller brugerne har. Brug System-fanen til at køre Heynabo import."
+            :description="USER_WORDS.admin.intro"
         />
       </div>
     </template>
@@ -162,7 +163,7 @@ const pagination = ref({
         :columns="userColumns"
         :loading="isUsersLoading"
         v-bind="COMPONENTS.adminUsers.loadingBar"
-        caption="Brugere - importeret fra Heynabo"
+        :caption="USER_WORDS.admin.caption"
         :class="COMPONENTS.adminUsers.table"
         :ui="COMPONENTS.table.adminUsersUi"
         :pagination-options="{

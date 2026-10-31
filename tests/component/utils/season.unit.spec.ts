@@ -28,9 +28,9 @@ import {
 } from '~/utils/season'
 import {SEASON_STATUS} from '~/config/seasonWords'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import type {DateRange, WeekDay, WeekDayMap} from '~/types/dateTypes'
-import {createDateInTimezone, getPeriodBoundary} from '~/utils/date'
-import {createWeekDayMapFromSelection} from '~/types/dateTypes'
+import type {DateRange, WeekDayMap} from '~/types/dateTypes'
+import {createDateInTimezone, getPeriodBoundary, PERIOD_DIRECTION, type PeriodDirection} from '~/utils/date'
+import {createWeekDayMapFromSelection, PERIOD_VIEWS, WEEKDAYS, type PeriodView} from '~/types/dateTypes'
 import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../../e2e/testDataFactories/dinnerEventFactory'
 
@@ -57,6 +57,9 @@ const createEvent = (id: number, date: Date, teamId: number | null = null) => ({
 
 // The first dinner of a roster's events, where its rotation starts
 const firstDayOf = (events: ReturnType<typeof createEvent>[]) => new Date(Math.min(...events.map(event => event.date.getTime())))
+
+// The weekdays the affinity cases name, read off the weekday list
+const [MONDAY, , WEDNESDAY, , FRIDAY, , SUNDAY] = WEEKDAYS
 
 describe('computeCookingDates', () => {
     it('should return dates for cooking days: Mon-Fri in one week', () => {
@@ -360,10 +363,10 @@ describe('computeAffinitiesForTeams', () => {
 
 describe('compareAffinities', () => {
     it.each([
-        { startDay: 'mandag' as WeekDay, aff1: ['mandag'], aff2: ['onsdag'], expected: -1 },
-        { startDay: 'mandag' as WeekDay, aff1: ['søndag'], aff2: ['onsdag'], expected: 1 },
-        { startDay: 'onsdag' as WeekDay, aff1: ['fredag'], aff2: ['mandag'], expected: -1 },
-        { startDay: 'mandag' as WeekDay, aff1: ['mandag'], aff2: ['mandag'], expected: 0 }
+        { startDay: MONDAY, aff1: [MONDAY], aff2: [WEDNESDAY], expected: -1 },
+        { startDay: MONDAY, aff1: [SUNDAY], aff2: [WEDNESDAY], expected: 1 },
+        { startDay: WEDNESDAY, aff1: [FRIDAY], aff2: [MONDAY], expected: -1 },
+        { startDay: MONDAY, aff1: [MONDAY], aff2: [MONDAY], expected: 0 }
     ])('startDay=$startDay, aff1=$aff1, aff2=$aff2 => $expected', ({ startDay, aff1, aff2, expected }) => {
         const compareFn = compareAffinities(startDay)
         expect(compareFn(createWeekDayMapFromSelection(aff1), createWeekDayMapFromSelection(aff2))).toBe(expected)
@@ -375,48 +378,40 @@ describe('createSortedAffinitiesToTeamsMap', () => {
         {
             scenario: '3 teams, different affinities, default startDay (mandag)',
             teams: [
-                createTeam(1, 'TeamC', createWeekDayMapFromSelection(['mandag', 'onsdag'])),
-                createTeam(2, 'TeamA', createWeekDayMapFromSelection(['onsdag'])),
-                createTeam(3, 'TeamB', createWeekDayMapFromSelection(['mandag', 'fredag']))
+                createTeam(1, 'TeamC', createWeekDayMapFromSelection([MONDAY, WEDNESDAY])),
+                createTeam(2, 'TeamA', createWeekDayMapFromSelection([WEDNESDAY])),
+                createTeam(3, 'TeamB', createWeekDayMapFromSelection([MONDAY, FRIDAY]))
             ],
             startDay: undefined,
-            expectedKeys: ['mandag', 'onsdag'],
-            expectedTeams: { mandag: ['TeamB', 'TeamC'], onsdag: ['TeamA'] }
+            expected: [[MONDAY, ['TeamB', 'TeamC']], [WEDNESDAY, ['TeamA']]]
         },
         {
             scenario: '3 teams, different affinities, startDay=onsdag',
             teams: [
-                createTeam(1, 'TeamC', createWeekDayMapFromSelection(['mandag'])),
-                createTeam(2, 'TeamA', createWeekDayMapFromSelection(['onsdag'])),
-                createTeam(3, 'TeamB', createWeekDayMapFromSelection(['fredag']))
+                createTeam(1, 'TeamC', createWeekDayMapFromSelection([MONDAY])),
+                createTeam(2, 'TeamA', createWeekDayMapFromSelection([WEDNESDAY])),
+                createTeam(3, 'TeamB', createWeekDayMapFromSelection([FRIDAY]))
             ],
-            startDay: 'onsdag' as WeekDay,
-            expectedKeys: ['onsdag', 'fredag', 'mandag'],
-            expectedTeams: { onsdag: ['TeamA'], fredag: ['TeamB'], mandag: ['TeamC'] }
+            startDay: WEDNESDAY,
+            expected: [[WEDNESDAY, ['TeamA']], [FRIDAY, ['TeamB']], [MONDAY, ['TeamC']]]
         },
         {
             scenario: 'same first weekday, sorted by name',
             teams: [
-                createTeam(1, 'C-Team', createWeekDayMapFromSelection(['fredag'])),
-                createTeam(2, 'A-Team', createWeekDayMapFromSelection(['fredag'])),
-                createTeam(3, 'B-Team', createWeekDayMapFromSelection(['fredag']))
+                createTeam(1, 'C-Team', createWeekDayMapFromSelection([FRIDAY])),
+                createTeam(2, 'A-Team', createWeekDayMapFromSelection([FRIDAY])),
+                createTeam(3, 'B-Team', createWeekDayMapFromSelection([FRIDAY]))
             ],
             startDay: undefined,
-            expectedKeys: ['fredag'],
-            expectedTeams: { fredag: ['A-Team', 'B-Team', 'C-Team'] }
+            expected: [[FRIDAY, ['A-Team', 'B-Team', 'C-Team']]]
         }
-    ])('$scenario', ({ teams, startDay, expectedKeys, expectedTeams }) => {
+    ])('$scenario', ({ teams, startDay, expected }) => {
         const result = startDay
             ? createSortedAffinitiesToTeamsMap(teams, startDay)
             : createSortedAffinitiesToTeamsMap(teams)
 
-        // Verify key ordering
-        expect(Array.from(result.keys())).toEqual(expectedKeys)
-
-        // Verify teams within each key
-        expectedKeys.forEach(weekday => {
-            expect(result.get(weekday as WeekDay)?.map(t => t.name)).toEqual(expectedTeams[weekday as keyof typeof expectedTeams])
-        })
+        // The keys in their order, each with its teams by name
+        expect(Array.from(result, ([weekday, keyTeams]) => [weekday, keyTeams.map(t => t.name)])).toEqual(expected)
     })
 })
 
@@ -424,24 +419,24 @@ describe('createTeamRoster', () => {
     it.each([
         {
             scenario: 'single affinity (3 teams)',
-            startDay: 'mandag' as WeekDay,
+            startDay: MONDAY,
             teams: [
-                createTeam(1, 'Team1', createWeekDayMapFromSelection(['mandag'])),
-                createTeam(2, 'Team2', createWeekDayMapFromSelection(['mandag'])),
-                createTeam(3, 'Team3', createWeekDayMapFromSelection(['mandag']))
+                createTeam(1, 'Team1', createWeekDayMapFromSelection([MONDAY])),
+                createTeam(2, 'Team2', createWeekDayMapFromSelection([MONDAY])),
+                createTeam(3, 'Team3', createWeekDayMapFromSelection([MONDAY]))
             ],
             expected: ['Team1', 'Team2', 'Team3']
         },
         {
             scenario: 'mixed affinities (varying sizes) zigzag round-robin',
-            startDay: 'mandag' as WeekDay,
+            startDay: MONDAY,
             teams: [
-                createTeam(1, 'Mon1', createWeekDayMapFromSelection(['mandag'])),
-                createTeam(2, 'Mon2', createWeekDayMapFromSelection(['mandag'])),
-                createTeam(3, 'Mon3', createWeekDayMapFromSelection(['mandag'])),
-                createTeam(4, 'Wed1', createWeekDayMapFromSelection(['onsdag'])),
-                createTeam(5, 'Wed2', createWeekDayMapFromSelection(['onsdag'])),
-                createTeam(6, 'Fri1', createWeekDayMapFromSelection(['fredag']))
+                createTeam(1, 'Mon1', createWeekDayMapFromSelection([MONDAY])),
+                createTeam(2, 'Mon2', createWeekDayMapFromSelection([MONDAY])),
+                createTeam(3, 'Mon3', createWeekDayMapFromSelection([MONDAY])),
+                createTeam(4, 'Wed1', createWeekDayMapFromSelection([WEDNESDAY])),
+                createTeam(5, 'Wed2', createWeekDayMapFromSelection([WEDNESDAY])),
+                createTeam(6, 'Fri1', createWeekDayMapFromSelection([FRIDAY]))
             ],
             expected: ['Mon1', 'Wed1', 'Fri1', 'Mon2', 'Wed2', 'Mon3']
         }
@@ -1122,51 +1117,52 @@ describe('Active Season Management utilities', () => {
         const mon20Boundary = new Date(2025, 0, 20) // no dinner that day
         const wed29 = d(29)
         const mar3 = d(3, 2)
+        const [day, week, month] = PERIOD_VIEWS
 
         // Same boundary helper prod code uses (DRY).
-        const boundary = (date: Date, view: 'day' | 'week' | 'month', direction: 1 | -1) =>
+        const boundary = (date: Date, view: PeriodView, direction: PeriodDirection) =>
             getPeriodBoundary(date, view, direction)
 
         it.each([
             // DAY view — finds the immediately prior/next dinner relative to the day.
             {desc: 'day +1 from Wed 15 → Fri 17',
-                events: [mon13, wed15, fri17], input: wed15.date, view: 'day' as const,
-                direction: 1 as const, expected: fri17.date},
+                events: [mon13, wed15, fri17], input: wed15.date, view: day,
+                direction: PERIOD_DIRECTION.next, expected: fri17.date},
             {desc: 'day -1 from Wed 15 → Mon 13',
-                events: [mon13, wed15, fri17], input: wed15.date, view: 'day' as const,
-                direction: -1 as const, expected: mon13.date},
+                events: [mon13, wed15, fri17], input: wed15.date, view: day,
+                direction: PERIOD_DIRECTION.prev, expected: mon13.date},
 
             // WEEK view — skips the empty intermediate week.
             {desc: 'week +1 from week-of-Mon-13 skips empty week-of-20 → Wed 29',
-                events: [mon13, wed15, fri17, wed29], input: wed15.date, view: 'week' as const,
-                direction: 1 as const, expected: wed29.date},
+                events: [mon13, wed15, fri17, wed29], input: wed15.date, view: week,
+                direction: PERIOD_DIRECTION.next, expected: wed29.date},
             {desc: 'week -1 from week-of-Mon-27 skips empty week-of-20 → Fri 17',
-                events: [mon13, wed15, fri17, wed29], input: wed29.date, view: 'week' as const,
-                direction: -1 as const, expected: fri17.date},
+                events: [mon13, wed15, fri17, wed29], input: wed29.date, view: week,
+                direction: PERIOD_DIRECTION.prev, expected: fri17.date},
 
             // MONTH view — skips the empty intermediate month (February).
             {desc: 'month +1 from January skips empty February → Mar 3',
-                events: [wed15, wed29, mar3], input: wed15.date, view: 'month' as const,
-                direction: 1 as const, expected: mar3.date},
+                events: [wed15, wed29, mar3], input: wed15.date, view: month,
+                direction: PERIOD_DIRECTION.next, expected: mar3.date},
             {desc: 'month -1 from March skips empty February → Wed 29',
-                events: [wed15, wed29, mar3], input: mar3.date, view: 'month' as const,
-                direction: -1 as const, expected: wed29.date},
+                events: [wed15, wed29, mar3], input: mar3.date, view: month,
+                direction: PERIOD_DIRECTION.prev, expected: wed29.date},
 
             // Boundary conditions — returns null at first/last dinner.
             {desc: 'day +1 from last dinner → null',
-                events: [mon13, wed15, fri17], input: fri17.date, view: 'day' as const,
-                direction: 1 as const, expected: null},
+                events: [mon13, wed15, fri17], input: fri17.date, view: day,
+                direction: PERIOD_DIRECTION.next, expected: null},
             {desc: 'day -1 from first dinner → null',
-                events: [mon13, wed15, fri17], input: mon13.date, view: 'day' as const,
-                direction: -1 as const, expected: null},
+                events: [mon13, wed15, fri17], input: mon13.date, view: day,
+                direction: PERIOD_DIRECTION.prev, expected: null},
 
             // Input from a non-dinner day (e.g. route parameter landed on a non-cooking day).
             {desc: 'day +1 from non-dinner day → next dinner after',
-                events: [mon13, wed15, fri17, wed29], input: mon20Boundary, view: 'day' as const,
-                direction: 1 as const, expected: wed29.date},
+                events: [mon13, wed15, fri17, wed29], input: mon20Boundary, view: day,
+                direction: PERIOD_DIRECTION.next, expected: wed29.date},
             {desc: 'day -1 from non-dinner day → last dinner before',
-                events: [mon13, wed15, fri17, wed29], input: mon20Boundary, view: 'day' as const,
-                direction: -1 as const, expected: fri17.date}
+                events: [mon13, wed15, fri17, wed29], input: mon20Boundary, view: day,
+                direction: PERIOD_DIRECTION.prev, expected: fri17.date}
         ])('$desc', ({events, input, view, direction, expected}) => {
             const b = boundary(input, view, direction)
             const result = find(events, b, direction)
@@ -1180,8 +1176,8 @@ describe('Active Season Management utilities', () => {
         it('sorts unordered input deterministically', () => {
             // Shuffled input: Fri 17, Mon 13, Wed 15. Day +1 from Mon 13 must still be Wed 15.
             const shuffled = [fri17, mon13, wed15]
-            const b = boundary(mon13.date, 'day', 1)
-            const result = find(shuffled, b, 1)
+            const b = boundary(mon13.date, day, PERIOD_DIRECTION.next)
+            const result = find(shuffled, b, PERIOD_DIRECTION.next)
             expect(result?.getTime()).toBe(wed15.date.getTime())
         })
 
@@ -1192,9 +1188,9 @@ describe('Active Season Management utilities', () => {
             //
             // Assert: day +1 from Wed 15 with only dinners [Wed 15, Fri 17] returns Fri 17.
             const events = [wed15, fri17]
-            const b = boundary(wed15.date, 'day', 1)
+            const b = boundary(wed15.date, day, PERIOD_DIRECTION.next)
             expect(b.getTime()).toBe(new Date(2025, 0, 15, 23, 59, 59, 999).getTime())
-            const result = find(events, b, 1)
+            const result = find(events, b, PERIOD_DIRECTION.next)
             expect(result?.getTime()).toBe(fri17.date.getTime())
         })
     })
