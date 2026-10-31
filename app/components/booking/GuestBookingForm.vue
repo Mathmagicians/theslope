@@ -12,7 +12,8 @@
  * "Du er ved at tilføje gæster"): the loader while it works, then a line per outcome naming the guests; the button
  * names the guests.
  */
-import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData, ScaffoldOrdersRequest} from '~/composables/useBookingValidation'
+import {z} from 'zod'
+import type {DinnerEventDisplay, DinnerMode, DesiredOrder, ScaffoldOrdersRequest} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
@@ -60,8 +61,25 @@ const {createBookingBadges, guestSaveLabel} = useBookingUi()
 const bookingsStore = useBookingsStore()
 
 // Validation schemas
-const {DinnerModeSchema, GuestBookingFormSchema, TicketTypeSchema} = useBookingValidation()
+const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
+
+// The form's input schema (ADR-001 compliance 4): z.coerce turns the inputs' strings into numbers
+const GuestBookingFormSchema = z.object({
+  count: z.coerce.number({error: 'Indtast antal gæster'})
+    .int({message: 'Skal være et helt tal'})
+    .min(1, {message: 'Minimum 1 gæst'})
+    .max(10, {message: 'Maximum 10 gæster'}),
+  ticketPriceId: z.coerce.number({error: 'Vælg en billettype'})
+    .int()
+    .positive({message: 'Vælg en billettype'}),
+  allergyTypeIds: z.array(z.coerce.number().int().positive()).default([]),
+  dinnerMode: DinnerModeSchema.refine(
+    mode => mode !== DinnerModeEnum.NONE,
+    {message: 'Gæster skal vælge en spisemåde'}
+  )
+})
+type GuestBookingFormData = z.infer<typeof GuestBookingFormSchema>
 
 // The guests a save books, as the form schema reads them; the mode holds Ingen while the form tries each mode
 type GuestDraft = Omit<GuestBookingFormData, 'dinnerMode'> & {dinnerMode: DinnerMode}

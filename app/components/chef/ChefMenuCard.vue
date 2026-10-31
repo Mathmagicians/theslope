@@ -101,6 +101,7 @@ import type { WaitlistQueueSummary, ExtraPortionsRequest } from '~/composables/u
 import { FORM_MODES, type FormMode } from '~/types/form'
 import { BOOKING_WORDS } from '~/config/bookingWords'
 import { BUTTON_WORDS } from '~/config/buttonWords'
+import { TEAM_WORDS } from '~/config/teamWords'
 
 interface Props {
   dinnerEvent: DinnerEventDetail
@@ -578,7 +579,7 @@ const handleCardClick = () => {
                 </div>
                 <p :class="TYPOGRAPHY.bodyTextMuted">
                   <span :class="COMPONENTS.chefMenuCard.dangerLead">Aflys middagen</span> — hele fællesspisningen aflyses for alle beboere.
-                  Skal du blot melde fra som chefkok? Brug «Ændre tjans» ved kokkens portræt nedenfor.
+                  {{ TEAM_WORDS.dutyChange.resignHint }}
                 </p>
                 <div :class="LAYOUTS.formButtonRow">
                   <UButton

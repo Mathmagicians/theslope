@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {ADMIN_WORDS} from '~/config/adminWords'
 
 const {ALERTS, COLOR, ICONS} = useTheSlopeDesignSystem()
 
@@ -42,55 +43,13 @@ watch([isPlanStoreErrored, planStoreError], ([errored, error]) => {
 
 // UI - ITEMS
 const tabs = [
-  {
-    key: 'planning',
-    label: 'Planlægning',
-    icon: 'i-heroicons-calendar',
-    content: 'Planlægning af middage og events. Oprette fællesspisninger (dinnerevents). Se kalendar, oprette sæson, oprette ferier. See teams. Se chefkokke',
-    component: 'AdminPlanning'
-  },
-  {
-    key: 'teams',
-    label: 'Madhold',
-    icon: ICONS.chef,
-    content: 'Oprette madhold i given sæson og administrere madhold. Tildele madhold til madlavningsdage. Tildele medlemmer til madhold',
-    component: 'AdminTeams'
-  },
-  {
-    key: 'households',
-    label: 'Husstande',
-    icon: 'i-heroicons-home',
-    content: 'Oversigt over husstande. Se allergier. Administrer flytninger og husstandsændringer',
-    component: 'AdminHouseholds'
-  },
-  {
-    key: 'allergies',
-    label: 'Allergier',
-    icon: 'i-mdi-food-allergy-off-outline',
-    content: 'Se allergier. Administrer allergier. Plakat til udprintning.',
-    component: 'AdminAllergies'
-  },
-  {
-    key: 'users',
-    label: 'Brugere',
-    icon: 'i-heroicons-users',
-    content: 'Importer data fra Heynabo. Se importerede brugere fra HeyNabo. Administrer brugere',
-    component: 'AdminUsers'
-  },
-  {
-    key: 'economy',
-    label: 'Økonomi',
-    icon: 'i-heroicons-currency-dollar',
-    content: 'Økonomisk overblik. Chefkokkebudgetter. Basisvarerbudgetter. Inberetning til PBS.',
-    component: 'AdminEconomy'
-  },
-  {
-    key: 'system',
-    label: 'System',
-    icon: 'i-heroicons-cog-6-tooth',
-    content: 'Systemjobs, vedligeholdelse og indstillinger.',
-    component: 'AdminSystem'
-  }
+  {key: 'planning', label: ADMIN_WORDS.tabs.planning, icon: ICONS.calendar, component: 'AdminPlanning'},
+  {key: 'teams', label: ADMIN_WORDS.tabs.teams, icon: ICONS.chef, component: 'AdminTeams'},
+  {key: 'households', label: ADMIN_WORDS.tabs.households, icon: ICONS.household, component: 'AdminHouseholds'},
+  {key: 'allergies', label: ADMIN_WORDS.tabs.allergies, icon: ICONS.allergy, component: 'AdminAllergies'},
+  {key: 'users', label: ADMIN_WORDS.tabs.users, icon: ICONS.users, component: 'AdminUsers'},
+  {key: 'economy', label: ADMIN_WORDS.tabs.economy, icon: ICONS.economy, component: 'AdminEconomy'},
+  {key: 'system', label: ADMIN_WORDS.tabs.system, icon: ICONS.settings, component: 'AdminSystem'}
 ]
 
 
@@ -160,8 +119,8 @@ useHead({
       v-bind="ALERTS.neutral"
       data-testid="admin-readonly-banner"
       :icon="ICONS.viewOnly"
-      title="Hej, du er ikke administrator"
-      description="Se, men ikke røre"
+      :title="ADMIN_WORDS.readOnly.title"
+      :description="ADMIN_WORDS.readOnly.description"
       class="mb-4"
     />
     <UTabs
@@ -178,7 +137,7 @@ useHead({
         <ViewError
             v-if="isPlanStoreErrored && (activeTab === 'planning' || activeTab === 'teams')"
             :error="planStoreError?.statusCode"
-            :message="`Kunne ikke loade data for admin siden - tab ${ activeTab }`"
+            :message="ADMIN_WORDS.failed(activeTab)"
             :cause="planStoreError"/>
         <Loader v-else-if="!isPlanStoreReady && (activeTab === 'planning' || activeTab === 'teams')" :text="activeTab"/>
         <!-- Pass canEdit to components (allergies tab uses canMutateAllergies) -->

@@ -19,6 +19,7 @@ import {FORM_MODES} from '~/types/form'
 import {ICONS, getRandomEmptyMessage} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from '../dinner/waitlistTestIds'
 import {SUPPLY_WORDS} from '~/composables/useBookingUi'
+import {TEAM_WORDS} from '~/config/teamWords'
 
 /**
  * ChefMenuCard: the allergen line and its editor over the dinner's allergens (the catalog's `id`, not a join row's
@@ -166,6 +167,8 @@ describe('ChefMenuCard', () => {
             const dangerZone = findByTestId(wrapper, 'dinner-danger-zone')
             expect(dangerZone.exists()).toBe(true)
             expect(dangerZone.text()).toContain('Aflys middagen')
+            // The way out for a chef who only resigns names the button by its own word
+            expect(dangerZone.text()).toContain(TEAM_WORDS.dutyChange.resignHint)
         })
     })
 

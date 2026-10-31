@@ -902,26 +902,6 @@ export const useBookingValidation = () => {
         scaffoldResult: ScaffoldResultSchema
     })
 
-    /**
-     * Guest booking form - UI form validation schema
-     * Used by GuestBookingForm component for UForm validation
-     * Uses z.coerce for HTML input string → number conversion
-     */
-    const GuestBookingFormSchema = z.object({
-        count: z.coerce.number({error: 'Indtast antal gæster'})
-            .int({message: 'Skal være et helt tal'})
-            .min(1, {message: 'Minimum 1 gæst'})
-            .max(10, {message: 'Maximum 10 gæster'}),
-        ticketPriceId: z.coerce.number({error: 'Vælg en billettype'})
-            .int()
-            .positive({message: 'Vælg en billettype'}),
-        allergyTypeIds: z.array(z.coerce.number().int().positive()).default([]),
-        dinnerMode: DinnerModeSchema.refine(
-            mode => mode !== DinnerModeSchema.enum.NONE,
-            {message: 'Gæster skal vælge en spisemåde'}
-        )
-    })
-
     // ============================================================================
     // Query Parameter Normalization
     // ============================================================================
@@ -1101,7 +1081,6 @@ export const useBookingValidation = () => {
         encodeDesiredOrder,
         ScaffoldOrdersRequestSchema,
         ScaffoldOrdersResponseSchema,
-        GuestBookingFormSchema,
 
         // Daily Maintenance
         ConsumeResultSchema,
@@ -1198,7 +1177,6 @@ export type DesiredOrder = z.infer<ReturnType<typeof useBookingValidation>['Desi
 export type BookingIntent = z.infer<ReturnType<typeof useBookingValidation>['BookingIntentSchema']>
 export type ScaffoldOrdersRequest = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldOrdersRequestSchema']>
 export type ScaffoldOrdersResponse = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldOrdersResponseSchema']>
-export type GuestBookingFormData = z.infer<ReturnType<typeof useBookingValidation>['GuestBookingFormSchema']>
 
 // Daily Maintenance
 export type ConsumeResult = z.infer<ReturnType<typeof useBookingValidation>['ConsumeResultSchema']>

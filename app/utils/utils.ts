@@ -16,3 +16,6 @@ export const findRowById = <Row extends {id: number | string}>(rows: Row[], rowI
 
 /** UTable's getRowId for a row per dinner, by the dinner's id (rowIdOf) */
 export const dinnerRowIdOf = <Row extends {dinnerEvent: {id: number}}>(row: Row): string => String(row.dinnerEvent.id)
+
+/** A thrown value as a log line reads it: an Error by its message, anything else as text */
+export const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error)

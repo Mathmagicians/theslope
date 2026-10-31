@@ -2,6 +2,7 @@ import {z} from 'zod'
 import {RoleSchema} from '~~/prisma/generated/zod'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {IdSchema} from '~/composables/useCoreValidation'
+import {DUTY_WORDS} from '~/config/dutyWords'
 
 /**
  * Validation schemas for the duty roster (ADR-001, ADR-010); isomorphic, the repository imports it (ADR-017)
@@ -32,8 +33,8 @@ export const useDutyValidation = () => {
             allocationPercentage: JokerSlotSchema.shape.allocationPercentage.default(100),
             note: z.string().nullish()
         })
-        .refine(slot => Object.values(slot.affinity).some(Boolean), {message: 'Vælg mindst én ugedag', path: ['affinity']})
-        .refine(slot => slot.endDate >= slot.startDate, {message: 'Slutdato skal være på eller efter startdato', path: ['endDate']})
+        .refine(slot => Object.values(slot.affinity).some(Boolean), {message: DUTY_WORDS.jokerSlot.noWeekday, path: ['affinity']})
+        .refine(slot => slot.endDate >= slot.startDate, {message: DUTY_WORDS.jokerSlot.endBeforeStart, path: ['endDate']})
 
     // Database row: the affinity travels as JSON (ADR-010)
     const SerializedJokerSlotSchema = JokerSlotSchema.extend({

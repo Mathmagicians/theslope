@@ -1098,7 +1098,7 @@ const getEventSummary = (eventId: number) => {
                   data-testid="grid-save"
                   @click="handleSave"
                 >
-                  {{ props.isSaving ? 'Arbejder ...' : bookingSaveLabel(BookingActionSchema.enum.CHANGE_MODE) }}
+                  {{ props.isSaving ? BUTTON_WORDS.working : bookingSaveLabel(BookingActionSchema.enum.CHANGE_MODE) }}
                 </UButton>
               </div>
             </div>

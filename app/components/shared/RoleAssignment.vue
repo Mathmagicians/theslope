@@ -35,7 +35,7 @@ const mode = computed<'volunteer' | 'resign' | 'swap'>(() => {
 const triggerLabel = computed(() =>
     mode.value === 'volunteer'
         ? `Bliv ${TEAM_WORDS.roles[props.role].label.toLowerCase()}`
-        : 'Rediger chefkokketjans'
+        : TEAM_WORDS.dutyChange.trigger
 )
 
 const isActionable = computed(() => !isDinnerPast(props.dinnerEvent.date, now.value))

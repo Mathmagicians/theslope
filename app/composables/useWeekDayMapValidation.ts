@@ -5,6 +5,7 @@ import {
     type WeekDayMap,
     type WeekDay
 } from '~/types/dateTypes'
+import {SEASON_WORDS} from '~/config/seasonWords'
 
 /**
  * Validation schemas and serialization for WeekDayMap objects
@@ -47,7 +48,7 @@ const DEFAULT_BOOLEAN_OPTIONS: UseWeekDayMapValidationOptions<boolean> = {
     valueSchema: z.boolean(),
     defaultValue: false,
     isRequired: (map: WeekDayMap<boolean>) => Object.values(map).some(v => v),
-    requiredMessage: "Man skal lave mad mindst en dag om ugen"
+    requiredMessage: SEASON_WORDS.form.noCookingDay
 }
 
 export const useWeekDayMapValidation = <T = boolean>(

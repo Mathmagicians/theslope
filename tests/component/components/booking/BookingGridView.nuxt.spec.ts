@@ -23,6 +23,7 @@ import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import {createBirthdayBadge, formatPreviewLines, lockChip, ticketBadgeLabel, ticketTypePresentation} from '~/composables/useBookingUi'
 import type DeadlineBadge from '~/components/deadline/DeadlineBadge.vue'
 import {getPeriodBoundary, PERIOD_DIRECTION} from '~/utils/date'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 import {DINNER_MODE_ORDER, type ReleasedTicketCounts} from '~/composables/useBooking'
 import {addDays, subYears} from 'date-fns'
 
@@ -195,7 +196,7 @@ describe('BookingGridView', () => {
       const wrapper = await mountGrid([dinner], {formMode: FORM_MODES.EDIT, isSaving: true})
 
       expect(columnCells(dinner.id).map(name => selectorNamed(wrapper, name).props('formMode'))).toEqual(columnCells(dinner.id).map(() => FORM_MODES.VIEW))
-      expect(findByTestId(wrapper, 'grid-save').text()).toContain('Arbejder ...')
+      expect(findByTestId(wrapper, 'grid-save').text()).toContain(BUTTON_WORDS.working)
     })
   })
 

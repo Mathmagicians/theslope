@@ -45,7 +45,7 @@ PAST SEASON:
 
 <script setup lang="ts">
 import {usePlanStore} from '~/stores/plan'
-import {SEASON_STATUS} from '~/config/seasonWords'
+import {SEASON_STATUS, SEASON_WORDS} from '~/config/seasonWords'
 
 interface Props {
   seasonId: number | null
@@ -87,34 +87,14 @@ const alertConfig = computed(() => {
 
   switch (status.value) {
     case SEASON_STATUS.ACTIVE:
-      return {
-        kind: 'success' as const,
-        icon: ICONS.checkCircle,
-        title: `Aktiv sæson`,
-        description: 'Denne sæson er synlig for alle brugere, som kan se og booke fællesspisninger. Kun én sæson kan være aktiv ad gangen.'
-      }
+      return {kind: 'success' as const, icon: ICONS.checkCircle, ...SEASON_WORDS.statusAlert[SEASON_STATUS.ACTIVE]}
     case SEASON_STATUS.FUTURE:
-      return {
-        kind: 'info' as const,
-        icon: ICONS.calendar,
-        title: `Fremtidig sæson`,
-        description: 'Denne sæson er kun synlig for administratorer. Når du aktiverer sæsonen, kan beboere se og booke fællesspisninger.'
-      }
+      return {kind: 'info' as const, icon: ICONS.calendar, ...SEASON_WORDS.statusAlert[SEASON_STATUS.FUTURE]}
     case SEASON_STATUS.CURRENT:
-      return {
-        kind: 'warning' as const,
-        icon: ICONS.calendar,
-        title: `Inaktiv sæson`,
-        description: 'Datoerne for denne sæson siger det er nu! Men den er ikke aktiveret. Aktiver sæsonen for at gøre den synlig for beboere.'
-      }
+      return {kind: 'warning' as const, icon: ICONS.calendar, ...SEASON_WORDS.statusAlert[SEASON_STATUS.CURRENT]}
     case SEASON_STATUS.PAST:
     default:
-      return {
-        kind: 'neutral' as const,
-        icon: ICONS.archive,
-        title: `Arkiveret sæson`,
-        description: 'Denne sæson er afsluttet og kun synlig for administratorer. Gamle sæsoner kan ikke genaktiveres.'
-      }
+      return {kind: 'neutral' as const, icon: ICONS.archive, ...SEASON_WORDS.statusAlert[SEASON_STATUS.PAST]}
   }
 })
 
@@ -137,13 +117,13 @@ const showButton = computed(() => {
       {{ alertConfig.title }} <UBadge v-if="status" v-bind="SEASON_STATUS_GLYPHS[status]" data-testid="season-status-mark" />
     </template>
     <template v-if="showButton" #actions>
-      <UFormField :hint="season?.isActive ? 'Fællesspisnings sæson er i gang' : 'Denne sæson er ikke aktiv'" :ui="{hint: TYPOGRAPHY.bodyTextMuted}">
+      <UFormField :hint="season?.isActive ? SEASON_WORDS.activation.activeHint : SEASON_WORDS.activation.inactiveHint" :ui="{hint: TYPOGRAPHY.bodyTextMuted}">
         <!-- Deactivate uses DangerButton (destructive action) -->
         <DangerButton
           v-if="season?.isActive"
           data-testid="deactivate-season"
-          label="Deaktiver Sæson"
-          confirm-label="Tryk igen for at deaktivere..."
+          :label="SEASON_WORDS.activation.deactivate"
+          :confirm-label="SEASON_WORDS.activation.confirmDeactivate"
           :loading="isActivatingSeason"
           :size="SIZES.small"
           @confirm="emit('deactivate')"
@@ -161,7 +141,7 @@ const showButton = computed(() => {
           :disabled="isActivatingSeason"
           @click="emit('activate')"
         >
-          Aktiver Sæson
+          {{ SEASON_WORDS.activation.activate }}
         </UButton>
       </UFormField>
     </template>

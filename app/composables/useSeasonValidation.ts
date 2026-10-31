@@ -7,7 +7,7 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {IdSchema} from '~/composables/useCoreValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
-import {SEASON_STATUS} from '~/config/seasonWords'
+import {SEASON_STATUS, SEASON_WORDS} from '~/config/seasonWords'
 
 const seasonStatusValues = [SEASON_STATUS.ACTIVE, SEASON_STATUS.FUTURE, SEASON_STATUS.CURRENT, SEASON_STATUS.PAST] as const
 
@@ -28,7 +28,7 @@ export const useSeasonValidation = () => {
         valueSchema: z.boolean(),
         defaultValue: false,
         isRequired: (map: WeekDayMap<boolean>) => Object.values(map).some(Boolean),
-        requiredMessage: "Man skal lave mad mindst en dag om ugen"
+        requiredMessage: SEASON_WORDS.form.noCookingDay
     })
     const {DinnerEventDisplaySchema, SerializedDinnerEventSchema, deserializeDinnerEvent, ScaffoldResultSchema} = useBookingValidation()
     const {TicketPriceSchema, TicketPricesArraySchema} = useTicketPriceValidation()
@@ -37,7 +37,7 @@ export const useSeasonValidation = () => {
     const holidaysSchema = z.array(dateRangeSchema)
         .default([])
         .refine((holidays) => !areRangesOverlapping(holidays), {
-            message: "Ferieperioder må ikke overlappe hinanden"
+            message: SEASON_WORDS.form.holidaysOverlap
         })
 
     const BaseSeasonSchema = z.object({
@@ -59,7 +59,7 @@ export const useSeasonValidation = () => {
     const SeasonSchema = BaseSeasonSchema.refine(
         (data) => data.holidays.every(holiday => isDateRangeInside(data.seasonDates, holiday)),
         {
-            message: "Ferieperioder skal være inden for fællesspisningssæsonen",
+            message: SEASON_WORDS.form.holidayOutsideSeason,
             path: ["holidays"]
         }
     )

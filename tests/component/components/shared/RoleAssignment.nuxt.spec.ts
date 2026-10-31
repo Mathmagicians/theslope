@@ -72,11 +72,11 @@ describe('RoleAssignment', () => {
     it.each([
         {desc: 'self is chef',  chef: ME},
         {desc: 'other is chef', chef: OTHER}
-    ])('assigned trigger ($desc) shows a label distinct from vacant', async ({chef}) => {
+    ])('assigned trigger ($desc) reads the duty change, distinct from vacant', async ({chef}) => {
         const vacant = findByTestId(await mountWith(null), TEST_IDS.trigger).text().trim()
         const assigned = findByTestId(await mountWith(chef), TEST_IDS.trigger).text().trim()
+        expect(assigned).toBe(TEAM_WORDS.dutyChange.trigger)
         expect(assigned).not.toBe(vacant)
-        expect(assigned).not.toBe('')
     })
 
     // The store settles a claim over several requests (the claim, the teams, the dinner on view), so the emit is awaited

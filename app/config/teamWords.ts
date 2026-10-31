@@ -6,6 +6,7 @@ import {useCookingTeamValidation, type TeamRole} from '~/composables/useCookingT
 const Role = useCookingTeamValidation().TeamRoleSchema.enum
 
 const heynaboSyncProblem = 'Din ændring er gemt, men Heynabo havde et problem. Vi har forsøgt at fikse det, tjek om det ser rigtig ud i Heynabo.'
+const changeChefDuty = 'Rediger chefkokketjans'
 
 export const TEAM_WORDS = {
     /** A team on view the person is not on: the badge on its tab and the line under the tabs */
@@ -32,6 +33,11 @@ export const TEAM_WORDS = {
             description: (teamShortName: string) => `Du er en sej kokkespire, som hjælper de voksne på ${teamShortName}`
         }
     } satisfies Record<TeamRole, {label: string, title: string, description: (teamShortName: string) => string}>,
+    /** The button by a taken chef duty that changes it, and the danger zone's pointer to it for a chef who only resigns */
+    dutyChange: {
+        trigger: changeChefDuty,
+        resignHint: `Skal du blot melde fra som chefkok? Brug «${changeChefDuty}» ved kokkens portræt nedenfor.`
+    },
     /**
      * The chef calendar: its countdown's title and time label ("madlavning kl 18:00"), its two views, the agenda's
      * heading over the days, and the chevron's name when the calendar is open and when it is closed
