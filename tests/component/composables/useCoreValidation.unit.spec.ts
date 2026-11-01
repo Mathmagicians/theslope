@@ -9,6 +9,7 @@ import {parseQuery, stringifyQuery} from 'ufo'
 import {useCoreValidation, getHouseholdShortName, adminBypassQuery, AdminBypassQuerySchema, queryFlag, QueryFlagSchema} from '~/composables/useCoreValidation'
 import type {UserCreate} from '~/composables/useCoreValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS, useUserPreferenceValidation, type UserPreferencesUpdate} from '~/composables/useUserPreferenceValidation'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -557,9 +558,9 @@ describe('useCoreValidation - HouseholdCreateFormSchema', () => {
     // ---------- pbsId validation (parametrized) ----------
 
     it.each([
-        ['non-numeric string',        'abc',   'PBS skal være et tal'],
-        ['decimal',                   12.5,    'PBS skal være et helt tal'],
-        ['zero',                      0,       'PBS skal være positivt']
+        ['non-numeric string',        'abc',   HOUSEHOLD_WORDS.createForm.pbsNotNumber],
+        ['decimal',                   12.5,    HOUSEHOLD_WORDS.createForm.pbsNotInteger],
+        ['zero',                      0,       HOUSEHOLD_WORDS.createForm.pbsNotPositive]
     ])('rejects pbsId when %s', (_, pbsId, expectedMessage) => {
         const result = baseSchema.safeParse({...validFormInput(), pbsId})
         expect(result.success).toBe(false)
@@ -584,7 +585,7 @@ describe('useCoreValidation - HouseholdCreateFormSchema', () => {
         expect(result.success).toBe(false)
         if (!result.success) {
             const err = result.error.issues.find(i => i.path[0] === 'movedInDate')
-            expect(err?.message).toBe('Du skal sætte en indflytningsdato for den nye familie')
+            expect(err?.message).toBe(HOUSEHOLD_WORDS.createForm.movedInDateMissing)
         }
     })
 
@@ -606,7 +607,7 @@ describe('useCoreValidation - HouseholdCreateFormSchema', () => {
         expect(result.success).toBe(expectedValid)
         if (!result.success) {
             const err = result.error.issues.find(i => i.path[0] === 'movedInDate')
-            expect(err?.message).toBe('Ny familie kan ikke flytte ind, så længe den forrige ikke er flyttet ud')
+            expect(err?.message).toBe(HOUSEHOLD_WORDS.createForm.previousNotMovedOut)
         }
     })
 })
@@ -806,7 +807,6 @@ describe('useCoreValidation - User preference columns', () => {
     const {
         BaseUserSchema,
         UserDetailSchema,
-        UserSessionSchema,
         SerializedUserInputSchema,
         serializeUserInput,
         serializeUserUpdate,
@@ -871,12 +871,12 @@ describe('useCoreValidation - User preference columns', () => {
         })
     })
 
+    // The session's user is the UserDetail login writes and the auth store parses
     it('GIVEN a session user THEN the session carries both columns', () => {
         const user = UserFactory.defaultUserWithInhabitant('test-session', preferences)
-        const session = UserSessionSchema.parse({...user, passwordHash: 'heynabo-token'})
+        const session = UserDetailSchema.parse(user)
 
         expect(session.notificationChannels).toEqual(preferences.notificationChannels)
         expect(session.appearance).toEqual(preferences.appearance)
-        expect(UserDetailSchema.parse(user).appearance).toEqual(preferences.appearance)
     })
 })

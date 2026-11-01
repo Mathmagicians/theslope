@@ -21,7 +21,7 @@ import type {DeliveryDryRun} from '~/composables/useDeliveryValidation'
 import type {SenderEmitResult} from '~/composables/useNotificationValidation'
 import type {HealthReport} from '~~/workers/common/health'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, openContext} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, openContext, attemptAll} = testHelpers
 const {JobType} = useMaintenanceValidation()
 const {DinnerStateSchema, TicketTypeSchema} = useBookingValidation()
 const {findTicketPriceByType} = useTicket()
@@ -231,19 +231,6 @@ export const periodOf = async (admin: BrowserContext, scene: Scene): Promise<num
         }
     }
     throw new Error(`No monthly run of the scenario billed household ${billed.id}`)
-}
-
-/** Runs every cleanup step; the steps that fail fail the hook */
-const attemptAll = async (what: string, steps: (() => Promise<unknown>)[]): Promise<void> => {
-    const failures: unknown[] = []
-    for (const step of steps) {
-        try {
-            await step()
-        } catch (error) {
-            failures.push(error)
-        }
-    }
-    if (failures.length > 0) throw new AggregateError(failures, `${what} failed`)
 }
 
 /** Removes the scenario's dinners alone on their day: the day is free again for the next scenario */

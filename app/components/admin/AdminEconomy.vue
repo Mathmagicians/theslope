@@ -19,6 +19,8 @@ import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {TableData, TableRow} from '@nuxt/ui'
 import {BUTTON_WORDS} from '~/config/buttonWords'
+import {BOOKING_WORDS} from '~/config/bookingWords'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 const props = withDefaults(defineProps<{
   canEdit?: boolean
@@ -26,7 +28,7 @@ const props = withDefaults(defineProps<{
   canEdit: false
 })
 
-const {formatPrice} = useTicket()
+const {formatKroner} = useTicket()
 const {groupByCostEntry, groupByHouseholdEntry, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
 const now = useClock()
 const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, BORDER, NOISE} = useTheSlopeDesignSystem()
@@ -101,7 +103,7 @@ const upcomingOrdersEnriched = computed((): OrderWithInhabitant[] =>
             inhabitant: {
                 id: o.inhabitantId,
                 name: getInhabitantName(o.inhabitantId),
-                household: getHouseholdForInhabitant(o.inhabitantId) ?? {id: 0, pbsId: 0, address: 'Ukendt'}
+                household: getHouseholdForInhabitant(o.inhabitantId) ?? {id: 0, pbsId: 0, address: BOOKING_WORDS.billing.unknownAddress}
             }
         }))
 )
@@ -117,17 +119,17 @@ const upcomingOrdersTotal = computed(() =>
 
 const dinnerColumns = [
     {id: 'expand'},
-    {accessorKey: 'date', header: 'Dato'},
-    {accessorKey: 'dinnerEvent.menuTitle', header: 'Menu'},
-    {accessorKey: 'ticketCounts', header: 'Kuverter'},
-    {accessorKey: 'totalAmount', header: 'Beløb'}
+    {accessorKey: 'date', header: BOOKING_WORDS.billing.columns.date},
+    {accessorKey: 'dinnerEvent.menuTitle', header: BOOKING_WORDS.billing.columns.menu},
+    {accessorKey: 'ticketCounts', header: BOOKING_WORDS.billing.stats.tickets},
+    {accessorKey: 'totalAmount', header: BOOKING_WORDS.billing.columns.amount}
 ]
 
 const householdOrderColumns = [
     {id: 'expand'},
-    {accessorKey: 'address', header: 'Adresse'},
-    {accessorKey: 'ticketCounts', header: 'Kuverter'},
-    {accessorKey: 'totalAmount', header: 'Beløb'}
+    {accessorKey: 'address', header: BOOKING_WORDS.billing.columns.address},
+    {accessorKey: 'ticketCounts', header: BOOKING_WORDS.billing.stats.tickets},
+    {accessorKey: 'totalAmount', header: BOOKING_WORDS.billing.columns.amount}
 ]
 
 const sortByAddress = <T extends { address: string }>(entries: T[]): T[] =>
@@ -152,9 +154,9 @@ const filterHouseholds = (entries: HouseholdEntry<OrderWithInhabitant>[], query:
 const futureDinnerStatsAccessor = (entry: CostEntry<OrderWithInhabitant, DinnerEventInfo>): StatBox[] => {
     const households = new Set(entry.items.map(o => o.inhabitant.household.id))
     return [
-        {icon: ICONS.household, value: households.size, label: 'Husstande'},
-        {icon: ICONS.dinner, value: formatTicketCounts(entry.items), label: 'Kuverter'},
-        {icon: ICONS.shoppingCart, value: `${formatPrice(entry.items.reduce((sum, o) => sum + o.priceAtBooking, 0))} kr`, label: 'Total'}
+        {icon: ICONS.household, value: households.size, label: BOOKING_WORDS.billing.stats.households},
+        {icon: ICONS.dinner, value: formatTicketCounts(entry.items), label: BOOKING_WORDS.billing.stats.tickets},
+        {icon: ICONS.shoppingCart, value: formatKroner(entry.items.reduce((sum, o) => sum + o.priceAtBooking, 0)), label: BOOKING_WORDS.billing.stats.total}
     ]
 }
 
@@ -201,22 +203,22 @@ interface UnifiedBillingPeriod {
     shareToken?: string
 }
 
-const billingPeriodTitleAccessor = () => 'Samlet PBS Afregning'
-const virtualPeriodTitleAccessor = () => 'Næste PBS'
+const billingPeriodTitleAccessor = () => BOOKING_WORDS.billing.period.settled
+const virtualPeriodTitleAccessor = () => BOOKING_WORDS.billing.period.next
 const periodSubtitleAccessor = (period: UnifiedBillingPeriod) => formatDateRange(period.period)
 const periodStatsAccessor = (period: UnifiedBillingPeriod): StatBox[] => [
-    {icon: ICONS.household, value: period.householdCount, label: 'Husstande'},
-    {icon: ICONS.calendar, value: period.dinnerCount, label: 'Middage'},
-    {icon: ICONS.dinner, value: period.ticketCounts, label: 'Kuverter'},
-    {icon: ICONS.shoppingCart, value: `${formatPrice(period.totalAmount)} kr`, label: 'Total'}
+    {icon: ICONS.household, value: period.householdCount, label: BOOKING_WORDS.billing.stats.households},
+    {icon: ICONS.calendar, value: period.dinnerCount, label: BOOKING_WORDS.billing.stats.dinners},
+    {icon: ICONS.dinner, value: period.ticketCounts, label: BOOKING_WORDS.billing.stats.tickets},
+    {icon: ICONS.shoppingCart, value: formatKroner(period.totalAmount), label: BOOKING_WORDS.billing.stats.total}
 ]
 
 const virtualInvoiceColumns = [
     {id: 'expand'},
-    {accessorKey: 'pbsId', header: 'PBS'},
-    {accessorKey: 'address', header: 'Adresse'},
-    {accessorKey: 'totalAmount', header: 'Beløb'},
-    {accessorKey: 'control', header: 'Kontrol'}
+    {accessorKey: 'pbsId', header: BOOKING_WORDS.billing.columns.pbs},
+    {accessorKey: 'address', header: BOOKING_WORDS.billing.columns.address},
+    {accessorKey: 'totalAmount', header: BOOKING_WORDS.billing.columns.amount},
+    {accessorKey: 'control', header: BOOKING_WORDS.billing.columns.control}
 ]
 
 const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
@@ -256,22 +258,22 @@ const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
 
 const periodColumns = [
     {id: 'expand'},
-    {accessorKey: 'status', header: 'Status'},
-    {accessorKey: 'period', header: 'Periode'},
-    {accessorKey: 'dinnerCount', header: 'Middage'},
-    {accessorKey: 'ticketCounts', header: 'Kuverter'},
-    {accessorKey: 'householdCount', header: 'Husstande'},
-    {accessorKey: 'totalAmount', header: 'Omsætning'},
-    {accessorKey: 'control', header: 'Kontrol'},
-    {accessorKey: 'share', header: 'Del'}
+    {accessorKey: 'status', header: BOOKING_WORDS.billing.columns.status},
+    {accessorKey: 'period', header: BOOKING_WORDS.billing.columns.period},
+    {accessorKey: 'dinnerCount', header: BOOKING_WORDS.billing.stats.dinners},
+    {accessorKey: 'ticketCounts', header: BOOKING_WORDS.billing.stats.tickets},
+    {accessorKey: 'householdCount', header: BOOKING_WORDS.billing.stats.households},
+    {accessorKey: 'totalAmount', header: BOOKING_WORDS.billing.columns.revenue},
+    {accessorKey: 'control', header: BOOKING_WORDS.billing.columns.control},
+    {accessorKey: 'share', header: BOOKING_WORDS.billing.columns.share}
 ]
 
 const invoiceColumns = [
     {id: 'expand'},
-    {accessorKey: 'pbsId', header: 'PBS'},
-    {accessorKey: 'address', header: 'Adresse'},
-    {accessorKey: 'amount', header: 'Beløb'},
-    {accessorKey: 'control', header: 'Kontrol'}
+    {accessorKey: 'pbsId', header: BOOKING_WORDS.billing.columns.pbs},
+    {accessorKey: 'address', header: BOOKING_WORDS.billing.columns.address},
+    {accessorKey: 'amount', header: BOOKING_WORDS.billing.columns.amount},
+    {accessorKey: 'control', header: BOOKING_WORDS.billing.columns.control}
 ]
 
 const {expanded: expandedInvoiceRows} = useExpandableRow()
@@ -369,7 +371,7 @@ const handleAdminSave = async (orders: DesiredOrder[]) => {
         orders,
         guestBookerInhabitantId
     )
-    const reported = scaffoldToast('Administrator Korrektion', result, editingHousehold.value.inhabitants.map(({id}) => id))
+    const reported = scaffoldToast(BOOKING_WORDS.billing.correction.toast, result, editingHousehold.value.inhabitants.map(({id}) => id))
     toast.add({...reported, description: `${editingHousehold.value.address}\n${reported.description}`})
     cancelEditing()
 }
@@ -388,14 +390,14 @@ const dinnerBreakdownStats = computed(() => {
 
 <template>
   <div data-testid="admin-economy" :class="COMPONENTS.adminEconomy.page">
-    <ViewError v-if="isBillingPeriodsErrored" :error="billingPeriodsError?.statusCode" message="Kunne ikke hente økonomioversigt"/>
+    <ViewError v-if="isBillingPeriodsErrored" :error="billingPeriodsError?.statusCode" :message="BOOKING_WORDS.billing.failed.overview"/>
 
     <template v-else>
       <UCard>
         <template #header>
           <div :class="COMPONENTS.adminEconomy.cardTitleRow">
             <UIcon :name="ICONS.shoppingCart" :size="SIZES.standardIconSize"/>
-            <h3 :class="TYPOGRAPHY.cardTitle">Fremtidige bestillinger</h3>
+            <h3 :class="TYPOGRAPHY.cardTitle">{{ BOOKING_WORDS.billing.titles.future }}</h3>
           </div>
         </template>
 
@@ -417,11 +419,11 @@ const dinnerBreakdownStats = computed(() => {
                 square
                 :size="SIZES.small"
                 :data-testid="`future-orders-expand-${row.original.dinnerEvent.id}`"
-                aria-label="Vis detaljer"
+                :aria-label="BUTTON_WORDS.openDetails"
                 @click="row.toggleExpanded()"
             />
           </template>
-          <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
+          <template #totalAmount-cell="{ row }">{{ formatKroner(row.original.totalAmount) }}</template>
           <template #expanded="{ row }">
             <div :class="[COMPONENTS.adminEconomy.panel, BG.panel]">
               <CostEntry
@@ -436,8 +438,8 @@ const dinnerBreakdownStats = computed(() => {
                   <div>
                     <DangerButton
                         v-if="props.canEdit"
-                        label="Admin Korrektion"
-                        confirm-label="Klik igen for at rette"
+                        :label="BOOKING_WORDS.billing.correction.label"
+                        :confirm-label="BOOKING_WORDS.billing.correction.confirm"
                         :icon="ICONS.authorize"
                         :confirm-icon="ICONS.authorize"
                         :size="SIZES.standard"
@@ -450,11 +452,11 @@ const dinnerBreakdownStats = computed(() => {
                 <template #default>
                   <div v-if="editingDinnerId === row.original.dinnerEvent.id" :class="COMPONENTS.adminEconomy.correction">
                     <div :class="COMPONENTS.adminEconomy.correctionRow">
-                      <label :class="TYPOGRAPHY.bodyTextMedium">Vælg husstand:</label>
+                      <label :class="TYPOGRAPHY.bodyTextMedium">{{ BOOKING_WORDS.billing.correction.household }}</label>
                       <USelectMenu
                           v-model="selectedHouseholdOption"
                           :items="householdOptions"
-                          placeholder="Vælg husstand..."
+                          :placeholder="BOOKING_WORDS.billing.correction.householdPlaceholder"
                           :class="COMPONENTS.adminEconomy.householdSelect"
                           data-testid="admin-correction-household-select"
                       />
@@ -496,7 +498,7 @@ const dinnerBreakdownStats = computed(() => {
                     <template #address-header>
                       <UInput
                           :model-value="getHouseholdSearch(row.original.dinnerEvent.id)"
-                          placeholder="Søg adresse eller navn..."
+                          :placeholder="BOOKING_WORDS.billing.search.household"
                           :trailing-icon="ICONS.search"
                           :size="SIZES.small"
                           @update:model-value="setHouseholdSearch(row.original.dinnerEvent.id, $event)"
@@ -510,12 +512,12 @@ const dinnerBreakdownStats = computed(() => {
                           :icon="householdRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                           square
                           :size="SIZES.small"
-                          aria-label="Vis ordrer"
+                          :aria-label="BOOKING_WORDS.billing.show.orders"
                           @click="householdRow.toggleExpanded()"
                       />
                     </template>
-                    <template #address-cell="{ row: householdRow }">{{ householdRow.original.address }} <span :class="TYPOGRAPHY.bodyTextMuted">· PBS {{ householdRow.original.pbsId }}</span></template>
-                    <template #totalAmount-cell="{ row: householdRow }">{{ formatPrice(householdRow.original.totalAmount) }} kr</template>
+                    <template #address-cell="{ row: householdRow }">{{ householdRow.original.address }} <span :class="TYPOGRAPHY.bodyTextMuted">· {{ HOUSEHOLD_WORDS.facts.pbs(householdRow.original.pbsId) }}</span></template>
+                    <template #totalAmount-cell="{ row: householdRow }">{{ formatKroner(householdRow.original.totalAmount) }}</template>
 
                     <template #expanded="{ row: householdRow }">
                       <div :class="[COMPONENTS.adminEconomy.nestedList, BG.panelNested]">
@@ -545,8 +547,8 @@ const dinnerBreakdownStats = computed(() => {
 
         <template v-if="upcomingOrdersGrouped.length > 0" #footer>
           <div :class="COMPONENTS.adminEconomy.totalRow">
-            <span :class="TYPOGRAPHY.bodyTextMedium">Total:</span>
-            <span :class="TYPOGRAPHY.cardTitle">{{ formatPrice(upcomingOrdersTotal) }} kr</span>
+            <span :class="TYPOGRAPHY.bodyTextMedium">{{ BOOKING_WORDS.billing.sums.total }}</span>
+            <span :class="TYPOGRAPHY.cardTitle">{{ formatKroner(upcomingOrdersTotal) }}</span>
           </div>
         </template>
       </UCard>
@@ -555,7 +557,7 @@ const dinnerBreakdownStats = computed(() => {
         <template #header>
           <div :class="COMPONENTS.adminEconomy.cardTitleRow">
             <UIcon :name="ICONS.clipboard" :size="SIZES.standardIconSize"/>
-            <h3 :class="TYPOGRAPHY.cardTitle">Faktureringsperioder</h3>
+            <h3 :class="TYPOGRAPHY.cardTitle">{{ BOOKING_WORDS.billing.titles.periods }}</h3>
           </div>
         </template>
 
@@ -564,7 +566,7 @@ const dinnerBreakdownStats = computed(() => {
             :columns="periodColumns"
             :get-row-id="rowIdOf"
             :date-accessor="(item) => item.period.start"
-            search-placeholder="Søg periode..."
+            :search-placeholder="BOOKING_WORDS.billing.search.period"
             :loading="isBillingPeriodsLoading || isCurrentPeriodLoading"
             :default-sort-desc="true"
         >
@@ -575,24 +577,24 @@ const dinnerBreakdownStats = computed(() => {
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
                 :size="SIZES.small"
-                aria-label="Vis detaljer"
-                @click="row.original.isVirtual ? row.toggleExpanded() : toggleSelection(row, row.original.id as number, periodParam, setPeriodParam)"
+                :aria-label="BUTTON_WORDS.openDetails"
+                @click="typeof row.original.id === 'number' ? toggleSelection(row, row.original.id, periodParam, setPeriodParam) : row.toggleExpanded()"
             />
           </template>
           <template #status-cell="{ row }">
             <UBadge v-if="row.original.isVirtual" :color="COLOR.success" :variant="NOISE.subtle" :size="SIZES.small">
               <UIcon :name="ICONS.ellipsisCircle" :class="SIZES.smallBadgeIcon"/>
-              Igangværende
+              {{ BOOKING_WORDS.billing.state.running }}
             </UBadge>
             <UBadge v-else :color="COLOR.neutral" :variant="NOISE.subtle" :size="SIZES.small">
               <UIcon :name="ICONS.check" :class="SIZES.smallBadgeIcon"/>
-              Afsluttet
+              {{ BOOKING_WORDS.billing.state.closed }}
             </UBadge>
           </template>
           <template #period-cell="{ row }">
             {{ formatDateRange(row.original.period) }}
           </template>
-          <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
+          <template #totalAmount-cell="{ row }">{{ formatKroner(row.original.totalAmount) }}</template>
           <template #control-cell="{ row }">
             <!-- The current period has no invoices to control yet -->
             <span v-if="row.original.isVirtual" :class="TEXT.neutral[400]">—</span>
@@ -635,13 +637,13 @@ const dinnerBreakdownStats = computed(() => {
                             :icon="householdRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                             square
                             :size="SIZES.small"
-                            aria-label="Vis transaktioner"
+                            :aria-label="BOOKING_WORDS.billing.show.transactions"
                             @click="householdRow.toggleExpanded()"
                         />
                       </template>
                       <template #pbsId-cell="{ row: householdRow }">{{ householdRow.original.pbsId }}</template>
                       <template #address-cell="{ row: householdRow }">{{ householdRow.original.address }}</template>
-                      <template #totalAmount-cell="{ row: householdRow }">{{ formatPrice(householdRow.original.totalAmount) }} kr</template>
+                      <template #totalAmount-cell="{ row: householdRow }">{{ formatKroner(householdRow.original.totalAmount) }}</template>
                       <template #control-cell>
                         <span :class="TEXT.neutral[400]">—</span>
                       </template>
@@ -696,13 +698,13 @@ const dinnerBreakdownStats = computed(() => {
                           :icon="invoiceRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                           square
                           :size="SIZES.small"
-                          aria-label="Vis transaktioner"
+                          :aria-label="BOOKING_WORDS.billing.show.transactions"
                           @click="toggleSelection(invoiceRow, invoiceRow.original.id, invoiceParam, setInvoiceParam)"
                       />
                     </template>
                     <template #pbsId-cell="{ row: invoiceRow }">{{ invoiceRow.original.pbsId }}</template>
                     <template #address-cell="{ row: invoiceRow }">{{ invoiceRow.original.address }}</template>
-                    <template #amount-cell="{ row: invoiceRow }">{{ formatPrice(invoiceRow.original.amount) }} kr</template>
+                    <template #amount-cell="{ row: invoiceRow }">{{ formatKroner(invoiceRow.original.amount) }}</template>
                     <template #control-cell="{ row: invoiceRow }">
                       <ControlBadge
                           :computed="invoiceRow.original.transactionSum"
@@ -715,29 +717,29 @@ const dinnerBreakdownStats = computed(() => {
                         <div v-if="invoiceTransactionsGrouped.length > 0 || isInvoiceTransactionsLoading" :class="[COMPONENTS.adminEconomy.invoiceFrame, BORDER.gray.frame]">
                           <div :class="[COMPONENTS.adminEconomy.invoiceHeader, COMPONENTS.economyTable.level2.header]">
                             <div :class="COMPONENTS.adminEconomy.invoiceTitle">
-                              <h4 :class="TYPOGRAPHY.cardTitle">PBS Faktura for {{ formatDate(selectedBillingPeriodDetail.paymentDate, 'MMMM yyyy') }}</h4>
-                              <p :class="TYPOGRAPHY.bodyTextMuted">{{ invoiceRow.original.address }} · PBS {{ invoiceRow.original.pbsId }}</p>
+                              <h4 :class="TYPOGRAPHY.cardTitle">{{ BOOKING_WORDS.billing.invoice(formatDate(selectedBillingPeriodDetail.paymentDate, 'MMMM yyyy')) }}</h4>
+                              <p :class="TYPOGRAPHY.bodyTextMuted">{{ invoiceRow.original.address }} · {{ HOUSEHOLD_WORDS.facts.pbs(invoiceRow.original.pbsId) }}</p>
                             </div>
                             <div :class="COMPONENTS.adminEconomy.statBoxes">
                               <div :class="[COMPONENTS.adminEconomy.statBox, COMPONENTS.economyTable.level2.statBox]">
                                 <UIcon :name="ICONS.calendar" :class="COMPONENTS.economyTable.level2.icon"/>
                                 <div :class="COMPONENTS.adminEconomy.statText">
                                   <p :class="COMPONENTS.adminEconomy.statValue">{{ dinnerBreakdownStats.dinnerCount }}</p>
-                                  <p :class="TYPOGRAPHY.finePrintMuted">Middage</p>
+                                  <p :class="TYPOGRAPHY.finePrintMuted">{{ BOOKING_WORDS.billing.stats.dinners }}</p>
                                 </div>
                               </div>
                               <div :class="[COMPONENTS.adminEconomy.statBox, COMPONENTS.economyTable.level2.statBox]">
                                 <UIcon :name="ICONS.dinner" :class="COMPONENTS.economyTable.level2.icon"/>
                                 <div :class="COMPONENTS.adminEconomy.statText">
                                   <p :class="COMPONENTS.adminEconomy.statValue">{{ dinnerBreakdownStats.ticketCounts }}</p>
-                                  <p :class="TYPOGRAPHY.finePrintMuted">Kuverter</p>
+                                  <p :class="TYPOGRAPHY.finePrintMuted">{{ BOOKING_WORDS.billing.stats.tickets }}</p>
                                 </div>
                               </div>
                               <div :class="[COMPONENTS.adminEconomy.statBox, COMPONENTS.economyTable.level2.statBox]">
                                 <UIcon :name="ICONS.shoppingCart" :class="COMPONENTS.economyTable.level2.icon"/>
                                 <div :class="COMPONENTS.adminEconomy.statText">
-                                  <p :class="COMPONENTS.adminEconomy.statValue">{{ formatPrice(dinnerBreakdownStats.total) }} kr</p>
-                                  <p :class="TYPOGRAPHY.finePrintMuted">Total</p>
+                                  <p :class="COMPONENTS.adminEconomy.statValue">{{ formatKroner(dinnerBreakdownStats.total) }}</p>
+                                  <p :class="TYPOGRAPHY.finePrintMuted">{{ BOOKING_WORDS.billing.stats.total }}</p>
                                 </div>
                               </div>
                             </div>
@@ -763,12 +765,12 @@ const dinnerBreakdownStats = computed(() => {
                                 :icon="dinnerRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                                 square
                                 :size="SIZES.small"
-                                aria-label="Vis ordrer"
+                                :aria-label="BOOKING_WORDS.billing.show.orders"
                                 @click="dinnerRow.toggleExpanded()"
                             />
                           </template>
                           <template #date-cell="{ row: dinnerRow }">{{ formatDate(dinnerRow.original.dinnerEvent.date) }}</template>
-                          <template #totalAmount-cell="{ row: dinnerRow }">{{ formatPrice(dinnerRow.original.totalAmount) }} kr</template>
+                          <template #totalAmount-cell="{ row: dinnerRow }">{{ formatKroner(dinnerRow.original.totalAmount) }}</template>
 
                           <template #expanded="{ row: dinnerRow }">
                             <div :class="[COMPONENTS.adminEconomy.nestedList, BG.panel]">
@@ -796,19 +798,19 @@ const dinnerBreakdownStats = computed(() => {
                     <template #footer>
                       <div :class="COMPONENTS.adminEconomy.periodFooter">
                         <span :class="TYPOGRAPHY.bodyTextMedium">
-                          Total: {{ selectedBillingPeriodDetail.invoices.length }} husstande
+                          {{ BOOKING_WORDS.billing.sums.households(selectedBillingPeriodDetail.invoices.length) }}
                         </span>
                         <div :class="COMPONENTS.adminEconomy.periodFigures">
                           <span :class="TYPOGRAPHY.cardTitle">
-                            {{ formatPrice(selectedBillingPeriodDetail.totalAmount) }} kr
+                            {{ formatKroner(selectedBillingPeriodDetail.totalAmount) }}
                           </span>
                           <span v-if="billingPeriodControlSum?.isValid" :class="COMPONENTS.adminEconomy.controlSumValid">
                             <UIcon :name="ICONS.robotHappy" :class="SIZES.smallBadgeIcon"/>
-                            {{ formatPrice(billingPeriodControlSum.computed) }} kr
+                            {{ formatKroner(billingPeriodControlSum.computed) }}
                           </span>
                           <span v-else-if="billingPeriodControlSum" :class="COMPONENTS.adminEconomy.controlSumInvalid">
                             <UIcon :name="ICONS.robotDead" :class="SIZES.smallBadgeIcon"/>
-                            {{ formatPrice(billingPeriodControlSum.computed) }} kr
+                            {{ formatKroner(billingPeriodControlSum.computed) }}
                           </span>
                         </div>
                       </div>
@@ -818,7 +820,7 @@ const dinnerBreakdownStats = computed(() => {
                   </CostEntry>
 
                   <div :class="COMPONENTS.adminEconomy.shareRow">
-                    <span :class="TYPOGRAPHY.bodyTextMuted">Del med bogholder:</span>
+                    <span :class="TYPOGRAPHY.bodyTextMuted">{{ BOOKING_WORDS.billing.share }}</span>
                     <ShareLinksPopover :share-token="selectedBillingPeriodDetail.shareToken"/>
                   </div>
                 </template>

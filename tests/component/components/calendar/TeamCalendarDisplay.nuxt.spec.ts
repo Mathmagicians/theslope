@@ -3,10 +3,11 @@ import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {enableAutoUnmount} from '@vue/test-utils'
 import TeamCalendarDisplay from '~/components/calendar/TeamCalendarDisplay.vue'
 import {RAINBOW, getRainbowBand} from '~/composables/useTheSlopeDesignSystem'
-import {mountWithTooltipProvider, findAllByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findAllByTestId, resetStores, itemAt} from '~~/tests/component/testHelpers'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
+import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DateRange} from '~/types/dateTypes'
 import CalendarLegend from '~/components/calendar/CalendarLegend.vue'
 import {DATE_WORDS} from '~/config/dateWords'
@@ -32,7 +33,7 @@ describe('TeamCalendarDisplay legend', () => {
         resetStores()
     })
 
-    const mount = (shown: CookingTeamDisplay[], seasonTeams: CookingTeamDisplay[] = shown, dinnerEvents = [] as ReturnType<typeof DinnerEventFactory.defaultDinnerEventDisplay>[], holidays: DateRange[] = []) =>
+    const mount = (shown: CookingTeamDisplay[], seasonTeams: CookingTeamDisplay[] = shown, dinnerEvents: DinnerEventDisplay[] = [], holidays: DateRange[] = []) =>
         mountWithTooltipProvider(TeamCalendarDisplay, {
             props: {seasonDates, teams: shown, seasonTeams, dinnerEvents, holidays},
             isMd: true
@@ -44,7 +45,7 @@ describe('TeamCalendarDisplay legend', () => {
 
         // Listed from the highest number down
         const badges = findAllByTestId(wrapper, 'calendar-legend-badge')
-        teams.forEach((_team, position) => expect(badges[position]!.classes()).toEqual(expect.arrayContaining(bandOf(teams.length - position))))
+        teams.forEach((_team, position) => expect(itemAt(badges, position).classes()).toEqual(expect.arrayContaining(bandOf(teams.length - position))))
 
         // What a badge renders of the rainbow: its own classes, kept to the ones a stop names
         const stopClasses = new Set(RAINBOW.flatMap(stop => stop.split(' ')))
@@ -60,13 +61,13 @@ describe('TeamCalendarDisplay legend', () => {
             SeasonFactory.defaultCookingTeamDisplay({id: 2, name: 'Holdet uden tal'}),
             SeasonFactory.defaultCookingTeamDisplay({id: 3, name: 'Madhold 3 - S1'})
         ]
-        const renamed = season[1]!
+        const renamed = itemAt(season, 1)
         const dinner = {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 7, date: new Date('2026-01-15'), cookingTeamId: renamed.id}
 
         const wrapper = await mount([renamed], season, [dinner])
 
-        expect(findAllByTestId(wrapper, 'calendar-legend-badge')[0]!.classes()).toEqual(expect.arrayContaining(bandOf(2)))
-        const day = findAllByTestId(wrapper, 'team-calendar-day')[0]!
+        expect(itemAt(findAllByTestId(wrapper, 'calendar-legend-badge'), 0).classes()).toEqual(expect.arrayContaining(bandOf(2)))
+        const day = itemAt(findAllByTestId(wrapper, 'team-calendar-day'), 0)
         expect(day.classes()).toEqual(expect.arrayContaining(bandOf(2)))
     })
 

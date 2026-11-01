@@ -6,7 +6,7 @@ import type {
 } from '~/composables/useCoreValidation'
 import {useBookingValidation, type ScaffoldResult, type DinnerMode} from '~/composables/useBookingValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
-import {useBooking, countTotals} from '~/composables/useBooking'
+import {useBooking} from '~/composables/useBooking'
 import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 /**
@@ -19,7 +19,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
     // DEPENDENCIES
     const {storeAsyncData, loadOrThrow, apiRequest, toastSaved, notFoundToast} = useApiHandler()
     const now = useClock()
-    const {formatScaffoldResult, sumScaffoldResults} = useBooking()
+    const {formatScaffoldResult} = useBooking()
     const {HouseholdDisplaySchema, HouseholdDetailSchema, serializeWeekDayMap} = useCoreValidation()
     const {InhabitantUpdateResponseSchema, HouseholdUpdateResponseSchema} = useBookingValidation()
 
@@ -154,25 +154,23 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const preferencesUrl = (inhabitantId: number) => `/api/household/inhabitants/${inhabitantId}/preferences`
 
     /**
-     * Update inhabitant dinner preferences
-     * Uses household endpoint (not admin) - requires household access
-     * @param inhabitantId - ID of the inhabitant to update
-     * @param preferences - WeekDayMap of DinnerMode preferences
+     * The preference save of the inhabitant, or with `allInhabitants` of every inhabitant of its household in one run
+     * (power mode); the reply's scaffold result covers the household
      */
-    const updateInhabitantPreferences = async (inhabitantId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean) => {
-        console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}${adminBypass ? ' (admin bypass)' : ''}`)
+    const savePreferences = async (inhabitantId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean, allInhabitants: boolean, action: string) => {
+        console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for ${allInhabitants ? 'the household of ' : ''}inhabitant ${inhabitantId}${adminBypass ? ' (admin bypass)' : ''}`)
 
         // The week map travels as it is; the endpoint serializes it (ADR-010)
         const result = await useBookingsStore().writeBookings(() => apiRequest(preferencesUrl(inhabitantId), {
             method: 'POST',
             body: {dinnerPreferences: preferences},
-            query: adminBypassQuery(adminBypass),
+            query: {...adminBypassQuery(adminBypass), ...allInhabitantsQuery(allInhabitants)},
             schema: InhabitantUpdateResponseSchema,
-            action: 'updateInhabitantPreferences'
+            action
         }))
 
         lastPreferenceResult.value = result.scaffoldResult
-        console.info(`🏠 > HOUSEHOLDS_STORE > Preferences updated for inhabitant ${inhabitantId}: ${formatScaffoldResult(result.scaffoldResult)}`)
+        console.info(`🏠 > HOUSEHOLDS_STORE > Preferences updated for ${allInhabitants ? 'the household of ' : ''}inhabitant ${inhabitantId}: ${formatScaffoldResult(result.scaffoldResult)}`)
 
         if (selectedHouseholdId.value) {
             await refreshSelectedHousehold()
@@ -181,71 +179,26 @@ export const useHouseholdsStore = defineStore("Households", () => {
         return result.scaffoldResult
     }
 
-    /**
-     * Update all inhabitants' dinner preferences in a household (power mode)
-     * Uses household endpoint (not admin) - requires household access
-     * @param householdId - ID of the household
-     * @param preferences - WeekDayMap of DinnerMode preferences to apply to all inhabitants
-     */
-    const updateAllInhabitantPreferences = async (householdId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean) => {
-        const household = households.value.find(h => h.id === householdId)
-        if (!household) throw new Error(`Household ${householdId} not found`)
+    /** Update inhabitant dinner preferences through the household endpoint (not admin), which requires household access */
+    const updateInhabitantPreferences = (inhabitantId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean) =>
+        savePreferences(inhabitantId, preferences, adminBypass, false, 'updateInhabitantPreferences')
 
-        console.info(`🏠 > HOUSEHOLDS_STORE > Power mode: Updating preferences for all ${household.inhabitants.length} inhabitants in household ${householdId}${adminBypass ? ' (admin bypass)' : ''}`)
-
-        // Update all inhabitants SEQUENTIALLY to avoid race conditions in scaffolding
-        // Each update triggers scaffoldPrebookings for the same household - parallel execution
-        // causes FK constraint errors when multiple scaffolds try to delete the same orders
-        const results = await useBookingsStore().writeBookings(async () => {
-            const responses = []
-            for (const inhabitant of household.inhabitants) {
-                responses.push(await apiRequest(preferencesUrl(inhabitant.id), {
-                    method: 'POST',
-                    body: {dinnerPreferences: preferences},
-                    query: adminBypassQuery(adminBypass),
-                    schema: InhabitantUpdateResponseSchema,
-                    action: 'updateAllInhabitantPreferences'
-                }))
-            }
-            return responses
-        })
-
-        // Refresh the selected household once after all updates
-        if (selectedHouseholdId.value === householdId) {
-            await refreshSelectedHousehold()
-        }
-
-        // Power mode updates a single household
-        const aggregatedResult = {...sumScaffoldResults(results.map(r => r.scaffoldResult)), households: 1}
-
-        lastPreferenceResult.value = aggregatedResult
-        console.info(`🏠 > HOUSEHOLDS_STORE > Power mode complete: ${household.inhabitants.length} inhabitants, scaffold: ${formatScaffoldResult(aggregatedResult)}`)
-
-        return aggregatedResult
-    }
+    /** Power mode: the draft for every inhabitant of the inhabitant's household, saved through the inhabitant's path */
+    const updateAllInhabitantPreferences = (inhabitantId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean) =>
+        savePreferences(inhabitantId, preferences, adminBypass, true, 'updateAllInhabitantPreferences')
 
     /**
-     * What a save of the draft preferences would do, read without writing: the dry run (GET) of each inhabitant the
-     * save writes, combined. One inhabitant, or every inhabitant of the household in power mode
+     * What a save of the draft preferences would do, read without writing: the save's dry run (GET), for the inhabitant
+     * or with `allInhabitants` for every inhabitant of its household (power mode)
      */
-    const previewPreferences = async (inhabitantIds: number[], preferences: WeekDayMap<DinnerMode>): Promise<ScaffoldResult> => {
-        console.info(`🏠 > HOUSEHOLDS_STORE > Previewing preferences for inhabitants ${inhabitantIds.join(', ')}`)
-        // A preview writes nothing, so the previews run side by side where the saves run one after another
-        const responses = await Promise.all(inhabitantIds.map(inhabitantId => apiRequest(preferencesUrl(inhabitantId), {
-            query: {dinnerPreferences: serializeWeekDayMap(preferences)},
+    const previewPreferences = async (inhabitantId: number, preferences: WeekDayMap<DinnerMode>, allInhabitants: boolean): Promise<ScaffoldResult> => {
+        console.info(`🏠 > HOUSEHOLDS_STORE > Previewing preferences for ${allInhabitants ? 'the household of ' : ''}inhabitant ${inhabitantId}`)
+        const {scaffoldResult} = await apiRequest(preferencesUrl(inhabitantId), {
+            query: {dinnerPreferences: serializeWeekDayMap(preferences), ...allInhabitantsQuery(allInhabitants)},
             schema: InhabitantUpdateResponseSchema,
             action: 'previewPreferences'
-        })))
-        // One person's preview is the save's whole result, the other members' corrections included
-        if (responses.length === 1) return responses[0]!.scaffoldResult
-        // In power mode an inhabitant's lines come from the preview holding that inhabitant's draft; another member's
-        // preview decides them by the stored preferences
-        const ownLines = responses.map(({scaffoldResult}, index) => {
-            const results = scaffoldResult.results.filter(line => line.inhabitantId === inhabitantIds[index])
-            return {...scaffoldResult, results, totals: countTotals(results)}
         })
-        // The inhabitants share one household
-        return {...sumScaffoldResults(ownLines), households: 1}
+        return scaffoldResult
     }
 
     /**

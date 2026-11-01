@@ -7,6 +7,9 @@ import {nextTick, ref, h, type VNodeChild} from 'vue'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 import {mountWithTooltipProvider, resetStores, findLoadingRow, findOpenRows, clickByTestId} from '~~/tests/component/testHelpers'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
+
+const WORDS = HOUSEHOLD_WORDS.inhabitantSelector
 
 enableAutoUnmount(afterEach)
 
@@ -46,9 +49,9 @@ describe('InhabitantSelector', () => {
         const wrapper = await mount()
         const text = wrapper.text()
         inhabitants.forEach(i => expect(text).toContain(`${i.name} ${i.lastName}`))
-        expect(text).toContain('Status')
-        expect(text).toContain('Handling')
-        expect(wrapper.find('input').attributes('placeholder')).toContain('Søg efter navn')
+        expect(text).toContain(WORDS.columns.status)
+        expect(text).toContain(WORDS.columns.action)
+        expect(wrapper.find('input').attributes('placeholder')).toBe(WORDS.search)
     })
 
     it('renders the given status and actions headers', async () => {
@@ -74,7 +77,7 @@ describe('InhabitantSelector', () => {
 
     // The table's own empty text renders through UTable's #empty slot
     it.each([
-        ['no inhabitants', [], undefined, 'Ingen beboere tilgængelige'],
+        ['no inhabitants', [], undefined, WORDS.empty],
         ['search yields no results', inhabitants, 'zzz-no-match', 'Ingen beboere fundet']
     ])('empty state: %s shows the empty text instead of inhabitant names', async (_, data, searchQuery, emptyText) => {
         const wrapper = await mount({inhabitants: data})
@@ -93,7 +96,7 @@ describe('InhabitantSelector', () => {
         const wrapper = await mount({inhabitants: [], loading})
         expect(findLoadingRow(wrapper).exists()).toBe(loadingRow)
         expect(wrapper.text().includes('Henter beboere...')).toBe(loadingRow)
-        expect(wrapper.text().includes('Ingen beboere tilgængelige')).toBe(emptyText)
+        expect(wrapper.text().includes(WORDS.empty)).toBe(emptyText)
     })
 
     // ========== SORT TOGGLE ==========

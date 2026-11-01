@@ -9,6 +9,7 @@ import {formatMonthYear} from '~/utils/date'
 import {da} from '@nuxt/ui/locale'
 import {addMonths, differenceInCalendarMonths} from 'date-fns'
 import {PREF_TEST_IDS} from '~~/tests/component/components/user/userPreferencesTestIds'
+import {useCoreValidation, type UserDetail} from '~/composables/useCoreValidation'
 
 const headers = {'Content-Type': 'application/json'}
 
@@ -183,32 +184,30 @@ async function selectDropdownOption(
     await option.click()
 }
 
+/** The session as the browser reads it (GET /api/_auth/session), unparsed */
+async function getSession(context: BrowserContext): Promise<Record<string, unknown>> {
+    const response = await context.request.get('/api/_auth/session', {headers})
+    expect(response.status()).toBe(200)
+    return await response.json()
+}
+
+/** The user snapshot the session carries */
+async function getSessionUser(context: BrowserContext): Promise<UserDetail> {
+    const {UserDetailSchema} = useCoreValidation()
+    return UserDetailSchema.parse((await getSession(context)).user)
+}
+
 /**
- * Fetch current user's session info from nuxt-auth-utils
- * Use this to get the authenticated user's householdId and inhabitantId
- *
- * @param context - Authenticated browser context
- * @returns Object with householdId and inhabitantId from session
+ * The signed-in user's ids and household, from the session
  *
  * @example
  * const { householdId, inhabitantId } = await getSessionUserInfo(context)
  */
 async function getSessionUserInfo(context: BrowserContext): Promise<{ userId: number, userEmail: string, householdId: number, inhabitantId: number, householdShortname: string, householdPbsId: number }> {
-    const response = await context.request.get('/api/_auth/session', { headers })
-    expect(response.status()).toBe(200)
-    const session = await response.json()
-    const userId = session.user?.id
-    const userEmail = session.user?.email
-    const householdId = session.user?.Inhabitant?.householdId
-    const inhabitantId = session.user?.Inhabitant?.id
-    const householdShortname = session.user?.Inhabitant?.household?.shortName
-    const householdPbsId = session.user?.Inhabitant?.household?.pbsId
-    expect(userId, 'Session user must have userId').toBeDefined()
-    expect(householdId, 'Session user must have householdId').toBeDefined()
-    expect(inhabitantId, 'Session user must have inhabitantId').toBeDefined()
-    expect(householdShortname, 'Session user must have householdShortname').toBeDefined()
-    expect(householdPbsId, 'Session user must have householdPbsId').toBeDefined()
-    return { userId, userEmail, householdId, inhabitantId, householdShortname, householdPbsId }
+    const {id: userId, email: userEmail, Inhabitant: inhabitant} = await getSessionUser(context)
+    expect(inhabitant, 'Session user must have an inhabitant').toBeDefined()
+    const {id: inhabitantId, householdId, household} = inhabitant!
+    return {userId, userEmail, householdId, inhabitantId, householdShortname: household.shortName, householdPbsId: household.pbsId}
 }
 
 /**
@@ -379,6 +378,19 @@ const readDateField = async (scope: Locator, field: 'start' | 'end'): Promise<Da
 // The phone every screen fits (iPhone X)
 const PHONE_VIEWPORT = {width: 375, height: 812}
 
+/** Runs every cleanup step, whatever another step does; the steps that fail fail the hook together */
+const attemptAll = async (what: string, steps: (() => Promise<unknown>)[]): Promise<void> => {
+    const failures: unknown[] = []
+    for (const step of steps) {
+        try {
+            await step()
+        } catch (error) {
+            failures.push(error)
+        }
+    }
+    if (failures.length > 0) throw new AggregateError(failures, `${what} failed`)
+}
+
 const testHelpers = {
     salt,
     saltedId,
@@ -393,6 +405,8 @@ const testHelpers = {
     pollUntil,
     doScreenshot,
     selectDropdownOption,
+    getSession,
+    getSessionUser,
     getSessionUserInfo,
     assertNoOrdersWithOrphanPrices,
     daysFromNow,
@@ -414,7 +428,8 @@ const testHelpers = {
     openPreferences,
     savePreferences,
     fillDateField,
-    readDateField
+    readDateField,
+    attemptAll
 }
 
 export default testHelpers

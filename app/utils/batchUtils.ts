@@ -6,11 +6,10 @@ import {z} from 'zod'
  * @returns function that chunks an array into batches of specified size
  */
 export const chunkArray = <T>(size: number) => (arr: T[]): T[][] =>
-    arr.reduce<T[][]>((chunks, item, i) =>
-        i % size === 0
-            ? [...chunks, [item]]
-            : [...chunks.slice(0, -1), [...chunks[chunks.length - 1]!, item]]
-    , [])
+    Array.from({length: Math.ceil(arr.length / size)}, (_, i) => arr.slice(i * size, (i + 1) * size))
+
+/** A list of one item at least: a group of groupBy holds the item that opened it */
+export type NonEmpty<T> = [T, ...T[]]
 
 /**
  * Curried groupBy utility - groups array items by a key function
@@ -27,19 +26,19 @@ export const chunkArray = <T>(size: number) => (arr: T[]): T[][] =>
  * ```
  */
 export const groupBy = <T, K extends string | number>(getKey: (item: T) => K) =>
-    (items: T[]): Map<K, T[]> =>
+    (items: T[]): Map<K, NonEmpty<T>> =>
         items.reduce((map, item) => {
             const key = getKey(item)
             const group = map.get(key)
             if (group) group.push(item)
             else map.set(key, [item])
             return map
-        }, new Map<K, T[]>())
+        }, new Map<K, NonEmpty<T>>())
 
 /** Lines from rows: the rows with one key make one line, the lines in the given order */
 export const linesBy = <Row, Line, Key extends string | number>(
     keyOf: (row: Row) => Key,
-    toLine: (rows: Row[], key: Key) => Line,
+    toLine: (rows: NonEmpty<Row>, key: Key) => Line,
     order: (a: Line, b: Line) => number
 ) => (rows: Row[]): Line[] =>
     Array.from(groupBy(keyOf)(rows), ([key, group]) => toLine(group, key)).sort(order)
@@ -61,6 +60,52 @@ export type PruneAndCreateResult<E, I = E> = {
     [Bucket in ReconciliationBucket]: Bucket extends typeof ReconciliationBucketSchema.enum.delete ? E[] : I[]
 }
 
+// The key of an item, undefined when it has none: such an incoming item is created, such an existing one stays
+type KeyOf<T, K> = (item: T) => K | undefined
+type Reconciler<E, I> = (existing: E[]) => (incoming: I[]) => PruneAndCreateResult<E, I>
+
+// The reconciliation by a key for each side
+const reconcileByKeys = <E, I, K>(
+    getExistingKey: KeyOf<E, K>,
+    getIncomingKey: KeyOf<I, K>,
+    isEqual: (existing: E, incoming: I) => boolean
+): Reconciler<E, I> => (existing) => (incoming) => {
+    const existingByKey = existing.reduce(
+        (map, item) => {
+            const key = getExistingKey(item)
+            return key !== undefined ? map.set(key, item) : map
+        },
+        new Map<K, E>()
+    )
+
+    const { result, seenKeys } = incoming.reduce<{result: PruneAndCreateResult<E, I>, seenKeys: Set<K>}>(
+        (acc, item) => {
+            const key = getIncomingKey(item)
+            if (key === undefined) {
+                return { ...acc, result: { ...acc.result, create: [...acc.result.create, item] } }
+            }
+            const existingItem = existingByKey.get(key)
+            if (!existingItem) {
+                return { ...acc, result: { ...acc.result, create: [...acc.result.create, item] } }
+            }
+            const newSeenKeys = acc.seenKeys.add(key)
+            if (isEqual(existingItem, item)) {
+                return { seenKeys: newSeenKeys, result: { ...acc.result, idempotent: [...acc.result.idempotent, item] } }
+            }
+            return { seenKeys: newSeenKeys, result: { ...acc.result, update: [...acc.result.update, item] } }
+        },
+        { result: { create: [], update: [], idempotent: [], delete: [] }, seenKeys: new Set<K>() }
+    )
+
+    return {
+        ...result,
+        delete: existing.filter(item => {
+            const key = getExistingKey(item)
+            return key !== undefined && !seenKeys.has(key)
+        })
+    }
+}
+
 /**
  * Curried function to compare two arrays and categorize items into create/update/idempotent/delete
  *
@@ -68,9 +113,9 @@ export type PruneAndCreateResult<E, I = E> = {
  * @template I - Type of incoming items (used in create/update/idempotent arrays)
  * @template K - Type of the key used for comparison
  *
- * @param getKey - Extract unique key from existing item (E), also used for incoming if getIncomingKey not provided
+ * @param getKey - The unique key of an item: without getIncomingKey it reads both sides, so it takes E and I
  * @param isEqual - Compare existing item (E) with incoming item (I) for equality
- * @param getIncomingKey - Optional: Extract key from incoming item (I) when key location differs from E
+ * @param getIncomingKey - The key of an incoming item (I) where it lives elsewhere than on an existing one; getKey then reads E alone
  * @returns Curried function that takes existing (E[]) and incoming (I[]) arrays
  *
  * @example
@@ -81,7 +126,7 @@ export type PruneAndCreateResult<E, I = E> = {
  *     (a, b) => a.price === b.price && a.ticketType === b.ticketType
  * )
  *
- * // Different types (E = OrderDisplay with id, I = OrderCreateWithPrice without id)
+ * // Different types (E = OrderDisplay with id, I = OrderCreateWithPrice without id): one key reads both
  * const reconcilePreBookings = pruneAndCreate<OrderDisplay, OrderCreateWithPrice, string>(
  *     (order) => `${order.inhabitantId}-${order.dinnerEventId}`,
  *     (existing, incoming) => existing.dinnerMode === incoming.dinnerMode
@@ -98,48 +143,20 @@ export type PruneAndCreateResult<E, I = E> = {
  * )
  * ```
  */
-export const pruneAndCreate = <E, I = E, K = number | string>(
-    getKey: (item: E) => K | undefined,
-    isEqual: (existing: E, incoming: I) => boolean = () => false,
-    getIncomingKey?: (item: I) => K | undefined
-) => (existing: E[]) => (incoming: I[]): PruneAndCreateResult<E, I> => {
-    const getExistingKey = getKey
-    const incomingKeyFn = getIncomingKey ?? (getKey as unknown as (item: I) => K | undefined)
-
-    const existingByKey = existing.reduce(
-        (map, item) => {
-            const key = getExistingKey(item)
-            return key !== undefined ? map.set(key, item) : map
-        },
-        new Map<K, E>()
-    )
-
-    const { result, seenKeys } = incoming.reduce(
-        (acc, item) => {
-            const key = incomingKeyFn(item)
-            if (key === undefined) {
-                return { ...acc, result: { ...acc.result, create: [...acc.result.create, item] } }
-            }
-            const existingItem = existingByKey.get(key)
-            if (!existingItem) {
-                return { ...acc, result: { ...acc.result, create: [...acc.result.create, item] } }
-            }
-            const newSeenKeys = acc.seenKeys.add(key)
-            if (isEqual(existingItem, item)) {
-                return { seenKeys: newSeenKeys, result: { ...acc.result, idempotent: [...acc.result.idempotent, item] } }
-            }
-            return { seenKeys: newSeenKeys, result: { ...acc.result, update: [...acc.result.update, item] } }
-        },
-        { result: { create: [], update: [], idempotent: [], delete: [] } as PruneAndCreateResult<E, I>, seenKeys: new Set<K>() }
-    )
-
-    return {
-        ...result,
-        delete: existing.filter(item => {
-            const key = getExistingKey(item)
-            return key !== undefined && !seenKeys.has(key)
-        })
-    }
+export function pruneAndCreate<E, I = E, K = number | string>(
+    getKey: KeyOf<E | I, K>,
+    isEqual?: (existing: E, incoming: I) => boolean
+): Reconciler<E, I>
+export function pruneAndCreate<E, I, K = number | string>(
+    getKey: KeyOf<E, K>,
+    isEqual: (existing: E, incoming: I) => boolean,
+    getIncomingKey: KeyOf<I, K>
+): Reconciler<E, I>
+export function pruneAndCreate<E, I, K>(
+    ...args: [KeyOf<E | I, K>, ((existing: E, incoming: I) => boolean)?] | [KeyOf<E, K>, (existing: E, incoming: I) => boolean, KeyOf<I, K>]
+): Reconciler<E, I> {
+    const isEqual = args[1] ?? (() => false)
+    return args.length === 3 ? reconcileByKeys(args[0], args[2], isEqual) : reconcileByKeys(args[0], args[0], isEqual)
 }
 
 /**

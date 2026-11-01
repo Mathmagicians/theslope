@@ -17,7 +17,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
  * a separate (non-chef) team to verify 403, and a teamless dinner to verify 404.
  */
 
-const {validatedBrowserContext, memberValidatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo, dinnerStartOf} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo, dinnerStartOf, attemptAll} = testHelpers
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -39,8 +39,10 @@ test.describe('Chef Dinner Endpoint', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
-        await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
+        await attemptAll('Chef Dinner Endpoint cleanup', [
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds),
+            () => AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
+        ]).finally(() => context.close())
     })
 
     // A SCHEDULED dinner on a team of its own with the member as its chef

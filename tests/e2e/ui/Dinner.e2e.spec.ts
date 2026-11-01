@@ -12,7 +12,7 @@ import {isSameDay} from 'date-fns'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, expectHydratedWithoutMismatch, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom, waitForApi, pageCalendarToMonth} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, expectHydratedWithoutMismatch, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom, waitForApi, pageCalendarToMonth, attemptAll} = testHelpers
 const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
 const {findTicketPriceByType} = useTicket()
 
@@ -221,8 +221,10 @@ test.describe('Dinner Page URL Navigation', () => {
         test.afterAll(async ({browser}) => {
             const adminContext = await validatedBrowserContext(browser)
             // Deleting an inhabitant cascades its orders and allergies
-            await Promise.all(createdInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(adminContext, id)))
-            await AllergyFactory.cleanupAllergyTypes(adminContext, createdAllergyTypeIds)
+            await attemptAll('Ticket allergies cleanup', [
+                ...createdInhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(adminContext, id)),
+                () => AllergyFactory.cleanupAllergyTypes(adminContext, createdAllergyTypeIds)
+            ]).finally(() => adminContext.close())
         })
 
         const bookingRow = (page: Page, inhabitantId: number) =>

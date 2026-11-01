@@ -4,7 +4,7 @@ import type {APIResponse, BrowserContext} from "@playwright/test"
 import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
 import type {HouseholdDetail, HouseholdDisplay, InhabitantDetail, InhabitantCreate, InhabitantUpdate, UserCreate, UserDisplay} from "~/composables/useCoreValidation"
-import {useCoreValidation} from "~/composables/useCoreValidation"
+import {useCoreValidation, adminBypassQuery, allInhabitantsQuery} from "~/composables/useCoreValidation"
 import {useBookingValidation, type InhabitantUpdateResponse, type HouseholdUpdateResponse, type DinnerMode as DinnerModeType} from "~/composables/useBookingValidation"
 import type {WeekDayMap} from "~/types/dateTypes"
 import {dateToWeekDay} from "~/utils/season"
@@ -494,6 +494,7 @@ export class HouseholdFactory {
      * @param seasonId - Optional seasonId query param for parallel-safe testing
      * @param assertResponse - Optional callback to assert response properties
      * @param adminBypass - An admin changing another household's preferences
+     * @param allInhabitants - Power mode: the preferences for every inhabitant of the inhabitant's household
      */
     static readonly updateInhabitantPreferences = async (
         context: BrowserContext,
@@ -502,11 +503,12 @@ export class HouseholdFactory {
         expectedStatus: number = 200,
         seasonId?: number,
         assertResponse?: (response: InhabitantUpdateResponse) => void,
-        adminBypass: boolean = false
+        adminBypass: boolean = false,
+        allInhabitants: boolean = false
     ): Promise<InhabitantUpdateResponse | null> => {
         const query = new URLSearchParams()
         if (seasonId !== undefined) query.append('seasonId', String(seasonId))
-        if (adminBypass) query.append('adminBypass', 'true')
+        HouseholdFactory.appendFlags(query, {...adminBypassQuery(adminBypass), ...allInhabitantsQuery(allInhabitants)})
 
         const response = await HouseholdFactory.postInhabitantPreferences(context, inhabitantId, {dinnerPreferences}, expectedStatus, query)
         if (response && assertResponse) {
@@ -532,18 +534,28 @@ export class HouseholdFactory {
 
     /**
      * Preview a preference change (GET /api/household/inhabitants/[id]/preferences): the reply the save would give, read
-     * with nothing written; any member reads any household's preview. The draft travels serialized in the query
+     * with nothing written; any member reads any household's preview. The draft travels serialized in the query;
+     * `allInhabitants` previews power mode, the draft for every inhabitant of the household
      */
     static readonly previewInhabitantPreferences = async (
         context: BrowserContext,
         inhabitantId: number,
         dinnerPreferences: WeekDayMap<DinnerModeType>,
         seasonId?: number,
-        expectedStatus: number = 200
+        expectedStatus: number = 200,
+        allInhabitants: boolean = false
     ): Promise<InhabitantUpdateResponse | null> => {
         const query = new URLSearchParams({dinnerPreferences: serializeWeekDayMap(dinnerPreferences)})
         if (seasonId !== undefined) query.append('seasonId', String(seasonId))
+        HouseholdFactory.appendFlags(query, allInhabitantsQuery(allInhabitants))
         return HouseholdFactory.readInhabitantUpdate(await context.request.get(`${HOUSEHOLD_ENDPOINT}/inhabitants/${inhabitantId}/preferences?${query}`), expectedStatus)
+    }
+
+    /** A request's flags into its query, as the store sends them: a set flag carries its value, an unset one stays out */
+    private static readonly appendFlags = (query: URLSearchParams, flags: Record<string, string | undefined>) => {
+        Object.entries(flags).forEach(([key, value]) => {
+            if (value !== undefined) query.append(key, value)
+        })
     }
 
     /** The preference endpoint's reply, its status asserted; parsed when it answers 200 */

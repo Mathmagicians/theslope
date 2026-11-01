@@ -5,9 +5,10 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 const {memberUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated, waitForApi} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated, waitForApi, attemptAll} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
@@ -72,9 +73,9 @@ test.describe('HouseholdCard - Members and Weekday Preferences', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        // Clean up ALL test inhabitants (not the household - it's the member's own); cleanup accepts a 404
-        await Promise.all(createdInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(context, id)))
-        // NOTE: Singleton active season is cleaned up by global teardown, not here
+        // The member's household stays; the spec's inhabitants go. The singleton season goes in global teardown
+        await attemptAll('HouseholdCard cleanup', createdInhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(context, id)))
+            .finally(() => context.close())
     })
 
     test('GIVEN household with members of different ages WHEN viewing members tab THEN each member displays correct ticket type', async ({page}) => {
@@ -114,7 +115,7 @@ test.describe('HouseholdCard - Members and Weekday Preferences', () => {
 
         // Wait for edit panel to be visible (UFormField renders label as generic element, not heading)
         // Exact: the sibling members' names start with Scrooge's
-        const editPanel = page.getByText(`Opdater fællesspisning præferencer for ${salt('Anders', testSalt)}`, {exact: true})
+        const editPanel = page.getByText(HOUSEHOLD_WORDS.preferences.editor.inhabitant(salt('Anders', testSalt)), {exact: true})
         await expect(editPanel, 'Edit panel should be visible after clicking edit button').toBeVisible()
 
         // WHEN: Change Monday to TAKEAWAY
@@ -175,9 +176,9 @@ test.describe('HouseholdCard - Members and Weekday Preferences', () => {
         expect(preferences!.torsdag).toBe(DinnerMode.DINEIN)
         expect(preferences!.fredag).toBe(DinnerMode.NONE)
 
-        // THEN: Verify UI collapsed back to VIEW mode once the save lands: Scrooge's toggle reads Rediger præferencer again
+        // THEN: Verify UI collapsed back to VIEW mode once the save lands: Scrooge's toggle reads the edit label again
         await saved
-        await expect(page.getByTestId(`inhabitant-${scroogeId}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer')
+        await expect(page.getByTestId(`inhabitant-${scroogeId}-edit-preferences`)).toHaveAttribute('aria-label', HOUSEHOLD_WORDS.preferences.edit)
 
         // THEN: Verify VIEW mode shows updated preferences correctly
         const updatedViewPreferences = page.getByTestId(`inhabitant-${scroogeId}-preferences-view`)

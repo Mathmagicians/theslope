@@ -22,7 +22,7 @@
  * └─────────────────────────────────────────────────────────────────────────────┘
  */
 
-import {FORM_MODES} from '~/types/form'
+import {FORM_MODES, TEAM_CARD_MODES} from '~/types/form'
 import type {DesiredOrder} from '~/composables/useBookingValidation'
 import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
 
@@ -232,7 +232,7 @@ useHead({
             v-if="dinnerEventDetail.cookingTeamId && dinnerEventDetail.cookingTeam"
             :team-id="dinnerEventDetail.cookingTeamId"
             :team-number="getTeamNumber(dinnerEventDetail.cookingTeam, selectedSeason?.CookingTeams ?? [])"
-            mode="monitor"
+            :mode="TEAM_CARD_MODES.MONITOR"
             use-short-name
           />
           <UAlert

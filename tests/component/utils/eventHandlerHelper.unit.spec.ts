@@ -1,12 +1,18 @@
-import {describe, it, expect, vi} from 'vitest'
-import {createError} from 'h3'
+import {describe, it, expect, vi, beforeEach} from 'vitest'
+import {createError, type H3Event} from 'h3'
 import {Prisma} from '~~/prisma/generated/client/client'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
+import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
+import {spyOnLogs} from '~~/tests/component/logSpies'
 
 // The helper reads createError from the Nitro auto-import scope
 vi.stubGlobal('createError', createError)
 
-const {nuxtErrorFromPrismaError, nuxtErrorFromCatch} = eventHandlerHelper
+// nuxt-auth-utils' Nitro auto-import reads a sealed cookie with the runtime config the unit runtime lacks
+const getUserSession = vi.fn()
+vi.stubGlobal('getUserSession', getUserSession)
+
+const {nuxtErrorFromPrismaError, nuxtErrorFromCatch, getSessionUser} = eventHandlerHelper
 
 const PREPEND = '🎟️ > ORDER > [BATCH CREATE]'
 
@@ -49,5 +55,38 @@ describe('isConflict', () => {
         {name: 'a plain error', error: new Error('boom'), expected: false}
     ])('is $expected for $name', ({error, expected}) => {
         expect(eventHandlerHelper.isConflict(error)).toBe(expected)
+    })
+})
+
+// The session holds its user as JSON: the dates are strings until the schema reads them
+describe('getSessionUser', () => {
+    const event = {} as H3Event
+    const user = UserFactory.defaultUserWithInhabitant('session-user')
+    const {email: _email, ...withoutEmail} = JSON.parse(JSON.stringify(user))
+    const logs = spyOnLogs()
+
+    beforeEach(() => {
+        Object.values(logs).forEach(spy => spy.mockReset().mockImplementation(() => {}))
+    })
+
+    it.each([
+        {name: 'a session user', session: {user: JSON.parse(JSON.stringify(user))}, answer: 'the domain\'s user, its dates as dates', expected: user, warned: 0},
+        {name: 'no session', session: {}, answer: 'null', expected: null, warned: 0},
+        {name: 'a session user the schema rejects', session: {user: withoutEmail}, answer: 'null', expected: null, warned: 1}
+    ])('GIVEN $name THEN it answers $answer with $warned warning', async ({session, expected, warned}) => {
+        getUserSession.mockResolvedValue(session)
+
+        await expect(getSessionUser(event)).resolves.toEqual(expected)
+        expect(logs.warn).toHaveBeenCalledTimes(warned)
+    })
+
+    // ADR-004: the warning names the schema's complaint, never the user's data
+    it('GIVEN a session user the schema rejects THEN the warning carries none of its data', async () => {
+        getUserSession.mockResolvedValue({user: withoutEmail})
+
+        await getSessionUser(event)
+
+        const warning = logs.warn.mock.calls.flat().join(' ')
+        expect([user.Inhabitant!.name, user.Inhabitant!.lastName, user.phone!].filter(value => warning.includes(value))).toEqual([])
     })
 })

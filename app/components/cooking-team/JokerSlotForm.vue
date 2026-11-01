@@ -8,6 +8,8 @@
  *   Arbejdstid  [100%         v]
  *   Note        [Anna barsel            ]             <- optional
  *   [Annuller]  [Tilføj]
+ *
+ * Visual check: /admin/teams, a team card's edit face with the joker form open, phone and desktop.
  */
 import type {z} from 'zod'
 import type {Form, FormSubmitEvent} from '@nuxt/ui'
@@ -15,6 +17,7 @@ import type {DateRange, WeekDayMap} from '~/types/dateTypes'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
 import type {JokerSlotCreate} from '~/composables/useDutyValidation'
 import {BUTTON_WORDS} from '~/config/buttonWords'
+import {DUTY_WORDS} from '~/config/dutyWords'
 
 type JokerSlotDraft = z.input<ReturnType<typeof useDutyValidation>['JokerSlotCreateSchema']>
 
@@ -32,6 +35,7 @@ const emit = defineEmits<{
 
 const {SIZES, BUTTONS, LAYOUTS, COMPONENTS} = useTheSlopeDesignSystem()
 const {JokerSlotCreateSchema} = useDutyValidation()
+const WORDS = DUTY_WORDS.jokerSlot
 const {TeamRoleSchema} = useCookingTeamValidation()
 
 const period = ref<DateRange>({...props.seasonDates})
@@ -61,25 +65,25 @@ const handleSubmit = ({data: {note, ...slot}}: FormSubmitEvent<JokerSlotCreate>)
       data-testid="joker-slot-form"
       @submit="handleSubmit"
   >
-    <CalendarDateRangePicker v-model="period" name="endDate" label="Periode" />
+    <CalendarDateRangePicker v-model="period" name="endDate" :label="WORDS.period" />
 
     <WeekDayMapDisplay
         v-model="draft.affinity"
         :parent-restriction="teamAffinity"
         hide-restricted
         name="affinity"
-        label="Ugedage"
+        :label="WORDS.weekdays"
     />
 
     <TeamRoleFields
         v-model:role="draft.role"
         v-model:allocation-percentage="draft.allocationPercentage"
-        role-label="Rolle"
+        :role-label="WORDS.role"
         role-select-test-id="joker-slot-role-select"
     />
 
-    <UFormField label="Note" name="note" hint="Valgfri" :size="SIZES.small">
-      <UInput v-model="draft.note" placeholder="Fx Anna barsel" :class="COMPONENTS.teamForm.control" :size="SIZES.small" />
+    <UFormField :label="WORDS.note.label" name="note" :hint="WORDS.note.hint" :size="SIZES.small">
+      <UInput v-model="draft.note" :placeholder="WORDS.note.placeholder" :class="COMPONENTS.teamForm.control" :size="SIZES.small" />
     </UFormField>
 
     <div :class="LAYOUTS.formButtonRow">

@@ -7,12 +7,14 @@ import {findByTestId, findComponentByTestId, resetStores} from '~~/tests/compone
 import {nextTick} from 'vue'
 import BookingViewSwitcher from '~/components/booking/BookingViewSwitcher.vue'
 import {BookingViewSchema, type BookingView} from '~/composables/useBookingView'
+import {DATE_WORDS} from '~/config/dateWords'
+import {NOISE, COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
 
 enableAutoUnmount(afterEach)
 
 const {day, week, month} = BookingViewSchema.enum
 const views = BookingViewSchema.options
-const labels: Record<BookingView, string> = {[day]: 'Dag', [week]: 'Uge', [month]: 'Måned'}
+const labels = DATE_WORDS.periodViews
 
 const mount = (modelValue: BookingView = day) =>
   mountSuspended(BookingViewSwitcher, {props: {modelValue}})
@@ -46,5 +48,14 @@ describe('BookingViewSwitcher', () => {
   it('marks the selected button active and the others not', async () => {
     const wrapper = await mount(week)
     views.forEach(view => expect(buttonOf(wrapper, view).props('active'), view).toBe(view === week))
+  })
+
+  it('makes the selected view loud and the others medium, each view\'s word on the switcher\'s label token', async () => {
+    const wrapper = await mount(week)
+    views.forEach(view => {
+      expect(buttonOf(wrapper, view).props('variant'), view).toBe(view === week ? NOISE.loud : NOISE.medium)
+      const label = btn(wrapper, view).findAll('span').find(span => span.text() === labels[view])
+      expect(label?.classes(), view).toEqual(COMPONENTS.bookingViewSwitcher.label.split(' '))
+    })
   })
 })

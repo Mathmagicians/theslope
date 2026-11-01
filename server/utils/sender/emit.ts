@@ -11,7 +11,7 @@ import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import type {NotificationKind} from '~/config/notificationTemplates'
 import type {EmailSetting} from '~~/server/utils/sender/config'
 import {chunkArray} from '~/utils/batchUtils'
-import {errorMessage} from '~/utils/utils'
+import {errorMessage} from '~~/workers/common/error'
 
 const {NotificationMessageSchema} = useNotificationValidation()
 const {DeliveryKindSchema, deliveryReferencePrefix} = useDeliveryValidation()

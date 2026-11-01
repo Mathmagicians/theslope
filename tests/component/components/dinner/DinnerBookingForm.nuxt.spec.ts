@@ -4,7 +4,7 @@ import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {config, enableAutoUnmount, flushPromises, type BaseWrapper} from '@vue/test-utils'
 import {shallowReactive} from 'vue'
 import type {AlertProps} from '@nuxt/ui'
-import {mountWithTooltipProvider, findByTestId, findComponentByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, registerScaffoldEndpoint, VIEWPORTS, lockedDinnerSupply, isTableLoading, untilTrue, mountedStore} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findComponentByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, registerScaffoldEndpoint, VIEWPORTS, lockedDinnerSupply, isTableLoading, untilTrue, mountedStore, itemAt, emittedPayload} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
@@ -17,7 +17,7 @@ import {ACTION_WORDS, MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel, createTicketSt
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {DINNER_MODE_ORDER, EMPTY_RELEASED_TICKET_COUNTS, formatPlace} from '~/composables/useBooking'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
-import type {BookingAction, BookingResult, DesiredOrder, DinnerEventDisplay, DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
+import type {BookingAction, BookingResult, DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 import type {HouseholdDetail, UserDetail} from '~/composables/useCoreValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
@@ -62,14 +62,16 @@ const seller = strangerHousehold.shortName
 /** A session user living in the household: the auth store's isMemberOfHousehold reads the inhabitant's householdId */
 const userInHousehold = (salt: string, household: HouseholdDetail): UserDetail => {
   const base = UserFactory.defaultUserWithInhabitant(salt)
-  const inhabitant = household.inhabitants[0]!
+  const baseInhabitant = base.Inhabitant
+  if (!baseInhabitant) throw new Error('The factory user carries no inhabitant')
+  const inhabitant = itemAt(household.inhabitants, 0)
   return {
     ...base,
     Inhabitant: {
-      ...base.Inhabitant!,
+      ...baseInhabitant,
       id: inhabitant.id,
       householdId: household.id,
-      household: {...base.Inhabitant!.household, id: household.id, pbsId: household.pbsId, shortName: household.shortName}
+      household: {...baseInhabitant.household, id: household.id, pbsId: household.pbsId, shortName: household.shortName}
     }
   }
 }
@@ -86,6 +88,12 @@ const scaffold = registerScaffoldEndpoint()
 // The previews of a save: the dry run's reads with orders
 const previews = () => scaffold.sent.filter(({body}) => body.orders.length > 0)
 
+/** A price row's age limit; a row without one fails the case */
+const ageLimitOf = (price: TicketPrice) => {
+  if (price.maximumAgeLimit == null) throw new Error(`The ${price.ticketType} price has no age limit`)
+  return price.maximumAgeLimit
+}
+
 const mountForm = (props: Record<string, unknown>, isMd?: boolean) => mountWithTooltipProvider(DinnerBookingForm, {props, isMd})
 
 /** The props of a member of the household on a dinner open or closed for changes; the dining mode stays editable */
@@ -97,19 +105,27 @@ const memberFormProps = (canModify: boolean, props: Record<string, unknown> = {}
 const mountMemberForm = (canModify: boolean, props: Record<string, unknown> = {}) => mountForm(memberFormProps(canModify, props))
 
 /** The mode selector of an expanded row, by the row's test id prefix (`inhabitant-<id>`, `power-power-mode`) */
-const rowSelector = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, row: string) =>
-  wrapper.findAllComponents({name: 'DinnerModeSelector'}).find(selector => selector.props('name') === `${row}-mode-edit`)!
+const rowSelector = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, row: string) => {
+  const selector = wrapper.findAllComponents({name: 'DinnerModeSelector'}).find(candidate => candidate.props('name') === `${row}-mode-edit`)
+  if (!selector) throw new Error(`No mode selector on ${row}`)
+  return selector
+}
 /** The mode selector of an inhabitant's expanded row */
 const editSelector = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, inhabitantId: number) => rowSelector(wrapper, `inhabitant-${inhabitantId}`)
 /** The name cell of an inhabitant's row: the UserListItem naming that inhabitant alone */
-const nameCellOf = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, inhabitantId: number) =>
-  wrapper.findAllComponents(UserListItem).find(item => {
+const nameCellOf = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, inhabitantId: number) => {
+  const cell = wrapper.findAllComponents(UserListItem).find(item => {
     const inhabitants = item.props('inhabitants')
     return !Array.isArray(inhabitants) && inhabitants.id === inhabitantId
-  })!
+  })
+  if (!cell) throw new Error(`No name cell for inhabitant ${inhabitantId}`)
+  return cell
+}
 // The tickets of an inhabitant's row, found by the row's name: on a phone under the name, from md in their own column
 const ticketsOf = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>, inhabitantId: number) => {
-  const row = (nameCellOf(wrapper, inhabitantId).element as Element).closest('tr')!
+  const nameCell: Element = nameCellOf(wrapper, inhabitantId).element
+  const row = nameCell.closest('tr')
+  if (!row) throw new Error(`No row holds inhabitant ${inhabitantId}`)
   return wrapper.findAllComponents(DinnerTicket).filter(ticket => row.contains(ticket.element))
 }
 
@@ -167,7 +183,7 @@ describe('DinnerBookingForm', () => {
     const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
     const adultPrice = TicketFactory.defaultPriceOf(TicketTypeSchema.enum.ADULT)
-    const booker = householdWithInhabitants.inhabitants[0]!
+    const booker = itemAt(householdWithInhabitants.inhabitants, 0)
     const dinnerEventId = baseProps.dinnerEvent.id
     const adultOrder = (id: number, inhabitantId: number, dinnerMode: DinnerMode, isGuestTicket: boolean) => OrderFactory.defaultOrder('guest', {
       id,
@@ -214,18 +230,19 @@ describe('DinnerBookingForm', () => {
     it('GIVEN a claimed guest order THEN its name cell leads with the user-plus disc and the "Gæst af" label', async () => {
       const wrapper = await mountMember(guestOrders.map(order => ({...order, provenanceHousehold: seller})))
 
-      const row = wrapper.findAll('span').find(span => span.text() === 'Gæst af')!.element.parentElement!
+      const row = wrapper.findAll('span').find(span => span.text() === BOOKING_WORDS.guests.of)?.element.parentElement
+      if (!row) throw new Error('No row holds the guest label')
       expect(wrapper.findAllComponents({name: 'UAvatar'}).some(avatar => row.contains(avatar.element) && avatar.props('icon') === ICONS.userPlus)).toBe(true)
     })
 
     describe('ticket allergies', () => {
-      const [allergic, notAllergic] = householdWithInhabitants.inhabitants
+      const [allergic, notAllergic] = [itemAt(householdWithInhabitants.inhabitants, 0), itemAt(householdWithInhabitants.inhabitants, 1)]
       const allergyTypes = AllergyFactory.createMockAllergyTypes()
       const householdWithAllergies = {
         ...householdWithInhabitants,
         inhabitants: householdWithInhabitants.inhabitants.map(inhabitant => ({
           ...inhabitant,
-          allergies: inhabitant.id === allergic!.id ? AllergyFactory.serializedAllergies(allergyTypes.length, inhabitant.id) : []
+          allergies: inhabitant.id === allergic.id ? AllergyFactory.serializedAllergies(allergyTypes.length, inhabitant.id) : []
         }))
       }
 
@@ -234,7 +251,7 @@ describe('DinnerBookingForm', () => {
         mountMemberForm(true, {household: householdWithAllergies, orders})
 
       const ticketAllergies = (wrapper: Awaited<ReturnType<typeof mountBooked>>) =>
-        wrapper.findAllComponents(DinnerTicket).map(ticket => ticket.props('allergies') as {name: string}[] | undefined)
+        wrapper.findAllComponents(DinnerTicket).map(ticket => ticket.props('allergies'))
 
       it('GIVEN a booked inhabitant with allergies THEN the ticket carries the allergy types and no row names them', async () => {
         const wrapper = await mountBooked()
@@ -245,9 +262,9 @@ describe('DinnerBookingForm', () => {
 
       // The allergies belong to the booked inhabitant: the expanded row names them, one AllergyTypeDisplay each
       it.each([
-        {desc: 'a booked inhabitant with allergies', inhabitant: allergic!, orders: familyAndGuests, shown: allergyTypes},
-        {desc: 'a booked inhabitant without allergies', inhabitant: notAllergic!, orders: familyAndGuests, shown: []},
-        {desc: 'an inhabitant with allergies and no ticket', inhabitant: allergic!, orders: familyAndGuests.filter(order => order.inhabitantId !== allergic!.id || order.isGuestTicket), shown: []}
+        {desc: 'a booked inhabitant with allergies', inhabitant: allergic, orders: familyAndGuests, shown: allergyTypes},
+        {desc: 'a booked inhabitant without allergies', inhabitant: notAllergic, orders: familyAndGuests, shown: []},
+        {desc: 'an inhabitant with allergies and no ticket', inhabitant: allergic, orders: familyAndGuests.filter(order => order.inhabitantId !== allergic.id || order.isGuestTicket), shown: []}
       ])('GIVEN $desc WHEN the row expands THEN the allergy line shows $shown.length allergies', async ({inhabitant, orders, shown}) => {
         const wrapper = await mountBooked(orders)
         await clickByTestId(wrapper, `inhabitant-${inhabitant.id}-toggle`)
@@ -289,6 +306,16 @@ describe('DinnerBookingForm', () => {
           ...expectedGuestOrders(DinnerMode.TAKEAWAY)
         ]]])
       })
+
+      it('WHEN the power row opens THEN its warning reads power mode\'s alert with the household\'s member count', async () => {
+        const wrapper = await mountMember(familyOrders(DinnerMode.DINEIN))
+        const {title, description} = BOOKING_WORDS.power.alert
+
+        await clickByTestId(wrapper, 'power-power-mode-toggle')
+
+        expect(wrapper.findAllComponents({name: 'UAlert'}).map(alert => ({title: alert.props('title'), description: alert.props('description')})))
+          .toContainEqual({title, description: description(householdWithInhabitants.inhabitants.length)})
+      })
     })
   })
 
@@ -315,10 +342,10 @@ describe('DinnerBookingForm', () => {
       {loading: true, shown: false},
       {loading: false, shown: true}
     ])('GIVEN a closed dinner with a released ticket and a queue entry and loading=$loading THEN the table receives it and the household\'s rows stay, and the day bill and both household notes show: $shown', async ({loading, shown}) => {
-      const [anna, bo] = householdWithInhabitants.inhabitants
+      const [anna, bo] = [itemAt(householdWithInhabitants.inhabitants, 0), itemAt(householdWithInhabitants.inhabitants, 1)]
       const dinnerEventId = baseProps.dinnerEvent.id
-      const released = OrderFactory.defaultOrder('released', {inhabitantId: anna!.id, dinnerEventId, state: useBookingValidation().OrderStateSchema.enum.RELEASED})
-      const entry = WaitlistFactory.defaultEntry({id: 41, inhabitantId: bo!.id, dinnerEventId})
+      const released = OrderFactory.defaultOrder('released', {inhabitantId: anna.id, dinnerEventId, state: useBookingValidation().OrderStateSchema.enum.RELEASED})
+      const entry = WaitlistFactory.defaultEntry({id: 41, inhabitantId: bo.id, dinnerEventId})
 
       const wrapper = await mountMemberForm(false, {orders: [released], waitlistEntries: [entry], loading})
 
@@ -340,7 +367,7 @@ describe('DinnerBookingForm', () => {
     {...row, ticketState: TicketState.released, order: {state: OrderState.RELEASED}, detail: undefined},
     {...row, ticketState: TicketState.claimed, order: {provenanceHousehold: seller}, detail: seller}
   ]))('GIVEN $ticket is $ticketState THEN its row\'s state badge is the DeadlineBadge of createTicketStateBadge', async ({isGuestTicket, rowId, ticketState, order, detail}) => {
-    const anna = householdWithInhabitants.inhabitants[0]!
+    const anna = itemAt(householdWithInhabitants.inhabitants, 0)
     const ticket = OrderFactory.defaultOrder('state', {inhabitantId: anna.id, dinnerEventId: baseProps.dinnerEvent.id, isGuestTicket, ...order})
     const wrapper = await mountMemberForm(false, {orders: [ticket]})
 
@@ -354,10 +381,10 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
   const DinnerMode = DinnerModeSchema.enum
   const {ADULT, CHILD} = TicketTypeSchema.enum
   const [adultPrice, childPrice] = [TicketFactory.defaultPriceOf(ADULT), TicketFactory.defaultPriceOf(CHILD)]
-  const [anna, bo] = householdWithInhabitants.inhabitants
+  const [anna, bo] = [itemAt(householdWithInhabitants.inhabitants, 0), itemAt(householdWithInhabitants.inhabitants, 1)]
   const dinnerEventId = baseProps.dinnerEvent.id
-  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY, ticketPrice: adultPrice})
-  const guestQueued = WaitlistFactory.defaultEntry({id: 41, inhabitantId: bo!.id, dinnerEventId, isGuestTicket: true, position: 3, ticketPrice: childPrice, dinnerMode: DinnerMode.DINEIN})
+  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY, ticketPrice: adultPrice})
+  const guestQueued = WaitlistFactory.defaultEntry({id: 41, inhabitantId: bo.id, dinnerEventId, isGuestTicket: true, position: 3, ticketPrice: childPrice, dinnerMode: DinnerMode.DINEIN})
 
   const mountClosed = (props: {orders?: OrderDisplay[], waitlistEntries?: ReturnType<typeof WaitlistFactory.defaultEntry>[]} = {}) =>
     mountMemberForm(false, props)
@@ -366,7 +393,7 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
   // Bo's own place, second in the adults' line wishing Takeaway, and the place of Bo's guest, third in the children's
   // line wishing Spisesal: the same marks and the same edits; a queued guest's row id names its entry
   const queuedRows = [
-    {row: 'Bo\'s place', entry: boQueued, ticketType: ADULT, rowId: `inhabitant-${bo!.id}`, positionId: bo!.id, guestCount: undefined, requeue: DinnerMode.DINEINLATE, saved: {isGuestTicket: false}},
+    {row: 'Bo\'s place', entry: boQueued, ticketType: ADULT, rowId: `inhabitant-${bo.id}`, positionId: bo.id, guestCount: undefined, requeue: DinnerMode.DINEINLATE, saved: {isGuestTicket: false}},
     {row: 'the place of Bo\'s guest', entry: guestQueued, ticketType: CHILD, rowId: `guest-order-guest-entry-${guestQueued.id}`, positionId: `guest-entry-${guestQueued.id}`, guestCount: 1, requeue: DinnerMode.TAKEAWAY, saved: {isGuestTicket: true, ticketPriceId: childPrice.id}}
   ]
 
@@ -393,14 +420,14 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
     await clickByTestId(wrapper, `${rowId}-mode-edit-${dinnerMode}`)
     await clickByTestId(wrapper, `${rowId}-save`)
 
-    expect(emittedSaves(wrapper)).toEqual([[[expect.objectContaining({inhabitantId: bo!.id, dinnerEventId, dinnerMode, waitlistEntryId: entry.id, ...saved})]]])
+    expect(emittedSaves(wrapper)).toEqual([[[expect.objectContaining({inhabitantId: bo.id, dinnerEventId, dinnerMode, waitlistEntryId: entry.id, ...saved})]]])
   })
 
   it('GIVEN a member holding a ticket THEN the row shows no queue position', async () => {
-    const order = OrderFactory.defaultOrder('ticket-holder', {inhabitantId: anna!.id, dinnerEventId, ...OrderFactory.priceFieldsOf(adultPrice), state: OrderStateSchema.enum.BOOKED})
-    const wrapper = await mountClosed({orders: [order], waitlistEntries: [{...boQueued, inhabitantId: anna!.id}]})
+    const order = OrderFactory.defaultOrder('ticket-holder', {inhabitantId: anna.id, dinnerEventId, ...OrderFactory.priceFieldsOf(adultPrice), state: OrderStateSchema.enum.BOOKED})
+    const wrapper = await mountClosed({orders: [order], waitlistEntries: [{...boQueued, inhabitantId: anna.id}]})
 
-    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(anna!.id)).exists()).toBe(false)
+    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(anna.id)).exists()).toBe(false)
     expect(wrapper.findAllComponents(DinnerTicket).some(ticket => ticket.props('ticketState') === TicketState.queued)).toBe(false)
   })
 
@@ -422,8 +449,8 @@ describe('DinnerBookingForm guest rows by price on a closed dinner', () => {
   const {TicketTypeSchema} = useBookingValidation()
   // The factory lists the baby who tastes first, the hungry baby second
   const babyPrices = baseProps.ticketPrices.filter(price => price.ticketType === TicketTypeSchema.enum.BABY)
-  const [tasting, hungry] = [babyPrices[0]!, babyPrices[1]!]
-  const booker = householdWithInhabitants.inhabitants[0]!
+  const [tasting, hungry] = [itemAt(babyPrices, 0), itemAt(babyPrices, 1)]
+  const booker = itemAt(householdWithInhabitants.inhabitants, 0)
   const dinnerEventId = baseProps.dinnerEvent.id
   const guestBaby = (id: number, price: TicketPrice) => OrderFactory.defaultOrder('guest-baby', {
     id, inhabitantId: booker.id, dinnerEventId, ...OrderFactory.priceFieldsOf(price), isGuestTicket: true
@@ -478,21 +505,21 @@ describe('DinnerBookingForm guest rows by price on a closed dinner', () => {
 describe('DinnerBookingForm a person\'s price on the dinner\'s date', () => {
   const {ADULT, CHILD} = useActionValidation().TicketTypeSchema.enum
   const [adultPrice, childPrice] = [TicketFactory.defaultPriceOf(ADULT), TicketFactory.defaultPriceOf(CHILD)]
-  const [anna, bo] = householdWithInhabitants.inhabitants
+  const [anna, bo] = [itemAt(householdWithInhabitants.inhabitants, 0), itemAt(householdWithInhabitants.inhabitants, 1)]
   const {dinnerEvent} = baseProps
   // Anna turns the CHILD price's age limit on the dinner: a child today, an adult on the dinner's date
-  const annaGrowingUp = {...anna!, birthDate: subYears(dinnerEvent.date, childPrice.maximumAgeLimit!)}
+  const annaGrowingUp = {...anna, birthDate: subYears(dinnerEvent.date, ageLimitOf(childPrice))}
   const bookedAtTheChildPrice = OrderFactory.defaultOrder('child-price', {
-    inhabitantId: anna!.id, dinnerEventId: dinnerEvent.id, ...OrderFactory.priceFieldsOf(childPrice)
+    inhabitantId: anna.id, dinnerEventId: dinnerEvent.id, ...OrderFactory.priceFieldsOf(childPrice)
   })
 
   it.each([
     {given: 'Anna, a child today, turns 12 on the dinner, with no order', inhabitant: annaGrowingUp, orders: [], price: adultPrice},
-    {given: 'Anna, an adult, holds a ticket booked at the CHILD price row', inhabitant: anna!, orders: [bookedAtTheChildPrice], price: childPrice}
+    {given: 'Anna, an adult, holds a ticket booked at the CHILD price row', inhabitant: anna, orders: [bookedAtTheChildPrice], price: childPrice}
   ])('GIVEN $given THEN her ticket badge reads the type and price of the $price.ticketType price row', async ({inhabitant, orders, price}) => {
-    const wrapper = await mountMemberForm(true, {household: {...householdWithInhabitants, inhabitants: [inhabitant, bo!]}, orders})
+    const wrapper = await mountMemberForm(true, {household: {...householdWithInhabitants, inhabitants: [inhabitant, bo]}, orders})
 
-    const badges = ticketsOf(wrapper, anna!.id).map(ticket => ticket.findComponent({name: 'UBadge'}).text())
+    const badges = ticketsOf(wrapper, anna.id).map(ticket => ticket.findComponent({name: 'UBadge'}).text())
     expect(badges).not.toHaveLength(0)
     expect(badges).toEqual(badges.map(() => ticketBadgeLabel(ticketTypePresentation(price.ticketType).label, price.price)))
   })
@@ -502,15 +529,15 @@ describe('DinnerBookingForm a person\'s price on the dinner\'s date', () => {
 describe('DinnerBookingForm power mode on a closed dinner where the household waits', () => {
   const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
   const DinnerMode = DinnerModeSchema.enum
-  const [adultPrice, childPrice] = [TicketTypeSchema.enum.ADULT, TicketTypeSchema.enum.CHILD].map(TicketFactory.defaultPriceOf)
-  const [anna, bo] = householdWithInhabitants.inhabitants
+  const [adultPrice, childPrice] = [TicketFactory.defaultPriceOf(TicketTypeSchema.enum.ADULT), TicketFactory.defaultPriceOf(TicketTypeSchema.enum.CHILD)]
+  const [anna, bo] = [itemAt(householdWithInhabitants.inhabitants, 0), itemAt(householdWithInhabitants.inhabitants, 1)]
   const dinnerEventId = baseProps.dinnerEvent.id
   const annaTicket = OrderFactory.defaultOrder('power', {
-    id: 201, inhabitantId: anna!.id, dinnerEventId, ...OrderFactory.priceFieldsOf(adultPrice!), dinnerMode: DinnerMode.TAKEAWAY
+    id: 201, inhabitantId: anna.id, dinnerEventId, ...OrderFactory.priceFieldsOf(adultPrice), dinnerMode: DinnerMode.TAKEAWAY
   })
-  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY, ticketPrice: adultPrice!})
+  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY, ticketPrice: adultPrice})
   const guestQueued = (dinnerMode: DinnerMode) => {
-    const entry = WaitlistFactory.defaultEntry({id: 41, inhabitantId: bo!.id, dinnerEventId, isGuestTicket: true, position: 1, ticketPrice: childPrice!, dinnerMode})
+    const entry = WaitlistFactory.defaultEntry({id: 41, inhabitantId: bo.id, dinnerEventId, isGuestTicket: true, position: 1, ticketPrice: childPrice, dinnerMode})
     return {...entry, order: {...entry.order, allergyTypeIds: [7]}}
   }
   const mountWaiting = (guestWish: DinnerMode) => mountMemberForm(false, {orders: [annaTicket], waitlistEntries: [boQueued, guestQueued(guestWish)]})
@@ -533,9 +560,9 @@ describe('DinnerBookingForm power mode on a closed dinner where the household wa
     await clickByTestId(wrapper, 'power-power-mode-save')
 
     expect(wrapper.emitted('saveBookings')).toEqual([[[
-      expect.objectContaining({inhabitantId: anna!.id, dinnerEventId, dinnerMode: DinnerMode.NONE, isGuestTicket: false, orderId: annaTicket.id}),
-      expect.objectContaining({inhabitantId: bo!.id, dinnerEventId, dinnerMode: DinnerMode.NONE, isGuestTicket: false, waitlistEntryId: boQueued.id}),
-      expect.objectContaining({inhabitantId: bo!.id, dinnerEventId, dinnerMode: DinnerMode.NONE, ticketPriceId: childPrice!.id, isGuestTicket: true, allergyTypeIds: [7], waitlistEntryId: 41})
+      expect.objectContaining({inhabitantId: anna.id, dinnerEventId, dinnerMode: DinnerMode.NONE, isGuestTicket: false, orderId: annaTicket.id}),
+      expect.objectContaining({inhabitantId: bo.id, dinnerEventId, dinnerMode: DinnerMode.NONE, isGuestTicket: false, waitlistEntryId: boQueued.id}),
+      expect.objectContaining({inhabitantId: bo.id, dinnerEventId, dinnerMode: DinnerMode.NONE, ticketPriceId: childPrice.id, isGuestTicket: true, allergyTypeIds: [7], waitlistEntryId: 41})
     ]]])
   })
 })
@@ -544,12 +571,12 @@ describe('DinnerBookingForm power mode on a closed dinner where the household wa
 describe('DinnerBookingForm previews a save through the server\'s dry run', () => {
   const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
   const DinnerMode = DinnerModeSchema.enum
-  const [anna, bo] = householdWithInhabitants.inhabitants
+  const [anna, bo] = [itemAt(householdWithInhabitants.inhabitants, 0), itemAt(householdWithInhabitants.inhabitants, 1)]
   const {dinnerEvent} = baseProps
   const householdOrder = householdWithInhabitants.inhabitants.map(({id}) => id)
   const adultPrice = TicketFactory.defaultPriceOf(TicketTypeSchema.enum.ADULT)
   const resultOf = (action: BookingAction, overrides: Partial<BookingResult> = {}): BookingResult => OrderFactory.defaultBookingResult({
-    inhabitantId: anna!.id, inhabitantName: anna!.name, dinnerEventId: dinnerEvent.id, action, ...overrides
+    inhabitantId: anna.id, inhabitantName: anna.name, dinnerEventId: dinnerEvent.id, action, ...overrides
   })
   const answer = (...results: BookingResult[]) => OrderFactory.defaultScaffoldOrdersResponse({dinners: [{id: dinnerEvent.id, date: dinnerEvent.date}], results})
   type Mounted = Awaited<ReturnType<typeof mountMemberForm>>
@@ -570,10 +597,10 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
     const reply = answer(resultOf(Action.BOOK, {dinnerMode: DinnerMode.TAKEAWAY}))
     scaffold.answers.preview = () => reply
     const wrapper = await mountMemberForm(true, {adminBypass})
-    await openRow(wrapper, anna!.id, DinnerMode.TAKEAWAY)
+    await openRow(wrapper, anna.id, DinnerMode.TAKEAWAY)
 
     await vi.waitFor(() => expect(rowPreview(wrapper).props('days')).toEqual(formatPreviewLines(reply.scaffoldResult, householdOrder)))
-    const desired = {inhabitantId: anna!.id, dinnerMode: DinnerMode.TAKEAWAY, ticketPriceId: adultPrice.id}
+    const desired = {inhabitantId: anna.id, dinnerMode: DinnerMode.TAKEAWAY, ticketPriceId: adultPrice.id}
     expect(previews().at(-1)).toEqual({
       query,
       body: {
@@ -582,9 +609,9 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
         orders: [expect.objectContaining(desired)]
       }
     })
-    expect(findByTestId(wrapper, `inhabitant-${anna!.id}-save`).text()).toContain(bookingSaveLabel(previewSaveOutcome(reply.scaffoldResult)))
+    expect(findByTestId(wrapper, `inhabitant-${anna.id}-save`).text()).toContain(bookingSaveLabel(previewSaveOutcome(reply.scaffoldResult)))
 
-    await clickByTestId(wrapper, `inhabitant-${anna!.id}-save`)
+    await clickByTestId(wrapper, `inhabitant-${anna.id}-save`)
 
     expect(wrapper.emitted('saveBookings')).toEqual([[[expect.objectContaining({...desired, dinnerEventId: dinnerEvent.id, isGuestTicket: false})]]])
   })
@@ -593,7 +620,7 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
     scaffold.answers.preview = () => answer(resultOf(Action.BOOK))
     const land = scaffold.hold('preview')
     const wrapper = await mountMemberForm(true)
-    await openRow(wrapper, anna!.id, DinnerMode.DINEIN)
+    await openRow(wrapper, anna.id, DinnerMode.DINEIN)
 
     await vi.waitFor(() => expect(rowPreview(wrapper).props('pending')).toBe(true))
     land()
@@ -620,7 +647,7 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
 
     await vi.waitFor(() => expect(guestPreview(wrapper).props('days').flatMap(day => day.lines.map(line => line.action))).toEqual([action]))
     expect(guestPreview(wrapper).props('title')).toBe(BOOKING_WORDS.preview.guestTitle)
-    expect(previews().at(-1)!.body.orders).toEqual([expect.objectContaining({inhabitantId: anna!.id, isGuestTicket: true, ticketPriceId: adultPrice.id})])
+    expect(itemAt(previews(), -1).body.orders).toEqual([expect.objectContaining({inhabitantId: anna.id, isGuestTicket: true, ticketPriceId: adultPrice.id})])
     expect(findByTestId(wrapper, 'guest-form-save').text()).toContain(guestSaveLabel(1))
   })
 
@@ -630,7 +657,7 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
       resultOf(action, {isGuestTicket: true, ticketType: adultPrice.ticketType, priceAtBooking: adultPrice.price}))
     // "Gæst af Anna (Voksen · 40 kr ×3)": the booker's guests, the price row's type and price, the count
     const guestLine = (count: number) =>
-      `${useOrder().formatGuestLabel(anna!.name)} (${ticketBadgeLabel(ticketTypePresentation(adultPrice.ticketType).label, adultPrice.price)} ${BOOKING_WORDS.guests.count(count)})`
+      `${useOrder().formatGuestLabel(anna.name)} (${ticketBadgeLabel(ticketTypePresentation(adultPrice.ticketType).label, adultPrice.price)} ${BOOKING_WORDS.guests.count(count)})`
     scaffold.answers.preview = () => answer(...guests(Action.BUY, 3), ...guests(Action.QUEUE, 7))
     const wrapper = await mountMemberForm(false)
     await clickByTestId(wrapper, 'guest-add-guest-toggle')
@@ -638,20 +665,20 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
 
     await vi.waitFor(() => expect(guestPreview(wrapper).props('days').flatMap(day => day.lines.map(line => line.name)))
       .toEqual([guestLine(3), guestLine(7)]))
-    expect(previews().at(-1)!.body.orders).toHaveLength(10)
+    expect(itemAt(previews(), -1).body.orders).toHaveLength(10)
     expect(findByTestId(wrapper, 'guest-form-save').text()).toContain(guestSaveLabel(10))
   })
 
   it('WHEN a queued inhabitant picks another mode THEN the entry goes to the dry run, its requeue names the new mode on the waiting list and the save reads its outcome', async () => {
     const QUEUED_ENTRY_ID = 31
-    const boQueued = WaitlistFactory.defaultEntry({id: QUEUED_ENTRY_ID, inhabitantId: bo!.id, dinnerEventId: dinnerEvent.id, position: 2, dinnerMode: DinnerMode.TAKEAWAY})
-    scaffold.answers.preview = () => answer(resultOf(Action.REQUEUE, {inhabitantId: bo!.id, inhabitantName: bo!.name, dinnerMode: DinnerMode.DINEINLATE}))
+    const boQueued = WaitlistFactory.defaultEntry({id: QUEUED_ENTRY_ID, inhabitantId: bo.id, dinnerEventId: dinnerEvent.id, position: 2, dinnerMode: DinnerMode.TAKEAWAY})
+    scaffold.answers.preview = () => answer(resultOf(Action.REQUEUE, {inhabitantId: bo.id, inhabitantName: bo.name, dinnerMode: DinnerMode.DINEINLATE}))
     const wrapper = await mountMemberForm(false, {waitlistEntries: [boQueued]})
-    await openRow(wrapper, bo!.id, DinnerMode.DINEINLATE)
+    await openRow(wrapper, bo.id, DinnerMode.DINEINLATE)
 
-    await vi.waitFor(() => expect(wrapper.text()).toContain(`${bo!.name} ${ACTION_WORDS[Action.REQUEUE].preview({mode: MODE_WORDS[DinnerMode.DINEINLATE].label})}`))
-    expect(findByTestId(wrapper, `inhabitant-${bo!.id}-save`).text()).toContain(bookingSaveLabel(Action.REQUEUE))
-    expect(previews().at(-1)!.body.orders).toEqual([expect.objectContaining({inhabitantId: bo!.id, dinnerMode: DinnerMode.DINEINLATE, waitlistEntryId: QUEUED_ENTRY_ID})])
+    await vi.waitFor(() => expect(wrapper.text()).toContain(`${bo.name} ${ACTION_WORDS[Action.REQUEUE].preview({mode: MODE_WORDS[DinnerMode.DINEINLATE].label})}`))
+    expect(findByTestId(wrapper, `inhabitant-${bo.id}-save`).text()).toContain(bookingSaveLabel(Action.REQUEUE))
+    expect(itemAt(previews(), -1).body.orders).toEqual([expect.objectContaining({inhabitantId: bo.id, dinnerMode: DinnerMode.DINEINLATE, waitlistEntryId: QUEUED_ENTRY_ID})])
   })
 })
 
@@ -659,10 +686,10 @@ describe('DinnerBookingForm previews a save through the server\'s dry run', () =
 describe('DinnerBookingForm shows the bookings the preferences give a row without an order', () => {
   const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
   const DinnerMode = DinnerModeSchema.enum
-  const [anna, bo] = householdWithInhabitants.inhabitants
+  const [anna, bo] = [itemAt(householdWithInhabitants.inhabitants, 0), itemAt(householdWithInhabitants.inhabitants, 1)]
   const dinnerEventId = baseProps.dinnerEvent.id
-  const annaExpected = OrderFactory.defaultBookingResult({inhabitantId: anna!.id, inhabitantName: anna!.name, dinnerEventId, dinnerMode: DinnerMode.DINEIN, action: Action.BOOK})
-  const annaOrder = OrderFactory.defaultOrder('anna', {inhabitantId: anna!.id, dinnerEventId, dinnerMode: DinnerMode.TAKEAWAY, state: OrderStateSchema.enum.BOOKED})
+  const annaExpected = OrderFactory.defaultBookingResult({inhabitantId: anna.id, inhabitantName: anna.name, dinnerEventId, dinnerMode: DinnerMode.DINEIN, action: Action.BOOK})
+  const annaOrder = OrderFactory.defaultOrder('anna', {inhabitantId: anna.id, dinnerEventId, dinnerMode: DinnerMode.TAKEAWAY, state: OrderStateSchema.enum.BOOKED})
   type Mounted = Awaited<ReturnType<typeof mountMemberForm>>
 
   const expectedReads = () => scaffold.sent.filter(({body}) => body.orders.length === 0)
@@ -700,12 +727,12 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
     const wrapper = await mountExpected([...expected], [...orders], viewer)
 
     const ticketProps = (inhabitantId: number) => ticketsOf(wrapper, inhabitantId).map(ticket => ticket.props())
-    expect(ticketProps(anna!.id)).not.toHaveLength(0)
-    ticketProps(anna!.id).forEach(props => expect(props).toMatchObject(annaTicket))
-    ticketsOf(wrapper, anna!.id).forEach(ticket => expect(ticket.classes()).toEqual(annaFace.split(' ')))
+    expect(ticketProps(anna.id)).not.toHaveLength(0)
+    ticketProps(anna.id).forEach(props => expect(props).toMatchObject(annaTicket))
+    ticketsOf(wrapper, anna.id).forEach(ticket => expect(ticket.classes()).toEqual(annaFace.split(' ')))
     // Bo has no result: the run leaves him out, as it leaves out a person who cancelled the dinner
-    expect(ticketProps(bo!.id)).not.toHaveLength(0)
-    ticketProps(bo!.id).forEach(props => expect(props).toMatchObject({dinnerMode: DinnerMode.NONE, expected: false}))
+    expect(ticketProps(bo.id)).not.toHaveLength(0)
+    ticketProps(bo.id).forEach(props => expect(props).toMatchObject({dinnerMode: DinnerMode.NONE, expected: false}))
     expect(findByTestId(wrapper, 'dinner-mode-legend-expected').exists()).toBe(legend)
   })
 
@@ -715,7 +742,7 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
     {desc: 'Anna expected on Takeaway and Bo left out', expected: [DinnerMode.TAKEAWAY], power: {consensus: false, expected: false}}
   ])('GIVEN $desc THEN the power ticket reads the modes the rows show', async ({expected, power}) => {
     const results = householdWithInhabitants.inhabitants.slice(0, expected.length).map((inhabitant, index) =>
-      OrderFactory.defaultBookingResult({inhabitantId: inhabitant.id, inhabitantName: inhabitant.name, dinnerEventId, dinnerMode: expected[index]!, action: Action.BOOK}))
+      OrderFactory.defaultBookingResult({inhabitantId: inhabitant.id, inhabitantName: inhabitant.name, dinnerEventId, dinnerMode: itemAt(expected, index), action: Action.BOOK}))
     const wrapper = await mountExpected(results)
 
     const powerTickets = wrapper.findAllComponents(DinnerTicket).filter(ticket => ticket.props('consensus') !== undefined)
@@ -724,13 +751,12 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
   })
 
   // The plan the preferences give a person on Takeaway
-  const planOf = (inhabitant: NonNullable<typeof anna>) =>
+  const planOf = (inhabitant: typeof anna) =>
     OrderFactory.defaultBookingResult({inhabitantId: inhabitant.id, inhabitantName: inhabitant.name, dinnerEventId, dinnerMode: DinnerMode.TAKEAWAY, action: Action.BOOK})
   // The save emits one desired order per person on the mode, each bare: no order and no place on the waiting list to name
   const expectBareSave = (wrapper: Mounted, inhabitants: {id: number}[], dinnerMode: DinnerMode) => {
     expect(wrapper.emitted('saveBookings')).toEqual([[inhabitants.map(({id}) => expect.objectContaining({inhabitantId: id, dinnerEventId, dinnerMode, isGuestTicket: false}))]])
-    const [[saved]] = wrapper.emitted('saveBookings') as [[DesiredOrder[]]]
-    for (const order of saved) {
+    for (const order of emittedPayload(wrapper, 'saveBookings', useBookingValidation().DesiredOrderSchema.array(), 0)) {
       expect(order.orderId).toBeUndefined()
       expect(order.waitlistEntryId).toBeUndefined()
     }
@@ -742,30 +768,30 @@ describe('DinnerBookingForm shows the bookings the preferences give a row withou
     {click: 'the plan\'s Takeaway', dinnerMode: DinnerMode.TAKEAWAY},
     {click: 'Ingen', dinnerMode: DinnerMode.NONE}
   ])('GIVEN Anna\'s plan WHEN her row expands THEN the selector shows the plan untouched; WHEN $click is clicked THEN her ticket turns solid on it and the save sends it bare', async ({dinnerMode}) => {
-    const wrapper = await mountExpected([planOf(anna!)])
-    await clickByTestId(wrapper, `inhabitant-${anna!.id}-toggle`)
-    expect(editSelector(wrapper, anna!.id).props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, expected: true})
+    const wrapper = await mountExpected([planOf(anna)])
+    await clickByTestId(wrapper, `inhabitant-${anna.id}-toggle`)
+    expect(editSelector(wrapper, anna.id).props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, expected: true})
 
-    await clickByTestId(wrapper, `inhabitant-${anna!.id}-mode-edit-${dinnerMode}`)
-    expect(editSelector(wrapper, anna!.id).props()).toMatchObject({modelValue: dinnerMode, expected: false})
-    expect(ticketsOf(wrapper, anna!.id)).not.toHaveLength(0)
-    ticketsOf(wrapper, anna!.id).forEach(ticket => expect(ticket.props()).toMatchObject({dinnerMode, expected: false}))
+    await clickByTestId(wrapper, `inhabitant-${anna.id}-mode-edit-${dinnerMode}`)
+    expect(editSelector(wrapper, anna.id).props()).toMatchObject({modelValue: dinnerMode, expected: false})
+    expect(ticketsOf(wrapper, anna.id)).not.toHaveLength(0)
+    ticketsOf(wrapper, anna.id).forEach(ticket => expect(ticket.props()).toMatchObject({dinnerMode, expected: false}))
 
-    await clickByTestId(wrapper, `inhabitant-${anna!.id}-save`)
-    expectBareSave(wrapper, [anna!], dinnerMode)
+    await clickByTestId(wrapper, `inhabitant-${anna.id}-save`)
+    expectBareSave(wrapper, [anna], dinnerMode)
   })
 
   // Untouched, a plan is no booking: no preview is asked for, the save reads Opdater, sends nothing and closes the row
   it('GIVEN Anna\'s plan WHEN her row expands and saves untouched THEN the save reads Opdater, nothing is sent and the row closes', async () => {
-    const wrapper = await mountExpected([planOf(anna!)])
-    await clickByTestId(wrapper, `inhabitant-${anna!.id}-toggle`)
-    expect(findByTestId(wrapper, `inhabitant-${anna!.id}-save`).text()).toContain(bookingSaveLabel(Action.CHANGE_MODE))
+    const wrapper = await mountExpected([planOf(anna)])
+    await clickByTestId(wrapper, `inhabitant-${anna.id}-toggle`)
+    expect(findByTestId(wrapper, `inhabitant-${anna.id}-save`).text()).toContain(bookingSaveLabel(Action.CHANGE_MODE))
 
-    await clickByTestId(wrapper, `inhabitant-${anna!.id}-save`)
+    await clickByTestId(wrapper, `inhabitant-${anna.id}-save`)
 
     expect(previews()).toEqual([])
     expect(wrapper.emitted('saveBookings')).toBeUndefined()
-    expect(findByTestId(wrapper, `inhabitant-${anna!.id}-save`).exists()).toBe(false)
+    expect(findByTestId(wrapper, `inhabitant-${anna.id}-save`).exists()).toBe(false)
   })
 
   it('GIVEN every row\'s plan on Takeaway WHEN the power row adopts the plan in one click THEN the save sends every person\'s plan bare', async () => {
@@ -791,7 +817,9 @@ describe('DinnerBookingForm on a closed dinner: the "Har du brug for flere bille
     const wrapper = await mountMemberForm(false, {releasedTicketCounts: counts})
 
     const alert = findComponentByTestId<AlertProps>(wrapper, 'UAlert', WAITLIST_TEST_IDS.moreTickets)
-    expect(alert.props()).toMatchObject(moreTicketsAlert(counts)!)
+    const bar = moreTicketsAlert(counts)
+    if (!bar) throw new Error('The supply gives no bar')
+    expect(alert.props()).toMatchObject(bar)
   })
 
   it.each([
@@ -805,15 +833,15 @@ describe('DinnerBookingForm on a closed dinner: the "Har du brug for flere bille
 })
 
 describe('DinnerBookingForm on a closed dinner: the household\'s own places on the waiting list', () => {
-  const [anna, bo] = householdWithInhabitants.inhabitants
+  const [anna, bo] = [itemAt(householdWithInhabitants.inhabitants, 0), itemAt(householdWithInhabitants.inhabitants, 1)]
   const dinnerEventId = baseProps.dinnerEvent.id
   const entryFor = (id: number, inhabitantId: number, onDinner = dinnerEventId) =>
     WaitlistFactory.defaultEntry({id, inhabitantId, dinnerEventId: onDinner})
   const noteOf = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>) => findByTestId(wrapper, WAITLIST_TEST_IDS.householdQueued)
 
   it.each([
-    {count: 1, entries: [entryFor(41, bo!.id)]},
-    {count: 2, entries: [entryFor(41, anna!.id), entryFor(42, bo!.id)]}
+    {count: 1, entries: [entryFor(41, bo.id)]},
+    {count: 2, entries: [entryFor(41, anna.id), entryFor(42, bo.id)]}
   ])('GIVEN $count entries THEN the warning note counts them and says when the household pays', async ({count, entries}) => {
     const wrapper = await mountMemberForm(false, {waitlistEntries: entries})
 
@@ -826,7 +854,7 @@ describe('DinnerBookingForm on a closed dinner: the household\'s own places on t
 
   it.each([
     {desc: 'no entry', entries: []},
-    {desc: 'an entry on another dinner only', entries: [entryFor(41, bo!.id, dinnerEventId + 1)]}
+    {desc: 'an entry on another dinner only', entries: [entryFor(41, bo.id, dinnerEventId + 1)]}
   ])('GIVEN $desc THEN no note shows', async ({entries}) => {
     const wrapper = await mountMemberForm(false, {waitlistEntries: entries})
 
@@ -839,12 +867,12 @@ describe('DinnerBookingForm on a closed dinner: the household\'s own places on t
 describe('DinnerBookingForm power row modes', () => {
   const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
   const {TAKEAWAY, NONE} = DinnerModeSchema.enum
-  const [anna, bo] = householdWithInhabitants.inhabitants
+  const [anna, bo] = [itemAt(householdWithInhabitants.inhabitants, 0), itemAt(householdWithInhabitants.inhabitants, 1)]
   const dinnerEventId = baseProps.dinnerEvent.id
   // Anna holds her ticket on Takeaway, Bo has released his
   const orders = [
-    OrderFactory.defaultOrder('power-anna', {id: 201, inhabitantId: anna!.id, dinnerEventId, dinnerMode: TAKEAWAY, state: OrderStateSchema.enum.BOOKED}),
-    OrderFactory.defaultOrder('power-bo', {id: 202, inhabitantId: bo!.id, dinnerEventId, dinnerMode: NONE, state: OrderStateSchema.enum.RELEASED})
+    OrderFactory.defaultOrder('power-anna', {id: 201, inhabitantId: anna.id, dinnerEventId, dinnerMode: TAKEAWAY, state: OrderStateSchema.enum.BOOKED}),
+    OrderFactory.defaultOrder('power-bo', {id: 202, inhabitantId: bo.id, dinnerEventId, dinnerMode: NONE, state: OrderStateSchema.enum.RELEASED})
   ]
 
   it.each([
@@ -860,9 +888,9 @@ describe('DinnerBookingForm power row modes', () => {
 
 describe('DinnerBookingForm on a cancelled dinner', () => {
   const {DinnerStateSchema, OrderStateSchema} = useBookingValidation()
-  const [anna] = householdWithInhabitants.inhabitants
+  const anna = itemAt(householdWithInhabitants.inhabitants, 0)
   const cancelledDinner = {...baseProps.dinnerEvent, state: DinnerStateSchema.enum.CANCELLED}
-  const annaTicket = OrderFactory.defaultOrder('cancelled', {inhabitantId: anna!.id, dinnerEventId: cancelledDinner.id, state: OrderStateSchema.enum.BOOKED})
+  const annaTicket = OrderFactory.defaultOrder('cancelled', {inhabitantId: anna.id, dinnerEventId: cancelledDinner.id, state: OrderStateSchema.enum.BOOKED})
   const mountCancelled = () => mountMemberForm(true, {dinnerEvent: cancelledDinner, orders: [annaTicket]})
 
   it('GIVEN a cancelled dinner THEN the form wears the cancelled corner ribbon', async () => {
@@ -900,13 +928,13 @@ describe('DinnerBookingForm on a cancelled dinner', () => {
 // over the dinners of the plan store's season, so a birthday between two dinners falls on the next
 describe('DinnerBookingForm the birthday badge on a person\'s first dinner at a new ticket type', () => {
   const {ADULT, CHILD} = useActionValidation().TicketTypeSchema.enum
-  const [anna, bo] = householdWithInhabitants.inhabitants
+  const [anna, bo] = [itemAt(householdWithInhabitants.inhabitants, 0), itemAt(householdWithInhabitants.inhabitants, 1)]
   // The season's dinners, a week apart
-  const [first, second, third] = [1, 2, 3].map(id => DinnerEventFactory.dinnerEventAt(id, 7 * id)) as [DinnerEventDisplay, DinnerEventDisplay, DinnerEventDisplay]
+  const [first, second, third] = [DinnerEventFactory.dinnerEventAt(1, 7), DinnerEventFactory.dinnerEventAt(2, 14), DinnerEventFactory.dinnerEventAt(3, 21)]
   const season = {...SeasonFactory.defaultSeason('birthday'), id: 7, dinnerEvents: [first, second, third]}
   // Anna turns 12 between the first and the second dinner: the second is her first at the ADULT price
-  const annaGrowingUp = {...anna!, birthDate: subYears(addDays(first.date, 3), TicketFactory.defaultPriceOf(CHILD).maximumAgeLimit!)}
-  const birthdayTestId = `inhabitant-${anna!.id}-birthday`
+  const annaGrowingUp = {...anna, birthDate: subYears(addDays(first.date, 3), ageLimitOf(TicketFactory.defaultPriceOf(CHILD)))}
+  const birthdayTestId = `inhabitant-${anna.id}-birthday`
   const unregister: Array<() => void> = []
 
   beforeEach(() => {
@@ -922,7 +950,7 @@ describe('DinnerBookingForm the birthday badge on a person\'s first dinner at a 
   })
 
   it('GIVEN Anna turns 12 between the season\'s first and second dinner THEN the second dinner carries the birthday badge beside her name; WHEN the form shows the third dinner THEN no badge', async () => {
-    const props = shallowReactive(memberFormProps(true, {dinnerEvent: second, household: {...householdWithInhabitants, inhabitants: [annaGrowingUp, bo!]}}))
+    const props = shallowReactive(memberFormProps(true, {dinnerEvent: second, household: {...householdWithInhabitants, inhabitants: [annaGrowingUp, bo]}}))
     const wrapper = await mountForm(props)
     const planStore = mountedStore(usePlanStore)
     await untilTrue(() => planStore.selectedSeason?.id === season.id)
@@ -930,12 +958,12 @@ describe('DinnerBookingForm the birthday badge on a person\'s first dinner at a 
 
     const badge = findComponentByTestId<InstanceType<typeof DeadlineBadge>['$props']>(wrapper, 'DeadlineBadge', birthdayTestId)
     expect(badge.props('badge')).toEqual(createBirthdayBadge(ADULT, second.date))
-    expect((nameCellOf(wrapper, anna!.id).element as Element).contains(badge.element)).toBe(true)
+    expect(findByTestId(nameCellOf(wrapper, anna.id), birthdayTestId).exists()).toBe(true)
 
     Object.assign(props, {dinnerEvent: third})
     await flushPromises()
 
-    expect(nameCellOf(wrapper, anna!.id)).toBeDefined()
+    expect(nameCellOf(wrapper, anna.id).exists()).toBe(true)
     expect(findByTestId(wrapper, birthdayTestId).exists()).toBe(false)
   })
 })

@@ -105,6 +105,12 @@ cell's inset and no wider than the box (`table.gridUi` and `table.adminUsersUi` 
 phone; `bookingGrid.expandedPanel` holds the booking grid's guest form, `adminUsers.expandedPanel` the user's profile
 card).
 
+### Add cards
+
+A form that adds a thing inline, the guest form under the booking table and the admin's new household, sits on
+`COMPONENTS.addCard`: the soft info card, its header row with the tinted glyph and the title, and a select that spans its
+field. The form's own layout keeps its component key (`guestBookingForm`, `householdCreateForm`).
+
 ### Choice groups
 
 `URadioGroup` and `USwitch` bind a `COMPONENTS.choiceGroup` shape (`stacked`, `inline`, `single`); the section heading above

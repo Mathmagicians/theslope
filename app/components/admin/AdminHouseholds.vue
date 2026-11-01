@@ -1,6 +1,14 @@
 <script setup lang="ts">
+/**
+ * AdminHouseholds - the admin's households: search, the create form above the table, a household's residency badge
+ * beside its PBS number, the edit panel under its row. Households moving in, leaving or moved out sort first.
+ *
+ * Visual check: /admin/households with a household moving in, one leaving and one moved out, a search without a
+ * match and the create form open, phone and desktop.
+ */
 import { getPaginationRowModel } from '@tanstack/vue-table'
 import type {HouseholdDisplay, HouseholdCreate, HouseholdMoveOut} from '~/composables/useCoreValidation'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 interface Props {
   canEdit?: boolean
@@ -12,9 +20,9 @@ const props = withDefaults(defineProps<Props>(), {
 const householdsStore = useHouseholdsStore()
 const {households, isHouseholdsLoading, isHouseholdsErrored, householdsError} = storeToRefs(householdsStore)
 
-
 const {COMPONENTS, SIZES, BUTTONS, ICONS, TYPOGRAPHY, TEXT, getResidencyDisplay, NOISE} = useTheSlopeDesignSystem()
 const now = useClock()
+const WORDS = HOUSEHOLD_WORDS.adminList
 
 // The open edit panels, keyed by the household's row id
 const expanded = ref<Record<string, boolean>>({})
@@ -36,15 +44,12 @@ const handleCreateHousehold = async (household: HouseholdCreate, prevOwnerMoveOu
   if (created) isCreateFormOpen.value = false
 }
 
-// Search/filter state
 const searchQuery = ref('')
 const sortDescending = ref(false)
 
-// Filter and sort households
 const filteredHouseholds = computed(() => {
   let result = households.value
 
-  // Filter by search query
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(household =>
@@ -58,10 +63,10 @@ const filteredHouseholds = computed(() => {
     )
   }
 
-  // Sort: non-active residency status first (pending, leaving, moved-out), then by address
+  // The households moving in, leaving or moved out come first, then by address
   result = [...result].sort((a, b) => {
-    const aInteresting = getResidencyStatus(a.movedInDate, a.moveOutDate, now.value) !== 'active'
-    const bInteresting = getResidencyStatus(b.movedInDate, b.moveOutDate, now.value) !== 'active'
+    const aInteresting = getResidencyStatus(a.movedInDate, a.moveOutDate, now.value) !== ResidencyStatus.active
+    const bInteresting = getResidencyStatus(b.movedInDate, b.moveOutDate, now.value) !== ResidencyStatus.active
     if (aInteresting !== bInteresting) return aInteresting ? -1 : 1
     return (a.address ?? '').localeCompare(b.address ?? '')
   })
@@ -77,19 +82,19 @@ const columns = [
   ...(props.canEdit ? [{id: 'expand'}] : []),
   {
     accessorKey: 'shortName',
-    header: 'Forkortelse'
+    header: WORDS.columns.shortName
   },
   {
     accessorKey: 'pbsId',
-    header: 'PBS'
+    header: WORDS.columns.pbs
   },
   {
     accessorKey: 'address',
-    header: 'Adresse'
+    header: WORDS.columns.address
   },
   {
     accessorKey: 'inhabitants',
-    header: 'Beboere',
+    header: WORDS.columns.inhabitants,
     cell: ({row}: {row: {original: HouseholdDisplay}}) =>
       h(resolveComponent('HouseholdListItem'), {
         household: row.original,
@@ -98,10 +103,9 @@ const columns = [
   }
 ]
 
-// Table ref for pagination control (same pattern as InhabitantSelector)
+// The search row pages through the table's own API
 const table = useTemplateRef('table')
 
-// Pagination - initial state, controlled via table API
 const pagination = ref({
   pageIndex: 0,
   pageSize: 10
@@ -111,16 +115,16 @@ const pagination = ref({
 <template>
   <div>
     <ViewError
-v-if="isHouseholdsErrored"
-               text="Kan ikke hente data for husstande"
-               :error="householdsError?.statusCode"
+      v-if="isHouseholdsErrored"
+      :text="WORDS.failed"
+      :error="householdsError?.statusCode"
       :cause="householdsError"
     />
 
   <UCard :class="COMPONENTS.adminHouseholds.card" data-testid="admin-households">
     <template #header>
       <div :class="COMPONENTS.adminHouseholds.headerRow">
-        <span>Husstande på Skråningen</span>
+        <span>{{ WORDS.title }}</span>
         <UButton
             v-if="props.canEdit && !isCreateFormOpen"
             v-bind="BUTTONS.save"
@@ -130,7 +134,7 @@ v-if="isHouseholdsErrored"
           <template #leading>
             <UIcon :name="ICONS.plusCircle" />
           </template>
-          Ny husstand
+          {{ WORDS.create }}
         </UButton>
       </div>
     </template>
@@ -144,15 +148,14 @@ v-if="isHouseholdsErrored"
       />
     </div>
 
-    <!-- Search, Sort, and Pagination Row -->
     <div :class="COMPONENTS.adminHouseholds.section">
       <TableSearchPagination
           v-model:search-query="searchQuery"
           v-model:sort-descending="sortDescending"
           :table="table"
           :pagination="pagination"
-          placeholder="Søg efter adresse, navn eller person..."
-          sort-label="Adresse"
+          :placeholder="WORDS.search"
+          :sort-label="WORDS.sort"
           test-id="household-search"
       />
     </div>
@@ -170,7 +173,6 @@ v-if="isHouseholdsErrored"
           getPaginationRowModel: getPaginationRowModel()
         }"
     >
-      <!-- Custom shortName cell with link -->
       <template #shortName-cell="{ row }">
         <NuxtLink
             :to="getHouseholdUrl(row.original.shortName, row.original.pbsId)"
@@ -212,7 +214,6 @@ v-if="isHouseholdsErrored"
         />
       </template>
 
-      <!-- Expanded row: HouseholdEditPanel -->
       <template #expanded="{ row }">
         <HouseholdEditPanel
             :household="row.original"

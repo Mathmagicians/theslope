@@ -147,6 +147,9 @@
  * │ Hele familien     -[DinnerTicket]-                               │
  * │ Anna B.H.         -[DinnerTicket]-                               │  -[..]- the past day's colours, struck through
  * └──────────────────────────────────────────────────────────────────┘
+ *
+ * Visual check: /household/[shortname]/bookings day view and /dinner, a row expanded (inhabitant, Hele familien, guest),
+ * a queued row, a planned row, the notes after the deadline and a cancelled dinner, phone and desktop.
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, ScaffoldOrdersRequest, TicketState as TicketStateValue} from '~/composables/useBookingValidation'
@@ -231,7 +234,6 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-// Self-initialize household store
 const householdsStore = useHouseholdsStore()
 const {selectedHousehold} = storeToRefs(householdsStore)
 const household = computed(() => props.household ?? selectedHousehold.value)
@@ -249,7 +251,7 @@ const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, 
 const now = useClock()
 const emptyStateMessage = getRandomEmptyMessage('household', now.value)
 
-const {resolveTicketPriceOn, ticketTypeChangeOf, formatPrice} = useTicket()
+const {resolveTicketPriceOn, ticketTypeChangeOf, formatKroner} = useTicket()
 
 // The season's dinners give a person's first dinner at a new ticket type; the badge shows when that is this dinner
 const planStore = usePlanStore()
@@ -268,11 +270,7 @@ const OrderStateEnum = OrderStateSchema.enum
 const allergiesStore = useAllergiesStore()
 const {allergyTypes} = storeToRefs(allergiesStore)
 
-// ============================================================================
-// EXPANDABLE ROW STATE
-// ============================================================================
-
-// Draft state for editing: null while the expanded row is an untouched plan
+// The expanded row's mode, null while the row is an untouched plan
 const draftMode = ref<DinnerMode | null>(null)
 const editingRowId = ref<number | string | null>(null)
 const isSaving = ref(false)
@@ -299,15 +297,10 @@ const {expanded} = useExpandableRow({
   }
 })
 
-// ============================================================================
-// DEADLINE COMPUTEDS
-// ============================================================================
-
 const canBook = computed(() => props.deadlines.canModifyOrders(props.dinnerEvent.date))
 // Nothing lands on a cancelled dinner: the form wears the corner ribbon, and every ticket the cancelled face
 const isCancelled = computed(() => isDinnerCancelled(props.dinnerEvent))
 const showRibbon = computed(() => props.ribbon && isCancelled.value)
-// Edit allowed if: permission-based formMode is EDIT AND the dinner has neither passed nor been cancelled
 // A row opens while the member may change the household and the booking rules give the row a mode (ADR-016)
 const canOpenRow = (row: TableRow): boolean => formMode.value === FORM_MODES.EDIT && row.enabledModes.length > 0
 
@@ -318,10 +311,6 @@ const residencyAlert = computed(() => {
   if (isHouseholdInResidency.value || !household.value) return null
   return getResidencyDisplay(household.value.movedInDate, household.value.moveOutDate, now.value)
 })
-
-// ============================================================================
-// ORDER PARTITIONING (uses useBooking helpers)
-// ============================================================================
 
 const eventOrders = computed(() =>
   (props.orders ?? []).filter(o => o.dinnerEventId === props.dinnerEvent.id)
@@ -344,10 +333,6 @@ const householdQueuedNote = computed(() =>
 // The bar on a closed dinner while tickets are for sale or someone waits, and the add-guest row's tickets for sale
 const moreTickets = computed(() => moreTicketsAlert(props.releasedTicketCounts))
 const forSaleWords = computed(() => ticketsForSale(props.releasedTicketCounts))
-
-// ============================================================================
-// TABLE CONFIGURATION
-// ============================================================================
 
 const columns = computed(() => [
   {id: 'expand'},
@@ -432,7 +417,7 @@ const tableData = computed((): TableRow[] => {
     inhabitant: inhabitantId => personOn.value(inhabitantId, props.dinnerEvent.id).expectedMode
   })
 
-  // Default synthetic row template
+  const noAllergies: AllergyTypeDisplay[] = []
   const defaultSyntheticRow = {
     lastName: '',
     ticketConfig: null,
@@ -442,7 +427,7 @@ const tableData = computed((): TableRow[] => {
     ticketState: TicketState.normal,
     stateBadge: null,
     birthdayBadge: null,
-    allergyTypes: [] as AllergyTypeDisplay[]
+    allergyTypes: noAllergies
   }
 
   // Power row with consensus (shown in both VIEW and EDIT modes): the modes every inhabitant row may pick
@@ -459,11 +444,10 @@ const tableData = computed((): TableRow[] => {
     expected: inhabitantRows.length > 0 && inhabitantRows.every(row => row.expected)
   }
 
-  // VIEW mode: power + inhabitants + guest orders
+  // The add-guest row only while the member edits and a guest may pick a mode
   if (formMode.value !== FORM_MODES.EDIT || newGuestModes.value.length === 0) return [powerRow, ...inhabitantRows, ...guestOrderRows]
 
-  // EDIT mode: power + inhabitants + guest orders + add guest
-  // Synthetic inhabitant for UserListItem consistency
+  // A synthetic inhabitant: the add-guest row draws its name and icon through UserListItem like every other row
   const guestAddInhabitant: InhabitantDisplay = {
     id: 0,
     name: BOOKING_WORDS.guests.add,
@@ -483,11 +467,7 @@ const tableData = computed((): TableRow[] => {
   ]
 })
 
-// ============================================================================
-// HANDLERS
-// ============================================================================
-
-// Build desired orders for a row in a mode (DRY: the save, its preview and the row's modes)
+// A row's desired orders in a mode: what its save sends, what its preview reads and which modes it may pick
 const buildDesiredOrdersForRow = (row: FormRow, dinnerMode: DinnerMode): DesiredOrder[] => {
   const dinnerEventId = props.dinnerEvent.id
   const buildForInhabitants = (inhabitantIds: number[]) => buildDesiredOrders(
@@ -551,17 +531,16 @@ const handleSave = async (row: TableRow) => {
   isSaving.value = true
 
   try {
-    // Validate before building orders
     if (row.rowType === BookingRow.power) {
       const inhabitantRows = tableData.value.filter((r: TableRow) => r.rowType === BookingRow.inhabitant)
       const missingPrice = inhabitantRows.find(r => r.ticketPriceId === null)
       if (missingPrice) {
-        throw new Error(`Kan ikke booke: mangler billetpris for ${missingPrice.name}`)
+        throw new Error(BOOKING_WORDS.bookingForm.missingPrice(missingPrice.name))
       }
     } else if (!row.ticketPriceId) {
       throw new Error(row.rowType === BookingRow['guest-order']
-        ? 'Kan ikke booke: mangler billetpris for gæst'
-        : `Kan ikke booke: mangler billetpris for ${row.name}`)
+        ? BOOKING_WORDS.bookingForm.missingGuestPrice
+        : BOOKING_WORDS.bookingForm.missingPrice(row.name))
     }
 
     const orders = draftOrdersOf(row)
@@ -581,18 +560,10 @@ const handleCancel = () => {
   emit('cancel')
 }
 
-// Shared: emit orders and collapse row
 const completeBooking = (orders: DesiredOrder[]) => {
   emit('saveBookings', orders)
   expanded.value = {}
 }
-
-// GuestBookingForm emits ready-made orders, forward to shared function
-const handleGuestSave = (orders: DesiredOrder[]) => completeBooking(orders)
-
-// ============================================================================
-// HELPER TEXT
-// ============================================================================
 
 const {getBookingOptions, powerOptions, newGuestRow, getDayBillSummary, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
 const {createBookingBadges, createTicketStateBadge, createBirthdayBadge, bookingSaveLabel} = useBookingUi()
@@ -610,7 +581,6 @@ const ticketStateOfRow = (order: OrderDisplay | null, waitlistEntry?: TicketWait
 // Deadline badges, counted from the page's clock
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, now.value, props.releasedTicketCounts))
 
-// Day bill summary (ticket counts + total price)
 const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
 
 // What saving the expanded row does: the server's dry run of its desired orders feeds the preview and the save label
@@ -648,9 +618,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
     <template #description>Ingen husstandsmedlemmer fundet</template>
   </UAlert>
 
-  <!-- Booking form -->
   <div v-else :class="[COMPONENTS.bookingForm.root, showRibbon && COMPONENTS.ribbon.container]">
-    <!-- Cancelled ribbon -->
     <div
       v-if="showRibbon"
       :class="getRibbonClasses('cancel')"
@@ -659,15 +627,13 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
       {{ BOOKING_WORDS.cancelledDinner.ribbon }}
     </div>
 
-    <!-- Deadline Status Badges + Day Bill Summary -->
-    <!-- Mobile: badges stacked left, day bill right | Desktop: all in row with gaps -->
     <div :class="COMPONENTS.bookingForm.statusRow">
       <div :class="COMPONENTS.bookingForm.deadlineBadges">
         <DeadlineBadge :badge="badges.booking" />
         <DeadlineBadge :badge="badges.diningMode" />
       </div>
       <div v-if="!loading" :class="COMPONENTS.bookingForm.dayBill" data-testid="booking-day-bill">
-        <span :class="TYPOGRAPHY.cardTitle">{{ dayBillSummary.ticketCounts }} · {{ formatPrice(dayBillSummary.totalPrice) }} kr</span>
+        <span :class="TYPOGRAPHY.cardTitle">{{ dayBillSummary.ticketCounts }} · {{ formatKroner(dayBillSummary.totalPrice) }}</span>
       </div>
     </div>
 
@@ -698,7 +664,6 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
       />
     </div>
 
-    <!-- Main Table with Expandable Rows -->
     <UTable
       v-model:expanded="expanded"
       :data="tableData"
@@ -708,7 +673,6 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
       data-testid="booking-table"
       :ui="COMPONENTS.table.bookingUi"
     >
-      <!-- Expand button column - uses BUTTONS.edit for standardized sizing -->
       <template #expand-cell="{row}">
         <UButton
           v-if="canOpenRow(row.original)"
@@ -721,10 +685,8 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
         />
       </template>
 
-      <!-- Name Column -->
       <template #name-cell="{row}">
         <div :class="COMPONENTS.bookingForm.nameCell">
-          <!-- Power Mode Row - UserListItem in GROUP mode with ticket below -->
           <div v-if="row.original.rowType === BookingRow.power && row.original.inhabitants" :class="COMPONENTS.bookingForm.powerName">
             <UserListItem
               :inhabitants="row.original.inhabitants"
@@ -732,7 +694,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
               :link-to-profile="false"
               :max="COMPONENTS.avatar.powerRowMax"
               compact
-              label="beboere"
+              :label="BOOKING_WORDS.power.faces"
             />
             <!-- DinnerTicket for power row (mobile only - desktop in ticket-cell) -->
             <div :class="COMPONENTS.bookingForm.ticketPhone">
@@ -747,7 +709,6 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
             </div>
           </div>
 
-          <!-- Guest Add Row - UserListItem with synthetic inhabitant -->
           <div v-else-if="row.original.rowType === BookingRow['guest-add'] && row.original.inhabitant">
             <UserListItem
               :inhabitants="row.original.inhabitant"
@@ -763,7 +724,6 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
             </UserListItem>
           </div>
 
-          <!-- Inhabitant Row - UserListItem in SINGLE mode -->
           <div v-else-if="row.original.rowType === BookingRow.inhabitant && row.original.inhabitant">
             <UserListItem
               :inhabitants="row.original.inhabitant"
@@ -777,7 +737,6 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
             </UserListItem>
           </div>
 
-          <!-- Guest Order Row - show who invited using UserListItem -->
           <div v-else-if="row.original.rowType === BookingRow['guest-order']">
             <div :class="COMPONENTS.bookingForm.guestOf">
               <UAvatar :icon="ICONS.userPlus" :size="COMPONENTS.avatar.compact.size" :class="COMPONENTS.avatar.compact.fit" />
@@ -789,7 +748,7 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
                 compact
                 :show-names="true"
               />
-              <span v-else :class="TYPOGRAPHY.bodyTextSmall">ukendt</span>
+              <span v-else :class="TYPOGRAPHY.bodyTextSmall">{{ BOOKING_WORDS.guests.unknownBooker }}</span>
             </div>
             <!-- A released or bought ticket's badge, as on an inhabitant's row -->
             <div v-if="row.original.stateBadge && !row.original.waitlistEntry" :class="COMPONENTS.bookingForm.guestProvenance">
@@ -821,7 +780,6 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
 
       <!-- Ticket Column (desktop only) -->
       <template #ticket-cell="{row}">
-        <!-- Power row: show DinnerTicket with consensus (desktop) -->
         <div v-if="row.original.rowType === BookingRow.power" :class="COMPONENTS.bookingForm.ticketDesktop">
           <DinnerTicket
             :ticket-config="row.original.ticketConfig"
@@ -832,7 +790,6 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
             :cancelled="isCancelled"
           />
         </div>
-        <!-- Inhabitant/Guest rows: show ticket -->
         <div v-else-if="row.original.rowType === BookingRow.inhabitant || row.original.rowType === BookingRow['guest-order']" :class="COMPONENTS.bookingForm.ticketDesktop">
           <DinnerTicket
             :ticket-config="row.original.ticketConfig"
@@ -848,9 +805,8 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
         </div>
       </template>
 
-      <!-- Expanded Row -->
       <template #expanded="{row}">
-        <!-- Guest add row: Use standalone GuestBookingForm -->
+        <!-- The add-guest row previews and saves in its own form -->
         <GuestBookingForm
           v-if="row.original.rowType === BookingRow['guest-add'] && bookerInhabitant?.id && household"
           :household-id="household.id"
@@ -860,14 +816,12 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
           :deadlines="deadlines"
           :released-ticket-counts="releasedTicketCounts"
           :booker-id="bookerInhabitant.id"
-          :booker-name="bookerInhabitant.name"
           :booking-context="bookingContext"
           :admin-bypass="adminBypass"
-          @save="handleGuestSave"
+          @save="completeBooking"
           @cancel="handleCancel"
         />
 
-        <!-- Other row types: UCard with form -->
         <UCard
           v-else
           :color="row.original.rowType === BookingRow.power ? COMPONENTS.powerMode.card.color : COLOR.primary"
@@ -877,24 +831,23 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
           <template #header>
             <h4 :class="COMPONENTS.bookingForm.editTitle">
               <template v-if="row.original.rowType === BookingRow.power">
-                Vælg for hele familien
+                {{ BOOKING_WORDS.power.editTitle }}
               </template>
               <template v-else-if="row.original.rowType === BookingRow['guest-order']">
-                Opdater gæstebillet
+                {{ BOOKING_WORDS.guests.editTitle }}
               </template>
               <template v-else>
-                Vælg spisning for {{ row.original.name }}
+                {{ BOOKING_WORDS.bookingForm.editTitle(row.original.name) }}
               </template>
             </h4>
           </template>
 
-          <!-- Power mode warning -->
           <UAlert
             v-if="row.original.rowType === BookingRow.power"
             v-bind="ALERTS.warning"
             :icon="COMPONENTS.powerMode.icon"
-            title="Du er ved at aktivere power mode"
-            :description="`Ændringer påvirker alle ${household?.inhabitants?.length ?? 0} medlemmer.`"
+            :title="BOOKING_WORDS.power.alert.title"
+            :description="BOOKING_WORDS.power.alert.description(household?.inhabitants?.length ?? 0)"
           />
 
           <!-- The booked inhabitant's allergies, from the household's live profile -->
@@ -913,7 +866,6 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
             />
           </div>
 
-          <!-- Deadline badges (contextual: booking + dining mode) -->
           <div :class="COMPONENTS.bookingForm.editDeadlines">
             <DeadlineBadge :badge="badges.booking" />
             <DeadlineBadge :badge="badges.diningMode" />
@@ -934,17 +886,16 @@ const saveLabel = computed(() => bookingSaveLabel(preview.value ? previewSaveOut
             @update:model-value="(mode: DinnerMode) => draftMode = mode"
           />
 
-          <!-- Order history toggle + display (in body, near the content it reveals) -->
+          <!-- The history opens in the body, beside the content it explains -->
           <div v-if="row.original.order?.id">
             <UButton
                 v-bind="BUTTONS.history(historyOrderId === row.original.order.id)"
-                aria-label="Vis ordrehistorik"
+                :aria-label="BUTTON_WORDS.history"
                 @click="toggleHistory(row.original.order.id)"
             />
             <OrderHistoryDisplay v-if="historyOrderId === row.original.order.id" :order-id="row.original.order.id" :class="COMPONENTS.bookingForm.history"/>
           </div>
 
-          <!-- Footer: action preview + buttons (stacked on mobile, horizontal on desktop) -->
           <template #footer>
             <div :class="COMPONENTS.bookingForm.editFooter">
               <ActionPreview :days="previewDays" :pending="isPreviewPending" />

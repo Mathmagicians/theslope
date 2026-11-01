@@ -35,7 +35,7 @@ import {BookingViewSchema, type BookingView} from '~/composables/useBookingView'
  */
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch, waitForApi, isScaffoldSave, isExpectedRead, PAST_THE_SCAFFOLD_WINDOW_DAYS, PHONE_VIEWPORT} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch, waitForApi, isScaffoldSave, isExpectedRead, PAST_THE_SCAFFOLD_WINDOW_DAYS, PHONE_VIEWPORT, attemptAll} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema, BookingActionSchema} = useBookingValidation()
 const {findTicketPriceByType} = useTicket()
 const DinnerMode = DinnerModeSchema.enum
@@ -73,11 +73,13 @@ test.beforeAll(async ({browser}) => {
 
 test.afterAll(async ({browser}) => {
     const context = await validatedBrowserContext(browser)
-    // The member's household stays; its test inhabitant goes, with its orders. Cleanup accepts a 404
-    await Promise.all(createdInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(context, id)))
-    // Deleting a household cascades its inhabitants and their orders; cleanup accepts a 404
-    await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
-    await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+    // The member's household stays; its test inhabitant goes, with its orders. Deleting a household cascades its
+    // inhabitants and their orders. Cleanup accepts a 404
+    await attemptAll('HouseholdBookings cleanup', [
+        ...createdInhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(context, id)),
+        () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds),
+        () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+    ]).finally(() => context.close())
 })
 
 // ---- Helpers (file-scope, DRY) ----

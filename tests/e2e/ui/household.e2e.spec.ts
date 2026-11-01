@@ -4,6 +4,7 @@ import testHelpers from '../testHelpers'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {BookingViewSchema} from '~/composables/useBookingView'
+import {HELP_TEXTS} from '~/config/help-texts'
 
 const {adminUIFile, memberUIFile} = authFiles
 const {validatedBrowserContext, gotoHydrated, salt, temporaryAndRandom, doScreenshot, getSessionUserInfo, waitForApi} = testHelpers
@@ -16,11 +17,11 @@ test.describe('Household tab navigation', () => {
     let pbsId: number
 
     const tabs = [
-        {name: 'Tilmeldinger', path: 'bookings', selector: '[data-testid="household-bookings"]'},
-        {name: 'Præferencer', path: 'members', selector: '[data-testid="household-members"]'},
-        {name: 'Allergier', path: 'allergies', selector: '[data-testid="household-allergies"]'},
-        {name: 'Økonomi', path: 'economy', selector: '[data-testid="household-economy"]'},
-        {name: 'Indstillinger', path: 'settings', selector: '[data-testid="household-settings"]'}
+        {name: HELP_TEXTS.household.bookings.title, path: 'bookings', selector: '[data-testid="household-bookings"]'},
+        {name: HELP_TEXTS.household.members.title, path: 'members', selector: '[data-testid="household-members"]'},
+        {name: HELP_TEXTS.household.allergies.title, path: 'allergies', selector: '[data-testid="household-allergies"]'},
+        {name: HELP_TEXTS.household.economy.title, path: 'economy', selector: '[data-testid="household-economy"]'},
+        {name: HELP_TEXTS.household.settings.title, path: 'settings', selector: '[data-testid="household-settings"]'}
     ] as const
 
     const defaultTab = tabs[0]!

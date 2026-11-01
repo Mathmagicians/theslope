@@ -30,7 +30,7 @@ const createdTeams = [
     {...SeasonFactory.defaultCookingTeamDetail(), id: 12, name: 'Hold 2'}
 ]
 const createTeamsEndpoint = vi.fn(() => ({teams: createdTeams, eventsAssigned: 6}))
-registerEndpoint('/api/_auth/session', () => ({user: {id: 1, email: 'admin@skraaningen.dk', systemRoles: [useCoreValidation().SystemRoleSchema.enum.ADMIN]}}))
+registerEndpoint('/api/_auth/session', () => ({user: {id: 1, email: 'admin@skraaningen.dk', systemRoles: [useCoreValidation().SystemRoleSchema.enum.ADMIN], Inhabitant: null}}))
 registerEndpoint('/api/admin/season/active', () => 1)
 const seasonByIdEndpoint = vi.fn(() => season)
 registerEndpoint('/api/admin/season/1', seasonByIdEndpoint)

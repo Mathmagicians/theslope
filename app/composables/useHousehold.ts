@@ -3,8 +3,9 @@ import {isBefore, isAfter} from 'date-fns'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import {groupBy} from '~/utils/batchUtils'
 import type {InhabitantDetail, InhabitantDisplay, InhabitantName, HouseholdDisplay} from '~/composables/useCoreValidation'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, DinnerMode} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 /**
  * Curried predicate: is a dinner event within the household's residency period?
@@ -28,30 +29,30 @@ export const isHouseholdActiveOnDay = (
 ) => (eventDate: Date): boolean =>
     !isAfter(movedInDate, eventDate) && (!moveOutDate || !isBefore(moveOutDate, eventDate))
 
-/**
- * Household residency status based on move-in/move-out dates.
- * Used by ribbon display and admin badges.
- */
-export type ResidencyStatus = 'pending' | 'active' | 'leaving' | 'moved-out'
+const ResidencyStatusSchema = z.enum(['pending', 'active', 'leaving', 'moved-out'])
+
+/** A household's residency on a day, from its move-in and move-out dates: the ribbon, the admin's badges, the alert */
+export const ResidencyStatus = ResidencyStatusSchema.enum
+export type ResidencyStatus = z.infer<typeof ResidencyStatusSchema>
 
 export const getResidencyStatus = (
     movedInDate: Date,
     moveOutDate: Date | null,
     now: Date
 ): ResidencyStatus => {
-    if (isAfter(movedInDate, now)) return 'pending'
-    if (moveOutDate && isBefore(moveOutDate, now)) return 'moved-out'
-    if (moveOutDate) return 'leaving'
-    return 'active'
+    if (isAfter(movedInDate, now)) return ResidencyStatus.pending
+    if (moveOutDate && isBefore(moveOutDate, now)) return ResidencyStatus['moved-out']
+    if (moveOutDate) return ResidencyStatus.leaving
+    return ResidencyStatus.active
 }
 
 /**
  * Resolve which household a Heynabo entity should be routed to, given N candidates
  * sharing the same heynaboId. Pure function, deterministic, always resolves.
  *
- * Returns the resolved household id, or null if no candidates (caller should create).
+ * Returns the resolved household, or null if no candidates (caller should create).
  *
- * Decision 4 rules (feature-proposal-move-out-date.md):
+ * The rules (ADR-013, Heynabo import routing):
  * 1. 0 candidates → null (create new)
  * 2. 1 candidate → that one
  * 3. N candidates, exactly 1 without moveOutDate → that one (active household)
@@ -62,25 +63,11 @@ export const resolveHouseholdForHeynaboId = (
     _heynaboId: number,
     candidates: HouseholdDisplay[]
 ): HouseholdDisplay | null => {
-    if (candidates.length === 0) return null
-    if (candidates.length === 1) return candidates[0]!
-
+    // One candidate is rule 2 under rule 3 or rule 4: alone it is the active one, or the newest move-out
     const active = candidates.filter(c => !c.moveOutDate)
-
-    if (active.length === 1) return active[0]!
-
-    if (active.length === 0) {
-        // All have moveOutDate — newest date wins, lowest id breaks ties
-        const sorted = [...candidates].sort((a, b) => {
-            const cmp = isAfter(a.moveOutDate!, b.moveOutDate!) ? -1 : isBefore(a.moveOutDate!, b.moveOutDate!) ? 1 : 0
-            return cmp !== 0 ? cmp : a.id - b.id
-        })
-        return sorted[0]!
-    }
-
-    // 2+ active — lowest id
-    const sorted = [...active].sort((a, b) => a.id - b.id)
-    return sorted[0]!
+    if (active.length > 0) return [...active].sort((a, b) => a.id - b.id)[0] ?? null
+    return [...candidates].sort((a, b) =>
+        (b.moveOutDate?.getTime() ?? 0) - (a.moveOutDate?.getTime() ?? 0) || a.id - b.id)[0] ?? null
 }
 
 /** Where one inhabitant currently lives — keyed globally by inhabitant heynaboId */
@@ -103,7 +90,8 @@ export const buildResolvedHouseholdMap = (households: HouseholdDisplay[]) => {
     const grouped = groupBy<HouseholdDisplay, number>(h => h.heynaboId)(households)
     const resolved = new Map<number, HouseholdDisplay>()
     for (const [heynaboId, candidates] of grouped) {
-        resolved.set(heynaboId, resolveHouseholdForHeynaboId(heynaboId, candidates)!)
+        const winner = resolveHouseholdForHeynaboId(heynaboId, candidates)
+        if (winner) resolved.set(heynaboId, winner)
     }
 
     const inhabitantPlacements = new Map<number, InhabitantPlacement>()
@@ -122,17 +110,11 @@ export const buildResolvedHouseholdMap = (households: HouseholdDisplay[]) => {
 export const useHousehold = () => {
     const {DinnerModeSchema} = useBookingValidation()
 
-    // Extract enum constants from Zod schema
-    const DinnerMode = DinnerModeSchema.enum
-    type DinnerMode = typeof DinnerMode[keyof typeof DinnerMode]
-
-    // Create weekday map factory with DINEIN as default (for preferences)
     const {createDefaultWeekdayMap: createDinnerModeMap} = useWeekDayMapValidation<DinnerMode>({
         valueSchema: DinnerModeSchema,
         defaultValue: DinnerMode.DINEIN
     })
 
-    // Create weekday map factory for booleans (for consensus)
     const {createDefaultWeekdayMap: createBooleanMap} = useWeekDayMapValidation<boolean>({
         valueSchema: z.boolean(),
         defaultValue: true
@@ -146,10 +128,10 @@ export const useHousehold = () => {
         values: T[],
         defaultValue: T
     ): { value: T, consensus: boolean } => {
-        if (values.length === 0) {
+        const [first] = values
+        if (first === undefined) {
             return { value: defaultValue, consensus: true }
         }
-        const first = values[0]!
         const allSame = values.every(v => v === first)
         return {
             value: allSame ? first : defaultValue,
@@ -200,6 +182,9 @@ export const useHousehold = () => {
     const normalizeName = (name: string): string =>
         name.toLowerCase().replace(/\s+/g, ' ').trim()
 
+    /** The id of the one match; none or several match nothing */
+    const uniqueMatchId = (matches: {id: number}[]): number | null => matches.length === 1 ? matches[0]?.id ?? null : null
+
     /**
      * Match a short name against inhabitants list
      * Supports six strategies (tried in order):
@@ -218,7 +203,6 @@ export const useHousehold = () => {
         const normalizedInput = normalizeName(shortName)
         if (!normalizedInput) return null
 
-        // Pre-normalize all inhabitants for consistent matching
         const normalized = inhabitants.map(i => ({
             id: i.id,
             name: normalizeName(i.name),
@@ -230,9 +214,9 @@ export const useHousehold = () => {
         const exactMatch = normalized.find(i => i.fullName === normalizedInput)
         if (exactMatch) return exactMatch.id
 
-        // Parse input into parts for subsequent strategies
+        // A non-empty input splits into at least one word
         const inputParts = normalizedInput.split(' ')
-        const inputFirstWord = inputParts[0]!
+        const [inputFirstWord = normalizedInput, inputSecondWord] = inputParts
 
         // Strategy 2: Match "FirstName X.Y." format against initials (exact count match)
         if (inputParts.length >= 2) {
@@ -259,8 +243,8 @@ export const useHousehold = () => {
                     // Strategy 2b: Single initial matches ANY word of remaining name + lastName
                     // "Anna L." matches {name: "Anna", lastName: "Berg Larsen"} (L matches Larsen)
                     // "Anna B." matches {name: "Anna Berg", lastName: "Larsen"} (B matches Berg in name)
-                    if (initials.length === 1) {
-                        const singleInitial = initials[0]!
+                    const [singleInitial] = initials
+                    if (initials.length === 1 && singleInitial) {
                         const singleInitialMatches = normalized.filter(i => {
                             const nameWords = i.name.split(' ')
                             // First word of name must match input first word
@@ -270,7 +254,8 @@ export const useHousehold = () => {
                             const lastNameWords = i.lastName.split(' ')
                             return [...remainingNameWords, ...lastNameWords].some(word => word.startsWith(singleInitial))
                         })
-                        if (singleInitialMatches.length === 1) return singleInitialMatches[0]!.id
+                        const singleInitialMatch = uniqueMatchId(singleInitialMatches)
+                        if (singleInitialMatch !== null) return singleInitialMatch
                     }
                 }
             }
@@ -278,27 +263,24 @@ export const useHousehold = () => {
 
         // Strategy 3: First name exact match (must be unique)
         if (inputParts.length === 1) {
-            const firstNameMatches = normalized.filter(i => i.name === normalizedInput)
-            if (firstNameMatches.length === 1) return firstNameMatches[0]!.id
+            const firstNameMatch = uniqueMatchId(normalized.filter(i => i.name === normalizedInput))
+            if (firstNameMatch !== null) return firstNameMatch
         }
 
         // Strategy 4: First word of composite name match (must be unique)
         // "Jimmy" matches {name: "Jimmy Diksen", ...}
         if (inputParts.length === 1) {
-            const firstWordMatches = normalized.filter(i =>
-                i.name.split(' ')[0] === normalizedInput
-            )
-            if (firstWordMatches.length === 1) return firstWordMatches[0]!.id
+            const firstWordMatch = uniqueMatchId(normalized.filter(i => i.name.split(' ')[0] === normalizedInput))
+            if (firstWordMatch !== null) return firstWordMatch
         }
 
         // Strategy 5: First name + lastName prefix match (must be unique)
         // "Jeppe Eg" matches {name: "Jeppe", lastName: "Eg Bilslev-Jensen"}
-        if (inputParts.length === 2) {
-            const inputLastName = inputParts[1]!
-            const prefixMatches = normalized.filter(i =>
-                i.name === inputFirstWord && i.lastName.startsWith(inputLastName)
-            )
-            if (prefixMatches.length === 1) return prefixMatches[0]!.id
+        if (inputParts.length === 2 && inputSecondWord !== undefined) {
+            const prefixMatch = uniqueMatchId(normalized.filter(i =>
+                i.name === inputFirstWord && i.lastName.startsWith(inputSecondWord)
+            ))
+            if (prefixMatch !== null) return prefixMatch
         }
 
         return null
@@ -339,24 +321,13 @@ export const useHousehold = () => {
             }
         }
 
-        if (uniqueLastNames.length === 0) return null
+        const [first, second] = uniqueLastNames
+        if (first === undefined) return null
 
-        // Single person household - no "Familien" prefix
-        if (inhabitants.length === 1) {
-            return uniqueLastNames[0]!
-        }
+        // A person living alone reads as the last name alone
+        if (inhabitants.length === 1) return first
 
-        // Multiple people - use "Familien" prefix
-        if (uniqueLastNames.length === 1) {
-            return `Familien ${uniqueLastNames[0]}`
-        }
-
-        if (uniqueLastNames.length === 2) {
-            return `Familien ${uniqueLastNames[0]} & ${uniqueLastNames[1]}`
-        }
-
-        // 3+ unique last names - show first two + "m.fl."
-        return `Familien ${uniqueLastNames[0]} & ${uniqueLastNames[1]} m.fl.`
+        return HOUSEHOLD_WORDS.familyName(first, second, uniqueLastNames.length > 2)
     }
 
     return {

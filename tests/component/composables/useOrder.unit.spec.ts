@@ -1,22 +1,22 @@
 import { describe, it, expect } from 'vitest'
-import { useOrder } from '~/composables/useOrder'
-import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useOrder, type DiningModeStats } from '~/composables/useOrder'
+import { useBookingValidation, type DinnerMode as DinnerModeValue, type OrderState as OrderStateValue, type TicketType as TicketTypeValue, type OrderDetail } from '~/composables/useBookingValidation'
 import { sumBy } from '~/utils/ledger'
+import { TEAM_WORDS } from '~/config/teamWords'
+import { BOOKING_WORDS } from '~/config/bookingWords'
 import { OrderFactory } from '../../e2e/testDataFactories/orderFactory'
 import { WaitlistFactory } from '../../e2e/testDataFactories/waitlistFactory'
 
-// Get enum schemas for type-safe test data
 const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema } = useBookingValidation()
 const OrderState = OrderStateSchema.enum
 const TicketType = TicketTypeSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 
-// Test data factory helper - uses OrderFactory for DRY test data
 let orderIdCounter = 1
 const createTestOrder = (overrides: {
-  state?: typeof OrderState[keyof typeof OrderState]
+  state?: OrderStateValue
   priceAtBooking?: number
-  ticketType?: typeof TicketType[keyof typeof TicketType]
+  ticketType?: TicketTypeValue
   description?: string | null
 } = {}) => {
   const id = orderIdCounter++
@@ -58,9 +58,9 @@ describe('useOrder', () => {
 
   describe('formatGuestLabel', () => {
     it.each([
-      {bookerName: undefined, expected: 'Gæst'},
-      {bookerName: 'Anna', expected: 'Gæst af Anna'},
-      {bookerName: '', expected: 'Gæst'},  // empty string treated as falsy
+      {bookerName: undefined, expected: BOOKING_WORDS.guests.name},
+      {bookerName: 'Anna', expected: BOOKING_WORDS.guests.ofBooker('Anna')},
+      {bookerName: '', expected: BOOKING_WORDS.guests.name}
     ])('GIVEN bookerName="$bookerName" THEN returns "$expected"', ({bookerName, expected}) => {
       expect(formatGuestLabel(bookerName)).toBe(expected)
     })
@@ -138,7 +138,7 @@ describe('useOrder', () => {
   // The booking grid's name cell: a person's own tickets and places over a row's dinners
   describe('personTicketCounts', () => {
     const { personTicketCounts } = useOrder()
-    const ticket = (state: typeof OrderState[keyof typeof OrderState], dinnerMode: typeof DinnerMode[keyof typeof DinnerMode] = DinnerMode.DINEIN) =>
+    const ticket = (state: OrderStateValue, dinnerMode: DinnerModeValue = DinnerMode.DINEIN) =>
       OrderFactory.defaultOrder(undefined, { state, dinnerMode })
 
     it.each([
@@ -165,21 +165,23 @@ describe('useOrder', () => {
   describe('calculateDiningModeStats - percentages based on PORTIONS not order count', () => {
     const { calculateDiningModeStats } = useOrder()
 
-    // Helper to create orders with specific mode
-    const createOrderWithMode = (
-      mode: typeof DinnerMode[keyof typeof DinnerMode],
-      ticketType: typeof TicketType[keyof typeof TicketType],
-      state: typeof OrderState[keyof typeof OrderState] = OrderState.BOOKED
-    ) => ({ ...createTestOrder({ state, ticketType }), dinnerMode: mode })
+    const createOrderWithMode = (mode: DinnerModeValue, ticketType: TicketTypeValue, state: OrderStateValue = OrderState.BOOKED): OrderDetail =>
+      ({ ...createTestOrder({ state, ticketType }), dinnerMode: mode })
+    const noOrders: OrderDetail[] = []
+    const panelOf = (stats: DiningModeStats[], key: string) => {
+      const panel = stats.find(stat => stat.key === key)
+      if (!panel) throw new Error(`No kitchen panel ${key}`)
+      return panel
+    }
 
     describe.each([
       {
         scenario: 'empty orders',
-        orders: [] as ReturnType<typeof createTestOrder>[],
-        expected: { TAKEAWAY: 0, SPISESAL: 0, 'SPIS SENT': 0, 'TIL SALG': 0 }
+        orders: noOrders,
+        expected: { [DinnerMode.TAKEAWAY]: 0, [DinnerMode.DINEIN]: 0, [DinnerMode.DINEINLATE]: 0, [OrderState.RELEASED]: 0 }
       },
       {
-        scenario: 'released babies → TIL SALG 0% (not order-based)',
+        scenario: 'released babies → the tickets for sale 0% (not order-based)',
         orders: [
           createOrderWithMode(DinnerMode.DINEIN, TicketType.ADULT),        // 1 portion
           createOrderWithMode(DinnerMode.DINEIN, TicketType.CHILD),        // 0.5 portion
@@ -187,7 +189,7 @@ describe('useOrder', () => {
           createOrderWithMode(DinnerMode.DINEIN, TicketType.BABY, OrderState.RELEASED), // 0 portions
           createOrderWithMode(DinnerMode.DINEIN, TicketType.BABY, OrderState.RELEASED)  // 0 portions
         ],
-        expected: { TAKEAWAY: 0, SPISESAL: 100, 'SPIS SENT': 0, 'TIL SALG': 0 }
+        expected: { [DinnerMode.TAKEAWAY]: 0, [DinnerMode.DINEIN]: 100, [DinnerMode.DINEINLATE]: 0, [OrderState.RELEASED]: 0 }
       },
       {
         scenario: 'equal portions split → 25% each',
@@ -197,18 +199,15 @@ describe('useOrder', () => {
           createOrderWithMode(DinnerMode.DINEINLATE, TicketType.ADULT),    // 1 portion
           createOrderWithMode(DinnerMode.DINEIN, TicketType.ADULT, OrderState.RELEASED) // 1 portion released
         ],
-        expected: { TAKEAWAY: 25, SPISESAL: 25, 'SPIS SENT': 25, 'TIL SALG': 25 }
+        expected: { [DinnerMode.TAKEAWAY]: 25, [DinnerMode.DINEIN]: 25, [DinnerMode.DINEINLATE]: 25, [OrderState.RELEASED]: 25 }
       }
     ])('GIVEN $scenario', ({ orders, expected }) => {
       it('THEN percentages reflect portion distribution', () => {
         const stats = calculateDiningModeStats(orders)
 
-        expect(stats.find(s => s.label === 'TAKEAWAY')!.percentage).toBe(expected.TAKEAWAY)
-        expect(stats.find(s => s.label === 'SPISESAL')!.percentage).toBe(expected.SPISESAL)
-        expect(stats.find(s => s.label === 'SPIS SENT')!.percentage).toBe(expected['SPIS SENT'])
-        expect(stats.find(s => s.label === 'TIL SALG')!.percentage).toBe(expected['TIL SALG'])
+        Object.entries(expected).forEach(([key, percentage]) => expect(panelOf(stats, key).percentage, key).toBe(percentage))
 
-        // Verify sum = 100% (unless all zero)
+        // The panels share the whole, unless no portion is booked
         const total = stats.reduce((sum, s) => sum + s.percentage, 0)
         expect(total === 0 || total === 100).toBe(true)
       })
@@ -231,7 +230,7 @@ describe('useOrder', () => {
       const stats = calculateDiningModeStats(closed)
 
       expect(sumBy(stats, s => s.portions)).toBe(calculateTotalPortions(closed))
-      expect(stats.find(s => s.key === OrderState.RELEASED)).toMatchObject({ label: 'TIL SALG', orderCount: 3 })
+      expect(panelOf(stats, OrderState.RELEASED)).toMatchObject({ label: TEAM_WORDS.kitchen.forSale, orderCount: 3 })
     })
   })
 
@@ -255,7 +254,6 @@ describe('useOrder', () => {
           expect(widths[key]).toBeCloseTo(expected, 0)
         })
 
-        // Verify sum = 100% (unless empty)
         const total = Object.values(widths).reduce((sum, w) => sum + w, 0)
         if (percentages.length > 0) expect(total).toBeCloseTo(100, 1)
       })

@@ -1,6 +1,7 @@
 import {test, expect} from '~~/tests/e2e/uiTest'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 const {validatedBrowserContext, expectApiError} = testHelpers
 
@@ -34,20 +35,20 @@ test.describe('Public Billing Page', () => {
         await page.goto(`/public/billing/${shareToken}`)
 
         // Wait for page to load
-        await expect(page.getByText('PBS Fakturaoversigt')).toBeVisible()
-        await expect(page.getByText('Skrååningen Fællesspisning')).toBeVisible()
+        await expect(page.getByText(BOOKING_WORDS.billing.publicPage.title)).toBeVisible()
+        await expect(page.getByText(BOOKING_WORDS.billing.publicPage.community)).toBeVisible()
 
         // Verify billing period is displayed
-        await expect(page.getByText('Forbrugsperiode')).toBeVisible()
+        await expect(page.getByText(BOOKING_WORDS.billing.summary.billingPeriod)).toBeVisible()
 
         // Verify stats tiles are visible
-        await expect(page.getByText('Husstande')).toBeVisible()
-        await expect(page.getByText('Kuverter')).toBeVisible()
+        await expect(page.getByText(BOOKING_WORDS.billing.stats.households)).toBeVisible()
+        await expect(page.getByText(BOOKING_WORDS.billing.stats.tickets)).toBeVisible()
 
         // Verify invoices table is visible
-        await expect(page.getByText('Fakturaer')).toBeVisible()
-        await expect(page.getByText('PBS ID')).toBeVisible()
-        await expect(page.getByText('Adresse')).toBeVisible()
+        await expect(page.getByText(BOOKING_WORDS.billing.titles.invoices)).toBeVisible()
+        await expect(page.getByText(BOOKING_WORDS.billing.columns.pbsId)).toBeVisible()
+        await expect(page.getByText(BOOKING_WORDS.billing.columns.address)).toBeVisible()
     })
 
     test('GIVEN invalid token WHEN navigating to public billing page THEN shows not found message', async ({page}) => {
@@ -56,7 +57,7 @@ test.describe('Public Billing Page', () => {
         await page.goto(`/public/billing/${invalidToken}`)
 
         // Should show not found message
-        await expect(page.getByText('Link ikke fundet')).toBeVisible()
-        await expect(page.getByText('Dette link er ugyldigt eller udløbet')).toBeVisible()
+        await expect(page.getByText(BOOKING_WORDS.billing.publicPage.notFound.title)).toBeVisible()
+        await expect(page.getByText(BOOKING_WORDS.billing.publicPage.notFound.description)).toBeVisible()
     })
 })

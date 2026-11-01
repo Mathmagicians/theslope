@@ -18,15 +18,6 @@ import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR, ALERTS, NOISE } = useTheSlopeDesignSystem()
 const now = useClock()
 
-// The tab keys are the URL's last segment
-const HOUSEHOLD_TAB = {
-  bookings: 'bookings',
-  members: 'members',
-  allergies: 'allergies',
-  economy: 'economy',
-  settings: 'settings'
-} as const
-
 // `edits` marks a tab whose component declares canEdit and adminBypass; the others take neither
 const tabs = [
   {
@@ -74,7 +65,7 @@ const asyncComponents = Object.fromEntries(
 )
 
 const route = useRoute()
-const shortname = computed(() => route.params.shortname as string)
+const shortname = computed(() => String(route.params.shortname))
 
 // Tab navigation with URL state
 const {activeTab} = useTabNavigation({

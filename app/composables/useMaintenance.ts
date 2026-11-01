@@ -148,7 +148,7 @@ export const useMaintenance = () => {
      * Format monthly billing results as stats array for action cards
      * Aggregates totals across all billing periods
      */
-    const {formatPrice} = useTicket()
+    const {formatKroner} = useTicket()
     const formatMonthlyBillingStats = ({results, periods}: MonthlyBillingJobResult): JobStat[] => {
         const totalInvoices = results.reduce((sum, r) => sum + r.invoiceCount, 0)
         const totalTransactions = results.reduce((sum, r) => sum + r.transactionCount, 0)
@@ -162,7 +162,7 @@ export const useMaintenance = () => {
             { icon: ICONS.calendar, label: label.periods, value: `${results.length}` },
             { icon: ICONS.ticket, label: label.invoices, value: `${totalInvoices}` },
             { icon: ICONS.shoppingCart, label: label.transactions, value: `${totalTransactions}` },
-            { icon: ICONS.economy, label: label.total, value: `${formatPrice(totalAmount)} kr` },
+            { icon: ICONS.economy, label: label.total, value: formatKroner(totalAmount) },
             { icon: ICONS.info, label: label.csvUploaded, value: `${csvUploaded}` },
             { icon: ICONS.info, label: label.mailsSent, value: `${mailsSent}` },
             { icon: ICONS.info, label: label.pending, value: `${pending}` }

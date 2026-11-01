@@ -158,14 +158,6 @@ export class UserFactory {
         return SenderEmitResultSchema.parse(await response.json())
     }
 
-    /** The user snapshot the session carries (GET /api/_auth/session) */
-    static readonly getSessionUser = async (context: BrowserContext): Promise<UserDetail> => {
-        const response = await context.request.get('/api/_auth/session', {headers})
-        expect(response.status()).toBe(200)
-        const {UserDetailSchema} = useCoreValidation()
-        return UserDetailSchema.parse((await response.json()).user)
-    }
-
     /** POST /api/admin/users/:id - the admin path used to arrange a member's phone for a test */
     static readonly setPhone = async (context: BrowserContext, userId: number, phone: string | null): Promise<void> => {
         const response = await context.request.post(`/api/admin/users/${userId}`, {headers, data: {phone}})

@@ -15,9 +15,11 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {COMPONENTS, createResponsiveSizes, createTableColumns} from '~/composables/useTheSlopeDesignSystem'
 import {formatPreviewLines} from '~/composables/useBookingUi'
 import {useBookingValidation, type InhabitantUpdateResponse, type ScaffoldResult} from '~/composables/useBookingValidation'
-import {useCoreValidation} from '~/composables/useCoreValidation'
+import {useCoreValidation, allInhabitantsQuery} from '~/composables/useCoreValidation'
 import {WEEKDAYS} from '~/types/dateTypes'
 import {formatDate, DATE_SETTINGS} from '~/utils/date'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 const {BookingActionSchema, DinnerModeSchema} = useBookingValidation()
 const {deserializeWeekDayMap} = useCoreValidation()
@@ -36,23 +38,25 @@ registerEndpoint('/api/admin/season', () => [season])
 registerEndpoint('/api/admin/household', () => [])
 
 // Each member's preference endpoint answers its preview, a read (GET) with the draft in its query, and its save (POST):
-// the member's Ingen cancels their dinner. The previews are kept in `sent`
-const sent: {inhabitantId: number, query: Record<string, unknown>}[] = []
+// the member's Ingen cancels their dinner, in power mode (`allInhabitants`) every member's. The requests are kept in `sent`
+const householdOrder = household.inhabitants.map(({id}) => id)
+const sent: {inhabitantId: number, method: string, query: Record<string, unknown>}[] = []
 const previewOf = (inhabitantId: number): ScaffoldResult => OrderFactory.defaultScaffoldResult({dinners: [{id: dinner.id, date: dinner.date}], results: [OrderFactory.defaultBookingResult({
     inhabitantId, inhabitantName: household.inhabitants.find(({id}) => id === inhabitantId)!.name, dinnerEventId: dinner.id, dinnerMode: DinnerMode.NONE, action: Action.CANCEL
 })]})
-let answerPreview = (inhabitantId: number): InhabitantUpdateResponse | Promise<InhabitantUpdateResponse> =>
-    ({inhabitant: {...household.inhabitants.find(({id}) => id === inhabitantId)!, userId: null}, scaffoldResult: previewOf(inhabitantId)})
+let answerPreview = (inhabitantId: number, allInhabitants: boolean): InhabitantUpdateResponse | Promise<InhabitantUpdateResponse> => ({
+    inhabitant: {...household.inhabitants.find(({id}) => id === inhabitantId)!, userId: null},
+    scaffoldResult: OrderFactory.defaultScaffoldResult({dinners: previewOf(inhabitantId).dinners, results: (allInhabitants ? householdOrder : [inhabitantId]).flatMap(id => previewOf(id).results)})
+})
 const answerOf = answerPreview
 household.inhabitants.forEach(({id}) => {
-    registerEndpoint(`/api/household/inhabitants/${id}/preferences`, {
-        method: 'GET',
-        handler: (event: H3Event) => {
-            sent.push({inhabitantId: id, query: getQuery(event)})
-            return answerPreview(id)
-        }
-    })
-    registerEndpoint(`/api/household/inhabitants/${id}/preferences`, {method: 'POST', handler: () => answerPreview(id)})
+    const answer = (event: H3Event) => {
+        const query = getQuery(event)
+        sent.push({inhabitantId: id, method: event.method, query})
+        return answerPreview(id, query.allInhabitants === allInhabitantsQuery(true).allInhabitants)
+    }
+    registerEndpoint(`/api/household/inhabitants/${id}/preferences`, {method: 'GET', handler: answer})
+    registerEndpoint(`/api/household/inhabitants/${id}/preferences`, {method: 'POST', handler: answer})
 })
 
 // The next test's resetStores drops the datasets a still-mounted card reads
@@ -87,6 +91,14 @@ describe.each(VIEWPORTS)('HouseholdCard on $viewport', ({isMd}) => {
         expect(wrapper.findComponent({name: 'UAvatarGroup'}).props('max')).toBe(COMPONENTS.avatar.powerRowMax)
     })
 
+    it('the power row\'s warning reads power mode\'s alert title and the household editor\'s description with the member count', async () => {
+        const wrapper = await mountCard(isMd)
+        await clickByTestId(wrapper, 'power-mode-toggle')
+
+        expect(wrapper.findAllComponents({name: 'UAlert'}).map(alert => ({title: alert.props('title'), description: alert.props('description')})))
+            .toContainEqual({title: BOOKING_WORDS.power.alert.title, description: HOUSEHOLD_WORDS.preferences.powerAlert.description(household.inhabitants.length)})
+    })
+
     it('the hint\'s line of dinner modes binds the hint modes token, and each mode holds its glyph and its word in a hint mode element', async () => {
         const wrapper = await mountCard(isMd)
         const line = wrapper.find('strong').element.parentElement!
@@ -101,7 +113,6 @@ describe.each(VIEWPORTS)('HouseholdCard on $viewport', ({isMd}) => {
 // A preference change previews what Gem does through the server's dry run, one person or every member in power mode
 describe('HouseholdCard previews a preference change', () => {
     const MONDAY = WEEKDAYS[0]
-    const householdOrder = household.inhabitants.map(({id}) => id)
     const previewTexts = (wrapper: Awaited<ReturnType<typeof mountCard>>) =>
         wrapper.findComponent(ActionPreview).props('days').map(day => day.lines.map(line => line.text))
 
@@ -111,18 +122,20 @@ describe('HouseholdCard previews a preference change', () => {
         answerPreview = answerOf
     })
 
+    // Power mode reads one dry run through the first member's path; the server's run answers for every member
     it.each([
-        {who: 'one person', toggle: `inhabitant-${inhabitant.id}-edit-preferences`, editor: `inhabitant-${inhabitant.id}-preferences-edit`, inhabitantIds: [inhabitant.id]},
-        {who: 'power mode', toggle: 'power-mode-toggle', editor: 'power-mode-preferences-edit', inhabitantIds: householdOrder}
-    ])('$who: the draft goes to each member\'s dry run and the reply renders under the dinner\'s day', async ({toggle, editor, inhabitantIds}) => {
+        {who: 'one person', toggle: `inhabitant-${inhabitant.id}-edit-preferences`, editor: `inhabitant-${inhabitant.id}-preferences-edit`, allInhabitants: false},
+        {who: 'power mode', toggle: 'power-mode-toggle', editor: 'power-mode-preferences-edit', allInhabitants: true}
+    ])('$who: the draft goes to one dry run and its reply renders under the dinner\'s day', async ({toggle, editor, allInhabitants}) => {
         const wrapper = await mountCard(false)
         await clickByTestId(wrapper, toggle)
         await clickByTestId(wrapper, `${editor}-${MONDAY}-${DinnerMode.NONE}`)
 
-        const expected = formatPreviewLines(
-            OrderFactory.defaultScaffoldResult({dinners: previewOf(inhabitant.id).dinners, results: inhabitantIds.flatMap(id => previewOf(id).results)}), householdOrder)
+        const expected = formatPreviewLines((await answerOf(inhabitant.id, allInhabitants)).scaffoldResult, householdOrder)
         await vi.waitFor(() => expect(previewTexts(wrapper)).toEqual(expected.map(day => day.lines.map(line => line.text))))
-        sent.forEach(({query}) => expect(deserializeWeekDayMap(String(query.dinnerPreferences))).toMatchObject({[MONDAY]: DinnerMode.NONE}))
+        expect(sent.map(({inhabitantId, method, query}) => ({inhabitantId, method, allInhabitants: query.allInhabitants})))
+            .toEqual([{inhabitantId: inhabitant.id, method: 'GET', ...allInhabitantsQuery(allInhabitants)}])
+        expect(deserializeWeekDayMap(String(sent[0]!.query.dinnerPreferences))).toMatchObject({[MONDAY]: DinnerMode.NONE})
     })
 
     it('while the draft equals the saved preferences no preview is asked for', async () => {
@@ -140,9 +153,9 @@ describe('HouseholdCard previews a preference change', () => {
         const landed = new Promise<void>(resolve => {
             land = resolve
         })
-        answerPreview = async (inhabitantId) => {
+        answerPreview = async (inhabitantId, allInhabitants) => {
             await landed
-            return answerOf(inhabitantId)
+            return answerOf(inhabitantId, allInhabitants)
         }
         const wrapper = await mountCard(false)
         await clickByTestId(wrapper, `inhabitant-${inhabitant.id}-edit-preferences`)
@@ -171,14 +184,20 @@ describe('HouseholdCard reports a saved preference change', () => {
         })
     })
 
-    it('the toast and the alert read the day\'s line, the people in the household\'s order', async () => {
+    // Power mode saves through the first member's path; the server's run covers the household either way
+    it.each([
+        {who: 'one person', toggle: `inhabitant-${first!.id}-edit-preferences`, editor: `inhabitant-${first!.id}-preferences-edit`, allInhabitants: false, title: HOUSEHOLD_WORDS.preferences.saved.inhabitant},
+        {who: 'power mode', toggle: 'power-mode-toggle', editor: 'power-mode-preferences-edit', allInhabitants: true, title: HOUSEHOLD_WORDS.preferences.saved.household}
+    ])('$who: one save, and the toast and the alert read the day\'s line, the people in the household\'s order', async ({toggle, editor, allInhabitants, title}) => {
         const wrapper = await mountCard(false)
-        await clickByTestId(wrapper, `inhabitant-${first!.id}-edit-preferences`)
-        await clickByTestId(wrapper, `inhabitant-${first!.id}-preferences-edit-${MONDAY}-${DinnerMode.NONE}`)
+        await clickByTestId(wrapper, toggle)
+        await clickByTestId(wrapper, `${editor}-${MONDAY}-${DinnerMode.NONE}`)
         await clickByTestId(wrapper, 'save-preferences')
 
         const line = `${formatDate(dinner.date, DATE_SETTINGS.DAY_MONTH_MASK)}  frameldt: ${first!.name}, ${second!.name}`
-        await vi.waitFor(() => expect(useToast().toasts.value.at(-1)).toMatchObject({title: 'Præferencer opdateret', description: line}))
-        expect(findByTestId(wrapper, 'last-result-alert').text()).toContain(`Du har ændret præferencer, og familiens bookinger har ændret sig:\n${line}`)
+        await vi.waitFor(() => expect(useToast().toasts.value.at(-1)).toMatchObject({title, description: line}))
+        expect(findByTestId(wrapper, 'last-result-alert').text()).toContain(HOUSEHOLD_WORDS.preferences.lastResult.description(line))
+        expect(sent.filter(({method}) => method === 'POST').map(({inhabitantId, query}) => ({inhabitantId, allInhabitants: query.allInhabitants})))
+            .toEqual([{inhabitantId: first!.id, ...allInhabitantsQuery(allInhabitants)}])
     })
 })

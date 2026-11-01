@@ -1,6 +1,8 @@
 <script setup lang="ts" generic="T extends CostLineItem">
 import type {TicketType} from '~/composables/useBookingValidation'
 import type {CostLineOrder} from '~/composables/useBookingUi'
+import {BOOKING_WORDS} from '~/config/bookingWords'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 /**
  * CostLine - Individual line item in economy views
@@ -11,6 +13,8 @@ import type {CostLineOrder} from '~/composables/useBookingUi'
  * order closed with Ingen.
  *
  * @generic T - Item type extending CostLineItem (OrderDisplay or TransactionDisplay)
+ *
+ * Visual check: /household/[shortname]/economy and /admin/economy, a period's lines with a history open, phone and desktop.
  */
 
 /**
@@ -43,18 +47,12 @@ const emit = defineEmits<{
     'toggle-history': [orderId: number | null]
 }>()
 
-const {formatPrice} = useTicket()
+const {formatKroner} = useTicket()
 const {formatCostLine} = useBookingUi()
 const {TYPOGRAPHY, SIZES, COMPONENTS, NOISE, BUTTONS, COLOR} = useTheSlopeDesignSystem()
 
-// Extract fields from item
-// For orders: use item.id (order is itself), for transactions: use orderId (may be null if order deleted)
-const orderId = computed(() => {
-    if (props.item.orderId !== undefined) {
-        return props.item.orderId  // transactions - use orderId (may be null)
-    }
-    return props.item.id  // orders - use own id for history
-})
+// An order is its own history; a transaction names its order, null once the order is deleted
+const orderId = computed(() => props.item.orderId !== undefined ? props.item.orderId : props.item.id)
 const isHistoryExpanded = computed(() => orderId.value !== null && props.historyOrderId === orderId.value)
 const ticketPresentation = computed(() => props.item.ticketType ? ticketTypePresentation(props.item.ticketType) : null)
 // Every mode shows, Ingen included (its X icon); a billed line shows none
@@ -71,44 +69,37 @@ const formatted = computed(() => formatCostLine(props.item))
 <template>
   <div :class="COMPONENTS.costLine.stack">
     <div :class="[COMPONENTS.costLine.row, COMPONENTS.costLine.columns, compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextSmall]">
-      <!-- History button -->
       <div>
         <UButton
             v-if="orderId"
             v-bind="BUTTONS.history(isHistoryExpanded)"
-            aria-label="Vis ordrehistorik"
+            :aria-label="BUTTON_WORDS.history"
             @click="emit('toggle-history', orderId)"
         />
       </div>
-      <!-- Name -->
       <span :class="COMPONENTS.costLine.nameSlot">{{ item.inhabitant.name }}</span>
-      <!-- Ticket type -->
       <div>
         <UBadge :color="ticketPresentation?.color ?? COLOR.neutral" :variant="NOISE.soft" :size="SIZES.small">
-          {{ ticketPresentation?.label ?? 'Ukendt' }}
+          {{ ticketPresentation?.label ?? BOOKING_WORDS.unknownTicketType }}
         </UBadge>
       </div>
-      <!-- Dinner mode -->
       <div>
         <DinnerModeSelector v-if="showDinnerMode" :model-value="dinnerModeValue" :size="SIZES.xs"/>
       </div>
-      <!-- Guest badge -->
       <div>
         <UBadge v-if="formatted.guest" :color="formatted.guest.color" :variant="NOISE.soft" :size="SIZES.small" :icon="formatted.guest.icon">
           {{ formatted.guest.label }}
         </UBadge>
       </div>
-      <!-- Order state -->
       <div>
         <UBadge :color="formatted.stateColor" :variant="NOISE.soft" :size="SIZES.small" :icon="formatted.stateIcon">
           {{ formatted.stateText }}
         </UBadge>
       </div>
-      <!-- Amount -->
-      <span :class="[COMPONENTS.costLine.amountSlot, compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextMuted]">{{ formatPrice(itemAmount) }} kr</span>
+      <span :class="[COMPONENTS.costLine.amountSlot, compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextMuted]">{{ formatKroner(itemAmount) }}</span>
     </div>
-    <div v-if="isHistoryExpanded" :class="COMPONENTS.costLine.history">
-      <OrderHistoryDisplay :order-id="orderId!"/>
+    <div v-if="isHistoryExpanded && orderId" :class="COMPONENTS.costLine.history">
+      <OrderHistoryDisplay :order-id="orderId"/>
     </div>
   </div>
 </template>

@@ -27,8 +27,8 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/order/waitlist.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `server/utils/waitlistAssignment.ts` | ✅ | N/A | ✅ | ✅ serial; recovery unit | ✅ `joinWaitlist` joins a household's claims on a dinner as one batch, idempotent on a later run; a placement grabs, writes, records and removes; the recovery settles a grab past `waitlistPlacingLeaseMinutes` and reports the sale or extra portion it finishes |
-| `server/utils/sender/events/waitlist.ts` | ✅ | N/A | ✅ | ✅ serial; unit | ✅ the booking status sender event: a notification about an inhabitant goes to the closest user (`findClosestUserInHousehold`, `records.ts`), the buildup to the closest user of the dinner's chef; `sendNotifications` sends the notifications of the dinners past their booking deadline as they stand, through `deliverDesired`; the dinners, people, households and logins read once per kind |
-| `server/utils/sender/deliveries.ts` | ✅ | N/A | ✅ | unit | ✅ `deliverDesired`, the delivery step every sender event shares: the recorded rows read once per subject type (ADR-014), one emit, one write of the Delivery rows; a delivery goes to a user or to a configured mailbox; `deliverInBackground` runs a sender event after the response |
+| `server/utils/sender/events/waitlist.ts` | ✅ | N/A | ✅ | ✅ serial; unit | ✅ the booking status sender event: a notification about an inhabitant goes to the closest user (`findClosestUserInHousehold`, `records.ts`), the buildup to the closest user of the dinner's chef; `sendNotifications` sends the notifications of the dinners past their booking deadline as they stand, through `deliverDesired`; the dinners, people, households and logins read once per kind; `notifyBookingOutcomes` and `notifyExtraPortions` leave out the outcomes of a dinner deleted since the action with a `console.warn`, and the action's other dinners notify |
+| `server/utils/sender/deliveries.ts` | ✅ | N/A | ✅ | unit | ✅ `deliverDesired`, the delivery step every sender event shares: the recorded rows read once per subject type (ADR-014), one emit, one write of the Delivery rows; a delivery goes to a user or to a configured mailbox; `deliverInBackground(event, name, work)` runs the work after the response as a promise, a synchronous throw included; its failure is one `console.error` line naming the work |
 | `server/utils/sender/events/monthly-billing.ts` | ✅ | N/A | ✅ | unit | ✅ the monthly billing sender event: `notificationsForAccountant`, a period's current version to the accountant's mailbox, cc the admin mailbox, the CSV attached; a missing accountant mailbox is an error line; sent through `deliverDesired` by the monthly run and the re-send |
 | `server/utils/sender/events/chef-deadlines.ts` | ✅ | N/A | ✅ | unit | ✅ the chef deadlines sender event (`sendChefDeadlines`): one notice a dinner a night to the chef's closest user while an alarm of the chef page (`getChefDeadlines`) is yellow, red or overdue, through `deliverDesired`; the active season's dinners and chefs read once |
 | `server/utils/sender/records.ts` | ✅ | N/A | ✅ | unit, through the sender events | ✅ the people reads every sender event shares (`readPeople`, `readNamed`) and `findClosestUserInHousehold` |
@@ -99,8 +99,8 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/billing/periods/[id].get.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed |
 | `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec skipped, import replaced |
 | **Admin - maintenance and jobs** | | | | | |
-| `/api/admin/maintenance/daily.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial | ⚠️ raw body read; the scaffold step drops cancelled and consumed dinners; the run sends the notifications of the dinners (`sendNotifications`) and then the chef deadlines (`sendChefDeadlines`), counted per sender event in `notifications` (`BOOKING_STATUS`, `CHEF_DEADLINES`); the pending dinners read as `DinnerEventDate[]` (`fetchPendingDinnersInActiveSeason`) |
-| `/api/admin/maintenance/monthly.post.ts` | ✅ | ⚠️ | ✅ | ✅ serial | ⚠️ raw body read |
+| `/api/admin/maintenance/daily.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial; unit | ⚠️ raw body read; the scaffold step drops cancelled and consumed dinners; the run sends the notifications of the dinners (`sendNotifications`) and then the chef deadlines (`sendChefDeadlines`), counted per sender event in `notifications` (`BOOKING_STATUS`, `CHEF_DEADLINES`); the pending dinners read as `DinnerEventDate[]` (`fetchPendingDinnersInActiveSeason`); each notification step (booking status, chef deadlines) stands alone: a failed step logs `console.error`, the next step runs, and the run completes PARTIAL with the step's message and the result of each step that ran; a failed data step completes the run FAILED with its message and rethrows |
+| `/api/admin/maintenance/monthly.post.ts` | ✅ | ⚠️ | ✅ | ✅ serial; unit | ⚠️ raw body read |
 | `/api/admin/maintenance/job-run/index.get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/maintenance/job-run/[id].get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/heynabo/import.get.ts` | ✅ | ⚠️ | ✅ | ✅ serial | ⚠️ raw query read |
@@ -110,8 +110,8 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/sender/delivery.get.ts` | ✅ | ✅ | ✅ | ✅ `delivery-records.feature`, `booking-notifications.feature` | ✅ the Delivery rows of the subjects in `subjectType=` and `subjectIds=`; `dryRun=BOOKING_STATUS` is the delivery dry run: per user what the DAILY_MAINTENANCE job sends, empty with no active season, an error with email off; every member reads (ADR-004) |
 | **Household** | | | | | |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/household/inhabitants/[id]/preferences.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the save's dry run on the draft in `dinnerPreferences=` (`serializeWeekDayMap`); any member reads any household's (ADR-004) |
-| `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save runs on the weekdays its draft changes, its dry run is the GET; past the deadline the path buys or queues (One intent path); `preferences.e2e` green in CI 2026-10-19 (8ed7e42) |
+| `/api/household/inhabitants/[id]/preferences.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the save's dry run on the draft in `dinnerPreferences=` (`serializeWeekDayMap`); any member reads any household's (ADR-004); `allInhabitants=true` (`AllInhabitantsQuerySchema`) previews power mode: one run with the draft for every inhabitant of the household |
+| `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save runs on the weekdays its draft changes, its dry run is the GET; past the deadline the path buys or queues (One intent path); `allInhabitants=true` (`AllInhabitantsQuerySchema`) is power mode: the household's inhabitants read once, written one after another, one run on the weekdays the draft changes for any of them; `preferences.e2e` green in CI 2026-10-19 (8ed7e42), its power mode case unrun |
 | `/api/household/order/scaffold.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the save's dry run on the draft in `orders=` (`DesiredOrderQuerySchema`, a month's draft under 16 KB); no orders answers the household's next run on the season's deadlines (One intent path); `bypassDeadlines=true` lifts the deadlines for an admin only; any member reads any household's (ADR-004) |
 | `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ✅ a save naming an order since bought by another household lists it in `failed` (`scaffoldPrebookings.unit.spec.ts:314`). Its dry run is the GET; `?adminBypass=true` from an admin writes the run's history rows with the source `admin-correction`; the run drops cancelled and consumed dinners; `scaffold.e2e` green in CI 2026-10-19 (8ed7e42); a ticket of 0 portions past the deadline: `features/booking/booking.feature` |
 | `/api/household/allergy/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -120,7 +120,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/household/allergy/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the allergy's household changes it; `?adminBypass=true` from an admin or the allergy manager (`requireHouseholdAccess`, ADR-004) |
 | `/api/household/allergy/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the allergy's household removes it; `?adminBypass=true` from an admin or the allergy manager (`requireHouseholdAccess`, ADR-004) |
 | **Chef** | | | | | |
-| `/api/chef/dinner/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/chef/dinner/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the Heynabo sync acts with the chef's token from the session's `secure` data (`getRequiredHeynaboToken`, 401 without it, ADR-013) |
 | `/api/chef/dinner/[id]/expenses/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/[expenseId].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -128,17 +128,17 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/chef/dinner/[id]/extra-portions.post.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ |
 | **Teams** | | | | | |
 | `/api/team/my.get.ts` | ✅ | N/A | ✅ | ✅ | ✅ |
-| `/api/team/cooking/[id]/assign-role.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/team/cooking/[id]/assign-role.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ a takeover of an announced dinner that keeps the menu reads the taker's token (`getRequiredHeynaboToken`) before the old event goes, 401 without it (ADR-013) |
 | `/api/team/cooking/[id]/remove-role.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **User** | | | | | |
-| `/api/user/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the booking mails honour the saved `notificationChannels`; after the user's creation this save is the one write of `notificationChannels` and `appearance` |
-| `/api/user/notifications/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ batched, 100 per call |
+| `/api/user/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the booking mails honour the saved `notificationChannels`; after the user's creation this save is the one write of `notificationChannels` and `appearance`; the session's user is replaced by the saved UserDetail, its `secure` data and sign-in time kept |
+| `/api/user/notifications/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ batched, 100 per call; the session user through `getRequiredUser` |
 | **Public** | | | | | |
 | `/api/public/billing/[token]/index.get.ts` | ✅ | ✅ | ❓ | ✅ ui | ❓ audit needed |
 | `/api/public/billing/[token]/csv.get.ts` | ✅ | ✅ | ❓ | ✅ ui | ❓ audit needed |
 | `/api/public/health.get.ts` | ❌ | N/A | N/A | N/A | ⚠️ no return type |
 | **Other** | | | | | |
-| `/api/auth/login.post.ts` | ❌ | ✅ | N/A | ✅ | ⚠️ no return type |
+| `/api/auth/login.post.ts` | ✅ | ✅ | N/A | ✅ unit | ✅ the session's `user` is the UserDetail and the Heynabo token goes to its server-only `secure` data; `/api/_auth/session` carries no token field (`authorization.e2e`) |
 | `/api/billing/index.get.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed |
 | `/api/calendar/index.get.ts` | ❌ | ⚠️ | ❓ | ❌ | ❌ raw query read, no spec |
 | `/api/calendar/feed.ts` | ✅ | N/A | ❓ | ❌ | ⚠️ no spec |
@@ -146,8 +146,9 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `server/integration/github/githubClient.ts` | ✅ | ✅ | N/A | ❌ | ⚠️ no spec |
 | `/api/test/heynabo/*` | N/A | N/A | N/A | N/A | N/A test support |
 | **Authorization** | | | | | |
+| `server/middleware/1.guard.ts` | N/A | N/A | N/A | ✅ unit | ✅ a protected route without a signed-in session answers 401 (API) or the login page with `?redirect`; a session without the Heynabo token in its `secure` data, or with a user `UserDetailSchema` rejects (`getSessionUser`, one `console.warn` without the user's data), is cleared first; the log line carries the masked mail and the roles |
 | `server/middleware/2.authorize.ts` | N/A | N/A | N/A | ✅ | ✅ |
-| `server/utils/authorizationHelper.ts` | N/A | N/A | N/A | ✅ | ✅ |
+| `server/utils/authorizationHelper.ts` | N/A | N/A | N/A | ✅ unit | ✅ `getRequiredHeynaboToken`: the session's Heynabo token or 401 |
 
 ## Checklist
 

@@ -12,9 +12,12 @@
  * └─────────────────────────────────────────────────────────────────────────┘
  *
  * Design: Subtle, not competing with the hero below. Uses muted colors.
+ *
+ * Visual check: /dinner and /chef, a dinner with and without a Heynabo event, phone and desktop.
  */
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 interface Props {
   dinnerEvent: DinnerEventDetail
@@ -31,27 +34,18 @@ const props = withDefaults(defineProps<Props>(), {
   navColor: undefined
 })
 
-// Design system and validation
-const {TYPOGRAPHY, ICONS, DINNER_STATE_BADGES, SIZES, IMG, BACKGROUNDS, COLOR, NOISE} = useTheSlopeDesignSystem()
-const {DinnerStateSchema} = useBookingValidation()
-const DinnerState = DinnerStateSchema.enum
+const {TYPOGRAPHY, ICONS, DINNER_STATE_BADGES, SIZES, IMG, COMPONENTS, COLOR, NOISE} = useTheSlopeDesignSystem()
+const header = COMPONENTS.dinnerDetailHeader
 
-// Heynabo link
 const eventUrlOf = getEventUrl(useRuntimeConfig().public.HEY_NABO_API)
 const heynaboEventUrl = computed(() => {
   if (!props.dinnerEvent.heynaboEventId) return null
   return eventUrlOf(props.dinnerEvent.heynaboEventId)
 })
 
-// Formatted date
 const formattedDate = computed(() => formatDate(props.dinnerEvent.date))
 
-// State badge config
-const stateBadge = computed(() => {
-  const state = props.dinnerEvent.state as keyof typeof DINNER_STATE_BADGES
-  const fallback = DinnerState.SCHEDULED as keyof typeof DINNER_STATE_BADGES
-  return DINNER_STATE_BADGES[state] ?? DINNER_STATE_BADGES[fallback]
-})
+const stateBadge = computed(() => DINNER_STATE_BADGES[props.dinnerEvent.state])
 
 const emit = defineEmits<{
   prev: []
@@ -62,11 +56,11 @@ const emit = defineEmits<{
 
 <template>
   <div
-    :class="`flex flex-col md:flex-row md:justify-between items-center gap-2 px-4 py-3 ${BACKGROUNDS.hero.mocha}`"
+    :class="header.root"
     data-testid="dinner-detail-header"
   >
     <!-- State badge (top on mobile, left on desktop) -->
-    <div class="flex items-center gap-2">
+    <div :class="header.badgeColumn">
       <UBadge
         :color="COLOR.mocha"
         :icon="stateBadge.icon"
@@ -92,7 +86,7 @@ const emit = defineEmits<{
     </CalendarDateNav>
 
     <!-- Heynabo link (bottom on mobile, right on desktop) -->
-    <div class="flex items-center md:justify-end">
+    <div :class="header.linkColumn">
       <UButton
         v-if="heynaboEventUrl"
         :to="heynaboEventUrl"
@@ -100,12 +94,12 @@ const emit = defineEmits<{
         :color="COLOR.neutral"
         :variant="NOISE.quiet"
         :size="SIZES.standard"
-        :avatar="{src: IMG.heynabo, alt: 'Heynabo'}"
+        :avatar="{src: IMG.heynabo, alt: BUTTON_WORDS.heynabo.name}"
         :trailing-icon="ICONS.arrowRight"
-        class="!text-[inherit]"
+        :class="header.heynaboLink"
         name="heynabo-event-link"
       >
-        Se på Heynabo
+        {{ BUTTON_WORDS.heynabo.openEvent }}
       </UButton>
     </div>
   </div>

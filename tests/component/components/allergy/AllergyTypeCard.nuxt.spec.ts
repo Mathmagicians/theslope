@@ -52,7 +52,7 @@ describe('AllergyTypeCard', () => {
 
             expect(findByTestId(wrapper, ALLERGY_TEST_IDS.form).exists()).toBe(true)
             expect(wrapper.text()).toContain(heading)
-            expect((wrapper.find('[name="allergy-name"]').element as HTMLInputElement).value).toBe(name)
+            expect(wrapper.find<HTMLInputElement>('[name="allergy-name"]').element.value).toBe(name)
         })
     })
 

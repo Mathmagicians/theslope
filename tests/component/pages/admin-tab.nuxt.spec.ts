@@ -153,7 +153,7 @@ describe('admin/[tab] - who edits the allergy catalog', () => {
 })
 
 // Every member reads the admin pages; a member without the admin role reads them under the read-only banner
-describe('admin/[tab] - the tabs and the read-only banner', () => {
+describe('admin/[tab] - the head, the tabs and the read-only banner', () => {
     beforeEach(() => {
         mockRoute.path = '/admin/allergies'
         mockRoute.params = {tab: 'allergies'}
@@ -163,6 +163,15 @@ describe('admin/[tab] - the tabs and the read-only banner', () => {
     it('names every tab', async () => {
         const wrapper = await mountWithTooltipProvider(AdminPage)
         Object.values(ADMIN_WORDS.tabs).forEach(label => expect(wrapper.text()).toContain(label))
+    })
+
+    it('names the page and describes it in the document head', async () => {
+        await mountWithTooltipProvider(AdminPage)
+
+        await vi.waitFor(() => expect({
+            title: document.title,
+            description: document.querySelector('meta[name="description"]')?.getAttribute('content')
+        }).toEqual(ADMIN_WORDS.page))
     })
 
     it.each([

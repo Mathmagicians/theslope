@@ -8,9 +8,11 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {getHouseholdUrl} from '~/utils/household'
+import {ADMIN_WORDS} from '~/config/adminWords'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 const {adminUIFile} = authFiles
-const {openContext, validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated, temporaryAndRandom, salt} = testHelpers
+const {openContext, validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated, temporaryAndRandom, salt, attemptAll} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const {findTicketPriceByType} = useTicket()
 const DinnerMode = DinnerModeSchema.enum
@@ -36,6 +38,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
     let householdEconomyUrl: string
     const testSalt = temporaryAndRandom()
     const createdSeasonIds: number[] = []
+    const createdInhabitantIds: number[] = []
 
     test.use({storageState: adminUIFile})
 
@@ -49,6 +52,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
             name: salt('Anders', testSalt), lastName: 'Korrektion'
         })
         testInhabitantId = person.id
+        createdInhabitantIds.push(person.id)
         await HouseholdFactory.updateInhabitant(adminContext, testInhabitantId, {dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)})
 
         // The spec's own season, open at activation: its cases correct an upcoming order and read no deadline, so its one
@@ -88,9 +92,11 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        await HouseholdFactory.deleteInhabitant(context, testInhabitantId)
-        // Deleting the season cascades its dinners and the order on them
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        // The admin's household stays; the spec's inhabitant goes, with its orders, and the season with its dinners
+        await attemptAll('AdminEconomy cleanup', [
+            ...createdInhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(context, id)),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 
     test('GIVEN an upcoming order WHEN /admin/economy is server-rendered THEN the future orders table shows its loading state, and once hydrated the order row appears', async ({browser, page}) => {
@@ -111,7 +117,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         const html = await adminContext.request.get(householdEconomyUrl).then(r => r.text())
 
         expect(html).toContain('data-testid="household-economy"')
-        expect(html).toContain('Faktureringsperioder')
+        expect(html).toContain(BOOKING_WORDS.billing.titles.periods)
         expect(html).not.toContain('Ingen kommende bestillinger')
     })
 
@@ -135,7 +141,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         const orderFetchPromise = page.waitForResponse(
             (r) => r.url().includes('/api/order') && r.url().includes('upcomingForSeason')
         )
-        await page.getByRole('tab', {name: 'Økonomi'}).click()
+        await page.getByRole('tab', {name: ADMIN_WORDS.tabs.economy}).click()
         await expect(page.getByTestId('admin-economy')).toBeVisible()
 
         // Wait for the upcoming orders to arrive
@@ -153,8 +159,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         const correctionBtn = page.getByTestId('admin-correction-btn')
         await expect(correctionBtn).toBeVisible()
         await correctionBtn.click()
-        // Wait for button to show confirm state (text changes to "Klik igen for at rette")
-        await expect(correctionBtn).toContainText('Klik igen')
+        await expect(correctionBtn).toContainText(BOOKING_WORDS.billing.correction.confirm)
         await correctionBtn.click()
 
         const householdSelect = page.getByTestId('admin-correction-household-select')

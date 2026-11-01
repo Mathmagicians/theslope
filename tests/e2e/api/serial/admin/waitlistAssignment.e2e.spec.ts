@@ -14,7 +14,7 @@ import type {WeekDayMap} from '~/types/dateTypes'
 import {dateToWeekDay} from '~/utils/season'
 const Action = useBookingValidation().BookingActionSchema.enum
 
-const {validatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo, daysFromNow} = testHelpers
+const {validatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo, daysFromNow, attemptAll} = testHelpers
 const {TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
 const {createDefaultWeekdayMap} = useCoreValidation()
@@ -84,11 +84,12 @@ test.describe('Waiting list assignment', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        // The persons go first, their orders and entries with them: a hook that runs out of time leaves none in the shared household.
-        // The season takes its team and its dinners with their orders and entries
-        for (const inhabitant of inhabitants) await HouseholdFactory.deleteInhabitant(context, inhabitant.id!)
-        await HouseholdFactory.deleteHousehold(context, sellerHouseholdIds)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        // A person takes their orders and entries; the season takes its team and its dinners with their orders and entries
+        await attemptAll('Waiting list assignment cleanup', [
+            ...inhabitants.map(inhabitant => () => HouseholdFactory.deleteInhabitant(context, inhabitant.id!)),
+            () => HouseholdFactory.deleteHousehold(context, sellerHouseholdIds),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 
     test('GIVEN voksen, barn, voksen, barn in the queue WHEN the chef releases 2.5 portions THEN the first three get their tickets and the last barn waits', async ({browser}) => {
@@ -282,8 +283,10 @@ test.describe('Preferences and the waiting list', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        for (const id of createdInhabitantIds) await HouseholdFactory.deleteInhabitant(context, id)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        await attemptAll('Preferences and the waiting list cleanup', [
+            ...createdInhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(context, id)),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 
     // A person of the admin's household who eats on no day, on a season whose dinners are all past the deadline

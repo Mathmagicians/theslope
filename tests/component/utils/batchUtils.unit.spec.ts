@@ -117,6 +117,29 @@ describe('batchUtils', () => {
             expect(result.update).toHaveLength(1)
             expect(result.idempotent).toHaveLength(0)
         })
+
+        // An incoming item keeps its key elsewhere than an existing one: each side reads its own
+        interface Wrapper { nested: Item }
+        interface Stored extends Item { storedAt: number }
+        const reconcileWrapped = pruneAndCreate<Wrapper, Item, number>(
+            wrapper => wrapper.nested.id,
+            (existing, incoming) => existing.nested.value === incoming.value,
+            item => item.id
+        )
+
+        it('GIVEN an incoming key of its own WHEN reconciling THEN each side matches by the key it holds', () => {
+            const result = reconcileWrapped([{nested: {id: 1, value: 'same'}}, {nested: {id: 2, value: 'gone'}}])([{id: 1, value: 'same'}, {id: 3, value: 'new'}])
+
+            expect(result).toEqual({create: [{id: 3, value: 'new'}], update: [], idempotent: [{id: 1, value: 'same'}], delete: [{nested: {id: 2, value: 'gone'}}]})
+        })
+
+        it('GIVEN one key for both sides WHEN its types differ THEN the key reads both', () => {
+            // @ts-expect-error a key of the existing side alone reads no incoming item
+            pruneAndCreate<Wrapper, Item, number>(wrapper => wrapper.nested.id)
+            const reconcileStored = pruneAndCreate<Stored, Item, number>(item => item.id)
+
+            expect(reconcileStored([{id: 1, value: 'kept', storedAt: 5}])([{id: 1, value: 'kept'}]).update).toEqual([{id: 1, value: 'kept'}])
+        })
     })
 })
 

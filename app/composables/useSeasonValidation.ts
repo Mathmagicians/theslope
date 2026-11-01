@@ -6,7 +6,6 @@ import {useTicketPriceValidation, type PortionTicket} from '~/composables/useTic
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {IdSchema} from '~/composables/useCoreValidation'
-import type {WeekDayMap} from '~/types/dateTypes'
 import {SEASON_STATUS, SEASON_WORDS} from '~/config/seasonWords'
 
 const seasonStatusValues = [SEASON_STATUS.ACTIVE, SEASON_STATUS.FUTURE, SEASON_STATUS.CURRENT, SEASON_STATUS.PAST] as const
@@ -20,16 +19,13 @@ export const useSeasonValidation = () => {
 
     // Get validation schemas with explicit boolean options for Season cookingDays
     const {
-        WeekDayMapSchemaRequired,
+        WeekDayMapSchema,
         serializeWeekDayMap,
         deserializeWeekDayMap,
         createWeekDayMapFromSelection
-    } = useWeekDayMapValidation<boolean>({
-        valueSchema: z.boolean(),
-        defaultValue: false,
-        isRequired: (map: WeekDayMap<boolean>) => Object.values(map).some(Boolean),
-        requiredMessage: SEASON_WORDS.form.noCookingDay
-    })
+    } = useWeekDayMapValidation<boolean>({valueSchema: z.boolean(), defaultValue: false})
+    // A season cooks on at least one weekday
+    const CookingDaysSchema = WeekDayMapSchema.refine(map => Object.values(map).some(Boolean), {message: SEASON_WORDS.form.noCookingDay})
     const {DinnerEventDisplaySchema, SerializedDinnerEventSchema, deserializeDinnerEvent, ScaffoldResultSchema} = useBookingValidation()
     const {TicketPriceSchema, TicketPricesArraySchema} = useTicketPriceValidation()
     const {deserializeCookingTeamDisplay, CookingTeamDisplaySchema, SerializedCookingTeamDisplaySchema} = useCookingTeamValidation()
@@ -45,7 +41,7 @@ export const useSeasonValidation = () => {
         shortName: z.string().min(4),
         seasonDates: dateRangeSchema,
         isActive: z.boolean(),
-        cookingDays: WeekDayMapSchemaRequired!,
+        cookingDays: CookingDaysSchema,
         holidays: holidaysSchema,
         ticketIsCancellableDaysBefore: z.number().min(0).max(31),
         diningModeIsEditableMinutesBefore: z.number().min(0).max(1440),

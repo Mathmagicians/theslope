@@ -1,6 +1,7 @@
 /**
  * The season words users read. Plain module without auto-imports (ADR-017).
  */
+import {FORM_MODES, type FormMode} from '~/types/form'
 
 /** A season's status as its badge and the season selector name it; the values of `SeasonStatusSchema` */
 export const SEASON_STATUS = {
@@ -34,6 +35,38 @@ export const SEASON_WORDS = {
         holidayOutsideSeason: 'Ferieperioder skal være inden for fællesspisningssæsonen',
         noTicketPrice: 'Udfyld mindst en billettype',
         ticketPricesAcrossSeasons: 'Alle billetpriser skal tilhøre samme sæson'
+    },
+    /**
+     * The admin's season form: the title's verb per form mode before the season's name, the line naming the holiday
+     * calendar the season follows and its link, the cooking days' unit, each field's label, the two lists' headings, and
+     * the heading over the form's errors
+     */
+    editor: {
+        titleVerbs: {[FORM_MODES.VIEW]: '', [FORM_MODES.EDIT]: 'Redigerer', [FORM_MODES.CREATE]: 'Opretter'} satisfies Record<FormMode, string>,
+        name: 'fællesspisning sæson',
+        holidayCalendar: {lead: 'Vi følger folkeskolernes feriekalender i', link: 'Lejre Kommune.'},
+        cookingDays: 'Madlavningsdage',
+        seasonDates: 'Fællesspisning sæsonens start - slut datoer',
+        weekdays: 'Hvilke ugedage skal der være fællesspisning?',
+        holidays: 'Hvornår holder fællesspisning fri?',
+        ticketIsCancellableDaysBefore: 'Hvor mange dage før fællespisning, skal man kunne afbestille sin billet?',
+        diningModeIsEditableMinutesBefore: 'Hvor mange minutter før fællespisning, skal man kunne ændre mellem spisesal og takeaway?',
+        consecutiveCookingDays: 'Hvor mange dage i træk laver madholdene mad?',
+        ticketPrices: 'Billetpriser',
+        errors: 'Formen indeholder fejl, som skal rettes:'
+    },
+    /**
+     * The season form's ticket prices: the add card's title, its fields' labels and placeholders, its add button, and a
+     * price's remove button by its ticket type
+     */
+    ticketPriceEditor: {
+        addTitle: 'Tilføj billettyper',
+        ticketType: 'Billettype',
+        price: 'Pris (DKK)',
+        maxAge: {label: 'Angiv aldersgrænse', placeholder: 'Eventuel aldersgrænse'},
+        description: {label: 'Beskrivelse (valgfrit)', placeholder: "F.eks. 'Fra 11 år og opefter'"},
+        add: 'Tilføj billet',
+        remove: (ticketType: string) => `Fjern ${ticketType}-billet`
     },
     /** The alert over the season on the admin's planning page, per status */
     statusAlert: {

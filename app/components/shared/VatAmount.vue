@@ -9,6 +9,8 @@
  * The stored figure is gross; the ex moms half is derived with the kitchen's VAT rate. The three parts sit in fixed
  * columns and the icon slot is always there, so kr lines up down a column of amounts with and without an icon.
  */
+import {PRICE_WORDS} from '~/config/priceWords'
+
 const props = withDefaults(defineProps<{
   gross: number
   balance?: boolean
@@ -36,7 +38,7 @@ const iconTestId = computed(() => props.pending ? 'vat-amount-pending' : negativ
 <template>
   <span :class="[COMPONENTS.vatAmount.root, negative ? COMPONENTS.vatAmount.over : '']" data-testid="vat-amount">
     <span :class="COMPONENTS.vatAmount.ex" data-testid="vat-amount-ex">{{ figure(exVat) }}</span>
-    <span :class="COMPONENTS.vatAmount.incl" data-testid="vat-amount-incl">/ {{ figure(gross) }} kr</span>
+    <span :class="COMPONENTS.vatAmount.incl" data-testid="vat-amount-incl">/ {{ PRICE_WORDS.kroner(figure(gross)) }}</span>
     <span :class="COMPONENTS.vatAmount.iconSlot" data-testid="vat-amount-slot">
       <UIcon v-if="balance" :name="iconName" :class="[COMPONENTS.vatAmount.icon, iconClass]" :data-testid="iconTestId" />
     </span>

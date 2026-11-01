@@ -2,14 +2,15 @@ import { test, expect } from '~~/tests/e2e/uiTest'
 import { authFiles } from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { ADMIN_WORDS } from '~/config/adminWords'
 
 const { adminUIFile, memberUIFile } = authFiles
 const { validatedBrowserContext, doScreenshot, gotoHydrated } = testHelpers
 
 // Every tab loads to its root test-id in MobileViewport.e2e.spec.ts; the cases here cover redirects and tab selection
 const tabs = [
-  { name: 'Økonomi', path: 'economy', selector: '[data-testid="admin-economy"]' },
-  { name: 'Planlægning', path: 'planning', selector: '[data-testid="admin-planning"]' }
+  { name: ADMIN_WORDS.tabs.economy, path: 'economy', selector: '[data-testid="admin-economy"]' },
+  { name: ADMIN_WORDS.tabs.planning, path: 'planning', selector: '[data-testid="admin-planning"]' }
 ]
 
 test.describe('Admin page path-based navigation', () => {
@@ -132,7 +133,7 @@ test.describe('Admin page authorization', () => {
           const bannerLocator = page.locator('[data-testid="admin-readonly-banner"]')
           if (userContext.expectBanner) {
             await expect(bannerLocator).toBeVisible()
-            await expect(bannerLocator).toContainText('Hej, du er ikke administrator')
+            await expect(bannerLocator).toContainText(ADMIN_WORDS.readOnly.title)
           } else {
             await expect(bannerLocator).not.toBeVisible()
           }

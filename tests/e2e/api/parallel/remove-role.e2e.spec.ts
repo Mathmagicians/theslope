@@ -16,7 +16,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
  * Team membership (CookingTeamAssignment) is preserved.
  */
 
-const {validatedBrowserContext, memberValidatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo, attemptAll} = testHelpers
 const {DinnerStateSchema} = useBookingValidation()
 const {TeamRoleSchema} = useCookingTeamValidation()
 const DinnerState = DinnerStateSchema.enum
@@ -42,8 +42,10 @@ test.describe('Remove Role Endpoint (Meld afbud)', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
-        await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
+        await attemptAll('Remove Role Endpoint (Meld afbud) cleanup', [
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds),
+            () => AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
+        ]).finally(() => context.close())
     })
 
     // A SCHEDULED dinner on a team of its own with the member as its chef

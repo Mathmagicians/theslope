@@ -14,7 +14,7 @@ const Action = useActionValidation().BookingActionSchema.enum
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap: createDefaultDinnerModeMap} = useCoreValidation()
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom, assertNoOrdersWithOrphanPrices, daysFromNow} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom, assertNoOrdersWithOrphanPrices, daysFromNow, attemptAll} = testHelpers
 const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
 const {findTicketPriceByType} = useTicket()
 
@@ -38,11 +38,11 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        for (const inhabitantId of createdInhabitantIds) await HouseholdFactory.deleteInhabitant(context, inhabitantId)
-        for (const householdId of createdHouseholdIds) {
-            await HouseholdFactory.deleteHousehold(context, householdId)
-        }
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        await attemptAll('POST /api/admin/season/[id]/scaffold-prebookings cleanup', [
+            ...createdInhabitantIds.map(inhabitantId => () => HouseholdFactory.deleteInhabitant(context, inhabitantId)),
+            ...createdHouseholdIds.map(householdId => () => HouseholdFactory.deleteHousehold(context, householdId)),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 
     test('should create orders for inhabitants with preferences, and be idempotent', async ({browser}) => {

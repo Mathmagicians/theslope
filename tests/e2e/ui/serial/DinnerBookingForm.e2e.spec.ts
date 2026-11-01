@@ -11,7 +11,7 @@ import {formatDate} from '~/utils/date'
 import {BookingViewSchema} from '~/composables/useBookingView'
 
 const {memberUIFile, adminUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, getSessionUserInfo, gotoHydrated, selectDropdownOption, temporaryAndRandom, salt, isScaffoldSave, isExpectedRead, expectApiError, PAST_THE_SCAFFOLD_WINDOW_DAYS} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, getSessionUserInfo, gotoHydrated, selectDropdownOption, temporaryAndRandom, salt, isScaffoldSave, isExpectedRead, expectApiError, PAST_THE_SCAFFOLD_WINDOW_DAYS, attemptAll} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, BookingActionSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -67,10 +67,12 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        // The member's household stays; the spec's inhabitants go, with their orders. Cleanup accepts a 404
-        await Promise.all(createdInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(context, id)))
-        // Cleanup accepts a season already gone (the admin case deletes its own)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        // The member's household stays; the spec's inhabitants go, with their orders. Cleanup accepts a 404, and a
+        // season already gone (the admin case deletes its own)
+        await attemptAll('DinnerBookingForm cleanup', [
+            ...createdInhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(context, id)),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 
     const getFutureDinnerEvent = async (eventIndex: number = 0) => {

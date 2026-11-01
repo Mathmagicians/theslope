@@ -12,6 +12,7 @@ import { useBooking } from '~/composables/useBooking'
 import { useCookingTeam } from '~/composables/useCookingTeam'
 import type { DinnerEventDetail, AssignRole } from '~/composables/useBookingValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
+import { getRequiredHeynaboToken } from '~~/server/utils/authorizationHelper'
 import {idParams} from '~/composables/useCoreValidation'
 
 const { throwH3Error } = eventHandlerHelper
@@ -70,7 +71,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
         )
 
         // Takeover of an ANNOUNCED dinner: the Heynabo event belongs to the departing chef's
-        // account and cannot be edited by the taker (bug-fix-chef-takeover.md)
+        // account and cannot be edited by the taker
         const isChefTakeover = dinnerEvent.chefId !== null
             && plan.nextChefId === assignData.inhabitantId
             && dinnerEvent.chefId !== assignData.inhabitantId
@@ -82,30 +83,24 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
                 heynaboSyncDegraded = cleared.heynaboSyncDegraded
                 console.info(`${PREFIX} Takeover with CLEAR: dinner ${id} reset for the new chef (degraded=${heynaboSyncDegraded})`)
             } else if (dinnerEvent.heynaboEventId) {
+                const heynaboToken = await getRequiredHeynaboToken(event)
                 await deleteHeynaboEventAsSystem(dinnerEvent.heynaboEventId)
                     .catch((e) => {
                         console.warn(`${PREFIX} Old Heynabo event ${dinnerEvent.heynaboEventId} could not be deleted (non-blocking)`, e)
                         heynaboSyncDegraded = true
                     })
-                const session = await getUserSession(event)
-                const heynaboToken = (session?.user as {passwordHash?: string} | undefined)?.passwordHash
-                let newEventId: number | null = null
-                if (heynaboToken) {
-                    const {createHeynaboEventPayload} = useBooking()
-                    const baseUrl = getRequestURL(event).origin
-                    const created = await createHeynaboEvent(heynaboToken, createHeynaboEventPayload(dinnerEvent, baseUrl))
-                        .catch((e) => {
-                            console.warn(`${PREFIX} Republish under the taker's token failed (non-blocking)`, e)
-                            heynaboSyncDegraded = true
-                            return null
-                        })
-                    if (created) {
-                        newEventId = created.id
-                        await uploadDefaultDinnerPictureToEvent(heynaboToken, created.id, baseUrl)
-                    }
-                } else {
-                    heynaboSyncDegraded = true
+                const {createHeynaboEventPayload} = useBooking()
+                const baseUrl = getRequestURL(event).origin
+                const created = await createHeynaboEvent(heynaboToken, createHeynaboEventPayload(dinnerEvent, baseUrl))
+                    .catch((e) => {
+                        console.warn(`${PREFIX} Republish under the taker's token failed (non-blocking)`, e)
+                        heynaboSyncDegraded = true
+                        return null
+                    })
+                if (created) {
+                    await uploadDefaultDinnerPictureToEvent(heynaboToken, created.id, baseUrl)
                 }
+                const newEventId = created?.id ?? null
                 await updateDinnerEvent(d1Client, id, { heynaboEventId: newEventId })
                 console.info(`${PREFIX} Takeover with PRESERVE: dinner ${id} republished (heynaboEventId=${newEventId}, degraded=${heynaboSyncDegraded})`)
             }

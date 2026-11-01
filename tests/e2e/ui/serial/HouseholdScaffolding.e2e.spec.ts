@@ -7,12 +7,13 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 import {dateToWeekDay} from '~/utils/season'
 import {formatDate} from '~/utils/date'
 import {WEEKDAYS} from '~/types/dateTypes'
 
 const {memberUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated, waitForApi, isBeforeDinnerDeadline} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated, waitForApi, isBeforeDinnerDeadline, attemptAll} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -83,14 +84,11 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-
-        // Clean up inhabitants first (they reference households); an inhabitant already gone counts as removed
-        for (const inhabitantId of createdInhabitantIds) {
-            await HouseholdFactory.deleteInhabitant(context, inhabitantId)
-        }
-
-        // Clean up seasons (cascade deletes dinner events and orders)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        // An inhabitant already gone counts as removed; a season cascades its dinner events and orders
+        await attemptAll('Household Scaffolding cleanup', [
+            ...createdInhabitantIds.map(inhabitantId => () => HouseholdFactory.deleteInhabitant(context, inhabitantId)),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 
     test('CREATE bucket: GIVEN inhabitant with NONE prefs WHEN changing to DINEIN THEN orders created for before-deadline events', async ({page, browser}) => {
@@ -152,7 +150,7 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         await saved
 
         // THEN: the row collapses once the save lands (the toggle reads 'Luk' while open)
-        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer')
+        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', HOUSEHOLD_WORDS.preferences.edit)
 
         // THEN: Verify orders created only for before-deadline events via API
         const ordersAfter = await pollUntil(
@@ -201,7 +199,7 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         const saved = waitForApi(page, `/api/household/inhabitants/${inhabitant.id}/preferences`, 'POST')
         await page.getByTestId('save-preferences').click()
         await saved
-        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer')
+        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', HOUSEHOLD_WORDS.preferences.edit)
 
         await page.getByRole('tab', {name: 'Tilmeldinger'}).click()
 

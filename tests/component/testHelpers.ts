@@ -3,8 +3,9 @@ import {expect, beforeEach, afterEach, vi} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
 import {useNuxtApp, clearNuxtData, useAppConfig, useState} from '#app'
+import {usePinia} from '#imports'
 import {getActivePinia, setActivePinia, type Pinia} from 'pinia'
-import {flushPromises, type BaseWrapper, type DOMWrapper, type VueWrapper} from '@vue/test-utils'
+import {flushPromises, type BaseWrapper, type DOMWrapper} from '@vue/test-utils'
 import {toCalendarDate} from '~/utils/date'
 import {sumBy} from '~/utils/ledger'
 import {TICKET_COUNTS} from '~/composables/useBilling'
@@ -14,6 +15,7 @@ import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {useBookingValidation, type ScaffoldOrdersRequest, type ScaffoldOrdersResponse, type TicketType} from '~/composables/useBookingValidation'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {getQuery, type H3Event} from 'h3'
+import type {ZodType} from 'zod'
 
 /**
  * Generic polling function for component tests
@@ -52,7 +54,7 @@ export const asyncDataStatus = (key: string) => useNuxtApp()._asyncData[key]?.st
  */
 export const resetStores = () => {
     const nuxtApp = useNuxtApp()
-    const appPinia = nuxtApp.$pinia as Pinia
+    const appPinia = usePinia()
     new Set([getActivePinia(), appPinia]).forEach(pinia => pinia?._s.forEach(store => store.$dispose()))
     setActivePinia(appPinia)
     clearNuxtData()
@@ -69,11 +71,16 @@ export const useTestScope = () => {
         scope = effectScope()
     })
     afterEach(() => scope.stop())
-    return <T>(create: () => T): T => scope.run(create) as T
+    // run answers undefined from a stopped scope: the box tells that apart from a composable answering undefined
+    return <T>(create: () => T): T => {
+        const created = scope.run(() => ({value: create()}))
+        if (!created) throw new Error('The test scope runs only inside a test')
+        return created.value
+    }
 }
 
 /** The store instance a mounted component uses: components inject the Nuxt app's pinia, not the spec's active one */
-export const mountedStore = <S>(useStore: (pinia: Pinia) => S): S => useStore(useNuxtApp().$pinia as Pinia)
+export const mountedStore = <S>(useStore: (pinia: Pinia) => S): S => useStore(usePinia())
 
 /** The datasets the stores request on creation, answered empty; a spec's own route for one of them registers after this call, as the last registration of a url answers */
 export const registerEmptyStoreEndpoints = () => {
@@ -190,6 +197,15 @@ export const findComponentByTestId = <Props>(wrapper: BaseWrapper<Node>, name: s
     return found
 }
 
+export {itemAt} from '~~/tests/component/listHelpers'
+
+/**
+ * The payload of an event's emit, the last one by default, parsed by the schema of what the component emits: the
+ * payload arrives typed, and a payload of another shape fails the case
+ */
+export const emittedPayload = <T>(wrapper: {emitted: (event: string) => unknown[][] | undefined}, event: string, schema: ZodType<T>, at = -1): T =>
+    schema.parse(wrapper.emitted(event)?.at(at)?.[0])
+
 /** The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows */
 export const findLoadingRow = (wrapper: BaseWrapper<Node>) => wrapper.find('[data-slot="loading"]')
 
@@ -220,11 +236,9 @@ export const findOpenRows = (wrapper: BaseWrapper<Node>): {row: DOMWrapper<Eleme
     })
 }
 
-type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
-
 /** The names of the icons rendered inside a wrapper or a part of it */
 export const iconNamesIn = (wrapper: BaseWrapper<Node>): string[] =>
-    (wrapper.findAllComponents({name: 'UIcon'}) as IconWrapper[]).map(icon => icon.props('name'))
+    wrapper.findAllComponents<ComponentPublicInstance<{name: string}>>({name: 'UIcon'}).map(icon => icon.props('name'))
 
 /** Whether the table binds `loading`: UTable runs its loading bar under the column headers, a bar that carries no attribute */
 export const isTableLoading = (wrapper: BaseWrapper<Node>): boolean =>
@@ -300,7 +314,7 @@ export const openPopover = async (wrapper: BaseWrapper<Node>) => {
 }
 
 /** A Date as its calendar day ('2025-01-05'): the model may carry local or UTC midnight of the same day */
-export const calendarDay = (date: Date) => toCalendarDate(date)?.toString()
+export const calendarDay = (date: Date | undefined) => toCalendarDate(date)?.toString()
 
 /** Ranges as calendar days, for asserting emitted DateRange payloads */
 export const asCalendarDays = (ranges: Array<{start: Date, end: Date}>) =>
@@ -309,6 +323,13 @@ export const asCalendarDays = (ranges: Array<{start: Date, end: Date}>) =>
 /** The typed date segments (reka DateField) of one kind, in field order: one per date field below `wrapper` */
 export const findDateSegments = (wrapper: BaseWrapper<Node>, segment: 'day' | 'month' | 'year') =>
     wrapper.findAll(`[data-segment="${segment}"]`)
+
+/** The first date segment of one kind below `wrapper`; a missing one fails the case by name */
+export const dateSegment = (wrapper: BaseWrapper<Node>, segment: Parameters<typeof findDateSegments>[1]) => {
+    const [found] = findDateSegments(wrapper, segment)
+    if (!found) throw new Error(`No ${segment} segment`)
+    return found
+}
 
 /** Types digits into one segment and waits a tick; the field commits when every segment holds a value */
 export const typeIntoSegment = async (segment: {trigger: (e: string, o: {key: string}) => Promise<unknown>}, keys: string[]) => {

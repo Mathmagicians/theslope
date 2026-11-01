@@ -3,7 +3,7 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, salt, temporaryAndRandom, attemptAll} = testHelpers
 
 // Variables to store IDs for cleanup
 // Only track root entities - CASCADE will delete children; a person in the member's household goes on its own
@@ -374,7 +374,9 @@ test.afterAll(async ({browser}) => {
     // Only need to delete root entities - CASCADE will handle the rest
     // Deleting Household cascades to Inhabitants and their Allergies
     // Deleting AllergyType cascades to any remaining Allergies
-    await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
-    await Promise.all(createdInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(context, id)))
-    await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
+    await attemptAll('Allergy API cleanup', [
+        () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds),
+        ...createdInhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(context, id)),
+        () => AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
+    ]).finally(() => context.close())
 })

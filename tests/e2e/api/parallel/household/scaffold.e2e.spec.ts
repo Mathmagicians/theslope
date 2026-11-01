@@ -12,7 +12,7 @@ import type { Season } from '~/composables/useSeasonValidation'
 import type { ScaffoldOrdersRequest, DinnerMode as DinnerModeType } from '~/composables/useBookingValidation'
 const Action = useBookingValidation().BookingActionSchema.enum
 
-const { validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, salt, getSessionUserInfo, daysFromNow } = testHelpers
+const { validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, salt, getSessionUserInfo, daysFromNow, attemptAll } = testHelpers
 const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema } = useBookingValidation()
 const { findTicketPriceByType, findTicketPriceById } = useTicket()
 const DinnerMode = DinnerModeSchema.enum
@@ -74,11 +74,12 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
   test.afterAll(async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
-    // Cleanup in reverse order of creation
-    for (const id of createdInhabitantIds) await HouseholdFactory.deleteInhabitant(context, id)
-    await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
-    await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
-    await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+    await attemptAll('Household Scaffold API (ADR-016) cleanup', [
+      ...createdInhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(context, id)),
+      () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds),
+      () => AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds),
+      () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+    ]).finally(() => context.close())
   })
 
   // ============================================================================

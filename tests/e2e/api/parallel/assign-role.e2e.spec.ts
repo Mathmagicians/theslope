@@ -7,7 +7,7 @@ import { useCookingTeamValidation } from '~/composables/useCookingTeamValidation
 import { useBookingValidation, type DinnerEventCreate } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 
-const { validatedBrowserContext, salt, temporaryAndRandom } = testHelpers
+const { validatedBrowserContext, salt, temporaryAndRandom, attemptAll } = testHelpers
 const { TeamRoleSchema } = useCookingTeamValidation()
 const TeamRole = TeamRoleSchema.enum
 const { DinnerStateSchema, MenuSwapStrategySchema } = useBookingValidation()
@@ -29,12 +29,12 @@ test.describe('DinnerEvent API - Assign Role', () => {
 
     test.afterAll(async ({ browser }) => {
         const context = await validatedBrowserContext(browser)
-
-        // Delete season - CASCADE deletes teams, dinner events, and assignments (ADR-005)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
-
-        // Delete households (not related to season, need manual cleanup)
-        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
+        await attemptAll('DinnerEvent API - Assign Role cleanup', [
+            // Delete season - CASCADE deletes teams, dinner events, and assignments (ADR-005)
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds),
+            // Delete households (not related to season, need manual cleanup)
+            () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
+        ]).finally(() => context.close())
     })
 
     test.describe('POST /api/team/cooking/[id]/assign-role', () => {

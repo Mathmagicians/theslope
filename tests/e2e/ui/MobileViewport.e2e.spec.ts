@@ -3,7 +3,7 @@ import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {BillingFactory} from '../testDataFactories/billingFactory'
-import {getHouseholdUrl} from '~/utils/household'
+import {getHouseholdUrl, HOUSEHOLD_TAB, type HouseholdTab} from '~/utils/household'
 import {BookingViewSchema} from '~/composables/useBookingView'
 
 const {adminUIFile} = authFiles
@@ -53,11 +53,11 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
     const WHOLE_WORD_TEXT = 'th, td, :is(span, button, a)[data-slot="base"]:not(td *)'
 
     const ADMIN_TABS = ['planning', 'teams', 'households', 'allergies', 'users', 'economy', 'system']
-    const HOUSEHOLD_TABS = ['bookings', 'members', 'allergies', 'economy', 'settings']
+    const HOUSEHOLD_TABS = Object.values(HOUSEHOLD_TAB)
     /** The bookings tab case renders the default day view */
     const BOOKING_VIEWS = [BookingViewSchema.enum.week, BookingViewSchema.enum.month]
 
-    const householdTab = (tab: string, query = '') =>
+    const householdTab = (tab: HouseholdTab, query = '') =>
         `${getHouseholdUrl(ownHousehold.shortName, ownHousehold.pbsId, tab)}${query}`
     const publicBillingPath = () => {
         if (!publicBillingToken) throw new Error('No billing period with a share token - run monthly-billing.feature first')
@@ -91,7 +91,7 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
         ...HOUSEHOLD_TABS.map(tab => ({name: `household-${tab}`, path: () => householdTab(tab)})),
         ...BOOKING_VIEWS.map(view => ({
             name: `household-bookings-${view}`,
-            path: () => householdTab('bookings', `&view=${view}`),
+            path: () => householdTab(HOUSEHOLD_TAB.bookings, `&view=${view}`),
             ready: 'household-bookings'
         })),
         {name: 'dinner', path: () => '/dinner', ready: 'dinner-detail-panel'},
@@ -121,7 +121,7 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
      * layout's right edge, so a red case names its cause.
      */
     const sampleOverflowEveryFrame = (page: Page) => page.addInitScript(() => {
-        const win = window as WindowWithOverflow
+        const win: WindowWithOverflow = window
         win.__maxOverflow = 0
         // clientWidth and scrollWidth read the same layout; innerWidth follows the window before the layout catches up
         const layoutWidth = () => document.documentElement.clientWidth
@@ -207,7 +207,7 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
             // The sampler stops before the screenshot: a full-page screenshot resizes the window, and the frames in
             // between are narrower than the page's layout
             const {overflow, culprit} = await page.evaluate(() => {
-                const win = window as WindowWithOverflow
+                const win: WindowWithOverflow = window
                 win.__stopOverflowSampler?.()
                 return {overflow: win.__maxOverflow ?? 0, culprit: win.__overflowCulprit}
             })

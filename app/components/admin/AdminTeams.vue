@@ -40,7 +40,7 @@
  * footer [Annuller] [Opret N madhold]; batch create numbers from N+1.
  */
 import {h, resolveComponent} from 'vue'
-import {FORM_MODES} from "~/types/form"
+import {FORM_MODES, TEAM_CARD_MODES} from "~/types/form"
 import type {TeamRole, CookingTeamCreate, CookingTeamDisplay} from "~/composables/useCookingTeamValidation"
 import type {WeekDayMap} from "~/types/dateTypes"
 import type {JokerSlotCreate} from "~/composables/useDutyValidation"
@@ -180,7 +180,7 @@ const detailProps = computed(() => ({
   seasonDates: selectedSeason.value?.seasonDates,
   holidays: selectedSeason.value?.holidays,
   teams: teams.value,
-  mode: formMode.value === FORM_MODES.EDIT ? 'edit' as const : 'regular' as const,
+  mode: formMode.value === FORM_MODES.EDIT ? TEAM_CARD_MODES.EDIT : TEAM_CARD_MODES.REGULAR,
   useShortName: true
 }))
 

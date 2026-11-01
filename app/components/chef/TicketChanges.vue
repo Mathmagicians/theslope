@@ -86,7 +86,7 @@ const changeColumns: TableColumn<ChangeRow>[] = [
   {id: 'tickets', header: WORDS.columns.tickets, meta: {class: besideDeadline()}},
   {id: 'revenue', header: WORDS.columns.revenue, meta: {class: {th: COMPONENTS.table.amountColumn.class.th, ...besideDeadline(COMPONENTS.table.amountColumn.class.td)}}}
 ]
-const {formatPrice} = useTicket()
+const {formatKroner} = useTicket()
 const {formatMoment} = useBooking()
 const bookingsStore = useBookingsStore()
 
@@ -199,7 +199,7 @@ const householdsOf = (change: TicketChange) => ticketChangeHouseholds(change, op
           </span>
         </template>
         <template #revenue-cell="{ row }">
-          <span v-if="!isDeadline(row.original)" data-testid="ticket-change-revenue">{{ formatPrice(row.original.revenue) }} kr</span>
+          <span v-if="!isDeadline(row.original)" data-testid="ticket-change-revenue">{{ formatKroner(row.original.revenue) }}</span>
         </template>
         <template #loading>
           <div :class="COMPONENTS.table.loadingRow">

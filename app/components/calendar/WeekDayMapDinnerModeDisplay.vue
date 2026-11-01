@@ -4,8 +4,7 @@
  *
  * Used in HouseholdCard expandable table rows
  *
- * Now uses DinnerModeSelector (the atomic DRY component) for each weekday.
- * This component is just a loop wrapper - all display logic is in DinnerModeSelector.
+ * Each weekday renders a DinnerModeSelector, which holds the display logic.
  *
  * VIEW MODE (collapsed row):
  * ┌────────────────────────────────────┐
@@ -30,6 +29,7 @@
  * │ Fri: [🍽️ Spis][🕐 Sen][🛍️ Takeaway][❌ Ingen]              │
  * └────────────────────────────────────────────────────────────────┘
  *
+ * Visual check: /household/[shortname]/settings, the weekday preferences in view and edit, phone and desktop.
  */
 import {WEEKDAYS} from '~/types/dateTypes'
 import type {WeekDayMap, WeekDay} from '~/types/dateTypes'
@@ -65,7 +65,6 @@ const emit = defineEmits<{
   'update:modelValue': [value: WeekDayMap<DinnerModeValue>]
 }>()
 
-// Design system
 const { WEEKDAY } = useTheSlopeDesignSystem()
 
 const {DinnerModeSchema} = useBookingValidation()
@@ -76,11 +75,9 @@ const {createDefaultWeekdayMap} = useWeekDayMapValidation({
   defaultValue: DinnerMode.DINEIN
 })
 
-// Update single day
 const updateDay = (day: WeekDay, value: DinnerModeValue) => {
   if (props.disabled || props.formMode === FORM_MODES.VIEW) return
 
-  // Initialize with all days set to DINEIN if modelValue is null/undefined
   const updated: WeekDayMap<DinnerModeValue> = props.modelValue
     ? {...props.modelValue}
     : createDefaultWeekdayMap(DinnerMode.DINEIN)
@@ -91,11 +88,10 @@ const updateDay = (day: WeekDay, value: DinnerModeValue) => {
 
 // Filter weekdays based on parent restriction (e.g., season cooking days)
 const visibleDays = computed(() => {
-  if (!props.parentRestriction) return WEEKDAYS
-  return WEEKDAYS.filter(day => props.parentRestriction![day])
+  const restriction = props.parentRestriction
+  return restriction ? WEEKDAYS.filter(day => restriction[day]) : WEEKDAYS
 })
 
-// Get dinner mode for a specific day
 const getDayValue = (day: WeekDay): DinnerModeValue => {
   return props.modelValue?.[day] ?? DinnerMode.DINEIN
 }
@@ -129,8 +125,8 @@ const getDayConsensus = (day: WeekDay): boolean | undefined => {
   </UFieldGroup>
 
   <!-- EDIT MODE: Responsive button groups (vertical on mobile, horizontal on desktop) -->
-  <div v-else-if="formMode === FORM_MODES.EDIT" class="flex gap-2 md:gap-4 flex-wrap ">
-    <div v-for="day in visibleDays" :key="day" class="flex flex-col items-center gap-2">
+  <div v-else-if="formMode === FORM_MODES.EDIT" :class="WEEKDAY.editRow">
+    <div v-for="day in visibleDays" :key="day" :class="WEEKDAY.editDay">
       <!-- Weekday label (if enabled) -->
       <DinnerModeSelector
         v-if="showLabels"
@@ -147,7 +143,7 @@ const getDayConsensus = (day: WeekDay): boolean | undefined => {
         :consensus="getDayConsensus(day)"
         :size="size"
         :name="`${name}-${day}`"
-        @update:model-value="(value) => updateDay(day, value as DinnerModeValue)"
+        @update:model-value="(value) => updateDay(day, value)"
       />
     </div>
   </div>

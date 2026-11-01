@@ -8,7 +8,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 
 const {CookingTeamDisplaySchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
 const {createWeekDayMapFromSelection} = useWeekDayMapValidation()
-const {headers, validatedBrowserContext, salt, temporaryAndRandom} = testHelpers
+const {headers, validatedBrowserContext, salt, temporaryAndRandom, attemptAll} = testHelpers
 
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
@@ -368,7 +368,9 @@ test.describe('Admin Teams API', () => {
         // Only need to delete root entities - CASCADE will handle the rest
         // Deleting Season cascades to CookingTeam → CookingTeamAssignment
         // Deleting Household cascades to Inhabitants
-        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        await attemptAll('Admin Teams API cleanup', [
+            () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 })

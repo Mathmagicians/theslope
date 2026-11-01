@@ -10,7 +10,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 
-const {validatedBrowserContext, saltedId, salt, temporaryAndRandom, headers} = testHelpers
+const {validatedBrowserContext, saltedId, salt, temporaryAndRandom, headers, attemptAll} = testHelpers
 const {SystemRoleSchema} = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum
 const {DinnerStateSchema} = useBookingValidation()
@@ -679,8 +679,10 @@ test.describe.serial('Heynabo Integration API', () => {
     // Cleanup: Remove test data if tests fail before import can reconcile; an entity the import already deleted counts as removed
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
-        await UserFactory.cleanupUsers(context, createdUserIds)
-        await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
+        await attemptAll('Heynabo Integration API cleanup', [
+            () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds),
+            () => UserFactory.cleanupUsers(context, createdUserIds),
+            () => AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
+        ]).finally(() => context.close())
     })
 })

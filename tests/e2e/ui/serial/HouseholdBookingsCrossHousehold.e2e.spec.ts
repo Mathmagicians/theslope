@@ -8,7 +8,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, gotoHydrated, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, gotoHydrated, salt, temporaryAndRandom, getSessionUserInfo, attemptAll} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
@@ -65,8 +65,10 @@ test.describe('Cross-Household Bookings - Serial UI Tests', () => {
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         // Cleanup accepts a household already gone
-        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        await attemptAll('Cross-Household Bookings cleanup', [
+            () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 
     test('Admin viewing target household bookings sees target orders not own orders', async ({page, browser}) => {

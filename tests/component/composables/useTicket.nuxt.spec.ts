@@ -2,7 +2,9 @@ import {describe, it, expect} from 'vitest'
 import {TicketFactory} from '../../e2e/testDataFactories/ticketFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
-import {ticketTypeLabel, ticketTypeLetter, ticketTypeCount} from '~/composables/useTicket'
+import {ticketTypeLabel, ticketTypeLetter, ticketTypeCount, TICKET_COUNTS} from '~/composables/useTicket'
+import type {TicketType as TicketTypeValue} from '~/composables/useBookingValidation'
+import {PRICE_WORDS} from '~/config/priceWords'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {addDays, addMonths, subYears} from 'date-fns'
 
@@ -268,6 +270,85 @@ describe('useTicket', () => {
         ])('GIVEN %i øre THEN returns %s kr', (ore, expected) => {
             const {formatPrice} = useTicket()
             expect(formatPrice(ore)).toBe(expected)
+        })
+    })
+
+    describe('formatKroner', () => {
+        it.each([
+            {ore: 150000, figure: '1.500'},
+            {ore: 0, figure: '0'}
+        ])('GIVEN $ore øre THEN reads $figure whole kroner with the unit', ({ore, figure}) => {
+            expect(useTicket().formatKroner(ore)).toBe(PRICE_WORDS.kroner(figure))
+        })
+    })
+
+    // A ticket type and its price, the line the select items, the badges, the toasts and the mails read
+    describe('formatTicketPrice', () => {
+        it.each([
+            {label: 'Voksen', price: 5000, text: 'Voksen · 50 kr'},
+            {label: 'Baby', price: 0, text: 'Baby · 0 kr'},
+            {label: 'Voksen', price: 150000, text: 'Voksen · 1.500 kr'}
+        ])('GIVEN $label at $price øre THEN reads "$text"', ({label, price, text}) => {
+            expect(useTicket().formatTicketPrice(label, price)).toBe(text)
+        })
+    })
+
+    // ========== FORMAT TICKET COUNTS TESTS ==========
+
+    describe('formatTicketCounts', () => {
+        const {ADULT, CHILD, BABY} = TicketType
+        const makeItem = (t: TicketTypeValue | null) => ({ticketType: t})
+
+        describe('with array input', () => {
+            it.each([
+                ['mixed types', [ADULT, ADULT, CHILD, BABY, BABY], '2V 1B 2b'],
+                ['empty array', [], '-'],
+                ['null ticketTypes ignored', [null, ADULT, null], '1V'],
+            ] as const)('%s → %s', (_, types, expected) => {
+                expect(useTicket().formatTicketCounts(types.map(makeItem))).toBe(expected)
+            })
+        })
+
+        describe('with map input', () => {
+            it.each([
+                ['mixed types', {[ADULT]: 200, [CHILD]: 50, [BABY]: 1}, '200V 50B 1b'],
+                ['empty map', {}, '-'],
+                ['partial map', {[ADULT]: 100, [BABY]: 2}, '100V 2b'],
+            ] as const)('%s → %s', (_, counts, expected) => {
+                expect(useTicket().formatTicketCounts(counts)).toBe(expected)
+            })
+        })
+    })
+
+    // One builder, three wordings of the same counts
+    describe('TICKET_COUNTS', () => {
+        const {ADULT, CHILD, BABY} = TicketType
+        const FULL = {[ADULT]: 8, [CHILD]: 1, [BABY]: 2}
+        const ZERO_TYPE = {[ADULT]: 2, [CHILD]: 0, [BABY]: 1}
+        const KITCHEN = {[ADULT]: 60, [CHILD]: 30, [BABY]: 10}
+        const EMPTY = {}
+
+        it.each([
+            {variant: 'compact', desc: 'full counts', counts: FULL, text: '8V 1B 2b'},
+            {variant: 'compact', desc: 'a zero type', counts: ZERO_TYPE, text: '2V 1b'},
+            {variant: 'compact', desc: 'no counts', counts: EMPTY, text: '-'},
+            {variant: 'sentence', desc: 'full counts', counts: FULL, text: '8 voksne, 1 barn, 2 babyer'},
+            {variant: 'sentence', desc: 'a zero type', counts: ZERO_TYPE, text: '2 voksne, 1 baby'},
+            {variant: 'sentence', desc: 'no counts', counts: EMPTY, text: ''},
+            {variant: 'labelled', desc: 'full counts', counts: KITCHEN, text: 'Voksen: 60 | Barn: 30 | Baby: 10'},
+            {variant: 'labelled', desc: 'a zero type', counts: ZERO_TYPE, text: 'Voksen: 2 | Barn: 0 | Baby: 1'},
+            {variant: 'labelled', desc: 'no counts', counts: EMPTY, text: 'Voksen: 0 | Barn: 0 | Baby: 0'}
+        ] as const)('$variant over $desc reads "$text"', ({variant, counts, text}) => {
+            expect(TICKET_COUNTS[variant].text(counts)).toBe(text)
+        })
+
+        it('names the ticket type of each part and holds its figure alone, so a list renders one part per type and draws its own separator', () => {
+            expect(TICKET_COUNTS.labelled.parts(ZERO_TYPE)).toEqual([
+                {ticketType: ADULT, text: 'Voksen: 2'},
+                {ticketType: CHILD, text: 'Barn: 0'},
+                {ticketType: BABY, text: 'Baby: 1'}
+            ])
+            expect(TICKET_COUNTS.compact.parts(ZERO_TYPE).map(part => part.ticketType)).toEqual([ADULT, BABY])
         })
     })
 })

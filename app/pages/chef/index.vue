@@ -89,16 +89,15 @@
  * - ?view=calendar:open - The calendar's view and open state
  */
 
-import {FORM_MODES, type FormMode} from '~/types/form'
-import type {ChefMenuForm} from '~/composables/useBookingValidation'
+import {FORM_MODES, TEAM_CARD_MODES, type FormMode} from '~/types/form'
+import type {ChefMenuForm, DinnerState as DinnerStateValue} from '~/composables/useBookingValidation'
 import type {ExpenseCreate} from '~/composables/useBillingValidation'
 import type {CookingRoundRow} from '~/composables/useBookingUi'
 import {CHEF_CALENDAR_VIEW, type ChefCalendarView} from '~/components/calendar/ChefCalendarDisplay.vue'
+import {TEAM_WORDS} from '~/config/teamWords'
 
-// Design system
 const {ICONS, LAYOUTS, ALERTS, COMPONENTS, breakpoint} = useTheSlopeDesignSystem()
 
-// Initialize stores
 const planStore = usePlanStore()
 const {
   isPlanStoreReady, isPlanStoreErrored, planStoreError, selectedSeason,
@@ -121,7 +120,6 @@ const {
 // Page ready when both plan store and myTeams are initialized
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
 
-// Permission helpers and date utilities
 const {isChefFor, deadlinesForSeason, getDinnerOnDate, splitDinnerEvents} = useSeason()
 const now = useClock()
 const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selectedSeason.value, now.value) : undefined)
@@ -196,13 +194,11 @@ const handleTabClick = (mode: ChefCalendarView) => setViewState({ mode, open: tr
 const handleAccordionToggle = (open: boolean) => setViewState({ mode: viewState.value.mode, open })
 const teamDinnerDates = computed(() => teamDinnerEvents.value.map(dinner => dinner.date))
 
-// Date selection via URL query parameter using curried pattern
 const {value: selectedDate, setValue: setSelectedDate} = useDinnerDateParam({
   dinnerDates: () => teamDinnerDates.value,
   syncWhen: () => isPageReady.value && teamDinnerEvents.value.length > 0
 })
 
-// Navigation logic from useBookingView
 const {hasPrev, hasNext, navigate} = useBookingView({
   selectedDate,
   setDate: setSelectedDate,
@@ -282,7 +278,7 @@ const handleExtraPortions = (portions: number) => {
 const {consecutiveDinnerRun} = useBooking()
 const {getTeamNumber} = useCookingTeam()
 const {calculateBudget} = useOrder()
-const kitchenConfig = useAppConfig().theslope?.kitchen
+const {baseRatePercent, vatPercent} = useAppConfig().theslope.kitchen
 const roundDinners = computed(() => selectedDinnerId.value
   ? consecutiveDinnerRun(teamDinnerEvents.value, selectedDinnerId.value)
   : [])
@@ -292,13 +288,14 @@ const roundRows = computed<CookingRoundRow[]>(() => roundDinners.value.map(dinne
   date: dinner.date,
   menuTitle: dinner.menuTitle,
   isCurrent: dinner.id === selectedDinnerId.value,
-  budgetGross: calculateBudget(bookingsStore.orders.filter(order => order.dinnerEventId === dinner.id), kitchenConfig?.baseRatePercent ?? 5, kitchenConfig?.vatPercent ?? 25).availableBudget,
+  budgetGross: calculateBudget(bookingsStore.orders.filter(order => order.dinnerEventId === dinner.id), baseRatePercent, vatPercent).availableBudget,
   spentGross: dinner.totalCost
 })))
 // The dinner's cooking team's number in the season: its colour on the team card and on the round's badge
 const dinnerTeamNumber = computed(() => dinnerEventDetail.value?.cookingTeam ? getTeamNumber(dinnerEventDetail.value.cookingTeam, seasonTeams.value) : null)
 
-const handleAdvanceState = async (newState: string) => {
+// The card advances a dinner only to announced: the publish to Heynabo
+const handleAdvanceState = async (newState: DinnerStateValue) => {
   if (!selectedDinnerId.value) return
   if (newState !== DinnerState.ANNOUNCED) return
   if (await bookingsStore.announceDinner(selectedDinnerId.value)) await usersStore.loadMyTeams()
@@ -311,7 +308,6 @@ const handleCancelDinner = async () => {
 
 const handleUndoCancelDinner = async () => {
   if (!selectedDinnerId.value || !dinnerEventDetail.value) return
-  // Restore to ANNOUNCED if menu title exists, otherwise SCHEDULED
   const targetState = dinnerEventDetail.value.menuTitle?.trim()
     ? DinnerState.ANNOUNCED
     : DinnerState.SCHEDULED
@@ -319,11 +315,11 @@ const handleUndoCancelDinner = async () => {
 }
 
 useHead({
-  title: '👨‍🍳 Madlavning',
+  title: TEAM_WORDS.page.title,
   meta: [
     {
       name: 'description',
-      content: 'Menu editing and dinner management for cooking teams'
+      content: TEAM_WORDS.page.description
     }
   ]
 })
@@ -333,21 +329,18 @@ useHead({
   <UPage :ui="LAYOUTS.masterDetailPage" data-testid="chef-page">
     <!-- Master: Team selector and calendar (left slot) -->
     <template #left>
-        <CalendarMasterPanel title="Mine Madhold">
+        <CalendarMasterPanel :title="TEAM_WORDS.page.myTeams">
           <!-- Header: Team selector and status -->
           <template #header>
-            <!-- Loading teams -->
             <Loader v-if="isMyTeamsLoading" text="Henter dine madhold..."/>
 
-            <!-- Error loading teams -->
             <ViewError
                 v-else-if="isMyTeamsErrored"
                 :error="myTeamsError?.statusCode"
-                message="Vi kan ikke hente dine madhold. Prøv at genindlæse siden."
+                :message="TEAM_WORDS.page.teamsFailed"
                 :cause="myTeamsError"
             />
 
-            <!-- Team selector and status -->
             <div v-else :class="COMPONENTS.chefTeamStatus">
               <!-- Team selector (always visible, handles own empty state) -->
               <MyTeamSelector
@@ -358,7 +351,6 @@ useHead({
                   @update:model-value="setSelectedTeamId"
               />
 
-              <!-- Team role status -->
               <TeamRoleStatus
                   v-if="teamOnView && authStore.user?.Inhabitant?.id"
                   :team="teamOnView"
@@ -374,11 +366,10 @@ useHead({
               <Loader text="Henter kalender..."/>
             </div>
 
-            <!-- Error loading calendar -->
             <ViewError
                 v-else-if="isPlanStoreErrored || isVisitErrored"
                 :error="calendarError?.statusCode"
-                message="Vi kan ikke hente data til kalenderen. Prøv at genindlæse siden 🔃."
+                :message="TEAM_WORDS.page.calendarFailed"
                 :cause="calendarError"
             />
 
@@ -396,7 +387,6 @@ useHead({
               </template>
             </UAlert>
 
-            <!-- Calendar display -->
             <div v-else-if="selectedTeam">
               <ChefCalendarDisplay
                   v-if="selectedSeason && selectedTeam && deadlines"
@@ -463,7 +453,7 @@ useHead({
                 v-if="dinnerEventDetail.cookingTeamId && dinnerTeamNumber !== null"
                 :team-id="dinnerEventDetail.cookingTeamId"
                 :team-number="dinnerTeamNumber"
-                mode="monitor"
+                :mode="TEAM_CARD_MODES.MONITOR"
                 use-short-name
                 :visiting="dinnerEventDetail.cookingTeamId === visitingTeam?.id"
             />

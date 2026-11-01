@@ -3,8 +3,12 @@
  * validation composable the server imports reads it (ADR-017).
  */
 export const DUTY_WORDS = {
-    /** The joker slot form's rules: its weekdays and its period */
+    /** The joker slot form: its fields (the period, the weekdays, the role, the optional note with its example) and its rules */
     jokerSlot: {
+        period: 'Periode',
+        weekdays: 'Ugedage',
+        role: 'Rolle',
+        note: {label: 'Note', hint: 'Valgfri', placeholder: 'Fx Anna barsel'},
         noWeekday: 'Vælg mindst én ugedag',
         endBeforeStart: 'Slutdato skal være på eller efter startdato'
     }

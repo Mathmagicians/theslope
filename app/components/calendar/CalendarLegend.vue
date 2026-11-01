@@ -1,5 +1,6 @@
 <script lang="ts">
 import type {NuxtUIChipSize, NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import {DATE_WORDS} from '~/config/dateWords'
 
 /** The sample a legend entry paints: the day circle, the circle in a chip, the team's band */
 export const LEGEND_KIND = {circle: 'circle', chip: 'chip', badge: 'badge'} as const
@@ -33,6 +34,8 @@ export type CalendarLegendItem =
  *
  * The calendars pass `items` and render it in BaseCalendar's #legend slot. DinnerModeLegend fills the
  * default slot with its rows and passes the grid's operating `hint`.
+ *
+ * Visual check: the Forklaring panel on /chef, /admin/teams, /dinner and the household booking grid, phone and desktop.
  */
 withDefaults(defineProps<{
   items?: CalendarLegendItem[]
@@ -47,7 +50,7 @@ const {ALERTS, ICONS, COMPONENTS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
 </script>
 
 <template>
-  <UAlert v-bind="ALERTS.legend" :icon="ICONS.info" title="Forklaring" data-testid="calendar-legend">
+  <UAlert v-bind="ALERTS.legend" :icon="ICONS.info" :title="DATE_WORDS.calendarLegend.title" data-testid="calendar-legend">
     <template #description>
       <div :class="COMPONENTS.legend.list" data-testid="calendar-legend-list">
         <div v-for="(item, index) in items" :key="index" :class="COMPONENTS.legend.entry" data-testid="calendar-legend-entry">

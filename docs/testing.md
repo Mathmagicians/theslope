@@ -482,6 +482,7 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 | `lockedDinnerSupply(byType?, queuedByType?)` | A locked dinner's supply (`ReleasedTicketCounts`) from its tickets for sale and its waiting list per ticket type, with the totals and the compact counts |
 | `kitchenConfig()` | The kitchen's rates the money components calculate with, read from the app config inside a hook or a test |
 | `useTestScope()` | A scope per test for the composables a test body creates: the watchers they start stop with the test, as they do when a component unmounts |
+| `itemAt(items, index)` | The item at an index of a list the case reads or builds, typed; a missing one fails the case by its index. It lives in `tests/component/listHelpers.ts`, which imports no Nuxt runtime: a node unit spec imports it from there |
 
 Shared `data-testid` contracts live next to the specs that share them: `tests/component/components/allergy/allergyTestIds.ts` (the allergy catalog UI), `cooking-team/jokerSlotIds.ts` (JokerSlotForm and the team card's joker box, shared with the AdminTeams e2e spec) and `dinner/waitlistTestIds.ts` (the waiting list UI).
 
@@ -815,6 +816,23 @@ an index (`SEARCH … USING INDEX`). Reference: `fetchOrders with provenance` in
 
 ---
 
+## Route and Middleware Testing
+
+`tests/component/routes/` and `tests/component/middleware/` hold `*.unit.spec.ts` that run a route or a server
+middleware in the unit runtime, behind an h3 app: `toWebHandler(createApp().use(handler))`. The case sends a `Request`
+and reads the `Response`: status, headers, body.
+
+| Piece | Runs on |
+|---|---|
+| The Nitro auto-imports the handler calls (`createError`, `getRequestURL`, `getUserSession`, `setUserSession`, `clearUserSession`) | `vi.stubGlobal`: h3's own function, or a `vi.fn()` the case answers |
+| The D1 binding | The app's `onRequest` sets `event.context.cloudflare.env.DB` |
+| Repository and integration modules | `vi.mock` of the module (`prismaRepository`, `heynaboClient`) |
+| The route behind a middleware | A handler after it on the app: `.use(guard).use(() => 'the route')` |
+
+References: `middleware/guard.unit.spec.ts`, `routes/api/auth/login.unit.spec.ts`.
+
+---
+
 ## E2E Testing (Playwright)
 
 ### Strategy: Setup → Interact → Verify
@@ -880,12 +898,20 @@ await page.waitForTimeout(1000)  // Arbitrary
 
 ### Cleanup
 
-```typescript
-let createdIds: number[] = []
+A spec records each id as it creates the row, and its `afterAll` deletes the recorded rows through
+`attemptAll(what, steps)` (`testHelpers`): each step runs whatever another step does, a row is one step, a delete
+accepts a row already gone (404), and the failed steps fail the hook together (`AggregateError`).
 
-test.afterAll(async ({ browser }) => {
+```typescript
+const createdInhabitantIds: number[] = []
+const createdSeasonIds: number[] = []
+
+test.afterAll(async ({browser}) => {
     const context = await validatedBrowserContext(browser)
-    await SeasonFactory.cleanupSeasons(context, createdIds)
+    await attemptAll('AdminEconomy cleanup', [
+        ...createdInhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(context, id)),
+        () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+    ]).finally(() => context.close())
 })
 ```
 

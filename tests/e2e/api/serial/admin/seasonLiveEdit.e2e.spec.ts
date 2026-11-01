@@ -13,7 +13,7 @@ const Action = useActionValidation().BookingActionSchema.enum
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap: createDefaultDinnerModeMap} = useCoreValidation()
-const {validatedBrowserContext, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, temporaryAndRandom, attemptAll} = testHelpers
 
 /**
  * Editing the ACTIVE season - SERIAL
@@ -61,12 +61,12 @@ test.describe('POST /api/admin/season/[id] on the active season', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        for (const householdId of createdHouseholdIds) {
-            await HouseholdFactory.deleteHousehold(context, householdId)
-        }
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
-        // Hand the singleton active season back to the suites that follow
-        await SeasonFactory.createActiveSeason(context)
+        await attemptAll('POST /api/admin/season/[id] on the active season cleanup', [
+            ...createdHouseholdIds.map(householdId => () => HouseholdFactory.deleteHousehold(context, householdId)),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds),
+            // Hand the singleton active season back to the suites that follow
+            () => SeasonFactory.createActiveSeason(context)
+        ]).finally(() => context.close())
     })
 
     test('GIVEN the active season WHEN a holiday is added and the season extended THEN orders are reconciled, the other bookings survive and the new dinner is scaffolded', async ({browser}) => {

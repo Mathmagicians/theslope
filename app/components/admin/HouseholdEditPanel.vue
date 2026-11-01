@@ -9,9 +9,12 @@
  * - Residens: read-only badge
  * - Beboere: shared InhabitantSelector for moving inhabitants
  * - Slet: DangerButton two-click delete
+ *
+ * Visual check: /admin/households, a household's row opened, phone and desktop.
  */
-import type {HouseholdDisplay} from '~/composables/useCoreValidation'
+import type {HouseholdDisplay, InhabitantDisplay} from '~/composables/useCoreValidation'
 import {BUTTON_WORDS} from '~/config/buttonWords'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 interface Props {
   household: HouseholdDisplay
@@ -29,16 +32,14 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const {SIZES, ICONS, TYPOGRAPHY, BUTTONS, COLOR, TEXT, BG, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
-
-// ========== RESIDENS ==========
+const {SIZES, ICONS, TYPOGRAPHY, BUTTONS, COLOR, TEXT, NOISE, COMPONENTS, LAYOUTS} = useTheSlopeDesignSystem()
+const panel = COMPONENTS.householdEditPanel
+const WORDS = HOUSEHOLD_WORDS.editPanel
 
 const now = useClock()
 const residency = computed(() => getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate, now.value))
 
-// ========== BEBOERE ==========
-
-// Only show inhabitants from households at the same address (same heynaboId)
+// Only the inhabitants of the households at the same address (same heynaboId)
 const sameAddressHouseholds = computed(() =>
     props.allHouseholds.filter(h => h.heynaboId === props.household.heynaboId)
 )
@@ -51,10 +52,7 @@ const isInThisHousehold = (id: number) =>
 const getHouseholdForInhabitant = (id: number) =>
     sameAddressHouseholds.value.find(h => h.inhabitants?.some(i => i.id === id))
 
-const sortByHouseholdThenName = (
-    rowA: {original: {id: number, name: string, lastName: string}},
-    rowB: {original: {id: number, name: string, lastName: string}}
-): number => {
+const sortByHouseholdThenName = (rowA: {original: InhabitantDisplay}, rowB: {original: InhabitantDisplay}): number => {
   const aHere = isInThisHousehold(rowA.original.id)
   const bHere = isInThisHousehold(rowB.original.id)
   if (aHere && !bHere) return -1
@@ -63,41 +61,35 @@ const sortByHouseholdThenName = (
       .localeCompare(`${rowB.original.name} ${rowB.original.lastName}`)
 }
 
-// ========== DELETE ==========
-
 const inhabitantCount = computed(() => props.household.inhabitants?.length ?? 0)
-const householdLabel = computed(() => `${props.household.shortName} (PBS ${props.household.pbsId})`)
 </script>
 
 <template>
-  <div :class="['p-4 md:p-6 space-y-6', BG.panel]">
-
-    <!-- STAMDATA -->
+  <div :class="panel.root">
     <section>
-      <h3 :class="TYPOGRAPHY.cardTitle" class="mb-3">Stamdata</h3>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+      <h3 :class="panel.sectionTitle">{{ WORDS.facts.title }}</h3>
+      <div :class="panel.facts">
         <div>
-          <span :class="TEXT.neutral[500]">PBS-nummer</span>
-          <div class="font-medium">{{ household.pbsId }}</div>
+          <span :class="TEXT.neutral[500]">{{ WORDS.facts.pbs }}</span>
+          <div :class="panel.factValue">{{ household.pbsId }}</div>
         </div>
         <div>
-          <span :class="TEXT.neutral[500]">Adresse</span>
-          <div class="font-medium">{{ household.address }} <UBadge :color="COLOR.neutral" :variant="NOISE.medium" :size="SIZES.small">Heynabo</UBadge></div>
+          <span :class="TEXT.neutral[500]">{{ WORDS.facts.address }}</span>
+          <div :class="panel.factValue">{{ household.address }} <UBadge :color="COLOR.neutral" :variant="NOISE.medium" :size="SIZES.small">{{ BUTTON_WORDS.heynabo.name }}</UBadge></div>
         </div>
         <div>
-          <span :class="TEXT.neutral[500]">Heynabo-ID</span>
-          <div class="font-medium">{{ household.heynaboId }}</div>
+          <span :class="TEXT.neutral[500]">{{ WORDS.facts.heynaboId }}</span>
+          <div :class="panel.factValue">{{ household.heynaboId }}</div>
         </div>
         <div>
-          <span :class="TEXT.neutral[500]">Forkortelse</span>
-          <div class="font-medium">{{ household.shortName }}</div>
+          <span :class="TEXT.neutral[500]">{{ WORDS.facts.shortName }}</span>
+          <div :class="panel.factValue">{{ household.shortName }}</div>
         </div>
       </div>
     </section>
 
-    <!-- RESIDENS -->
     <section>
-      <h3 :class="TYPOGRAPHY.cardTitle" class="mb-3">Residens</h3>
+      <h3 :class="panel.sectionTitle">{{ WORDS.residency.title }}</h3>
       <UBadge
           v-if="residency"
           :color="residency.color"
@@ -107,37 +99,36 @@ const householdLabel = computed(() => `${props.household.shortName} (PBS ${props
       >
         {{ residency.badgeText }}
       </UBadge>
-      <span v-else :class="[TYPOGRAPHY.bodyTextSmall, TEXT.neutral[500]]">Aktiv beboer</span>
+      <span v-else :class="[TYPOGRAPHY.bodyTextSmall, TEXT.neutral[500]]">{{ WORDS.residency.active }}</span>
     </section>
 
-    <!-- BEBOERE -->
     <section>
-      <h3 :class="TYPOGRAPHY.cardTitle" class="mb-3">Beboere</h3>
+      <h3 :class="panel.sectionTitle">{{ WORDS.inhabitants.title }}</h3>
       <InhabitantSelector
           :inhabitants="allInhabitants"
           :sort-fn="sortByHouseholdThenName"
           :loading="loading"
-          status-header="Husstand"
-          actions-header="Handling"
-          search-placeholder="Søg navn, PBS eller adresse..."
-          empty-text="Ingen beboere i fællesskabet"
+          :status-header="WORDS.inhabitants.household"
+          :actions-header="WORDS.inhabitants.action"
+          :search-placeholder="WORDS.inhabitants.search"
+          :empty-text="WORDS.inhabitants.empty"
       >
         <template #status="{ row }">
           <template v-for="h in [getHouseholdForInhabitant(row.original.id)]" :key="h?.id">
             <UBadge
                 v-if="h"
                 :color="h.id === household.id ? COLOR.success : COLOR.neutral"
-                :variant="h.id === household.id ? 'solid' : 'outline'"
+                :variant="h.id === household.id ? NOISE.loud : NOISE.medium"
                 :size="SIZES.small"
-                class="w-fit"
+                :class="panel.householdBadge"
             >
-              {{ h.shortName }} PBS {{ h.pbsId }}
+              {{ WORDS.inhabitants.householdBadge(h.shortName, h.pbsId) }}
             </UBadge>
           </template>
         </template>
 
         <template #actions="{ row }">
-          <span v-if="isInThisHousehold(row.original.id)" :class="[TYPOGRAPHY.finePrint, TEXT.neutral[500]]">I denne husstand</span>
+          <span v-if="isInThisHousehold(row.original.id)" :class="[TYPOGRAPHY.finePrint, TEXT.neutral[500]]">{{ WORDS.inhabitants.here }}</span>
           <UButton
               v-else
               :color="COLOR.primary"
@@ -147,17 +138,16 @@ const householdLabel = computed(() => `${props.household.shortName} (PBS ${props
               @click="emit('move:inhabitant', row.original.id)"
           >
             <template #leading><UIcon :name="ICONS.moveIn" /></template>
-            Flyt hertil
+            {{ WORDS.inhabitants.moveHere }}
           </UButton>
         </template>
       </InhabitantSelector>
     </section>
 
-    <!-- FOOTER -->
-    <div :class="['flex flex-col-reverse md:flex-row md:justify-between gap-2 pt-4', LAYOUTS.panelDivider]">
+    <div :class="[panel.footer, LAYOUTS.panelDivider]">
       <DangerButton
-          :label="`Slet ${householdLabel}`"
-          :confirm-label="`Tryk igen for at slette ${householdLabel} (${inhabitantCount} beboere slettes)...`"
+          :label="WORDS.delete.label(household.shortName, household.pbsId)"
+          :confirm-label="WORDS.delete.confirm(household.shortName, household.pbsId, inhabitantCount)"
           :loading="loading"
           @confirm="emit('delete')"
       />

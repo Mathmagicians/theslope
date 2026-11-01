@@ -13,6 +13,7 @@ import {COMPONENTS, ICONS, ROLE_ICONS, getCalendarCountBadge, getRainbowBand, cr
 import {useCookingTeamValidation, type CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 import type {JokerSlot} from '~/composables/useDutyValidation'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
+import {TEAM_CARD_MODES, type TeamCardMode} from '~/types/form'
 import {formatDate} from '~/utils/date'
 import {TEAM_WORDS} from '~/config/teamWords'
 import {BUTTON_WORDS} from '~/config/buttonWords'
@@ -91,7 +92,7 @@ const TEAM_ID = 1
 
 // The mounting page selects the team in the store the mounted card reads; a store created before the mount
 // registers the dataset key first and would serve the card through its own selection
-const mountCard = async (mode: 'monitor' | 'regular' | 'edit', detail: Partial<CookingTeamDetail> = {}, teamId = TEAM_ID, isMd = true, props: {visiting?: boolean} = {}) => {
+const mountCard = async (mode: TeamCardMode, detail: Partial<CookingTeamDetail> = {}, teamId = TEAM_ID, isMd = true, props: {visiting?: boolean} = {}) => {
     team = SeasonFactory.defaultCookingTeamDetail({id: TEAM_ID, assignments, dinnerEvents, jokerSlots: slots.map(({slot}) => slot), ...detail})
     const wrapper = await mountWithTooltipProvider(CookingTeamCard, {
         props: {teamId, teamNumber: 1, mode, seasonDates: season.seasonDates, seasonCookingDays: season.cookingDays, ...props},
@@ -126,7 +127,7 @@ describe('CookingTeamCard', () => {
     // The regular and the edit face render the same boxes; the edit controls have their own cases
     describe('Holdmedlemmer and Jokere', () => {
         it('the view face: every box heading carries its glyph once, the member rows align, the Jokere box lists one line per slot with its period, role and note, and no edit control shows', async () => {
-            const wrapper = await mountCard('regular')
+            const wrapper = await mountCard(TEAM_CARD_MODES.REGULAR)
             ROLES.forEach(role => expectHeadingWithGlyph(wrapper, TEST_IDS.roleHeading(role), ROLE_ICONS[role]))
             expectHeadingWithGlyph(wrapper, TEST_IDS.jokerHeading, ICONS.joker)
 
@@ -140,7 +141,7 @@ describe('CookingTeamCard', () => {
             slots.forEach(({slot}) => expect(findByTestId(wrapper, JOKER_SLOT_IDS.delete(slot.id)).exists()).toBe(false))
             expect(findByTestId(wrapper, JOKER_SLOT_IDS.add).exists()).toBe(false)
             expect(findByTestId(wrapper, TEST_IDS.jokerAddRow).exists()).toBe(false)
-            expect(wrapper.findAll('h4').some(heading => heading.text() === 'Tilføj jokere')).toBe(false)
+            expect(wrapper.findAll('h4').some(heading => heading.text() === TEAM_WORDS.card.addJokers)).toBe(false)
 
             const lines = findAllByTestId(findByTestId(wrapper, TEST_IDS.jokerBox), TEST_IDS.jokerSlot)
             // One line per slot in its order: its period, its note and its role's glyph
@@ -152,10 +153,10 @@ describe('CookingTeamCard', () => {
 
         // The default slots cover several shifts; a slot ending on its first tuesday covers one
         it.each([
-            {lines: slots, labels: ['3 vagter', '5 vagter']},
-            {lines: [{slot: jokerSlot({endDate: new Date(2026, 9, 7)}), shifts: 1}], labels: ['1 vagt']}
-        ])('every joker line counts its shifts in the calendar count badge: $labels', async ({lines, labels}) => {
-            const wrapper = await mountCard('regular', {jokerSlots: lines.map(({slot}) => slot)})
+            {name: 'several shifts', lines: slots},
+            {name: 'one shift', lines: [{slot: jokerSlot({endDate: new Date(2026, 9, 7)}), shifts: 1}]}
+        ])('every joker line counts its shifts in the calendar count badge: $name', async ({lines}) => {
+            const wrapper = await mountCard(TEAM_CARD_MODES.REGULAR, {jokerSlots: lines.map(({slot}) => slot)})
             const countBadge = getCalendarCountBadge(1)
             const rendered = findAllByTestId(findByTestId(wrapper, TEST_IDS.jokerBox), TEST_IDS.jokerSlot)
             // Each line in its slot's order: the badge reads the count, names the shifts and wears the calendar's count badge
@@ -170,18 +171,18 @@ describe('CookingTeamCard', () => {
                     line: line.text()
                 }
             })
-            expect(badges).toEqual(lines.map(({shifts}, index) => ({
+            expect(badges).toEqual(lines.map(({shifts}) => ({
                 count: String(shifts),
-                label: labels[index],
+                label: TEAM_WORDS.card.shifts(shifts),
                 classes: expect.arrayContaining(classesOf(countBadge.class)),
                 size: createResponsiveSizes(ref(true)).small,
                 icons: [countBadge.icon],
-                line: expect.not.stringContaining('vagt')
+                line: expect.not.stringContaining(TEAM_WORDS.card.shifts(shifts))
             })))
         })
 
         it('an empty Jokere box reads "Ingen jokere"', async () => {
-            const wrapper = await mountCard('regular', {jokerSlots: []})
+            const wrapper = await mountCard(TEAM_CARD_MODES.REGULAR, {jokerSlots: []})
             const box = findByTestId(wrapper, TEST_IDS.jokerBox)
             expect(findAllByTestId(box, TEST_IDS.jokerSlot)).toHaveLength(0)
             expect(box.text()).toContain('Ingen jokere')
@@ -190,7 +191,7 @@ describe('CookingTeamCard', () => {
 
     describe('edit face, Jokere and Holdmedlemmer', () => {
         it('every slot line carries a slet that emits remove:jokerSlot, and every member row a labelled trash button that emits remove:member, with its id', async () => {
-            const wrapper = await mountCard('edit')
+            const wrapper = await mountCard(TEAM_CARD_MODES.EDIT)
             const lines = findAllByTestId(findByTestId(wrapper, TEST_IDS.jokerBox), TEST_IDS.jokerSlot)
             // Each line holds its own slot's slet, and each slet has an accessible name
             expect(lines.map(line => slots.filter(({slot}) => findByTestId(line, JOKER_SLOT_IDS.delete(slot.id)).exists()).map(({slot}) => slot.id)))
@@ -211,7 +212,7 @@ describe('CookingTeamCard', () => {
 
     describe('the team the store holds', () => {
         it('the Jokere box and member rows follow the store team after a write refreshes it', async () => {
-            const wrapper = await mountCard('edit')
+            const wrapper = await mountCard(TEAM_CARD_MODES.EDIT)
             const store = usePlanStore()
             const [removedSlot, keptSlot] = [emilSlot.slot, annaSlot.slot]
             team = {...team, assignments: assignments.slice(1), jokerSlots: [keptSlot]}
@@ -225,7 +226,7 @@ describe('CookingTeamCard', () => {
         })
 
         it('shows the loader, not the held team, while the store holds another team', async () => {
-            const wrapper = await mountCard('regular', {}, TEAM_ID + 1)
+            const wrapper = await mountCard(TEAM_CARD_MODES.REGULAR, {}, TEAM_ID + 1)
 
             expect(wrapper.text()).toContain('Henter madhold')
             expect(findAllByTestId(wrapper, TEST_IDS.memberRow)).toHaveLength(0)
@@ -234,7 +235,7 @@ describe('CookingTeamCard', () => {
 
     describe('monitor face', () => {
         it('every group heading carries its role glyph once', async () => {
-            const wrapper = await mountCard('monitor')
+            const wrapper = await mountCard(TEAM_CARD_MODES.MONITOR)
             ROLES.forEach(role => expectHeadingWithGlyph(wrapper, TEST_IDS.roleHeading(role), ROLE_ICONS[role]))
         })
 
@@ -244,7 +245,7 @@ describe('CookingTeamCard', () => {
             {visit: 'not visiting', props: {visiting: false}, texts: []},
             {visit: 'no visiting prop', props: {}, texts: []}
         ])('the header carries the visit badge: $visit', async ({props, texts}) => {
-            const wrapper = await mountCard('monitor', {}, TEAM_ID, true, props)
+            const wrapper = await mountCard(TEAM_CARD_MODES.MONITOR, {}, TEAM_ID, true, props)
             const badges = wrapper.findAllComponents({name: 'UBadge'})
                 .filter(badge => badge.attributes('data-testid') === TEST_IDS.visitBadge)
 
@@ -262,8 +263,8 @@ describe('CookingTeamCard', () => {
             SeasonFactory.defaultCookingTeamAssignment({id: index + 1, role: Role.COOK, inhabitantId: index + 40}))
 
         it.each([
-            {group: 'the monitor face\'s Kokke row', mode: 'monitor' as const, testId: TEST_IDS.roleGroup(Role.COOK)},
-            {group: 'the edit face\'s member summary', mode: 'edit' as const, testId: TEST_IDS.memberSummary}
+            {group: 'the monitor face\'s Kokke row', mode: TEAM_CARD_MODES.MONITOR, testId: TEST_IDS.roleGroup(Role.COOK)},
+            {group: 'the edit face\'s member summary', mode: TEAM_CARD_MODES.EDIT, testId: TEST_IDS.memberSummary}
         ])('$group', async ({mode, testId}) => {
             const wrapper = await mountCard(mode, {assignments: cooks}, TEAM_ID, isMd)
             const avatars = avatarsIn(findByTestId(wrapper, testId))
@@ -275,7 +276,7 @@ describe('CookingTeamCard', () => {
 
     describe('edit face, Holdnavn', () => {
         it('shows the resolved team name, and emits the trimmed draft once on blur after a focus seeds it', async () => {
-            const wrapper = await mountCard('edit', {name: 'Team Alpha'})
+            const wrapper = await mountCard(TEAM_CARD_MODES.EDIT, {name: 'Team Alpha'})
             const input = findByTestId<HTMLInputElement>(wrapper, TEST_IDS.nameInput)
             expect(input.element.value).toBe('Team Alpha')
             await input.trigger('focus')
@@ -285,7 +286,7 @@ describe('CookingTeamCard', () => {
         })
 
         it('emits nothing for an unchanged or empty draft and shows the live name again', async () => {
-            const wrapper = await mountCard('edit', {name: 'Team Alpha'})
+            const wrapper = await mountCard(TEAM_CARD_MODES.EDIT, {name: 'Team Alpha'})
             const input = findByTestId(wrapper, TEST_IDS.nameInput)
             await input.trigger('focus')
             await input.trigger('blur')
@@ -312,10 +313,10 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
     })
 
     it('the "Tilføj jokere" row sits under the finder with the joker glyph in the avatar place and a Tilføj button', async () => {
-        const wrapper = await mountCard('edit')
+        const wrapper = await mountCard(TEAM_CARD_MODES.EDIT)
         const row = findByTestId(wrapper, TEST_IDS.jokerAddRow)
-        const finderHeading = headingNamed(wrapper, 'Tilføj medlemmer')
-        const jokerHeading = headingNamed(wrapper, 'Tilføj jokere')
+        const finderHeading = headingNamed(wrapper, TEAM_WORDS.card.addMembers)
+        const jokerHeading = headingNamed(wrapper, TEAM_WORDS.card.addJokers)
 
         expect(row.exists()).toBe(true)
         expect(finderHeading?.element.parentElement?.contains(row.element)).toBe(true)
@@ -323,7 +324,7 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
         expect(follows(jokerHeading?.element, row.element)).toBe(true)
 
         expect(avatarsIn(row)[0]?.props('icon')).toBe(ICONS.joker)
-        expect(row.text()).toContain('Joker · en plads uden navn')
+        expect(row.text()).toContain(TEAM_WORDS.card.jokerRow)
         expect(addButton(wrapper).text()).toBe(BUTTON_WORDS.add)
         expect(addButton(wrapper).attributes('aria-expanded')).toBe('false')
         expect(addButtonIcon(wrapper).props('icon')).toBe(ICONS.plusCircle)
@@ -331,7 +332,7 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
     })
 
     it('Tilføj opens the form in the member form panel and reads Luk while open', async () => {
-        const wrapper = await mountCard('edit')
+        const wrapper = await mountCard(TEAM_CARD_MODES.EDIT)
         expect(findByTestId(wrapper, JOKER_SLOT_IDS.form).exists()).toBe(false)
 
         await clickByTestId(wrapper, JOKER_SLOT_IDS.add)
@@ -349,7 +350,7 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
 
     it('the form\'s Tilføj emits add:jokerSlot on the team days and closes the row', async () => {
         const teamDays = createDefaultWeekdayMap([false, true, false, true, false, false, false])
-        const wrapper = await mountCard('edit', {affinity: teamDays})
+        const wrapper = await mountCard(TEAM_CARD_MODES.EDIT, {affinity: teamDays})
         await clickByTestId(wrapper, JOKER_SLOT_IDS.add)
         await flushPromises()
 
@@ -370,7 +371,7 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
     })
 
     it('Annuller closes the row and emits nothing', async () => {
-        const wrapper = await mountCard('edit')
+        const wrapper = await mountCard(TEAM_CARD_MODES.EDIT)
         await clickByTestId(wrapper, JOKER_SLOT_IDS.add)
         await flushPromises()
 
@@ -399,7 +400,7 @@ describe('CookingTeamCard team calendar', () => {
             renamed,
             SeasonFactory.defaultCookingTeamDisplay({id: 7, name: 'Madhold 3 - S1'})
         ]}
-        const wrapper = await mountCard('regular', {name: renamed.name})
+        const wrapper = await mountCard(TEAM_CARD_MODES.REGULAR, {name: renamed.name})
         await usePlanStore().loadSeasons()
 
         await vi.waitFor(() => expect(findAllByTestId(wrapper, 'calendar-legend-badge')[0]?.classes())

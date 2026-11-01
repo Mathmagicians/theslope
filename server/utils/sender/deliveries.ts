@@ -17,7 +17,7 @@ import {
 import {useUserPreferenceValidation, wantsChannel, type NotificationChannel} from '~/composables/useUserPreferenceValidation'
 import {fetchDeliveries, recordDeliveries} from '~~/server/data/financesRepository'
 import {groupBy} from '~/utils/batchUtils'
-import {errorMessage} from '~/utils/utils'
+import {errorMessage} from '~~/workers/common/error'
 
 const LOG = '📬 > DELIVERY >'
 

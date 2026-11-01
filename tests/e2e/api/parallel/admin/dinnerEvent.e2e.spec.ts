@@ -12,7 +12,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 const Action = useBookingValidation().BookingActionSchema.enum
 
-const {validatedBrowserContext, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, getSessionUserInfo, attemptAll} = testHelpers
 const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
 const {findTicketPriceByType} = useTicket()
 
@@ -235,12 +235,12 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
     // Cleanup after all tests
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-
-        // Household delete cascades its inhabitants' orders and allergies (ADR-005)
-        await HouseholdFactory.deleteHousehold(context, testHouseholdIds)
-        await AllergyFactory.cleanupAllergyTypes(context, testAllergyTypeIds)
-
-        // Clean up the test season (CASCADE deletes all dinner events automatically per ADR-005)
-        await SeasonFactory.cleanupSeasons(context, testSeasonIds)
+        await attemptAll('Dinner Event /api/admin/dinner-event CRUD operations cleanup', [
+            // Household delete cascades its inhabitants' orders and allergies (ADR-005)
+            () => HouseholdFactory.deleteHousehold(context, testHouseholdIds),
+            () => AllergyFactory.cleanupAllergyTypes(context, testAllergyTypeIds),
+            // Clean up the test season (CASCADE deletes all dinner events automatically per ADR-005)
+            () => SeasonFactory.cleanupSeasons(context, testSeasonIds)
+        ]).finally(() => context.close())
     })
 })

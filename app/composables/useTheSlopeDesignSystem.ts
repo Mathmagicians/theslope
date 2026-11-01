@@ -2,8 +2,11 @@ import {computed} from 'vue'
 import type {WeekDay} from '~/types/dateTypes'
 import type {AlertProps, AvatarProps, ButtonProps, BadgeProps, ChipProps} from '@nuxt/ui'
 import {SEASON_STATUS} from '~/config/seasonWords'
-import type {TicketState} from '~/composables/useBookingValidation'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
+import {BOOKING_WORDS} from '~/config/bookingWords'
+import type {DinnerState, TicketState} from '~/composables/useBookingValidation'
 import {TEMPORAL_CATEGORY, type SeasonStatusValue, type TemporalCategory} from '~/utils/season'
+import {ResidencyStatus} from '~/composables/useHousehold'
 
 // NuxtUI size types extracted from component props
 export type NuxtUISize = NonNullable<ButtonProps['size']>
@@ -423,7 +426,7 @@ export const TYPOGRAPHY = {
     sectionTitle: 'text-xl md:text-3xl font-bold uppercase',
     cardTitle: 'text-lg font-semibold',
     sectionSubheading: `text-sm font-semibold ${TEXT.strong}`,
-    sectionSubheadingLight: 'text-md font-semibold text-amber-50 dark:text-amber-100',
+    sectionSubheadingLight: 'font-semibold text-amber-50 dark:text-amber-100',
     sectionIconLight: 'text-2xl text-amber-50 dark:text-amber-100',
 
     // Body text
@@ -960,6 +963,26 @@ export const COMPONENTS = {
         orderList: 'space-y-2 max-h-64 md:max-h-96 overflow-y-auto'
     },
 
+    // The accountant's public billing page: the page and its column, the gone link's card and icon, the header card and
+    // its row, the summary's facts, the stat tiles with their icons, a card's footer row, an invoice's amount; the CSV
+    // link's redirect page
+    publicBilling: {
+        page: 'min-h-screen py-8',
+        column: 'max-w-6xl mx-auto px-4',
+        notFound: 'text-center',
+        notFoundIcon: 'text-6xl text-warning-500 mb-4',
+        header: 'mb-6',
+        headerRow: 'flex items-center gap-3',
+        facts: 'grid grid-cols-2 md:grid-cols-4 gap-4',
+        fact: 'text-center p-4 rounded-lg',
+        tiles: 'grid grid-cols-2 gap-4 mb-6',
+        tile: 'flex items-center gap-4',
+        tileIcon: 'text-4xl text-primary-500',
+        footer: 'flex justify-end',
+        amount: 'text-right',
+        csvRedirect: 'min-h-screen flex items-center justify-center'
+    },
+
     // HelpButton: the help popover below the button, its card, and the feedback form that unfolds in the card's footer
     helpButton: {
         popoverContent: {side: 'bottom', align: 'start'},
@@ -976,7 +999,13 @@ export const COMPONENTS = {
         formButtons: 'gap-2 md:gap-3'
     },
 
-    // The season form's ticket price editor (TicketPriceListEditor): the card that adds a price and the list of prices
+    // The season form's lists, the holidays and the ticket prices: the list, and the line of a list without entries
+    seasonFormList: {
+        list: 'mt-4 space-y-2',
+        empty: 'mx-auto'
+    },
+
+    // The season form's ticket price editor (TicketPriceListEditor): the card that adds a price
     ticketPriceEditor: {
         addCard: 'mb-4',
         addTitle: 'text-sm font-semibold',
@@ -986,15 +1015,13 @@ export const COMPONENTS = {
         descriptionField: 'w-full',
         typeSelectUi: {content: 'min-w-fit'},
         descriptionUi: {root: 'w-full'},
-        addFooter: 'flex justify-end',
-        list: 'mt-4 space-y-2',
-        empty: 'text-md mx-auto'
+        addFooter: 'flex justify-end'
     },
 
     // The allergy type card (AllergyTypeCard): its edit form, its compact catalog row and its full detail
     allergyTypeCard: {
         form: 'w-full max-w-2xl space-y-4',
-        formTitle: 'text-md font-semibold',
+        formTitle: 'font-semibold',
         field: 'w-full',
         compact: 'flex items-center gap-3 p-3',
         compactGlyph: 'flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 flex-shrink-0',
@@ -1081,6 +1108,11 @@ export const COMPONENTS = {
     // The selected item in a segmented control (form mode, booking view) - a ring, not a fill,
     // so the item's own colour still reads through
     segmentedActive: `ring-2 border-2 ${RING.orange[200]} shadow-md`,
+
+    /** The booking view switcher: a view's word beside its glyph from md, the glyph alone on a phone */
+    bookingViewSwitcher: {
+        label: 'hidden md:block'
+    },
 
     /**
      * A choice control inside a form section (`URadioGroup`, `USwitch`): `v-bind` a shape so an
@@ -1262,6 +1294,16 @@ export const COMPONENTS = {
     },
 
     /**
+     * The admin page (`pages/admin/[tab].vue`): the `root` frame, the read-only `banner` over the tabs, and the `tabs`
+     * whose labels show from md and whose list sticks under the header
+     */
+    adminPage: {
+        root: 'md:py-2 lg:p-4 min-h-screen',
+        banner: 'mb-4',
+        tabs: {class: 'mb-1 md:mb-4', ui: {label: 'hidden md:inline', list: 'sticky top-12 md:top-16 z-20 rounded-none md:rounded-lg'}}
+    },
+
+    /**
      * The household page (`pages/household/[shortname]/[tab].vue`): the `card`, full-bleed on a phone, whose root clips
      * the residency ribbon; the `header` stack over the banners, the `title` row with its `titleIcon`, and the `tabs`
      * whose labels show from md
@@ -1332,6 +1374,17 @@ export const COMPONENTS = {
         prevOwners: 'flex flex-col gap-4 pt-2',
         // One household at the address: its name over its move-out field on a phone, beside it from md
         prevOwner: 'grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 md:items-center'
+    },
+    householdEditPanel: {
+        // The panel under the household's row: its sections stacked on the panel surface
+        root: `p-4 md:p-6 space-y-6 ${BG.panel}`,
+        sectionTitle: `${TYPOGRAPHY.cardTitle} mb-3`,
+        // The facts: two to a row on a phone, four from md, each label over its value
+        facts: 'grid grid-cols-2 md:grid-cols-4 gap-3 text-sm',
+        factValue: 'font-medium',
+        householdBadge: 'w-fit',
+        // The delete under the cancel on a phone, the two at the row's ends from md; LAYOUTS.panelDivider draws its rule
+        footer: 'flex flex-col-reverse md:flex-row md:justify-between gap-2 pt-4'
     },
 
     /**
@@ -1571,7 +1624,7 @@ export const COMPONENTS = {
         powerName: 'flex flex-col gap-0.5',
         // The expanded row's edit card: wide content scrolls inside it
         editCard: {class: 'max-w-full overflow-x-auto', ui: {body: 'p-4 flex flex-col gap-4', footer: 'p-4', header: 'p-4'}},
-        editTitle: 'text-md font-semibold text-balance',
+        editTitle: 'font-semibold text-balance',
         editDeadlines: 'flex flex-col md:flex-row md:justify-between gap-2',
         history: 'mt-2',
         editFooter: 'flex flex-col gap-2',
@@ -1702,19 +1755,26 @@ export const COMPONENTS = {
     },
 
     /**
-     * GuestBookingForm: the info `card` (soft, its body a stack), the `header` row with its `headerIcon` and `title`,
-     * the `deadlines` row, the two `columns` (ticket | allergies) with the left `fieldStack`, a ticket type `option`
-     * in the select (`optionBadge`, `optionNote`), the `footer` stack, the `errors` block and an `error` line with its `errorIcon`
+     * A form that adds a thing inline, GuestBookingForm's guests and HouseholdCreateForm's household: the info `card`
+     * (soft, its body a stack), the `header` row with its `headerIcon` and `title`, and a `select` spanning its field
      */
-    guestBookingForm: {
+    addCard: {
         card: {variant: NOISE.soft, ui: {body: 'p-4 flex flex-col gap-4', footer: 'p-4'}},
         header: 'flex items-center gap-2',
         headerIcon: 'size-5 text-info',
-        title: 'text-md font-semibold',
+        title: 'font-semibold',
+        select: 'w-full'
+    },
+
+    /**
+     * GuestBookingForm on its `addCard`: the `deadlines` row, the two `columns` (ticket | allergies) with the left
+     * `fieldStack`, a ticket type `option` in the select (`optionBadge`, `optionNote`), the `footer` stack, the `errors`
+     * block and an `error` line with its `errorIcon`
+     */
+    guestBookingForm: {
         deadlines: 'flex flex-col md:flex-row md:justify-between gap-2',
         columns: LAYOUTS.gridTwoCol,
         fieldStack: 'flex flex-col gap-4',
-        select: 'w-full',
         option: 'flex flex-col gap-0.5',
         optionBadge: 'uppercase w-fit',
         optionNote: TYPOGRAPHY.finePrintMuted,
@@ -1795,7 +1855,10 @@ export const COMPONENTS = {
     // A framed summary: an icon beside a bold count over its label; the frame measures at the 3:1 edge rung
     statBox: {
         box: `flex items-center gap-2 px-3 py-2 w-fit rounded-md border ${BORDER.gray[500]}`,
-        icon: 'text-xl text-primary'
+        icon: 'text-xl text-primary',
+        figure: 'text-center',
+        value: 'font-semibold',
+        unit: 'text-xs text-muted'
     },
 
     // The typed date field (UInputDate) renders the house mask dd/MM/yyyy: en-GB gives the
@@ -1811,11 +1874,46 @@ export const COMPONENTS = {
         }
     },
 
-    // The period field (CalendarDateRangePicker): its padded form field, and the read-only face's input,
-    // as wide as the range text and never narrower than the field
+    // The date pickers' padded form field: one date (CalendarDatePicker) and a period (CalendarDateRangePicker)
+    datePickerField: 'p-2',
+
+    // The period field's read-only face (CalendarDateRangePicker): an input as wide as the range text and never
+    // narrower than the field
     dateRangeField: {
-        field: 'p-2',
         viewUi: {base: 'w-fit min-w-full'}
+    },
+
+    /**
+     * The holiday list (CalendarDateRangeListPicker): the add row, stacked on the phone and side by side from md; the
+     * add button's bottom margin from md, which lines it up with the period field with and without the field's error
+     * line; a holiday's row. The list and its empty line are the season form's (`seasonFormList`)
+     */
+    holidayListPicker: {
+        addRow: 'flex flex-col md:flex-row items-center md:items-end space-x-2 md:space-x-4',
+        addButton: {withError: 'md:mb-8', plain: 'md:mb-1'},
+        row: 'flex items-center gap-2'
+    },
+
+    /**
+     * The admin's season form (AdminPlanningSeason): the borderless card, the header row spread from md, the holiday
+     * calendar's link, the body with the calendar above the fields on the phone and beside them from xl, the fields'
+     * column, the stacked fields and footer, a titled section, the calendar's column and the calendar centred in it,
+     * and the error list: its block, title, bullets and a field's name
+     */
+    seasonForm: {
+        card: 'w-full ring-0 shadow-none',
+        headerRow: 'md:justify-between',
+        holidayLink: 'underline',
+        body: 'flex flex-col-reverse xl:flex-row gap-2 md:gap-6',
+        formColumn: 'grow',
+        stack: 'space-y-4',
+        section: 'space-y-2',
+        calendarColumn: 'min-w-1/2 lg:w-1/2 grow-0',
+        calendar: 'mx-auto',
+        errors: 'space-y-1',
+        errorsTitle: 'font-semibold',
+        errorList: 'list-disc list-inside',
+        errorName: 'font-medium'
     },
 
     // Shared UCalendar root: Monday-first, no padding weeks, and other-month days both disabled
@@ -1944,6 +2042,40 @@ export const COMPONENTS = {
         container: 'rounded-lg border border-error-300 dark:border-error-800 ' +
                    'bg-error-50 dark:bg-error-950/40 p-4 space-y-3',
         heading: `text-xs font-bold uppercase tracking-wide ${TEXT.error} flex items-center gap-1.5`
+    },
+
+    /**
+     * The two-click button (DangerButton): its root, the boundary of the click-outside check, and per mode (a destructive
+     * action, an undo) the armed button's colour, its ring and text, and its countdown wipe, the dark colour shrinking
+     * off the light one
+     */
+    dangerButton: {
+        root: 'inline-block',
+        danger: {
+            color: COLOR.error,
+            armed: `ring-2 ${RING.red[500]} text-white`,
+            countdown: {dark: '--color-red-900', light: '--color-red-400'}
+        },
+        undo: {
+            color: COLOR.success,
+            armed: `ring-2 ${RING.green[500]} text-white`,
+            countdown: {dark: '--color-green-900', light: '--color-green-400'}
+        }
+    },
+
+    /**
+     * The sign-in page (Login): the form centred in its column, its failure alert and fields; once signed in, the
+     * dashboard's column, the greeting's size over the light section heading, and the space above the ways in
+     */
+    login: {
+        formPage: 'flex items-center justify-center py-12',
+        formColumn: 'max-w-md w-full px-4',
+        form: 'space-y-6',
+        failedAlert: 'mb-4',
+        fields: 'space-y-4',
+        dashboard: 'py-6 px-4 md:px-8 max-w-5xl mx-auto space-y-6',
+        greeting: 'text-2xl md:text-3xl',
+        waysIn: 'pt-4'
     },
 
     /**
@@ -2161,6 +2293,17 @@ export const COMPONENTS = {
         ui: {description: TYPOGRAPHY.finePrint},
         description: 'flex flex-col items-center',
         badge: 'mt-1'
+    },
+
+    /**
+     * The dinner page's header bar (DinnerDetailHeader) on the hero's mocha: stacked on the phone and spread from md, the
+     * state badge's column, the Heynabo link's column, and the link's text in the bar's colour
+     */
+    dinnerDetailHeader: {
+        root: `flex flex-col md:flex-row md:justify-between items-center gap-2 px-4 py-3 ${BACKGROUNDS.hero.mocha}`,
+        badgeColumn: 'flex items-center gap-2',
+        linkColumn: 'flex items-center md:justify-end',
+        heynaboLink: '!text-[inherit]'
     },
 
     /**
@@ -2424,11 +2567,11 @@ export const getCalendarCountBadge = (teamNumber: number) => ({class: getRainbow
 export type ResidencyAlertKind = Extract<AlertKind, 'success' | 'error' | 'neutral'>
 
 /** Residency status → display config (ribbon, alert, badge). null = active, no display needed */
-export const RESIDENCY_CONFIG: Record<import('~/composables/useHousehold').ResidencyStatus, { type: RibbonType, prefix: string, description: string, icon: string, color: ResidencyAlertKind, dateField: 'movedInDate' | 'moveOutDate' } | null> = {
-    'pending':   { type: 'new',    prefix: 'Indflytter',  description: 'Familien flytter ind d.',    icon: ICONS.moveIn,  color: COLOR.success, dateField: 'movedInDate' },
-    'leaving':   { type: 'cancel', prefix: 'Fraflytter',  description: 'Familien fraflytter d.',     icon: ICONS.moveOut, color: COLOR.error,   dateField: 'moveOutDate' },
-    'moved-out': { type: 'past',   prefix: 'Fraflyttet',  description: 'Familien er fraflyttet d.',  icon: ICONS.moveOut, color: COLOR.neutral, dateField: 'moveOutDate' },
-    'active':    null
+export const RESIDENCY_CONFIG: Record<ResidencyStatus, { type: RibbonType, prefix: string, description: string, icon: string, color: ResidencyAlertKind, dateField: 'movedInDate' | 'moveOutDate' } | null> = {
+    [ResidencyStatus.pending]:     { type: 'new',    ...HOUSEHOLD_WORDS.residency.status[ResidencyStatus.pending],     icon: ICONS.moveIn,  color: COLOR.success, dateField: 'movedInDate' },
+    [ResidencyStatus.leaving]:     { type: 'cancel', ...HOUSEHOLD_WORDS.residency.status[ResidencyStatus.leaving],     icon: ICONS.moveOut, color: COLOR.error,   dateField: 'moveOutDate' },
+    [ResidencyStatus['moved-out']]: { type: 'past',   ...HOUSEHOLD_WORDS.residency.status[ResidencyStatus['moved-out']], icon: ICONS.moveOut, color: COLOR.neutral, dateField: 'moveOutDate' },
+    [ResidencyStatus.active]:      null
 }
 
 /** Resolve residency display data for a household on `now`. Returns null for active households. */
@@ -2441,8 +2584,8 @@ export const getResidencyDisplay = (movedInDate: Date, moveOutDate: Date | null,
         ...config,
         dateText,
         badgeText: `${config.prefix} ${formatDate(date!)}`,
-        alertTitle: 'Fællesspisning er for beboere',
-        alertDescription: `Familien skal bo her, for at kunne bestille. ${dateText}.`
+        alertTitle: HOUSEHOLD_WORDS.residency.alert.title,
+        alertDescription: HOUSEHOLD_WORDS.residency.alert.description(dateText)
     }
 }
 
@@ -2921,7 +3064,11 @@ const createWeekdayDisplay = (isMd: Ref<boolean | null>) => ({
      * Badge/button content size for dinner mode icons
      * Mobile: size-4 (16px), Desktop: size-8 (32px)
      */
-    badgeContentSize: 'size-4 md:size-8'
+    badgeContentSize: 'size-4 md:size-8',
+
+    /** The weekday preferences in edit mode (WeekDayMapDinnerModeDisplay): the days wrap in a row, each a column of its label over its selector */
+    editRow: 'flex gap-2 md:gap-4 flex-wrap',
+    editDay: 'flex flex-col items-center gap-2'
 })
 
 /**
@@ -3005,41 +3152,31 @@ const createNavigation = (isMd: Ref<boolean | null>) => ({
  * ```
  */
 /**
- * DINNER_STATE_BADGES - Shared dinner state badge configuration
- *
- * Used for consistent dinner state display across:
- * - TeamCalendarDisplay (agenda view)
- * - ChefDinnerCard (master view)
- * - DinnerEvent components
- *
- * Colors follow feature proposal:
- * - SCHEDULED: mocha (warm - "ready to plan")
- * - ANNOUNCED: success (green - "published, bookable")
- * - CONSUMED: neutral (gray - "done, archived")
- * - CANCELLED: neutral (black/dark - NOT red, red is for deadline warnings)
+ * The dinner state's badge, one per dinner state: its label, colour and glyph. A cancelled dinner reads neutral, not
+ * red, since red marks the deadlines
  */
 export const DINNER_STATE_BADGES = {
     SCHEDULED: {
-        label: 'Planlagt',
+        label: BOOKING_WORDS.dinnerStates.SCHEDULED,
         color: COLOR.mocha,
-        icon: 'i-heroicons-clipboard-document-list'
+        icon: ICONS.clipboard
     },
     ANNOUNCED: {
-        label: 'Annonceret',
+        label: BOOKING_WORDS.dinnerStates.ANNOUNCED,
         color: COLOR.success,
-        icon: 'i-heroicons-megaphone'
+        icon: ICONS.megaphone
     },
     CANCELLED: {
-        label: 'Aflyst',
+        label: BOOKING_WORDS.dinnerStates.CANCELLED,
         color: COLOR.neutral,
-        icon: 'i-heroicons-x-circle'
+        icon: ICONS.noDinner
     },
     CONSUMED: {
-        label: 'Afholdt',
+        label: BOOKING_WORDS.dinnerStates.CONSUMED,
         color: COLOR.neutral,
-        icon: 'i-heroicons-check-circle'
+        icon: ICONS.checkCircle
     }
-} as const
+} as const satisfies Record<DinnerState, {label: string, color: NuxtUIColor, icon: string}>
 
 /**
  * PLANNING_CALENDAR - Pink palette accent colors

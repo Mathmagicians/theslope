@@ -12,13 +12,13 @@ import type {DinnerEventDisplayInline} from '~/composables/useCookingTeamValidat
 import {byTimeThenId} from '~/composables/useWaitlist'
 import {calculateCountdown, formatDate, DATE_SETTINGS} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
-import {chunkArray, groupBy, linesBy, partition} from '~/utils/batchUtils'
+import {chunkArray, groupBy, linesBy, partition, type NonEmpty} from '~/utils/batchUtils'
 import {sumBy} from '~/utils/ledger'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {differenceInCalendarDays, isAfter} from 'date-fns'
 
 
-const {OrderBucketSchema, BookingActionSchema} = useBookingValidation()
+const {OrderBucketSchema, BookingActionSchema, BookingTotalsSchema} = useBookingValidation()
 const Bucket = OrderBucketSchema.enum
 const Action = BookingActionSchema.enum
 
@@ -65,8 +65,10 @@ export type OrderDecision = {
 /** The orders of each bucket */
 export type OrderBucketResult<T = DesiredOrder> = Record<OrderBucket, T[]>
 
-export const emptyOrderBuckets = <T = DesiredOrder>(): OrderBucketResult<T> =>
-    Object.fromEntries(OrderBucketSchema.options.map(bucket => [bucket, []])) as unknown as OrderBucketResult<T>
+export const emptyOrderBuckets = <T = DesiredOrder>(): OrderBucketResult<T> => ({
+    [Bucket.create]: [], [Bucket.update]: [], [Bucket.idempotent]: [], [Bucket.delete]: [],
+    [Bucket.claim]: [], [Bucket.leave]: [], [Bucket.requeue]: []
+})
 
 /**
  * Input for order decision: the desired order plus context for deadline enforcement
@@ -137,7 +139,7 @@ export const formatDinnerName = (menuTitle: string): string =>
 
 /** The orders of a run per action, every action present */
 export const countTotals = (items: readonly BookingResult[]): BookingTotals =>
-    Object.fromEntries(BookingActionSchema.options.map(action => [action, items.filter(item => item.action === action).length])) as BookingTotals
+    BookingTotalsSchema.parse(Object.fromEntries(BookingActionSchema.options.map(action => [action, items.filter(item => item.action === action).length])))
 
 /**
  * Pure decision function for categorizing user booking intent into buckets.
@@ -971,7 +973,7 @@ export const useBooking = () => {
         provenanceAllergies?: string[] | null
     }>(
         orders: T[]
-    ): Record<string, T[]> => Object.fromEntries(groupBy<T, string>(order => {
+    ): Record<string, NonEmpty<T>> => Object.fromEntries(groupBy<T, string>(order => {
         const allergiesKey = order.provenanceAllergies?.slice().sort().join(',') ?? ''
         const provenanceKey = order.provenanceHousehold ?? ''
         return `${order.inhabitantId}-${order.ticketType ?? 'unknown'}-${order.priceAtBooking}-${order.dinnerEventId}-${allergiesKey}-${provenanceKey}`
@@ -1034,25 +1036,6 @@ export const useBooking = () => {
         return parts.length > 0 ? parts.join(' ') : '(ingen)'
     }
 
-    // Sums the results of several scaffold runs; the season is the last run's
-    const sumScaffoldResults = (results: readonly ScaffoldResult[]): ScaffoldResult => ({
-        seasonId: results.at(-1)?.seasonId ?? null,
-        dinners: [...new Map(results.flatMap(result => result.dinners).map(dinner => [dinner.id, dinner])).values()],
-        totals: Object.fromEntries(BookingActionSchema.options.map(action => [action, sumBy(results, result => result.totals[action])])) as BookingTotals,
-        positions: results.flatMap(result => result.positions),
-        unchanged: sumBy(results, result => result.unchanged),
-        households: sumBy(results, result => result.households),
-        errored: sumBy(results, result => result.errored),
-        results: results.flatMap(result => result.results),
-        failed: results.flatMap(result => result.failed),
-        outcomes: {
-            joined: results.flatMap(result => result.outcomes.joined),
-            ticketsSold: results.flatMap(result => result.outcomes.ticketsSold),
-            waitlistTicketsSold: results.flatMap(result => result.outcomes.waitlistTicketsSold),
-            waitlistPortionsAssigned: results.flatMap(result => result.outcomes.waitlistPortionsAssigned)
-        }
-    })
-
     // ============================================================================
     // Desired Orders - grid edits and power changes as one DesiredOrder[]
     // ============================================================================
@@ -1107,7 +1090,7 @@ export const useBooking = () => {
         dinnerEventId: number
     ): {
         inhabitants: {inhabitantId: number, order?: OrderDisplay, entry?: TicketWaitlistDisplay}[]
-        guestGroups: OrderDisplay[][]
+        guestGroups: NonEmpty<OrderDisplay>[]
         entries: TicketWaitlistDisplay[]
     } => {
         const dinnerEntries = entries.filter(entry => entry.dinnerEventId === dinnerEventId)
@@ -1162,7 +1145,7 @@ export const useBooking = () => {
                 ?? order?.dinnerMode
                 ?? entry?.order.dinnerMode
                 ?? DinnerModeSchema.enum.NONE),
-            ...targets.guestGroups.map(guestOrders => draftMode.guestGroup?.(guestOrders) ?? guestOrders[0]!.dinnerMode),
+            ...targets.guestGroups.map(guestOrders => draftMode.guestGroup?.(guestOrders) ?? guestOrders[0].dinnerMode),
             ...targets.entries.map(entry => draftMode.entry?.(entry) ?? entry.order.dinnerMode)
         ]
         return computeConsensus(modes, DinnerModeSchema.enum.DINEIN)
@@ -1228,8 +1211,9 @@ export const useBooking = () => {
 
     const {TicketTypeSchema, TicketChangeKindSchema, OrderAuditChangeSchema} = useBookingValidation()
     const Change = OrderAuditChangeSchema.enum
+    const Type = TicketTypeSchema.enum
     const countsBy = (count: (type: TicketType) => number): TicketCounts =>
-        Object.fromEntries(TicketTypeSchema.options.map(type => [type, count(type)])) as TicketCounts
+        ({[Type.ADULT]: count(Type.ADULT), [Type.CHILD]: count(Type.CHILD), [Type.BABY]: count(Type.BABY)})
     const emptyCounts = (): TicketCounts => countsBy(() => 0)
     const countsPlus = (a: TicketCounts, b: TicketCounts): TicketCounts => countsBy(type => a[type] + b[type])
 
@@ -1398,7 +1382,7 @@ export const useBooking = () => {
                 const audit = readOrderAudit(row)
                 return audit === null || heldNoTicket(audit) ? [] : [{row, audit}]
             })
-            .reduce(({held, lines}, {row, audit}) => {
+            .reduce<{held: HeldTickets, lines: TicketChange[]}>(({held, lines}, {row, audit}) => {
                 const ticket = ticketOf(row, audit)
                 const before = findHeld(held, audit)
                 const moved = afterRow(before, row, ticket)
@@ -1408,7 +1392,7 @@ export const useBooking = () => {
                 const next = after ? withTicket(rest, after) : rest
                 const events = eventsOf(before, after, row, audit)
                 return {held: next, lines: events.length > 0 ? [...lines, toLine(row, ticket, after ?? before, events, next)] : lines}
-            }, {held: new Map() as HeldTickets, lines: [] as TicketChange[]})
+            }, {held: new Map<number, HeldTicket>(), lines: []})
         return collapseByKey(lines)
     }
 
@@ -1426,7 +1410,7 @@ export const useBooking = () => {
         TicketChangeKindSchema.options.flatMap(change => {
             const alike = groupBy((event: TicketEvent) => `${event.seller ?? ''}|${event.reason ?? ''}`)(events.filter(event => event.change === change))
             return [...alike.values()].map(ofAlike => {
-                const {seller, reason} = ofAlike[0]!
+                const {seller, reason} = ofAlike[0]
                 const from = ofAlike.flatMap(event => event.from ? [event.from] : [])
                 return {
                     change,
@@ -1441,7 +1425,7 @@ export const useBooking = () => {
     // gives the rest, and the line takes its place by its last row
     const changeKey = (change: TicketChange): string => `${formatMoment(change.timestamp)}|${change.performedByUserId}`
     const collapseByKey = linesBy<TicketChange, TicketChange, string>(changeKey, group => ({
-        ...group.at(-1)!,
+        ...(group.at(-1) ?? group[0]),
         households: [...new Set(group.flatMap(change => change.households))],
         events: mergeEvents(group.flatMap(change => change.events))
     }), byTime)
@@ -1452,10 +1436,15 @@ export const useBooking = () => {
         const index = sorted.findIndex(dinner => dinner.id === aroundId)
         if (index < 0) return []
         const adjacent = (earlier: Date, later: Date) => differenceInCalendarDays(later, earlier) <= 1
+        // The dinners at i and i + 1 fall on consecutive days
+        const adjacentAt = (i: number): boolean => {
+            const [earlier, later] = [sorted[i], sorted[i + 1]]
+            return earlier !== undefined && later !== undefined && adjacent(earlier.date, later.date)
+        }
         let start = index
-        while (start > 0 && adjacent(sorted[start - 1]!.date, sorted[start]!.date)) start--
+        while (start > 0 && adjacentAt(start - 1)) start--
         let end = index
-        while (end < sorted.length - 1 && adjacent(sorted[end]!.date, sorted[end + 1]!.date)) end++
+        while (end < sorted.length - 1 && adjacentAt(end)) end++
         return sorted.slice(start, end + 1)
     }
 
@@ -1483,7 +1472,6 @@ export const useBooking = () => {
         groupGuestOrders,
         // Scaffold Result Formatting
         formatScaffoldResult,
-        sumScaffoldResults,
         // Lock Status
         getLockedFutureDinnerIds,
         computeLockStatus,

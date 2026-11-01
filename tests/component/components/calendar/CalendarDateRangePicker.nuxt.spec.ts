@@ -4,18 +4,14 @@ import { mountSuspended } from "@nuxt/test-utils/runtime"
 import { enableAutoUnmount } from '@vue/test-utils'
 import CalendarDateRangePicker from '~/components/calendar/CalendarDateRangePicker.vue'
 import { ref } from 'vue'
-import { openPopover, expectSharedCalendarGrid, findDateSegments, typeIntoSegment, calendarDay, resetStores } from '~~/tests/component/testHelpers'
-import { CALENDAR, dayCircleClasses } from '~/composables/useTheSlopeDesignSystem'
-import type { DateRange } from '~/types/dateTypes'
+import { openPopover, expectSharedCalendarGrid, findDateSegments, dateSegment, typeIntoSegment, calendarDay, resetStores, emittedPayload } from '~~/tests/component/testHelpers'
+import { CALENDAR, dayCircleClasses, type CalendarPickerSelection } from '~/composables/useTheSlopeDesignSystem'
+import { dateRangeSchema } from '~/composables/useDateRangeValidation'
 
 const IS_MD = true
 
 const JAN_1 = new Date(2025, 0, 1)
 const JAN_5 = new Date(2025, 0, 5)
-
-type PickerVm = {
-  errors: Map<string, string[]>
-}
 
 enableAutoUnmount(afterEach)
 
@@ -36,9 +32,7 @@ describe('CalendarDateRangePicker', () => {
   it('renders start and end dates in typed segments, and a calendar on the shared grid token', async () => {
     const wrapper = await mountPicker({ start: JAN_1, end: JAN_5 })
     const days = findDateSegments(wrapper, 'day')
-    expect(days.length).toBe(2)
-    expect(days[0]!.attributes('aria-valuenow')).toBe('1')
-    expect(days[1]!.attributes('aria-valuenow')).toBe('5')
+    expect(days.map(day => day.attributes('aria-valuenow'))).toEqual(['1', '5'])
     findDateSegments(wrapper, 'year').forEach(year => expect(year.attributes('aria-valuenow')).toBe('2025'))
 
     await openPopover(wrapper)
@@ -47,26 +41,24 @@ describe('CalendarDateRangePicker', () => {
 
   it('typing the start day updates start and preserves end', async () => {
     const wrapper = await mountPicker({ start: JAN_1, end: JAN_5 })
-    await typeIntoSegment(findDateSegments(wrapper, 'day')[0]!, ['0', '3'])
+    await typeIntoSegment(dateSegment(wrapper, 'day'), ['0', '3'])
 
-    const emitted = wrapper.emitted('update:modelValue')
-    expect(emitted).toBeTruthy()
-    const lastRange = emitted!.at(-1)![0] as DateRange
+    const lastRange = emittedPayload(wrapper, 'update:modelValue', dateRangeSchema)
     expect(calendarDay(lastRange.start)).toBe('2025-01-03')
     expect(calendarDay(lastRange.end)).toBe('2025-01-05')
   })
 
-  it('typing a start after the end reports the range error', async () => {
+  it('typing a start after the end shows the range rule under the field', async () => {
     const wrapper = await mountPicker({ start: JAN_1, end: JAN_5 })
-    await typeIntoSegment(findDateSegments(wrapper, 'day')[0]!, ['0', '7'])
+    await typeIntoSegment(dateSegment(wrapper, 'day'), ['0', '7'])
 
-    const vm = wrapper.vm as unknown as PickerVm
-    const allErrors = Array.from(vm.errors.values()).flat()
-    expect(allErrors.some((msg: string) => msg.includes('Tidsmaskinen'))).toBe(true)
+    const rangeRule = dateRangeSchema.safeParse({ start: new Date(2025, 0, 7), end: JAN_5 }).error?.issues.map(issue => issue.message)
+    expect(rangeRule).toHaveLength(1)
+    expect(wrapper.find('[data-slot="error"]').text()).toBe(rangeRule?.[0])
   })
 
   // What is being picked decides how a selected day reads - the variants live in CALENDAR.picker
-  describe.each(['cookingDay', 'holiday'] as const)('selection=%s', (selection) => {
+  describe.each(['cookingDay', 'holiday'] as const satisfies readonly CalendarPickerSelection[])('selection=%s', (selection) => {
     it('draws every picked day with the design-system circle for that selection', async () => {
       const wrapper = await mountPicker({ start: JAN_1, end: JAN_5 }, { selection })
       await openPopover(wrapper)
@@ -74,10 +66,8 @@ describe('CalendarDateRangePicker', () => {
       // The popover is teleported to the body, so the rendered days are read from the document
       expect(document.querySelectorAll('[data-selected]').length).toBeGreaterThan(0)
       const circle = document.querySelector(`[data-value="2025-01-03"] div`)
-      expect(circle, 'a day inside the picked range renders a circle').not.toBeNull()
-      dayCircleClasses(CALENDAR.picker[selection])
-        .flatMap(token => token.split(' '))
-        .forEach(cls => expect(circle!.classList.contains(cls)).toBe(true))
+      const circleClasses = dayCircleClasses(CALENDAR.picker[selection]).flatMap(token => token.split(' '))
+      expect(Array.from(circle?.classList ?? []), 'a day inside the picked range renders the circle').toEqual(expect.arrayContaining(circleClasses))
     })
   })
 })

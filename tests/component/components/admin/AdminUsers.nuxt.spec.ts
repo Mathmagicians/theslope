@@ -2,19 +2,21 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, resetStores, registerEmptyStoreEndpoints, holdEndpoint, findLoadingRow, tableHeaders, cellsByHeader, VIEWPORTS, findByTestId, findOpenRows} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, resetStores, registerEmptyStoreEndpoints, holdEndpoint, findLoadingRow, tableHeaders, cellsByHeader, VIEWPORTS, findByTestId, findOpenRows, itemAt} from '~~/tests/component/testHelpers'
 import AdminUsers from '~/components/admin/AdminUsers.vue'
 import UserProfileCard from '~/components/user/UserProfileCard.vue'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {BUTTON_WORDS} from '~/config/buttonWords'
+import {USER_WORDS} from '~/config/userWords'
 
 // Only HTTP is faked (testing.md Rule 6)
 registerEmptyStoreEndpoints()
 const user = UserFactory.defaultUserWithInhabitant('admin-users')
 registerEndpoint('/api/admin/users', () => [user])
 
+const COLUMNS = USER_WORDS.admin.columns
 // The expand column has no header text
-const HEADERS = ['', '#', 'Navn', 'Mail', 'Telefon', 'Systemroller', 'Sidst opdateret']
+const HEADERS = ['', '#', COLUMNS.name, COLUMNS.email, COLUMNS.phone, COLUMNS.systemRoles, COLUMNS.updatedAt]
 
 const mountUsers = (isMd: boolean) => mountWithTooltipProvider(AdminUsers, {props: {canEdit: true}, isMd})
 
@@ -32,7 +34,7 @@ describe('AdminUsers table', () => {
         await vi.waitFor(() => expect(wrapper.find('tbody').text()).toContain(user.email))
 
         expect(tableHeaders(wrapper)).toEqual(HEADERS)
-        expect(cellsByHeader(wrapper)).toMatchObject({Telefon: user.phone})
+        expect(cellsByHeader(wrapper)).toMatchObject({[COLUMNS.phone]: user.phone})
     })
 })
 
@@ -82,6 +84,24 @@ describe('AdminUsers open row', () => {
 
         const open = findOpenRows(wrapper)
         expect(open.map(({row}) => row.text())).toEqual([expect.stringContaining(second.email)])
-        expect(open[0]!.detail.findComponent(UserProfileCard).props('user')).toMatchObject({id: second.id, email: second.email})
+        expect(itemAt(open, 0).detail.findComponent(UserProfileCard).props('user')).toMatchObject({id: second.id, email: second.email})
+    })
+})
+
+describe('AdminUsers a user without an inhabitant', () => {
+    const withoutInhabitant = {...UserFactory.defaultUserWithInhabitant('admin-users-no-inhabitant', {id: user.id + 2}), Inhabitant: null}
+    let unregister: () => void = () => {}
+
+    beforeEach(() => {
+        unregister = registerEndpoint('/api/admin/users', () => [withoutInhabitant])
+    })
+
+    afterEach(() => unregister())
+
+    it('GIVEN a user without an inhabitant THEN the Navn cell reads the unknown user\'s word', async () => {
+        const wrapper = await mountUsers(true)
+        await vi.waitFor(() => expect(wrapper.find('tbody').text()).toContain(withoutInhabitant.email))
+
+        expect(cellsByHeader(wrapper)).toMatchObject({[COLUMNS.name]: USER_WORDS.unknownUser})
     })
 })

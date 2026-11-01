@@ -71,6 +71,6 @@ describe('HelpButton - feedback', () => {
         await vi.waitFor(() => expect(toastTitles()).toHaveLength(1))
         await flushPromises()
         expect(page().text()).not.toContain('Kunne ikke sende feedback')
-        expect((findByTestId(page(), TEST_IDS.description).element as HTMLTextAreaElement).value).toBe('Knappen gør ingenting')
+        expect(findByTestId<HTMLTextAreaElement>(page(), TEST_IDS.description).element.value).toBe('Knappen gør ingenting')
     })
 })

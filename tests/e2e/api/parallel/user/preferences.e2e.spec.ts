@@ -3,7 +3,7 @@ import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {useUserPreferenceValidation, type Appearance, type NotificationChannel} from '~/composables/useUserPreferenceValidation'
 
-const {validatedBrowserContext, memberValidatedBrowserContext} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, attemptAll, getSessionUser} = testHelpers
 const {NotificationChannelSchema, PaletteSchema, TextScaleSchema, DEFAULT_APPEARANCE} = useUserPreferenceValidation()
 const Channel = NotificationChannelSchema.enum
 const Palette = PaletteSchema.enum
@@ -26,7 +26,7 @@ test.describe('User preferences', () => {
 
     test.beforeAll(async ({browser}) => {
         const memberContext = await memberValidatedBrowserContext(browser)
-        const me = await UserFactory.getSessionUser(memberContext)
+        const me = await getSessionUser(memberContext)
         memberUserId = me.id
         originalChannels = me.notificationChannels
         originalAppearance = me.appearance
@@ -36,11 +36,13 @@ test.describe('User preferences', () => {
     test.afterAll(async ({browser}) => {
         const memberContext = await memberValidatedBrowserContext(browser)
         const adminContext = await validatedBrowserContext(browser)
-        await UserFactory.setPhone(adminContext, memberUserId, originalPhone)
-        await UserFactory.updateMyPreferences(memberContext, {
-            notificationChannels: originalChannels,
-            appearance: originalAppearance
-        })
+        await attemptAll('User preferences cleanup', [
+            () => UserFactory.setPhone(adminContext, memberUserId, originalPhone),
+            () => UserFactory.updateMyPreferences(memberContext, {
+                notificationChannels: originalChannels,
+                appearance: originalAppearance
+            })
+        ]).finally(() => Promise.all([memberContext.close(), adminContext.close()]))
     })
 
     test('GIVEN a member WHEN saving channels and appearance THEN the response and the session both carry them', async ({browser}) => {
@@ -55,7 +57,7 @@ test.describe('User preferences', () => {
         expect(updated!.notificationChannels).toEqual(preferences.notificationChannels)
         expect(updated!.appearance).toEqual(preferences.appearance)
 
-        const sessionUser = await UserFactory.getSessionUser(context)
+        const sessionUser = await getSessionUser(context)
         expect(sessionUser.notificationChannels).toEqual(preferences.notificationChannels)
         expect(sessionUser.appearance).toEqual(preferences.appearance)
     })

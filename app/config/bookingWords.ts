@@ -1,8 +1,9 @@
 /**
  * The booking words users read. Plain module without auto-imports: the app and the server import it (ADR-017).
  */
-import {useBookingValidation, DinnerMode, OrderAuditAction, OrderState, TicketState, type BookingAction, type BookingOutcome} from '~/composables/useBookingValidation'
+import {useBookingValidation, DinnerMode, DinnerState, OrderAuditAction, OrderState, TicketState, type BookingAction, type BookingOutcome} from '~/composables/useBookingValidation'
 import {useBillingValidation, type VatMode} from '~/composables/useBillingValidation'
+import {PRICE_WORDS} from '~/config/priceWords'
 
 const {BookingActionSchema, TicketChangeKindSchema} = useBookingValidation()
 const Action = BookingActionSchema.enum
@@ -16,6 +17,11 @@ const releasedPayment = 'Du betaler, medmindre andre køber'
 const releasedWord = 'Frigivet'
 const claimedWord = 'Købt fra anden'
 const guestOf = 'Gæst af'
+const dateColumn = 'Dato'
+const pbsInvoice = 'PBS Faktura'
+const unknown = 'Ukendt'
+const missingPrice = (who: string) => `Kan ikke booke: mangler billetpris for ${who}`
+const total = 'Total'
 
 export const BOOKING_WORDS = {
     /** A dinner's name while the chef has written no menu */
@@ -42,14 +48,14 @@ export const BOOKING_WORDS = {
         ticketColumns: {ticketType: 'Billettype', count: 'Antal', unitPrice: 'Stk pris', revenue: 'Total'},
         revenue: 'Indtægter',
         contribution: (percent: number) => `Køkkenbidrag (${percent}%)`,
-        columns: {date: 'Dato', dinner: 'Middag', payer: 'Bestiller', note: 'Note'},
+        columns: {date: dateColumn, dinner: 'Middag', payer: 'Bestiller', note: 'Note'},
         vatModes: {
             [VatModeValue.inkl]: 'Inkl. moms',
             [VatModeValue.ex]: 'Ex moms'
         } satisfies Record<VatMode, string>,
         otherUnit: {
-            [VatModeValue.ex]: (amount: string) => `= ${amount} kr inkl. moms`,
-            [VatModeValue.inkl]: (amount: string) => `= ${amount} kr ex moms`
+            [VatModeValue.ex]: (amount: string) => `= ${PRICE_WORDS.kroner(amount)} inkl. moms`,
+            [VatModeValue.inkl]: (amount: string) => `= ${PRICE_WORDS.kroner(amount)} ex moms`
         } satisfies Record<VatMode, (amount: string) => string>,
         placeholders: {amount: 'beløb', note: 'note'}
     },
@@ -58,7 +64,75 @@ export const BOOKING_WORDS = {
         label: (ticketType: string, price: string) => `${ticketType} · ${price} kr`,
         ageLimit: (years: number) => `Under ${years} år`
     },
+    /** A cost line's ticket badge when its ticket type is gone */
+    unknownTicketType: unknown,
     ticketCount,
+    /**
+     * The guest form's fields: the eating mode, the number of guests, the ticket type with its placeholder and the
+     * allergies; its rules: the number of guests, their ticket type and their eating mode
+     */
+    guestForm: {
+        fields: {
+            dinnerMode: 'Hvordan spiser I?',
+            count: 'Antal gæster',
+            ticketType: 'Billettype',
+            ticketTypePlaceholder: 'Vælg billettype...',
+            allergies: 'Allergier (valgfrit)'
+        },
+        countMissing: 'Indtast antal gæster',
+        countNotInteger: 'Skal være et helt tal',
+        countMin: 'Minimum 1 gæst',
+        countMax: 'Maximum 10 gæster',
+        ticketPriceMissing: 'Vælg en billettype',
+        dinnerModeMissing: 'Gæster skal vælge en spisemåde'
+    },
+    /**
+     * The economy views (HouseholdEconomy, AdminEconomy, the public billing page): a billing period's title, a
+     * household's closed on its PBS invoice or the one running, the admin's settled or the next; a period's badge; the
+     * counts the boxes read; the tables' columns; the facts of a billing summary; the cards' titles and sum lines; the
+     * toggles that open a row's orders or transactions; the searches; a household's invoice by its payment month; the
+     * share with the accountant; the admin's correction of a dinner's bookings and the address of a household the list
+     * lacks; the accountant's page; a failed read
+     */
+    billing: {
+        period: {closed: pbsInvoice, open: 'Aktuel periode', settled: 'Samlet PBS Afregning', next: 'Næste PBS'},
+        state: {running: 'Igangværende', closed: 'Afsluttet'},
+        stats: {households: 'Husstande', dinners: 'Middage', tickets: 'Kuverter', total},
+        columns: {
+            date: dateColumn,
+            menu: 'Menu',
+            amount: 'Beløb',
+            status: 'Status',
+            period: 'Periode',
+            control: 'Kontrol',
+            revenue: 'Omsætning',
+            share: 'Del',
+            address: 'Adresse',
+            pbs: 'PBS',
+            pbsId: 'PBS ID'
+        },
+        summary: {billingPeriod: 'Forbrugsperiode', cutoffDate: 'Opgørelsesdato', paymentDate: 'PBS opkræves'},
+        titles: {upcoming: 'Kommende', future: 'Fremtidige bestillinger', periods: 'Faktureringsperioder', invoices: 'Fakturaer'},
+        sums: {expected: 'Forventet:', total: `${total}:`, households: (count: number) => `${total}: ${count} husstande`},
+        show: {orders: 'Vis ordrer', transactions: 'Vis transaktioner'},
+        search: {period: 'Søg periode...', household: 'Søg adresse eller navn...'},
+        invoice: (month: string) => `${pbsInvoice} for ${month}`,
+        share: 'Del med bogholder:',
+        correction: {
+            label: 'Admin Korrektion',
+            confirm: 'Klik igen for at rette',
+            household: 'Vælg husstand:',
+            householdPlaceholder: 'Vælg husstand...',
+            toast: 'Administrator Korrektion'
+        },
+        unknownAddress: unknown,
+        publicPage: {
+            title: 'PBS Fakturaoversigt',
+            community: 'Skråningen Fællesspisning',
+            notFound: {title: 'Link ikke fundet', description: 'Dette link er ugyldigt eller udløbet.'}
+        },
+        failed: {overview: 'Kunne ikke hente økonomioversigt', invoices: 'Kunne ikke hente fakturaoversigt'}
+    },
     /** A closed dinner's supply: the Framelding badge, the chef's waiting-list box, the household's notes, the booking form's alert */
     supply: {
         forSale: (tickets: string) => `${tickets} til salg`,
@@ -87,9 +161,22 @@ export const BOOKING_WORDS = {
     mixedModes: 'Blandet',
     /**
      * Power mode, one row for the whole household: the booking grid's row name (`name`), the booking form's (`formName`),
-     * the household card's toggle, and the save of the booking form's and the household card's power row
+     * the name of the booking form's face group, its expanded row's title, the household card's toggle, the save of the
+     * booking form's and the household card's power row, and the power row's warning: its title on both, its description
+     * on the booking form (the household card's is the preference editor's)
      */
-    power: {name: 'Alle', formName: 'Hele familien', toggle: 'Power mode', save: 'Gem for alle'},
+    power: {
+        name: 'Alle',
+        formName: 'Hele familien',
+        faces: 'beboere',
+        editTitle: 'Vælg for hele familien',
+        toggle: 'Power mode',
+        save: 'Gem for alle',
+        alert: {
+            title: 'Du er ved at aktivere power mode',
+            description: (memberCount: number) => `Ændringer påvirker alle ${memberCount} medlemmer.`
+        }
+    },
     /** A booking action: the preview line's words after the name, the toast's words after the count */
     actions: {
         [Action.BOOK]: {preview: () => 'tilmeldes', toast: 'tilmeldt'},
@@ -115,8 +202,8 @@ export const BOOKING_WORDS = {
     /**
      * The guest form's button, a booker's guests of one ticket type counted in a preview or toast line, the guests a
      * ticket's badge names, a guest row's name, and the booker a guest comes with: before the booker's face in the
-     * views (`of`), before the booker's name in a line (`ofBooker`); the add-guest row's name and the guest form's
-     * title (`add`)
+     * views (`of`), before the booker's name in a line (`ofBooker`), in place of a booker no longer in the household
+     * (`unknownBooker`); the add-guest row's name and the guest form's title (`add`); a guest row's expanded title
      */
     guests: {
         add: 'Tilføj gæst',
@@ -125,8 +212,25 @@ export const BOOKING_WORDS = {
         label: (count: number) => count === 1 ? 'Gæst' : `${count} Gæster`,
         name: 'Gæst',
         of: guestOf,
-        ofBooker: (booker: string) => `${guestOf} ${booker}`
+        ofBooker: (booker: string) => `${guestOf} ${booker}`,
+        unknownBooker: 'ukendt',
+        editTitle: 'Opdater gæstebillet'
     },
+    /**
+     * The booking form's inhabitant row: its expanded title; a save that finds no ticket price for a person or a guest
+     */
+    bookingForm: {
+        editTitle: (name: string) => `Vælg spisning for ${name}`,
+        missingPrice,
+        missingGuestPrice: missingPrice('gæst')
+    },
+    /** A dinner's state as its badge names it */
+    dinnerStates: {
+        [DinnerState.SCHEDULED]: 'Planlagt',
+        [DinnerState.ANNOUNCED]: 'Annonceret',
+        [DinnerState.CANCELLED]: 'Aflyst',
+        [DinnerState.CONSUMED]: 'Afholdt'
+    } satisfies Record<DinnerState, string>,
     /** A ticket's state: CostLine and the order badges */
     orderStates: {
         [OrderState.BOOKED]: 'Bestilt',
@@ -155,7 +259,7 @@ export const BOOKING_WORDS = {
         title: 'Se billetændringer',
         toggle: (open: boolean) => open ? 'Skjul billetændringer' : 'Vis billetændringer',
         failed: 'Kunne ikke hente billetændringer',
-        columns: {date: 'Dato', households: 'Husstand', performedBy: 'Af', change: 'Ændring', tickets: 'Billetter · kuverter', revenue: 'Indtægter'},
+        columns: {date: dateColumn, households: 'Husstand', performedBy: 'Af', change: 'Ændring', tickets: 'Billetter · kuverter', revenue: 'Indtægter'},
         kinds: {
             [TicketChangeKind.CLOSE]: 'lukket',
             [TicketChangeKind.EXTRA_PORTIONS]: (booked: string) => `ekstra ${booked}`

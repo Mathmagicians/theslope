@@ -1,5 +1,6 @@
 import {test, expect} from '~~/tests/e2e/uiTest'
 import testHelpers from '~~/tests/e2e/testHelpers'
+import {USER_WORDS} from '~/config/userWords'
 //import {adminFile} from './auth.setup'
 const adminFile = 'playwright/.auth/admin.json'
 
@@ -39,12 +40,12 @@ test.describe('Pages with logged in user can load', () => {
         await gotoHydrated(page, '/login')
 
         // Wait for dashboard to load (shown when logged in)
-        await expect(page.getByText('Hvad vil du lave i dag?')).toBeVisible()
+        await expect(page.getByText(USER_WORDS.login.waysIn)).toBeVisible()
 
         // Verify action cards are visible (use .first() to avoid strict mode violations)
-        await expect(page.getByRole('heading', {name: 'Fællesspisning'})).toBeVisible()
-        await expect(page.getByRole('heading', {name: 'Min husstand'})).toBeVisible()
-        await expect(page.getByRole('heading', {name: 'Mit madhold'})).toBeVisible()
+        await expect(page.getByRole('heading', {name: USER_WORDS.login.dinner.title})).toBeVisible()
+        await expect(page.getByRole('heading', {name: USER_WORDS.login.household.title})).toBeVisible()
+        await expect(page.getByRole('heading', {name: USER_WORDS.login.team.title})).toBeVisible()
 
         // Documentation screenshot: User dashboard after login
         await doScreenshot(page, 'user/dashboard', true)

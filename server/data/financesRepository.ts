@@ -4,7 +4,7 @@ import {getPrismaClientConnection} from "../utils/database"
 import {useDeliveryValidation, type Delivery, type DeliveryCreate} from '~/composables/useDeliveryValidation'
 import {chunkArray, groupBy} from '~/utils/batchUtils'
 import {sumAmounts} from '~/utils/ledger'
-import {errorMessage} from '~/utils/utils'
+import {errorMessage} from '~~/workers/common/error'
 
 import type {
     OrderDisplay,

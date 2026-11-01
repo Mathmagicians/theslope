@@ -55,14 +55,14 @@ describe('AdminPlanning', () => {
     beforeEach(() => {
         resetStores()
         vi.clearAllMocks()
-        sessionEndpoint.mockReturnValue({user: {id: 1, email: 'admin@skraaningen.dk', systemRoles: [SystemRole.ADMIN]}})
+        sessionEndpoint.mockReturnValue({user: {id: 1, email: 'admin@skraaningen.dk', systemRoles: [SystemRole.ADMIN], Inhabitant: null}})
         seasonsEndpoint.mockReturnValue([season])
     })
 
     // The admin's create action is the one the create mode transition clicks, below
     describe('header controls', () => {
         it('shows neither create nor edit control for a member', async () => {
-            sessionEndpoint.mockReturnValue({user: {id: 2, email: 'member@skraaningen.dk', systemRoles: []}})
+            sessionEndpoint.mockReturnValue({user: {id: 2, email: 'member@skraaningen.dk', systemRoles: [], Inhabitant: null}})
             const wrapper = await mountPlanning({canEdit: false})
             expect(findByTestId(wrapper, PLANNING_TEST_IDS.create).exists()).toBe(false)
             expect(findByTestId(wrapper, PLANNING_TEST_IDS.edit).exists()).toBe(false)

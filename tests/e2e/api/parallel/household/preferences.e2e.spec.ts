@@ -9,7 +9,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 import {differenceInCalendarDays} from 'date-fns'
 const Action = useBookingValidation().BookingActionSchema.enum
 
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, salt} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, salt, attemptAll} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap} = useWeekDayMapValidation({valueSchema: DinnerModeSchema, defaultValue: DinnerMode.NONE})
@@ -38,8 +38,10 @@ test.describe('Household Preferences API', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        for (const id of createdInhabitantIds) await HouseholdFactory.deleteInhabitant(context, id)
-        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
+        await attemptAll('Household Preferences API cleanup', [
+            ...createdInhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(context, id)),
+            ...createdHouseholdIds.map(id => () => HouseholdFactory.deleteHousehold(context, id))
+        ]).finally(() => context.close())
     })
 
     test('GIVEN member WHEN updating the preferences of a person in their household THEN the reply carries the stored preferences', async ({browser}) => {
@@ -130,8 +132,10 @@ const personBookedOnOwnHousehold = async (adminContext: BrowserContext, seasonId
 
 const removeOwnRows = async (browser: Browser, {seasonIds, householdIds}: OwnRows) => {
     const context = await validatedBrowserContext(browser)
-    await HouseholdFactory.deleteHousehold(context, householdIds)
-    await SeasonFactory.cleanupSeasons(context, seasonIds)
+    await attemptAll('Own rows cleanup', [
+        ...householdIds.map(id => () => HouseholdFactory.deleteHousehold(context, id)),
+        () => SeasonFactory.cleanupSeasons(context, seasonIds)
+    ]).finally(() => context.close())
 }
 
 /**
@@ -169,6 +173,50 @@ test.describe('Preference preview', () => {
 
         expect(saved!.scaffoldResult.dinners).toEqual(preview!.scaffoldResult.dinners)
         expect(decisionsOf(saved)).toEqual(decisionsOf(preview))
+    })
+})
+
+/**
+ * Power mode applies one draft to every inhabitant of the household: `allInhabitants=true` on an inhabitant's path
+ * previews and saves it for all of them in one run. Both people store Ingen, so the draft's Spisesal on one weekday books
+ * each of them on that weekday's open dinners
+ */
+test.describe('Power mode', () => {
+    const created: OwnRows = {seasonIds: [], householdIds: []}
+
+    test.afterAll(({browser}) => removeOwnRows(browser, created))
+
+    test('GIVEN a household of two storing Ingen WHEN power mode previews Spisesal on one weekday THEN the reply books both on that weekday\'s dinners and nothing changes, and the save answers the same and stores the draft on both', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const {season, dinnerEvents, dinner} = await ownSeason(adminContext, created)
+        const household = await HouseholdFactory.createHousehold(adminContext)
+        created.householdIds.push(household.id)
+        const personOf = (lastName: string) => HouseholdFactory.createInhabitantWithConfig(adminContext, household.id, {
+            name: salt('Anders', temporaryAndRandom()), lastName, birthDate: null, dinnerPreferences: none
+        })
+        const people = [await personOf('PowerFirst'), await personOf('PowerSecond')]
+        const weekday = dateToWeekDay(dinner.date)
+        const onWeekday = dinnerEvents.filter(de => dateToWeekDay(de.date) === weekday).map(de => de.id)
+        const draft = {...none, [weekday]: DinnerMode.DINEIN}
+        const ordersOf = () => OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, dinnerEvents.map(de => de.id))
+        const decisionsOf = (reply: InhabitantUpdateResponse | null) => reply!.scaffoldResult.results.map(line => [line.inhabitantId, line.dinnerEventId, line.action]).sort()
+        const storedOf = () => Promise.all(people.map(async ({id}) => (await HouseholdFactory.getInhabitantById(adminContext, id))!.dinnerPreferences))
+        const booked = await ordersOf()
+
+        const preview = await HouseholdFactory.previewInhabitantPreferences(adminContext, people[0]!.id, draft, season.id, 200, true)
+
+        const named = preview!.scaffoldResult.dinners.map(({id}) => id)
+        expect(named).toContain(dinner.id)
+        expect(onWeekday).toEqual(expect.arrayContaining(named))
+        // Each person books each dinner the reply names
+        expect(decisionsOf(preview)).toEqual(people.flatMap(({id}) => named.map(dinnerEventId => [id, dinnerEventId, Action.BOOK])).sort())
+        expect(await ordersOf()).toEqual(booked)
+        expect(await storedOf()).toEqual([none, none])
+
+        const saved = await HouseholdFactory.updateInhabitantPreferences(adminContext, people[0]!.id, draft, 200, season.id, undefined, true, true)
+
+        expect(decisionsOf(saved)).toEqual(decisionsOf(preview))
+        expect(await storedOf()).toEqual([draft, draft])
     })
 })
 

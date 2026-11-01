@@ -12,11 +12,11 @@
  * - Auto-reset timeout with visual countdown (opacity fade)
  * - Configurable colors for hero contexts
  */
-import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
+import { COLOR, NOISE, type NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
 import type { ButtonProps } from '@nuxt/ui'
 import { BUTTON_WORDS } from '~/config/buttonWords'
 
-const { ICONS, SIZES, RING } = useTheSlopeDesignSystem()
+const { ICONS, SIZES, COMPONENTS } = useTheSlopeDesignSystem()
 
 type ButtonSize = ButtonProps['size']
 type ButtonVariant = ButtonProps['variant']
@@ -49,7 +49,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  confirmLabel: 'Er du sikker? Tryk igen for at bekræfte',
+  confirmLabel: BUTTON_WORDS.confirmAgain,
   loadingLabel: BUTTON_WORDS.working,
   loading: false,
   disabled: false,
@@ -57,8 +57,8 @@ const props = withDefaults(defineProps<Props>(), {
   size: undefined,
   icon: undefined,
   confirmIcon: undefined,
-  initialColor: 'neutral',
-  initialVariant: 'outline',
+  initialColor: COLOR.neutral,
+  initialVariant: NOISE.medium,
   undo: false
 })
 
@@ -89,21 +89,22 @@ const displayIcon = computed(() => {
   return isConfirmMode.value ? effectiveConfirmIcon.value : effectiveIcon.value
 })
 
+// The mode's face: a destructive action's, or an undo's for restoring
+const face = computed(() => props.undo ? COMPONENTS.dangerButton.undo : COMPONENTS.dangerButton.danger)
+
 const displayColor = computed<NuxtUIColor>(() =>
-  isConfirmMode.value || props.loading ? (props.undo ? 'success' : 'error') : props.initialColor
+  isConfirmMode.value || props.loading ? face.value.color : props.initialColor
 )
 
 const displayVariant = computed<ButtonVariant>(() =>
-  isConfirmMode.value || props.loading ? 'solid' : props.initialVariant
+  isConfirmMode.value || props.loading ? NOISE.loud : props.initialVariant
 )
 
 // Gradient wipe: confirm color shrinks from left as countdown progresses
 const countdownGradient = computed(() => {
   if (!isConfirmMode.value || props.loading) return {}
   const percent = countdownProgress.value
-  const [dark, light] = props.undo
-    ? ['--color-green-900', '--color-green-400']
-    : ['--color-red-900', '--color-red-400']
+  const {dark, light} = face.value.countdown
   return {
     background: `linear-gradient(to right, var(${dark}) ${percent}%, var(${light}) ${percent}%)`
   }
@@ -164,7 +165,7 @@ const handleClick = () => {
 
 // Click-outside detection
 const handleClickOutside = (event: MouseEvent) => {
-  if (isConfirmMode.value && buttonRef.value && !buttonRef.value.contains(event.target as Node)) {
+  if (isConfirmMode.value && buttonRef.value && !(event.target instanceof Node && buttonRef.value.contains(event.target))) {
     resetToInitial()
   }
 }
@@ -187,7 +188,7 @@ watch(() => props.loading, (newLoading) => {
 </script>
 
 <template>
-  <div ref="buttonRef" class="inline-block">
+  <div ref="buttonRef" :class="COMPONENTS.dangerButton.root">
     <UButton
       block
       :color="displayColor"
@@ -198,7 +199,7 @@ watch(() => props.loading, (newLoading) => {
       :disabled="disabled || loading"
       :loading="loading"
       :style="countdownGradient"
-      :class="isConfirmMode && !loading ? `ring-2 ${undo ? RING.green[500] : RING.red[500]} text-white` : ''"
+      :class="isConfirmMode && !loading ? face.armed : ''"
       @click="handleClick"
     >
       {{ displayText }}

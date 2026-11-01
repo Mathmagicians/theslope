@@ -7,6 +7,10 @@ import {nextTick} from 'vue'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 import {mountWithTooltipProvider, findDateSegments, resetStores} from '~~/tests/component/testHelpers'
 import {BUTTON_WORDS} from '~/config/buttonWords'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
+import {formatDate} from '~/utils/date'
+
+const WORDS = HOUSEHOLD_WORDS.createForm
 
 enableAutoUnmount(afterEach)
 
@@ -54,7 +58,8 @@ const fillPbs = async (wrapper: Awaited<ReturnType<typeof mount>>, pbsId: string
 
 const pickDateByName = async (wrapper: Awaited<ReturnType<typeof mount>>, name: string, date: Date) => {
     const picker = wrapper.findAllComponents(CalendarDatePicker).find(p => p.props('name') === name)
-    picker?.vm.updateDate(date)
+    if (!picker) throw new Error(`No date picker named ${name}`)
+    picker.vm.$emit('update:modelValue', date)
     await nextTick()
     await nextTick()
 }
@@ -65,9 +70,14 @@ const pickMoveInDate = (wrapper: Awaited<ReturnType<typeof mount>>, date: Date) 
 // The submit button's @click calls formRef.submit() internally (NuxtUI pattern for
 // buttons outside the <form> scope — https://ui.nuxt.com/components/form#methods).
 // UForm.submit() validates schema + contextual rules asynchronously, so flush promises.
+const buttonReading = (wrapper: Awaited<ReturnType<typeof mount>>, label: string) => {
+    const button = wrapper.findAll('button').find(candidate => candidate.text().includes(label))
+    if (!button) throw new Error(`No button reading ${label}`)
+    return button
+}
+
 const clickSubmit = async (wrapper: Awaited<ReturnType<typeof mount>>) => {
-    const submitBtn = wrapper.findAll('button').find(b => b.text().includes('Opret husstand'))
-    await submitBtn?.trigger('click')
+    await buttonReading(wrapper, WORDS.submit).trigger('click')
     await flushPromises()
     await nextTick()
 }
@@ -79,7 +89,7 @@ describe('HouseholdCreateForm', () => {
     // ========== RENDERING ==========
 
     it('renders its labels and buttons', async () => {
-        const labels = ['Ny husstand', 'PBS', 'Adresse', 'Vælg en indflytningsdato', BUTTON_WORDS.cancel, 'Opret husstand']
+        const labels = [WORDS.title, WORDS.pbs.label, WORDS.address.label, WORDS.movedIn, BUTTON_WORDS.cancel, WORDS.submit]
         const wrapper = await mount()
         labels.forEach(label => expect(wrapper.text(), label).toContain(label))
     })
@@ -90,16 +100,14 @@ describe('HouseholdCreateForm', () => {
         const existing = [makeHousehold({pbsId: 101, shortName: 'S_17'})]
         const wrapper = await mount({existingHouseholds: existing})
         await fillPbs(wrapper, '101')
-        expect(wrapper.text()).toContain('101')
-        expect(wrapper.text()).toContain('S_17')
-        expect(wrapper.text()).toContain('bruges af')
+        expect(wrapper.text()).toContain(WORDS.pbsTaken(101, 'S_17'))
     })
 
     it('does not show PBS warning when pbsId is unique', async () => {
         const existing = [makeHousehold({pbsId: 200, shortName: 'S_17'})]
         const wrapper = await mount({existingHouseholds: existing})
         await fillPbs(wrapper, '101')
-        expect(wrapper.html()).not.toContain('bruges af')
+        expect(wrapper.text()).not.toContain(WORDS.pbsTaken(101, 'S_17'))
     })
 
     // ========== COEXISTENCE NOTICE ==========
@@ -108,19 +116,26 @@ describe('HouseholdCreateForm', () => {
         const existing = [makeHousehold({pbsId: 115, address: 'Skråningen 14', shortName: 'S_14', heynaboId: 99})]
         const wrapper = await mount({existingHouseholds: existing})
         await pickAddress(wrapper, 'Skråningen 14')
-        expect(wrapper.text()).toContain('S_14')
-        expect(wrapper.text()).toContain('115')
-        expect(wrapper.text()).toMatch(/[Ee]ksisterende husstand/)
-        // USelect renders the label "Skråningen 14 · HN 99"
-        expect(wrapper.text()).toContain('HN 99')
+        expect(wrapper.text()).toContain(WORDS.prevOwners(1))
+        expect(wrapper.text()).toContain(WORDS.prevOwner('S_14', 99, 115))
+        expect(wrapper.text()).toContain(WORDS.addressOption('Skråningen 14', 99))
+    })
+
+    it('names the date a household at the address moved out, and offers it no move-out field', async () => {
+        const movedOut = new Date('2024-06-01')
+        const existing = [makeHousehold({id: 9, pbsId: 200, address: 'Skråningen 14', moveOutDate: movedOut})]
+        const wrapper = await mount({existingHouseholds: existing})
+        await pickAddress(wrapper, 'Skråningen 14')
+
+        expect(wrapper.text()).toContain(WORDS.movedOut(formatDate(movedOut)))
+        expect(wrapper.findAllComponents(CalendarDatePicker).map(picker => picker.props('name'))).toEqual(['movedInDate'])
     })
 
     // ========== EMITS ==========
 
     it('emits cancel on Annuller click', async () => {
         const wrapper = await mount()
-        const cancelBtn = wrapper.findAll('button').find(b => b.text().includes(BUTTON_WORDS.cancel))
-        await cancelBtn?.trigger('click')
+        await buttonReading(wrapper, BUTTON_WORDS.cancel).trigger('click')
         await nextTick()
         expect(wrapper.emitted('cancel')).toBeTruthy()
     })

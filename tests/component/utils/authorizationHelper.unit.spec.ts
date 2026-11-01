@@ -7,7 +7,7 @@ import {isAdmin, canMutateAllergies} from '~/composables/usePermissions'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {fetchDinnerEvent} from '~~/server/data/financesRepository'
 import {findTeamAssignmentByTeamAndInhabitant} from '~~/server/data/prismaRepository'
-import {requireChefForDinner, requireHouseholdAccess} from '~~/server/utils/authorizationHelper'
+import {requireChefForDinner, requireHouseholdAccess, getRequiredHeynaboToken} from '~~/server/utils/authorizationHelper'
 
 const {TeamRoleSchema} = useCookingTeamValidation()
 const Role = TeamRoleSchema.enum
@@ -30,6 +30,10 @@ vi.mock('~~/server/utils/eventHandlerHelper', () => {
 })
 
 const getSessionUser = eventHandlerHelper.getSessionUser as unknown as ReturnType<typeof vi.fn>
+
+// nuxt-auth-utils' Nitro auto-import reads a sealed cookie with the runtime config the unit runtime lacks
+const getUserSession = vi.fn()
+vi.stubGlobal('getUserSession', getUserSession)
 
 const ME_INHABITANT_ID = 42
 const TEAM_ID = 7
@@ -60,6 +64,21 @@ const mockEvent: H3Event = {context: {cloudflare: {env: {DB: {} as unknown}}}} a
 
 beforeEach(() => {
     vi.clearAllMocks()
+})
+
+// Chef sync acts in Heynabo with the signed-in user's own token, kept in the session's server-only data (ADR-013)
+describe('getRequiredHeynaboToken', () => {
+    it('GIVEN the token in the session\'s secure data THEN returns it', async () => {
+        getUserSession.mockResolvedValue({user: mockUser(), secure: {heynaboToken: 'heynabo-token'}})
+
+        await expect(getRequiredHeynaboToken(mockEvent)).resolves.toBe('heynabo-token')
+    })
+
+    it('GIVEN a session without it THEN throws 401', async () => {
+        getUserSession.mockResolvedValue({user: mockUser()})
+
+        await expect(getRequiredHeynaboToken(mockEvent)).rejects.toMatchObject({statusCode: 401})
+    })
 })
 
 describe('requireChefForDinner', () => {

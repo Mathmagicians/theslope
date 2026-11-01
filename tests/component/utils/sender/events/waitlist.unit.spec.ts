@@ -8,14 +8,16 @@ import {fetchDinnerEvents, fetchDinnerEventsByIds, fetchOrderHistoryForDinners, 
 import {fetchWaitlistForDinners} from '~~/server/data/waitlistRepository'
 import type {EmailChannel} from '~~/server/utils/sender/config'
 import type {EmailMessage} from '~/composables/useNotificationValidation'
-import type {HouseholdDetail, InhabitantDisplay, UserDisplay} from '~/composables/useCoreValidation'
-import {useBookingValidation, TicketState, type BookingOutcomes, type OrderHistoryDisplay, type TicketSale, type WaitlistJoined} from '~/composables/useBookingValidation'
+import {IdSchema, type HouseholdDetail, type InhabitantDisplay, type UserDisplay} from '~/composables/useCoreValidation'
+import type {NonEmpty} from '~/utils/batchUtils'
+import {useBookingValidation, TicketState, type BookingOutcomes, type DinnerState, type OrderAuditAction, type OrderHistoryDisplay, type TicketSale, type WaitlistJoined} from '~/composables/useBookingValidation'
 import {useDeliveryValidation, type Delivery} from '~/composables/useDeliveryValidation'
 import {useUserPreferenceValidation, type NotificationChannel} from '~/composables/useUserPreferenceValidation'
 import {formatPlace, useBooking} from '~/composables/useBooking'
 import {siteUrl} from '~~/server/utils/sender/compose'
 import {useOrder} from '~/composables/useOrder'
 import {BOOKING_WORDS} from '~/config/bookingWords'
+import type {NotificationKind} from '~/config/notificationTemplates'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -27,6 +29,7 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {fakeSenderQueue as fakeQueue, sentMessages as sentBodies, type FakeSenderQueue} from '~~/tests/component/utils/sender/fakeSenderQueue'
 import {fakeDeliveries} from '~~/tests/component/utils/sender/fakeDeliveries'
 import {spyOnLogs} from '~~/tests/component/logSpies'
+import {itemAt} from '~~/tests/component/listHelpers'
 
 // The unit runtime has no D1: the lookups answer from the test
 vi.mock('~~/server/data/prismaRepository', () => ({
@@ -127,7 +130,7 @@ describe('booking notifications after the action', () => {
         notifyBookingOutcomesInBackground({waitUntil, context: {cloudflare: {env: {DB: {}}}}} as unknown as H3Event, outcomesOf({ticketsSold: [sale]}))
 
         expect(waitUntil).toHaveBeenCalledOnce()
-        await expect(waitUntil.mock.calls[0]![0]).resolves.toEqual({counts: {sent: 0}, missing})
+        await expect(itemAt(waitUntil.mock.calls, 0)[0]).resolves.toEqual({counts: {sent: 0}, missing})
         expect(logs.error).toHaveBeenCalledWith(`📬 > DELIVERY > [EVENT ${SenderEvent.BOOKING_STATUS}] e-mail is off (${missing} not set): nothing sent`)
     })
 })
@@ -137,7 +140,7 @@ describe('booking notifications after the action', () => {
 describe('the mails of the waiting list\'s placements', () => {
     const logs = spyOnLogs()
     const household = HouseholdFactory.defaultHouseholdDetail()
-    const member = {...household.inhabitants[0]!, userId: 6}
+    const member = {...itemAt(household.inhabitants, 0), userId: 6}
     beforeEach(() => {
         Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
         mockDinners(null)
@@ -168,7 +171,7 @@ describe('the people a run\'s mails name', () => {
     const logs = spyOnLogs()
     const {TicketTypeSchema, DinnerModeSchema, BookingActionSchema} = useBookingValidation()
     type Member = HouseholdDetail['inhabitants'][number]
-    const template = HouseholdFactory.defaultHouseholdDetail().inhabitants[0]!
+    const template = itemAt(HouseholdFactory.defaultHouseholdDetail().inhabitants, 0)
     // A person of the run with a name of its own, a login when userId is given
     const person = (id: number, householdId: number, userId: number | null): Member => ({...template, id, householdId, userId, name: `Skråner ${id}`})
     // A household's first user is its member of the lowest id with a login, in whatever order its read lists them
@@ -178,8 +181,8 @@ describe('the people a run\'s mails name', () => {
     const [buyer, buyerWithoutLogin] = [person(201, 20, 2010), person(202, 20, null)]
     const chef = person(501, 50, 5010)
     const [chefsPartner, chefWithoutOwnLogin] = [person(521, 52, 5210), person(522, 52, null)]
-    const householdOf = (members: Member[]): HouseholdDetail =>
-        ({...HouseholdFactory.defaultHouseholdDetail(`h${members[0]!.householdId}`), id: members[0]!.householdId, inhabitants: members})
+    const householdOf = (members: NonEmpty<Member>): HouseholdDetail =>
+        ({...HouseholdFactory.defaultHouseholdDetail(`h${members[0].householdId}`), id: members[0].householdId, inhabitants: members})
     const [sellers, buyers] = [householdOf([seller, sellerWithoutLogin, sellerToo]), householdOf([buyer, buyerWithoutLogin])]
     // Every household has a user; the chef without a login of their own lives with one
     const households = [
@@ -187,11 +190,13 @@ describe('the people a run\'s mails name', () => {
         householdOf([chefsPartner, chefWithoutOwnLogin])
     ]
     const people = households.flatMap(household => household.inhabitants)
+    // A person's login: the people who book in these cases all have one
+    const userIdOf = ({userId}: Member): number => IdSchema.parse(userId)
     const addressOf = ({id}: Member): string => `${id}@example.com`
     // The account the DAILY_MAINTENANCE job and the preference runs book with: a login of no household, with an address
     const systemUser = UserFactory.defaultUserWithInhabitant('system', {id: 9000, email: 'system@example.com'})
     const loginOf = (member: Member, notificationChannels?: NotificationChannel[]) =>
-        UserFactory.defaultUserWithInhabitant(`u${member.id}`, {id: member.userId!, email: addressOf(member), notificationChannels})
+        UserFactory.defaultUserWithInhabitant(`u${member.id}`, {id: userIdOf(member), email: addressOf(member), notificationChannels})
     const logins = [...people.filter(member => member.userId).map(member => loginOf(member)), systemUser]
     beforeEach(() => {
         Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
@@ -201,7 +206,7 @@ describe('the people a run\'s mails name', () => {
     afterEach(() => vi.clearAllMocks())
 
     const ADULT_PRICE = TicketFactory.defaultPriceOf(TicketTypeSchema.enum.ADULT)
-    const ADULT_PRICE_ID = ADULT_PRICE.id!
+    const ADULT_PRICE_ID = IdSchema.parse(ADULT_PRICE.id)
     // The queue entry of a person's place
     const entryOf = (member: Member): number => 600 + member.id
     // A place in the dinner's adult line, the line's size at the join; the buildup threshold is 3
@@ -220,11 +225,11 @@ describe('the people a run\'s mails name', () => {
     const portionTo = (owner: Member, orderId = 88) =>
         ({dinnerEventId: dinner.dinnerEventId, entryId: entryOf(owner), inhabitantId: owner.id, isGuestTicket: false, portions: 1, orderId, ticketPriceId: ADULT_PRICE_ID, dinnerMode: DinnerModeSchema.enum.DINEIN})
     // The parent joins and books the child; the neighbour's place reaches the threshold
-    const joined = [joinedEvent(parent, parent.userId!, 1), joinedEvent(child, parent.userId!, 2), joinedEvent(neighbour, neighbour.userId!, 3)]
+    const joined = [joinedEvent(parent, userIdOf(parent), 1), joinedEvent(child, userIdOf(parent), 2), joinedEvent(neighbour, userIdOf(neighbour), 3)]
 
     const notify = (queue: FakeSenderQueue, outcomes: BookingOutcomes) => notifyBookingOutcomes({} as D1Database, NotificationFactory.channel(queue), outcomes)
-    const ofKind = (kind: string) => (message: EmailMessage): boolean => message.meta.kind === kind
-    const mailsOfKind = (queue: FakeSenderQueue, kind: string): EmailMessage[] => sentMessages(queue).filter(ofKind(kind))
+    const ofKind = (kind: NotificationKind) => (message: EmailMessage): boolean => message.meta.kind === kind
+    const mailsOfKind = (queue: FakeSenderQueue, kind: NotificationKind): EmailMessage[] => sentMessages(queue).filter(ofKind(kind))
 
     // 40 dinners, the first 20 in season 9 and the others in season 10
     const fortyDinners = Array.from({length: 40}, (_, index) => ({id: 100 + index, seasonId: index < 20 ? 9 : 10}))
@@ -252,7 +257,7 @@ describe('the people a run\'s mails name', () => {
         const DELETED_DINNER_ID = 99
         const queue = fakeQueue()
 
-        await notify(queue, outcomesOf({joined: [joinedEvent(parent, parent.userId!, 1)], ticketsSold: [saleTo(buyer, {dinnerEventId: DELETED_DINNER_ID})]}))
+        await notify(queue, outcomesOf({joined: [joinedEvent(parent, userIdOf(parent), 1)], ticketsSold: [saleTo(buyer, {dinnerEventId: DELETED_DINNER_ID})]}))
 
         expect(sentMessages(queue).map(message => message.meta.kind)).toEqual([Kind.WAITLIST_JOINED])
         expect(logs.warn).toHaveBeenCalledExactlyOnceWith(`📮 > SENDER > [EVENT ${SenderEvent.BOOKING_STATUS}] Dinner ${DELETED_DINNER_ID} not found: its notifications are left out`)
@@ -309,9 +314,9 @@ describe('the people a run\'s mails name', () => {
         {email: 'ticket sold for a seller with the household\'s second user', heard: ofKind(Kind.TICKET_SOLD), outcomes: outcomesOf({ticketsSold: [saleTo(buyer, {sellerInhabitantId: sellerToo.id})]}), to: [sellerToo]},
         {email: 'ticket sold for a seller without a user', heard: ofKind(Kind.TICKET_SOLD), outcomes: outcomesOf({ticketsSold: [saleTo(buyer, {sellerInhabitantId: sellerWithoutLogin.id})]}), to: [seller]},
         {email: 'ticket sold for a seller the history does not name', heard: ofKind(Kind.TICKET_SOLD), outcomes: outcomesOf({ticketsSold: [saleTo(buyer)]}), to: [seller]},
-        {email: 'waitlist buildup for a chef with a user', heard: ofKind(Kind.WAITLIST_BUILDUP), outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}), to: [chef]},
+        {email: 'waitlist buildup for a chef with a user', heard: ofKind(Kind.WAITLIST_BUILDUP), outcomes: outcomesOf({joined: [joinedEvent(neighbour, userIdOf(neighbour), 3)]}), to: [chef]},
         {email: 'waitlist buildup for a chef without a user, in a household with one', heard: ofKind(Kind.WAITLIST_BUILDUP), chefId: chefWithoutOwnLogin.id,
-            outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}), to: [chefsPartner]}
+            outcomes: outcomesOf({joined: [joinedEvent(neighbour, userIdOf(neighbour), 3)]}), to: [chefsPartner]}
     ])('GIVEN $email WHEN the emails resolve THEN one goes, to the closest user', async ({heard, outcomes, to, chefId = chef.id}) => {
         mockDinners(chefId)
         const queue = fakeQueue()
@@ -341,7 +346,7 @@ describe('the people a run\'s mails name', () => {
     it.each([
         {mail: 'a child\'s place, joined by a system run', kind: Kind.WAITLIST_JOINED, outcomes: outcomesOf({joined: [joinedEvent(child, systemUser.id, 2)]}),
             reads: [parent.name, child.name, formatPlace(2, TicketTypeSchema.enum.ADULT), BOOKING_WORDS.ticketStateBadge[TicketState.queued].helpText]},
-        {mail: 'a guest\'s place, booked on the parent', kind: Kind.WAITLIST_JOINED, outcomes: outcomesOf({joined: [joinedEvent(parent, parent.userId!, 1, {isGuestTicket: true})]}),
+        {mail: 'a guest\'s place, booked on the parent', kind: Kind.WAITLIST_JOINED, outcomes: outcomesOf({joined: [joinedEvent(parent, userIdOf(parent), 1, {isGuestTicket: true})]}),
             reads: [parent.name, useOrder().formatGuestLabel(parent.name)]},
         {mail: 'a ticket sold to a waiting child', kind: Kind.WAITLIST_TICKET_ASSIGNED, outcomes: outcomesOf({waitlistTicketsSold: [saleTo(buyerWithoutLogin)]}),
             reads: ticketForTheChild},
@@ -351,7 +356,7 @@ describe('the people a run\'s mails name', () => {
             reads: [buyer.name, buyerWithoutLogin.name]},
         {mail: 'the sale of a released ticket a user bought', kind: Kind.TICKET_SOLD, outcomes: outcomesOf({ticketsSold: [saleTo(buyer, {sellerInhabitantId: sellerToo.id})]}),
             reads: [sellerToo.name, buyers.shortName]},
-        {mail: 'the line reaching the threshold', kind: Kind.WAITLIST_BUILDUP, outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}),
+        {mail: 'the line reaching the threshold', kind: Kind.WAITLIST_BUILDUP, outcomes: outcomesOf({joined: [joinedEvent(neighbour, userIdOf(neighbour), 3)]}),
             reads: [chef.name, BOOKING_WORDS.supply.chefAsk(3)]}
     ])('GIVEN $mail WHEN its $kind mail goes THEN it greets the one who hears and names what it is about', async ({kind, outcomes, reads}) => {
         const queue = fakeQueue()
@@ -360,7 +365,7 @@ describe('the people a run\'s mails name', () => {
 
         const [message] = mailsOfKind(queue, kind)
         expect(message, `a ${kind} mail`).toBeDefined()
-        for (const text of reads) expect(message!.text).toContain(text)
+        for (const text of reads) expect(message?.text).toContain(text)
     })
 
     // The buildup sends the chef to the chef page on the team's dinner; a dinner without a team by its date alone
@@ -371,10 +376,9 @@ describe('the people a run\'s mails name', () => {
         mockDinners(chef.id, [{id: dinner.dinnerEventId, seasonId: 9, cookingTeamId}])
         const queue = fakeQueue()
 
-        await notify(queue, outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}))
+        await notify(queue, outcomesOf({joined: [joinedEvent(neighbour, userIdOf(neighbour), 3)]}))
 
-        const [message] = mailsOfKind(queue, Kind.WAITLIST_BUILDUP)
-        expect(message!.text).toContain(buildChefUrl(siteUrl(NotificationFactory.config(), ''), cookingTeamId, dinner.date))
+        expect(itemAt(mailsOfKind(queue, Kind.WAITLIST_BUILDUP), 0).text).toContain(buildChefUrl(siteUrl(NotificationFactory.config(), ''), cookingTeamId, dinner.date))
     })
 
     // The mails honour the recipient's own channels (Mine indstillinger → Notifikationer): with e-mail off the recipient
@@ -390,7 +394,7 @@ describe('the people a run\'s mails name', () => {
         const mails = [
             {mail: 'a person\'s own place', kind: Kind.WAITLIST_JOINED, recipient: parent, outcomes: outcomesOf({joined: [joinedEvent(parent, systemUser.id, 1)]})},
             {mail: 'a child\'s place, heard by the household\'s first user', kind: Kind.WAITLIST_JOINED, recipient: parent, outcomes: outcomesOf({joined: [joinedEvent(child, systemUser.id, 1)]})},
-            {mail: 'the line reaching the threshold', kind: Kind.WAITLIST_BUILDUP, recipient: chef, outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]})},
+            {mail: 'the line reaching the threshold', kind: Kind.WAITLIST_BUILDUP, recipient: chef, outcomes: outcomesOf({joined: [joinedEvent(neighbour, userIdOf(neighbour), 3)]})},
             {mail: 'the sale of a released ticket', kind: Kind.TICKET_SOLD, recipient: seller, outcomes: outcomesOf({ticketsSold: [saleTo(buyer)]})},
             {mail: 'a ticket sold to the first in line', kind: Kind.WAITLIST_TICKET_ASSIGNED, recipient: buyer, outcomes: outcomesOf({waitlistTicketsSold: [saleTo(buyer)]})},
             {mail: 'a released ticket bought', kind: Kind.TICKET_BOUGHT, recipient: buyer, outcomes: outcomesOf({ticketsSold: [saleTo(buyer)]})},
@@ -425,7 +429,7 @@ describe('the people a run\'s mails name', () => {
         })
         afterEach(() => vi.useRealTimers())
         let historyId = 0
-        const historyRow = (orderId: number, action: OrderHistoryDisplay['action'], auditData: string, minute: number): OrderHistoryDisplay =>
+        const historyRow = (orderId: number, action: OrderAuditAction, auditData: string, minute: number): OrderHistoryDisplay =>
             OrderFactory.defaultOrderHistoryDisplay(undefined, {id: ++historyId, orderId, action, auditData, dinnerEventId: dinner.dinnerEventId, timestamp: at(minute)})
         const snapshotOf = (orderId: number) => OrderFactory.defaultOrderSnapshot({id: orderId, dinnerEventId: dinner.dinnerEventId})
         // The row of a sale of the order, and the row of the chef's extra portion that created the order; before the clock
@@ -442,7 +446,7 @@ describe('the people a run\'s mails name', () => {
             deliveredAt: at(minute)
         })
         // The records of the emails of a notification, by the notification their reference leads with
-        const rowsOfKind = (kind: string) => recorded.rows.filter(row => mailKindOf(row.reference) === kind)
+        const rowsOfKind = (kind: NotificationKind) => recorded.rows.filter(row => mailKindOf(row.reference) === kind)
         // A subject's records, each by its notification and version, by version and then notification
         const rowsOf = (subjectType: Delivery['subjectType'], subjectId: number) => recorded.rows
             .filter(row => row.subjectType === subjectType && row.subjectId === subjectId)
@@ -450,7 +454,7 @@ describe('the people a run\'s mails name', () => {
             .sort((a, b) => a.version - b.version || a.kind.localeCompare(b.kind))
 
         it.each([
-            {email: 'waitlist joined for an inhabitant', kind: Kind.WAITLIST_JOINED, outcomes: outcomesOf({joined: [joinedEvent(parent, parent.userId!, 1)]}), history: [],
+            {email: 'waitlist joined for an inhabitant', kind: Kind.WAITLIST_JOINED, outcomes: outcomesOf({joined: [joinedEvent(parent, userIdOf(parent), 1)]}), history: [],
                 subject: {subjectType: TICKET_WAITLIST, subjectId: entryOf(parent), version: 1}},
             {email: 'waitlist ticket assigned to the first in line', kind: Kind.WAITLIST_TICKET_ASSIGNED, outcomes: outcomesOf({waitlistTicketsSold: [saleTo(buyer)]}), history: [bought(77)],
                 subject: {subjectType: ORDER, subjectId: 77, version: 1}},
@@ -462,15 +466,15 @@ describe('the people a run\'s mails name', () => {
                 subject: {subjectType: ORDER, subjectId: 77, version: 2}},
             {email: 'waitlist extra portion for the first in line', kind: Kind.WAITLIST_EXTRA_PORTION, outcomes: outcomesOf({waitlistPortionsAssigned: [portionTo(buyer, 88)]}), history: [extraPortion(88)],
                 subject: {subjectType: ORDER, subjectId: 88, version: 1}},
-            {email: 'waitlist buildup for the chef', kind: Kind.WAITLIST_BUILDUP, outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}), history: [],
+            {email: 'waitlist buildup for the chef', kind: Kind.WAITLIST_BUILDUP, outcomes: outcomesOf({joined: [joinedEvent(neighbour, userIdOf(neighbour), 3)]}), history: [],
                 subject: {subjectType: DINNER_EVENT, subjectId: dinner.dinnerEventId, version: 1}},
             // The chef's extra portions before the first buildup tell the chef nothing
             {email: 'waitlist buildup for the chef after the chef\'s earlier extra portions', kind: Kind.WAITLIST_BUILDUP,
-                outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}), history: [extraPortion(88), extraPortion(89)],
+                outcomes: outcomesOf({joined: [joinedEvent(neighbour, userIdOf(neighbour), 3)]}), history: [extraPortion(88), extraPortion(89)],
                 subject: {subjectType: DINNER_EVENT, subjectId: dinner.dinnerEventId, version: 1}},
             // The dinner's other notices count no buildup: a chef deadlines notice before the extra portion leaves it the first
             {email: 'waitlist buildup for the chef after a chef deadlines notice on the dinner and the chef\'s extra portion', kind: Kind.WAITLIST_BUILDUP,
-                outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}), history: [extraPortion(88)], delivered: [chefDeadlinesNotice(-20)],
+                outcomes: outcomesOf({joined: [joinedEvent(neighbour, userIdOf(neighbour), 3)]}), history: [extraPortion(88)], delivered: [chefDeadlinesNotice(-20)],
                 subject: {subjectType: DINNER_EVENT, subjectId: dinner.dinnerEventId, version: 1}}
         ])('GIVEN $email WHEN it is sent THEN one delivery record of its subject and version is written', async ({kind, outcomes, history, delivered = [], subject}) => {
             store.history = history
@@ -501,10 +505,10 @@ describe('the people a run\'s mails name', () => {
                 {kind: Kind.WAITLIST_EXTRA_PORTION, version: 1}, {kind: Kind.TICKET_SOLD, version: 2}, {kind: Kind.WAITLIST_TICKET_ASSIGNED, version: 2}
             ]},
             {subject: 'a line building up, then after each of two rounds of extra portions, then a rerun', subjectType: DINNER_EVENT, subjectId: dinner.dinnerEventId, steps: [
-                {outcomes: outcomesOf({joined: [joinedEvent(neighbour, neighbour.userId!, 3)]}), history: []},
-                {outcomes: outcomesOf({joined: [joinedEvent(parent, parent.userId!, 3)]}), history: [extraPortion(88, 15)]},
-                {outcomes: outcomesOf({joined: [joinedEvent(sibling, sibling.userId!, 3)]}), history: [extraPortion(88, 15), extraPortion(89, 25)]},
-                {outcomes: outcomesOf({joined: [joinedEvent(sibling, sibling.userId!, 3)]}), history: [extraPortion(88, 15), extraPortion(89, 25)]}
+                {outcomes: outcomesOf({joined: [joinedEvent(neighbour, userIdOf(neighbour), 3)]}), history: []},
+                {outcomes: outcomesOf({joined: [joinedEvent(parent, userIdOf(parent), 3)]}), history: [extraPortion(88, 15)]},
+                {outcomes: outcomesOf({joined: [joinedEvent(sibling, userIdOf(sibling), 3)]}), history: [extraPortion(88, 15), extraPortion(89, 25)]},
+                {outcomes: outcomesOf({joined: [joinedEvent(sibling, userIdOf(sibling), 3)]}), history: [extraPortion(88, 15), extraPortion(89, 25)]}
             ], rows: [
                 {kind: Kind.WAITLIST_BUILDUP, version: 1}, {kind: Kind.WAITLIST_BUILDUP, version: 2}, {kind: Kind.WAITLIST_BUILDUP, version: 3}
             ]}
@@ -526,7 +530,7 @@ describe('the people a run\'s mails name', () => {
         const DinnerState = DinnerStateSchema.enum
         const SEASON_ID = 9
         // D1 holds the dinner in this state; the season comes with its dinners
-        let dinnerState: typeof DinnerState[keyof typeof DinnerState]
+        let dinnerState: DinnerState
         // The run's clock, the day before the dinner and past its booking deadline
         const at = (minute: number) => new Date(2026, 9, 18, 12, minute)
         beforeEach(() => {
@@ -553,10 +557,11 @@ describe('the people a run\'s mails name', () => {
         })
         const soldTicket = OrderFactory.defaultOrder(undefined, {id: 77, dinnerEventId: dinner.dinnerEventId, inhabitantId: buyer.id, ticketPriceId: ADULT_PRICE_ID})
 
+        const ticketSold = {outcome: 'a ticket sold to the first in line', kinds: [Kind.TICKET_SOLD, Kind.WAITLIST_TICKET_ASSIGNED],
+            written: () => ({queue: [], history: [sale()], booked: [soldTicket]})}
         const notifications = [
             {outcome: 'a place on the waiting list', kinds: [Kind.WAITLIST_JOINED], written: () => ({queue: [place()], history: [], booked: []})},
-            {outcome: 'a ticket sold to the first in line', kinds: [Kind.TICKET_SOLD, Kind.WAITLIST_TICKET_ASSIGNED],
-                written: () => ({queue: [], history: [sale()], booked: [soldTicket]})}
+            ticketSold
         ]
         // D1 holds the dinner as written, with the booking emails flag as given
         const holdDinner = ({queue, history, booked}: ReturnType<typeof notifications[number]['written']>, flag: string) => {
@@ -588,8 +593,7 @@ describe('the people a run\'s mails name', () => {
 
         // The admin's view of what the DAILY_MAINTENANCE job sends, whether or not the flag lets it send
         it('GIVEN a dinner with a ticket sold to the first in line and the booking emails flag off WHEN the maintenance run is a dry run THEN it lists the booking notifications per user, and nothing is sent or recorded', async () => {
-            const [, ticketSold] = notifications
-            holdDinner(ticketSold!.written(), 'false')
+            holdDinner(ticketSold.written(), 'false')
             const sender = fakeQueue()
 
             const {dryRun} = await send(sender, {dryRun: true})
@@ -604,8 +608,7 @@ describe('the people a run\'s mails name', () => {
         })
 
         it('GIVEN a dinner with a ticket sold to the first in line WHEN a maintenance run sends the booking notifications THEN it reads the season and its dinners once, and the delivery records once per subject type', async () => {
-            const [, ticketSold] = notifications
-            holdDinner(ticketSold!.written(), 'true')
+            holdDinner(ticketSold.written(), 'true')
 
             await send(fakeQueue())
 

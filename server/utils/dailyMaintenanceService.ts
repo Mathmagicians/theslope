@@ -19,7 +19,7 @@ import {deleteWaitlistForConsumedDinners} from '~~/server/data/waitlistRepositor
 import type {DailyMaintenanceResult} from '~/composables/useBookingValidation'
 import {useDeliveryValidation, type SenderEvent} from '~/composables/useDeliveryValidation'
 import {useBooking} from '~/composables/useBooking'
-import {errorMessage} from '~/utils/utils'
+import {errorMessage} from '~~/workers/common/error'
 import type {EmailChannel} from '~~/server/utils/sender/config'
 import type {DeliveryResult} from '~~/server/utils/sender/deliveries'
 import {sendNotifications} from '~~/server/utils/sender/events/waitlist'
@@ -116,7 +116,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             jobRun.id,
             JobStatus.FAILED,
             undefined,
-            error instanceof Error ? error.message : 'Unknown error'
+            errorMessage(error)
         )
         throw error
     }

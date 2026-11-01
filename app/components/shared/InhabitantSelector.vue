@@ -7,9 +7,13 @@
  * Call-sites:
  * - CookingTeamCard: team badge in #status, role buttons in #actions
  * - HouseholdEditPanel: household badge in #status, move button in #actions
+ *
+ * Visual check: /admin/teams edit face and /admin/households edit panel, the finder with a search, an empty search,
+ * the status sort and a row open, phone and desktop.
  */
 import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { InhabitantDisplay } from '~/composables/useCoreValidation'
+import { HOUSEHOLD_WORDS } from '~/config/householdWords'
 
 interface Props {
   inhabitants: InhabitantDisplay[]
@@ -24,15 +28,16 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   sortFn: undefined,
-  searchPlaceholder: 'Søg efter navn...',
-  statusHeader: 'Status',
-  actionsHeader: 'Handling',
-  emptyText: 'Ingen beboere tilgængelige',
+  searchPlaceholder: HOUSEHOLD_WORDS.inhabitantSelector.search,
+  statusHeader: HOUSEHOLD_WORDS.inhabitantSelector.columns.status,
+  actionsHeader: HOUSEHOLD_WORDS.inhabitantSelector.columns.action,
+  emptyText: HOUSEHOLD_WORDS.inhabitantSelector.empty,
   pageSize: 8,
   loading: false
 })
 
 const { SIZES, COMPONENTS, TYPOGRAPHY, TEXT, ICONS, NOISE } = useTheSlopeDesignSystem()
+const WORDS = HOUSEHOLD_WORDS.inhabitantSelector
 
 // Search + sort at data level (same pattern as AdminHouseholds, AdminUsers)
 const searchQuery = ref('')
@@ -48,9 +53,10 @@ const filteredInhabitants = computed(() => {
     )
   }
 
-  if (props.sortFn) {
+  const sortFn = props.sortFn
+  if (sortFn) {
     result = [...result].sort((a, b) => {
-      const cmp = props.sortFn!({original: a}, {original: b})
+      const cmp = sortFn({original: a}, {original: b})
       return sortDescending.value ? -cmp : cmp
     })
   }
@@ -59,7 +65,7 @@ const filteredInhabitants = computed(() => {
 })
 
 const columns = [
-  { accessorKey: 'name', header: 'Navn' },
+  { accessorKey: 'name', header: WORDS.columns.name },
   { accessorKey: 'status', header: props.statusHeader },
   { accessorKey: 'actions', header: props.actionsHeader }
 ]
@@ -67,7 +73,6 @@ const columns = [
 // Open rows keyed by the inhabitant's row id, so an open row stays with its inhabitant through a search or a sort
 const expanded = defineModel<Record<string, boolean>>('expanded', { default: () => ({}) })
 
-// Pagination
 const pagination = ref({ pageIndex: 0, pageSize: props.pageSize })
 const table = useTemplateRef('table')
 </script>
@@ -112,7 +117,6 @@ const table = useTemplateRef('table')
         </UButton>
       </template>
 
-      <!-- Name column: avatar + full name -->
       <template #name-cell="{ row }">
         <div :class="COMPONENTS.inhabitantSelector.nameRow">
           <UAvatar

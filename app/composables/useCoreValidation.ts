@@ -4,6 +4,8 @@ import {SystemRoleSchema, DinnerModeSchema} from '~~/prisma/generated/zod'
 import {IdSchema, UserFragmentSchema, InhabitantFragmentSchema, HouseholdFragmentSchema, AllergyFragmentSchema} from '~/composables/fragments/domainFragments'
 import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} from '~/composables/useUserPreferenceValidation'
 import {useWeekDayMapValidation} from './useWeekDayMapValidation'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
+import {USER_WORDS} from '~/config/userWords'
 
 /**
  * Core Domain Validation - User, Inhabitant, Household
@@ -42,6 +44,14 @@ export const AdminBypassQuerySchema = z.object({
 /** The query of a change to a household's data: an override carries `adminBypass=true`, the household's own change nothing (ADR-004) */
 export const adminBypassQuery = (adminBypass: boolean): z.input<typeof AdminBypassQuerySchema> =>
     ({adminBypass: queryFlag(adminBypass)})
+
+export const AllInhabitantsQuerySchema = z.object({
+    allInhabitants: QueryFlagSchema
+})
+
+/** The query of a preference save or preview: power mode carries `allInhabitants=true`, the draft then applies to every inhabitant of the household */
+export const allInhabitantsQuery = (allInhabitants: boolean): z.input<typeof AllInhabitantsQuerySchema> =>
+    ({allInhabitants: queryFlag(allInhabitants)})
 
 /**
  * Generate shortName from household address
@@ -260,10 +270,9 @@ export const useCoreValidation = () => {
         }).nullable().optional()
     })
 
-    // Login schema for authentication
     const LoginSchema = z.object({
-        email: z.email('Indtast den mail, du er registreret med i Heynabo'),
-        password: z.string().nonempty('Indtast din Heynabo adgangskode')
+        email: z.email(USER_WORDS.login.email.invalid),
+        password: z.string().nonempty(USER_WORDS.login.password.placeholder)
     })
 
     // ========================================================================
@@ -309,14 +318,14 @@ export const useCoreValidation = () => {
         HouseholdCreateSchema
             .pick({pbsId: true, address: true, movedInDate: true})
             .extend({
-                pbsId: z.coerce.number({error: 'PBS skal være et tal'})
-                    .int({message: 'PBS skal være et helt tal'})
-                    .positive({message: 'PBS skal være positivt'}),
-                movedInDate: z.date({error: 'Du skal sætte en indflytningsdato for den nye familie'})
+                pbsId: z.coerce.number({error: HOUSEHOLD_WORDS.createForm.pbsNotNumber})
+                    .int({message: HOUSEHOLD_WORDS.createForm.pbsNotInteger})
+                    .positive({message: HOUSEHOLD_WORDS.createForm.pbsNotPositive}),
+                movedInDate: z.date({error: HOUSEHOLD_WORDS.createForm.movedInDateMissing})
             })
             .refine(
                 (data) => siblingMoveOutConstraints.every(c => !isBefore(data.movedInDate, c)),
-                {message: 'Ny familie kan ikke flytte ind, så længe den forrige ikke er flyttet ud', path: ['movedInDate']}
+                {message: HOUSEHOLD_WORDS.createForm.previousNotMovedOut, path: ['movedInDate']}
             )
 
     // ADR-009: Index endpoint - full household scalars + lightweight inhabitant relation
@@ -374,12 +383,6 @@ export const useCoreValidation = () => {
                 shortName: true
             })
         }).nullable()
-    })
-
-    // User session schema - extends UserDetail with passwordHash for auth purposes
-    // passwordHash stores Heynabo token for session management (not actual password)
-    const UserSessionSchema = UserDetailSchema.extend({
-        passwordHash: z.string()
     })
 
     // ========================================================================
@@ -506,7 +509,6 @@ export const useCoreValidation = () => {
         UserUpdateSchema,
         UserDisplaySchema,
         UserDetailSchema,
-        UserSessionSchema,
         LoginSchema,
         // Schemas - Inhabitant
         BaseInhabitantSchema,
@@ -555,10 +557,8 @@ export const useCoreValidation = () => {
 // USER TYPES
 // Display: Minimal user info for lists
 export type UserDisplay = z.infer<ReturnType<typeof useCoreValidation>['UserDisplaySchema']>
-// Detail: Full user with nested inhabitant & household (GET /api/admin/users/:id)
+// Detail: Full user with nested inhabitant & household (GET /api/admin/users/:id, the session's user)
 export type UserDetail = z.infer<ReturnType<typeof useCoreValidation>['UserDetailSchema']>
-// Session: UserDetail + passwordHash for auth/session (stores Heynabo token)
-export type UserSession = z.infer<ReturnType<typeof useCoreValidation>['UserSessionSchema']>
 // Mutations
 export type UserCreate = z.infer<ReturnType<typeof useCoreValidation>['UserCreateSchema']>
 export type UserUpdate = z.infer<ReturnType<typeof useCoreValidation>['UserUpdateSchema']>

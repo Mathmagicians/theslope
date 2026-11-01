@@ -28,6 +28,7 @@ import type {BillingPeriodSideEffects, BillingPeriodSummaryDetail, MonthlyBillin
 import type {SenderEmitResult} from '~/composables/useNotificationValidation'
 import type {EmailChannel} from '~~/server/utils/sender/config'
 import {deliveredVersions, useDeliveryValidation} from '~/composables/useDeliveryValidation'
+import {errorMessage} from '~~/workers/common/error'
 
 const {decideBillingSideEffects} = useBilling()
 const {DeliverySubjectSchema, DeliveryKindSchema, SenderEventSchema} = useDeliveryValidation()
@@ -124,7 +125,7 @@ export async function runMonthlyBilling(d1Client: D1Database, triggeredBy: strin
             jobRun.id,
             JobStatus.FAILED,
             undefined,
-            error instanceof Error ? error.message : 'Unknown error'
+            errorMessage(error)
         )
         throw error
     }

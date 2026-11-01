@@ -99,15 +99,17 @@ describe('runDailyMaintenance', () => {
         expect(completeJobRun).toHaveBeenCalledExactlyOnceWith(d1Client, jobRun.id, JobStatus.PARTIAL, result, `${failing}: D1 down`)
     })
 
-    // A data step's failure is the run's: the job run records it, and the caller hears it
-    it('GIVEN the scaffold fails WHEN the daily maintenance runs THEN no notification step runs, the job run completes FAILED with the reason, and the run rethrows', async () => {
+    // A data step's failure is the run's: the job run records its text, and the caller hears it
+    it.each([
+        {thrown: 'an error', failure: new Error('D1 down')},
+        {thrown: 'a value that is no error', failure: 'D1 down'}
+    ])('GIVEN the scaffold fails with $thrown WHEN the daily maintenance runs THEN no notification step runs, the job run completes FAILED with the reason, and the run rethrows', async ({failure}) => {
         answerSteps(ACTIVE_SEASON_ID)
-        const failure = new Error('D1 down')
         vi.mocked(scaffoldPrebookings).mockRejectedValue(failure)
 
-        await expect(runDailyMaintenance(d1Client, jobRun.triggeredBy, NotificationFactory.channel(fakeSenderQueue()))).rejects.toThrow(failure)
+        await expect(runDailyMaintenance(d1Client, jobRun.triggeredBy, NotificationFactory.channel(fakeSenderQueue()))).rejects.toBe(failure)
 
         expect([sendNotifications, sendChefDeadlines].map(step => vi.mocked(step).mock.calls.length)).toEqual([0, 0])
-        expect(completeJobRun).toHaveBeenCalledExactlyOnceWith(d1Client, jobRun.id, JobStatus.FAILED, undefined, failure.message)
+        expect(completeJobRun).toHaveBeenCalledExactlyOnceWith(d1Client, jobRun.id, JobStatus.FAILED, undefined, 'D1 down')
     })
 })

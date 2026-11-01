@@ -12,7 +12,7 @@ import {formatDate} from '~/utils/date'
 import {WAITLIST_TEST_IDS} from '~~/tests/component/components/dinner/waitlistTestIds'
 
 const {memberUIFile, adminUIFile} = authFiles
-const {openContext, validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, gotoHydrated, pollUntil, salt, temporaryAndRandom, waitForApi} = testHelpers
+const {openContext, validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, gotoHydrated, pollUntil, salt, temporaryAndRandom, waitForApi, attemptAll} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
@@ -70,8 +70,10 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
 
     // The season takes its team and its dinners; cleanup accepts a person or a season already gone
     test.afterAll(async () => {
-        await Promise.all(createdInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(adminContext, id)))
-        await SeasonFactory.cleanupSeasons(adminContext, createdSeasonIds)
+        await attemptAll('Waiting list cleanup', [
+            ...createdInhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(adminContext, id)),
+            () => SeasonFactory.cleanupSeasons(adminContext, createdSeasonIds)
+        ])
     })
 
     test('GIVEN a closed, sold-out dinner WHEN a member saves Spisesal THEN the row shows the ghosted wish at position 1 and the chef\'s card shows the queue', async ({browser}) => {

@@ -16,7 +16,7 @@ const mountNotes = (props: {notes: string, canEdit?: boolean, isSaving?: boolean
 type Wrapper = Awaited<ReturnType<typeof mountNotes>>
 
 const textareaEl = (wrapper: Wrapper) =>
-    findByTestId(wrapper, ALLERGY_TEST_IDS.notesTextarea).element as HTMLTextAreaElement
+    findByTestId<HTMLTextAreaElement>(wrapper, ALLERGY_TEST_IDS.notesTextarea).element
 
 const openEditor = (wrapper: Wrapper) => clickByTestId(wrapper, ALLERGY_TEST_IDS.editNotes)
 

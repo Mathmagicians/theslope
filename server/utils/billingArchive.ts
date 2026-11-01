@@ -5,7 +5,7 @@
  */
 import {useBillingValidation, type BillingArchiveResult, type BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 import {DATE_SETTINGS, formatDate} from '~/utils/date'
-import {errorMessage} from '~/utils/utils'
+import {errorMessage} from '~~/workers/common/error'
 
 const {generateBillingCsv, generateCsvFilename} = useBillingValidation()
 const LOG = '💰 > BILLING > [ARCHIVE]'

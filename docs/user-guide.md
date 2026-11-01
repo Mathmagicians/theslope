@@ -23,9 +23,11 @@ Før du kan logge ind, skal du sikre dig følgende i **Heynabo**:
 ### Sådan tjekker du dine børns billettype
 
 1. Log ind på [skraaningen.dk](https://www.skraaningen.dk)
-2. Gå til [Husstanden](https://www.skraaningen.dk/household) (fanen med hus-ikon)
+2. Gå til [Præferencer](https://www.skraaningen.dk/household) (fanen med hus-ikon)
 3. Se listen over husstandens medlemmer
 4. Hver person vises med deres billettype: Baby, Barn eller Voksen
+
+Fylder et barn 12, skifter billettypen fra den første middag efter fødselsdagen - billetten får badgen **Ny billetpris** (*Voksen fra 20/10/2026*), og i ugegitteret får barnet en Barn- og en Voksen-række den uge.
 
 Står dit barn som **Voksen** selvom de er under 12 år? Så mangler fødselsdatoen i Heynabo. Ret det i Heynabo-appen, og det opdateres automatisk i Skrånerappen.
 
@@ -64,6 +66,7 @@ I appen bruges følgende symboler til at vise spisningsform og status:
 | ![Lukket](https://api.iconify.design/heroicons/lock-closed.svg?height=20&color=%23ef4444) | **Framelding: Lukket** | Lukket for framelding - du kan frigive din billet, købe en billet til salg eller skrive dig på ventelisten |
 | ![Frigivet](https://api.iconify.design/heroicons/arrow-up-tray.svg?height=20&color=%23ef4444) | **Frigivet** | Billetten er sat til salg |
 | ![Køb](https://api.iconify.design/heroicons/arrows-right-left.svg?height=20&color=%238b5cf6) | **Køb billet** | Køb en billet, som en anden har sat til salg |
+| ![Købt fra anden](https://api.iconify.design/heroicons/arrows-right-left.svg?height=20&color=%233b82f6) | **Købt fra anden** | Du har købt en frigivet billet - badgen siger *fra <husstand>* |
 | ![Venteliste](https://api.iconify.design/hugeicons/hourglass.svg?height=20&color=%23737373) | **Venteliste** | Du står i kø til en billet af din billettype |
 
 Kalenderne har også en **Forklaring** nederst, der viser symbolerne for netop den visning.
@@ -115,10 +118,12 @@ Efter login har du adgang til:
 | Sektion | Hvad du kan gøre |
 |---------|------------------|
 | **Tilmeldinger** | Se og book middage for din husstand |
-| **Husstanden** | Se medlemmer og sæt ugentlige præferencer |
+| **Præferencer** | Se medlemmer og sæt ugentlige præferencer |
 | **Allergier** | Tilføj allergier for husstandens medlemmer |
 | **Økonomi** | Se fakturaer og udgifter til fællesspisning |
 | **Indstillinger** | Opdater husstandsoplysninger |
+
+> **Kig ind hos naboerne:** Du kan åbne enhver husstands side - banneret **Du besøger nu en anden husstand end din egen** med **Kigge, ikke røre** siger, at du kun kan se.
 
 ---
 
@@ -134,7 +139,7 @@ Ugentlige præferencer bestemmer, hvornår du automatisk bliver tilmeldt fælles
 
 > **Ingen:** Ændrer du en dag til "Ingen", bliver du frameldt de kommende middage på den dag. Er frameldingsfristen passeret, frigives billetten i stedet og sættes til salg.
 
-1. Gå til **Husstanden** (fanen med hus-ikon)
+1. Gå til **Præferencer** (fanen med hus-ikon)
 2. Find den person du vil redigere
 3. Klik på **blyant-ikonet** ud for personen
 4. Vælg spisningsform for hver dag (se [Symboler i appen](#symboler-i-appen) ovenfor)
@@ -198,9 +203,10 @@ I uge- eller månedsvisning kan du hurtigt ændre tilmeldinger for flere dage:
 
 1. Klik på **blyanten** for at aktivere redigeringstilstand
 2. Klik på en celle for at skifte, hvordan du spiser: Spisesal → Sen → Takeaway → Ingen - det, der ikke kan vælges lige nu, springes over
-3. Brug **Power-rækken** øverst til at ændre alle medlemmer på én gang - dine gæster følger med
-4. Se **forhåndsvisning** af ændringer før du gemmer
-5. Klik **Opdater** når du er færdig - eller **Annuller** for at fortryde
+3. Over hver kolonne sidder kalenderens chip, **Booking kan ændres** eller **Lukket for framelding**; en frigivet billet viser Frigivet-ikonet i cellens hjørne
+4. Brug **Power-rækken** øverst til at ændre alle medlemmer på én gang - dine gæster følger med
+5. Se **forhåndsvisning** af ændringer før du gemmer
+6. Klik **Opdater** når du er færdig - eller **Annuller** for at fortryde
 
 Gæster har deres egen række i gitteret, så du kan ændre deres spisningsform på samme måde som familiens.
 
@@ -303,7 +309,7 @@ Gæsten vises i tabellen som "Gæst af [dit navn]", og billetten viser billettyp
 ### Sådan ser du din PBS-faktura
 
 1. Gå til **Økonomi** (pengeikonet)
-2. Se oversigt over udgifter for denne og forrige periode
+2. Se oversigt over udgifter for denne og forrige periode - hver middag med sin ret under **Menu**
 3. Fakturaen trækkes automatisk via PBS omkring den 1. i måneden
 
 ![Økonomi fanen](screenshots/household/household-economy.png)
@@ -325,7 +331,7 @@ Har I skiftet mening? Åbn samme sektion og klik **Fortryd flytning** (to-klik b
 
 ### Sådan tilføjer du allergier
 
-1. Gå til **Allergier** (advarsels-ikonet)
+1. Gå til **Allergier** (allergi-ikonet)
 2. Vælg det husstandsmedlem der har allergien
 3. Klik **Tilføj allergi**
 4. Vælg allergitype fra listen
@@ -380,4 +386,4 @@ Kontakt en administrator eller opret et issue på [GitHub](https://github.com/Ma
 
 ---
 
-*Sidst opdateret: Oktober 2026 (ventelisten, køb og frigiv efter fristen, appen på telefonen, Mine indstillinger, allergier på billetten, forventede bestillinger, aflyste middage, pris på billetten, billetter på 0 portioner)*
+*Sidst opdateret: Oktober 2026 (ventelisten, køb og frigiv efter fristen, appen på telefonen, Mine indstillinger, allergier på billetten, forventede bestillinger, aflyste middage, pris på billetten, billetter på 0 portioner, kig ind hos naboerne, Ny billetpris)*

@@ -8,7 +8,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot, gotoHydrated, waitForApi, temporaryAndRandom, expectApiError} = testHelpers
+const {validatedBrowserContext, pollUntil, doScreenshot, gotoHydrated, waitForApi, temporaryAndRandom, expectApiError, attemptAll} = testHelpers
 
 test.describe('AdminTeams Form UI', () => {
     const adminTeamsUrl = '/admin/teams'
@@ -19,10 +19,10 @@ test.describe('AdminTeams Form UI', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
-        for (const householdId of createdHouseholdIds) {
-            await HouseholdFactory.deleteHousehold(context, householdId)
-        }
+        await attemptAll('AdminTeams cleanup', [
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds),
+            ...createdHouseholdIds.map(householdId => () => HouseholdFactory.deleteHousehold(context, householdId))
+        ]).finally(() => context.close())
     })
 
     test('GIVEN a season without madhold WHEN viewing it THEN the table renders its own empty state with the create CTA',

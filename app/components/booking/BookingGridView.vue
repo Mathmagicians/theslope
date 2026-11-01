@@ -249,7 +249,7 @@ const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEm
 const now = useClock()
 const emptyState = getRandomEmptyMessage('noDinners', now.value)
 
-const {formatPrice, resolveTicketPriceOn, ticketTypeChangeOf} = useTicket()
+const {formatKroner, resolveTicketPriceOn, ticketTypeChangeOf} = useTicket()
 const {personTicketCounts} = useOrder()
 
 const {getDayBillSummary, getBookingOptions, powerOptions, newGuestRow, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
@@ -1047,7 +1047,7 @@ const getEventSummary = (eventId: number) => {
       <template v-for="event in flatEvents" :key="`footer-${event.id}`" #[`event-${event.id}-footer`]>
         <div :class="COMPONENTS.bookingGrid.summary">
           <span>{{ getEventSummary(event.id).ticketCounts }}</span>
-          <span :class="COMPONENTS.bookingGrid.summaryPrice">{{ formatPrice(getEventSummary(event.id).totalPrice) }} kr</span>
+          <span :class="COMPONENTS.bookingGrid.summaryPrice">{{ formatKroner(getEventSummary(event.id).totalPrice) }}</span>
         </div>
       </template>
 
@@ -1061,7 +1061,6 @@ const getEventSummary = (eventId: number) => {
             :allergy-types="props.allergyTypes"
             :deadlines="props.deadlines"
             :booker-id="props.bookerId"
-            :booker-name="props.household.inhabitants.find(i => i.id === props.bookerId)?.name ?? 'Ukendt'"
             :released-ticket-counts="props.lockStatus.get(activeGuestEvent.id) ?? EMPTY_RELEASED_TICKET_COUNTS"
             :booking-context="contextOf(activeGuestEvent)"
             :admin-bypass="props.adminBypass"

@@ -863,9 +863,8 @@ describe('Bookings store — tickets for sale and waiting lists on locked dinner
         waitlistEntriesEndpoint.mockImplementation(() => queue.map((ticketType, index) =>
             WaitlistFactory.defaultEntry({id: 21 + index, dinnerEventId: lockedDinner.id, ticketPrice: priceOf(ticketType)})))
         const store = useBookingsStore()
-        const queuedFormatted = useBilling().formatTicketCounts({[TicketType.ADULT]: 2, [TicketType.CHILD]: 1})
 
-        await vi.waitFor(() => expect(store.lockStatus.get(lockedDinner.id)).toMatchObject({total: 0, queued: 3, queuedFormatted}))
+        await vi.waitFor(() => expect(store.lockStatus.get(lockedDinner.id)).toMatchObject({total: 0, queued: 3, queuedByType: {[TicketType.ADULT]: 2, [TicketType.CHILD]: 1}}))
         expect(lastQuery(waitlistEntriesEndpoint)).toEqual({dinnerEventIds: String(lockedDinner.id)})
     })
 })
@@ -1096,6 +1095,15 @@ describe('Bookings store — waiting list', () => {
         await vi.waitFor(() => expect(store.selectedDinnerWaitlist).toMatchObject({dinnerEventId: WAITLIST_DINNER_ID, entries: 2, portions: 1.5}))
         expect(store.selectedDinnerWaitlist!.lines.map(({ticketType, entries}) => [ticketType, entries.map(entry => entry.id)]))
             .toEqual([[TicketType.ADULT, [21]], [TicketType.CHILD, [22]]])
+    })
+
+    it('counts the queue on the dinner on view by ticket type, one per entry its lines hold', async () => {
+        const store = useBookingsStore()
+
+        store.loadOrdersForDinners({dinnerEventIds: [WAITLIST_DINNER_ID]})
+        store.selectDinnerDate(() => new Date(queuedDinner.date))
+
+        await vi.waitFor(() => expect(store.selectedDinnerWaitlist?.queuedByType).toEqual({[TicketType.ADULT]: 1, [TicketType.CHILD]: 1}))
     })
 
     it('releases portions, toasts the tickets handed out and the entries still waiting, and re-reads the queue', async () => {

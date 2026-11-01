@@ -68,7 +68,7 @@ const {baseRatePercent: kitchenBaseRatePercent, vatPercent} = appConfig.theslope
 
 // Business logic from useOrder and useTicket
 const { getActiveOrders, groupByTicketType, calculateBudget, calculateTotalPortions, spendingLeft, spendingAwaitsTickets } = useOrder()
-const { formatPrice } = useTicket()
+const { formatKroner } = useTicket()
 
 // Expandable details state
 const showDetails = ref(false)
@@ -103,7 +103,7 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
   <!-- Compact Mode -->
   <div v-if="mode === 'compact'" :class="COMPONENTS.dinnerBudget.compact">
     <UIcon :name="ICONS.economy" :class="COMPONENTS.dinnerBudget.boxGlyph" />
-    <span :class="COMPONENTS.dinnerBudget.compactAmount">{{ formatPrice(budget.availableBudget) }} kr</span>
+    <span :class="COMPONENTS.dinnerBudget.compactAmount">{{ formatKroner(budget.availableBudget) }}</span>
   </div>
 
   <!-- Full Mode: Title + 3-Box Layout -->
@@ -132,7 +132,7 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
             <span :class="COMPONENTS.dinnerBudget.boxLabelText">{{ WORDS.boxes.revenue }}</span>
           </div>
           <!-- Ticket money is what the households pay: plain kr, no VAT split -->
-          <div :class="COMPONENTS.dinnerBudget.boxAmountLarge">{{ formatPrice(budget.totalRevenue) }} kr</div>
+          <div :class="COMPONENTS.dinnerBudget.boxAmountLarge">{{ formatKroner(budget.totalRevenue) }}</div>
           <div :class="COMPONENTS.dinnerBudget.boxFact">
             {{ WORDS.portions(formatPortions(totalPortions)) }}
           </div>
@@ -180,15 +180,15 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
       <!-- Billetter: the ticket table named by type -->
       <UTable :data="revenueByType" :columns="ticketColumns" :ui="COMPONENTS.table.ui" data-testid="budget-ticket-table">
         <template #ticketType-cell="{ row }">{{ ticketTypeLabel(row.original.ticketType) }}</template>
-        <template #unitPrice-cell="{ row }">{{ formatPrice(row.original.unitPrice) }} kr</template>
-        <template #revenue-cell="{ row }">{{ formatPrice(row.original.revenue) }} kr</template>
+        <template #unitPrice-cell="{ row }">{{ formatKroner(row.original.unitPrice) }}</template>
+        <template #revenue-cell="{ row }">{{ formatKroner(row.original.revenue) }}</template>
         <template #empty>
           <UAlert v-bind="ALERTS.emptyStateCompact" :title="noTicketsSold" data-testid="budget-ticket-empty" />
         </template>
         <template #body-bottom>
           <tr :class="COMPONENTS.table.totalRow" data-testid="budget-summary-revenue">
             <td :class="COMPONENTS.table.sumCell" colspan="3">{{ WORDS.revenue }}</td>
-            <td :class="COMPONENTS.table.sumAmountCell">{{ formatPrice(budget.totalRevenue) }} kr</td>
+            <td :class="COMPONENTS.table.sumAmountCell">{{ formatKroner(budget.totalRevenue) }}</td>
           </tr>
           <tr>
             <td :class="COMPONENTS.table.sumCell" colspan="3">{{ WORDS.contribution(budget.kitchenBaseRatePercent) }}</td>

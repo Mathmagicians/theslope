@@ -11,7 +11,7 @@ import {
 import type {UserDetail} from '~/composables/useCoreValidation'
 import type {NotificationKind} from '~/config/notificationTemplates'
 
-const {gotoHydrated, openPreferences, savePreferences} = testHelpers
+const {gotoHydrated, openPreferences, savePreferences, getSessionUser} = testHelpers
 const {NotificationChannelSchema, PaletteSchema, TextScaleSchema, DEFAULT_APPEARANCE} = useUserPreferenceValidation()
 
 /** The settings by their words in a feature: a text scale, a palette, a channel; "channel none" is no channel at all */
@@ -68,7 +68,7 @@ const memberOf = (scene: Scene, actor: Actor): BrowserContext => {
 
 /** The user as the session carries it; the first read keeps the settings the scenario found, put back after it */
 const keepMemberSettings = async (scene: Scene, member: BrowserContext): Promise<UserDetail> => {
-    const user = await UserFactory.getSessionUser(member)
+    const user = await getSessionUser(member)
     scene.memberSettings ??= {userId: user.id, notificationChannels: user.notificationChannels, appearance: user.appearance, phone: user.phone ?? null}
     return user
 }
@@ -95,7 +95,7 @@ Given('{actor} has the setting {setting}', async ({scene}, actor: Actor, setting
 })
 
 Then('{actor} has the setting {setting}', async ({scene}, actor: Actor, setting: Setting) => {
-    const {appearance, notificationChannels} = await UserFactory.getSessionUser(contextOfActor(scene, actor))
+    const {appearance, notificationChannels} = await getSessionUser(contextOfActor(scene, actor))
     switch (setting.kind) {
         case SETTING.TEXT_SCALE:
             expect(appearance.textScale).toBe(setting.value)
@@ -147,7 +147,7 @@ Then('{actor} sees the text {textChange}', async ({scene}, actor: Actor, change:
 })
 
 Then('{actor} sees the colours change', async ({scene}, actor: Actor) => {
-    const {appearance} = await UserFactory.getSessionUser(memberOf(scene, actor))
+    const {appearance} = await getSessionUser(memberOf(scene, actor))
     const html = fromScene(scene, 'page').locator('html')
     // The default palette is the base stylesheet: <html> carries no data-palette for it
     const shown = appearance.palette === PaletteSchema.enum.default ? null : appearance.palette

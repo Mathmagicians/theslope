@@ -110,6 +110,20 @@ export class BillingFactory {
         ...overrides
     })
 
+    /** A transaction as the household billing view reads it, for component tests: an adult ticket of a live order, in the default current period */
+    static readonly defaultTransactionDisplay = (overrides: Partial<TransactionDisplay> = {}): TransactionDisplay => ({
+        id: 1,
+        orderId: 1,
+        amount: 4000,
+        createdAt: new Date(2025, 9, 20),
+        orderSnapshot: '{}',
+        dinnerEvent: {id: 1, date: new Date(2025, 9, 20), menuTitle: 'Test'},
+        inhabitant: {id: 1, name: 'Test', household: {id: 1, pbsId: 100, address: 'Test'}},
+        ticketType: TicketType.ADULT,
+        dinnerMode: null,
+        ...overrides
+    })
+
     /** HouseholdBillingResponse data for component tests (no API call): an empty current period, no past invoices */
     static readonly defaultHouseholdBilling = (householdId: number = 1): HouseholdBillingResponse => ({
         householdId,

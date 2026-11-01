@@ -13,7 +13,7 @@ const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {DinnerStateSchema, TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
 const DinnerState = DinnerStateSchema.enum
-const {headers, validatedBrowserContext, temporaryAndRandom} = testHelpers
+const {headers, validatedBrowserContext, temporaryAndRandom, attemptAll} = testHelpers
 
 test.describe('Season API Tests', () => {
 
@@ -467,10 +467,10 @@ test.describe('Season API Tests', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        // Cleanup households first (before seasons, in case of any references)
-        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
-        // Factory cleanup automatically includes active season singleton
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        await attemptAll('Season API Tests cleanup', [
+            () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 
 })

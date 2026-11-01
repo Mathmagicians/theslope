@@ -1,6 +1,8 @@
 import {defineEventHandler, sendRedirect} from "h3"
 import {maskPassword} from "~/utils/utils"
-import type {UserDetail} from "~/composables/useCoreValidation"
+import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+
+const {getSessionUser} = eventHandlerHelper
 
 // list of endpoints that we want dont need to protect
 const unprotectedRoutes = ["/api/auth", "/api/calendar/feed", "/login", "/api/_auth", "/api/_nuxt_icon", "/api/public", "/public"]
@@ -34,8 +36,13 @@ export default defineEventHandler(async (event) => {
 
     // Check for user session - getUserSession returns empty object if no session exists
     const session = await getUserSession(event)
+    const user = await getSessionUser(event)
 
-    if (!session?.user) {
+    if (!user || !session.secure?.heynaboToken) {
+        // A session user the schema rejects, or a session without the Heynabo token, which cannot act in Heynabo
+        // (ADR-013): the session is cleared and signs in again
+        if (session.user) await clearUserSession(event)
+
         // Handle API routes differently from page routes
         if (pathname.startsWith("/api/")) {
             // For API routes, throw 401 Unauthorized
@@ -49,7 +56,5 @@ export default defineEventHandler(async (event) => {
         }
     }
 
-    // Type cast: Module augmentation doesn't expand UserDetail properties (see types/auth.d.ts)
-    const user = session.user as UserDetail & {passwordHash: string}
-    console.info(`🔒 > [GUARD] > User session: mail=${maskPassword(user.email)}, token=${maskPassword(user.passwordHash)}, roles=${JSON.stringify(user.systemRoles)}`)
+    console.info(`🔒 > [GUARD] > User session: mail=${maskPassword(user.email)}, roles=${JSON.stringify(user.systemRoles)}`)
 })

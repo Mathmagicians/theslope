@@ -62,7 +62,7 @@ const filteredUsers = computed(() => {
 
 const formattedUsers = computed(() => filteredUsers.value.map(user => ({
   ...user,
-  greeting: user.Inhabitant?.name || 'Ukendt bruger'
+  greeting: user.Inhabitant?.name || USER_WORDS.unknownUser
 })))
 
 type UserWithInhabitant = typeof users.value[number] & {
@@ -104,11 +104,11 @@ const userColumns = [
         })
   },
   {accessorKey: 'id', header: '#'},
-  {accessorKey: 'greeting', header: 'Navn'},
-  {accessorKey: 'email', header: 'Mail'},
-  {accessorKey: 'phone', header: 'Telefon'},
-  {accessorKey: 'systemRoles', header: 'Systemroller'},
-  {accessorKey: 'updatedAt', header: 'Sidst opdateret'},
+  {accessorKey: 'greeting', header: USER_WORDS.admin.columns.name},
+  {accessorKey: 'email', header: USER_WORDS.admin.columns.email},
+  {accessorKey: 'phone', header: USER_WORDS.admin.columns.phone},
+  {accessorKey: 'systemRoles', header: USER_WORDS.admin.columns.systemRoles},
+  {accessorKey: 'updatedAt', header: USER_WORDS.admin.columns.updatedAt},
 ]
 
 // Table ref for pagination control
@@ -131,7 +131,7 @@ const pagination = ref({
         <UAlert
             v-bind="ALERTS.info"
             :icon="ICONS.authorized"
-            title=" Brugere"
+            :title="USER_WORDS.admin.title"
             :description="USER_WORDS.admin.intro"
         />
       </div>
@@ -143,8 +143,8 @@ const pagination = ref({
           v-model:sort-descending="sortDescending"
           :table="table"
           :pagination="pagination"
-          placeholder="Søg efter navn eller email..."
-          sort-label="Navn"
+          :placeholder="USER_WORDS.admin.search"
+          :sort-label="USER_WORDS.admin.columns.name"
           test-id="user-search"
       />
     </div>
@@ -152,7 +152,7 @@ const pagination = ref({
     <ViewError
         v-if="isUsersErrored"
         :status-code="usersError?.statusCode" :cause="usersError"
-        message="Kunne ikke loade bruger data 🤖"
+        :message="USER_WORDS.admin.failed"
     />
     <UTable
         ref="table"

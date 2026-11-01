@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {ADMIN_WORDS} from '~/config/adminWords'
 
-const {ALERTS, COLOR, ICONS} = useTheSlopeDesignSystem()
+const {ALERTS, COLOR, ICONS, COMPONENTS} = useTheSlopeDesignSystem()
 
 // AUTHORIZATION - Admin role check for edit actions (ADR pattern from household page)
 const authStore = useAuthStore()
@@ -99,11 +99,11 @@ useBookingsStore().loadBillingOverview(() => activeTab.value === 'economy')
 // UI - CONTINUED
 
 useHead({
-  title: "😎 Administration",
+  title: ADMIN_WORDS.page.title,
   meta: [
     {
       name: "description",
-      content: "you can view households and their dinner preferences here",
+      content: ADMIN_WORDS.page.description,
     },
   ],
 })
@@ -112,7 +112,7 @@ useHead({
 
 
 <template>
-  <div class="md:py-2 lg:p-4 min-h-screen">
+  <div :class="COMPONENTS.adminPage.root">
     <!-- Non-admin banner: shown when viewing as non-admin user -->
     <UAlert
       v-if="!canEdit"
@@ -121,16 +121,12 @@ useHead({
       :icon="ICONS.viewOnly"
       :title="ADMIN_WORDS.readOnly.title"
       :description="ADMIN_WORDS.readOnly.description"
-      class="mb-4"
+      :class="COMPONENTS.adminPage.banner"
     />
     <UTabs
         v-model="activeTab"
+        v-bind="COMPONENTS.adminPage.tabs"
         :items="tabItems"
-        class="mb-1 md:mb-4"
-        :ui="{
-          label: 'hidden md:inline',
-          list: 'sticky top-12 md:top-16 z-20 rounded-none md:rounded-lg'
-        }"
         :color="COLOR.primary"
     >
       <template #content="{ item }">

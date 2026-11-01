@@ -20,9 +20,9 @@ import {useSeason} from "~/composables/useSeason"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 import type { OrderDisplay } from '~/composables/useBookingValidation'
-import {QueryFlagSchema, type UserDetail} from '~/composables/useCoreValidation'
+import {QueryFlagSchema} from '~/composables/useCoreValidation'
 
-const {throwH3Error} = eventHandlerHelper
+const {throwH3Error, getSessionUser} = eventHandlerHelper
 const {OrderStateSchema, OrderSortBySchema, IdOrIdsSchema} = useBookingValidation()
 
 const sortBySchema = OrderSortBySchema.default(OrderSortBySchema.enum.createdAt)
@@ -65,8 +65,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
         householdId = query.householdId
     } else if (!query.allHouseholds) {
         // Default: filter by session user's household
-        const session = await getUserSession(event)
-        const user = session?.user as UserDetail | undefined
+        const user = await getSessionUser(event)
         householdId = user?.Inhabitant?.householdId
 
         if (!householdId) {

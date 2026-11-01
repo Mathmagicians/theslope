@@ -623,7 +623,10 @@ type DayLine = {row: BookingResult, rows: BookingResult[], name: string, places:
 type ResultDay = {dinnerEventId: number, date: Date, lines: DayLine[], failed: DayLine[], soldToWaitlist: TicketSale[], sold: TicketSale[]}
 
 /** A row of a result's day: one order's result, one failed order, or one ticket sold */
-type DayRow = {dinnerEventId: number} & ({result: BookingResult} | {failed: BookingResult} | {sale: TicketSale, toWaitlist: boolean})
+type DayRow = {dinnerEventId: number} & (
+    | {result: BookingResult, failed?: never, sale?: never}
+    | {failed: BookingResult, result?: never, sale?: never}
+    | {sale: TicketSale, toWaitlist: boolean, result?: never, failed?: never})
 
 /**
  * The days of a booking result, one per dinner the run decided, ascending: the preview and the toast read their lines
@@ -644,7 +647,7 @@ const resultDays = (result: ScaffoldResult, householdOrder: number[]): ResultDay
     const linesOfDay = linesBy<BookingResult, DayLine, string>(
         row => `${row.action}:${personOf(row)}`,
         (rows) => {
-            const row = rows[0]!
+            const [row] = rows
             return {
                 row,
                 rows,
@@ -657,15 +660,15 @@ const resultDays = (result: ScaffoldResult, householdOrder: number[]): ResultDay
             || Number(a.row.isGuestTicket) - Number(b.row.isGuestTicket)
     )
 
-    const days = linesBy<DayRow, ResultDay, number>(
+    const days = linesBy<DayRow & {date: Date}, ResultDay, number>(
         row => row.dinnerEventId,
         (dayRows, dinnerEventId) => {
-            const sales = dayRows.flatMap(row => 'sale' in row ? [row] : [])
+            const sales = dayRows.flatMap(row => row.sale ? [{sale: row.sale, toWaitlist: row.toWaitlist}] : [])
             return {
                 dinnerEventId,
-                date: dateById.get(dinnerEventId)!,
-                lines: linesOfDay(dayRows.flatMap(row => 'result' in row ? [row.result] : [])),
-                failed: linesOfDay(dayRows.flatMap(row => 'failed' in row ? [row.failed] : [])),
+                date: dayRows[0].date,
+                lines: linesOfDay(dayRows.flatMap(row => row.result ? [row.result] : [])),
+                failed: linesOfDay(dayRows.flatMap(row => row.failed ? [row.failed] : [])),
                 soldToWaitlist: sales.filter(({toWaitlist}) => toWaitlist).map(({sale}) => sale),
                 sold: sales.map(({sale}) => sale)
             }
@@ -679,7 +682,10 @@ const resultDays = (result: ScaffoldResult, householdOrder: number[]): ResultDay
         ...result.failed.map((row): DayRow => ({dinnerEventId: row.dinnerEventId, failed: row})),
         ...waitlistTicketsSold.map((sale): DayRow => ({dinnerEventId: sale.dinnerEventId, sale, toWaitlist: true})),
         ...ticketsSold.map((sale): DayRow => ({dinnerEventId: sale.dinnerEventId, sale, toWaitlist: false}))
-    ].filter(row => dateById.has(row.dinnerEventId)))
+    ].flatMap(row => {
+        const date = dateById.get(row.dinnerEventId)
+        return date ? [{...row, date}] : []
+    }))
 }
 
 /**
@@ -895,13 +901,12 @@ export type GuestItem = {
 export const guestItemsOf = (orders: OrderDisplay[], waitlistEntries: TicketWaitlistDetail[], ticketPrices: TicketPrice[]): GuestItem[] => {
     const {findTicketPriceById, resolveTicketPrice} = useTicket()
     const placed = Object.entries(useBooking().groupGuestOrders(orders))
-        .filter(([, group]) => group.length > 0)
         .map(([key, group]): GuestItem => ({
             id: `guest-group-${key}`,
             orders: group,
             waitlistEntry: undefined,
-            held: group[0]!,
-            ticketPrice: resolveTicketPrice(null, group[0]!.priceAtBooking, ticketPrices)
+            held: group[0],
+            ticketPrice: resolveTicketPrice(null, group[0].priceAtBooking, ticketPrices)
         }))
     const queued = waitlistEntries
         .filter(entry => entry.isGuestTicket)
@@ -973,16 +978,17 @@ export const useBookingUi = () => {
             done: boolean,
             result: StepDeadlineResult
         ): DeadlineBadgeData => {
-            const labels = DEADLINE_LABELS[key]
+            // A step without a label of its own reads none
+            const labels: {label?: string, openText: string, closedText: string} = DEADLINE_LABELS[key]
             const alarm = done ? ALARM_LEVEL.neutral : result.alarm
             const b = ALARM_TO_BADGE[alarm]
             const text = done ? labels.closedText : labels.openText
             return {
                 step, alarm,
-                label: 'label' in labels ? labels.label : '',
+                label: labels.label ?? '',
                 icon: b.icon,
                 value: done ? '' : result.description,
-                color: b.color as DeadlineBadgeData['color'],
+                color: b.color,
                 helpText: text
             }
         }

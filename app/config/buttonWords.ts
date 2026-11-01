@@ -13,5 +13,11 @@ export const BUTTON_WORDS = {
     /** The toggle that opens a table row's details */
     openDetails: 'Åbn detaljer',
     /** The label a button shows while its action runs */
-    working: 'Arbejder...'
+    working: 'Arbejder...',
+    /** The label a two-click button shows once the first click arms it */
+    confirmAgain: 'Er du sikker? Tryk igen for at bekræfte',
+    /** The toggle that shows an order's history */
+    history: 'Vis ordrehistorik',
+    /** A link out to Heynabo: the logo's name, and the link to a dinner's event there */
+    heynabo: {name: 'Heynabo', openEvent: 'Se på Heynabo'}
 } as const

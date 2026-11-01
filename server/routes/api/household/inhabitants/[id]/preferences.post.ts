@@ -3,9 +3,9 @@ import {z} from "zod"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {isAdmin} from '~/composables/usePermissions'
-import {AdminBypassQuerySchema, RouteIdSchema, idParams, useCoreValidation} from "~/composables/useCoreValidation"
+import {AdminBypassQuerySchema, AllInhabitantsQuerySchema, RouteIdSchema, idParams, useCoreValidation} from "~/composables/useCoreValidation"
 import {useBookingValidation, type InhabitantUpdateResponse, type ScaffoldResult, type DinnerMode} from "~/composables/useBookingValidation"
-import {fetchInhabitant, updateInhabitant} from "~~/server/data/prismaRepository"
+import {fetchHouseholds, fetchInhabitant, updateInhabitant} from "~~/server/data/prismaRepository"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {notifyBookingOutcomesInBackground} from "~~/server/utils/sender/events/waitlist"
 import {changedWeekdays, type WeekDayMap} from "~/types/dateTypes"
@@ -16,11 +16,12 @@ const LOG = '👩‍🏠 > INHABITANT > [PREFERENCES]'
 
 const paramSchema = idParams('id')
 
-const querySchema = AdminBypassQuerySchema.extend({seasonId: RouteIdSchema.optional()})
+const querySchema = AdminBypassQuerySchema.extend({...AllInhabitantsQuerySchema.shape, seasonId: RouteIdSchema.optional()})
 
 /**
  * POST /api/household/inhabitants/[id]/preferences
- * Update inhabitant dinner preferences (for household members)
+ * Update inhabitant dinner preferences (for household members); `?allInhabitants=true` is power mode: the draft for
+ * every inhabitant of the household, re-scaffolded in one run
  * Requires: authenticated user belongs to same household as inhabitant
  * Its dry run is the GET on the same path (`preferences.get.ts`)
  */
@@ -31,6 +32,7 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
     let id!: number
     let seasonId: number | undefined
     let adminBypass!: boolean
+    let allInhabitants!: boolean
     let dinnerPreferences: WeekDayMap<DinnerMode>
     try {
         const {WeekDayMapSchemaOptional} = useCoreValidation()
@@ -41,6 +43,7 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
         const query = await getValidatedQuery(event, querySchema.parse)
         seasonId = query.seasonId
         adminBypass = query.adminBypass
+        allInhabitants = query.allInhabitants
         const body = await readValidatedBody(event, bodySchema.parse)
         dinnerPreferences = body.dinnerPreferences
     } catch (error) {
@@ -57,11 +60,16 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
         // Verify user belongs to same household (admin can bypass via ?adminBypass=true)
         const user = await requireHouseholdAccess(event, inhabitant.householdId, adminBypass ? isAdmin : undefined)
 
-        console.info(`${LOG} User ${user.email} updating preferences for inhabitant ${inhabitant.name} ${inhabitant.lastName}`)
+        const inhabitants = allInhabitants ? (await fetchHouseholds(d1Client, inhabitant.householdId)).flatMap(household => household.inhabitants) : [inhabitant]
+        console.info(`${LOG} User ${user.email} updating preferences for ${allInhabitants ? `the ${inhabitants.length} inhabitants of household ${inhabitant.householdId}` : `inhabitant ${inhabitant.name} ${inhabitant.lastName}`}`)
+        // The reply's inhabitant first, then the household's others one write after another (ADR-014)
         const updatedInhabitant = await updateInhabitant(d1Client, id, {dinnerPreferences})
+        for (const other of inhabitants.filter(({id: inhabitantId}) => inhabitantId !== id)) {
+            await updateInhabitant(d1Client, other.id, {dinnerPreferences})
+        }
 
         // Re-scaffold the household on the weekdays the draft changes, the DAILY_MAINTENANCE job keeps the rest in step (ADR-015)
-        const weekdays = changedWeekdays(inhabitant.dinnerPreferences, dinnerPreferences)
+        const weekdays = changedWeekdays(inhabitants.map(stored => stored.dinnerPreferences), dinnerPreferences)
         console.info(`${LOG} Re-scaffolding household ${updatedInhabitant.householdId} on ${weekdays.join(', ') || 'no weekday'}`)
         const scaffoldResult: ScaffoldResult = await scaffoldPrebookings(d1Client, {
             seasonId,

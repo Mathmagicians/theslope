@@ -1,7 +1,8 @@
 // @vitest-environment nuxt
 /**
  * UserProfileCard - the member's card: the role badges and the household link of the user it shows, and for the
- * owner the header actions, the ⚙ toggle that reveals the settings card the parent renders and Log ud.
+ * owner the header actions, the ⚙ toggle that reveals the settings card the parent renders and Log ud; for an admin the
+ * role manager, where a role Heynabo owns stays read-only.
  *
  * Real component tree, real stores (testing.md Rule 6); only HTTP and the session are faked.
  * The toggle and Log ud belong to the current user's own card, so the spec drives `authStore.user`.
@@ -11,16 +12,22 @@ import {nextTick} from 'vue'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {mockNuxtImport} from '@nuxt/test-utils/runtime'
 import UserProfileCard from '~/components/user/UserProfileCard.vue'
-import {mountWithTooltipProvider, findByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, itemAt, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
-import {useCoreValidation, type UserDetail, type SystemRole as SystemRoleValue} from '~/composables/useCoreValidation'
+import {useCoreValidation, type UserDetail} from '~/composables/useCoreValidation'
+import {ROLE_OWNERSHIP, RoleOwner} from '~/composables/useUserRoles'
+import {getHouseholdUrl} from '~/utils/household'
+import {USER_WORDS} from '~/config/userWords'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 import {PREF_TEST_IDS} from './userPreferencesTestIds'
 
 const SystemRole = useCoreValidation().SystemRoleSchema.enum
 
 /** The header's own actions; the ⚙ is `PREF_TEST_IDS.toggle`, next to the card it opens */
 const PROFILE_TEST_IDS = {
-    logout: 'logout-button'
+    logout: 'logout-button',
+    heynaboProfile: 'heynabo-profile-link',
+    editRoles: 'edit-roles-btn'
 } as const
 
 // The test runtime has no session cookie and no /api/_auth endpoint, so the session nuxt-auth-utils
@@ -66,7 +73,7 @@ describe('UserProfileCard - header actions', () => {
         const wrapper = await mountCard({user: me, showActions: true})
         const toggle = findByTestId(wrapper, PREF_TEST_IDS.toggle)
         expect(toggle.text()).toBe('')
-        expect(toggle.attributes('aria-label')).toBe('Indstillinger')
+        expect(toggle.attributes('aria-label')).toBe(USER_WORDS.profile.settings)
 
         await toggle.trigger('click')
         await nextTick()
@@ -89,7 +96,7 @@ describe('UserProfileCard - role badges', () => {
         {
             scenario: 'display badges for known roles',
             roles: [SystemRole.ADMIN, SystemRole.ALLERGYMANAGER],
-            shouldInclude: ['Admin', 'Allergichef'],
+            shouldInclude: [USER_WORDS.roles[SystemRole.ADMIN], USER_WORDS.roles[SystemRole.ALLERGYMANAGER]],
             shouldExclude: []
         },
         {
@@ -100,7 +107,7 @@ describe('UserProfileCard - role badges', () => {
         }
     ])('should $scenario', async ({roles, shouldInclude, shouldExclude}) => {
         // Set after the factory, which parses the user: the session may hold a role the catalog no longer knows
-        const user = {...UserFactory.defaultUserWithInhabitant('profile-roles'), systemRoles: roles as SystemRoleValue[]}
+        const user = {...UserFactory.defaultUserWithInhabitant('profile-roles'), systemRoles: roles}
 
         const wrapper = await mountCard({user})
 
@@ -110,11 +117,40 @@ describe('UserProfileCard - role badges', () => {
     })
 })
 
+describe('UserProfileCard - links', () => {
+    it('GIVEN a user with a household THEN the card links the household and the Heynabo profile under the Heynabo name', async () => {
+        const wrapper = await mountCard({user: me})
+        const household = me.Inhabitant?.household
+        if (!household?.shortName) throw new Error('The factory user has no household')
+
+        expect(wrapper.find(`a[href="${getHouseholdUrl(household.shortName, household.pbsId)}"]`).exists()).toBe(true)
+        expect(findByTestId(wrapper, PROFILE_TEST_IDS.heynaboProfile).text()).toBe(BUTTON_WORDS.heynabo.name)
+    })
+})
+
+describe('UserProfileCard - role manager', () => {
+    const admin = UserFactory.defaultUserWithInhabitant('profile-admin', {id: 3, systemRoles: [SystemRole.ADMIN]})
+
+    it('GIVEN an admin editing the roles THEN a role Heynabo owns is read-only and marked, and the help names every role', async () => {
+        const wrapper = await mountCard({user: me, showRoleManager: true}, admin)
+        await clickByTestId(wrapper, PROFILE_TEST_IDS.editRoles)
+
+        const roles = Object.values(SystemRole)
+        const switches = wrapper.findAllComponents({name: 'USwitch'})
+        expect(roles.map((_role, index) => itemAt(switches, index).props('disabled')))
+            .toEqual(roles.map(role => ROLE_OWNERSHIP[role] === RoleOwner.HN))
+        expect(wrapper.text()).toContain(USER_WORDS.profile.roles.heynaboOwned)
+        roles.forEach(role => expect(wrapper.text()).toContain(USER_WORDS.profile.roles.help[role]))
+    })
+})
+
 describe('UserProfileCard - optional data', () => {
     it('should handle user without household shortName', async () => {
         const user = UserFactory.defaultUserWithInhabitant('profile-no-shortname')
+        const household = user.Inhabitant?.household
+        if (!household) throw new Error('The factory user has no household')
         // shortName can be null from the API
-        Object.assign(user.Inhabitant!.household, {shortName: null})
+        Object.assign(household, {shortName: null})
         user.phone = null
 
         const wrapper = await mountCard({user})

@@ -9,7 +9,7 @@ import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, formatPlace} from '~/
 import {useBookingValidation, TicketState, type BookingAction, type BookingResult, type QueuePosition} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
-import {lockedDinnerSupply} from '~~/tests/component/testHelpers'
+import {itemAt, lockedDinnerSupply} from '~~/tests/component/testHelpers'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
@@ -296,17 +296,17 @@ describe('useBookingUi', () => {
             {desc: 'groceries bought: groceries step done', overrides: {totalCost: 1200}, step: 3, done: true},
             {desc: 'consumed dinner: dinner step done', overrides: {state: DinnerState.CONSUMED}, step: 4, done: true}
         ])('$desc', ({overrides, step, done}) => {
-            const badge = createChefBadges(farFutureDinner(overrides), deadlines, new Date()).get(step)!
-            expect(badge.alarm).toBe(done ? -1 : 0)
-            if (done) expect(badge.value).toBe('')
-            else expect(badge.value).not.toBe('')
+            const badge = createChefBadges(farFutureDinner(overrides), deadlines, new Date()).get(step)
+            expect(badge?.alarm).toBe(done ? -1 : 0)
+            if (done) expect(badge?.value).toBe('')
+            else expect(badge?.value).not.toBe('')
         })
 
         it('booking badge carries released ticket counts once booking is closed', () => {
             const yesterday = {...DinnerEventFactory.defaultDinnerEventDisplay(), date: addDays(new Date(), -1)}
-            const badge = createChefBadges(yesterday, deadlines, new Date(), lockedDinnerSupply({[ADULT]: 2})).get(2)!
-            expect(badge.alarm).toBe(-1)
-            expect(badge.value).toBe('2V til salg')
+            const badge = createChefBadges(yesterday, deadlines, new Date(), lockedDinnerSupply({[ADULT]: 2})).get(2)
+            expect(badge?.alarm).toBe(-1)
+            expect(badge?.value).toBe('2V til salg')
         })
     })
 
@@ -396,11 +396,11 @@ describe('ticket type presentation', () => {
 
     it('a price as a select item carries its type presentation, its label with the price, and its age limit with its description', () => {
         const child = TicketFactory.defaultPriceOf(TicketTypeSchema.enum.CHILD)
-        const item = ticketPriceSelectItems([child])[0]!
+        const item = itemAt(ticketPriceSelectItems([child]), 0)
         expect(item.presentation).toEqual(ticketTypePresentation(TicketTypeSchema.enum.CHILD))
         expect(item.label).toBe(`${ticketTypeLabel(TicketTypeSchema.enum.CHILD)} · ${useTicket().formatPrice(child.price)} kr`)
         expect(item.description).toBe(`Under ${child.maximumAgeLimit} år · ${child.description}`)
-        expect(ticketPriceSelectItems([child], true)[0]!.description).toBeUndefined()
+        expect(itemAt(ticketPriceSelectItems([child], true), 0).description).toBeUndefined()
     })
 })
 
@@ -415,7 +415,8 @@ describe('scaffoldToastLook', () => {
 })
 
 // The season's prices a result carries, in the config's order: the baby who tastes, the hungry baby, the child, the adult
-const [TASTING_TICKET, HUNGRY_TICKET, CHILD_TICKET, ADULT_TICKET] = TicketFactory.defaultTicketPrices() as [TicketPrice, TicketPrice, TicketPrice, TicketPrice]
+const TICKET_PRICES = TicketFactory.defaultTicketPrices()
+const [TASTING_TICKET, HUNGRY_TICKET, CHILD_TICKET, ADULT_TICKET] = [itemAt(TICKET_PRICES, 0), itemAt(TICKET_PRICES, 1), itemAt(TICKET_PRICES, 2), itemAt(TICKET_PRICES, 3)]
 // The people of a booking result: Anna and her guests of one ticket type and price, Lars, Knud and Lene
 const adult = (inhabitantId: number, inhabitantName: string) => ({inhabitantId, inhabitantName, ticketType: ADULT, priceAtBooking: ADULT_TICKET.price})
 const ANNA = adult(1, 'Anna')
@@ -444,7 +445,7 @@ const withSold = (waitlistTicketsSold: ReturnType<typeof soldToWaitlist>) => ({.
 
 // The dinners a booking result names: one a week from Monday 19/10/2026, and 13/01/2027; the day each line starts with
 const RESULT_DINNERS = [...[19, 26, 33, 40].map((day, index) => ({id: 11 + index, date: new Date(2026, 9, day)})), {id: 15, date: new Date(2027, 0, 13)}]
-const dayOf = (dinnerEventId: number) => formatDate(RESULT_DINNERS.find(({id}) => id === dinnerEventId)!.date, DATE_SETTINGS.DAY_MONTH_MASK)
+const dayOf = (dinnerEventId: number) => formatDate(itemAt(RESULT_DINNERS.filter(({id}) => id === dinnerEventId), 0).date, DATE_SETTINGS.DAY_MONTH_MASK)
 const inResultDays = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => run({dinners: RESULT_DINNERS, ...overrides})
 // A ticket the person released, sold on the dinner: to the waiting list or to a claim
 const saleOf = (seller: Person, dinnerEventId: number) =>
@@ -570,7 +571,7 @@ describe('formatPreviewLines', () => {
     const {TAKEAWAY} = DinnerModeSchema.enum
     // The dinners a preview's run decided, one a day from 19/10/2026
     const dinners = Array.from({length: 8}, (_, index) => ({id: index + 1, date: new Date(2026, 9, 19 + index)}))
-    const dateOf = (dinnerEventId: number) => dinners[dinnerEventId - 1]!.date
+    const dateOf = (dinnerEventId: number) => itemAt(dinners, dinnerEventId - 1).date
     const inDays = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => run({dinners, ...overrides})
     const HOUSEHOLD = [ANNA, LARS, KNUD].map(person => person.inhabitantId)
     // Each day's lines, keyed by its dinner
@@ -690,7 +691,7 @@ describe('formatPreviewLines', () => {
     } as const satisfies Record<BookingAction, keyof typeof ORDER_STATE_LABELS>
     it.each(BookingActionSchema.options)('a %s line reads the person and the action\'s words in its glyph and colour', (action) => {
         const [day] = formatPreviewLines(inDays({results: resultsAt(ANNA, action, 1)}))
-        expect(day!.lines).toEqual([{
+        expect(day?.lines).toEqual([{
             name: ANNA.inhabitantName,
             action,
             icon: ACTION_WORDS[action].icon,
@@ -710,10 +711,10 @@ describe('formatPreviewLines', () => {
     })
 
     it('a ticket sold to the waiting list wears the glyph and the colour of a ticket bought', () => {
-        const [day] = formatPreviewLines(inDays({results: resultsAt(ANNA, Action.BUY, 1), outcomes: withSold(soldToWaitlist(1, 1))}))
-        const [bought, sold] = day!.lines
+        const days = formatPreviewLines(inDays({results: resultsAt(ANNA, Action.BUY, 1), outcomes: withSold(soldToWaitlist(1, 1))}))
+        const [bought, sold] = itemAt(days, 0).lines
         expect(bought).toMatchObject({name: ANNA.inhabitantName, action: Action.BUY, icon: ACTION_WORDS[Action.BUY].icon})
-        expect(sold).toMatchObject({action: Action.BUY, icon: bought!.icon, color: bought!.color})
+        expect(sold).toMatchObject({action: Action.BUY, icon: bought?.icon, color: bought?.color})
     })
 })
 

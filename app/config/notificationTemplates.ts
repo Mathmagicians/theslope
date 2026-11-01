@@ -7,6 +7,7 @@
  */
 import type {SenderEvent} from '~/composables/useDeliveryValidation'
 import {useNotificationValidation, type NotificationEnvironment} from '~/composables/useNotificationValidation'
+import {PRICE_WORDS} from '~/config/priceWords'
 
 const {EnvironmentSchema} = useNotificationValidation()
 
@@ -38,11 +39,11 @@ export const NOTIFICATION_TEMPLATES = {
     },
     BILLING_PERIOD_CLOSED: {
         subject: '{{senderName}}: PBS-opgørelse {{billingPeriod}}',
-        text: 'Hejsa,\n\nVedhæftet er PBS-opgørelsen for perioden {{billingPeriod}}: {{householdCount}} husstande, i alt {{totalAmount}} kr.\n\nOversigt: {{summaryUrl}}'
+        text: `Hejsa,\n\nVedhæftet er PBS-opgørelsen for perioden {{billingPeriod}}: {{householdCount}} husstande, i alt ${PRICE_WORDS.kroner('{{totalAmount}}')}.\n\nOversigt: {{summaryUrl}}`
     },
     BILLING_PERIOD_UPDATED: {
         subject: '{{senderName}}: PBS-opgørelse {{billingPeriod}} — opdatering v{{version}}',
-        text: 'Hejsa,\n\nPBS-opgørelsen for perioden {{billingPeriod}} er opdateret (version {{version}}) og erstatter den tidligere fremsendte: {{householdCount}} husstande, i alt {{totalAmount}} kr.\n\nOversigt: {{summaryUrl}}'
+        text: `Hejsa,\n\nPBS-opgørelsen for perioden {{billingPeriod}} er opdateret (version {{version}}) og erstatter den tidligere fremsendte: {{householdCount}} husstande, i alt ${PRICE_WORDS.kroner('{{totalAmount}}')}.\n\nOversigt: {{summaryUrl}}`
     },
     WAITLIST_JOINED: {
         subject: '{{senderName}}: {{person}} står på ventelisten til {{dinner}}',

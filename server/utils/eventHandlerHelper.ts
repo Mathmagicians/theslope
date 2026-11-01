@@ -3,7 +3,9 @@ import {z, ZodError} from "zod"
 import {H3Error} from "h3"
 import type {H3Event} from 'h3'
 import type {NuxtError} from 'nuxt/app'
-import type {UserDetail} from '~/composables/useCoreValidation'
+import {useCoreValidation, type UserDetail} from '~/composables/useCoreValidation'
+
+const {UserDetailSchema} = useCoreValidation()
 
 const PRISMA_RECORD_NOT_FOUND = 'P2025'
 const PRISMA_UNIQUE_VIOLATION = 'P2002'
@@ -200,12 +202,23 @@ const throwNuxtError = (prepend: string, error: unknown, statusCode: number = 50
  * Get authenticated user from session
  * Returns null if no session or user not found
  *
+ * The session holds its user as JSON; the schema reads its dates back as dates, as stores/auth.ts does in the app.
+ * A session user the schema rejects reads as signed out: the guard clears its session and it signs in again.
+ *
  * @param event - H3 event with session context
  * @returns UserDetail or null
  */
 const getSessionUser = async (event: H3Event): Promise<UserDetail | null> => {
-    const session = await getUserSession(event)
-    return (session?.user as UserDetail) ?? null
+    const {user} = await getUserSession(event)
+    if (!user) return null
+
+    const parsed = UserDetailSchema.safeParse(user)
+    if (!parsed.success) {
+        // ADR-004: the schema's complaint names fields and expectations, never the user's values
+        console.warn(`🔒 > [SESSION] > Session user rejected by the schema: ${z.prettifyError(parsed.error)}`)
+        return null
+    }
+    return parsed.data
 }
 
 /**

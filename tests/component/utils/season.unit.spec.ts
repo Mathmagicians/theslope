@@ -28,9 +28,8 @@ import {
 } from '~/utils/season'
 import {SEASON_STATUS} from '~/config/seasonWords'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import type {DateRange, WeekDayMap} from '~/types/dateTypes'
 import {createDateInTimezone, getPeriodBoundary, PERIOD_DIRECTION, type PeriodDirection} from '~/utils/date'
-import {createWeekDayMapFromSelection, PERIOD_VIEWS, WEEKDAYS, type PeriodView} from '~/types/dateTypes'
+import {createWeekDayMapFromSelection, PERIOD_VIEWS, WEEKDAYS, type DateRange, type PeriodView, type WeekDayMap} from '~/types/dateTypes'
 import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../../e2e/testDataFactories/dinnerEventFactory'
 

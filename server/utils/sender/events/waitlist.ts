@@ -262,7 +262,12 @@ const composer = (records: NotificationRecords) => {
     const {formatGuestLabel} = useOrder()
     const {formatPrice, findTicketPriceById} = useTicket()
     const closestUser = findClosestUserInHousehold(records)
-    const dinnerOf = (dinnerEventId: number): DinnerForWaitlist => dinners.get(dinnerEventId)!
+    // Each outcome with its dinner; the outcomes come on the dinners found (onDinners)
+    const withDinner = <Outcome extends {dinnerEventId: number}>(outcomes: Outcome[]): [Outcome, DinnerForWaitlist][] =>
+        outcomes.flatMap((outcome): [Outcome, DinnerForWaitlist][] => {
+            const dinner = dinners.get(outcome.dinnerEventId)
+            return dinner ? [[outcome, dinner]] : []
+        })
     const shortnameOf = (householdId: number | undefined): string => (householdId && households.get(householdId)?.shortName) || `#${householdId}`
     const personOf = (inhabitantId: number, isGuestTicket: boolean): string => {
         const name = inhabitants.get(inhabitantId)?.name ?? ''
@@ -279,16 +284,14 @@ const composer = (records: NotificationRecords) => {
     }
     const orderSubject = (orderId: number): NotificationSubject => ({subjectType: Subject.ORDER, subjectId: orderId})
 
-    const joinedNotification = (event: NotifiedJoin): BookingNotifications<Tracked>['joined'][number] => {
-        const {context, ticketPrices} = dinnerOf(event.dinnerEventId)
+    const joinedNotification = ([event, {context, ticketPrices}]: [NotifiedJoin, DinnerForWaitlist]): BookingNotifications<Tracked>['joined'][number] => {
         return {
             ...closestUser(event.inhabitantId), dinner: context, person: personOf(event.inhabitantId, event.isGuestTicket),
             place: formatPlace(event.position, event.ticketType), ticket: ticketLine(ticketPrices, event.ticketPriceId, event.dinnerMode),
             subject: {subjectType: Subject.TICKET_WAITLIST, subjectId: event.entryId}
         }
     }
-    const buildupNotifications = (buildup: NotifiedBuildup): BookingNotifications<Tracked>['buildups'] => {
-        const {chefId, context} = dinnerOf(buildup.dinnerEventId)
+    const buildupNotifications = ([buildup, {chefId, context}]: [NotifiedBuildup, DinnerForWaitlist]): BookingNotifications<Tracked>['buildups'] => {
         if (!chefId) return []
         return [{
             ...closestUser(chefId), dinner: context, queued: TICKET_COUNTS.compact.text(buildup.queuedByType), entries: buildup.entries,
@@ -296,22 +299,19 @@ const composer = (records: NotificationRecords) => {
         }]
     }
     // The seller's closest user hears, the selling household's first user when the history names no seller
-    const soldNotification = (buyer: (sale: NotifiedSale) => string) => (sale: NotifiedSale): BookingNotifications<Tracked>['sold'][number] => {
-        const {context, ticketPrices} = dinnerOf(sale.dinnerEventId)
+    const soldNotification = (buyer: (sale: NotifiedSale) => string) => ([sale, {context, ticketPrices}]: [NotifiedSale, DinnerForWaitlist]): BookingNotifications<Tracked>['sold'][number] => {
         return {
             ...closestUser(sale.sellerInhabitantId, sale.sellerHouseholdId), dinner: context, buyer: buyer(sale),
             ticket: ticketLine(ticketPrices, sale.ticketPriceId), subject: orderSubject(sale.orderId)
         }
     }
-    const ticketNotification = (sale: NotifiedSale): BookingNotifications<Tracked>['assigned'][number] => {
-        const {context, ticketPrices} = dinnerOf(sale.dinnerEventId)
+    const ticketNotification = ([sale, {context, ticketPrices}]: [NotifiedSale, DinnerForWaitlist]): BookingNotifications<Tracked>['assigned'][number] => {
         return {
             ...closestUser(sale.buyerInhabitantId), dinner: context, person: personOf(sale.buyerInhabitantId, sale.isGuestTicket),
             ticket: ticketLine(ticketPrices, sale.ticketPriceId, sale.dinnerMode, shortnameOf(sale.sellerHouseholdId)), subject: orderSubject(sale.orderId)
         }
     }
-    const extraPortionNotification = (portion: NotifiedPortion): BookingNotifications<Tracked>['extraPortions'][number] => {
-        const {context, ticketPrices} = dinnerOf(portion.dinnerEventId)
+    const extraPortionNotification = ([portion, {context, ticketPrices}]: [NotifiedPortion, DinnerForWaitlist]): BookingNotifications<Tracked>['extraPortions'][number] => {
         return {
             ...closestUser(portion.inhabitantId), dinner: context, person: personOf(portion.inhabitantId, portion.isGuestTicket),
             ticket: ticketLine(ticketPrices, portion.ticketPriceId, portion.dinnerMode), subject: orderSubject(portion.orderId)
@@ -320,12 +320,12 @@ const composer = (records: NotificationRecords) => {
     const buyerHousehold = (sale: NotifiedSale): string => shortnameOf(inhabitants.get(sale.buyerInhabitantId)?.householdId)
 
     return (notified: NotifiedOutcomes): BookingNotifications<Tracked> => ({
-        joined: notified.joined.map(joinedNotification),
-        buildups: notified.buildups.flatMap(buildupNotifications),
-        sold: [...notified.ticketsSold.map(soldNotification(buyerHousehold)), ...notified.waitlistTicketsSold.map(soldNotification(() => WAITLIST_BUYER))],
-        assigned: notified.waitlistTicketsSold.map(ticketNotification),
-        bought: notified.ticketsSold.map(ticketNotification),
-        extraPortions: notified.waitlistPortionsAssigned.map(extraPortionNotification)
+        joined: withDinner(notified.joined).map(joinedNotification),
+        buildups: withDinner(notified.buildups).flatMap(buildupNotifications),
+        sold: [...withDinner(notified.ticketsSold).map(soldNotification(buyerHousehold)), ...withDinner(notified.waitlistTicketsSold).map(soldNotification(() => WAITLIST_BUYER))],
+        assigned: withDinner(notified.waitlistTicketsSold).map(ticketNotification),
+        bought: withDinner(notified.ticketsSold).map(ticketNotification),
+        extraPortions: withDinner(notified.waitlistPortionsAssigned).map(extraPortionNotification)
     })
 }
 

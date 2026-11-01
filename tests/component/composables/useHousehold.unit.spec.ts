@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { useHousehold, isHouseholdActiveOnDay, getResidencyStatus, buildResolvedHouseholdMap } from '~/composables/useHousehold'
+import { useHousehold, isHouseholdActiveOnDay, getResidencyStatus, buildResolvedHouseholdMap, ResidencyStatus } from '~/composables/useHousehold'
+import { HOUSEHOLD_WORDS } from '~/config/householdWords'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
@@ -35,15 +36,15 @@ describe('getResidencyStatus', () => {
 
   it.each([
     { scenario: 'moved in on reference date, no move-out',
-      movedIn: REF, moveOut: null, expected: 'active' },
+      movedIn: REF, moveOut: null, expected: ResidencyStatus.active },
     { scenario: 'not yet moved in (future movedInDate)',
-      movedIn: date(2026, 6, 1), moveOut: null, expected: 'pending' },
+      movedIn: date(2026, 6, 1), moveOut: null, expected: ResidencyStatus.pending },
     { scenario: 'not yet moved in, with future move-out',
-      movedIn: date(2026, 6, 1), moveOut: date(2027, 1, 1), expected: 'pending' },
+      movedIn: date(2026, 6, 1), moveOut: date(2027, 1, 1), expected: ResidencyStatus.pending },
     { scenario: 'move-out date on reference date (still leaving)',
-      movedIn: date(2020, 1, 1), moveOut: REF, expected: 'leaving' },
+      movedIn: date(2020, 1, 1), moveOut: REF, expected: ResidencyStatus.leaving },
     { scenario: 'move-out date in the past',
-      movedIn: date(2020, 1, 1), moveOut: date(2025, 12, 1), expected: 'moved-out' },
+      movedIn: date(2020, 1, 1), moveOut: date(2025, 12, 1), expected: ResidencyStatus['moved-out'] },
   ])('$scenario → $expected', ({ movedIn, moveOut, expected }) => {
     expect(getResidencyStatus(movedIn, moveOut, REF)).toBe(expected)
   })
@@ -272,9 +273,9 @@ describe('useHousehold', () => {
     it.each([
       { inhabitants: [{ lastName: '' }], expected: null, scenario: 'empty lastName' },
       { inhabitants: [{ lastName: 'Hansen' }], expected: 'Hansen', scenario: 'single person' },
-      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Hansen' }], expected: 'Familien Hansen', scenario: 'same lastName' },
-      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }], expected: 'Familien Hansen & Jensen', scenario: 'two lastNames' },
-      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }, { lastName: 'Larsen' }], expected: 'Familien Hansen & Jensen m.fl.', scenario: '3+ lastNames' }
+      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Hansen' }], expected: HOUSEHOLD_WORDS.familyName('Hansen', undefined, false), scenario: 'same lastName' },
+      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }], expected: HOUSEHOLD_WORDS.familyName('Hansen', 'Jensen', false), scenario: 'two lastNames' },
+      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }, { lastName: 'Larsen' }], expected: HOUSEHOLD_WORDS.familyName('Hansen', 'Jensen', true), scenario: '3+ lastNames' }
     ])('$scenario → $expected', ({ inhabitants, expected }) => {
       expect(formatHouseholdFamilyName(inhabitants.map((names, index) => ({ ...HouseholdFactory.defaultInhabitantData(), id: index + 1, ...names })))).toBe(expected)
     })

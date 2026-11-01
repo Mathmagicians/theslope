@@ -2,6 +2,7 @@ import {useBookingValidation, type TicketType, type OrderDisplay} from '~/compos
 import type {TicketPrice, PortionTicket} from '~/composables/useTicketPriceValidation'
 import {calculateAgeOnDate} from '~/utils/date'
 import {SEASON_CONFIG} from '~/config/season'
+import {PRICE_WORDS} from '~/config/priceWords'
 
 const {TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
@@ -87,19 +88,12 @@ export const useTicket = () => {
 
         const age = calculateAgeOnDate(birthDate, referenceDate)
 
-        // Sort by age limit (ascending) and find first match
-        const sorted = [...prices]
-            .filter(tp => tp.maximumAgeLimit !== null && tp.maximumAgeLimit !== undefined)
-            .sort((a, b) => a.maximumAgeLimit! - b.maximumAgeLimit!)
-
-        for (const price of sorted) {
-            if (age < price.maximumAgeLimit!) {
-                return price.ticketType
-            }
-        }
-
-        // No match → ADULT (over all age limits)
-        return TicketType.ADULT
+        // The age limits ascending: the first the person is under names the ticket type, past them all ADULT
+        const limits = prices
+            .flatMap(({ticketType, maximumAgeLimit}) =>
+                maximumAgeLimit === null || maximumAgeLimit === undefined ? [] : [{ticketType, limit: maximumAgeLimit}])
+            .sort((a, b) => a.limit - b.limit)
+        return limits.find(({limit}) => age < limit)?.ticketType ?? TicketType.ADULT
     }
 
     /**
@@ -228,7 +222,7 @@ export const useTicket = () => {
         (dinnerDates: Date[]): {date: Date, ticketType: TicketType} | null => {
             if (!birthDate) return null
             const days = dinnerDates.map(date => ({date, ticketType: determineTicketType(birthDate, ticketPrices, date)}))
-            return days.find((day, index) => index > 0 && day.ticketType !== days[index - 1]!.ticketType) ?? null
+            return days.find((day, index) => index > 0 && day.ticketType !== days[index - 1]?.ticketType) ?? null
         }
 
     /**
@@ -245,6 +239,9 @@ export const useTicket = () => {
      */
     const formatPrice = (dkkFraction: number): string => convertPriceToDecimalFormat(dkkFraction).toLocaleString('da-DK')
 
+    /** A price in whole kroner with its unit: "1.500 kr" for 150000 øre */
+    const formatKroner = (dkkFraction: number): string => PRICE_WORDS.kroner(formatPrice(dkkFraction))
+
     return {
         determineTicketType,
         resolveTicketType,
@@ -258,6 +255,7 @@ export const useTicket = () => {
         withPortions,
         takesNoPortionOf,
         convertPriceToDecimalFormat,
-        formatPrice
+        formatPrice,
+        formatKroner
     }
 }

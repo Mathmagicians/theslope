@@ -9,7 +9,7 @@ import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, salt, temporaryAndRandom, daysFromNow, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, salt, temporaryAndRandom, daysFromNow, getSessionUserInfo, attemptAll} = testHelpers
 const {TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
 const {BookingActionSchema, DinnerModeSchema} = useBookingValidation()
@@ -53,8 +53,10 @@ test.describe('Waiting list entries API', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        for (const id of inhabitantIds) await HouseholdFactory.deleteInhabitant(context, id)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        await attemptAll('Waiting list entries API cleanup', [
+            ...inhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(context, id)),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 
     test('GIVEN a member of another household WHEN reading the dinner\'s queue THEN the entries are readable', async ({browser}) => {
@@ -93,8 +95,10 @@ test.describe('Power mode Ingen on a dinner where the household waits for a gues
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        for (const id of inhabitantIds) await HouseholdFactory.deleteInhabitant(context, id)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        await attemptAll('Power mode Ingen on a dinner where the household waits for a guest cleanup', [
+            ...inhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(context, id)),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 
     test('GIVEN a household holding an adult ticket with its adult guest first in line and another household behind WHEN power mode saves Ingen THEN the guest leaves the line, the ticket is released and the other household buys it', async ({browser}) => {

@@ -5,10 +5,14 @@
  * Addresses are Heynabo-owned: the USelect only offers addresses that already exist,
  * so heynaboId + name are inherited from the selected prevOwner. Renders an empty state
  * when no addresses exist (e.g. before first Heynabo sync).
+ *
+ * Visual check: /admin/households, the create form with an address that has households and with one that has none,
+ * and the empty state, phone and desktop.
  */
 import type {FormSubmitEvent, Form} from '@nuxt/ui'
 import type {HouseholdDisplay, HouseholdCreateFormData, HouseholdCreate, HouseholdMoveOut} from '~/composables/useCoreValidation'
 import {BUTTON_WORDS} from '~/config/buttonWords'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 interface Props {
     existingHouseholds: HouseholdDisplay[]
@@ -25,15 +29,13 @@ const emit = defineEmits<{
 const {BUTTONS, SIZES, COLOR, ICONS, ALERTS, TYPOGRAPHY, LAYOUTS, COMPONENTS} = useTheSlopeDesignSystem()
 const {HouseholdCreateFormSchema} = useCoreValidation()
 const now = useClock()
+const WORDS = HOUSEHOLD_WORDS.createForm
 
 const formRef = useTemplateRef<Form<HouseholdCreateFormData>>('formRef')
 
-// movedInDate uses `undefined` (not null) to align with UForm's Partial<schema> state type
-const formState = reactive<{
-    pbsId: number | undefined
-    address: string
-    movedInDate: Date | undefined
-}>({
+// pbsId and movedInDate start undefined (not null) to align with UForm's Partial<schema> state type
+type CreateFormState = Omit<HouseholdCreateFormData, 'pbsId' | 'movedInDate'> & Partial<HouseholdCreateFormData>
+const formState = reactive<CreateFormState>({
     pbsId: undefined,
     address: '',
     movedInDate: undefined
@@ -53,7 +55,7 @@ const addressOptions = computed<AddressOption[]>(() => {
         const address = h.address?.trim()
         if (!address || seen.has(address)) continue
         seen.set(address, {
-            label: `${address} · HN ${h.heynaboId}`,
+            label: WORDS.addressOption(address, h.heynaboId),
             value: address,
             heynaboId: h.heynaboId
         })
@@ -68,13 +70,19 @@ const prevOwners = computed((): HouseholdDisplay[] => {
 })
 
 const isImmutable = (s: HouseholdDisplay) =>
-    getResidencyStatus(s.movedInDate, s.moveOutDate ?? null, now.value) === 'moved-out'
+    getResidencyStatus(s.movedInDate, s.moveOutDate ?? null, now.value) === ResidencyStatus['moved-out']
 
-// Admin overrides per prevOwner. Falls back to original moveOutDate or new movedInDate.
-const prevOwnerDates = reactive<Record<number, Date | null>>({})
+// Admin overrides per prevOwner, a cleared date included. Falls back to original moveOutDate or new movedInDate.
+const prevOwnerDates = reactive(new Map<number, Date | null>())
 
 const effectiveDate = (s: HouseholdDisplay): Date | null =>
-    s.id in prevOwnerDates ? prevOwnerDates[s.id]! : (s.moveOutDate ?? formState.movedInDate ?? null)
+    prevOwnerDates.has(s.id) ? prevOwnerDates.get(s.id) ?? null : (s.moveOutDate ?? formState.movedInDate ?? null)
+
+// A household that has moved out shows its date; one still living there gets a move-out field
+const prevOwnerRows = computed(() => prevOwners.value.map(owner => ({
+    owner,
+    movedOutOn: isImmutable(owner) ? owner.moveOutDate ?? null : null
+})))
 
 const prevOwnerConstraints = computed<Date[]>(() =>
     prevOwners.value.flatMap(s => {
@@ -90,14 +98,15 @@ const validateForm = (state: {pbsId?: unknown}) => {
     if (typeof state.pbsId !== 'number') return []
     const conflict = props.existingHouseholds.find(h => h.pbsId === state.pbsId)
     return conflict
-        ? [{name: 'pbsId', message: `PBS ${conflict.pbsId} bruges af ${conflict.shortName}`}]
+        ? [{name: 'pbsId', message: WORDS.pbsTaken(conflict.pbsId, conflict.shortName)}]
         : []
 }
 
 const handleSubmit = async (event: FormSubmitEvent<HouseholdCreateFormData>) => {
     const {pbsId, address, movedInDate} = event.data
-    // Invariant: address came from USelect populated from props.existingHouseholds
-    const prevOwner = props.existingHouseholds.find(h => h.address?.trim() === address.trim())!
+    // The address select offers only the addresses of props.existingHouseholds
+    const prevOwner = props.existingHouseholds.find(h => h.address?.trim() === address.trim())
+    if (!prevOwner) throw new Error(`No household at ${address}`)
 
     const prevOwnerMoveOutUpdates = prevOwners.value.flatMap(s => {
         if (isImmutable(s)) return []
@@ -130,7 +139,7 @@ const handleCancel = () => emit('cancel')
         v-bind="ALERTS.emptyState"
         :avatar="{text: '🏠', size: SIZES.emptyStateAvatar}"
     >
-        <template #title>I mangler nogen huse at bo i, admin skal synkronisere først med Heynabo</template>
+        <template #title>{{ WORDS.noAddresses }}</template>
     </UAlert>
 
     <UForm
@@ -143,24 +152,23 @@ const handleCancel = () => emit('cancel')
     >
         <UCard
             :color="COLOR.info"
-            v-bind="COMPONENTS.guestBookingForm.card"
+            v-bind="COMPONENTS.addCard.card"
         >
             <template #header>
-                <div :class="COMPONENTS.guestBookingForm.header">
-                    <UIcon :name="ICONS.plusCircle" :class="COMPONENTS.guestBookingForm.headerIcon" />
-                    <h4 :class="COMPONENTS.guestBookingForm.title">Ny husstand</h4>
+                <div :class="COMPONENTS.addCard.header">
+                    <UIcon :name="ICONS.plusCircle" :class="COMPONENTS.addCard.headerIcon" />
+                    <h4 :class="COMPONENTS.addCard.title">{{ WORDS.title }}</h4>
                 </div>
             </template>
 
-            <!-- Adresse -->
-            <UFormField label="Adresse" name="address" required :size="SIZES.standard">
+            <UFormField :label="WORDS.address.label" name="address" required :size="SIZES.standard">
                 <USelectMenu
                     v-model="formState.address"
                     :items="addressOptions"
                     value-key="value"
                     name="address"
-                    placeholder="Vælg adresse..."
-                    :class="COMPONENTS.guestBookingForm.select"
+                    :placeholder="WORDS.address.placeholder"
+                    :class="COMPONENTS.addCard.select"
                     :size="SIZES.standard"
                     data-testid="create-household-address"
                 />
@@ -168,18 +176,18 @@ const handleCancel = () => emit('cancel')
 
             <!-- New household: PBS + move-in date (primary focus, above prevOwners) -->
             <div :class="LAYOUTS.gridTwoCol">
-                <UFormField label="PBS" name="pbsId" required :size="SIZES.standard">
+                <UFormField :label="WORDS.pbs.label" name="pbsId" required :size="SIZES.standard">
                     <UInput
                         v-model.number="formState.pbsId"
                         name="pbsId"
                         type="number"
-                        placeholder="F.eks. 12345"
+                        :placeholder="WORDS.pbs.placeholder"
                         :size="SIZES.standard"
                         data-testid="create-household-pbs"
                     />
                 </UFormField>
 
-                <UFormField label="Vælg en indflytningsdato" name="movedInDate" required>
+                <UFormField :label="WORDS.movedIn" name="movedInDate" required>
                     <CalendarDatePicker
                         :model-value="formState.movedInDate ?? null"
                         name="movedInDate"
@@ -191,28 +199,25 @@ const handleCancel = () => emit('cancel')
 
             <!-- Existing households at the same address (secondary, below new) -->
             <section v-if="prevOwners.length" :class="[COMPONENTS.householdCreateForm.prevOwners, LAYOUTS.sectionDivider]">
-                <h5 :class="TYPOGRAPHY.sectionSubheading">
-                    {{ prevOwners.length === 1 ? 'Eksisterende husstand' : 'Eksisterende husstande' }} på adressen
-                </h5>
-                <div v-for="prevOwner in prevOwners" :key="prevOwner.id" :class="COMPONENTS.householdCreateForm.prevOwner">
+                <h5 :class="TYPOGRAPHY.sectionSubheading">{{ WORDS.prevOwners(prevOwners.length) }}</h5>
+                <div v-for="{owner: prevOwner, movedOutOn} in prevOwnerRows" :key="prevOwner.id" :class="COMPONENTS.householdCreateForm.prevOwner">
                     <span :class="TYPOGRAPHY.bodyTextMedium">
-                        {{ prevOwner.shortName }} &middot; HN {{ prevOwner.heynaboId }} &middot; PBS {{ prevOwner.pbsId }}
+                        {{ WORDS.prevOwner(prevOwner.shortName, prevOwner.heynaboId, prevOwner.pbsId) }}
                     </span>
-                    <span v-if="isImmutable(prevOwner)" :class="TYPOGRAPHY.bodyTextMuted">
-                        Fraflyttede {{ formatDate(prevOwner.moveOutDate!) }}
+                    <span v-if="movedOutOn" :class="TYPOGRAPHY.bodyTextMuted">
+                        {{ WORDS.movedOut(formatDate(movedOutOn)) }}
                     </span>
-                    <UFormField v-else :label="`Sæt fraflytningsdato for ${prevOwner.shortName} · PBS ${prevOwner.pbsId}`" :size="SIZES.standard">
+                    <UFormField v-else :label="WORDS.setMoveOut(prevOwner.shortName, prevOwner.pbsId)" :size="SIZES.standard">
                         <CalendarDatePicker
                             :model-value="effectiveDate(prevOwner)"
                             :name="`prevOwner-moveout-${prevOwner.id}`"
                             label=""
-                            @update:model-value="(d) => prevOwnerDates[prevOwner.id] = d"
+                            @update:model-value="(d) => prevOwnerDates.set(prevOwner.id, d)"
                         />
                     </UFormField>
                 </div>
             </section>
 
-            <!-- Footer: action buttons -->
             <template #footer>
                 <div :class="LAYOUTS.formButtonRow">
                     <UButton
@@ -231,7 +236,7 @@ const handleCancel = () => emit('cancel')
                         <template #leading>
                             <UIcon :name="ICONS.plusCircle" />
                         </template>
-                        Opret husstand
+                        {{ WORDS.submit }}
                     </UButton>
                 </div>
             </template>

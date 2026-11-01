@@ -49,7 +49,7 @@ Ikke-admin ser en **"Se, men ikke røre"**-besked øverst og kan ikke ændre dat
 | Kør systemjobs | [System](https://www.skraaningen.dk/admin/system) |
 | Importér sæson fra CSV | `make theslope-import-season-*` |
 | Eksportér holdmedlemmer til CSV | `make theslope-export-teams env=<env>` |
-| Synkronisér fra Heynabo | [System](https://www.skraaningen.dk/admin/system) → **Heynabo** (kører også hver nat) |
+| Synkronisér fra Heynabo | [System](https://www.skraaningen.dk/admin/system) → **Heynabo Import** (kører også hver nat) |
 
 ---
 
@@ -190,7 +190,7 @@ Beboere kan flyttes mellem husstande på **samme adresse** (samme Heynabo-ID). D
 
 ### Admin-adgang til husstandssider
 
-Admin kan besøge enhver husstands side og aktivere admin-tilgang:
+Alle beboere kan kigge ind hos enhver husstand (**Kigge, ikke røre**); som admin kan du også låse op:
 
 1. Gå til en husstand via linket i husstandstabellen
 2. Klik **Admin røre alligevel** på banneret "Du besøger nu en anden husstand end din egen", og **Klik igen for at låse op**
@@ -257,7 +257,7 @@ Brugerfanen viser alle brugere importeret fra Heynabo.
 2. Brug søgefeltet til at finde brugere på navn eller email
 3. Klik på pilen ved en bruger for at se detaljer
 
-På telefonen scroller tabellen sidelæns, og pilen åbner brugerens profilkort.
+Tabellen scroller sidelæns på telefonen; pilen åbner brugerens profilkort på telefon og desktop.
 
 ### Systemroller
 
@@ -352,7 +352,7 @@ Tjek `unmatchedNames` i svaret - disse skal tildeles manuelt eller rettes i CSV.
 
 ### Heynabo-import
 
-Synkronisér husstande og beboere fra Heynabo. På dev og prod: Admin → System → Heynabo-import. Lokalt:
+Synkronisér husstande og beboere fra Heynabo. På dev og prod: Admin → System → **Heynabo Import**. Lokalt:
 
 ```bash
 make theslope-login-local && make theslope-admin-import   # GET /api/admin/heynabo/import på den lokale server
@@ -419,7 +419,7 @@ Som admin kan du rette bookinger for alle husstande - også efter deadline er pa
 
 | Job | Kørsel | Beskrivelse |
 |-----|--------|-------------|
-| Heynabo import | Dagligt kl. 02:00 | Synkroniser husstande og beboere fra Heynabo |
+| Heynabo Import | Dagligt kl. 02:00 | Synkroniser husstande og beboere fra Heynabo |
 | Daglig vedligeholdelse | Dagligt kl. 03:00 | Afslut middage, luk ordrer, opret transaktioner, ryd ventelister på afholdte middage, tilmeldinger (rolling window 60 dage), sælg billetter til salg til ventelisten |
 | Månedlig fakturering | D. 18. hver måned kl. 04:00 | Luk perioden, send CSV til bogholderen, arkivér |
 
@@ -428,9 +428,9 @@ Som admin kan du rette bookinger for alle husstande - også efter deadline er pa
 1. Gå til [System](https://www.skraaningen.dk/admin/system)
 2. Find jobbet i oversigten
 3. Klik jobbets knap: **Kør import**, **Kør daglig vedligeholdelse** eller **Kør fakturering**
-4. Boksen viser jobbets seneste kørsel: tidspunkt, status og resultat - og fejlen under kørslen, hvis den fejler. Kørslen står også i **Jobhistorik**
+4. Boksen viser jobbets seneste kørsel: tidspunkt, status (**Fejlet**, når den fejler) og resultat - og fejlen under kørslen. Kørslen står også i **Jobhistorik**
 
-Et job uden kørsler viser **Ingen kørsler endnu**. På telefonen scroller **Jobhistorik** sidelæns.
+Et job uden kørsler viser **Ingen kørsler endnu**. På telefonen scroller **Jobhistorik** sidelæns. Boksen **Heynabo Import** bærer Heynabos logo. Boksen **Heynabo Import** bærer Heynabos logo.
 
 Alle jobs er idempotente og kan køres igen uden problemer.
 
@@ -442,4 +442,4 @@ Alle jobs er idempotente og kan køres igen uden problemer.
 
 ---
 
-*Sidst opdateret: Oktober 2026 (sæsonmærker, ventelisten i den daglige vedligeholdelse, madhold-fanen og jokere, sæsonredigering, allergiplakat, mail til bogholder, ny husstand, den allergiansvarliges adgang, jobboksenes seneste kørsel)*
+*Sidst opdateret: Oktober 2026 (sæsonmærker, ventelisten i den daglige vedligeholdelse, madhold-fanen og jokere, sæsonredigering, allergiplakat, mail til bogholder, ny husstand, den allergiansvarliges adgang, jobboksenes seneste kørsel, Heynabo Import, kig ind hos husstandene, Heynabo Import, kig ind hos husstandene)*
