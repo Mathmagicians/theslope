@@ -24,7 +24,7 @@ export const getRequiredUser = async (event: H3Event): Promise<UserDetail> => {
 }
 
 /**
- * Get the session's Heynabo token or throw 401: chef sync acts in Heynabo as the signed-in user (ADR-013)
+ * Get the session's Heynabo token or throw 401: chef sync acts in Heynabo as the signed-in user
  */
 export const getRequiredHeynaboToken = async (event: H3Event): Promise<string> => {
     const {secure} = await getUserSession(event)

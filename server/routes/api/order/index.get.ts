@@ -9,9 +9,8 @@
  * - sortBy: 'createdAt' (default) or 'releasedAt' (FIFO for claim queue)
  * - allHouseholds: false (default) = filter by session user's household
  *                  true = return orders from all households
- *
- * ADR-002: Separate try-catch for validation and business logic
- * ADR-004: Logging standards
+ * - includeProvenance: each bought ticket with the household it was bought from and its allergies
+ * - includeCostContext: each order with its dinner and its eater, as their Display types, for the economy views
  */
 import {fetchOrders} from "~~/server/data/financesRepository"
 import {fetchSeason} from "~~/server/data/prismaRepository"
@@ -34,7 +33,7 @@ const querySchema = z.object({
     sortBy: sortBySchema.optional(),
     allHouseholds: QueryFlagSchema,
     includeProvenance: QueryFlagSchema,
-    includeDinnerContext: QueryFlagSchema,
+    includeCostContext: QueryFlagSchema,
     householdId: z.coerce.number().int().positive().optional()
 }).refine(
     (data) => !(data.householdId && data.allHouseholds),
@@ -102,7 +101,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
             eventIds = query.dinnerEventIds
         }
 
-        const orders = await fetchOrders(d1Client, eventIds, householdId, query.state, query.sortBy, query.includeProvenance, query.includeDinnerContext)
+        const orders = await fetchOrders(d1Client, eventIds, householdId, query.state, query.sortBy, query.includeProvenance, query.includeCostContext)
         console.info(`${LOG} Fetched ${orders.length} orders${householdId ? ` for household ${householdId}` : ' (all households)'}`)
         setResponseStatus(event, 200)
         return orders

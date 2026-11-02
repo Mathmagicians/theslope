@@ -39,8 +39,8 @@ export default defineEventHandler(async (event) => {
     const user = await getSessionUser(event)
 
     if (!user || !session.secure?.heynaboToken) {
-        // A session user the schema rejects, or a session without the Heynabo token, which cannot act in Heynabo
-        // (ADR-013): the session is cleared and signs in again
+        // A session user the schema rejects, or a session without the Heynabo token, which cannot act in Heynabo:
+        // the session is cleared and signs in again
         if (session.user) await clearUserSession(event)
 
         // Handle API routes differently from page routes

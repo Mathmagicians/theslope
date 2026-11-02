@@ -1,10 +1,6 @@
 import {describe, it, expect, vi} from 'vitest'
 import {chunkArray, groupBy, linesBy, partition, pruneAndCreate, writeBatchOnce, writeBatchOrEach} from '~/utils/batchUtils'
-import {useBookingValidation} from '~/composables/useBookingValidation'
-
-const {OrderStateSchema, DinnerModeSchema} = useBookingValidation()
-const OrderState = OrderStateSchema.enum
-const DinnerMode = DinnerModeSchema.enum
+import {OrderState, DinnerMode} from '~/composables/useBookingValidation'
 
 describe('batchUtils', () => {
     describe('chunkArray', () => {
@@ -32,9 +28,9 @@ describe('batchUtils', () => {
     })
 
     describe('groupBy', () => {
-        interface Order { id: number; state: typeof OrderState[keyof typeof OrderState]; mode: typeof DinnerMode[keyof typeof DinnerMode] }
+        interface Order { id: number; state: OrderState; mode: DinnerMode }
 
-        const groupByState = groupBy<Order, string>(o => o.state)
+        const groupByState = groupBy<Order, OrderState>(o => o.state)
 
         it('empty array → empty map', () => {
             expect(groupByState([]).size).toBe(0)

@@ -32,7 +32,7 @@ describe('isHouseholdActiveOnDay', () => {
 
 describe('getResidencyStatus', () => {
   const date = (y: number, m: number, d: number) => new Date(y, m - 1, d)
-  const REF = date(2026, 3, 1) // Fixed reference date: 2026-03-01
+  const REF = date(2026, 3, 1)
 
   it.each([
     { scenario: 'moved in on reference date, no move-out',

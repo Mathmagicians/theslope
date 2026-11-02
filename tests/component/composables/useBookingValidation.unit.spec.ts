@@ -11,6 +11,7 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import type {ZodSafeParseResult} from 'zod'
+import {itemAt, present} from '~~/tests/component/listHelpers'
 
 const {TicketTypeSchema} = useBookingValidation()
 
@@ -28,7 +29,7 @@ describe('useBookingValidation', () => {
     OrderDisplaySchema,
     OrderDetailSchema,
     OrderHistoryDisplaySchema,
-    OrderSnapshotSchema,
+    OrderAuditSnapshotSchema,
     OrderAuditChangeSchema,
     OrderAuditActionSchema,
     OrderAuditSourceSchema,
@@ -41,12 +42,12 @@ describe('useBookingValidation', () => {
   } = useBookingValidation()
 
   describe('DinnerEvent Schemas', () => {
-    it('DinnerEventDisplaySchema (ADR-009: Minimal) GIVEN the factory display data WHEN parsing THEN succeeds', () => {
+    it('DinnerEventDisplaySchema (Minimal) GIVEN the factory display data WHEN parsing THEN succeeds', () => {
       const validDisplay = DinnerEventFactory.defaultDinnerEventDisplay()
       expect(DinnerEventDisplaySchema.parse(validDisplay)).toMatchObject(validDisplay)
     })
 
-    it('DinnerEventDetailSchema (ADR-009: Detail extends Display) GIVEN detail with ALL scalar fields WHEN parsing THEN succeeds', () => {
+    it('DinnerEventDetailSchema (Detail extends Display) GIVEN detail with ALL scalar fields WHEN parsing THEN succeeds', () => {
       const validDetail = DinnerEventFactory.defaultDinnerEventDetail()
       expect(DinnerEventDetailSchema.parse(validDetail)).toMatchObject(validDetail)
     })
@@ -64,7 +65,7 @@ describe('useBookingValidation', () => {
     })
 
     describe('DinnerEventUpdateSchema', () => {
-      // Note: id comes from URL path, not body (ADR-013)
+      // Note: id comes from URL path, not body
       it('GIVEN a totalCost key (the cost is computed from the expense rows) WHEN parsing THEN throws', () => {
         expect(() => DinnerEventUpdateSchema.parse({totalCost: 50000})).toThrow()
       })
@@ -72,12 +73,12 @@ describe('useBookingValidation', () => {
   })
 
   describe('Order Schemas', () => {
-    it('OrderDisplaySchema (ADR-009: Minimal) GIVEN valid order WHEN parsing THEN succeeds', () => {
+    it('OrderDisplaySchema (Minimal) GIVEN valid order WHEN parsing THEN succeeds', () => {
       const result = OrderDisplaySchema.safeParse(OrderFactory.defaultOrder())
       expect(result.success, getValidationError(result)).toBe(true)
     })
 
-    it('OrderDetailSchema (ADR-009: ALL scalar relations) GIVEN detail WHEN parsing THEN succeeds and includes ALL DinnerEvent scalars', () => {
+    it('OrderDetailSchema (ALL scalar relations) GIVEN detail WHEN parsing THEN succeeds and includes ALL DinnerEvent scalars', () => {
       const result = OrderDetailSchema.safeParse(OrderFactory.defaultOrderDetail())
       expect(result.success, getValidationError(result)).toBe(true)
 
@@ -96,7 +97,7 @@ describe('useBookingValidation', () => {
 
     it.each([
       {name: 'OrderHistoryDisplaySchema', schema: OrderHistoryDisplaySchema, factory: () => OrderFactory.defaultOrderHistoryDisplay()},
-      {name: 'OrderSnapshotSchema', schema: OrderSnapshotSchema, factory: () => OrderFactory.defaultOrderSnapshot()}
+      {name: 'OrderAuditSnapshotSchema', schema: OrderAuditSnapshotSchema, factory: () => OrderFactory.defaultOrderAuditSnapshot()}
     ])('$name GIVEN the factory data WHEN parsing THEN succeeds', ({schema, factory}) => {
       const result: ZodSafeParseResult<unknown> = schema.safeParse(factory())
       expect(result.success, getValidationError(result)).toBe(true)
@@ -110,7 +111,7 @@ describe('useBookingValidation', () => {
       const State = OrderStateSchema.enum
       const Mode = DinnerModeSchema.enum
       const {legacyAuditData} = OrderFactory
-      const snapshot = OrderFactory.defaultOrderSnapshot({id: 7, isGuestTicket: true, allergies: ['Gluten']})
+      const snapshot = OrderFactory.defaultOrderAuditSnapshot({id: 7, isGuestTicket: true, allergies: ['Gluten']})
       const BUYER = 20
       // A row on the snapshot's dinner by its inhabitant; the row's order id is null once the order is deleted
       const auditRow = (action: OrderAuditAction, auditData: string, overrides: Partial<OrderHistoryDisplay> = {}) =>
@@ -186,7 +187,7 @@ describe('useBookingValidation', () => {
     })
   })
 
-  describe('Serialization (ADR-010)', () => {
+  describe('Serialization', () => {
     describe('deserializeDinnerEvent', () => {
       it('GIVEN allergens as join table WHEN deserializing THEN flattens to array', () => {
         const mockAllergyTypes = AllergyFactory.createMockAllergyTypes()
@@ -194,7 +195,7 @@ describe('useBookingValidation', () => {
         const result = deserializeDinnerEvent(prismaEvent)
         expect(result.allergens).toBeDefined()
         expect(result.allergens).toHaveLength(2)
-        expect(result.allergens![0]).toEqual(mockAllergyTypes[0])
+        expect(itemAt(present(result.allergens, 'allergens'), 0)).toEqual(mockAllergyTypes[0])
       })
 
       it('GIVEN null allergens WHEN deserializing THEN returns empty array', () => {
@@ -218,7 +219,7 @@ describe('useBookingValidation', () => {
 
       it('GIVEN a ticket with its price row WHEN deserializing THEN the row carries the portions the lookup gives it', () => {
         const result = deserializeDinnerEventDetail(DinnerEventFactory.defaultSerializedDinnerEventDetail({tickets: [DinnerEventFactory.serializedTicket()]}), withPortions)
-        expect(result.tickets![0]!.ticketPrice!.portions).toBe(0.5)
+        expect(present(itemAt(present(result.tickets, 'tickets'), 0).ticketPrice, 'ticket price').portions).toBe(0.5)
       })
 
       it('GIVEN expense rows WHEN deserializing THEN the lines are domain rows, the cost is their sum and the ticket reference carries it', () => {
@@ -234,10 +235,10 @@ describe('useBookingValidation', () => {
         }), withPortions)
         expect(result.totalCost).toBe(131000)
         expect(result.expenses).toEqual(rows)
-        expect(result.tickets![0]!.dinnerEvent.totalCost).toBe(131000)
+        expect(itemAt(present(result.tickets, 'tickets'), 0).dinnerEvent.totalCost).toBe(131000)
       })
 
-      // Use real serialize methods to generate test data (ADR-010)
+      // Use real serialize methods to generate test data
       const {serializeWeekDayMap, createDefaultWeekdayMap} = useCoreValidation()
       const {serializeWeekDayMap: serializeAffinity, createDefaultWeekdayMap: createDefaultAffinity} = useWeekDayMapValidation()
 
@@ -252,8 +253,8 @@ describe('useBookingValidation', () => {
             chef: DinnerEventFactory.serializedInhabitant(SERIALIZED_PREFERENCES)
           }),
           assertion: (result: DinnerEventDetail) => {
-            expect(typeof result.chef!.dinnerPreferences).toBe('object')
-            expect(result.chef!.dinnerPreferences).toHaveProperty('mandag')
+            expect(typeof present(result.chef, 'chef').dinnerPreferences).toBe('object')
+            expect(present(result.chef, 'chef').dinnerPreferences).toHaveProperty('mandag')
           }
         },
         {
@@ -262,7 +263,7 @@ describe('useBookingValidation', () => {
             chef: DinnerEventFactory.serializedInhabitant(null)
           }),
           assertion: (result: DinnerEventDetail) => {
-            expect(result.chef!.dinnerPreferences).toBeNull()
+            expect(present(result.chef, 'chef').dinnerPreferences).toBeNull()
           }
         },
         {
@@ -278,8 +279,8 @@ describe('useBookingValidation', () => {
             cookingTeam: DinnerEventFactory.serializedCookingTeam(SERIALIZED_AFFINITY)
           }),
           assertion: (result: DinnerEventDetail) => {
-            expect(typeof result.cookingTeam!.affinity).toBe('object')
-            expect(result.cookingTeam!.affinity).toHaveProperty('mandag')
+            expect(typeof present(result.cookingTeam, 'cooking team').affinity).toBe('object')
+            expect(present(result.cookingTeam, 'cooking team').affinity).toHaveProperty('mandag')
           }
         },
         {
@@ -289,7 +290,7 @@ describe('useBookingValidation', () => {
           }),
           assertion: (result: DinnerEventDetail) => {
             expect(result.tickets?.[0]).toBeDefined()
-            const inhabitant = result.tickets![0]!.inhabitant
+            const inhabitant = itemAt(present(result.tickets, 'tickets'), 0).inhabitant
             expect(typeof inhabitant.dinnerPreferences).toBe('object')
             expect(inhabitant.dinnerPreferences).toHaveProperty('mandag')
           }
@@ -304,7 +305,7 @@ describe('useBookingValidation', () => {
         const result = deserializeDinnerEventDetail(DinnerEventFactory.defaultSerializedDinnerEventDetail({
           tickets: [DinnerEventFactory.serializedTicket({inhabitant: {...DinnerEventFactory.serializedInhabitant(SERIALIZED_PREFERENCES), allergies}})]
         }), withPortions)
-        expect(result.tickets![0]!.inhabitant.allergies.map(a => a.allergyType)).toEqual(allergies.map(a => a.allergyType))
+        expect(itemAt(present(result.tickets, 'tickets'), 0).inhabitant.allergies.map(a => a.allergyType)).toEqual(allergies.map(a => a.allergyType))
       })
     })
   })
@@ -414,10 +415,10 @@ describe('useBookingValidation', () => {
   })
 
   // ============================================================================
-  // ADR-016: Unified Booking Scaffold
+  // Unified Booking Scaffold
   // ============================================================================
 
-  describe('Unified Booking Scaffold (ADR-016)', () => {
+  describe('Unified Booking Scaffold', () => {
     const {
       DesiredOrderSchema,
       ScaffoldOrdersRequestSchema,
@@ -447,7 +448,7 @@ describe('useBookingValidation', () => {
       expect(parse).not.toThrow()
     })
 
-    // A preview is a read (ADR-004): the draft travels in the query, one dot-separated value per desired order, in the
+    // A preview is a read: the draft travels in the query, one dot-separated value per desired order, in the
     // order inhabitantId.dinnerEventId.dinnerMode.ticketPriceId.isGuestTicket.state.orderId.waitlistEntryId.allergyTypeIds
     describe('the desired order in a query', () => {
       const {encodeDesiredOrder, DesiredOrderQuerySchema} = useBookingValidation()

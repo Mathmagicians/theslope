@@ -5,15 +5,16 @@ import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
+import { UserFactory } from '~~/tests/e2e/testDataFactories/userFactory'
 import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { usePlanStore } from '~/stores/plan'
+import { useUsersStore } from '~/stores/users'
 import { API_ERROR_WORDS } from '~/config/apiErrorWords'
 import { SEASON_WORDS } from '~/config/seasonWords'
 import { TEAM_WORDS } from '~/config/teamWords'
 import { useAuthStore } from '~/stores/auth'
 import { useCookingTeamValidation } from '~/composables/useCookingTeamValidation'
-import { useCoreValidation } from '~/composables/useCoreValidation'
 
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
@@ -38,7 +39,7 @@ registerEndpoint(`/api/admin/season/${GONE_SEASON_ID}`, () => {
 })
 registerEndpoint('/api/admin/season', seasonIndexEndpoint)
 
-// Team creation returns the operation result envelope (ADR-009)
+// Team creation returns the operation result envelope
 const createdTeams = [
     { ...SeasonFactory.defaultCookingTeamDetail(), id: 11, name: 'Hold 1' },
     { ...SeasonFactory.defaultCookingTeamDetail(), id: 12, name: 'Hold 2' }
@@ -55,7 +56,7 @@ registerEndpoint('/api/admin/season/1', { method: 'POST', handler: updateSeasonE
 registerEndpoint('/api/admin/season', { method: 'PUT', handler: createSeasonEndpoint })
 registerEndpoint('/api/admin/season/active', { method: 'POST', handler: activateSeasonEndpoint })
 
-// Team aggregate writes: a create returns the created entity, a delete the deleted count (ADR-009)
+// Team aggregate writes: a create returns the created entity, a delete the deleted count
 const TEAM_ID = 11
 const ASSIGNMENT_ID = 7
 const JOKER_SLOT_ID = 5
@@ -83,18 +84,20 @@ const deactivateSeasonEndpoint = vi.fn(() => season1)
 const teamDetail = SeasonFactory.defaultCookingTeamDetail({ id: TEAM_ID })
 const updateTeamEndpoint = vi.fn(() => teamDetail)
 const deleteTeamEndpoint = vi.fn(() => TEAM_ID)
-const assignAffinitiesEndpoint = vi.fn(() => ({ seasonId: season1.id, teamCount: 1, teams: [teamDetail] }))
+// Answers unknown, so a case can hand the store an envelope its schema refuses
+const assignAffinitiesEndpoint = vi.fn((): unknown => ({ seasonId: season1.id, teamCount: 1, teams: [teamDetail] }))
 const assignCookingTeamsEndpoint = vi.fn(() => ({ seasonId: season1.id, eventCount: 1, events: [DinnerEventFactory.defaultDinnerEventDisplay()] }))
 const dinner = { ...DinnerEventFactory.defaultDinnerEventDetail(), id: 21 }
 const assignRoleEndpoint = vi.fn(() => dinner)
 const removeRoleEndpoint = vi.fn(() => dinner)
 const me = { ...HouseholdFactory.defaultInhabitantData('plan'), id: 31 }
-registerEndpoint('/api/_auth/session', () => ({ user: { id: 1, email: 'me@example.com', systemRoles: [], Inhabitant: me } }))
-const { SystemRoleSchema } = useCoreValidation()
-// The role actions refresh through the users and bookings stores, whose reads start with them
-const emptyReads = ['/api/team/my', `/api/admin/users/by-role/${SystemRoleSchema.enum.ALLERGYMANAGER}`, '/api/admin/users', '/api/admin/household',
-    '/api/admin/billing/periods', '/api/admin/billing/current-period']
+const sessionUser = UserFactory.defaultUserWithInhabitant('plan')
+registerEndpoint('/api/_auth/session', () => ({ user: { ...sessionUser, Inhabitant: { ...sessionUser.Inhabitant, ...me } } }))
+// The role actions refresh through the bookings store, whose reads start with it, and the person's own teams
+const emptyReads = ['/api/admin/household', '/api/admin/billing/periods', '/api/admin/billing/current-period']
 emptyReads.forEach(url => registerEndpoint(url, () => []))
+const myTeamsEndpoint = vi.fn(() => [teamDetail])
+registerEndpoint('/api/team/my', myTeamsEndpoint)
 registerEndpoint('/api/admin/season/deactivate', { method: 'POST', handler: deactivateSeasonEndpoint })
 registerEndpoint(`/api/admin/season/${season1.id}/assign-team-affinities`, { method: 'POST', handler: assignAffinitiesEndpoint })
 registerEndpoint(`/api/admin/season/${season1.id}/assign-cooking-teams`, { method: 'POST', handler: assignCookingTeamsEndpoint })
@@ -244,7 +247,7 @@ describe('Plan Store - Season save and activation', () => {
         const store = await setupStore()
         const activeFetchesBefore = activeSeasonIdEndpoint.mock.calls.length
 
-        await store.activateSeason(season2.id!)
+        await store.activateSeason(season2.id)
 
         expect(activateSeasonEndpoint).toHaveBeenCalledTimes(1)
         expect(activeSeasonIdEndpoint.mock.calls.length).toBeGreaterThan(activeFetchesBefore)
@@ -567,7 +570,7 @@ describe('Plan Store - write actions', () => {
     })
 
     it('assignTeamAffinitiesAndEvents rejects an envelope its schema refuses', async () => {
-        assignAffinitiesEndpoint.mockReturnValueOnce({seasonId: season1.id, teamCount: 1, teams: [{id: TEAM_ID}]} as never)
+        assignAffinitiesEndpoint.mockReturnValueOnce({seasonId: season1.id, teamCount: 1, teams: [{id: TEAM_ID}]})
         const store = await setupStore()
 
         await expect(store.assignTeamAffinitiesAndEvents(season1.id)).rejects.toThrow()
@@ -652,5 +655,45 @@ describe('Plan Store - selected team', () => {
 
         await vi.waitFor(() => expect(idleTeam(store)).toEqual(IDLE))
         expect(teamByIdEndpoint).toHaveBeenCalledTimes(1)
+    })
+})
+
+// The person's own teams are the users store's, asked for by the page that shows them; the plan store asks for none
+describe('Plan Store - the person\'s own teams', () => {
+    const {TeamRoleSchema} = useCookingTeamValidation()
+    const MY_TEAMS_KEY = 'users-store-my-teams'
+
+    beforeEach(() => {
+        resetStores()
+        vi.clearAllMocks()
+        seasonIndexEndpoint.mockReturnValue(mockSeasons)
+        seasonByIdEndpoint.mockReturnValue(season1)
+        activeSeasonIdEndpoint.mockReturnValue(season1.id)
+    })
+
+    it('selecting a team requests none of the own teams', async () => {
+        const store = await setupStore()
+
+        store.selectTeam(TEAM_ID)
+
+        await vi.waitFor(() => expect(store.selectedTeam?.id).toBe(TEAM_ID))
+        expect(myTeamsEndpoint).not.toHaveBeenCalled()
+        expect(asyncDataStatus(MY_TEAMS_KEY)).toBe('idle')
+    })
+
+    it.each([
+        {description: 'reloads them for a page that asked for them', asked: true, reads: 1},
+        {description: 'reads none of them while no page asked for them', asked: false, reads: 0}
+    ])('a role act $description', async ({asked, reads}) => {
+        const store = await setupStore()
+        if (asked) {
+            useUsersStore().loadMyTeams()
+            await vi.waitFor(() => expect(asyncDataStatus(MY_TEAMS_KEY)).toBe('success'))
+        }
+        const readsBefore = myTeamsEndpoint.mock.calls.length
+
+        await store.assignRoleToDinner(dinner.id, me.id, TeamRoleSchema.enum.CHEF)
+
+        expect(myTeamsEndpoint.mock.calls.length - readsBefore).toBe(reads)
     })
 })

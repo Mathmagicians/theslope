@@ -21,20 +21,17 @@ description: Use before proposing or briefing a change to an endpoint, a reposit
   `scaffoldPrebookings` (`server/utils/scaffoldPrebookings.ts`); neither writes the other's column.
 - A server utility is called with an option before a second utility is written (`ScaffoldOptions.preview`, not a
   `previewPrebookings`); an endpoint takes a query flag before a new route is added (`?adminBypass=true`, `?bypassDeadlines=true`).
-  A read is a `GET` and a preview is a read (ADR-004): the draft travels in the query (`orders=`, `dinnerPreferences=`).
+  A preview is a read, Logging and Security Standards (ADR-004); its draft travels in the query (`orders=`, `dinnerPreferences=`).
 - The server decides, the browser renders: `app/components/**` send a draft (`DesiredOrder[]`, `WeekDayMap<DinnerMode>`)
   and format the `ScaffoldResult` that comes back; `app/composables/useBooking.ts` is the one generator, imported by
   `server/utils/scaffoldPrebookings.ts` (ADR-017).
-- Words users read live in `app/config/*.ts` (`bookingWords.ts`, `notificationTemplates.ts`); a composable formats, a
-  store reads and writes through `useApiHandler`, a component binds tokens (ADR-007, ADR-017, ADR-018).
+- Where words, formatting, store reads and writes, and tokens live: SSR-Friendly Store Pattern (ADR-007), Isomorphic
+  Composables (ADR-017), Design System Owns Shared UI Patterns (ADR-018).
 
 ## Reads and writes over a list
 
-- A read over a list of ids is one chunked query (`fetchHouseholdsByIds` in `server/data/prismaRepository.ts`), never one
-  query per item; a step that scales with the rows of a run (the scaffold's claims, the mails of its outcomes) reads once
-  and works from maps. Writes go through `createManyAndReturn` and `writeBatchOrEach` (ADR-014).
-- D1 allows six simultaneous connections per invocation, 1,000 queries and 100 bound parameters per statement: the
-  chunks of a read run one after another or in one `batch()`; a `Promise.all` over rows or chunks against D1 is a fault.
+- Batch Operations and Utility Functions (ADR-014) owns the D1 limits, the chunk size per record and the read and write
+  patterns over a list; a proposal over a list of rows names the ADR-014 line it follows.
 
 ## One of each
 

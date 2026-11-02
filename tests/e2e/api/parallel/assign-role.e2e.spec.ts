@@ -30,7 +30,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
     test.afterAll(async ({ browser }) => {
         const context = await validatedBrowserContext(browser)
         await attemptAll('DinnerEvent API - Assign Role cleanup', [
-            // Delete season - CASCADE deletes teams, dinner events, and assignments (ADR-005)
+            // Delete season - CASCADE deletes teams, dinner events, and assignments
             () => SeasonFactory.cleanupSeasons(context, createdSeasonIds),
             // Delete households (not related to season, need manual cleanup)
             () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds)

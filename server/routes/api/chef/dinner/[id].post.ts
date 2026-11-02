@@ -38,7 +38,7 @@ type ChefDinnerUpdate = z.infer<typeof ChefDinnerUpdateSchema>
  * - State transitions (ANNOUNCED creates Heynabo event, CANCELLED cancels it)
  * - Allergens (NO Heynabo sync - we're source of truth)
  *
- * ADR-013: Heynabo sync acts with the chef's own token from the session; a session without it is a 401.
+ * Heynabo sync acts with the chef's own token from the session; a session without it is a 401.
  */
 export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     const {cloudflare} = event.context

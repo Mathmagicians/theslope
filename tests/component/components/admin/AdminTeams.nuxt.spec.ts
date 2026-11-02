@@ -3,7 +3,7 @@ import {describe, it, expect, vi, beforeEach, afterEach, onTestFinished} from 'v
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick, ref} from 'vue'
-import type {ButtonProps} from '@nuxt/ui'
+import type {ButtonProps, TableColumn} from '@nuxt/ui'
 import {mountWithTooltipProvider, clickByTestId, findAllByTestId, findByTestId, findComponentByTestId, pollFor, resetStores, VIEWPORTS, holdEndpoint, findLoadingRow, expectMasterDetail, findOpenRows} from '~~/tests/component/testHelpers'
 import AdminTeams from '~/components/admin/AdminTeams.vue'
 import CookingTeamCard from '~/components/cooking-team/CookingTeamCard.vue'
@@ -11,20 +11,22 @@ import TeamCalendarDisplay from '~/components/calendar/TeamCalendarDisplay.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
 import {TEAM_WORDS} from '~/config/teamWords'
+import {ADMIN_WORDS} from '~/config/adminWords'
 import {useAuthStore} from '~/stores/auth'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {COMPONENTS, getRainbowBand, getRainbowAccent, createResponsiveIcons} from '~/composables/useTheSlopeDesignSystem'
 
 // The test environment has no router to navigate: useEntityFormManager and useQueryParam
-// write the URL state through navigateTo (ADR-006 / ADR-008)
+// write the URL state through navigateTo
 const {mockNavigateTo, mockRoute, landNavigation, useRoute} = await vi.hoisted(async () =>
     (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation())
 mockNuxtImport('navigateTo', () => mockNavigateTo)
 mockNuxtImport('useRoute', () => useRoute)
 
-// Only HTTP is faked (testing.md Rule 6) - specific routes first, generic last
-const season = {...SeasonFactory.defaultSeason('teams'), id: 1, CookingTeams: [] as CookingTeamDisplay[]}
+// Only HTTP is faked - specific routes first, generic last
+const noTeams: CookingTeamDisplay[] = []
+const season = {...SeasonFactory.defaultSeason('teams'), id: 1, CookingTeams: noTeams}
 const createdTeams = [
     {...SeasonFactory.defaultCookingTeamDetail(), id: 11, name: 'Hold 1'},
     {...SeasonFactory.defaultCookingTeamDetail(), id: 12, name: 'Hold 2'}
@@ -137,10 +139,10 @@ describe('AdminTeams master table', () => {
         expect(findByTestId(findByTestId(wrapper, `team-row-${withJokers.id}`), 'team-badge-jokers').exists()).toBe(true)
         expect(findByTestId(findByTestId(wrapper, `team-row-${withoutJokers.id}`), 'team-badge-jokers').exists()).toBe(false)
 
-        // The Madhold column takes the row's slack, so the badges stay on one line while the weekdays fit their letters
-        const columns = wrapper.findComponent({name: 'UTable'}).props('columns') as Array<{header?: string, meta?: {class?: unknown}}>
-        expect(columns.find(column => column.header === 'Madhold')?.meta?.class).toEqual(COMPONENTS.masterDetail.primaryColumn)
-        expect(columns.find(column => column.header === 'Madlavningsdage')?.meta?.class).toEqual(COMPONENTS.masterDetail.compactColumn)
+        // The team column takes the row's slack, so the badges stay on one line while the weekdays fit their letters
+        const columns: TableColumn<CookingTeamDisplay>[] = wrapper.findComponent({name: 'UTable'}).props('columns')
+        expect(columns.find(column => column.header === ADMIN_WORDS.tabs.teams)?.meta?.class).toEqual(COMPONENTS.masterDetail.primaryColumn)
+        expect(columns.find(column => column.header === TEAM_WORDS.card.cookingDays.view)?.meta?.class).toEqual(COMPONENTS.masterDetail.compactColumn)
     })
 
     // A season without teams that reloads shows the loading row, not the empty state, until the season answers
@@ -195,8 +197,8 @@ describe('AdminTeams team selection', () => {
 
     // The master table stays in the master slot; the detail slot beside it swaps between the overview and the open team
     it.each([
-        {state: 'no team open: the all-teams calendar', open: false, holds: (detail: Element, wrapper: Wrapper) => detail.contains(wrapper.findComponent(TeamCalendarDisplay).element)},
-        {state: 'a team open: the framed team detail', open: true, holds: (detail: Element, wrapper: Wrapper) => detail.contains(findByTestId(wrapper, 'edit-team').element)}
+        {state: 'no team open: the all-teams calendar', open: false, holds: (detail: Element | null, wrapper: Wrapper) => detail?.contains(wrapper.findComponent(TeamCalendarDisplay).element)},
+        {state: 'a team open: the framed team detail', open: true, holds: (detail: Element | null, wrapper: Wrapper) => detail?.contains(findByTestId(wrapper, 'edit-team').element)}
     ])('md, $state stands in the detail slot beside the master table', async ({open, holds}) => {
         const wrapper = await mountTeams(true)
         if (open) {
@@ -207,7 +209,7 @@ describe('AdminTeams team selection', () => {
         // UTable renders more than one root, so its wrapper's element is the one holding it: the master
         const master = wrapper.findComponent({name: 'UTable'}).element
         expectMasterDetail(master, master.nextElementSibling)
-        expect(holds(master.nextElementSibling!, wrapper)).toBe(true)
+        expect(holds(master.nextElementSibling, wrapper)).toBe(true)
     })
 
     const openTeam = async (isMd: boolean) => {
@@ -242,20 +244,16 @@ describe('AdminTeams team selection', () => {
 
         const open = findOpenRows(wrapper)
         expect(open.map(({row}) => findByTestId(row, `team-toggle-${team.id}`).exists())).toEqual([true])
-        expect(open[0]!.detail.findComponent(CookingTeamCard).props('teamId')).toBe(team.id)
+        expect(open.map(({detail}) => detail.findComponent(CookingTeamCard).props('teamId'))).toEqual([team.id])
     })
 })
 
 // A team's number is the one in its name, else its position in the season's teams; a row's badges and its
 // selection accent wear the rainbow stop of that number, whatever order the season lists the teams in
 describe('AdminTeams team colours', () => {
-    const seasonTeams = [
-        SeasonFactory.defaultCookingTeamDisplay({id: 41, name: 'Madhold 3 - S1'}),
-        SeasonFactory.defaultCookingTeamDisplay({id: 42, name: 'Holdet uden tal'}),
-        SeasonFactory.defaultCookingTeamDisplay({id: 43, name: 'Madhold 1 - S1'})
-    ]
     // Madhold 3 takes its number from its name, the unnumbered team from its position; Madhold 1 only fills the third position
-    const numbered = seasonTeams.slice(0, 2).map((team, position) => ({id: team.id!, name: team.name, number: [3, 2][position]!}))
+    const numbered = [{id: 41, name: 'Madhold 3 - S1', number: 3}, {id: 42, name: 'Holdet uden tal', number: 2}]
+    const seasonTeams = [...numbered, {id: 43, name: 'Madhold 1 - S1'}].map(({id, name}) => SeasonFactory.defaultCookingTeamDisplay({id, name}))
     seasonTeams.forEach(team =>
         registerEndpoint(`/api/admin/team/${team.id}`, () => SeasonFactory.defaultCookingTeamDetail({id: team.id, name: team.name})))
 

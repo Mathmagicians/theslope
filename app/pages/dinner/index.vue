@@ -53,7 +53,6 @@ const {value: calendarOpen, setValue: setCalendarOpen} = useCalendarOpenParam(()
 
 
 const bookingsStore = useBookingsStore()
-useUsersStore()  // chef-volunteer flow needs it instantiated in setup context
 
 const {
   lockStatus,
@@ -104,7 +103,7 @@ bookingsStore.loadOrdersForDinners(() => ({
   includeProvenance: true
 }))
 
-// ADR-016: Unified booking handler via scaffold endpoint
+// The household's bookings save through the scaffold endpoint
 const handleSaveBookings = async (orders: DesiredOrder[]) => {
   const householdId = user.value?.Inhabitant?.household?.id
   const dinnerEventId = selectedDinnerId.value

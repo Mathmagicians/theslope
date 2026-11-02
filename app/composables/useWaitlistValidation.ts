@@ -9,7 +9,7 @@ export const PlacementRecovery = PlacementRecoverySchema.enum
 
 /**
  * Waiting list schemas: an entry holds an unplaced order in its create shape, the queue reads FIFO by `createdAt`,
- * and the operation results report what a release or a sweep did (ADR-009 operation result types).
+ * and the operation results report what a release or a sweep did.
  */
 export const useWaitlistValidation = () => {
     const {
@@ -46,7 +46,7 @@ export const useWaitlistValidation = () => {
     const TicketForSaleSchema = OrderDisplaySchema.pick({id: true, dinnerEventId: true, ticketPriceId: true, releasedAt: true, inhabitantId: true})
         .extend({householdId: IdSchema})
 
-    // Database row: the order travels as JSON (ADR-010)
+    // Database row: the order travels as JSON
     const SerializedTicketWaitlistSchema = TicketWaitlistDisplaySchema.extend({
         order: z.string()
     })
@@ -69,7 +69,8 @@ export const useWaitlistValidation = () => {
         portions: z.number().positive().max(100)
     })
 
-    // A dinner's queue: its size, its portion need and its lines, one per ticket type in ticket type order, each in join order
+    // A dinner's queue: its size, its portion need, its count per ticket type, and its lines, one per ticket type in ticket
+    // type order, each in join order
     const WaitlistQueueSummarySchema = z.object({
         dinnerEventId: IdSchema,
         entries: z.number().int().nonnegative(),
@@ -77,7 +78,8 @@ export const useWaitlistValidation = () => {
         lines: z.object({
             ticketType: TicketTypeSchema,
             entries: TicketWaitlistDisplaySchema.array()
-        }).array()
+        }).array(),
+        queuedByType: z.partialRecord(TicketTypeSchema, z.number().int().nonnegative())
     })
 
     // A release of extra portions: the entries assigned, and the sales of another run's stopped placements it finished

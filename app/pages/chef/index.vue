@@ -168,7 +168,7 @@ const otherTeamDinners = computed(() => seasonTeamDinners.value.filter(dinner =>
 
 const calendarError = computed(() => isPlanStoreErrored.value ? planStoreError.value : selectedTeamError.value)
 
-// Calendar view mode + accordion state via URL query param - survives component remounts (ADR-006)
+// Calendar view mode + accordion state via URL query param - survives component remounts
 // Format: view=calendar:open or view=agenda:closed
 const ACCORDION_STATE = {open: 'open', closed: 'closed'} as const
 type ViewState = { mode: ChefCalendarView, open: boolean }
@@ -212,7 +212,7 @@ const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 // Only the team's own dinners: the store resolves the date against the selected season
 bookingsStore.selectDinnerDate(() => selectedDinnerEvent.value ? selectedDate.value : null)
 
-// A dinner of any team opens on its team at its date: both writes of the tick land in one navigation (ADR-006)
+// A dinner of any team opens on its team at its date: both writes of the tick land in one navigation
 const handleDinnerSelect = (dinnerId: number) => {
   const dinner = seasonDinners.value.find(e => e.id === dinnerId)
   if (!dinner?.cookingTeamId) return

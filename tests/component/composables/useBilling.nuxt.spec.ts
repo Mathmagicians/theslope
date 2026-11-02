@@ -5,6 +5,8 @@ import type {InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingV
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {itemAt} from '~~/tests/component/listHelpers'
 
 describe('useBilling', () => {
     // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
@@ -14,6 +16,7 @@ describe('useBilling', () => {
     let getBillingPeriodForDate: Billing['getBillingPeriodForDate']
     let controlInvoices: Billing['controlInvoices']
     let controlTransactions: Billing['controlTransactions']
+    let groupByCostEntry: Billing['groupByCostEntry']
     let groupByHouseholdEntry: Billing['groupByHouseholdEntry']
     let decideBillingSideEffects: Billing['decideBillingSideEffects']
     let expenseNoteWords: Billing['expenseNoteWords']
@@ -25,6 +28,7 @@ describe('useBilling', () => {
             getBillingPeriodForDate,
             controlInvoices,
             controlTransactions,
+            groupByCostEntry,
             groupByHouseholdEntry,
             decideBillingSideEffects
         } = useBilling())
@@ -122,6 +126,20 @@ describe('useBilling', () => {
 
     // ========== GROUPING TESTS ==========
 
+    describe('groupByCostEntry', () => {
+        const order = (id: number, dinnerEventId: number, priceAtBooking: number) => ({
+            ...OrderFactory.defaultOrder('cost-entry', {id, dinnerEventId, priceAtBooking}),
+            dinnerEvent: {...DinnerEventFactory.defaultDinnerEventDisplay('cost-entry'), id: dinnerEventId}
+        })
+
+        it('GIVEN three orders on two dinners WHEN grouping by dinner THEN one entry per dinner, in the orders\' order, with its orders and their summed amount', () => {
+            const grouped = groupByCostEntry([order(1, 31, 4000), order(2, 32, 1700), order(3, 31, 4000)], o => o.priceAtBooking)
+
+            expect(grouped.map(entry => ({dinner: entry.dinnerEvent.id, orders: entry.items.map(o => o.id), total: entry.totalAmount})))
+                .toEqual([{dinner: 31, orders: [1, 3], total: 8000}, {dinner: 32, orders: [2], total: 1700}])
+        })
+    })
+
     describe('groupByHouseholdEntry', () => {
         const makeTx = (householdId: number, pbsId: number, address: string, amount: number): TransactionDisplay =>
             BillingFactory.defaultTransactionDisplay({
@@ -131,7 +149,6 @@ describe('useBilling', () => {
 
         // Verifies grouped output is ordered by address, then pbsId as tiebreaker.
         it('GIVEN transactions pre-sorted by address then pbsId WHEN grouping THEN output is sorted by address then pbsId, one entry per household with summed totals', () => {
-            const grouper = groupByHouseholdEntry<TransactionDisplay>(tx => tx.inhabitant.household)
             const input = [
                 makeTx(1, 3000, 'Abbey Road 1', 4000),        // address "A" + lower pbs
                 makeTx(2, 7000, 'Abbey Road 1', 4000),        // same address, higher pbs → after 1
@@ -139,12 +156,12 @@ describe('useBilling', () => {
                 makeTx(4, 5000, 'Skråningen 31', 4000),
                 makeTx(1, 3000, 'Abbey Road 1', 1700)         // merged into first entry
             ]
-            const grouped = grouper(input, tx => tx.amount)
+            const grouped = groupByHouseholdEntry(input, tx => tx.amount, tx => tx.inhabitant.household)
 
             expect(grouped.map(g => g.address)).toEqual(['Abbey Road 1', 'Abbey Road 1', 'Penny Lane 4', 'Skråningen 31'])
             expect(grouped.map(g => g.pbsId)).toEqual([3000, 7000, 1000, 5000])
-            expect(grouped[0]!.totalAmount).toBe(5700)  // 4000 + 1700 merged
-            expect(grouped[0]!.computedTotal).toBe(5700)
+            expect(itemAt(grouped, 0).totalAmount).toBe(5700)  // 4000 + 1700 merged
+            expect(itemAt(grouped, 0).computedTotal).toBe(5700)
         })
     })
 

@@ -39,7 +39,7 @@ const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {CookingTeamDetailSchema, CookingTeamDisplaySchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema, TeamRoleSchema} = useCookingTeamValidation()
 const {RoleSchema, JokerSlotSchema} = useDutyValidation()
 const {DinnerStateSchema} = useBookingValidation()
-const {JobType, JobStatus} = useMaintenanceValidation()
+const {JobType, JobStatus, JobTrigger} = useMaintenanceValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
@@ -1261,7 +1261,7 @@ export class SeasonFactory {
         durationMs: 4500,
         resultSummary: null,
         errorMessage: null,
-        triggeredBy: 'ADMIN',
+        triggeredBy: JobTrigger.ADMIN,
         ...overrides
     })
 

@@ -40,6 +40,8 @@ import type {AllergyDisplay, AllergyTypeDisplay} from '~/composables/useAllergyV
 import type {TicketPresentation} from '~/composables/useBookingUi'
 import {BUTTON_WORDS} from '~/config/buttonWords'
 import {ALLERGY_WORDS} from '~/config/allergyWords'
+import {ADMIN_WORDS} from '~/config/adminWords'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 // Design system
 const {SIZES, COLOR, COMPONENTS, NOISE, TYPOGRAPHY, ICONS} = useTheSlopeDesignSystem()
@@ -84,7 +86,7 @@ const editingInhabitantId = ref<number | null>(null)
 
 // Helper to get allergy type name
 const getAllergyTypeName = (allergyTypeId: number): string =>
-  allergyTypes.value.find(t => t.id === allergyTypeId)?.name ?? 'ukendt'
+  allergyTypes.value.find(t => t.id === allergyTypeId)?.name ?? ALLERGY_WORDS.household.unknownType
 
 // Add allergy - receives allergyTypeId from AllergyEditor @add event
 const handleAddAllergy = async (allergyTypeId: number) => {
@@ -96,7 +98,7 @@ const handleAddAllergy = async (allergyTypeId: number) => {
     inhabitantComment: null
   }, props.adminBypass)
 
-  showSuccessToast('Allergi', `${getAllergyTypeName(allergyTypeId)} tilføjet`)
+  showSuccessToast(ALLERGY_WORDS.toasts.title, ALLERGY_WORDS.toasts.added(getAllergyTypeName(allergyTypeId)))
 }
 
 // Remove allergy - receives allergyTypeId from AllergyEditor @remove event
@@ -107,7 +109,7 @@ const handleRemoveAllergy = async (allergyTypeId: number) => {
 
   await allergyStore.deleteAllergy(allergy.id, props.adminBypass)
 
-  showSuccessToast('Allergi', `${getAllergyTypeName(allergyTypeId)} fjernet`)
+  showSuccessToast(ALLERGY_WORDS.toasts.title, ALLERGY_WORDS.toasts.removed(getAllergyTypeName(allergyTypeId)))
 }
 
 // Update comment - receives allergyTypeId from AllergyEditor @update:comment event
@@ -119,7 +121,7 @@ const handleCommentUpdate = async (allergyTypeId: number, comment: string) => {
     inhabitantComment: comment || null
   }, props.adminBypass)
 
-  showSuccessToast('Allergi', 'Din kommentar er gemt')
+  showSuccessToast(ALLERGY_WORDS.toasts.title, ALLERGY_WORDS.toasts.commentSaved)
 }
 
 // Table row type definition
@@ -188,11 +190,11 @@ const columns = computed(() => [
   ...(props.canEdit ? [{id: 'expand', header: ''}] : []),
   {
     accessorKey: 'name',
-    header: 'Beboer'
+    header: HOUSEHOLD_WORDS.inhabitant
   },
   {
     id: 'allergies',
-    header: 'Allergier',
+    header: ADMIN_WORDS.tabs.allergies,
     cell: () => '' // Custom rendering via #allergies-cell template slot
   }
 ])
@@ -202,7 +204,7 @@ const columns = computed(() => [
   <UCard data-testid="household-allergies" v-bind="display.card">
     <!-- HEADER -->
     <template #header>
-      <h3 :class="TYPOGRAPHY.cardTitle">Familiens allergier og diætkrav</h3>
+      <h3 :class="TYPOGRAPHY.cardTitle">{{ ALLERGY_WORDS.household.title }}</h3>
     </template>
 
     <!-- BODY -->
@@ -277,7 +279,7 @@ const columns = computed(() => [
                 :allergy-types="allergyTypes"
                 :allergies="currentAllergiesForEditor"
                 show-comments
-                label="Tilføj og rediger allergier"
+                :label="ALLERGY_WORDS.household.editorLabel"
                 @add="handleAddAllergy"
                 @remove="handleRemoveAllergy"
                 @update:comment="handleCommentUpdate"

@@ -51,13 +51,18 @@ export class WaitlistFactory {
         }
     }
 
-    static readonly defaultQueueSummary = (overrides: Partial<WaitlistQueueSummary> = {}): WaitlistQueueSummary => ({
-        dinnerEventId: 1,
-        entries: 4,
-        portions: 2.5,
-        lines: [],
-        ...overrides
-    })
+    // A queue whose count per ticket type is its lines' entries unless given
+    static readonly defaultQueueSummary = (overrides: Partial<WaitlistQueueSummary> = {}): WaitlistQueueSummary => {
+        const lines = overrides.lines ?? []
+        return {
+            dinnerEventId: 1,
+            entries: 4,
+            portions: 2.5,
+            lines,
+            queuedByType: Object.fromEntries(lines.map(({ticketType, entries}) => [ticketType, entries.length])),
+            ...overrides
+        }
+    }
 
     static readonly defaultAssignmentResult = (overrides: Partial<WaitlistAssignmentResult> = {}): WaitlistAssignmentResult => ({
         dinnerEventId: 1,

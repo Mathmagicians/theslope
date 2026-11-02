@@ -1,6 +1,5 @@
 import {useBookingValidation, CLOSED_DINNER_STATES, DinnerMode as DinnerModeEnum, DinnerState as DinnerStateEnum, OrderState as OrderStateEnum, TicketState as TicketStateEnum, SupplyState as SupplyStateEnum, type TicketState, type SupplyState, type TicketType, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventDate, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDisplay, type TicketOrder, type DinnerMode, type DesiredOrder, type BookingIntent, type OrderState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketEvent, type TicketCounts, type ForSaleCounts, type WaitlistCounts, type OrderAudit} from '~/composables/useBookingValidation'
 import {useBillingValidation, type TransactionCreateData} from '~/composables/useBillingValidation'
-import {useBilling} from '~/composables/useBilling'
 import {useSeason, type BookingDeadlines, type SeasonDeadlines} from '~/composables/useSeason'
 import {useHousehold, isHouseholdActiveOnDay} from '~/composables/useHousehold'
 import {useTicket, ticketTypeLabel} from '~/composables/useTicket'
@@ -543,14 +542,11 @@ export const DEADLINE_LABELS = BOOKING_WORDS.deadlineLabels
 // Released tickets (badge factories live in useBookingUi)
 // ============================================================================
 
-/**
- * A locked dinner's supply: the released tickets and the waiting list, each with its pre-formatted breakdown
- * ("2V 1B") for the deadline badges and the booking form's bar
- */
+/** A locked dinner's supply: the released tickets and the waiting list, each with its breakdown by ticket type */
 export type ReleasedTicketCounts = ForSaleCounts & WaitlistCounts
 
 /** A locked dinner with nothing for sale and nobody on its waiting list */
-export const EMPTY_RELEASED_TICKET_COUNTS: ReleasedTicketCounts = {total: 0, formatted: '-', byType: {}, queued: 0, queuedFormatted: '-', queuedByType: {}}
+export const EMPTY_RELEASED_TICKET_COUNTS: ReleasedTicketCounts = {total: 0, byType: {}, queued: 0, queuedByType: {}}
 
 /** A locked dinner's supply: its tickets for sale, its waiting list, both or neither */
 export const supplyStateOf = (counts: ReleasedTicketCounts): SupplyState => {
@@ -563,7 +559,7 @@ export const supplyStateOf = (counts: ReleasedTicketCounts): SupplyState => {
 }
 
 // ============================================================================
-// Daily Maintenance - State Constants (ADR-015: Idempotent operations)
+// Daily Maintenance - State Constants (idempotent operations)
 // ============================================================================
 
 /**
@@ -701,10 +697,8 @@ export const DINNER_STEP_MAP: Record<DinnerStepState, StepConfig> = {
 }
 
 /**
- * Business logic for Bookings domain (DinnerEvent + Order)
- *
- * ADR-001: Separated from useBookingValidation (schemas only)
- * ADR-013: Heynabo event synchronization
+ * Business logic for Bookings domain (DinnerEvent + Order) and its Heynabo event payload; the schemas live in
+ * useBookingValidation
  */
 export const useBooking = () => {
     // Import configured utilities from useSeason (DRY)
@@ -804,7 +798,7 @@ export const useBooking = () => {
         teamId === null ? `${baseUrl}/chef?date=${formatDate(dinnerDate)}` : `${baseUrl}/chef?team=${teamId}&date=${formatDate(dinnerDate)}`
 
     /**
-     * Transform a DinnerEvent to Heynabo event payload (ADR-013)
+     * Transform a DinnerEvent to Heynabo event payload
      *
      * @param dinnerEvent - The dinner event to transform (DinnerEventDetail with cookingTeam)
      * @param baseUrl - Base URL for building dinner link (e.g., 'https://skraaningen.dk')
@@ -905,7 +899,7 @@ export const useBooking = () => {
 
     /**
      * Prepare transaction data from closed orders.
-     * ADR-010: Preserves isGuestTicket and the eating mode in snapshot for billing display
+     * Preserves isGuestTicket and the eating mode in snapshot for billing display
      */
     const prepareTransactionData = (closedOrders: OrderForTransaction[]): TransactionCreateData[] => {
         const {serializeTransaction} = useBillingValidation()
@@ -991,7 +985,7 @@ export const useBooking = () => {
      * @returns Object with ticketCounts and totalPrice (always returns object)
      */
     const getDayBillSummary = (orders: OrderDisplay[]): { ticketCounts: string; totalPrice: number } => {
-        const {formatTicketCounts} = useBilling()
+        const {formatTicketCounts} = useTicket()
 
         const activeOrders = orders.filter(isPendingOrder)
         return {

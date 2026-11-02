@@ -7,7 +7,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {getHouseholdUrl} from '~/utils/household'
+import {getHouseholdUrl, HOUSEHOLD_TAB} from '~/utils/household'
 import {ADMIN_WORDS} from '~/config/adminWords'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 
@@ -69,14 +69,18 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
             .filter(e => new Date(e.date) >= today)
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-        expect(futureDinners.length).toBeGreaterThan(0)
-        testDinnerEventId = futureDinners[0]!.id
-        const testTicketPriceId = findTicketPriceByType(TicketTypeSchema.enum.ADULT, testSeason.season.ticketPrices)!.id!
+        const [firstDinner] = futureDinners
+        if (!firstDinner) throw new Error('The test season has no dinner from today')
+        testDinnerEventId = firstDinner.id
+        const adultPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, testSeason.season.ticketPrices)
+        if (!adultPrice) throw new Error('The test season has no adult ticket price')
+        const testTicketPriceId = adultPrice.id!
 
-        const household = (await HouseholdFactory.getAllHouseholds(adminContext)).find(h => h.id === testHouseholdId)!
+        const household = (await HouseholdFactory.getAllHouseholds(adminContext)).find(h => h.id === testHouseholdId)
+        if (!household) throw new Error(`The admin's household ${testHouseholdId} is not among the households`)
         householdAddress = household.address
         householdPbsId = household.pbsId
-        householdEconomyUrl = getHouseholdUrl(household.shortName, household.pbsId, 'economy')
+        householdEconomyUrl = getHouseholdUrl(household.shortName, household.pbsId, HOUSEHOLD_TAB.economy)
 
         const result = await OrderFactory.createOrder(adminContext, {
             householdId: testHouseholdId,

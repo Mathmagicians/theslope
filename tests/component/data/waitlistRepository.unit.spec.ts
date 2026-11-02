@@ -28,7 +28,7 @@ const historyRows = () => fakePrisma.orderHistory.createMany.mock.calls.flatMap(
 // Anna's and Bo's places on dinner 5, each with the snapshot the run built from the household it holds
 const places = [21, 22].map((id, index) => {
     const entry = WaitlistFactory.defaultEntry({id, inhabitantId: 41 + index, dinnerEventId: 5, dinnerMode: DinnerModeSchema.enum.TAKEAWAY})
-    return {id, entry, snapshot: OrderFactory.defaultOrderSnapshot({id: null, inhabitantId: entry.inhabitantId, dinnerEventId: 5, dinnerMode: DinnerModeSchema.enum.TAKEAWAY})}
+    return {id, entry, snapshot: OrderFactory.defaultOrderAuditSnapshot({id: null, inhabitantId: entry.inhabitantId, dinnerEventId: 5, dinnerMode: DinnerModeSchema.enum.TAKEAWAY})}
 })
 
 beforeEach(() => {

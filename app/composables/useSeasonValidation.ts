@@ -46,7 +46,7 @@ export const useSeasonValidation = () => {
         ticketIsCancellableDaysBefore: z.number().min(0).max(31),
         diningModeIsEditableMinutesBefore: z.number().min(0).max(1440),
         consecutiveCookingDays: z.number().int().min(1).max(7).default(1),
-        // Optional relations (from server) - ADR-009: Lightweight Display data only
+        // Optional relations (from server): lightweight Display data only
         dinnerEvents: z.array(DinnerEventDisplaySchema).optional(),
         CookingTeams:  z.array(CookingTeamDisplaySchema).optional(),
         ticketPrices: TicketPricesArraySchema
@@ -85,7 +85,7 @@ export const useSeasonValidation = () => {
     type StoredDateRange = z.infer<typeof StoredDateRangeSchema>
     const readDateRange = ({start, end}: StoredDateRange) => ({start: parseDate(start), end: parseDate(end)})
 
-    // A Season row (ADR-010): its dates, cooking days and holidays as JSON and a shortName it may lack; a read includes
+    // A Season row: its dates, cooking days and holidays as JSON and a shortName it may lack; a read includes
     // the price rows, the detail read the dinner rows and the team rows
     const SeasonRowSchema = BaseSeasonSchema
         .omit({shortName: true, seasonDates: true, cookingDays: true, holidays: true, dinnerEvents: true, CookingTeams: true, ticketPrices: true})
@@ -100,14 +100,14 @@ export const useSeasonValidation = () => {
         })
     type SeasonRow = z.infer<typeof SeasonRowSchema>
 
-    // What reconciling the season's dinner events changed (ADR-015 idempotent counts)
+    // What reconciling the season's dinner events changed (idempotent counts)
     const ReconciliationResultSchema = z.object({
         created: z.number().int().nonnegative(),
         idempotent: z.number().int().nonnegative(),
         deleted: z.number().int().nonnegative()
     })
 
-    // Operation result of a season update (ADR-009): the season plus what the save
+    // Operation result of a season update: the season plus what the save
     // set in motion - dinner event reconciliation and, on the active season, re-scaffolding
     const SeasonUpdateResponseSchema = z.object({
         season: SeasonSchema,

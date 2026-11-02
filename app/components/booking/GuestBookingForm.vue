@@ -67,7 +67,7 @@ const DinnerModeEnum = DinnerModeSchema.enum
 // The schema's bounds on the number of guests are the count field's
 const GUEST_COUNT = {min: 1, max: 10}
 
-// The form's input schema (ADR-001 compliance 4): z.coerce turns the inputs' strings into numbers
+// The form's input schema, read by this form alone: z.coerce turns the inputs' strings into numbers
 const GuestBookingFormSchema = z.object({
   count: z.coerce.number({error: WORDS.countMissing})
     .int({message: WORDS.countNotInteger})
@@ -106,7 +106,7 @@ const guestOrdersOf = ({count, ticketPriceId, dinnerMode, allergyTypeIds}: Guest
   Array.from({length: count}, () =>
     buildGuestOrder(props.bookerId, props.dinnerEvent.id, ticketPriceId, dinnerMode, allergyTypeIds.length > 0 ? allergyTypeIds : undefined))
 
-// The modes the guest may take: the guest the save books in each mode, as the decision matrix lands it, at the picked
+// The modes the guest may take: the guest the save books in each mode, as getBookingOptions lands it, at the picked
 // price; while none is picked, the season's first price stands in
 const enabledModes = computed((): DinnerMode[] => {
   const ticketPriceId = formState.ticketPriceId ?? props.ticketPrices[0]?.id

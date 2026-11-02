@@ -5,9 +5,10 @@ import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {BillingFactory} from '../testDataFactories/billingFactory'
 import {getHouseholdUrl, HOUSEHOLD_TAB, type HouseholdTab} from '~/utils/household'
 import {BookingViewSchema} from '~/composables/useBookingView'
+import {da} from '@nuxt/ui/locale'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, doScreenshot, gotoHydrated, getSessionUserInfo, PHONE_VIEWPORT} = testHelpers
+const {validatedBrowserContext, doScreenshot, gotoHydrated, getSessionUser, getSessionUserInfo, PHONE_VIEWPORT} = testHelpers
 
 /**
  * Mobile viewport guard (iPhone X, 375x812): every screen fits a phone.
@@ -21,16 +22,16 @@ const {validatedBrowserContext, doScreenshot, gotoHydrated, getSessionUserInfo, 
  *   animation frame;
  * - no alert clips its content: the alert root is `overflow-hidden`, so an alert wider than its content box
  *   hides the overflow instead of widening the document. Alert responsiveness lives in the design system's
- *   `ALERTS` token (ADR-018), so a red here points at the token;
+ *   `ALERTS` token, so a red here points at the token;
  * - a data table wider than the phone scrolls inside its own box (the UTable root), so the page check above covers it;
  * - no word breaks across two lines in a table, a badge or a button. Alerts break anywhere by design (`ALERTS`), so
  *   text inside an alert is left out.
  *
  * A screenshot of each screen lands in test-results/mobile/, taken before the assertions.
  */
-test.describe('Mobile viewport - no horizontal overflow', () => {
-    test.use({storageState: adminUIFile, viewport: PHONE_VIEWPORT})
+test.use({storageState: adminUIFile, viewport: PHONE_VIEWPORT})
 
+test.describe('Mobile viewport - no horizontal overflow', () => {
     // Session-derived (the admin's own household) and data-derived (a billing period's share token), resolved in beforeAll
     let ownHousehold = {shortName: '', pbsId: 0}
     let publicBillingToken: string | undefined
@@ -101,7 +102,7 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
 
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        // /dinner only renders the master/detail layout when a season is active (ADR-003 singleton)
+        // /dinner only renders the master/detail layout when a season is active
         await SeasonFactory.createActiveSeason(context)
         const {householdShortname, householdPbsId} = await getSessionUserInfo(context)
         ownHousehold = {shortName: householdShortname, pbsId: householdPbsId}
@@ -225,4 +226,45 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
             expect.soft(await findBrokenWords(page.locator(WHOLE_WORD_TEXT)), `${url}: words broken across two lines`).toEqual([])
         })
     }
+})
+
+test.describe('Mobile viewport - the header drawer', () => {
+    const {open: OPEN_MENU} = da.messages.header
+    // Past md the drawer's styles hide it, and a drawer left open keeps its scroll lock and focus trap; low, so the page scrolls
+    const DESKTOP_VIEWPORT = {width: 1280, height: 400}
+
+    const openDrawer = async (page: Page): Promise<Locator> => {
+        await gotoHydrated(page, '/login')
+        await page.getByRole('button', {name: OPEN_MENU}).click()
+        const drawer = page.getByRole('dialog', {name: OPEN_MENU})
+        await expect(drawer).toBeVisible()
+        return drawer
+    }
+
+    test('GIVEN a signed-in member on a phone WHEN they open the burger and follow Admin THEN the drawer holds Admin and their own link, and it is closed on the new route', async ({page}) => {
+        const {Inhabitant: inhabitant} = await getSessionUser(page.context())
+        if (!inhabitant) throw new Error('The admin session has no inhabitant')
+
+        const drawer = await openDrawer(page)
+        await expect(drawer.getByRole('link', {name: inhabitant.name})).toBeVisible()
+        await drawer.getByRole('link', {name: 'Admin'}).click()
+
+        await expect(page).toHaveURL(/\/admin/)
+        await expect(drawer).toHaveCount(0)
+    })
+
+    test('GIVEN the drawer open on a phone WHEN the window widens past md THEN the drawer and its overlay are gone, the page scrolls and the desktop links respond', async ({page}) => {
+        const drawer = await openDrawer(page)
+
+        await page.setViewportSize(DESKTOP_VIEWPORT)
+
+        await expect(drawer).toHaveCount(0)
+        await expect(page.locator('[data-slot="overlay"]')).toHaveCount(0)
+        // A wheel, since a scroll lock on the body stops the user's scroll and leaves a scripted one through
+        await page.mouse.move(DESKTOP_VIEWPORT.width / 2, DESKTOP_VIEWPORT.height / 2)
+        await page.mouse.wheel(0, DESKTOP_VIEWPORT.height)
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+        await page.getByRole('banner').getByRole('link', {name: 'Madhold'}).click()
+        await expect(page).toHaveURL(/\/chef/)
+    })
 })

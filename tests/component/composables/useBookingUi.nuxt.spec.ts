@@ -6,7 +6,7 @@ import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, formatPlace} from '~/composables/useBooking'
-import {useBookingValidation, TicketState, type BookingAction, type BookingResult, type QueuePosition} from '~/composables/useBookingValidation'
+import {useBookingValidation, TicketState, type BookingAction, type BookingResult, type DinnerMode, type QueuePosition} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {itemAt, lockedDinnerSupply} from '~~/tests/component/testHelpers'
@@ -14,6 +14,8 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
+import {CostLineKind, type CostLine} from '~/composables/useBillingValidation'
 import {ticketTypeLabel} from '~/composables/useTicket'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
@@ -340,12 +342,19 @@ describe('useBookingUi', () => {
             ({formatCostLine} = useBookingUi())
         })
         const {DINEIN, TAKEAWAY, NONE} = DinnerModeSchema.enum
+        const billed = (dinnerMode: DinnerMode | null): CostLine =>
+            ({kind: CostLineKind.TRANSACTION, transaction: BillingFactory.defaultTransactionDisplay({dinnerMode})})
+        const liveBooked: CostLine = {
+            kind: CostLineKind.ORDER,
+            order: OrderFactory.defaultOrder(undefined, {state: OrderState.BOOKED, dinnerMode: DINEIN}),
+            inhabitant: itemAt(HouseholdFactory.defaultHouseholdDetail('cost-line').inhabitants, 0)
+        }
 
         it.each([
-            {desc: 'a billed released ticket reads released', line: {dinnerMode: NONE}, shown: ORDER_STATE_LABELS[OrderState.RELEASED], mode: undefined},
-            {desc: 'a billed eaten ticket reads closed', line: {dinnerMode: TAKEAWAY}, shown: ORDER_STATE_LABELS[OrderState.CLOSED], mode: undefined},
-            {desc: 'a billed ticket whose snapshot has no mode reads closed', line: {dinnerMode: null}, shown: ORDER_STATE_LABELS[OrderState.CLOSED], mode: undefined},
-            {desc: 'a live order reads its state and shows its mode', line: {state: OrderState.BOOKED, dinnerMode: DINEIN}, shown: ORDER_STATE_LABELS[OrderState.BOOKED], mode: DINEIN}
+            {desc: 'a billed released ticket reads released', line: billed(NONE), shown: ORDER_STATE_LABELS[OrderState.RELEASED], mode: undefined},
+            {desc: 'a billed eaten ticket reads closed', line: billed(TAKEAWAY), shown: ORDER_STATE_LABELS[OrderState.CLOSED], mode: undefined},
+            {desc: 'a billed ticket whose snapshot has no mode reads closed', line: billed(null), shown: ORDER_STATE_LABELS[OrderState.CLOSED], mode: undefined},
+            {desc: 'a live order reads its state and shows its mode', line: liveBooked, shown: ORDER_STATE_LABELS[OrderState.BOOKED], mode: DINEIN}
         ])('$desc', ({line, shown, mode}) => {
             expect(formatCostLine(line)).toMatchObject({stateText: shown.label, stateColor: shown.color, stateIcon: shown.icon, guest: null})
             expect(costLineMode(line)).toBe(mode)

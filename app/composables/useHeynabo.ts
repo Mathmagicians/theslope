@@ -15,6 +15,15 @@ const HEYNABO_ID_BATCH_SIZE = 90
 // Curried chunk function for heynaboId arrays (used for batch deletes)
 export const chunkHeynaboIds = chunkArray<number>(HEYNABO_ID_BATCH_SIZE)
 
+// D1 limit: 100 bound parameters per query, Household ~10 fields = max 8 per batch
+const SAVE_BATCH_SIZE = 8
+
+// A user link binds two parameters, the user's id and the inhabitant's heynaboId: 50 links per chunk
+const USER_LINK_BATCH_SIZE = 50
+
+export const chunkSaves = <T>(items: T[]): T[][] => chunkArray<T>(SAVE_BATCH_SIZE)(items)
+export const chunkUserLinks = <T>(items: T[]): T[][] => chunkArray<T>(USER_LINK_BATCH_SIZE)(items)
+
 // ========================================================================
 // EQUALITY FUNCTIONS - Named for testability (not exported)
 // ========================================================================

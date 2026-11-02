@@ -1,9 +1,11 @@
-import {defineEventHandler, setResponseStatus, getQuery} from 'h3'
+import {defineEventHandler, setResponseStatus, getValidatedQuery} from 'h3'
 import {runHeynaboImport} from '~~/server/utils/heynaboImportService'
 import type {HeynaboImportResponse} from '~/composables/useHeynaboValidation'
+import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const {throwH3Error} = eventHandlerHelper
+const LOG = '🏠 > IMPORT >'
 
 /**
  * GET /api/admin/heynabo/import
@@ -12,20 +14,25 @@ const {throwH3Error} = eventHandlerHelper
  * Same logic as cron task, but triggered via HTTP.
  *
  * Query params:
- * - triggeredBy: "ADMIN:<email>" from the admin UI, "ADMIN" when absent
+ * - triggeredBy: the admin's trigger from the admin UI (`adminTrigger`), the admin when absent
  */
 export default defineEventHandler(async (event): Promise<HeynaboImportResponse> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
+    const {JobTriggerQuerySchema} = useMaintenanceValidation()
 
-    const query = getQuery(event)
-    const triggeredBy = (query.triggeredBy as string) || 'ADMIN'
+    let triggeredBy: string
+    try {
+        ({triggeredBy} = await getValidatedQuery(event, JobTriggerQuerySchema.parse))
+    } catch (error) {
+        return throwH3Error(`${LOG} Invalid query parameters`, error, 400)
+    }
 
     try {
         const result = await runHeynaboImport(d1Client, triggeredBy)
         setResponseStatus(event, 200)
         return result
     } catch (error) {
-        return throwH3Error('🏠 > IMPORT > Import operation failed', error)
+        return throwH3Error(`${LOG} Import operation failed`, error)
     }
 })

@@ -2,40 +2,20 @@ import type {DateRange} from '~/types/dateTypes'
 import {addMonths, setDate, startOfDay, startOfMonth} from 'date-fns'
 import {createDateRange, formatDate, formatDateRange} from '~/utils/date'
 import {useSeason} from '~/composables/useSeason'
-import {ticketTypeCount, ticketTypeLabel, ticketTypeLetter} from '~/composables/useTicket'
+import {useTicket} from '~/composables/useTicket'
 import {useCookingTeam} from '~/composables/useCookingTeam'
-import {useBookingValidation, type TicketType, type DinnerEventInfo, type DinnerEventDetail} from '~/composables/useBookingValidation'
+import type {TicketType, DinnerEventDetail} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
-import type {BillingSideEffectStamps, CostEntry, HouseholdEntry, InvoiceDisplay, PayerSnapshot, TransactionDisplay} from '~/composables/useBillingValidation'
+import type {BillingSideEffectStamps, InvoiceDisplay, PayerSnapshot, TransactionDisplay, OrderSnapshot} from '~/composables/useBillingValidation'
 
 const LINK_TRANSACTION_BATCH_SIZE = 90
 
-const {TicketTypeSchema} = useBookingValidation()
-
-type TicketTypeCounts = Partial<Record<TicketType, number>>
-type TicketWord = (type: TicketType, count: number) => string
-
-/**
- * Ticket counts in words, curried over the wording: each ticket type's word in the order of the types, joined by the
- * separator; a type without tickets is left out unless `withZero`, and no parts read `empty`. `parts` keeps each
- * type's word apart for a list that renders one element per type and draws the separator itself
- */
-const ticketCountText = ({word, separator, withZero = false, empty = ''}: {word: TicketWord, separator: string, withZero?: boolean, empty?: string}) => {
-    const parts = (counts: TicketTypeCounts): {ticketType: TicketType, text: string}[] => TicketTypeSchema.options
-        .filter(type => withZero || counts[type])
-        .map(type => ({ticketType: type, text: word(type, counts[type] ?? 0)}))
-    return {parts, text: (counts: TicketTypeCounts): string => parts(counts).map(part => part.text).join(separator) || empty}
-}
-
-/** The separator between the kitchen box's labelled counts in running text; a rendered list draws COMPONENTS.pipe */
-const PIPE = ' | '
-
-/** The wordings of a ticket count, one builder each: "2V 1B", "2 voksne, 1 barn", and the kitchen box's "Voksen: 60 | Barn: 30" */
-export const TICKET_COUNTS = {
-    compact: ticketCountText({word: (type, count) => `${count}${ticketTypeLetter(type)}`, separator: ' ', empty: '-'}),
-    sentence: ticketCountText({word: ticketTypeCount, separator: ', '}),
-    labelled: ticketCountText({word: (type, count) => `${ticketTypeLabel(type)}: ${count}`, separator: PIPE, withZero: true})
-}
+// An economy group (CostEntry, HouseholdEntry): the base its first item opens it with, its items, their total amount and
+// their ticket counts
+type GroupEntry<T, Base> = Base & {items: T[], totalAmount: number, ticketCounts: string}
+// A dinner's group; a household's group with its control sum, the total its items add up to
+export type CostEntry<T> = GroupEntry<T, {dinnerEvent: OrderSnapshot['dinnerEvent']}>
+export type HouseholdEntry<T> = GroupEntry<T, OrderSnapshot['inhabitant']['household'] & {computedTotal: number}>
 
 /**
  * Billing business logic composable
@@ -45,23 +25,7 @@ export const TICKET_COUNTS = {
  */
 export const useBilling = () => {
     const {getBillingCutoffDay} = useSeason()
-
-    // How many items carry each ticket type
-    const countTicketTypes = <T extends { ticketType: TicketType | null }>(items: T[]): Partial<Record<TicketType, number>> =>
-        items.reduce((acc, item) => {
-            if (item.ticketType) acc[item.ticketType] = (acc[item.ticketType] ?? 0) + 1
-            return acc
-        }, {} as Partial<Record<TicketType, number>>)
-
-    /**
-     * Format ticket counts for display (e.g., "2V 1B")
-     * Accepts either:
-     * - Array of items with ticketType (TransactionDisplay, OrderDisplay, etc.)
-     * - Pre-computed counts map from repository { ADULT: 200, CHILD: 50, BABY: 1 }
-     */
-    const formatTicketCounts = <T extends { ticketType: TicketType | null }>(
-        input: T[] | Partial<Record<TicketType, number>>
-    ): string => TICKET_COUNTS.compact.text(Array.isArray(input) ? countTicketTypes(input) : input)
+    const {formatTicketCounts} = useTicket()
 
     /**
      * Curried generic groupBy factory for economy views.
@@ -69,8 +33,8 @@ export const useBilling = () => {
      *
      * Type params:
      * - T: Item type (must have ticketType for formatting)
-     * - Base: The context/base fields returned by createBase (e.g., {dinnerEvent} or HouseholdInfo)
-     * - C: Complete entry type (Base + items/totalAmount/ticketCounts)
+     * - Base: The context/base fields returned by createBase ({dinnerEvent}, or the household with its control sum); an
+     *   entry is the base with its items, their total amount and their ticket counts
      *
      * @param config.getKey - Extract grouping key from item
      * @param config.createBase - Create base entry fields from first item
@@ -79,20 +43,19 @@ export const useBilling = () => {
      */
     const createGroupBy = <
         T extends { ticketType: TicketType | null },
-        Base,
-        C extends Base & { items: T[], totalAmount: number, ticketCounts: string }
+        Base
     >(
         config: {
             getKey: (item: T) => number
             createBase: (item: T) => Base
-            onAccumulate?: (entry: C, amount: number) => void
-            sortBy?: (a: C, b: C) => number
+            onAccumulate?: (entry: GroupEntry<T, Base>, amount: number) => void
+            sortBy?: (a: GroupEntry<T, Base>, b: GroupEntry<T, Base>) => number
         }
     ) => (
         items: T[],
         getAmount: (item: T) => number
-    ): C[] => {
-        const grouped = new Map<number, C>()
+    ): GroupEntry<T, Base>[] => {
+        const grouped = new Map<number, GroupEntry<T, Base>>()
 
         for (const item of items) {
             const key = config.getKey(item)
@@ -104,12 +67,12 @@ export const useBilling = () => {
                 existing.totalAmount += amount
                 config.onAccumulate?.(existing, amount)
             } else {
-                const entry = {
+                const entry: GroupEntry<T, Base> = {
                     ...config.createBase(item),
                     items: [item],
                     totalAmount: amount,
                     ticketCounts: ''
-                } as C
+                }
                 config.onAccumulate?.(entry, amount)
                 grouped.set(key, entry)
             }
@@ -122,40 +85,39 @@ export const useBilling = () => {
     }
 
     /**
-     * Group items by dinner event for economy display.
-     * T must have ticketType and dinnerEvent. Groups by dinnerEvent.id.
-     *
-     * @returns Curried function: (items, getAmount) => CostEntry[]
+     * Group items by dinner event for economy display, one entry per dinnerEvent.id in the items' order.
      *
      * @example
-     * const grouped = groupByCostEntry<OrderWithInhabitant>()(orders, o => o.priceAtBooking)
+     * const grouped = groupByCostEntry(orders, o => o.priceAtBooking)
      */
-    const groupByCostEntry = <T extends { ticketType: TicketType | null, dinnerEvent: DinnerEventInfo }>() =>
-        createGroupBy<T, { dinnerEvent: DinnerEventInfo }, CostEntry<T, DinnerEventInfo>>({
-            getKey: item => item.dinnerEvent.id,
-            createBase: item => ({ dinnerEvent: item.dinnerEvent })
-        })
+    const groupByCostEntry = <T extends { ticketType: TicketType | null, dinnerEvent: OrderSnapshot['dinnerEvent'] }>(
+        items: T[],
+        getAmount: (item: T) => number
+    ): CostEntry<T>[] => createGroupBy({
+        getKey: (item: T) => item.dinnerEvent.id,
+        createBase: (item: T) => ({ dinnerEvent: item.dinnerEvent })
+    })(items, getAmount)
 
     /**
      * Group items by household for PBS/revisor view.
      * Parallel to groupByCostEntry but groups by household instead of dinner.
      *
      * @param getHousehold - Extract household info from item
-     * @returns Curried function: (items, getAmount) => HouseholdEntry[]
      */
-    type HouseholdEntryBase = { id: number, pbsId: number, address: string, computedTotal: number }
     const groupByHouseholdEntry = <T extends { ticketType: TicketType | null }>(
-        getHousehold: (item: T) => { id: number, pbsId: number, address: string }
-    ) => createGroupBy<T, HouseholdEntryBase, HouseholdEntry<T>>({
-        getKey: item => getHousehold(item).id,
-        createBase: item => {
+        items: T[],
+        getAmount: (item: T) => number,
+        getHousehold: (item: T) => OrderSnapshot['inhabitant']['household']
+    ): HouseholdEntry<T>[] => createGroupBy({
+        getKey: (item: T) => getHousehold(item).id,
+        createBase: (item: T) => {
             const household = getHousehold(item)
             return {id: household.id, pbsId: household.pbsId, address: household.address, computedTotal: 0}
         },
         onAccumulate: (entry, amount) => { entry.computedTotal += amount }
         // No sortBy: input transactions are pre-sorted by household address at the DB layer
         // (fetchUnbilledTransactions orderBy). Map grouping preserves insertion order.
-    })
+    })(items, getAmount)
 
     /**
      * Calculate billing period dates relative to a reference date.
@@ -275,7 +237,7 @@ export const useBilling = () => {
     const controlTransactions = createControlSum<TransactionDisplay>(tx => tx.amount)
 
     /**
-     * What a closed billing period still needs (ADR-015: the monthly run converges every period). A side effect is
+     * What a closed billing period still needs (the monthly run converges every period). A side effect is
      * current when its delivered version equals the period's content version; catch-up billing bumps the version,
      * so the period gets a fresh archive and a fresh mail.
      */
@@ -303,14 +265,12 @@ export const useBilling = () => {
         getBillingPeriodForDate,
         groupByCostEntry,
         groupByHouseholdEntry,
-        countTicketTypes,
-        formatTicketCounts,
         chunkTransactionIds,
         // Control sums
         createControlSum,
         controlInvoices,
         controlTransactions,
-        // Monthly run side effects (ADR-015)
+        // Monthly run side effects
         decideBillingSideEffects
     }
 }

@@ -12,27 +12,26 @@ manager's face rings blue, on a phone no face rings.
 -->
 <script setup lang="ts">
 import type {AlertKind} from '~/composables/useTheSlopeDesignSystem'
+import {ALLERGY_WORDS} from '~/config/allergyWords'
 
 const props = withDefaults(defineProps<{
-  /** Which ALERTS kind to wear - the poster wants the quiet neutral face (ADR-018) */
+  /** Which ALERTS kind to wear - the poster wants the quiet neutral face */
   kind?: AlertKind
   message?: string
 }>(), {
   kind: 'info',
-  message: 'Kontakt den allergiansvarlige, hvis du har brug for at snakke om allergier i din familie:'
+  message: ALLERGY_WORDS.managers.message
 })
 
 const {ALERTS, ICONS, COMPONENTS} = useTheSlopeDesignSystem()
 
 const store = useUsersStore()
 const {allergyManagers, isAllergyManagersLoading} = storeToRefs(store)
+store.loadAllergyManagers()
 
-const allergyManagerInhabitants = computed(() => {
-  if (!allergyManagers.value) return []
-  return allergyManagers.value
-    .filter(m => m.Inhabitant)
-    .map(m => m.Inhabitant!)
-})
+// An account without an inhabitant can hold the role; it has no face to show
+const allergyManagerInhabitants = computed(() =>
+  allergyManagers.value.flatMap(manager => manager.Inhabitant ? [manager.Inhabitant] : []))
 </script>
 
 <template>
@@ -42,13 +41,13 @@ const allergyManagerInhabitants = computed(() => {
     v-bind="ALERTS[props.kind]"
     :icon="ICONS.help"
     :ui="COMPONENTS.allergyManagersList.alertUi(ALERTS[props.kind].ui)"
-    title="Spørgsmål om allergier?"
+    :title="ALLERGY_WORDS.managers.title"
   >
     <template #description>
       <p :class="COMPONENTS.allergyManagersList.message">{{ props.message }}</p>
       <UserListItem
         :inhabitants="allergyManagerInhabitants"
-        label="Allergiansvarlige"
+        :label="ALLERGY_WORDS.managers.label"
         ring="allergyManager"
       />
     </template>

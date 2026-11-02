@@ -92,9 +92,15 @@ describe('DangerButton faces', () => {
     const DANGER = COMPONENTS.dangerButton
     const buttonProps = (wrapper: Awaited<ReturnType<typeof mountButton>>) =>
         wrapper.findComponent<ComponentPublicInstance<ButtonProps>>({name: 'UButton'}).props()
+    const wipeOf = (wrapper: Awaited<ReturnType<typeof mountButton>>) =>
+        getButton(wrapper).element.style.getPropertyValue(DANGER.wipePosition)
 
     beforeEach(() => {
         resetStores()
+    })
+
+    afterEach(() => {
+        vi.useRealTimers()
     })
 
     it('GIVEN initial state THEN the root binds its token and the button reads neutral and medium without the armed ring', async () => {
@@ -115,9 +121,24 @@ describe('DangerButton faces', () => {
         await nextTick()
 
         expect(buttonProps(wrapper)).toMatchObject({color, variant: NOISE.loud})
-        expect(getButton(wrapper).classes()).toEqual(expect.arrayContaining(face.armed.split(' ')))
-        const wipe = getButton(wrapper).attributes('style')
-        expect(wipe).toContain(`var(${face.countdown.dark})`)
-        expect(wipe).toContain(`var(${face.countdown.light})`)
+        expect(getButton(wrapper).classes()).toEqual(expect.arrayContaining([...face.armed.split(' '), ...face.countdown.split(' ')]))
+    })
+
+    it('GIVEN armed WHEN the timeout runs THEN the wipe moves from full to half to gone, and the countdown leaves with it', async () => {
+        vi.useFakeTimers()
+        const wrapper = await mountButton({autoResetMs: 1000})
+
+        await getButton(wrapper).trigger('click')
+        await nextTick()
+        expect(parseFloat(wipeOf(wrapper))).toBe(100)
+
+        vi.advanceTimersByTime(500)
+        await nextTick()
+        expect(parseFloat(wipeOf(wrapper))).toBeCloseTo(50)
+
+        vi.advanceTimersByTime(500)
+        await nextTick()
+        expect(wipeOf(wrapper)).toBe('')
+        expect(getButton(wrapper).classes()).not.toEqual(expect.arrayContaining(DANGER.danger.countdown.split(' ')))
     })
 })

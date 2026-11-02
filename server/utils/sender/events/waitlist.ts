@@ -3,7 +3,7 @@
  * return their outcomes and the caller hands them here after the action; the DAILY_MAINTENANCE job reads what the dinners past
  * their booking deadline send as they stand. A notification about an inhabitant goes to the inhabitant's closest user
  * (findClosestUserInHousehold), the waitlist buildup to the chef's. The dinners and people the notifications name are
- * read once per kind (ADR-014); the delivery step (deliveries.ts) sends each once per subject, version, notification,
+ * read once per kind; the delivery step (deliveries.ts) sends each once per subject, version, notification,
  * channel and user. The booking emails flag (SHOULD_SEND_BOOKING_EMAILS_FLAG) off, a run sends and records nothing.
  */
 import type {H3Event} from 'h3'
@@ -29,7 +29,6 @@ import {formatPlace, useBooking} from '~/composables/useBooking'
 import {useOrder} from '~/composables/useOrder'
 import {useSeason} from '~/composables/useSeason'
 import {ticketTypeLabel, useTicket} from '~/composables/useTicket'
-import {TICKET_COUNTS} from '~/composables/useBilling'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {NotificationKind, WAITLIST_BUYER} from '~/config/notificationTemplates'
 import {fetchSeason} from '~~/server/data/prismaRepository'
@@ -260,7 +259,7 @@ const load = async (
 const composer = (records: NotificationRecords) => {
     const {dinners, households, inhabitants} = records
     const {formatGuestLabel} = useOrder()
-    const {formatPrice, findTicketPriceById} = useTicket()
+    const {findTicketPriceById, formatTicketPrice, formatTicketCounts} = useTicket()
     const closestUser = findClosestUserInHousehold(records)
     // Each outcome with its dinner; the outcomes come on the dinners found (onDinners)
     const withDinner = <Outcome extends {dinnerEventId: number}>(outcomes: Outcome[]): [Outcome, DinnerForWaitlist][] =>
@@ -277,7 +276,7 @@ const composer = (records: NotificationRecords) => {
     const ticketLine = (ticketPrices: TicketPrice[], ticketPriceId: number | null, dinnerMode?: DinnerMode, seller?: string): string => {
         const price = findTicketPriceById(ticketPriceId, ticketPrices)
         return [
-            price && BOOKING_WORDS.ticketPrice.label(ticketTypeLabel(price.ticketType), formatPrice(price.price)),
+            price && formatTicketPrice(ticketTypeLabel(price.ticketType), price.price),
             dinnerMode && BOOKING_WORDS.modes[dinnerMode],
             seller && BOOKING_WORDS.ticketChange.seller(seller)
         ].filter(Boolean).join(' · ')
@@ -294,7 +293,7 @@ const composer = (records: NotificationRecords) => {
     const buildupNotifications = ([buildup, {chefId, context}]: [NotifiedBuildup, DinnerForWaitlist]): BookingNotifications<Tracked>['buildups'] => {
         if (!chefId) return []
         return [{
-            ...closestUser(chefId), dinner: context, queued: TICKET_COUNTS.compact.text(buildup.queuedByType), entries: buildup.entries,
+            ...closestUser(chefId), dinner: context, queued: formatTicketCounts(buildup.queuedByType), entries: buildup.entries,
             portions: buildup.portions, subject: {subjectType: Subject.DINNER_EVENT, subjectId: buildup.dinnerEventId}
         }]
     }

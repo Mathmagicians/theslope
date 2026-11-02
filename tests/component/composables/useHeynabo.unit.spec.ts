@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { reconcileHouseholds, reconcileUsers, mergeHouseholdForUpdate, resolveInhabitantImportPlan, getUserUrl, getEventUrl } from '~/composables/useHeynabo'
+import { reconcileHouseholds, reconcileUsers, mergeHouseholdForUpdate, resolveInhabitantImportPlan, getUserUrl, getEventUrl, chunkHeynaboIds, chunkSaves, chunkUserLinks } from '~/composables/useHeynabo'
 import type { HouseholdDisplay, InhabitantCreate, InhabitantDisplay } from '~/composables/useCoreValidation'
 import {
     householdReconciliationTestData,
     userReconciliationTestData,
     inhabitantImportPlanScenarios
 } from '~~/tests/e2e/testDataFactories/reconciliationTestData'
+import { itemAt } from '~~/tests/component/listHelpers'
 
 // Matches PruneAndCreateResult<E, I>: delete is E[], everything else is I[]
 const verifyReconciliation = <E, I>(
     result: { idempotent: I[], update: I[], delete: E[], create: I[] },
     expected: { idempotent: number[], update: number[], delete: number[], create: number[] },
     getDeleteKey: (e: E) => number,
-    getKey: (i: I) => number = getDeleteKey as unknown as (i: I) => number
+    getKey: (i: I) => number
 ) => {
     expect(result.idempotent.map(getKey).sort()).toEqual(expected.idempotent.sort())
     expect(result.update.map(getKey).sort()).toEqual(expected.update.sort())
@@ -32,7 +33,7 @@ describe('useHeynabo', () => {
                 delete: expected.delete.heynaboIds,
                 create: expected.create.heynaboIds
             }
-            verifyReconciliation(result, expectedKeys, h => h.heynaboId)
+            verifyReconciliation(result, expectedKeys, h => h.heynaboId, h => h.heynaboId)
         })
     })
 
@@ -57,8 +58,9 @@ describe('useHeynabo', () => {
     describe('mergeHouseholdForUpdate', () => {
         it('preserves TheSlope-owned fields (pbsId, movedInDate, moveOutDate) from existing', () => {
             const { existing, incoming } = householdReconciliationTestData
-            const existingHousehold = { ...existing[1]!, id: 1, shortName: 'ON' } as HouseholdDisplay
-            const incomingHousehold = incoming[1]!
+            const stored = itemAt(existing, 1)
+            const existingHousehold: HouseholdDisplay = { ...stored, id: 1, shortName: 'ON', moveOutDate: stored.moveOutDate ?? null, inhabitants: [] }
+            const incomingHousehold = itemAt(incoming, 1)
 
             const result = mergeHouseholdForUpdate(incomingHousehold, existingHousehold)
 
@@ -77,7 +79,7 @@ describe('useHeynabo', () => {
     describe('resolveInhabitantImportPlan', () => {
         // Order-free comparisons: placements as heynaboId → target household id, deletions as a set
         const placements = (placed: InhabitantCreate[]) => new Map(placed.map(i => [i.heynaboId, i.householdId]))
-        const expectedPlacements = (pairs: number[][]) => new Map(pairs as Array<[number, number]>)
+        const expectedPlacements = (pairs: number[][]) => new Map(pairs.map(pair => [itemAt(pair, 0), itemAt(pair, 1)]))
         const deletedHeynaboIds = (inhabitants: InhabitantDisplay[]) => new Set(inhabitants.map(i => i.heynaboId))
 
         it.each(inhabitantImportPlanScenarios)('$scenario', ({incoming, existing, expected}) => {
@@ -86,6 +88,20 @@ describe('useHeynabo', () => {
             expect(placements(plan.update), 'update bucket').toEqual(expectedPlacements(expected.update))
             expect(placements(plan.idempotent), 'idempotent bucket').toEqual(expectedPlacements(expected.idempotent))
             expect(deletedHeynaboIds(plan.delete), 'delete bucket').toEqual(new Set(expected.delete))
+        })
+    })
+
+    // GIVEN more items than a chunk holds WHEN chunked THEN full chunks, then the rest, in the items' order
+    describe('chunkers', () => {
+        it.each([
+            {chunker: 'chunkHeynaboIds', chunk: chunkHeynaboIds, size: 90},
+            {chunker: 'chunkSaves', chunk: chunkSaves<number>, size: 8},
+            {chunker: 'chunkUserLinks', chunk: chunkUserLinks<number>, size: 50}
+        ])('$chunker cuts the items into chunks of $size', ({chunk, size}) => {
+            const items = Array.from({length: 2 * size + 1}, (_, index) => index)
+            const chunks = chunk(items)
+            expect(chunks.map(c => c.length)).toEqual([size, size, 1])
+            expect(chunks.flat()).toEqual(items)
         })
     })
 

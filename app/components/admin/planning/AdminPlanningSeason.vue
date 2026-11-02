@@ -45,7 +45,6 @@ const cookingDayCount = computed(() => {
 })
 const {holidayUrl} = useAppConfig().theslope
 
-// The store owns the saving state (ADR-007)
 const planStore = usePlanStore()
 const {isSavingSeasonFlowInProgress: isSavingSeason} = storeToRefs(planStore)
 

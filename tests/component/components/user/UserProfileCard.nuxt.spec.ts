@@ -4,7 +4,7 @@
  * owner the header actions, the ⚙ toggle that reveals the settings card the parent renders and Log ud; for an admin the
  * role manager, where a role Heynabo owns stays read-only.
  *
- * Real component tree, real stores (testing.md Rule 6); only HTTP and the session are faked.
+ * Real component tree, real stores; only HTTP and the session are faked.
  * The toggle and Log ud belong to the current user's own card, so the spec drives `authStore.user`.
  */
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'

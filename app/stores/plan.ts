@@ -13,9 +13,10 @@ export const usePlanStore = defineStore("Plan", () => {
         const {SeasonSchema, SeasonUpdateResponseSchema, ActiveSeasonIdSchema} = useSeasonValidation()
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
+        const usersStore = useUsersStore()
 
         // ========================================
-        // State (ADR-007)
+        // State
         // ========================================
 
         const activeSeasonIdDataset = storeAsyncData('plan-store-active-season-id', '/api/admin/season/active', {
@@ -52,7 +53,7 @@ export const usePlanStore = defineStore("Plan", () => {
             return null
         }
 
-        // The page names the season it shows (ADR-007 rule 9); a shortName resolves once the seasons have loaded,
+        // The page names the season it shows; a shortName resolves once the seasons have loaded,
         // and a choice that resolves to no season falls back to the default
         const seasonChoice = shallowRef<() => string | number | null>(() => null)
         const selectSeason = (choice: MaybeRefOrGetter<string | number | null>) => {
@@ -95,7 +96,8 @@ export const usePlanStore = defineStore("Plan", () => {
         const {JokerSlotSchema} = useDutyValidation()
         const {formatRoleClaimedTitle} = useCookingTeam()
 
-        // The mounting page selects the team (ADR-007 rule 9); GET under /api/admin/ is open to every member
+        // The mounting page selects the team; GET under /api/admin/ is open to every member. A page's default team reads
+        // the season's dinners and the person's own teams, so the server render resolves the team after both
         const teamChoice = shallowRef<() => number | null>(() => null)
         const selectTeam = (choice: MaybeRefOrGetter<number | null>) => {
             teamChoice.value = () => toValue(choice)
@@ -109,7 +111,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 default: () => null,
                 errorMessage: TEAM_WORDS.admin.failed,
                 enabled: () => !!selectedTeamId.value,
-                dependsOn: [seasonsDataset]
+                dependsOn: [selectedSeasonDataset, usersStore.myTeamsDataset]
             }
         )
         const {
@@ -129,7 +131,7 @@ export const usePlanStore = defineStore("Plan", () => {
         const isSavingSeason = ref(false)
         const isActivatingSeason = ref(false)
 
-        // Toast descriptions report what a save set in motion (ADR-009 operation results)
+        // Toast descriptions report what a save set in motion
         const formatSeasonUpdate = (result: SeasonUpdateResponse): string => {
             const {created, deleted} = result.reconciliation
             const sentences = [SEASON_WORDS.toasts.updated.reconciled(created, deleted)]
@@ -253,7 +255,7 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
-        // Returns the operation envelope (ADR-009) so callers can report what the save changed
+        // Returns the operation envelope so callers can report what the save changed
         const updateSeason = async (season: Season): Promise<SeasonUpdateResponse | null> => {
             const result = await saveSeason(() => apiRequest(`/api/admin/season/${season.id}`, {
                 method: 'POST',
@@ -304,13 +306,13 @@ export const usePlanStore = defineStore("Plan", () => {
             return deactivated
         }
 
-        // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
+        // COOKING TEAM ACTIONS - Part of Season aggregate
         const createTeam = async (teamOrTeams: CookingTeamCreate | CookingTeamCreate[]): Promise<CreateTeamsResponse> => {
             const teams = Array.isArray(teamOrTeams) ? teamOrTeams : [teamOrTeams]
 
             isCreatingTeams.value = true
             try {
-                // ADR-009 operation result: teams created + dinner events the assignment touched
+                // The operation result: the teams created and the dinner events the assignment touched
                 const created = await apiRequest('/api/admin/team', {
                     method: 'PUT',
                     body: teams,
@@ -355,7 +357,7 @@ export const usePlanStore = defineStore("Plan", () => {
             return deletedId
         }
 
-        // TEAM MEMBER AND JOKER SLOT ACTIONS - Part of Team aggregate (ADR-005); the refresh carries the season and the team
+        // TEAM MEMBER AND JOKER SLOT ACTIONS - Part of Team aggregate; the refresh carries the season and the team
         const addTeamMember = async (assignment: CookingTeamAssignmentCreate): Promise<CookingTeamAssignment> => {
             const created = await apiRequest('/api/admin/team/assignment', {
                 method: 'PUT',
@@ -421,7 +423,7 @@ export const usePlanStore = defineStore("Plan", () => {
 
         // DINNER EVENT ACTIONS
         const isRoleUpdating = ref(false)
-        const assignRoleToDinner = async (dinnerEventId: number, inhabitantId: number, role: CookingTeamAssignment['role'], menuStrategy?: MenuSwapStrategy): Promise<DinnerEventDetail> => {
+        const assignRoleToDinner = async (dinnerEventId: number, inhabitantId: number, role: TeamRole, menuStrategy?: MenuSwapStrategy): Promise<DinnerEventDetail> => {
             isRoleUpdating.value = true
             try {
                 const updated = await apiRequest(`/api/team/cooking/${dinnerEventId}/assign-role`, {
@@ -435,7 +437,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 // selected dinner id from myTeams/season, so settle those first or its re-run
                 // reloads stale detail over the fresh fetch.
                 await refreshTeamAggregates()
-                await useUsersStore().loadMyTeams()
+                await usersStore.refreshMyTeams()
                 await useBookingsStore().refreshSelectedDinnerEventDetail()
                 return updated
             } finally {
@@ -460,7 +462,7 @@ export const usePlanStore = defineStore("Plan", () => {
         /**
          * Withdraw the current user from a role on a dinner ("Meld afbud").
          * Clears chef + menu + allergens server-side; 207 means the Heynabo event
-         * could not be deleted (best-effort, ADR-013). Returns null on error.
+         * could not be deleted (best-effort). Returns null on error.
          */
         const resignRoleForMe = async (dinnerEvent: DinnerEventDetail, role: TeamRole): Promise<DinnerEventDetail | null> => {
             const inhabitantId = authStore.inhabitantId
@@ -480,7 +482,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 // selected dinner id from myTeams/season, so settle those first or its re-run
                 // reloads stale detail over the fresh fetch.
                 await refreshTeamAggregates()
-                await useUsersStore().loadMyTeams()
+                await usersStore.refreshMyTeams()
                 await useBookingsStore().refreshSelectedDinnerEventDetail()
                 toastSaved(TEAM_WORDS.toasts.resigned.title)
                 if (heynaboSyncDegraded) {
@@ -508,6 +510,7 @@ export const usePlanStore = defineStore("Plan", () => {
             selectedSeasonDataset: markRaw(selectedSeasonDataset),
             selectedTeam,
             selectedTeamId,
+            selectedTeamDataset: markRaw(selectedTeamDataset),
             selectedTeamError,
             seasons,
             // computed state

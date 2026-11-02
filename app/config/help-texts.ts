@@ -1,3 +1,13 @@
+/**
+ * The page help: per route its title and text. A title that names an area reads the area's own word.
+ */
+import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {ADMIN_WORDS} from '~/config/adminWords'
+import {TEAM_WORDS} from '~/config/teamWords'
+import {USER_WORDS} from '~/config/userWords'
+
+const Role = useCookingTeamValidation().TeamRoleSchema.enum
+
 export const HELP_TEXTS = {
     index: {
         title: 'Velkommen til Skråningen',
@@ -8,40 +18,40 @@ export const HELP_TEXTS = {
         content: '🗓️ Se alle kommende fællesspisninger. Klik på en dato for at se menu, tilmeldinger og madhold. Du kan også ændre mellem almindelig fællesspisning, takeaway og sen spisning for din husstand, ændre framelding/tilmelding for en given dato, tilmelde en gæst, eller købe andres billetter som er sat til salg.'
     },
     chef: {
-        title: 'Chefkok',
+        title: TEAM_WORDS.roles[Role.CHEF].label,
         content: '👨‍🍳 Din oversigt som chefkok. Se dine kommende madlavningsdage, annoncer menuer og hold styr på tilmeldinger og allergier.'
     },
     admin: {
         planning: {
-            title: 'Planlægning',
+            title: ADMIN_WORDS.tabs.planning,
             content: '📅 Planlæg fællesspisning for hele sæsonen. Opret og rediger sæsoner, definer madlavningsdage og ferier.'
         },
         teams: {
-            title: 'Madhold',
+            title: ADMIN_WORDS.tabs.teams,
             content: '👥 Administrer madhold og tilmeldinger. Opret teams og fordel beboere på de forskellige madhold.'
         },
         chefs: {
-            title: 'Chefkokke',
+            title: TEAM_WORDS.roles[Role.CHEF].plural,
             content: '👨‍🍳 Administrer chefkokke og deres tilgængelighed. Tildel chefkokke til specifikke madlavningsdage.'
         },
         households: {
-            title: 'Husstande',
+            title: ADMIN_WORDS.tabs.households,
             content: '🏠 Oversigt over alle husstande på Skråningen. Se beboere, allergier og administrer flytninger og husstandsændringer.'
         },
         allergies: {
-            title: 'Allergier',
+            title: ADMIN_WORDS.tabs.allergies,
             content: '⚠️ Administrer allergier og fødevareintoleranser for alle beboere. Opret og rediger allergioplysninger til brug ved madlavning.'
         },
         users: {
-            title: 'Brugere',
+            title: ADMIN_WORDS.tabs.users,
             content: '👤 Her ser du brugere med login til systemet. 🔄 De importeres fra Heynabo med samme brugernavn og password. 🛡️ Du kan se systemroller og opdatere listen via importknappen.'
         },
         economy: {
-            title: 'Økonomi',
+            title: ADMIN_WORDS.tabs.economy,
             content: '💰 Økonomisk overblik over fællesspisningen. Se chefkokkebudgetter, basisvarebudgetter og forbered inberetning til PBS.'
         },
         settings: {
-            title: 'Indstillinger',
+            title: USER_WORDS.profile.settings,
             content: '⚙️ Systemindstillinger for fællesspisningen. Administrer globale præferencer og konfigurationer.'
         },
         system: {
@@ -59,19 +69,19 @@ export const HELP_TEXTS = {
             content: '⚡ Power mode opdaterer alle medlemmer samtidigt. ✏️ Klik på blyanten for at redigere enkeltpersoner. ▼ Udvid rækken for at se valgmuligheder. 💾 Ændringer gemmes når du trykker Gem.'
         },
         allergies: {
-            title: 'Allergier',
+            title: ADMIN_WORDS.tabs.allergies,
             content: '⚠️ Administrer allergier og fødevareintoleranser for din husstand. Tilføj og opdater allergioplysninger for hver beboer.'
         },
         economy: {
-            title: 'Økonomi',
+            title: ADMIN_WORDS.tabs.economy,
             content: '💰 Se økonomisk oversigt for din husstand. Følg udgifter til fællesspisning og se fakturaer.'
         },
         settings: {
-            title: 'Indstillinger',
+            title: USER_WORDS.profile.settings,
             content: '⚙️ Administrer indstillinger for din husstand. Opdater beboeroplysninger og præferencer.'
         }
     },
-    login : {
+    login: {
         title: 'Velkommen til Theslope',
         content: '👋 Velkommen til Skråningens system for fællesspisning! 🍽️ Book billetter til middage. 🏠 Administrer din husstand. 👨‍🍳 Se dit madholds tjanser og afregning.'
     }

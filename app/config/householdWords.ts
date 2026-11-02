@@ -1,19 +1,28 @@
 /**
- * The household words users read. Plain module without auto-imports (ADR-017).
+ * The household words users read. Plain module without auto-imports: the server imports it too.
  */
 // Type only: useHousehold reads the family name from here, so a value import would close a cycle
 import type {ResidencyStatus} from '~/composables/useHousehold'
-import type {DinnerMode} from '~/composables/useBookingValidation'
 import {BUTTON_WORDS} from '~/config/buttonWords'
 
-const pbsLabel = (pbsId: number) => `PBS ${pbsId}`
+const pbsWord = 'PBS'
+const pbsLabel = (pbsId: number) => `${pbsWord} ${pbsId}`
 const householdLabel = (shortName: string, pbsId: number) => `${shortName} · ${pbsLabel(pbsId)}`
 const householdInParens = (shortName: string, pbsId: number) => `${shortName} (${pbsLabel(pbsId)})`
 const address = 'Adresse'
 const shortNameWord = 'Forkortelse'
 const inhabitantsWord = 'Beboere'
+const householdWord = 'Husstand'
+const newHousehold = 'Ny husstand'
+const actionColumn = 'Handling'
 
 export const HOUSEHOLD_WORDS = {
+    /** A household, an inhabitant, its inhabitants, its address and its PBS number, wherever a view names them */
+    household: householdWord,
+    inhabitant: 'Beboer',
+    inhabitants: inhabitantsWord,
+    address,
+    pbs: pbsWord,
     /**
      * A failed read of the households, the household on view and a household's detail, the household page naming it;
      * a failed save of a household's data
@@ -51,13 +60,7 @@ export const HOUSEHOLD_WORDS = {
             title: 'Sådan redigerer du præferencer',
             pencil: 'Klik på blyanten for at redigere enkeltpersoner',
             save: 'Ændringer gemmes når du trykker på GEM, og påvirker fremtidige bookinger',
-            modesTitle: 'Valg for fællesspisning:',
-            modes: {
-                DINEIN: 'Fællesspisning',
-                DINEINLATE: 'Sen spisning',
-                TAKEAWAY: 'Takeaway',
-                NONE: 'Ingen spisning'
-            } satisfies Record<DinnerMode, string>
+            modesTitle: 'Valg for fællesspisning:'
         }
     },
     /** The household the URL names and is gone, as the not-found toast names it before its shortName */
@@ -70,16 +73,16 @@ export const HOUSEHOLD_WORDS = {
      */
     adminList: {
         title: 'Husstande på Skråningen',
-        create: 'Ny husstand',
+        create: newHousehold,
         failed: 'Kan ikke hente data for husstande',
         search: 'Søg efter adresse, navn eller person...',
         sort: address,
-        columns: {shortName: shortNameWord, pbs: 'PBS', address, inhabitants: inhabitantsWord}
+        columns: {shortName: shortNameWord, pbs: pbsWord, address, inhabitants: inhabitantsWord}
     },
     /** The inhabitant finder's defaults: its search, its columns and its list without inhabitants */
     inhabitantSelector: {
         search: 'Søg efter navn...',
-        columns: {name: 'Navn', status: 'Status', action: 'Handling'},
+        columns: {name: 'Navn', status: 'Status', action: actionColumn},
         empty: 'Ingen beboere tilgængelige'
     },
     /**
@@ -94,10 +97,10 @@ export const HOUSEHOLD_WORDS = {
         movedInDateMissing: 'Du skal sætte en indflytningsdato for den nye familie',
         previousNotMovedOut: 'Ny familie kan ikke flytte ind, så længe den forrige ikke er flyttet ud',
         noAddresses: `I mangler nogen huse at bo i, admin skal synkronisere først med ${BUTTON_WORDS.heynabo.name}`,
-        title: 'Ny husstand',
+        title: newHousehold,
         address: {label: address, placeholder: 'Vælg adresse...'},
         addressOption: (address: string, heynaboId: number) => `${address} · HN ${heynaboId}`,
-        pbs: {label: 'PBS', placeholder: 'F.eks. 12345'},
+        pbs: {label: pbsWord, placeholder: 'F.eks. 12345'},
         pbsTaken: (pbsId: number, shortName: string) => `${pbsLabel(pbsId)} bruges af ${shortName}`,
         movedIn: 'Vælg en indflytningsdato',
         prevOwners: (count: number) => `${count === 1 ? 'Eksisterende husstand' : 'Eksisterende husstande'} på adressen`,
@@ -121,8 +124,8 @@ export const HOUSEHOLD_WORDS = {
         residency: {title: 'Residens', active: 'Aktiv beboer'},
         inhabitants: {
             title: inhabitantsWord,
-            household: 'Husstand',
-            action: 'Handling',
+            household: householdWord,
+            action: actionColumn,
             search: 'Søg navn, PBS eller adresse...',
             empty: 'Ingen beboere i fællesskabet',
             householdBadge: (shortName: string, pbsId: number) => `${shortName} ${pbsLabel(pbsId)}`,

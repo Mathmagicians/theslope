@@ -66,7 +66,7 @@ beforeEach(() => {
     vi.clearAllMocks()
 })
 
-// Chef sync acts in Heynabo with the signed-in user's own token, kept in the session's server-only data (ADR-013)
+// Chef sync acts in Heynabo with the signed-in user's own token, kept in the session's server-only data
 describe('getRequiredHeynaboToken', () => {
     it('GIVEN the token in the session\'s secure data THEN returns it', async () => {
         getUserSession.mockResolvedValue({user: mockUser(), secure: {heynaboToken: 'heynabo-token'}})
@@ -139,7 +139,7 @@ describe('requireChefForDinner', () => {
 })
 
 // Every member reads; a household changes its own data, and an admin, or the allergy manager for allergies, changes it
-// through the override the endpoint passes as a predicate, logged with the actor, their roles and the household (ADR-004)
+// through the override the endpoint passes as a predicate, logged with the actor, their roles and the household
 describe('requireHouseholdAccess', () => {
     const SystemRole = useCoreValidation().SystemRoleSchema.enum
     const HOUSEHOLD_ID = 4711

@@ -33,6 +33,7 @@ const UButton = resolveComponent('UButton')
 
 const store = useUsersStore()
 const {users, isUsersLoading, isUsersErrored, usersError} = storeToRefs(store)
+store.loadUsers()
 
 const {roleLabels} = useUserRolesUi()
 const {COMPONENTS, ICONS, ALERTS, COLOR, TEXT, BG, NOISE, SIZES} = useTheSlopeDesignSystem()

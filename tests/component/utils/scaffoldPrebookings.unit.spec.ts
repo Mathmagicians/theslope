@@ -27,6 +27,7 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
+import {itemAt, present} from '~~/tests/component/listHelpers'
 
 // The scaffolder reads the app config, and its error log builds errors, from the Nitro auto-import scope
 await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).stubAppConfig())
@@ -39,7 +40,7 @@ vi.mock('~~/server/data/prismaRepository', async importOriginal => ({
     fetchHouseholds: vi.fn(), fetchHouseholdsByInhabitantIds: vi.fn(), fetchSeason: vi.fn(), fetchActiveSeasonId: vi.fn(), fetchUser: vi.fn()
 }))
 vi.mock('~~/server/data/financesRepository', async importOriginal => ({
-    orderSnapshotOf: (await importOriginal<typeof import('~~/server/data/financesRepository')>()).orderSnapshotOf,
+    orderAuditSnapshotOf: (await importOriginal<typeof import('~~/server/data/financesRepository')>()).orderAuditSnapshotOf,
     fetchOrders: vi.fn(), fetchUserIntentKeys: vi.fn(), createOrders: vi.fn(), deleteOrder: vi.fn(), updateOrdersBatch: vi.fn(),
     claimOrder: vi.fn(), countReleasedTicketsByType: vi.fn(), findReleasedOrderId: vi.fn(), claimReleasedOrder: vi.fn(), recordCancellation: vi.fn()
 }))
@@ -74,12 +75,13 @@ const asPreviewOf = (saved: ScaffoldResult) => ({...saved, outcomes: {...saved.o
 // A household of two on a dinner where Bo holds an order; the household waits for nothing until a test says so
 const givenSave = () => {
     const ticketPrices = TicketFactory.defaultTicketPrices()
-    const adultPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, ticketPrices)!
+    const adultPrice = present(findTicketPriceByType(TicketTypeSchema.enum.ADULT, ticketPrices), 'adult price')
     const dinner = {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 5}
     const season = {...SeasonFactory.defaultSeason(), id: 1, ticketPrices, dinnerEvents: [dinner]}
     const household = HouseholdFactory.defaultHouseholdDetail()
-    const [anna, bo] = household.inhabitants
-    const boOrder = OrderFactory.defaultOrder(undefined, {id: 11, inhabitantId: bo!.id, dinnerEventId: dinner.id, ...OrderFactory.priceFieldsOf(adultPrice)})
+    const anna = itemAt(household.inhabitants, 0)
+    const bo = itemAt(household.inhabitants, 1)
+    const boOrder = OrderFactory.defaultOrder(undefined, {id: 11, inhabitantId: bo.id, dinnerEventId: dinner.id, ...OrderFactory.priceFieldsOf(adultPrice)})
     vi.mocked(fetchSeason).mockResolvedValue(season)
     vi.mocked(fetchHouseholds).mockResolvedValue([household])
     vi.mocked(fetchOrders).mockResolvedValue([boOrder])
@@ -91,7 +93,7 @@ const givenSave = () => {
     })
     const save = (desiredOrders: DesiredOrder[]) =>
         scaffoldPrebookings(d1Client, {seasonId: season.id, householdId: household.id, userId: 1, deadlines: OPEN_DEADLINES, desiredOrders})
-    return {season, household, anna: anna!, bo: bo!, boOrder, dinner, adultPrice, takeaway, save}
+    return {season, household, anna, bo, boOrder, dinner, adultPrice, takeaway, save}
 }
 
 // Anna's draft changes one dinner per weekday: past the season's cancel deadline it releases, before it it changes the
@@ -147,12 +149,13 @@ const released = (order: OrderDisplay, minutesAgo: number): OrderDisplay => ({..
  */
 const givenSupply = (ticketPrices: TicketPrice[], tickets: TicketOnSale[], entries: TicketWaitlistDisplay[], held: TicketOnSale[] = []) => {
     const ticketTypeOf = useWaitlist().ticketTypeOfPrice(ticketPrices)
+    const releasedTime = ({order}: TicketOnSale) => present(order.releasedAt, 'release time').getTime()
     const oldestOfType = (dinnerEventId: number, ticketType: TicketType) => tickets
         .filter(({order}) => order.dinnerEventId === dinnerEventId && ticketTypeOf(order.ticketPriceId) === ticketType)
-        .sort((a, b) => a.order.releasedAt!.getTime() - b.order.releasedAt!.getTime())[0]
+        .sort((a, b) => releasedTime(a) - releasedTime(b))[0]
     const sell = (ticket: TicketOnSale) => {
         tickets.splice(tickets.indexOf(ticket), 1)
-        return {order: OrderFactory.defaultOrderDetail(undefined, {id: ticket.order.id}), ticketPriceId: ticket.order.ticketPriceId!, sellerHouseholdId: ticket.householdId, sellerInhabitantId: ticket.order.inhabitantId}
+        return {order: OrderFactory.defaultOrderDetail(undefined, {id: ticket.order.id}), ticketPriceId: present(ticket.order.ticketPriceId, 'ticket price'), sellerHouseholdId: ticket.householdId, sellerInhabitantId: ticket.order.inhabitantId}
     }
     let nextEntryId = 500
     const join = (requests: TicketWaitlistCreate[]): TicketWaitlistDisplay[] => {
@@ -191,7 +194,7 @@ const givenSupply = (ticketPrices: TicketPrice[], tickets: TicketOnSale[], entri
     })
     writeUpdates.mockImplementation(async (_d1, updates) => {
         for (const {orderId} of updates.filter(update => update.isNewRelease)) {
-            const {order, householdId} = held.find(ticket => ticket.order.id === orderId)!
+            const {order, householdId} = present(held.find(ticket => ticket.order.id === orderId), `held order ${orderId}`)
             tickets.push({order: released(order, 0), householdId})
         }
         return updates.length
@@ -224,10 +227,10 @@ const givenClosedDinner = ({forSale, waiting, annaHolds}: {forSale: boolean, wai
     // Anna's and Bo's wishes for the dinner: as draft preferences for every weekday, or as the grid's desired orders
     const intents = {
         preferences: {
-            preview: (modes: readonly DinnerMode[]) => scaffold({preview: true, preferences: [anna, bo].map((inhabitant, index) => ({inhabitantId: inhabitant.id, dinnerPreferences: createDefaultWeekdayMap(modes[index]!)}))}),
+            preview: (modes: readonly DinnerMode[]) => scaffold({preview: true, preferences: [anna, bo].map((inhabitant, index) => ({inhabitantId: inhabitant.id, dinnerPreferences: createDefaultWeekdayMap(itemAt(modes, index))}))}),
             // The endpoint stores the draft, then scaffolds the household
             save: (modes: readonly DinnerMode[]) => {
-                vi.mocked(fetchHouseholds).mockResolvedValue([storedHousehold(inhabitantId => modes[inhabitantId === anna.id ? 0 : 1]!)])
+                vi.mocked(fetchHouseholds).mockResolvedValue([storedHousehold(inhabitantId => itemAt(modes, inhabitantId === anna.id ? 0 : 1))])
                 return scaffold({})
             }
         },
@@ -257,7 +260,7 @@ const givenClaims = ({households: people, dinners, forSale = 0, waiting = 0, que
 }) => {
     const {season, household} = givenSave()
     const closedDinners = Array.from({length: dinners}, (_, index) => DinnerEventFactory.dinnerEventAt(51 + index, 1 + index))
-    const priceOf = (ticketType: TicketType) => findTicketPriceByType(ticketType, season.ticketPrices)!
+    const priceOf = (ticketType: TicketType) => present(findTicketPriceByType(ticketType, season.ticketPrices), ticketType)
     const adultPrice = priceOf(ADULT)
     const personOf = (id: number, householdId: number, ticketType: TicketType, dinnerMode: DinnerMode) => ({
         ...HouseholdFactory.defaultInhabitantData(`person${id}`), id, householdId,
@@ -265,7 +268,7 @@ const givenClaims = ({households: people, dinners, forSale = 0, waiting = 0, que
     })
     // The first household is the one a scoped run names
     const claiming = people.map((_, index) => index === 0 ? household : HouseholdFactory.defaultHouseholdDetail(`claimers${index}`))
-    const claims = people.flatMap((ticketTypes, index) => ticketTypes.map(ticketType => ({ticketType, householdId: claiming[index]!.id})))
+    const claims = people.flatMap((ticketTypes, index) => ticketTypes.map(ticketType => ({ticketType, householdId: itemAt(claiming, index).id})))
     const claimers = claims.map(({ticketType, householdId}, index) => personOf(700 + index, householdId, ticketType, Mode.DINEIN))
     const sellers = HouseholdFactory.defaultHouseholdDetail('releasing')
     const sellerPeople = Array.from({length: releasing}, (_, index) => personOf(800 + index, sellers.id, ADULT, Mode.NONE))
@@ -285,7 +288,7 @@ const givenClaims = ({households: people, dinners, forSale = 0, waiting = 0, que
         WaitlistFactory.defaultEntry({dinnerEventId, inhabitantId, ticketPrice: priceOf(ticketType), householdId, createdAt: subMinutes(new Date(), minutesAgo)})
     const entries = [
         ...closedDinners.flatMap(dinner => Array.from({length: waiting}, (_, index) => entryOn(dinner.id, OTHER_INHABITANT_ID + index, ADULT, OTHER_HOUSEHOLD_ID, 60 - index))),
-        ...(queued ? closedDinners.flatMap(dinner => claimers.map((claimer, index) => entryOn(dinner.id, claimer.id, claims[index]!.ticketType, claimer.householdId, 30))) : [])
+        ...(queued ? closedDinners.flatMap(dinner => claimers.map((claimer, index) => entryOn(dinner.id, claimer.id, itemAt(claims, index).ticketType, claimer.householdId, 30))) : [])
     ].map((entry, index) => ({...entry, id: 21 + index}))
     const households = [
         ...claiming.map(candidate => ({...candidate, inhabitants: claimers.filter(claimer => claimer.householdId === candidate.id)})),
@@ -341,7 +344,7 @@ describe('scaffoldPrebookings', () => {
             const result = await save([WaitlistFactory.wishOf(annaQueued, {dinnerMode}), takeaway(bo.id, boOrder.id)])
 
             expect(result.failed).toEqual([expect.objectContaining({inhabitantId: anna.id, action})])
-            expect(result.failed[0]!.reason).toBe(reason)
+            expect(itemAt(result.failed, 0).reason).toBe(reason)
             expect(result.results).toEqual([expect.objectContaining({inhabitantId: bo.id, action: BookingActionSchema.enum.CHANGE_MODE})])
         })
     })
@@ -557,7 +560,7 @@ describe('scaffoldPrebookings', () => {
                     return scaffoldPrebookings(d1Client, {seasonId: season.id, householdId: household.id})
                 }
             }
-            return {runs, annaPlace, boPlace, anna, bo, dayAfter, seasonId: season.id!, household}
+            return {runs, annaPlace, boPlace, anna, bo, dayAfter, seasonId: present(season.id, 'season id'), household}
         }
 
         it.each([
@@ -583,7 +586,7 @@ describe('scaffoldPrebookings', () => {
             }], audit(join))
         })
 
-        // A household's leaves are one write and its changes another, whatever the number of places (ADR-014)
+        // A household's leaves are one write and its changes another, whatever the number of places
         it.each([
             {change: 'leave', dinnerMode: Mode.NONE, action: Action.LEAVE, written: () => vi.mocked(deleteWaitlistEntries).mock.calls.map(([, leaves]) => leaves)},
             {change: 'change', dinnerMode: Mode.TAKEAWAY, action: Action.REQUEUE, written: () => vi.mocked(updateWaitlistEntryOrders).mock.calls.map(([, requeues]) => requeues)}
@@ -610,7 +613,7 @@ describe('scaffoldPrebookings', () => {
     })
 
     // A run settles every household's claims per dinner, after the households' runs: one read of the line and of the
-    // dinner's tickets for sale, one write of the joins (ADR-014)
+    // dinner's tickets for sale, one write of the joins
     describe('claims on closed dinners', () => {
         beforeEach(() => {
             vi.clearAllMocks()
@@ -698,7 +701,7 @@ describe('scaffoldPrebookings', () => {
             expect(writersCalled()).toEqual(['writeUpdates', 'claimOrder', 'sellTicketsToWaitlist'])
             expect(saved.totals).toMatchObject({[Action.RELEASE]: 1, [Action.BUY]: 1, [Action.QUEUE]: 0})
             expect(saved.outcomes.ticketsSold.map(sale => [sale.buyerInhabitantId, sale.buyerHouseholdId, sale.sellerHouseholdId, sale.sellerInhabitantId]))
-                .toEqual([[claimers[0]!.id, householdId, sellerHouseholdId, sellerPeople[0]!.id]])
+                .toEqual([[itemAt(claimers, 0).id, householdId, sellerHouseholdId, itemAt(sellerPeople, 0).id]])
             expect(saved.outcomes.waitlistTicketsSold).toEqual([])
             expect(previewed).toEqual(asPreviewOf(saved))
         })
@@ -721,7 +724,7 @@ describe('scaffoldPrebookings', () => {
         // A preference save runs on the weekdays it changes; the result names the dinners the run decides
         it('GIVEN a household of five eating on a closed dinner\'s weekday WHEN the household\'s run on that weekday settles THEN it names that dinner alone and writes five entries, one per person, each at its own place', async () => {
             const {claimers, dinners, householdId, scaffold} = givenClaims({households: [[ADULT, ADULT, ADULT, ADULT, ADULT]], dinners: 2})
-            const day = dinners[0]!
+            const day = itemAt(dinners, 0)
 
             const result = await scaffold({householdId, weekdays: [dateToWeekDay(day.date)]})
 
@@ -752,7 +755,7 @@ describe('scaffoldPrebookings', () => {
         // hands the entries back in
         it('GIVEN the joins\' entries handed back in reverse WHEN the household\'s claims join a closed dinner\'s waiting list THEN every place and every joined outcome names its own person', async () => {
             const {claimers, householdId, scaffold} = givenClaims({households: [[ADULT, ADULT, CHILD]], dinners: 1})
-            const insertOrder = vi.mocked(createWaitlistEntries).getMockImplementation()!
+            const insertOrder = present(vi.mocked(createWaitlistEntries).getMockImplementation(), 'the join')
             vi.mocked(createWaitlistEntries).mockImplementation(async (...write) => (await insertOrder(...write)).reverse())
             const indexOf = (inhabitantId: number) => claimers.findIndex(claimer => claimer.id === inhabitantId)
 
@@ -779,11 +782,13 @@ describe('scaffoldPrebookings', () => {
         ] as const)('GIVEN a baby of household 8 waiting in the baby line WHEN Anna\'s household $wish $ticket THEN it lands as $action and the waiting baby buys from it: $soldToLine', async ({price, dinnerMode, holds, action, writes, soldToLine}) => {
             const {season, household, anna, dinner} = givenSave()
             // The factory lists the baby who tastes first, the hungry baby second
-            const [tasting, hungry] = season.ticketPrices.filter(ticketPrice => ticketPrice.ticketType === TicketTypeSchema.enum.BABY)
-            const babyPrice = {tasting, hungry}[price]!
+            const babyPrices = season.ticketPrices.filter(ticketPrice => ticketPrice.ticketType === TicketTypeSchema.enum.BABY)
+            const tasting = itemAt(babyPrices, 0)
+            const hungry = itemAt(babyPrices, 1)
+            const babyPrice = {tasting, hungry}[price]
             const annaOrder = OrderFactory.defaultOrder(undefined, {id: 41, inhabitantId: anna.id, dinnerEventId: dinner.id, ...OrderFactory.priceFieldsOf(babyPrice)})
             const babyWaiting = WaitlistFactory.defaultEntry({
-                id: 21, inhabitantId: OTHER_INHABITANT_ID, dinnerEventId: dinner.id, ticketPrice: hungry!, householdId: OTHER_HOUSEHOLD_ID, createdAt: subMinutes(new Date(), 60)
+                id: 21, inhabitantId: OTHER_INHABITANT_ID, dinnerEventId: dinner.id, ticketPrice: hungry, householdId: OTHER_HOUSEHOLD_ID, createdAt: subMinutes(new Date(), 60)
             })
             const held = holds ? [annaOrder] : []
             vi.mocked(fetchOrders).mockResolvedValue(held)
@@ -828,15 +833,15 @@ describe('scaffoldPrebookings', () => {
         it('GIVEN nothing for sale on a closed dinner WHEN Anna\'s guest wish for a hungry baby joins the waiting list THEN its place carries the claim\'s price', async () => {
             const {season, household, anna, dinner} = givenSave()
             // The factory lists the baby who tastes first, the hungry baby second
-            const [, hungry] = season.ticketPrices.filter(ticketPrice => ticketPrice.ticketType === TicketTypeSchema.enum.BABY)
+            const hungry = itemAt(season.ticketPrices.filter(ticketPrice => ticketPrice.ticketType === TicketTypeSchema.enum.BABY), 1)
             vi.mocked(fetchOrders).mockResolvedValue([])
             givenSupply(season.ticketPrices, [], [])
 
             const result = await scaffoldPrebookings(d1Client, {seasonId: season.id, householdId: household.id, userId: 7, desiredOrders: [OrderFactory.defaultDesiredOrder({
-                inhabitantId: anna.id, dinnerEventId: dinner.id, ticketPriceId: hungry!.id, isGuestTicket: true
+                inhabitantId: anna.id, dinnerEventId: dinner.id, ticketPriceId: hungry.id, isGuestTicket: true
             })]})
 
-            expect(result.positions).toEqual([expect.objectContaining({inhabitantId: anna.id, isGuestTicket: true, position: 1, priceAtBooking: hungry!.price})])
+            expect(result.positions).toEqual([expect.objectContaining({inhabitantId: anna.id, isGuestTicket: true, position: 1, priceAtBooking: hungry.price})])
         })
     })
 

@@ -5,10 +5,12 @@
  * Uses D1 directly via context.cloudflare.env.DB.
  */
 import {runHeynaboImport} from '~~/server/utils/heynaboImportService'
+import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const LOG = '🔧 > TASK > [HEYNABO_IMPORT]'
 const {throwH3Error} = eventHandlerHelper
+const {JobTrigger} = useMaintenanceValidation()
 
 export default defineTask({
     meta: {
@@ -22,7 +24,7 @@ export default defineTask({
         }
 
         try {
-            const result = await runHeynaboImport(d1Client, 'CRON')
+            const result = await runHeynaboImport(d1Client, JobTrigger.CRON)
             return { result }
         } catch (error) {
             return throwH3Error(`${LOG} Failed`, error)

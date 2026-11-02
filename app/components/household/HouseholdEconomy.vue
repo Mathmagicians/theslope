@@ -12,8 +12,8 @@
 import {addDays} from 'date-fns'
 import {formatDate, createDateRange, formatDateRange} from '~/utils/date'
 import type {DateRange} from '~/types/dateTypes'
-import type {TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
-import type {OrderDisplay, DinnerEventInfo} from '~/composables/useBookingValidation'
+import {CostLineKind, type TransactionDisplay} from '~/composables/useBillingValidation'
+import type {CostEntry} from '~/composables/useBilling'
 import type {StatBox} from '~/components/economy/CostEntry.vue'
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import {BOOKING_WORDS} from '~/config/bookingWords'
@@ -23,10 +23,10 @@ interface Props {
     household: HouseholdDetail
 }
 
-const props = defineProps<Props>()
+defineProps<Props>()
 
-const {formatKroner} = useTicket()
-const {groupByCostEntry, calculateCurrentBillingPeriod, formatTicketCounts} = useBilling()
+const {formatKroner, formatTicketCounts} = useTicket()
+const {groupByCostEntry, calculateCurrentBillingPeriod} = useBilling()
 const now = useClock()
 const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, NOISE} = useTheSlopeDesignSystem()
 
@@ -65,31 +65,10 @@ bookingsStore.loadHouseholdBilling()
 bookingsStore.loadUpcomingOrders(false)
 const isUpcomingOrdersLoading = computed(() => isOrdersLoading.value || !isSelectedSeasonInitialized.value)
 
-const inhabitantsMap = computed(() => new Map(props.household.inhabitants.map(i => [i.id, i.name])))
-const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id}`
-
-type OrderWithContext = OrderDisplay & { dinnerEvent: DinnerEventInfo, inhabitant: { id: number, name: string } }
-
-const groupOrdersByDinner = groupByCostEntry<OrderWithContext>()
-const upcomingOrdersData = computed(() => {
-    return groupOrdersByDinner(
-        orders.value
-            .filter((o): o is OrderDisplay & { dinnerEvent: DinnerEventInfo } =>
-                isPendingOrder(o) &&
-                o.dinnerEvent !== undefined
-            )
-            .map(o => ({
-                ...o,
-                inhabitant: { id: o.inhabitantId, name: getInhabitantName(o.inhabitantId) }
-            })),
-        o => o.priceAtBooking
-    )
-})
-
-const groupTxByDinner = groupByCostEntry<TransactionDisplay>()
+const upcomingOrdersData = computed(() => groupByCostEntry(orders.value.filter(isPendingOrder), o => o.priceAtBooking))
 
 const currentPeriodData = computed(() =>
-    billing.value ? groupTxByDinner(billing.value.currentPeriod.transactions, tx => tx.amount) : []
+    billing.value ? groupByCostEntry(billing.value.currentPeriod.transactions, tx => tx.amount) : []
 )
 
 // A row of the period table: the current period, not yet billed (virtual), or a past invoice
@@ -101,7 +80,7 @@ interface UnifiedBillingPeriod {
     dinnerCount: number
     ticketCounts: string
     isClosed: boolean           // true = past invoice, false = virtual/current
-    groups: CostEntry<TransactionDisplay, DinnerEventInfo>[]
+    groups: CostEntry<TransactionDisplay>[]
     transactionSum: number      // Control sum: Σ transaction amounts
 }
 
@@ -129,7 +108,7 @@ const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
     })
 
     for (const inv of billing.value.pastInvoices) {
-        const groups = groupTxByDinner(inv.transactions, tx => tx.amount)
+        const groups = groupByCostEntry(inv.transactions, tx => tx.amount)
         const invoiceTransactionSum = sumAmounts(inv.transactions)
         periods.push({
             id: inv.id,
@@ -221,7 +200,7 @@ const upcomingPeriodStart = computed(() => addDays(calculateCurrentBillingPeriod
                 <CostLine
                     v-for="order in row.original.items"
                     :key="order.id"
-                    :item="order"
+                    :line="{kind: CostLineKind.ORDER, order, inhabitant: order.inhabitant}"
                     :history-order-id="historyOrderId"
                     @toggle-history="toggleHistory"
                 />
@@ -325,7 +304,7 @@ const upcomingPeriodStart = computed(() => addDays(calculateCurrentBillingPeriod
                       <CostLine
                           v-for="tx in dinnerRow.original.items"
                           :key="tx.id"
-                          :item="tx"
+                          :line="{kind: CostLineKind.TRANSACTION, transaction: tx}"
                           :history-order-id="historyOrderId"
                           compact
                           @toggle-history="toggleHistory"

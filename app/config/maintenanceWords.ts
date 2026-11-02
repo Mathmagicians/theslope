@@ -1,10 +1,13 @@
 /**
- * The maintenance job words admins read on the system page and in the job toasts. Plain module without auto-imports
- * (ADR-017).
+ * The maintenance job words admins read on the system page and in the job toasts. Plain module without auto-imports.
  */
 import {useMaintenanceValidation, type JobType, type JobStatus} from '~/composables/useMaintenanceValidation'
+import {ADMIN_WORDS} from '~/config/adminWords'
+import {BOOKING_WORDS} from '~/config/bookingWords'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 const {JobType: Job, JobStatus: Status} = useMaintenanceValidation()
+const transactions = 'Transaktioner'
 
 export const MAINTENANCE_WORDS = {
     /** A job's name in the job history and in its toasts */
@@ -52,16 +55,16 @@ export const MAINTENANCE_WORDS = {
     /** The labels of a run's stats, per job */
     stats: {
         [Job.HEYNABO_IMPORT]: {
-            households: 'Husstande',
-            inhabitants: 'Beboere',
-            users: 'Brugere',
+            households: ADMIN_WORDS.tabs.households,
+            inhabitants: HOUSEHOLD_WORDS.inhabitants,
+            users: ADMIN_WORDS.tabs.users,
             linked: 'Linked',
             admins: 'Admins'
         },
         [Job.DAILY_MAINTENANCE]: {
             consumed: 'Middage afholdt',
             closed: 'Ordrer lukket',
-            transactions: 'Transaktioner',
+            transactions,
             waitlists: 'Ventelister',
             preferences: 'Præferencer klippet',
             bookings: 'Bookinger'
@@ -69,8 +72,8 @@ export const MAINTENANCE_WORDS = {
         [Job.MONTHLY_BILLING]: {
             periods: 'Perioder',
             invoices: 'PBS Fakturaer',
-            transactions: 'Transaktioner',
-            total: 'Total',
+            transactions,
+            total: BOOKING_WORDS.billing.stats.total,
             csvUploaded: 'CSV uploadet',
             mailsSent: 'Mails sendt',
             pending: 'Afventer'

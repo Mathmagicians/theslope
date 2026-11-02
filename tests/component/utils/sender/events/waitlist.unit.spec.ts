@@ -64,6 +64,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllEnvs())
 
+const d1Client = {} as D1Database
 const dinner = {dinnerEventId: 7, date: new Date(2026, 9, 19), menuTitle: 'Lasagne'}
 const TEAM_ID = 3
 const to = 'anna@example.com'
@@ -109,10 +110,10 @@ describe('booking notifications after the action', () => {
 
     it.each([
         {operation: 'notifyBookingOutcomes', notify: (channel: EmailChannel) =>
-            notifyBookingOutcomes({} as D1Database, channel, {joined: [], ticketsSold: [sale], waitlistTicketsSold: [sale], waitlistPortionsAssigned: []})},
+            notifyBookingOutcomes(d1Client, channel, {joined: [], ticketsSold: [sale], waitlistTicketsSold: [sale], waitlistPortionsAssigned: []})},
         {operation: 'notifyExtraPortions', notify: (channel: EmailChannel) =>
-            notifyExtraPortions({} as D1Database, channel, WaitlistFactory.defaultAssignmentResult({dinnerEventId: 7, waitlistTicketsSold: [sale]}))},
-        {operation: 'sendNotifications', notify: (channel: EmailChannel) => sendNotifications({} as D1Database, channel, 9)}
+            notifyExtraPortions(d1Client, channel, WaitlistFactory.defaultAssignmentResult({dinnerEventId: 7, waitlistTicketsSold: [sale]}))},
+        {operation: 'sendNotifications', notify: (channel: EmailChannel) => sendNotifications(d1Client, channel, 9)}
     ])('$operation rejects with a failed lookup\'s error, logs the booking status sender event failed and sends no notification', async ({notify}) => {
         const queue = fakeQueue()
 
@@ -153,9 +154,9 @@ describe('the mails of the waiting list\'s placements', () => {
 
     it.each([
         {placement: 'an extra portion a scaffold run finished', kinds: [Kind.WAITLIST_EXTRA_PORTION], notify: (channel: EmailChannel) =>
-            notifyBookingOutcomes({} as D1Database, channel, {joined: [], ticketsSold: [], waitlistTicketsSold: [], waitlistPortionsAssigned: [portion]})},
+            notifyBookingOutcomes(d1Client, channel, {joined: [], ticketsSold: [], waitlistTicketsSold: [], waitlistPortionsAssigned: [portion]})},
         {placement: 'a sale the chef\'s extra portions finished', kinds: [Kind.TICKET_SOLD, Kind.WAITLIST_TICKET_ASSIGNED], notify: (channel: EmailChannel) =>
-            notifyExtraPortions({} as D1Database, channel, WaitlistFactory.defaultAssignmentResult({dinnerEventId: dinner.dinnerEventId, waitlistTicketsSold: [sale]}))}
+            notifyExtraPortions(d1Client, channel, WaitlistFactory.defaultAssignmentResult({dinnerEventId: dinner.dinnerEventId, waitlistTicketsSold: [sale]}))}
     ])('$placement reaches its mails', async ({kinds, notify}) => {
         const queue = fakeQueue()
 
@@ -227,7 +228,7 @@ describe('the people a run\'s mails name', () => {
     // The parent joins and books the child; the neighbour's place reaches the threshold
     const joined = [joinedEvent(parent, userIdOf(parent), 1), joinedEvent(child, userIdOf(parent), 2), joinedEvent(neighbour, userIdOf(neighbour), 3)]
 
-    const notify = (queue: FakeSenderQueue, outcomes: BookingOutcomes) => notifyBookingOutcomes({} as D1Database, NotificationFactory.channel(queue), outcomes)
+    const notify = (queue: FakeSenderQueue, outcomes: BookingOutcomes) => notifyBookingOutcomes(d1Client, NotificationFactory.channel(queue), outcomes)
     const ofKind = (kind: NotificationKind) => (message: EmailMessage): boolean => message.meta.kind === kind
     const mailsOfKind = (queue: FakeSenderQueue, kind: NotificationKind): EmailMessage[] => sentMessages(queue).filter(ofKind(kind))
 
@@ -271,7 +272,7 @@ describe('the people a run\'s mails name', () => {
 
     it.each([
         {event: 'the dinner is booked', run: (queue: FakeSenderQueue) => notify(queue, everyKind())},
-        {event: 'a portion is added', run: (queue: FakeSenderQueue) => notifyExtraPortions({} as D1Database, NotificationFactory.channel(queue),
+        {event: 'a portion is added', run: (queue: FakeSenderQueue) => notifyExtraPortions(d1Client, NotificationFactory.channel(queue),
             WaitlistFactory.defaultAssignmentResult({dinnerEventId: dinner.dinnerEventId, waitlistTicketsSold: [saleTo(buyer)], assigned: [portionTo(buyer)]}))}
     ])('GIVEN the booking emails flag off WHEN $event THEN no email is sent and no delivery record is written', async ({run}) => {
         vi.stubEnv('SHOULD_SEND_BOOKING_EMAILS_FLAG', 'false')
@@ -431,7 +432,7 @@ describe('the people a run\'s mails name', () => {
         let historyId = 0
         const historyRow = (orderId: number, action: OrderAuditAction, auditData: string, minute: number): OrderHistoryDisplay =>
             OrderFactory.defaultOrderHistoryDisplay(undefined, {id: ++historyId, orderId, action, auditData, dinnerEventId: dinner.dinnerEventId, timestamp: at(minute)})
-        const snapshotOf = (orderId: number) => OrderFactory.defaultOrderSnapshot({id: orderId, dinnerEventId: dinner.dinnerEventId})
+        const snapshotOf = (orderId: number) => OrderFactory.defaultOrderAuditSnapshot({id: orderId, dinnerEventId: dinner.dinnerEventId})
         // The row of a sale of the order, and the row of the chef's extra portion that created the order; before the clock
         // starts unless a minute is given
         const bought = (orderId: number, minute = -10) =>
@@ -552,7 +553,7 @@ describe('the people a run\'s mails name', () => {
         const sale = () => OrderFactory.defaultOrderHistoryDisplay(undefined, {
             id: 1, orderId: 77, inhabitantId: buyer.id, dinnerEventId: dinner.dinnerEventId, action: OrderAuditActionSchema.enum.USER_CLAIMED, timestamp: at(10),
             auditData: createOrderAuditData(OrderAuditChangeSchema.enum.BUY,
-                OrderFactory.defaultOrderSnapshot({id: 77, dinnerEventId: dinner.dinnerEventId, inhabitantId: seller.id, householdId: sellers.id}),
+                OrderFactory.defaultOrderAuditSnapshot({id: 77, dinnerEventId: dinner.dinnerEventId, inhabitantId: seller.id, householdId: sellers.id}),
                 OrderAuditSourceSchema.enum['waitlist-assignment'])
         })
         const soldTicket = OrderFactory.defaultOrder(undefined, {id: 77, dinnerEventId: dinner.dinnerEventId, inhabitantId: buyer.id, ticketPriceId: ADULT_PRICE_ID})
@@ -571,7 +572,7 @@ describe('the people a run\'s mails name', () => {
             vi.mocked(fetchOrders).mockResolvedValue(booked)
         }
         const send = (sender: FakeSenderQueue, options?: Parameters<typeof sendNotifications>[3], seasonId: number | null = SEASON_ID) =>
-            sendNotifications({} as D1Database, NotificationFactory.channel(sender), seasonId, options)
+            sendNotifications(d1Client, NotificationFactory.channel(sender), seasonId, options)
 
         const states = [
             {given: 'no delivery records', flag: 'true', dinnerIs: DinnerState.SCHEDULED, runBefore: async () => undefined, sent: true},

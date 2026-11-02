@@ -1,9 +1,12 @@
 /**
- * The booking words users read. Plain module without auto-imports: the app and the server import it (ADR-017).
+ * The booking words users read. Plain module without auto-imports: the app and the server import it.
  */
 import {useBookingValidation, DinnerMode, DinnerState, OrderAuditAction, OrderState, TicketState, type BookingAction, type BookingOutcome} from '~/composables/useBookingValidation'
 import {useBillingValidation, type VatMode} from '~/composables/useBillingValidation'
 import {PRICE_WORDS} from '~/config/priceWords'
+import {ADMIN_WORDS} from '~/config/adminWords'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
+import {CHEF_DEADLINE_WORDS} from '~/config/notificationTemplates'
 
 const {BookingActionSchema, TicketChangeKindSchema} = useBookingValidation()
 const Action = BookingActionSchema.enum
@@ -22,10 +25,23 @@ const pbsInvoice = 'PBS Faktura'
 const unknown = 'Ukendt'
 const missingPrice = (who: string) => `Kan ikke booke: mangler billetpris for ${who}`
 const total = 'Total'
+const dinnerWord = 'Fællesspisning'
+const ticketTypeWord = 'Billettype'
+const guestWord = 'Gæst'
+const updateWord = 'Opdater'
+const scheduledWord = 'Planlagt'
+const consumedWord = 'Afholdt'
+const cancellationWord = 'Framelding'
+const inCalendar = 'Fællesspisningen er i kalenderen'
+const placeBeingAssigned = 'pladsen er ved at blive tildelt'
+const revenueWord = 'Indtægter'
+const deadlineIn = 'om'
 
 export const BOOKING_WORDS = {
     /** A dinner's name while the chef has written no menu */
-    untitledDinner: 'Fællesspisning',
+    untitledDinner: dinnerWord,
+    /** A ticket's type, as a field and a column name it */
+    ticketType: ticketTypeWord,
     /** The dates a team's cooking round spans, after the team's badge in the Budget pane */
     roundPeriod,
     /** The heading of a team's cooking round in the Madbestilling hint: the team and the dates it cooks */
@@ -45,8 +61,8 @@ export const BOOKING_WORDS = {
         boxes: {revenue: 'INDTÆGTER', allowance: 'RÅDIGHEDSBELØB', contribution: 'KØKKENBIDRAG'},
         portions: (portions: string) => `${portions} kuverter`,
         contributionRate: (percent: number) => `${percent}% af indtægter`,
-        ticketColumns: {ticketType: 'Billettype', count: 'Antal', unitPrice: 'Stk pris', revenue: 'Total'},
-        revenue: 'Indtægter',
+        ticketColumns: {ticketType: ticketTypeWord, count: 'Antal', unitPrice: 'Stk pris', revenue: total},
+        revenue: revenueWord,
         contribution: (percent: number) => `Køkkenbidrag (${percent}%)`,
         columns: {date: dateColumn, dinner: 'Middag', payer: 'Bestiller', note: 'Note'},
         vatModes: {
@@ -59,9 +75,8 @@ export const BOOKING_WORDS = {
         } satisfies Record<VatMode, (amount: string) => string>,
         placeholders: {amount: 'beløb', note: 'note'}
     },
-    /** A ticket price in a select menu: its type with its price, and the age limit beside its description */
+    /** A ticket price in a select menu: the age limit beside its description */
     ticketPrice: {
-        label: (ticketType: string, price: string) => `${ticketType} · ${price} kr`,
         ageLimit: (years: number) => `Under ${years} år`
     },
     /** A cost line's ticket badge when its ticket type is gone */
@@ -75,7 +90,7 @@ export const BOOKING_WORDS = {
         fields: {
             dinnerMode: 'Hvordan spiser I?',
             count: 'Antal gæster',
-            ticketType: 'Billettype',
+            ticketType: ticketTypeWord,
             ticketTypePlaceholder: 'Vælg billettype...',
             allergies: 'Allergier (valgfrit)'
         },
@@ -97,7 +112,7 @@ export const BOOKING_WORDS = {
     billing: {
         period: {closed: pbsInvoice, open: 'Aktuel periode', settled: 'Samlet PBS Afregning', next: 'Næste PBS'},
         state: {running: 'Igangværende', closed: 'Afsluttet'},
-        stats: {households: 'Husstande', dinners: 'Middage', tickets: 'Kuverter', total},
+        stats: {households: ADMIN_WORDS.tabs.households, dinners: 'Middage', tickets: 'Kuverter', total},
         columns: {
             date: dateColumn,
             menu: 'Menu',
@@ -107,8 +122,8 @@ export const BOOKING_WORDS = {
             control: 'Kontrol',
             revenue: 'Omsætning',
             share: 'Del',
-            address: 'Adresse',
-            pbs: 'PBS',
+            address: HOUSEHOLD_WORDS.address,
+            pbs: HOUSEHOLD_WORDS.pbs,
             pbsId: 'PBS ID'
         },
         summary: {billingPeriod: 'Forbrugsperiode', cutoffDate: 'Opgørelsesdato', paymentDate: 'PBS opkræves'},
@@ -125,7 +140,6 @@ export const BOOKING_WORDS = {
             householdPlaceholder: 'Vælg husstand...',
             toast: 'Administrator Korrektion'
         },
-        unknownAddress: unknown,
         publicPage: {
             title: 'PBS Fakturaoversigt',
             community: 'Skråningen Fællesspisning',
@@ -168,7 +182,7 @@ export const BOOKING_WORDS = {
     power: {
         name: 'Alle',
         formName: 'Hele familien',
-        faces: 'beboere',
+        faces: HOUSEHOLD_WORDS.preferences.powerRow.faces,
         editTitle: 'Vælg for hele familien',
         toggle: 'Power mode',
         save: 'Gem for alle',
@@ -196,8 +210,8 @@ export const BOOKING_WORDS = {
         [Action.BUY]: 'Køb billet',
         [Action.QUEUE]: 'Skriv på venteliste',
         [Action.LEAVE]: 'Forlad ventelisten',
-        [Action.REQUEUE]: 'Opdater',
-        [Action.CHANGE_MODE]: 'Opdater'
+        [Action.REQUEUE]: updateWord,
+        [Action.CHANGE_MODE]: updateWord
     } satisfies Record<BookingOutcome, string>,
     /**
      * The guest form's button, a booker's guests of one ticket type counted in a preview or toast line, the guests a
@@ -209,27 +223,29 @@ export const BOOKING_WORDS = {
         add: 'Tilføj gæst',
         save: (count: number) => count === 1 ? 'Tilmeld gæst' : 'Tilmeld gæster',
         count: (count: number) => `×${count}`,
-        label: (count: number) => count === 1 ? 'Gæst' : `${count} Gæster`,
-        name: 'Gæst',
+        label: (count: number) => count === 1 ? guestWord : `${count} Gæster`,
+        name: guestWord,
         of: guestOf,
         ofBooker: (booker: string) => `${guestOf} ${booker}`,
         unknownBooker: 'ukendt',
         editTitle: 'Opdater gæstebillet'
     },
     /**
-     * The booking form's inhabitant row: its expanded title; a save that finds no ticket price for a person or a guest
+     * The booking form's inhabitant row: its expanded title; the name column's header on a phone, where the row carries
+     * its tickets; a save that finds no ticket price for a person or a guest
      */
     bookingForm: {
         editTitle: (name: string) => `Vælg spisning for ${name}`,
+        ticketsColumn: 'Billetter',
         missingPrice,
         missingGuestPrice: missingPrice('gæst')
     },
     /** A dinner's state as its badge names it */
     dinnerStates: {
-        [DinnerState.SCHEDULED]: 'Planlagt',
+        [DinnerState.SCHEDULED]: scheduledWord,
         [DinnerState.ANNOUNCED]: 'Annonceret',
         [DinnerState.CANCELLED]: 'Aflyst',
-        [DinnerState.CONSUMED]: 'Afholdt'
+        [DinnerState.CONSUMED]: consumedWord
     } satisfies Record<DinnerState, string>,
     /** A ticket's state: CostLine and the order badges */
     orderStates: {
@@ -259,7 +275,7 @@ export const BOOKING_WORDS = {
         title: 'Se billetændringer',
         toggle: (open: boolean) => open ? 'Skjul billetændringer' : 'Vis billetændringer',
         failed: 'Kunne ikke hente billetændringer',
-        columns: {date: dateColumn, households: 'Husstand', performedBy: 'Af', change: 'Ændring', tickets: 'Billetter · kuverter', revenue: 'Indtægter'},
+        columns: {date: dateColumn, households: HOUSEHOLD_WORDS.household, performedBy: 'Af', change: 'Ændring', tickets: 'Billetter · kuverter', revenue: revenueWord},
         kinds: {
             [TicketChangeKind.CLOSE]: 'lukket',
             [TicketChangeKind.EXTRA_PORTIONS]: (booked: string) => `ekstra ${booked}`
@@ -274,7 +290,7 @@ export const BOOKING_WORDS = {
             toggle: (open: boolean, count: number) => open ? 'Skjul husstande' : `Vis alle ${count} husstande`
         },
         portions: (portions: string) => `· ${portions} kuverter`,
-        deadline: (moment: string) => `Framelding lukker · ${moment}`,
+        deadline: (moment: string) => `${cancellationWord} lukker · ${moment}`,
         more: 'Vis fuld historik'
     },
     /** Billetændringer's household of a ticket the history cannot attribute */
@@ -292,8 +308,8 @@ export const BOOKING_WORDS = {
         failed: 'FEJLET',
         /** A leave or a change the waiting list refuses while a run assigns the place */
         conflict: {
-            [Action.LEAVE]: 'pladsen er ved at blive tildelt',
-            [Action.REQUEUE]: 'pladsen er ved at blive tildelt'
+            [Action.LEAVE]: placeBeingAssigned,
+            [Action.REQUEUE]: placeBeingAssigned
         },
         unchanged: (count: number) => `${count} uændret`,
         householdFailed: 'Bookingen fejlede',
@@ -333,32 +349,32 @@ export const BOOKING_WORDS = {
      */
     deadlineLabels: {
         SCHEDULED: {
-            openText: 'Fællesspisningen er i kalenderen',
-            closedText: 'Fællesspisningen er i kalenderen'
+            openText: inCalendar,
+            closedText: inCalendar
         },
         ANNOUNCED: {
             label: 'Menu',
             openText: 'Chefkokken publicerer sin menu',
             closedText: 'Chefkokken har publiceret sin menu',
-            deadlinePrefix: 'om'
+            deadlinePrefix: deadlineIn
         },
         BOOKING_CLOSED: {
-            label: 'Framelding',
+            label: cancellationWord,
             openText: 'Booking kan ændres',
             closedText: 'Lukket for framelding',
             deadlinePrefix: 'åben de næste'
         },
         GROCERIES_DONE: {
-            label: 'Indkøb',
+            label: CHEF_DEADLINE_WORDS.GROCERIES_DONE.title,
             openText: 'Chefkokken bestiller madvarer',
             closedText: 'Chefkokken har bestilt madvarer',
-            deadlinePrefix: 'om'
+            deadlinePrefix: deadlineIn
         },
         CONSUMED: {
             label: 'Spisning',
             openText: 'Fællesspisning forude',
             closedText: 'Vi har spist den dejlige mad',
-            deadlinePrefix: 'om'
+            deadlinePrefix: deadlineIn
         },
         // The booking view's eating mode badge (DinnerBookingForm and GuestBookingForm)
         DINING_MODE: {
@@ -369,11 +385,11 @@ export const BOOKING_WORDS = {
     },
     /** The title of each step of a dinner's progress */
     dinnerSteps: {
-        SCHEDULED: 'Planlagt',
+        SCHEDULED: scheduledWord,
         ANNOUNCED: 'Publiceret',
-        BOOKING_CLOSED: 'Framelding',
+        BOOKING_CLOSED: cancellationWord,
         GROCERIES_DONE: 'Madbestilling klar',
-        CONSUMED: 'Afholdt'
+        CONSUMED: consumedWord
     },
     /** A step the chef has not done by its deadline */
     stepOverdue: 'mangler',
@@ -385,6 +401,8 @@ export const BOOKING_WORDS = {
         grid: 'Bookinger processeret',
         powerMode: 'Bookinger opdateret for hele husstanden'
     },
+    /** The booking grid's footer under the names: the column's sums */
+    gridSum: 'Sum',
     /** A failed read of the orders, the waiting lists or the dinner on view, and a failed save of the bookings */
     failed: {
         orders: 'Kunne ikke hente bookinger',

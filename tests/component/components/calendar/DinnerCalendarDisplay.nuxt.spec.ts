@@ -3,15 +3,15 @@ import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {DOMWrapper, enableAutoUnmount} from '@vue/test-utils'
 import {addDays, addMonths, endOfMonth, startOfMonth} from 'date-fns'
 import DinnerCalendarDisplay from '~/components/calendar/DinnerCalendarDisplay.vue'
-import {DEADLINE_LABELS, EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {DEADLINE_LABELS, type ReleasedTicketCounts} from '~/composables/useBooking'
 import CalendarLegend from '~/components/calendar/CalendarLegend.vue'
 import CountdownTimer, {COUNTDOWN_PALETTE} from '~/components/calendar/CountdownTimer.vue'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {DATE_WORDS} from '~/config/dateWords'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
-import {findAllByTestId, findByTestId, iconNamesIn, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
+import {findAllByTestId, findByTestId, iconNamesIn, lockedDinnerSupply, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
 import {CALENDAR, ICONS} from '~/composables/useTheSlopeDesignSystem'
-import {DinnerState} from '~/composables/useBookingValidation'
+import {DinnerState, useBookingValidation} from '~/composables/useBookingValidation'
 import {WAITLIST_TEST_IDS} from '~~/tests/component/components/dinner/waitlistTestIds'
 
 enableAutoUnmount(afterEach)
@@ -26,7 +26,8 @@ const MONTH = startOfMonth(addMonths(new Date(), 2))
 describe('DinnerCalendarDisplay lock chips', () => {
     const dinnerOn = (id: number, dayOfMonth: number) =>
         ({...DinnerEventFactory.defaultDinnerEventDisplay(), id, date: addDays(MONTH, dayOfMonth - 1)})
-    const supply = (total: number, queued: number): ReleasedTicketCounts => ({...EMPTY_RELEASED_TICKET_COUNTS, total, formatted: total > 0 ? `${total}V` : '-', queued, queuedFormatted: queued > 0 ? `${queued}V` : '-'})
+    const {ADULT} = useBookingValidation().TicketTypeSchema.enum
+    const supply = (total: number, queued: number): ReleasedTicketCounts => lockedDinnerSupply({[ADULT]: total}, {[ADULT]: queued})
 
     const FOR_SALE = dinnerOn(1, 10)
     const QUEUED = dinnerOn(2, 11)

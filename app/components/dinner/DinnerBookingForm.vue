@@ -211,7 +211,7 @@ interface Props {
   waitlistEntries?: TicketWaitlistDetail[]
   /** The dinner's bookings are on the way */
   loading?: boolean
-  /** An admin's save lifts the deadlines (ADR-016): its preview reads the same run */
+  /** An admin's save lifts the deadlines: its preview reads the same run */
   adminBypass?: boolean
   /** Draws the cancelled corner ribbon on a cancelled dinner; a parent that draws its own passes false */
   ribbon?: boolean
@@ -238,7 +238,7 @@ const householdsStore = useHouseholdsStore()
 const {selectedHousehold} = storeToRefs(householdsStore)
 const household = computed(() => props.household ?? selectedHousehold.value)
 
-// Permission-based form mode - EDIT if the user belongs to the household (session predicate on the auth store, ADR-017)
+// Permission-based form mode - EDIT if the user belongs to the household (session predicate on the auth store)
 // Admin can override via canEditAdminOverride prop
 const {isMemberOfHousehold} = useAuthStore()
 const formMode = computed(() => {
@@ -301,7 +301,7 @@ const canBook = computed(() => props.deadlines.canModifyOrders(props.dinnerEvent
 // Nothing lands on a cancelled dinner: the form wears the corner ribbon, and every ticket the cancelled face
 const isCancelled = computed(() => isDinnerCancelled(props.dinnerEvent))
 const showRibbon = computed(() => props.ribbon && isCancelled.value)
-// A row opens while the member may change the household and the booking rules give the row a mode (ADR-016)
+// A row opens while the member may change the household and the booking rules give the row a mode
 const canOpenRow = (row: TableRow): boolean => formMode.value === FORM_MODES.EDIT && row.enabledModes.length > 0
 
 const bookingContext = computed(() => bookingContextOf(household.value, props.deadlines, props.ticketPrices, now.value)(props.dinnerEvent))
@@ -343,7 +343,7 @@ const columns = computed(() => [
 // Booker for guest tickets: current user's inhabitant (for regular booking flow)
 const {myInhabitant: bookerInhabitant} = storeToRefs(householdsStore)
 
-// The modes a row may pick: the desired order its save sends for each mode, as the decision matrix lands it
+// The modes a row may pick: the desired order its save sends for each mode, as getBookingOptions lands it
 const enabledModesOf = (row: FormRow): DinnerMode[] => getBookingOptions({
   order: row.order,
   waitlistEntry: row.waitlistEntry ?? null,

@@ -14,7 +14,7 @@ const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
 // Variables to store IDs for cleanup
-// Only track household - CASCADE will delete all inhabitants (ADR-005)
+// Only the household is tracked: deleting it cascades its inhabitants
 // BUT users have SET NULL relationship - must track and cleanup separately
 let testHouseholdId: number
 const createdHouseholdIds: number[] = []
@@ -635,9 +635,9 @@ test.describe('Admin Inhabitant API', () => {
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         await attemptAll('Admin Inhabitant API cleanup', [
-            // Clean up seasons created in individual tests (CASCADE deletes teams and assignments per ADR-005)
+            // Clean up seasons created in individual tests (CASCADE deletes their teams and assignments)
             () => SeasonFactory.cleanupSeasons(context, createdSeasonIds),
-            // Clean up the test households (CASCADE deletes all inhabitants automatically per ADR-005)
+            // Clean up the test households (CASCADE deletes their inhabitants)
             () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds),
             // Clean up users created via createInhabitantWithUser (SET NULL means they survive inhabitant deletion)
             () => UserFactory.cleanupUsers(context, createdUserIds)

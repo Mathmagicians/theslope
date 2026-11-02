@@ -48,18 +48,12 @@ export default defineEventHandler(async (event): Promise<AssignTeamsResponse> =>
 
         // Compute team assignments using composable (call at request time, not module load time)
         const {assignTeamsToEvents, chunkTeamAssignments} = useSeason()
-        const eventsWithAssignments = assignTeamsToEvents(season)
-            .filter(event => event.id && event.cookingTeamId)
+        const assignments = assignTeamsToEvents(season).flatMap(({id, cookingTeamId}) => cookingTeamId ? [{id, cookingTeamId}] : [])
 
         // Process in batches to avoid D1 rate limits
-        const batches = chunkTeamAssignments(eventsWithAssignments)
         const updatedEvents: DinnerEventDisplay[] = []
-
-        for (const batch of batches) {
-            const batchResults = await Promise.all(
-                batch.map(event => assignCookingTeamToDinnerEvent(d1Client, event.id!, event.cookingTeamId!))
-            )
-            updatedEvents.push(...batchResults)
+        for (const batch of chunkTeamAssignments(assignments)) {
+            updatedEvents.push(...await Promise.all(batch.map(({id, cookingTeamId}) => assignCookingTeamToDinnerEvent(d1Client, id, cookingTeamId))))
         }
 
         console.info(`🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Successfully assigned teams to ${updatedEvents.length} dinner events for season ${seasonId}`)

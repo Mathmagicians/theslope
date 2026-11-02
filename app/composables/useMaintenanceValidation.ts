@@ -6,18 +6,17 @@ import type {MonthlyBillingJobResult} from './useBillingValidation'
 
 /**
  * Validation schemas for maintenance/job entities
- * Following ADR-001: Zod schemas in composables for shared validation
  *
- * JobRun tracks execution history of automated jobs (ADR-015: Idempotent Automated Jobs)
+ * JobRun tracks execution history of automated jobs
  */
 export const useMaintenanceValidation = () => {
-    // Re-export enums for application code (ADR-001)
+    // Re-export enums for application code
     const JobType = JobTypeSchema.enum
     const JobStatus = JobStatusSchema.enum
 
     /**
      * JobRun Display - for index endpoint (GET /api/admin/job-run)
-     * Single schema sufficient for this simple entity (ADR-009)
+     * Single schema sufficient for this simple entity
      */
     const JobRunDisplaySchema = z.object({
         id: z.number().int().positive(),
@@ -31,13 +30,20 @@ export const useMaintenanceValidation = () => {
         triggeredBy: z.string()
     })
 
+    /** Who starts a job: the cron or an admin */
+    const JobTriggerSchema = z.enum(['CRON', 'ADMIN'])
+    const JobTrigger = JobTriggerSchema.enum
+
     /**
      * JobRun Create - for starting a new job run
      */
     const JobRunCreateSchema = z.object({
         jobType: JobTypeSchema,
-        triggeredBy: z.string().default('CRON')
+        triggeredBy: z.string().default(JobTrigger.CRON)
     })
+
+    /** The trigger of a job an admin starts: by the admin's mail from the app, by its name from an import */
+    const adminTrigger = (who: string | undefined): string => `${JobTrigger.ADMIN}:${who}`
 
     /**
      * JobRun Update - for completing a job run
@@ -50,11 +56,9 @@ export const useMaintenanceValidation = () => {
         errorMessage: z.string().optional()
     })
 
-    /**
-     * Trigger job request (POST /api/admin/job-run/trigger)
-     */
-    const TriggerJobRequestSchema = z.object({
-        jobType: JobTypeSchema
+    /** The query of a job an admin starts over HTTP: the trigger the app names, else the admin */
+    const JobTriggerQuerySchema = z.object({
+        triggeredBy: z.string().optional().transform(triggeredBy => triggeredBy || JobTrigger.ADMIN)
     })
 
     /**
@@ -66,7 +70,7 @@ export const useMaintenanceValidation = () => {
     })
 
     // ============================================================================
-    // Serialization (ADR-010: Composable defines, repository uses)
+    // Serialization: the composable defines it, the repository uses it
     // ============================================================================
 
     /**
@@ -100,27 +104,28 @@ export const useMaintenanceValidation = () => {
         // Enum values for runtime checks
         JobType,
         JobStatus,
+        JobTrigger,
 
         // Entity schemas
         JobRunDisplaySchema,
         JobRunCreateSchema,
         JobRunUpdateSchema,
-        TriggerJobRequestSchema,
+        JobTriggerQuerySchema,
         JobRunQuerySchema,
+        adminTrigger,
 
         // Result schemas
         SeasonImportResponseSchema,
 
-        // Serialization (ADR-010)
+        // Serialization
         serializeResultSummary
     }
 }
 
-// Type exports (ADR-001)
+// Type exports
 export type JobRunDisplay = z.infer<ReturnType<typeof useMaintenanceValidation>['JobRunDisplaySchema']>
 export type JobRunCreate = z.infer<ReturnType<typeof useMaintenanceValidation>['JobRunCreateSchema']>
 export type JobRunUpdate = z.infer<ReturnType<typeof useMaintenanceValidation>['JobRunUpdateSchema']>
-export type TriggerJobRequest = z.infer<ReturnType<typeof useMaintenanceValidation>['TriggerJobRequestSchema']>
 export type JobType = z.infer<ReturnType<typeof useMaintenanceValidation>['JobTypeSchema']>
 export type JobStatus = z.infer<ReturnType<typeof useMaintenanceValidation>['JobStatusSchema']>
 export type SeasonImportResponse = z.infer<ReturnType<typeof useMaintenanceValidation>['SeasonImportResponseSchema']>

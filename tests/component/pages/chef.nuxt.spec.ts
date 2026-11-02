@@ -5,6 +5,7 @@ import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
 import {nextTick} from 'vue'
 import ChefPage from '~/pages/chef/index.vue'
 import {usePlanStore} from '~/stores/plan'
+import {useUsersStore} from '~/stores/users'
 import {useCookingTeam} from '~/composables/useCookingTeam'
 import {useCookingTeamValidation, type CookingTeamDetail, type CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
@@ -15,7 +16,8 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
-import {findAllByTestId, findByTestId, mountWithTooltipProvider, registerEmptyStoreEndpoints, resetStores} from '~~/tests/component/testHelpers'
+import {findAllByTestId, findByTestId, itemAt, mountWithTooltipProvider, registerEmptyStoreEndpoints, resetStores} from '~~/tests/component/testHelpers'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 
 // The test environment has no router to land a deep link on, and no session cookie
 const {mockRoute, mockNavigateTo, landNavigation, useRoute, session, useUserSession} = await vi.hoisted(async () => {
@@ -34,6 +36,8 @@ const TEST_IDS = {
 } as const
 
 const me = UserFactory.defaultUserWithInhabitant('chef-page')
+const {Inhabitant: myInhabitant} = me
+if (!myInhabitant) throw new Error('the factory user lives in a household')
 const SEASON_ID = 1
 const teamOne = SeasonFactory.defaultCookingTeamDisplay({id: 21, seasonId: SEASON_ID, name: 'Madhold 1 - chef-page'})
 const teamTwo = SeasonFactory.defaultCookingTeamDisplay({id: 22, seasonId: SEASON_ID, name: 'Madhold 2 - chef-page'})
@@ -55,14 +59,18 @@ const teamDetailOf = (team: CookingTeamDisplay, assignments: CookingTeamDetail['
     SeasonFactory.defaultCookingTeamDetail({...team, assignments, dinnerEvents: dinners.filter(d => d.cookingTeamId === team.id)})
 const myTeamOne = teamDetailOf(teamOne, [SeasonFactory.defaultCookingTeamAssignment({
     cookingTeamId: teamOne.id,
-    inhabitantId: me.Inhabitant!.id,
+    inhabitantId: myInhabitant.id,
     role: useCookingTeamValidation().TeamRoleSchema.enum.COOK
 })])
 
 // The stores the page creates read their datasets; the spec's own routes register after, and the last registration answers
 registerEmptyStoreEndpoints()
 registerEndpoint('/api/order/waitlist', () => [])
-const myHouseholdId = me.Inhabitant!.household!.id
+// The page lists no users: neither all users nor the allergy managers are read
+const usersRead = vi.fn(() => [])
+registerEndpoint('/api/admin/users', usersRead)
+registerEndpoint(`/api/admin/users/by-role/${useCoreValidation().SystemRoleSchema.enum.ALLERGYMANAGER}`, usersRead)
+const myHouseholdId = myInhabitant.household.id
 registerEndpoint(`/api/admin/household/${myHouseholdId}`, () => ({...HouseholdFactory.defaultHouseholdDetail('chef-page'), id: myHouseholdId}))
 ;[teamOne, teamTwo].forEach(team => registerEndpoint(`/api/admin/team/${team.id}`, () => teamDetailOf(team)))
 // The dinner's detail never arrives: the cases read the master panel, not the menu card
@@ -90,6 +98,7 @@ beforeAll(() => {
 
 beforeEach(() => {
     resetStores()
+    usersRead.mockClear()
     session.user.value = me
     mockNavigateTo.mockImplementation(landNavigation)
 })
@@ -125,11 +134,13 @@ describe('chef/index - the team on view', () => {
 
         const tabs = findByTestId(wrapper, TEST_IDS.teamSelector).findAll('[role="tab"]')
         expect(tabs, 'one tab, the team on view').toHaveLength(1)
-        expect(tabs[0]!.text()).toContain(getTeamShortName(team.name))
+        expect(itemAt(tabs, 0).text()).toContain(getTeamShortName(team.name))
         expect(findAllByTestId(wrapper, TEST_IDS.visitBadge), 'the tab is marked as a visit').toHaveLength(visiting ? 1 : 0)
         expect(findByTestId(wrapper, TEST_IDS.roleStatus).text().includes(TEAM_WORDS.visit.line(getTeamShortName(team.name))),
             'the visitor line').toBe(visiting)
         expect(wrapper.text()).not.toContain('Ingen madhold')
+        expect(useUsersStore().myTeams.map(own => own.id), 'the person\'s own teams').toEqual(myTeams.map(own => own.id))
+        expect(usersRead, 'the page lists no users').not.toHaveBeenCalled()
     })
 })
 

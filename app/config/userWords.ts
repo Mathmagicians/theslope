@@ -1,11 +1,12 @@
 /**
  * The user words: what admins read on the users page, and a member's own preferences in Mine indstillinger.
- * Plain module without auto-imports (ADR-017).
+ * Plain module without auto-imports: the server imports it too.
  */
 import {useUserPreferenceValidation, type NotificationChannel, type Palette, type TextScale, type PALETTES} from '~/composables/useUserPreferenceValidation'
 // Type only: useCoreValidation reads the sign-in words from here, so a value import would close a cycle
 import type {SystemRole} from '~/composables/useCoreValidation'
 import {BUTTON_WORDS} from '~/config/buttonWords'
+import {ADMIN_WORDS} from '~/config/adminWords'
 
 const {NotificationChannelSchema, PaletteSchema, TextScaleSchema} = useUserPreferenceValidation()
 const Channel = NotificationChannelSchema.enum
@@ -14,6 +15,8 @@ const TextScaleKey = TextScaleSchema.enum
 
 /** A contrast level the palette registry verifies a palette at */
 type ContrastLevel = NonNullable<typeof PALETTES[Palette]['level']>
+
+const systemRoles = 'Systemroller'
 
 export const USER_WORDS = {
     /** A signed-in user without an inhabitant: the header's greeting and the name on the admin's users page */
@@ -48,7 +51,7 @@ export const USER_WORDS = {
         settings: 'Indstillinger',
         logout: 'Log ud',
         roles: {
-            title: 'Systemroller',
+            title: systemRoles,
             heynaboOwned: `(${BUTTON_WORDS.heynabo.name})`,
             helpTitle: 'Om systemroller',
             help: {
@@ -97,11 +100,11 @@ export const USER_WORDS = {
      * column's word) and caption, and a failed read of the users
      */
     admin: {
-        title: 'Brugere',
+        title: ADMIN_WORDS.tabs.users,
         intro: 'Her kan du se de brugere, som vi har importeret fra Heynabo. Du kan også se, hvilke systemroller brugerne har. Brug System-fanen til at køre Heynabo import.',
         caption: 'Brugere - importeret fra Heynabo',
         search: 'Søg efter navn eller email...',
-        columns: {name: 'Navn', email: 'Mail', phone: 'Telefon', systemRoles: 'Systemroller', updatedAt: 'Sidst opdateret'},
+        columns: {name: 'Navn', email: 'Mail', phone: 'Telefon', systemRoles, updatedAt: 'Sidst opdateret'},
         failed: 'Kunne ikke loade bruger data 🤖'
     },
     /** The toast of a saved role change */

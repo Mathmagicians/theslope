@@ -1,9 +1,10 @@
 /**
- * The cooking team words users read on the chef page and the admin's team page. Plain module without auto-imports (ADR-017).
+ * The cooking team words users read on the chef page and the admin's team page. Plain module without auto-imports: the server imports it too.
  */
 import {useCookingTeamValidation, type TeamRole} from '~/composables/useCookingTeamValidation'
 import {DinnerMode} from '~/composables/useBookingValidation'
 import {PRICE_WORDS} from '~/config/priceWords'
+import {SEASON_WORDS} from '~/config/seasonWords'
 
 const Role = useCookingTeamValidation().TeamRoleSchema.enum
 
@@ -76,7 +77,7 @@ export const TEAM_WORDS = {
         unsaved: 'Hold skal gemmes før medlemmer kan tilføjes',
         addJokers: 'Tilføj jokere',
         jokerRow: 'Joker · en plads uden navn',
-        cookingDays: {edit: 'Holdets madlavningsdage', view: 'Madlavningsdage'}
+        cookingDays: {edit: 'Holdets madlavningsdage', view: SEASON_WORDS.editor.cookingDays}
     },
     /**
      * The button by a taken chef duty that changes it; the danger zone's dinner cancel, its action, what it does and its
@@ -214,10 +215,17 @@ export const TEAM_WORDS = {
             }
         }
     },
-    /** The admin's team page: a failed team read, the create button, and the toasts of its team, member and joker saves */
+    /**
+     * The admin's team page: a failed team read, the create button, the create face's question (how many teams, and how
+     * many more beside the season's teams), and the toasts of its team, member and joker saves
+     */
     admin: {
         failed: 'Kunne ikke hente hold',
         create: 'Opret madhold',
+        count: {
+            first: 'Hvor mange madhold skal vi have?',
+            more: (teams: number) => `Vi har allerede ${teams} madhold. Hvor mange nye vil du lave?`
+        },
         created: {
             title: 'Madhold oprettet',
             description: (teams: number, eventsAssigned: number) => `${teams} madhold oprettet · ${eventsAssigned} madlavninger tildelt`

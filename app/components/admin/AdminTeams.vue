@@ -3,7 +3,7 @@
  * AdminTeams - one master table, one portable team detail
  *
  * Selection is the open state and rides in ?team=; the detail's face rides in
- * ?mode=view|edit|create (ADR-006). The master table is constant - the master
+ * ?mode=view|edit|create. The master table is constant - the master
  * of LAYOUTS.masterDetailPage, the same columns in every state - and only the
  * detail beside it swaps: the all-teams calendar with no selection (the
  * overview, at a glance), the framed team detail when a row is open. Everything
@@ -46,6 +46,7 @@ import type {WeekDayMap} from "~/types/dateTypes"
 import type {JokerSlotCreate} from "~/composables/useDutyValidation"
 import {BUTTON_WORDS} from "~/config/buttonWords"
 import {TEAM_WORDS} from "~/config/teamWords"
+import {ADMIN_WORDS} from "~/config/adminWords"
 
 // Props - canEdit from parent for authorization
 interface Props {
@@ -91,7 +92,7 @@ const {formMode, onModeChange: baseOnModeChange} = useEntityFormManager<CookingT
 
 const onModeChange = baseOnModeChange
 
-// SEASON SELECTION MANAGEMENT - delegated to composable (ADR-007)
+// SEASON SELECTION MANAGEMENT - delegated to composable
 const selectedSeasonId = computed(() => selectedSeason.value?.id ?? null)
 const {season} = useSeasonSelector({
   seasons: computed(() => seasons.value),
@@ -126,7 +127,7 @@ watch([formMode, teamCount, selectedSeason, teams], () => {
   }
 }, {immediate: true})
 
-// EDIT MODE - Team selection via ?team= query param (ADR-006, survives store refresh)
+// EDIT MODE - Team selection via ?team= query param (survives store refresh)
 // Cleanup (strip ?team= on mode change) handled by onModeChange wrapper above.
 const {value: selectedTeamId, setValue: setSelectedTeamParam} = useQueryParam<number>('team', {
   serialize: (id) => id.toString(),
@@ -209,7 +210,7 @@ const handleBatchCreateTeams = async () => {
   if (!createDraft.value.length || !selectedSeason.value?.id) return
 
   try {
-    // The store's toast reports the operation result (ADR-009), not the draft
+    // The store's toast reports the operation result, not the draft
     await createTeam(createDraft.value)
     await onModeChange(FORM_MODES.VIEW)
   } catch (error) {
@@ -305,12 +306,12 @@ const columns = [
   },
   {
     accessorKey: 'name',
-    header: 'Madhold',
+    header: ADMIN_WORDS.tabs.teams,
     meta: {class: COMPONENTS.masterDetail.primaryColumn}
   },
   {
     accessorKey: 'affinity',
-    header: 'Madlavningsdage',
+    header: TEAM_WORDS.card.cookingDays.view,
     meta: {class: COMPONENTS.masterDetail.compactColumn}
   }
 ]
@@ -342,7 +343,7 @@ const columns = [
             :disabled="disabledModes.includes(FORM_MODES.CREATE)"
             @click="onModeChange(FORM_MODES.CREATE)"
         >
-          Opret madhold
+          {{ TEAM_WORDS.admin.create }}
         </UButton>
       </div>
     </template>
@@ -355,10 +356,7 @@ const columns = [
         <div v-if="formMode === FORM_MODES.CREATE" :class="COMPONENTS.adminTeams.createFace">
           <div :class="COMPONENTS.adminTeams.countRow">
             <label for="team-count" :class="COMPONENTS.adminTeams.countLabel">
-              <span v-if="teams.length > 0">Vi har allerede {{
-                  teams.length
-                }} madhold. Hvor mange nye vil du lave?</span>
-              <span v-else>Hvor mange madhold skal vi have?</span>
+              {{ teams.length > 0 ? TEAM_WORDS.admin.count.more(teams.length) : TEAM_WORDS.admin.count.first }}
             </label>
             <UInput
                 id="team-count"
@@ -401,7 +399,7 @@ const columns = [
                     :member-count="row.original.assignments?.length ?? 0"
                     :joker-slot-count="row.original.jokerSlotCount ?? 0"
                     :cooking-days-count="row.original.cookingDaysCount ?? 0"
-                    size="small"
+                    :size="SIZES.small"
                 />
               </div>
             </template>
@@ -422,7 +420,7 @@ const columns = [
                       :team-number="selectedTeamNumber"
                       :team-name="getTeamShortName(selectedTeam.name)"
                       :show-counts="false"
-                      size="small"
+                      :size="SIZES.small"
                   />
                   <UButton
                       v-if="props.canEdit && formMode === FORM_MODES.VIEW"

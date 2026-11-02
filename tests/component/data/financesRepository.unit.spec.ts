@@ -1,4 +1,4 @@
-import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
+import {beforeAll, beforeEach, describe, expect, it, vi, type Mock} from 'vitest'
 import {createError} from 'h3'
 import {DatabaseSync, type SQLInputValue} from 'node:sqlite'
 import {readdirSync, readFileSync} from 'node:fs'
@@ -10,6 +10,7 @@ import {useDeliveryValidation, type DeliveryCreate} from '~/composables/useDeliv
 import {useBookingValidation, OrderAuditAction, OrderSortBy} from '~/composables/useBookingValidation'
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import {callsInFlight, statementsInCallOrder} from '~~/tests/component/data/fakePrismaClient'
+import {itemAt} from '~~/tests/component/listHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 
@@ -60,7 +61,7 @@ describe('createOrders', () => {
         const {createdIds} = await createOrders(d1Client, household.id, orders, OrderFactory.defaultAuditContext())
 
         expect(createdIds).toEqual([101, 102])
-        expect(historyRows().map(row => [row.orderId, row.inhabitantId])).toEqual([[101, people[0]!.id], [102, people[1]!.id]])
+        expect(historyRows().map(row => [row.orderId, row.inhabitantId])).toEqual([[101, itemAt(people, 0).id], [102, itemAt(people, 1).id]])
     })
 })
 
@@ -103,7 +104,7 @@ describe('deleteOrder', () => {
 describe('updateOrdersBatch', () => {
     it('GIVEN a release in an admin\'s correction WHEN written THEN its history row names the change and the run\'s source in its audit data', async () => {
         const household = HouseholdFactory.defaultHouseholdDetail()
-        const person = household.inhabitants[0]!
+        const person = itemAt(household.inhabitants, 0)
         const order = {...OrderFactory.defaultOrder(undefined, {id: 301, inhabitantId: person.id, state: OrderStateSchema.enum.RELEASED}), inhabitant: holderOf(person, household)}
         fakePrisma.order.updateMany.mockResolvedValue({count: 1})
         fakePrisma.order.findMany.mockResolvedValue([order])
@@ -123,7 +124,9 @@ describe('updateOrdersBatch', () => {
     })
 })
 
-// A read over a list of ids takes the whole list and sends its chunks one after another, 90 ids each (ADR-014)
+const idsInWhere = ([{where}]: Mock['mock']['calls'][number]): number[] => where.id.in
+
+// A read over a list of ids takes the whole list and sends its chunks one after another, 90 ids each
 describe.each([
     {
         reader: 'fetchOrders', read: (ids: number[]) => fetchOrders(d1Client, ids),
@@ -131,7 +134,7 @@ describe.each([
     },
     {
         reader: 'fetchDinnerEventsByIds', read: (ids: number[]) => fetchDinnerEventsByIds(d1Client, ids),
-        statement: fakePrisma.dinnerEvent.findMany, idsOf: ([{where}]: [{where: {id: {in: number[]}}}]) => where.id.in
+        statement: fakePrisma.dinnerEvent.findMany, idsOf: idsInWhere
     },
     {
         reader: 'the history read of updateOrdersBatch',
@@ -142,7 +145,7 @@ describe.each([
                 audit: {action: OrderAuditAction.SYSTEM_UPDATED, change: OrderAuditChangeSchema.enum.RELEASE, performedByUserId: 1, inhabitantId: 1, dinnerEventId: 5, seasonId: 3}
             })))
         },
-        statement: fakePrisma.order.findMany, idsOf: ([{where}]: [{where: {id: {in: number[]}}}]) => where.id.in
+        statement: fakePrisma.order.findMany, idsOf: idsInWhere
     }
 ])('$reader', ({read, statement, idsOf}) => {
     it('GIVEN 100 ids WHEN read THEN it reads 90, then the other 10, one read in flight at a time', async () => {
@@ -151,7 +154,7 @@ describe.each([
 
         await read(Array.from({length: 100}, (_, index) => index + 1))
 
-        expect(statement.mock.calls.map(call => idsOf(call as never).length)).toEqual([90, 10])
+        expect(statement.mock.calls.map(call => idsOf(call).length)).toEqual([90, 10])
         expect(reads.peak).toBe(1)
     })
 })
@@ -168,7 +171,7 @@ describe('fetchOrders with provenance', () => {
     const historyRow = (id: number, orderId: number, action: OrderAuditAction, householdShortname: string, hour: number) => ({
         id, orderId, action, timestamp: at(hour),
         auditData: createOrderAuditData(action === USER_CLAIMED ? OrderAuditChangeSchema.enum.BUY : OrderAuditChangeSchema.enum.RELEASE,
-            OrderFactory.defaultOrderSnapshot({id: orderId, dinnerEventId: DINNER_ID, householdShortname}))
+            OrderFactory.defaultOrderAuditSnapshot({id: orderId, dinnerEventId: DINNER_ID, householdShortname}))
     })
     // Order 1 is claimed twice and released after; order 2 is claimed twice at one moment; order 3 is booked, never claimed
     const history = [
@@ -247,7 +250,7 @@ describe('recordDeliveries', () => {
         const recorded = await recordDeliveries(d1Client, [rowOf(77), rowOf(78, 5)])
 
         expect(statementsInCallOrder(fakePrisma)).toEqual(['delivery.createManyAndReturn'])
-        expect(fakePrisma.delivery.createManyAndReturn.mock.calls[0]![0].data.map((row: DeliveryCreate) => row.jobRunId)).toEqual([null, 5])
+        expect(itemAt(fakePrisma.delivery.createManyAndReturn.mock.calls, 0)[0].data.map((row: DeliveryCreate) => row.jobRunId)).toEqual([null, 5])
         expect(recorded.map(row => row.subjectId)).toEqual([77, 78])
     })
 

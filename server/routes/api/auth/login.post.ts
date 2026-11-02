@@ -34,7 +34,7 @@ export default defineEventHandler(async (event): Promise<UserDetail> => {
 
     // Database operations
     try {
-        // ADR-009: the user with its Inhabitant and household, parsed by the repository
+        // The user with its inhabitant and household, parsed by the repository
         const theSlopeUser = await fetchUser(d1Client, { email: heynaboLoggedIn.email })
         if (!theSlopeUser) {
             throw createError({ statusCode: 404, statusMessage: '🔐 > LOGIN > UNKNOWN USER' })

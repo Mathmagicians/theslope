@@ -93,7 +93,7 @@ Klik **Bliv chefkok**, bekræft — og dit ansigt pryder portrættet. Tjansen er
 | **Total kuverter** | Samlet antal portioner (voksen, barn, baby) |
 | **Takeaway** | Antal og procentdel der henter mad |
 | **Spisesal** | Antal og procentdel der spiser i salen |
-| **Spis sent** | Antal og procentdel der kommer sent |
+| **Sen** | Antal og procentdel der kommer sent |
 | **Til salg** | Frigivne billetter der kan købes. Står der naboer på ventelisten, får boksen et **timeglas** med **VENTELISTE**: hvor mange kuverter ventelisten mangler, og hvilke billettyper de venter på |
 | **Allergier** | Under hver kategori: hvor mange kuverter der har et af menuens allergener |
 

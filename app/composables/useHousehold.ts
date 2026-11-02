@@ -8,20 +8,8 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 /**
- * Curried predicate: is a dinner event within the household's residency period?
- * Takes household dates, returns a filter function for dinner event dates.
- *
- * DRY — one predicate for both user booking and system scaffolding.
- * Per ADR-016, both paths build a dinnerEventById map from the filtered set.
- *
- * Boundary rules:
- * - Event on movedInDate → included (moved in that day, can eat)
- * - Event on moveOutDate → included (still there that day)
- * - moveOutDate null → no upper bound
- *
- * @param movedInDate - Household move-in date
- * @param moveOutDate - Household move-out date (null = no upper bound)
- * @returns Predicate: (eventDate) => boolean
+ * Is a dinner within the household's residency? The user's booking and the system's scaffold both filter their dinners
+ * with it. The move-in day and the move-out day both count; a household without a move-out date has no end.
  */
 export const isHouseholdActiveOnDay = (
     movedInDate: Date,
@@ -47,23 +35,14 @@ export const getResidencyStatus = (
 }
 
 /**
- * Resolve which household a Heynabo entity should be routed to, given N candidates
- * sharing the same heynaboId. Pure function, deterministic, always resolves.
- *
- * Returns the resolved household, or null if no candidates (caller should create).
- *
- * The rules (ADR-013, Heynabo import routing):
- * 1. 0 candidates → null (create new)
- * 2. 1 candidate → that one
- * 3. N candidates, exactly 1 without moveOutDate → that one (active household)
- * 4. N candidates, all with moveOutDate → newest moveOutDate, tie-break lowest id
- * 5. N candidates, 2+ without moveOutDate → lowest id (deterministic)
+ * The household a Heynabo address routes to among the households sharing its heynaboId, or null without one (the
+ * import creates it). A household without a move-out date wins, the lowest id among several; else the newest move-out
+ * wins, the lowest id on a tie.
  */
 export const resolveHouseholdForHeynaboId = (
     _heynaboId: number,
     candidates: HouseholdDisplay[]
 ): HouseholdDisplay | null => {
-    // One candidate is rule 2 under rule 3 or rule 4: alone it is the active one, or the newest move-out
     const active = candidates.filter(c => !c.moveOutDate)
     if (active.length > 0) return [...active].sort((a, b) => a.id - b.id)[0] ?? null
     return [...candidates].sort((a, b) =>
@@ -104,9 +83,6 @@ export const buildResolvedHouseholdMap = (households: HouseholdDisplay[]) => {
     return {resolved, inhabitantPlacements}
 }
 
-/**
- * Business logic for working with households and inhabitants
- */
 export const useHousehold = () => {
     const {DinnerModeSchema} = useBookingValidation()
 
@@ -120,10 +96,7 @@ export const useHousehold = () => {
         defaultValue: true
     })
 
-    /**
-     * Compute consensus for any array of values
-     * Returns first value if all same, defaultValue if mixed or empty
-     */
+    /** The value all values share, else the default; an empty list agrees on the default */
     const computeConsensus = <T>(
         values: T[],
         defaultValue: T
@@ -139,10 +112,7 @@ export const useHousehold = () => {
         }
     }
 
-    /**
-     * Compute aggregated dinner preferences across multiple inhabitants
-     * Uses computeConsensus for each weekday
-     */
+    /** The household's dinner mode per weekday where its inhabitants agree, DINEIN where they differ, and the agreement */
     const computeAggregatedPreferences = (
         inhabitants: InhabitantDetail[]
     ): { preferences: WeekDayMap<DinnerMode>, consensus: WeekDayMap<boolean> } => {
@@ -165,20 +135,13 @@ export const useHousehold = () => {
         return { preferences, consensus }
     }
 
-    /**
-     * Format inhabitant name with last name initials (for display)
-     * Used when disambiguating inhabitants with same first name
-     * Example: "Mads Bruun Hovgaard" → "Mads B.H."
-     */
+    /** The first name with the last name's initials, "Mads B.H.", to tell inhabitants with one first name apart */
     const formatNameWithInitials = (inhabitant: InhabitantName): string => {
         const lastNameParts = inhabitant.lastName.split(/\s+/)
         const initials = lastNameParts.map(part => `${part.charAt(0).toUpperCase()}.`).join('')
         return `${inhabitant.name} ${initials}`
     }
 
-    /**
-     * Normalize a name: lowercase, collapse whitespace, trim
-     */
     const normalizeName = (name: string): string =>
         name.toLowerCase().replace(/\s+/g, ' ').trim()
 
@@ -194,10 +157,7 @@ export const useHousehold = () => {
      * 3. First name only (unique): "Babyyoda" matches {name: "Babyyoda", ...}
      * 4. First word match (unique): "Jimmy" matches {name: "Jimmy Diksen", ...}
      * 5. First name + lastName prefix: "Jeppe Eg" matches {name: "Jeppe", lastName: "Eg Bilslev"}
-     *
-     * @param shortName - Name to match (e.g., "Mads B.H." or "Mads B." or "Babyyoda")
-     * @param inhabitants - List of inhabitants to match against
-     * @returns Matched inhabitant ID or null if no match/ambiguous
+     * No match, or several, returns null.
      */
     const matchInhabitantByNameWithInitials = (shortName: string, inhabitants: InhabitantDisplay[]): number | null => {
         const normalizedInput = normalizeName(shortName)
@@ -247,9 +207,7 @@ export const useHousehold = () => {
                     if (initials.length === 1 && singleInitial) {
                         const singleInitialMatches = normalized.filter(i => {
                             const nameWords = i.name.split(' ')
-                            // First word of name must match input first word
                             if (nameWords[0] !== inputFirstWord) return false
-                            // Initial can match remaining name words OR lastName words
                             const remainingNameWords = nameWords.slice(1)
                             const lastNameWords = i.lastName.split(' ')
                             return [...remainingNameWords, ...lastNameWords].some(word => word.startsWith(singleInitial))
@@ -286,26 +244,14 @@ export const useHousehold = () => {
         return null
     }
 
-    /**
-     * Create a matcher function bound to a specific inhabitants list
-     */
     const createInhabitantMatcher = (inhabitants: InhabitantDisplay[]) => {
         return (shortName: string): number | null => matchInhabitantByNameWithInitials(shortName, inhabitants)
     }
 
     /**
-     * Format household family name from inhabitants' last names
-     * Used for displaying a welcoming household title instead of garbled Heynabo names
-     *
-     * Examples:
-     * - Single last name: "Familien Hansen"
-     * - Two last names: "Familien Hansen & Jensen"
-     * - Three+ last names: "Familien Hansen & Jensen m.fl."
-     * - Single person: "Hansen" (no "Familien" prefix)
-     * - No inhabitants: null
-     *
-     * @param inhabitants - Array of inhabitants with lastName
-     * @returns Formatted family name string or null if no inhabitants
+     * The household's title from its inhabitants' last names, in place of Heynabo's address name: "Familien Hansen",
+     * "Familien Hansen & Jensen", "Familien Hansen & Jensen m.fl." past two; a person alone reads "Hansen"; no
+     * inhabitants, null
      */
     const formatHouseholdFamilyName = (
         inhabitants: InhabitantDisplay[]

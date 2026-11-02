@@ -23,7 +23,7 @@ const route = useRoute()
 const token = computed(() => String(route.params.token))
 
 const {formatKroner} = useTicket()
-const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY, BG} = useTheSlopeDesignSystem()
+const {ALERTS, COMPONENTS, ICONS, SIZES, TYPOGRAPHY, BG} = useTheSlopeDesignSystem()
 const {publicBilling} = COMPONENTS
 const {BillingPeriodSummaryDetailSchema} = useBillingValidation()
 const {storeAsyncData} = useApiHandler()
@@ -54,11 +54,11 @@ const columns: TableColumn<InvoiceDisplay>[] = [
   <div :class="[publicBilling.page, BG.invoiceGround]" data-testid="public-billing">
     <div :class="publicBilling.column">
       <!-- Error States -->
-      <UCard v-if="isNotFound" :class="publicBilling.notFound">
-        <UIcon :name="ICONS.exclamationCircle" :class="publicBilling.notFoundIcon"/>
-        <h1 :class="TYPOGRAPHY.cardTitle">{{ BOOKING_WORDS.billing.publicPage.notFound.title }}</h1>
-        <p :class="TYPOGRAPHY.bodyTextMuted">{{ BOOKING_WORDS.billing.publicPage.notFound.description }}</p>
-      </UCard>
+      <UAlert
+          v-if="isNotFound"
+          v-bind="ALERTS.warning"
+          :title="BOOKING_WORDS.billing.publicPage.notFound.title"
+          :description="BOOKING_WORDS.billing.publicPage.notFound.description"/>
 
       <ViewError v-else-if="isErrored" :error="error?.statusCode" :message="BOOKING_WORDS.billing.failed.invoices"/>
       <Loader v-else-if="isLoading" text="Henter fakturaoversigt..."/>

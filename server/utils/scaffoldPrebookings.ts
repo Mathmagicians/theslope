@@ -1,7 +1,7 @@
-import {fetchOrders, createOrders, deleteOrder, recordCancellation, updateOrdersBatch, claimOrder, countReleasedTicketsByType, orderSnapshotOf, type Cancellation, type OrderBatchUpdate, fetchUserIntentKeys} from "~~/server/data/financesRepository"
+import {fetchOrders, createOrders, deleteOrder, recordCancellation, updateOrdersBatch, claimOrder, countReleasedTicketsByType, orderAuditSnapshotOf, type Cancellation, type OrderBatchUpdate, fetchUserIntentKeys} from "~~/server/data/financesRepository"
 import {fetchHouseholds, fetchHouseholdsByInhabitantIds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 import {useSeason, type BookingDeadlines} from "~/composables/useSeason"
-import {useBookingValidation, OrderState, type ScaffoldResult, type DesiredOrder, type DinnerMode, type DinnerState, type OrderAuditAction, type OrderSnapshot, type QueuePosition, type BookingOutcomes, type BookingAction, type BookingResult, type OrderDisplay, type TicketType, OrderAuditAction as AuditActions, BookingFailure} from "~/composables/useBookingValidation"
+import {useBookingValidation, OrderState, type ScaffoldResult, type DesiredOrder, type DinnerMode, type DinnerState, type OrderAuditAction, type OrderAuditSnapshot, type QueuePosition, type BookingOutcomes, type BookingAction, type BookingResult, type OrderDisplay, type TicketType, OrderAuditAction as AuditActions, BookingFailure} from "~/composables/useBookingValidation"
 import type {HouseholdDisplay} from "~/composables/useCoreValidation"
 import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import type {TicketForSale, TicketWaitlistCreate, TicketWaitlistDisplay, WaitlistAuditContext, WaitlistOrder, WaitlistPlacementOutcomes} from "~/composables/useWaitlistValidation"
@@ -265,7 +265,7 @@ export async function scaffoldPrebookings(
     }
 
     // The audit's user and the payer of every order, purchase and place the run books: the given user, else the system account
-    // ADR-013: System operations use getSystemUserId() (cached) to ensure valid FK
+    // System operations use getSystemUserId() (cached) to ensure valid FK
     const effectiveUserId = options.userId ?? await getSystemUserId(d1Client)
     // A write to a place on the waiting list records the act it is, by the run's user
     const auditOf = (action: BookingAction): WaitlistAuditContext => ({action: getAuditAction(isUserTriggered, action), performedByUserId: effectiveUserId, seasonId: effectiveSeasonId})
@@ -285,8 +285,8 @@ export async function scaffoldPrebookings(
     const isBookable = (dinnerEventId: number) => isOpen(dinnerEventId)
         || (options.adminCorrection === true && stateOf.get(dinnerEventId) === DinnerStateSchema.enum.CONSUMED)
     const desiredOrders = options.desiredOrders?.filter(desired => isBookable(desired.dinnerEventId))
-    const dinnerEventIds = (isUserMode
-        ? [...new Set(desiredOrders!.map(o => o.dinnerEventId))]
+    const dinnerEventIds = (desiredOrders
+        ? [...new Set(desiredOrders.map(o => o.dinnerEventId))]
         : (options.dinnerEventIds
             ? options.dinnerEventIds
             : getScaffoldableDinnerEvents(allDinnerEvents, now).filter(onWeekdays).map(e => e.id)))
@@ -304,7 +304,7 @@ export async function scaffoldPrebookings(
     const execute = preview ? landsUnwritten : writeBatchOrEach
     const executeOnce = preview ? landsUnwritten : writeBatchOnce
 
-    // The dinners' orders and queue entries and the user intent keys, one read after another (ADR-014); the repositories
+    // The dinners' orders and queue entries and the user intent keys, one read after another; the repositories
     // chunk the dinner ids
     const existingOrders = await fetchOrders(d1Client, dinnerEventIds)
     const existingEntries = await fetchWaitlistForDinners(d1Client, dinnerEventIds)
@@ -364,17 +364,17 @@ export async function scaffoldPrebookings(
                 householdId: household.id
             }
         }
-        // The person a history row without an order names (orderSnapshotOf), with the household the run holds; none for a
+        // The person a history row without an order names (orderAuditSnapshotOf), with the household the run holds; none for a
         // person outside the household
         const holderOf = (inhabitantId: number) => {
             const inhabitant = household.inhabitants.find(candidate => candidate.id === inhabitantId)
             return inhabitant && {...inhabitant, householdId: household.id, household: {address: household.address}}
         }
         // A place on the waiting list as its history row keeps it: its person, its dinner and the wish it holds
-        const placeSnapshotOf = (entry: TicketWaitlistDisplay, order: WaitlistOrder): OrderSnapshot => {
+        const placeSnapshotOf = (entry: TicketWaitlistDisplay, order: WaitlistOrder): OrderAuditSnapshot => {
             const holder = holderOf(entry.inhabitantId)
             if (!holder) throw new Error(`${LOG} Data integrity: queue entry ${entry.id} of inhabitant ${entry.inhabitantId} outside household ${household.id}`)
-            return orderSnapshotOf({...order, id: null, inhabitantId: entry.inhabitantId, dinnerEventId: entry.dinnerEventId, isGuestTicket: entry.isGuestTicket}, holder)
+            return orderAuditSnapshotOf({...order, id: null, inhabitantId: entry.inhabitantId, dinnerEventId: entry.dinnerEventId, isGuestTicket: entry.isGuestTicket}, holder)
         }
         // One result per order; a failed one is logged with the person and the dinner
         const nameOf = (inhabitantId: number): string => household.inhabitants.find(inhabitant => inhabitant.id === inhabitantId)?.name ?? ''
@@ -416,9 +416,9 @@ export async function scaffoldPrebookings(
 
 
             // Resolve desired orders to buckets
-            const result = isUserMode
+            const result = desiredOrders
                 ? resolveDesiredOrdersToBuckets(
-                    desiredOrders!,
+                    desiredOrders,
                     householdOrders,
                     dinnerEventById,
                     canModifyOrders,
@@ -439,7 +439,7 @@ export async function scaffoldPrebookings(
                 )
 
             // The generator skips an order the household no longer holds (bought by another household, or deleted); the save lists it as failed
-            const staleOrders = isUserMode ? desiredOrders!.filter(desired => desired.orderId !== undefined && !orderById.has(desired.orderId)) : []
+            const staleOrders = (desiredOrders ?? []).filter(desired => desired.orderId !== undefined && !orderById.has(desired.orderId))
             failed.push(...staleOrders.map(stale => resultOf(stale, actionOfUpdate(stale, undefined))))
 
             // Create new orders; a failed batch is written order by order
@@ -453,11 +453,12 @@ export async function scaffoldPrebookings(
                 }), landedAs(Action.BOOK), failedAs(() => Action.BOOK))
             }
 
-            // Updates: each carries its action (release, reclaim, price, mode); ADR-014 groups them by signature
+            // Updates: each carries its action (release, reclaim, price, mode); the batch update groups them by signature
             const updates: {desired: DesiredOrder, update: OrderBatchUpdate, action: BookingAction}[] = []
+            const existingOf = (desired: DesiredOrder) => desired.orderId ? orderById.get(desired.orderId) : undefined
             for (const incoming of result.update) {
                 // Generator contract: an update names an order among the household's
-                const existing = incoming.orderId ? orderById.get(incoming.orderId) : undefined
+                const existing = existingOf(incoming)
                 if (!incoming.orderId || !existing) {
                     throw new Error(`${LOG} Data integrity: update bucket order ${incoming.orderId} not among the household's orders for inhabitant ${incoming.inhabitantId} dinnerEvent ${incoming.dinnerEventId}`)
                 }
@@ -486,23 +487,23 @@ export async function scaffoldPrebookings(
                 }})
             }
             const executeBatchUpdates = updateOrdersBatch(90)
-            const actionOf = (desired: DesiredOrder) => updates.find(entry => entry.desired === desired)!.action
+            const actionOf = (desired: DesiredOrder) => actionOfUpdate(desired, existingOf(desired))
             // A released order stays for sale at its price; a new release goes on sale now
             const forSaleAfter = (desired: DesiredOrder, action: BookingAction): TicketForSale | null => {
-                const existing = orderById.get(desired.orderId!)!
-                return desired.state === OrderState.RELEASED
+                const existing = existingOf(desired)
+                return existing && desired.state === OrderState.RELEASED
                     ? {id: existing.id, dinnerEventId: existing.dinnerEventId, ticketPriceId: desired.ticketPriceId, releasedAt: action === Action.RELEASE ? new Date() : existing.releasedAt, inhabitantId: existing.inhabitantId, householdId: household.id}
                     : null
             }
             await execute(updates, entries => executeBatchUpdates(d1Client, entries.map(({update}) => update)),
                 entries => {
-                    for (const {desired, action} of entries) {
+                    for (const {desired, action, update} of entries) {
                         landed.push(resultOf(desired, action))
-                        supply.orderWritten(desired.orderId!, forSaleAfter(desired, action))
+                        supply.orderWritten(update.orderId, forSaleAfter(desired, action))
                     }
                 },
                 failedAs(actionOf))
-            // Cancel: an order before the deadline is deleted, chunked to respect D1's 100 param limit (ADR-014), a failed
+            // Cancel: an order before the deadline is deleted, chunked to respect D1's 100 param limit, a failed
             // chunk order by order; a cancellation of nothing booked is recorded alone. Each lands as CANCEL
             // Pass null for system-triggered cancellations → SYSTEM_DELETED audit (recordCancellation contract: null = system)
             // Pass effectiveUserId for user-triggered ones → USER_CANCELLED audit (respected by scaffolder)
@@ -521,7 +522,7 @@ export async function scaffoldPrebookings(
                 if (holder) {
                     const cancellation: Cancellation = {
                         orderId: null, inhabitantId: desired.inhabitantId, dinnerEventId: desired.dinnerEventId, seasonId: effectiveSeasonId, performedByUserId: cancelledBy, source,
-                        snapshot: orderSnapshotOf({...toOrderCreate(desired), id: null}, holder)
+                        snapshot: orderAuditSnapshotOf({...toOrderCreate(desired), id: null}, holder)
                     }
                     return [{desired, cancellation}]
                 }
@@ -538,11 +539,11 @@ export async function scaffoldPrebookings(
                 else failedAs(() => Action.QUEUE)({desired: claim}, new Error(`${LOG} Missing ticket price ${claim.ticketPriceId} for claim`))
             }
 
-            // The household's places on the waiting list: the leaves are one write per chunk within D1's parameters (ADR-014)
+            // The household's places on the waiting list: the leaves are one write per chunk within D1's parameters
             // in one attempt, the new wishes one write retried place by place; each place's history row names the person
             // and the household the run holds
             const placeOf = (desired: DesiredOrder): TicketWaitlistDisplay => {
-                const entry = entryById.get(desired.waitlistEntryId!)
+                const entry = desired.waitlistEntryId ? entryById.get(desired.waitlistEntryId) : undefined
                 if (!entry) throw new Error(`${LOG} Data integrity: queue entry ${desired.waitlistEntryId} of inhabitant ${desired.inhabitantId} not read`)
                 return entry
             }
@@ -600,8 +601,11 @@ export async function scaffoldPrebookings(
         // A ticket type with a line sells nothing to a claim
         const forSaleOf = (ticketType: TicketType): number => waiting.has(ticketType) ? 0 : released.get(ticketType) ?? 0
         const typeOf = new Map(claims.map(({claim, ticketType}) => [claim, ticketType]))
-        const settled = bookingOutcomes(Bucket.claim, claims.map(({claim}) => claim), claim => ({ticketType: typeOf.get(claim), ticketsForSale: forSaleOf(typeOf.get(claim)!)}))
-        return {line, settled: settled.map(({outcome}, index) => ({pending: claims[index]!, outcome}))}
+        const settled = bookingOutcomes(Bucket.claim, claims.map(({claim}) => claim), claim => {
+            const ticketType = typeOf.get(claim)
+            return {ticketType, ticketsForSale: ticketType ? forSaleOf(ticketType) : 0}
+        })
+        return {line, settled: claims.flatMap((pending, index) => settled.slice(index, index + 1).map(({outcome}) => ({pending, outcome})))}
     }
     for (const [dinnerEventId, claims] of groupBy<PendingClaim, number>(({claim}) => claim.dinnerEventId)(pendingClaims)) {
         const read = await readSupply(dinnerEventId, claims).catch((error: unknown) => {
@@ -634,7 +638,7 @@ export async function scaffoldPrebookings(
             }
         }
 
-        // The joins of a dinner are one write across the households (ADR-014) in one attempt: a refused write lists each of
+        // The joins of a dinner are one write across the households in one attempt: a refused write lists each of
         // its joins failed. A join's history row keeps the name and the household its run holds; any other person's claim
         // fails alone
         const joins = toJoin.flatMap(pending => {
@@ -643,15 +647,16 @@ export async function scaffoldPrebookings(
             if (holder) {
                 const order = {...run.toOrderCreate(claim), state: OrderStateSchema.enum.BOOKED, allergyTypeIds: claim.allergyTypeIds}
                 const entry = {dinnerEventId, inhabitantId: claim.inhabitantId, isGuestTicket: claim.isGuestTicket, order}
-                return [{pending, join: {entry, snapshot: orderSnapshotOf({...order, id: null}, holder)}}]
+                return [{pending, join: {entry, snapshot: orderAuditSnapshotOf({...order, id: null}, holder)}}]
             }
             run.failedAs(() => Action.QUEUE)({desired: claim}, new Error(`${LOG} Claim for inhabitant ${claim.inhabitantId} outside household ${run.household.id}`))
             return []
         })
         const joined: {pending: PendingClaim, entry: TicketWaitlistDisplay}[] = []
-        const dinnerState = dinnerEvents.find(dinnerEvent => dinnerEvent.id === dinnerEventId)!.state
+        const dinner = dinnerEvents.find(dinnerEvent => dinnerEvent.id === dinnerEventId)
+        if (!dinner) throw new Error(`${LOG} Data integrity: dinner ${dinnerEventId} not among the run's dinners`)
         await writeBatchOnce(joins, async batch => {
-            const entries = await supply.join(batch.map(({join}) => join), dinnerState, auditOf(Action.BOOK))
+            const entries = await supply.join(batch.map(({join}) => join), dinner.state, auditOf(Action.BOOK))
             // Each join takes the first entry written for its person, dinner and guest flag: two guest tickets of one person
             // pair in insert order
             const written = groupBy<TicketWaitlistDisplay, string>(entryKeyOf)(entries)
@@ -665,7 +670,9 @@ export async function scaffoldPrebookings(
         // The places count the line as read, then the joins in join order
         const places = joinedOf(read.line, joined.map(({entry}) => entry), season.ticketPrices, effectiveUserId)
         for (const [index, {pending: {claim, run}, entry}] of joined.entries()) {
-            const {position, joined: event} = places[index]!
+            const place = places[index]
+            if (!place) throw new Error(`${LOG} No place counted for inhabitant ${claim.inhabitantId} on dinner ${dinnerEventId}`)
+            const {position, joined: event} = place
             outcomes.joined.push(event)
             landed.push(run.resultOf(claim, Action.QUEUE))
             positions.push({inhabitantId: claim.inhabitantId, dinnerEventId, isGuestTicket: claim.isGuestTicket, position, ticketType: event.ticketType, priceAtBooking: entry.order.priceAtBooking})

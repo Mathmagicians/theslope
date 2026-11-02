@@ -57,7 +57,7 @@ I appen bruges følgende symboler til at vise spisningsform og status:
 | Symbol | Navn | Betydning |
 |:------:|------|-----------|
 | ![Spisesal](https://api.iconify.design/hugeicons/dish-02.svg?height=20&color=%2322c55e) | **Spisesal** | Spis i fællessalen til normal tid |
-| ![Sen](https://api.iconify.design/heroicons/moon.svg?height=20&color=%2322c55e) | **Sen spisning** | Spis i fællessalen til sen spisning |
+| ![Sen](https://api.iconify.design/heroicons/moon.svg?height=20&color=%2322c55e) | **Sen** | Spis i fællessalen til sen spisning |
 | ![Takeaway](https://api.iconify.design/heroicons/shopping-bag.svg?height=20&color=%2322c55e) | **Takeaway** | Hent mad og spis hjemme |
 | ![Ingen](https://api.iconify.design/heroicons/x-circle.svg?height=20&color=%23ef4444) | **Ingen** | Ikke tilmeldt denne dag |
 | ![Blandet](https://api.iconify.design/heroicons/question-mark-circle.svg?height=20&color=%23737373) | **Blandet** | Familiemedlemmer har forskellige valg |
@@ -184,7 +184,7 @@ På [Middagskalenderen](https://www.skraaningen.dk/dinner) kan du se hvem der er
 | **Total kuverter** | Samlet antal tilmeldte (voksen, barn, baby) |
 | **Takeaway** | Hvem der henter mad |
 | **Spisesal** | Hvem der spiser i salen |
-| **Sen spisning** | Hvem der kommer sent |
+| **Sen** | Hvem der kommer sent |
 | **Til salg** | Billetter til salg, du kan købe - og ventelisten, når nogen venter |
 | **Allergier** | Hvor mange kuverter i hver kategori der har en af menuens allergener |
 

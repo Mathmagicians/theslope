@@ -10,7 +10,6 @@ import {useBookingValidation, type TicketChange, type TicketType} from '~/compos
 import {ticketChangeWord, ticketChangeSeller} from '~/composables/useBookingUi'
 import {useBooking} from '~/composables/useBooking'
 import {useTicket} from '~/composables/useTicket'
-import {useBilling} from '~/composables/useBilling'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {formatPortions} from '~/utils/utils'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
@@ -33,7 +32,7 @@ const WORDS = BOOKING_WORDS.ticketChange
 const counts = OrderFactory.ticketCounts
 const SINCE = new Date('2026-04-03T18:00:00')
 // A ticket chip as the pane writes it: the tickets of one type as the ticket counts read them
-const chip = (count: number, ticketType: TicketType) => useBilling().formatTicketCounts({[ticketType]: count})
+const chip = (count: number, ticketType: TicketType) => useTicket().formatTicketCounts({[ticketType]: count})
 
 // A line on a dinner holding 43 tickets
 const change = (overrides: Partial<TicketChange>): TicketChange =>

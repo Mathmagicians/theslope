@@ -2,7 +2,7 @@
 /**
  * InhabitantSelector - Reusable inhabitant finder with search, sort, pagination.
  *
- * Parent provides data (ADR-007) and domain-specific UI via scoped slots.
+ * Parent provides data and domain-specific UI via scoped slots.
  *
  * Call-sites:
  * - CookingTeamCard: team badge in #status, role buttons in #actions

@@ -92,7 +92,7 @@
 import {FORM_MODES} from '~/types/form'
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
-import {DinnerMode} from '~/composables/useBookingValidation'
+import type {DinnerMode} from '~/composables/useBookingValidation'
 import type {TicketPresentation} from '~/composables/useBookingUi'
 import {BUTTON_WORDS} from '~/config/buttonWords'
 import {BOOKING_WORDS} from '~/config/bookingWords'
@@ -438,10 +438,7 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
             <span>{{ HOUSEHOLD_WORDS.preferences.howTo.save }}</span>
             <span :class="COMPONENTS.householdCard.hintModes">
               <strong>{{ HOUSEHOLD_WORDS.preferences.howTo.modesTitle }}</strong>
-              <span :class="COMPONENTS.householdCard.hintMode"><UIcon :name="ICONS.dinner" :class="COMPONENTS.householdCard.hintIcon" /> {{ HOUSEHOLD_WORDS.preferences.howTo.modes[DinnerMode.DINEIN] }}</span>
-              <span :class="COMPONENTS.householdCard.hintMode"><UIcon :name="ICONS.clock" :class="COMPONENTS.householdCard.hintIcon" /> {{ HOUSEHOLD_WORDS.preferences.howTo.modes[DinnerMode.DINEINLATE] }}</span>
-              <span :class="COMPONENTS.householdCard.hintMode"><UIcon :name="ICONS.takeaway" :class="COMPONENTS.householdCard.hintIcon" /> {{ HOUSEHOLD_WORDS.preferences.howTo.modes[DinnerMode.TAKEAWAY] }}</span>
-              <span :class="COMPONENTS.householdCard.hintMode"><UIcon :name="ICONS.noDinner" :class="COMPONENTS.householdCard.hintIcon" /> {{ HOUSEHOLD_WORDS.preferences.howTo.modes[DinnerMode.NONE] }}</span>
+              <span v-for="mode in DINNER_MODE_ORDER" :key="mode" :class="COMPONENTS.householdCard.hintMode"><UIcon :name="MODE_WORDS[mode].icon" :class="COMPONENTS.householdCard.hintIcon" /> {{ MODE_WORDS[mode].label }}</span>
             </span>
           </div>
         </template>

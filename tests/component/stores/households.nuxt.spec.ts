@@ -68,7 +68,7 @@ registerEndpoint('/api/admin/household', { handler: createHouseholdEndpoint, met
 registerEndpoint('/api/household/1/update', { handler: moveOutEndpoint, method: 'POST' })
 const calendarFeedEndpoint = vi.fn()
 registerEndpoint('/api/calendar/feed', calendarFeedEndpoint)
-// A preference preview is a read (ADR-004): the GET after the generic routes above (reverse-order lookup)
+// A preference preview is a read: the GET after the generic routes above (reverse-order lookup)
 const previewEndpoint1 = vi.fn()
 const previewEndpoint2 = vi.fn()
 registerEndpoint('/api/household/inhabitants/1/preferences', { handler: previewEndpoint1, method: 'GET' })
@@ -298,7 +298,7 @@ describe('Households Store', () => {
     })
   })
 
-  // A preview is a read (ADR-004): the draft travels serialized in the query of one GET, outside the booking write, with
+  // A preview is a read: the draft travels serialized in the query of one GET, outside the booking write, with
   // no override; any member reads it. The server's run answers for the household: the other member's line stands beside
   // the inhabitant's own
   describe('previewPreferences', () => {
@@ -450,7 +450,7 @@ describe('Households Store', () => {
     })
   })
 
-  // An admin's change of a household carries the override; the household's own change carries no parameter (ADR-004)
+  // An admin's change of a household carries the override; the household's own change carries no parameter
   describe('the override on a write', () => {
     type Store = ReturnType<typeof useHouseholdsStore>
     const writes = [

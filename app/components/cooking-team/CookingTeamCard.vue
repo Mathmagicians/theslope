@@ -50,12 +50,6 @@
  * Visual check: at 375px and desktop with a role of seven members, the /dinner monitor face's role row and the
  * /admin/teams edit header's faces show three and the overflow count on a phone, five from md; the names and the
  * badges wrap under the faces inside the card and the page does not scroll sideways.
- *
- * ADR Compliance:
- * - ADR-001: Types from validation composables
- * - ADR-007/ADR-009: every mode reads the Detail the plan store holds for the selected team
- * - Mobile-first responsive design
- * - Uses UserListItem for consistent inhabitant display
  */
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
 import type { TeamRole, CookingTeamAssignment, CookingTeamDisplay } from '~/composables/useCookingTeamValidation'
@@ -104,8 +98,8 @@ const emit = defineEmits<{
   'remove:jokerSlot': [slotId: number]
 }>()
 
-// The mounting page selects the team in the plan store (ADR-007); the store keeps the previous team while the
-// next one loads, so the card renders only the team it is mounted for
+// The mounting page selects the team in the plan store, and every face reads its Detail there; the store keeps the
+// previous team while the next one loads, so the card renders only the team it is mounted for
 const planStore = usePlanStore()
 const team = computed(() => planStore.selectedTeam?.id === props.teamId ? planStore.selectedTeam : null)
 const error = computed(() => planStore.selectedTeamError)
@@ -148,8 +142,7 @@ const editedName = computed({
 const startNameEdit = () => {
   draftName.value = teamName.value
 }
-// The team wears the rainbow stop of its number: fill and ink as classes, so a badge needs
-// no colour slot (ADR-018)
+// The team wears the rainbow stop of its number: fill and ink as classes, so a badge needs no colour slot
 const teamBand = computed(() => getRainbowBand(props.teamNumber - 1))
 
 // The members per role, in the order the boxes show them
@@ -261,7 +254,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
         :member-count="assignments.length"
         :joker-slot-count="jokerSlots.length"
         :cooking-days-count="cookingDaysCount"
-        size="large"
+        :size="SIZES.large"
       />
       <UBadge v-if="visiting" v-bind="COMPONENTS.visitBadge" :size="SIZES.small" :label="TEAM_WORDS.visit.badge" data-testid="team-card-visit-badge" />
     </div>
@@ -340,7 +333,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             :joker-slot-count="jokerSlots.length"
             :cooking-days-count="cookingDaysCount"
             :show-name="false"
-            size="large"
+            :size="SIZES.large"
           />
         </div>
       </div>
@@ -361,7 +354,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
         :member-count="assignments.length"
         :joker-slot-count="jokerSlots.length"
         :cooking-days-count="cookingDaysCount"
-        size="large"
+        :size="SIZES.large"
       />
     </div>
 

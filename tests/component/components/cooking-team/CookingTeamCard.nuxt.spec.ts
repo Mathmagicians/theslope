@@ -78,7 +78,7 @@ const assignments = ROLES.map(role =>
 
 let team: CookingTeamDetail = SeasonFactory.defaultCookingTeamDetail()
 
-// Only HTTP is faked (testing.md Rule 6) - specific routes first, generic last; the plan store reads the team
+// Only HTTP is faked - specific routes first, generic last; the plan store reads the team
 registerEndpoint(`/api/admin/team/1/joker-slot/${emilSlot.slot.id}`, {method: 'DELETE', handler: () => 1})
 registerEndpoint('/api/admin/team/1', () => team)
 // No active season by default; a case that needs the season's teams sets one

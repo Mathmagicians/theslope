@@ -19,7 +19,7 @@ const DinnerMode = DinnerModeSchema.enum
 
 /**
  * E2E tests for /api/household/order/scaffold: POST is the booking write, GET its dry run (a read)
- * ADR-016: Unified booking mutation endpoint; ADR-004: every member reads, a household changes its own bookings
+ * Every member reads; a household changes its own bookings
  *
  * Tests cover:
  * - Authorization (the write: user must belong to household; the read: any member)
@@ -31,7 +31,7 @@ const DinnerMode = DinnerModeSchema.enum
  * - A cancelled dinner: nothing lands on it
  * - Error cases
  */
-test.describe('Household Scaffold API (ADR-016)', () => {
+test.describe('Household Scaffold API', () => {
   // Test data - created once, reused across tests
   let testSeason: Season
   let testHouseholdId: number
@@ -74,7 +74,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
   test.afterAll(async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
-    await attemptAll('Household Scaffold API (ADR-016) cleanup', [
+    await attemptAll('Household Scaffold API cleanup', [
       ...createdInhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(context, id)),
       () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds),
       () => AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds),

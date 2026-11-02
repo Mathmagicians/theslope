@@ -112,11 +112,17 @@ Everything follows `docs/testing.md` (factories, salting, `describe.each`, no mo
 ```
 Package: <name>
 Goal: <one sentence>
+Signed block: <the block the user said yes to, word for word>
+ADR lines: <ADR-NNN [Title] and the line it follows; the compliance rows it touches>
+Siblings: <the other implementations of the same thing and the shape they share>
+Before / after: <each planned choice as code at file:line, and the sibling it follows>
 Files: create / modify / delete
 Red tests first: <spec → cases>
+Gate greps: <old shape, new name, the fixed breach across siblings → expected count>
 Test-ids: <old → new>
+E2E specs: <paths, for test-engineer's run>
 Open decisions: <none | list>
-Agent: tdd-pair-programmer | nuxt-typescript-developer | test-automation-engineer
+Agent: frontend-engineer | tdd-pair-programmer | nuxt-typescript-developer | test-automation-engineer
 User actions: <npm i …, migration, none>
 ```
 Wait for approval or fine-tuning. Launch one agent per package with the brief, the mockup and `docs/testing.md` rules.
@@ -124,15 +130,28 @@ Wait for approval or fine-tuning. Launch one agent per package with the brief, t
 - The brief covers the ask and nothing wider: the smallest change that does what the user asked. A wider idea is one optional
   line after the brief, never part of its scope or its decisions. "Measure the contrast correctly" is the pairs the components
   paint, not their hover states, checkbox parts and a button sweep; "change the default palette" is a selector, not a rebase.
+- A yes covers what it names: a yes on the guards moves no data between stores. Every planned choice (a helper, an
+  export, a type, a token, a word) sits in Before / after; the existing generic utility comes first (`chunkArray<T>(size)`
+  curried in the composable, never a new wrapper around the loop).
+- Standing permission covers the cleanup inside the files the package touches (`/architecture` § Code rules,
+  design-system deviations). A sibling hit in an untouched file, a new helper or a behaviour change (a 400 where a 500
+  was) the agent lists with `file:line` and holds on; the orchestrator brings it to the user as one round (the sin,
+  before, after, the sites, what users see) and never answers an agent's "unless you say hold" with "Go".
 - A domain rule outside the brief — a decision-matrix row, a bucket's path, an ADR line, a test case asserting a new
   rule — stops the agent: it goes to the architect as a decision, and the closing report names it. No subagent writes
   `docs/adr.md`; an ADR line is the architect's text, written after the yes on it.
-- The brief's verify step ends at the unit specs, `pre:all` and the full unit run. It names the package's e2e specs by
-  path for the orchestrator's run request to test-engineer, states "never run Playwright, e2e or BDD", and carries no
-  `npx playwright` line (`/peer-sessions`).
-- The brief points the agent at `.claude/skills/code-comments/SKILL.md` and never dictates comment text. Source comments
-  carry no dates, decisions, sign-offs or doc references — those live in the plan doc; the architect's diff review checks
-  the comments too.
+- A held agent edits nothing; work that landed before the hold arrived is reported with its files.
+- The brief points the agent at `/dry` § Before any work starts and § After any work: the gate, and at
+  `.claude/skills/code-comments/SKILL.md`; it never dictates comment text. Source comments carry no dates, decisions,
+  sign-offs or doc references — those live in the plan doc; the architect's diff review checks the comments too.
+- The brief's verify step ends at the unit specs, `pre:all` and the full unit run; a colour token change runs
+  `make palettes` and the contrast gate inside the package. A red gate stays red: the code is fixed or the gap goes to
+  the user, never the threshold or the test. The brief names the package's e2e specs by path for the orchestrator's run
+  request to test-engineer, states "never run Playwright, e2e or BDD", and carries no `npx playwright` line (`/peer-sessions`).
+- The handback carries the red and green output, each gate grep with its count, the files by absolute path, the visual
+  check numbered, and every finding outside the brief with its `file:line`.
+- Everything for one item reaches the user in one round: the brief with its framework check, then the handback with its
+  deviations, the defects found in the same view and the follow-up changes, as one block to sign. Never in drops.
 
 ## Per-package gate
 

@@ -65,7 +65,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: WeekDayMap<DinnerModeValue>]
 }>()
 
-const { WEEKDAY } = useTheSlopeDesignSystem()
+const { WEEKDAY, ORIENTATIONS } = useTheSlopeDesignSystem()
 
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
@@ -109,7 +109,7 @@ const getDayConsensus = (day: WeekDay): boolean | undefined => {
     :name="name"
     :data-testid="name"
     :size="size"
-    orientation="horizontal"
+    :orientation="ORIENTATIONS.horizontal"
     :class="WEEKDAY.fieldGroupClasses"
   >
     <DinnerModeSelector

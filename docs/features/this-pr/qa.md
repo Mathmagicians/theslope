@@ -5,6 +5,27 @@
 The checks with human eyes of what users see and the tests leave unproven, as a walk through the app. A check passes with its date in **Signed off** and becomes one
 line under § Signed off.
 
+## Open
+
+| # | Check | Where | What to see | Signed off |
+|---|---|---|---|---|
+| 166 | Header layout: the phone bar | 375px | The bar as wide as its content and centred; the logo 64px, its text bold, on the bar's vertical centre; the burger about 6px nearer the edge | |
+| 167 | Header layout: the drawer | 375px, the burger | The open drawer: the header row, then Admin, the person with avatar, help; the burger primary soft while open | |
+| 168 | Header layout: the desktop bar | 1280px, scrolling; also between 768 and 1023px | A centred rounded bar 16px from the top; the centre Fællesspisning / Husstand / Madhold with icons; right Admin, the person, help; the logo 128px bold; no burger | |
+| 169 | Header layout: the first paint | Desktop, cache off or throttled | No link jumps after hydration | |
+| 170 | Header layout: widening with the drawer open | 375px → past 768px | The overlay gone, the page scrolls, the links and help respond | |
+| 171 | Header layout: stacking | The booking grid in edit mode, a calendar, a popover, the help card, a modal, a toast | The grid's sticky edit footer, the calendars' sticky headers and z-40 elements pass under the bar; popovers, the help card, modals and toasts open above it | |
+| 172 | Header layout: the active link | `/dinner`, `/household/…`, `/chef`, `/admin`; tab to the logo | The active link primary soft; a focus ring on the logo link | |
+| 173 | Header layout: signed out | `/login`, phone and desktop | Phone: the LOGIN icon and the burger, the drawer with help only; desktop: LOGIN with its label, an empty centre | |
+
+## Signed off 2026-11-02
+
+- #165 Cost line types, billed lines: as before, no mode, a closed or released badge, the amount, history where the order exists
+- #164 Cost line types, the admin economy: each line with the eater's name, mode and amount; the dinner's count and total as before; an order under its eater's household
+- #163 Cost line types, the household's economy: each line with the eater's name, ticket type, mode, amount and history
+- #161 The visited team on the server render: `/chef` first paint shows the next dinner's team as the visiting tab, its calendar and the dinner card, no "Henter kalender..." flash; a member on a team gets their own team the same way
+- #162 Danger button contrast: the label readable through the whole wipe in light and dark, the ring visible
+
 ## Signed off 2026-10-29
 
 - #122, #153 A dinner's Budget heading: a long menu title wraps in full with the date at its end at 375px, a short one shares its line with "ex / inkl. moms" at 1280px (defect 109)

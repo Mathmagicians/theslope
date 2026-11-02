@@ -15,11 +15,11 @@ import {useCoreValidation} from '~/composables/useCoreValidation'
 const SystemRole = useCoreValidation().SystemRoleSchema.enum
 
 // The test environment has no router to navigate: useEntityFormManager writes ?mode=
-// through navigateTo (ADR-006 / ADR-008), which is what this spec asserts on
+// through navigateTo, which is what this spec asserts on
 const {mockNavigateTo} = vi.hoisted(() => ({mockNavigateTo: vi.fn()}))
 mockNuxtImport('navigateTo', () => mockNavigateTo)
 
-// Only HTTP is faked (testing.md Rule 6) - specific routes first, generic last.
+// Only HTTP is faked - specific routes first, generic last.
 // The session drives isAdmin on the auth store and disabledModes on the plan store.
 const season = {...SeasonFactory.defaultSeason('planning'), id: 1}
 const seasonsEndpoint = vi.fn()

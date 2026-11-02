@@ -40,8 +40,6 @@ export type NuxtUIButtonVariant = NonNullable<ButtonProps['variant']>
  *    ```ts
  *    const heroClass = `${BG.mocha[500]} ${TEXT.mocha[50]}`
  *    ```
- *
- * See docs/ui.md for full color usage guidelines.
  */
 
 // ============================================================================
@@ -296,6 +294,8 @@ export const TEXT = {
         900: 'text-red-900'
     },
     white: 'text-white',
+    /** Ink on a fill that is deep in light mode and pale in dark mode: white on the deep face, black on the pale one */
+    onFill: 'text-white dark:text-black',
 
     /**
      * Dark ink for a vibrant fill. `ink` cannot serve here: its `dark:text-white` face would
@@ -969,15 +969,13 @@ export const COMPONENTS = {
     publicBilling: {
         page: 'min-h-screen py-8',
         column: 'max-w-6xl mx-auto px-4',
-        notFound: 'text-center',
-        notFoundIcon: 'text-6xl text-warning-500 mb-4',
         header: 'mb-6',
         headerRow: 'flex items-center gap-3',
         facts: 'grid grid-cols-2 md:grid-cols-4 gap-4',
         fact: 'text-center p-4 rounded-lg',
         tiles: 'grid grid-cols-2 gap-4 mb-6',
         tile: 'flex items-center gap-4',
-        tileIcon: 'text-4xl text-primary-500',
+        tileIcon: 'text-4xl text-primary',
         footer: 'flex justify-end',
         amount: 'text-right',
         csvRedirect: 'min-h-screen flex items-center justify-center'
@@ -1223,6 +1221,28 @@ export const COMPONENTS = {
     pageFooter: {
         row: 'flex flex-col md:flex-row items-center justify-between gap-4 py-4',
         iconButtonUi: {leadingIcon: TYPOGRAPHY.footerText}
+    },
+
+    /**
+     * PageHeader: UHeader's slots collapse at md instead of the framework's lg, the drawer's content and overlay with
+     * them, so a drawer opened on a phone leaves with the burger. The bar is as wide as its content, centred, sticky
+     * with the md offset; the title holds the logo's width. On the right, the areas' icons for a phone and the
+     * person's links from md, each menu's labels shown from md
+     */
+    pageHeader: {
+        ui: {
+            root: `${BACKGROUNDS.header} shadow-sm md:rounded-lg md:top-4 w-fit mx-auto`,
+            toggle: 'md:hidden',
+            left: 'md:flex-1',
+            center: 'hidden md:flex',
+            right: 'flex items-center justify-end md:flex-1 gap-1.5',
+            title: 'w-16 md:w-32',
+            content: 'md:hidden',
+            overlay: 'md:hidden'
+        },
+        areaIcons: 'md:hidden',
+        personLinks: 'hidden md:flex',
+        mainMenuUi: {linkLabel: 'hidden md:inline'}
     },
 
     /** SeasonSelector: the select keeps room for the longest season name */
@@ -1658,7 +1678,7 @@ export const COMPONENTS = {
         /** The sync glyph of the loading row, spinning */
         loadingSpinner: MOTION_SPIN,
         /**
-         * THE table cell styling (ADR-018): every UTable binds one of these three
+         * THE table cell styling: every UTable binds one of these three
          * (`designSystemUsage.unit.spec.ts` rejects a table without).
          * Cells wrap between words on every viewport (Nuxt UI's theme cell is `whitespace-nowrap`); a word stays whole.
          * A data table wider than a phone scrolls inside its own box, the page never does (MobileViewport.e2e).
@@ -1858,7 +1878,7 @@ export const COMPONENTS = {
         icon: 'text-xl text-primary',
         figure: 'text-center',
         value: 'font-semibold',
-        unit: 'text-xs text-muted'
+        unit: TYPOGRAPHY.finePrintMuted
     },
 
     // The typed date field (UInputDate) renders the house mask dd/MM/yyyy: en-GB gives the
@@ -2037,7 +2057,7 @@ export const COMPONENTS = {
 
     // Danger zone - bordered region inside a "More"/overflow panel for destructive actions.
     // Spatially separates rare + destructive actions from routine controls (see ChefMenuCard).
-    // Reusable: hosts DangerButton commits; designed to grow with more items.
+    // Hosts DangerButton commits.
     dangerZone: {
         container: 'rounded-lg border border-error-300 dark:border-error-800 ' +
                    'bg-error-50 dark:bg-error-950/40 p-4 space-y-3',
@@ -2045,21 +2065,24 @@ export const COMPONENTS = {
     },
 
     /**
-     * The two-click button (DangerButton): its root, the boundary of the click-outside check, and per mode (a destructive
-     * action, an undo) the armed button's colour, its ring and text, and its countdown wipe, the dark colour shrinking
-     * off the light one
+     * The two-click button (DangerButton): its root, the boundary of the click-outside check; the variable that places
+     * the countdown wipe; and per mode (a destructive action, an undo) the armed button's colour, its ring and ink, and
+     * its countdown, the strong colour shrinking off the pale one at the wipe. Each mode's ink reads on both colours of
+     * its countdown in both modes
      */
     dangerButton: {
         root: 'inline-block',
+        // The countdown classes spell it out: Tailwind generates a class only from its literal text
+        wipePosition: '--wipe',
         danger: {
             color: COLOR.error,
-            armed: `ring-2 ${RING.red[500]} text-white`,
-            countdown: {dark: '--color-red-900', light: '--color-red-400'}
+            armed: `ring-2 ${RING.red[500]} ${TEXT.onFill}`,
+            countdown: 'bg-linear-to-r from-(length:--wipe) to-(length:--wipe) from-red-900 to-red-600 dark:from-red-500 dark:to-red-300'
         },
         undo: {
             color: COLOR.success,
-            armed: `ring-2 ${RING.green[500]} text-white`,
-            countdown: {dark: '--color-green-900', light: '--color-green-400'}
+            armed: `ring-2 ${RING.green[500]} ${TEXT.onFill}`,
+            countdown: 'bg-linear-to-r from-(length:--wipe) to-(length:--wipe) from-green-900 to-green-700 dark:from-green-500 dark:to-green-300'
         }
     },
 
@@ -2608,7 +2631,7 @@ export const IMG = {
     heynabo: '/heynabo.jpeg',
     /**
      * Default dinner picture for heroes without custom menu pictures
-     * Located in public/ folder (ADR-013), accessible from root URL
+     * In public/, served from the root URL
      */
     defaultDinnerPicture: '/fællesspisning_0.jpeg'
 } as const
@@ -2905,7 +2928,7 @@ const alertUi = (extra: Partial<AlertUi> = {}): AlertUi => ({
 })
 
 /**
- * createResponsiveAlerts - THE alert pattern (ADR-018)
+ * createResponsiveAlerts - THE alert pattern
  *
  * `v-bind` a kind and pass only domain props: `:title`, `:description`, an `:icon` override,
  * `:avatar`, `data-testid`, a margin `class`. Colour and variant belong to the kind, never to
@@ -3097,32 +3120,25 @@ const createPagination = (isMd: Ref<boolean | null>) => ({
     siblingCount: computed(() => isMd.value ? 1 : 0)
 })
 
+const navigationLink = {
+    color: 'neutral' as const,
+    variant: 'link' as const,
+    activeColor: 'primary' as const,
+    activeVariant: 'soft' as const
+}
+
 /**
- * createNavigation - Responsive navigation configuration
- *
- * Provides navigation link styling and responsive behavior for header menus.
- * On desktop (md+), drawer links swap to main nav since drawer toggle is hidden.
- *
- * @param isMd - Responsive breakpoint ref
- * @returns Navigation configuration
+ * The header's controls: a link's colours, neutral at rest and primary soft while active as UNavigationMenu draws
+ * them, and the burger's face by its open state, the menu icon in both
  */
-const createNavigation = (isMd: Ref<boolean | null>) => ({
-    // Link styling - matches UNavigationMenu: neutral (sky/blue) default, primary (amber/brown) soft when active
-    link: {
-        color: 'neutral' as const,
-        variant: 'link' as const,
-        activeColor: 'primary' as const,
-        activeVariant: 'soft' as const
-    },
-    /**
-     * Whether to swap drawer content with main nav
-     * - Desktop (isMd): true - drawer links should be in main nav (toggle is hidden)
-     * - Mobile (!isMd): false - drawer links stay in drawer
-     */
-    get shouldSwapDrawerWithMain(): boolean {
-        return isMd.value === true
-    }
-})
+export const NAVIGATION = {
+    link: navigationLink,
+    toggle: (open: boolean): ButtonProps => ({
+        icon: ICONS.menu,
+        color: open ? navigationLink.activeColor : navigationLink.color,
+        variant: open ? navigationLink.activeVariant : navigationLink.variant
+    })
+}
 
 /**
  * useTheSlopeDesignSystem Composable
@@ -3130,8 +3146,7 @@ const createNavigation = (isMd: Ref<boolean | null>) => ({
  * TheSlope's centralized design system - single source of truth for colors, typography,
  * layouts, backgrounds, components, and responsive sizing patterns.
  *
- * Provides curated design decisions based on Pantone Color of the Year 2025 (Mocha Mousse)
- * and TheSlope's vibrant color palette.
+ * Its colours build on Pantone's Color of the Year 2025 (Mocha Mousse) and TheSlope's own palette.
  *
  * @example
  * ```ts
@@ -3268,7 +3283,7 @@ const TABLE_COLUMN_FROM_MD = {class: {th: 'hidden md:table-cell', td: 'hidden md
 export const createTableColumns = (isMd: Ref<boolean | null>) => ({
     // On a phone the booking form's name column carries each inhabitant's tickets inline
     get bookingFormName(): {header: string} {
-        return {header: isMd.value ? 'Beboer' : 'Billetter'}
+        return {header: isMd.value ? HOUSEHOLD_WORDS.inhabitant : BOOKING_WORDS.bookingForm.ticketsColumn}
     },
     bookingFormTicket: {meta: TABLE_COLUMN_FROM_MD},
     get householdMemberName(): {header: string | undefined} {
@@ -3327,7 +3342,7 @@ export const calendarPickerProps = () => ({
  */
 export const CHEF_CALENDAR = {
     day: {
-        next: `text-white dark:text-black font-bold ${BG.ocean[400]}`,
+        next: `${TEXT.onFill} font-bold ${BG.ocean[400]}`,
         future: `font-medium ${BG.ocean[200]} ${TEXT.ocean[800]}`,
         // Another team's dinner: a plain outlined circle, without the team on view's colours
         otherTeam: `font-medium border ${BORDER.gray[500]}`
@@ -3348,7 +3363,7 @@ export const CHEF_CALENDAR = {
  */
 export const DINNER_CALENDAR = {
     day: {
-        next: `text-white dark:text-black font-bold ${BG.peach[400]}`,
+        next: `${TEXT.onFill} font-bold ${BG.peach[400]}`,
         future: `font-medium ${BG.peach[200]} ${TEXT.peach[800]}`
     },
     countdown: {
@@ -3637,7 +3652,7 @@ export const useTheSlopeDesignSystem = () => {
         PAGINATION: createPagination(isMd),
 
         // Navigation configuration
-        NAVIGATION: createNavigation(isMd),
+        NAVIGATION,
 
         // Responsive icons
         RESPONSIVE_ICONS: createResponsiveIcons(isMd),
@@ -3648,7 +3663,7 @@ export const useTheSlopeDesignSystem = () => {
         // Responsive buttons (standardized button configs with sizing)
         BUTTONS: createResponsiveButtons(isMd),
 
-        // Responsive alerts (ADR-018: v-bind a kind, never raw color/variant)
+        // Responsive alerts: a site v-binds a kind, never a raw color or variant
         ALERTS: createResponsiveAlerts(isMd),
 
         // Low-level builders (only if you need custom combinations)

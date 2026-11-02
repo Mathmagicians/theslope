@@ -6,7 +6,7 @@ import {dateToWeekDay, isBeforeDeadline} from '~/utils/season'
 import {formatDate} from '~/utils/date'
 import {useCoreValidation, IdSchema} from '~/composables/useCoreValidation'
 import {sumBy} from '~/utils/ledger'
-import {useBookingValidation, TicketState, SupplyState, type BookingIntent, type OrderDisplay, type DinnerMode, type DinnerState, type DesiredOrder, type OrderAuditAction, type OrderAuditChange, type OrderAuditSource, type OrderSnapshot, type OrderState, type TicketType, type TicketChange, type DinnerEventDisplay, type DinnerEventDate, type ForSaleCounts, type WaitlistCounts} from '~/composables/useBookingValidation'
+import {useBookingValidation, TicketState, SupplyState, type BookingIntent, type OrderDisplay, type DinnerMode, type DinnerState, type DesiredOrder, type OrderAuditAction, type OrderAuditChange, type OrderAuditSource, type OrderAuditSnapshot, type OrderState, type TicketType, type TicketChange, type DinnerEventDisplay, type DinnerEventDate, type ForSaleCounts, type WaitlistCounts} from '~/composables/useBookingValidation'
 import type {DinnerEventDisplayInline} from '~/composables/useCookingTeamValidation'
 import {OPEN_DEADLINES, type BookingDeadlines} from '~/composables/useSeason'
 import {BOOKING_WORDS} from '~/config/bookingWords'
@@ -502,7 +502,7 @@ describe('useBooking', () => {
             expect(result.userEmailHandle).toBe(expectedEmail)
         })
 
-        // ADR-010: isGuestTicket must be preserved through billing pipeline
+        // isGuestTicket survives the billing pipeline
         it.each([
             {desc: 'guest ticket true', isGuestTicket: true},
             {desc: 'guest ticket false', isGuestTicket: false}
@@ -882,7 +882,7 @@ describe('decideOrderAction', () => {
         })
     })
 
-    // ADR-016: an orderId among no existing orders is stale (bought by another household, or deleted)
+    // An orderId among no existing orders is stale (bought by another household, or deleted)
     describe('stale orders', () => {
         it.each([
             {desc: 'an eating mode before the deadline', dinnerMode: DinnerMode.DINEIN, beforeDeadline: true},
@@ -1746,12 +1746,12 @@ describe('Lock Status Utilities', () => {
     describe('computeLockStatus', () => {
         // The released counts the store reads, and the ReleasedTicketCounts a locked dinner carries: its tickets for sale
         // beside its waiting list
-        const released = (total: number, formatted: string, byType: ForSaleCounts['byType']): ForSaleCounts => ({ total, formatted, byType })
-        const queue = (queued: number, queuedFormatted: string, queuedByType: WaitlistCounts['queuedByType'] = {}): WaitlistCounts => ({ queued, queuedFormatted, queuedByType })
-        const counts = (supply = released(0, '-', {}), waitlist = queue(0, '-')) => ({ ...supply, ...waitlist })
+        const released = (total: number, byType: ForSaleCounts['byType']): ForSaleCounts => ({ total, byType })
+        const queue = (queued: number, queuedByType: WaitlistCounts['queuedByType'] = {}): WaitlistCounts => ({ queued, queuedByType })
+        const counts = (supply = released(0, {}), waitlist = queue(0)) => ({ ...supply, ...waitlist })
         const emptyCount = counts()
-        const adults = (count: number) => released(count, `${count}V`, {[TicketTypes.ADULT]: count})
-        const oneChild = released(1, '1B', {[TicketTypes.CHILD]: 1})
+        const adults = (count: number) => released(count, {[TicketTypes.ADULT]: count})
+        const oneChild = released(1, {[TicketTypes.CHILD]: 1})
 
         describe.each([
             {
@@ -1783,16 +1783,16 @@ describe('Lock Status Utilities', () => {
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5), makeEvent(3, 10)],
                 lockedDays: 7,
                 releasedCounts: undefined,
-                queues: new Map([[1, queue(3, '2V 1B', {[TicketTypes.ADULT]: 2, [TicketTypes.CHILD]: 1})], [3, queue(4, '4V', {[TicketTypes.ADULT]: 4})]]),
-                expected: new Map([[1, counts(undefined, queue(3, '2V 1B', {[TicketTypes.ADULT]: 2, [TicketTypes.CHILD]: 1}))], [2, emptyCount]])
+                queues: new Map([[1, queue(3, {[TicketTypes.ADULT]: 2, [TicketTypes.CHILD]: 1})], [3, queue(4, {[TicketTypes.ADULT]: 4})]]),
+                expected: new Map([[1, counts(undefined, queue(3, {[TicketTypes.ADULT]: 2, [TicketTypes.CHILD]: 1}))], [2, emptyCount]])
             },
             {
                 name: 'carries the tickets for sale and the waiting list of a locked dinner side by side',
                 dinnerEvents: [makeEvent(1, 2)],
                 lockedDays: 7,
                 releasedCounts: new Map([[1, adults(4)]]),
-                queues: new Map([[1, queue(1, '1B', {[TicketTypes.CHILD]: 1})]]),
-                expected: new Map([[1, counts(adults(4), queue(1, '1B', {[TicketTypes.CHILD]: 1}))]])
+                queues: new Map([[1, queue(1, {[TicketTypes.CHILD]: 1})]]),
+                expected: new Map([[1, counts(adults(4), queue(1, {[TicketTypes.CHILD]: 1}))]])
             }
         ])('$name', ({dinnerEvents, lockedDays, releasedCounts, queues, expected}) => {
             it('returns correct lock status map', () => {
@@ -2184,7 +2184,7 @@ describe('replayTicketChanges', () => {
         dinnerEventId: 1, inhabitantId: order.inhabitantId, bookedByUserId: actor, ticketPriceId: order.ticketPriceId, priceAtBooking: priceOf(order.ticketPriceId),
         dinnerMode: Mode.DINEIN, state: State.BOOKED, isGuestTicket: order.isGuestTicket ?? false
     })
-    const snapshotOf = (order: Ticket, state: OrderState): OrderSnapshot => OrderFactory.defaultOrderSnapshot({
+    const snapshotOf = (order: Ticket, state: OrderState): OrderAuditSnapshot => OrderFactory.defaultOrderAuditSnapshot({
         id: order.id, inhabitantId: order.inhabitantId, dinnerEventId: 1, ticketPriceId: order.ticketPriceId, priceAtBooking: priceOf(order.ticketPriceId),
         dinnerMode: Mode.DINEIN, state, isGuestTicket: order.isGuestTicket ?? false, inhabitantNameWithInitials: 'A. B.',
         householdShortname: shortNameOf(order.householdId), householdId: order.householdId

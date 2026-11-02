@@ -29,6 +29,9 @@ const TICKET_RECEIVED = {
     text: 'Kære {{name}},\n\n{{dinner}}\n{{person}}: 1 {{action}}\n{{ticket}}\nDu betaler for billetten. Vi glæder os til at se jer.\n\nSe bookingen: {{bookingUrl}}'
 }
 
+/** A billing period's households and total, and the link to its summary */
+const BILLING_PERIOD_SUMMARY = `{{householdCount}} husstande, i alt ${PRICE_WORDS.kroner('{{totalAmount}}')}.\n\nOversigt: {{summaryUrl}}`
+
 /** The buyer a sale to the waiting list names in the seller's mail */
 export const WAITLIST_BUYER = 'ventelisten'
 
@@ -39,11 +42,11 @@ export const NOTIFICATION_TEMPLATES = {
     },
     BILLING_PERIOD_CLOSED: {
         subject: '{{senderName}}: PBS-opgørelse {{billingPeriod}}',
-        text: `Hejsa,\n\nVedhæftet er PBS-opgørelsen for perioden {{billingPeriod}}: {{householdCount}} husstande, i alt ${PRICE_WORDS.kroner('{{totalAmount}}')}.\n\nOversigt: {{summaryUrl}}`
+        text: `Hejsa,\n\nVedhæftet er PBS-opgørelsen for perioden {{billingPeriod}}: ${BILLING_PERIOD_SUMMARY}`
     },
     BILLING_PERIOD_UPDATED: {
         subject: '{{senderName}}: PBS-opgørelse {{billingPeriod}} — opdatering v{{version}}',
-        text: `Hejsa,\n\nPBS-opgørelsen for perioden {{billingPeriod}} er opdateret (version {{version}}) og erstatter den tidligere fremsendte: {{householdCount}} husstande, i alt ${PRICE_WORDS.kroner('{{totalAmount}}')}.\n\nOversigt: {{summaryUrl}}`
+        text: `Hejsa,\n\nPBS-opgørelsen for perioden {{billingPeriod}} er opdateret (version {{version}}) og erstatter den tidligere fremsendte: ${BILLING_PERIOD_SUMMARY}`
     },
     WAITLIST_JOINED: {
         subject: '{{senderName}}: {{person}} står på ventelisten til {{dinner}}',
@@ -52,7 +55,7 @@ export const NOTIFICATION_TEMPLATES = {
     WAITLIST_TICKET_ASSIGNED: TICKET_RECEIVED,
     TICKET_BOUGHT: TICKET_RECEIVED,
     WAITLIST_EXTRA_PORTION: {
-        subject: '{{senderName}}: {{person}} har fået en billet til {{dinner}}',
+        subject: TICKET_RECEIVED.subject,
         text: 'Kære {{name}},\n\n{{dinner}}\n{{person}}: 1 {{action}}\n{{ticket}}\nKøkkenholdet laver flere portioner, og en af dem er til {{person}}. Vi glæder os til at se jer.\n\nSe bookingen: {{bookingUrl}}'
     },
     WAITLIST_BUILDUP: {

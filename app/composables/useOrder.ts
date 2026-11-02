@@ -1,8 +1,8 @@
 /**
  * The order rules: the kitchen's counts and panels, the budget and the VAT. The server imports it, so every import is
- * explicit (ADR-017)
+ * explicit
  */
-import {useBookingValidation, TicketState, type OrderDisplay, type OrderDetail, type TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, TicketState, type OrderDisplay, type OrderDetail, type TicketType, type KitchenPanel} from '~/composables/useBookingValidation'
 import {isPendingOrder, ticketStateOf} from '~/composables/useBooking'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {krToOre, sumBy} from '~/utils/ledger'
@@ -13,7 +13,7 @@ import {TEAM_WORDS} from '~/config/teamWords'
  * Statistics for one dining mode in kitchen display
  */
 export interface DiningModeStats {
-  key: string
+  key: KitchenPanel
   label: string
   percentage: number  // Based on PORTIONS (cooking workload), not order count
   portions: number
@@ -125,7 +125,7 @@ export const useOrder = () => {
   const calculateNormalizedWidths = (
     stats: DiningModeStats[],
     minWidth = 10
-  ): Record<string, number> => {
+  ): Partial<Record<KitchenPanel, number>> => {
     if (stats.length === 0) return {}
 
     const withMin = stats.map(s => ({ key: s.key, width: Math.max(s.percentage, minWidth) }))

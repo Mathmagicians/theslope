@@ -1,16 +1,19 @@
 import { describe, it, expect } from 'vitest'
 import { useOrder, type DiningModeStats } from '~/composables/useOrder'
-import { useBookingValidation, type DinnerMode as DinnerModeValue, type OrderState as OrderStateValue, type TicketType as TicketTypeValue, type OrderDetail } from '~/composables/useBookingValidation'
+import { useBookingValidation, type DinnerMode as DinnerModeValue, type OrderState as OrderStateValue, type TicketType as TicketTypeValue, type KitchenPanel, type OrderDetail } from '~/composables/useBookingValidation'
 import { sumBy } from '~/utils/ledger'
 import { TEAM_WORDS } from '~/config/teamWords'
 import { BOOKING_WORDS } from '~/config/bookingWords'
 import { OrderFactory } from '../../e2e/testDataFactories/orderFactory'
 import { WaitlistFactory } from '../../e2e/testDataFactories/waitlistFactory'
+import { itemAt } from '~~/tests/component/listHelpers'
 
-const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema } = useBookingValidation()
+const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, KitchenPanelSchema } = useBookingValidation()
 const OrderState = OrderStateSchema.enum
 const TicketType = TicketTypeSchema.enum
 const DinnerMode = DinnerModeSchema.enum
+// The kitchen box's panels, in their order
+const PANELS = KitchenPanelSchema.options
 
 let orderIdCounter = 1
 const createTestOrder = (overrides: {
@@ -168,7 +171,7 @@ describe('useOrder', () => {
     const createOrderWithMode = (mode: DinnerModeValue, ticketType: TicketTypeValue, state: OrderStateValue = OrderState.BOOKED): OrderDetail =>
       ({ ...createTestOrder({ state, ticketType }), dinnerMode: mode })
     const noOrders: OrderDetail[] = []
-    const panelOf = (stats: DiningModeStats[], key: string) => {
+    const panelOf = (stats: DiningModeStats[], key: KitchenPanel) => {
       const panel = stats.find(stat => stat.key === key)
       if (!panel) throw new Error(`No kitchen panel ${key}`)
       return panel
@@ -205,7 +208,7 @@ describe('useOrder', () => {
       it('THEN percentages reflect portion distribution', () => {
         const stats = calculateDiningModeStats(orders)
 
-        Object.entries(expected).forEach(([key, percentage]) => expect(panelOf(stats, key).percentage, key).toBe(percentage))
+        PANELS.forEach(panel => expect(panelOf(stats, panel).percentage, panel).toBe(expected[panel]))
 
         // The panels share the whole, unless no portion is booked
         const total = stats.reduce((sum, s) => sum + s.percentage, 0)
@@ -238,20 +241,20 @@ describe('useOrder', () => {
     const { calculateNormalizedWidths } = useOrder()
 
     const makeStats = (percentages: number[]) =>
-      percentages.map((p, i) => ({ key: `K${i}`, label: `L${i}`, percentage: p, portions: p, orderCount: p }))
+      percentages.map((p, i) => ({ key: itemAt(PANELS, i), label: `L${i}`, percentage: p, portions: p, orderCount: p }))
 
     describe.each([
-      { scenario: 'empty', percentages: [], minWidth: 10, expectedWidths: {} },
-      { scenario: 'all zeros (4 items)', percentages: [0, 0, 0, 0], minWidth: 10, expectedWidths: { K0: 25, K1: 25, K2: 25, K3: 25 } },
-      { scenario: '100% in one', percentages: [100, 0, 0, 0], minWidth: 10, expectedWidths: { K0: 76.9, K1: 7.7, K2: 7.7, K3: 7.7 } },
-      { scenario: 'custom min 20%', percentages: [80, 0], minWidth: 20, expectedWidths: { K0: 80, K1: 20 } }
+      { scenario: 'empty', percentages: [], minWidth: 10, expectedWidths: [] },
+      { scenario: 'all zeros (4 items)', percentages: [0, 0, 0, 0], minWidth: 10, expectedWidths: [25, 25, 25, 25] },
+      { scenario: '100% in one', percentages: [100, 0, 0, 0], minWidth: 10, expectedWidths: [76.9, 7.7, 7.7, 7.7] },
+      { scenario: 'custom min 20%', percentages: [80, 0], minWidth: 20, expectedWidths: [80, 20] }
     ])('GIVEN $scenario', ({ percentages, minWidth, expectedWidths }) => {
       it('THEN widths are normalized correctly', () => {
         const stats = makeStats(percentages)
         const widths = calculateNormalizedWidths(stats, minWidth)
 
-        Object.entries(expectedWidths).forEach(([key, expected]) => {
-          expect(widths[key]).toBeCloseTo(expected, 0)
+        expectedWidths.forEach((expected, index) => {
+          expect(widths[itemAt(PANELS, index)]).toBeCloseTo(expected, 0)
         })
 
         const total = Object.values(widths).reduce((sum, w) => sum + w, 0)

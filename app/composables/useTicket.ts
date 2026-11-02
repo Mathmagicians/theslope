@@ -8,7 +8,7 @@ const {TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
 
 // The words a ticket type goes by: its label, its letter in a ticket count ("2V 1B"), and its noun for one and for many;
-// its colour and glyph live in useBookingUi (ADR-017)
+// its colour and glyph live in useBookingUi
 const ticketTypeWords: Record<TicketType, {label: string, letter: string, one: string, many: string}> = {
     [TicketType.ADULT]: {label: 'Voksen', letter: 'V', one: 'voksen', many: 'voksne'},
     [TicketType.CHILD]: {label: 'Barn', letter: 'B', one: 'barn', many: 'børn'},
@@ -24,6 +24,31 @@ export const ticketTypeLetter = (type: TicketType): string => ticketTypeWords[ty
 /** A count of one ticket type in words: "1 barn", "8 voksne" */
 export const ticketTypeCount = (type: TicketType, count: number): string =>
     `${count} ${count === 1 ? ticketTypeWords[type].one : ticketTypeWords[type].many}`
+
+type TicketTypeCounts = Partial<Record<TicketType, number>>
+type TicketWord = (type: TicketType, count: number) => string
+
+/**
+ * Ticket counts in words, curried over the wording: each ticket type's word in the order of the types, joined by the
+ * separator; a type without tickets is left out unless `withZero`, and no parts read `empty`. `parts` keeps each
+ * type's word apart for a list that renders one element per type and draws the separator itself
+ */
+const ticketCountText = ({word, separator, withZero = false, empty = ''}: {word: TicketWord, separator: string, withZero?: boolean, empty?: string}) => {
+    const parts = (counts: TicketTypeCounts): {ticketType: TicketType, text: string}[] => TicketTypeSchema.options
+        .filter(type => withZero || counts[type])
+        .map(type => ({ticketType: type, text: word(type, counts[type] ?? 0)}))
+    return {parts, text: (counts: TicketTypeCounts): string => parts(counts).map(part => part.text).join(separator) || empty}
+}
+
+/** The separator between the kitchen box's labelled counts in running text; a rendered list draws COMPONENTS.pipe */
+const PIPE = ' | '
+
+/** The wordings of a ticket count, one builder each: "2V 1B", "2 voksne, 1 barn", and the kitchen box's "Voksen: 60 | Barn: 30" */
+export const TICKET_COUNTS = {
+    compact: ticketCountText({word: (type, count) => `${count}${ticketTypeLetter(type)}`, separator: ' ', empty: '-'}),
+    sentence: ticketCountText({word: ticketTypeCount, separator: ', '}),
+    labelled: ticketCountText({word: (type, count) => `${ticketTypeLabel(type)}: ${count}`, separator: PIPE, withZero: true})
+}
 
 /**
  * Business logic for working with tickets and ticket types
@@ -78,7 +103,7 @@ export const useTicket = () => {
         birthDate: Date | null | undefined,
         ticketPrices: TicketPrice[] | undefined,
         referenceDate: Date
-    ): typeof TicketType[keyof typeof TicketType] => {
+    ): TicketType => {
         // Default to ADULT if no birthDate
         if (!birthDate) return TicketType.ADULT
 
@@ -150,7 +175,7 @@ export const useTicket = () => {
      * @returns Matching TicketPrice or undefined if not found
      */
     const findTicketPriceByType = (
-        ticketType: typeof TicketType[keyof typeof TicketType],
+        ticketType: TicketType,
         ticketPrices?: TicketPrice[]
     ): TicketPrice | undefined => {
         if (!ticketPrices?.length) return undefined
@@ -242,6 +267,26 @@ export const useTicket = () => {
     /** A price in whole kroner with its unit: "1.500 kr" for 150000 øre */
     const formatKroner = (dkkFraction: number): string => PRICE_WORDS.kroner(formatPrice(dkkFraction))
 
+    /** A ticket type and its price: "Barn · 17 kr" */
+    const formatTicketPrice = (label: string, price: number): string => `${label} · ${formatKroner(price)}`
+
+    // How many items carry each ticket type
+    const countTicketTypes = <T extends { ticketType: TicketType | null }>(items: T[]): Partial<Record<TicketType, number>> =>
+        items.reduce<Partial<Record<TicketType, number>>>((acc, item) => {
+            if (item.ticketType) acc[item.ticketType] = (acc[item.ticketType] ?? 0) + 1
+            return acc
+        }, {})
+
+    /**
+     * Format ticket counts for display (e.g., "2V 1B")
+     * Accepts either:
+     * - Array of items with ticketType (TransactionDisplay, OrderDisplay, etc.)
+     * - Pre-computed counts map from repository { ADULT: 200, CHILD: 50, BABY: 1 }
+     */
+    const formatTicketCounts = <T extends { ticketType: TicketType | null }>(
+        input: T[] | Partial<Record<TicketType, number>>
+    ): string => TICKET_COUNTS.compact.text(Array.isArray(input) ? countTicketTypes(input) : input)
+
     return {
         determineTicketType,
         resolveTicketType,
@@ -256,6 +301,9 @@ export const useTicket = () => {
         takesNoPortionOf,
         convertPriceToDecimalFormat,
         formatPrice,
-        formatKroner
+        formatKroner,
+        formatTicketPrice,
+        countTicketTypes,
+        formatTicketCounts
     }
 }

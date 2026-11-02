@@ -1,5 +1,5 @@
 /**
- * The season words users read. Plain module without auto-imports (ADR-017).
+ * The season words users read. Plain module without auto-imports.
  */
 import {FORM_MODES, type FormMode} from '~/types/form'
 
@@ -61,7 +61,6 @@ export const SEASON_WORDS = {
      */
     ticketPriceEditor: {
         addTitle: 'Tilføj billettyper',
-        ticketType: 'Billettype',
         price: 'Pris (DKK)',
         maxAge: {label: 'Angiv aldersgrænse', placeholder: 'Eventuel aldersgrænse'},
         description: {label: 'Beskrivelse (valgfrit)', placeholder: "F.eks. 'Fra 11 år og opefter'"},

@@ -312,11 +312,7 @@ guest's card stays closed, and the form stays in place.
 The architecture rule fails a raw palette shade only, so about 560 raw utilities sit in the static `class`
 attributes of sixty-three `.vue` files (`AdminEconomy.vue` 68, `UserProfileCard.vue` 52, `UserPreferencesCard.vue` 50,
 `HouseholdSettings.vue` 46, `AllergyTypeCard.vue` 43, the public billing page 34, `HelpButton.vue` 32,
-`HouseholdEconomy.vue` 30, `AllergyDetailPanel.vue` 30, …). Per-site `:ui` patches and literal props sit beside them:
-`TicketPriceListEditor.vue` (three), `HelpButton.vue` (`variant="outline"` on a `UCard`), the page tabs of
-`pages/admin/[tab].vue`, `pages/household/[shortname]/[tab].vue` and `PageHeader.vue` (`label: 'hidden md:inline'`),
-`HouseholdListItem.vue:19` (a raw row), and the avatar groups of `UserListItem.vue:152`, `CookingTeamCard.vue:339` and
-`HouseholdListItem.vue:20` (`:ui="{base: avatar.compact.fit}"`).
+`HouseholdEconomy.vue` 30, `AllergyDetailPanel.vue` 30, …). Per-site `:ui` patches sit beside them: `TicketPriceListEditor.vue` (two).
 
 Motion utilities are the same class, 14 hits in 8 files: `animate-spin` beside `MOTION_SPIN` in `OrderHistoryDisplay.vue:59` and
 `AdminEconomy.vue:541`; hover interactions in `UserListItem.vue:158,199` (`hover:scale-110 hover:rotate-3 transition-transform duration-200`),

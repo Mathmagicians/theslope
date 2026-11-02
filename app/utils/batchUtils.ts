@@ -13,7 +13,7 @@ export type NonEmpty<T> = [T, ...T[]]
 
 /**
  * Curried groupBy utility - groups array items by a key function
- * ADR-014: Used for batch operations that need to group by update signature
+ * Used for batch operations that need to group by update signature
  *
  * @param getKey - Function to extract grouping key from item
  * @returns Curried function that groups items into a Map by key

@@ -23,7 +23,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | Endpoint | Return type | Validation | Repository | E2E | Status |
 |---|---|---|---|---|---|
 | **Orders** | | | | | |
-| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the sort from `OrderSortBySchema`; its three flags through `QueryFlagSchema`, `=false` reads false |
+| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the sort from `OrderSortBySchema`; its three flags through `QueryFlagSchema`, `=false` reads false; `includeCostContext` returns each order with its dinner and its eater as Display types |
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/order/waitlist.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `server/utils/waitlistAssignment.ts` | ✅ | N/A | ✅ | ✅ serial; recovery unit | ✅ `joinWaitlist` joins a household's claims on a dinner as one batch, idempotent on a later run; a placement grabs, writes, records and removes; the recovery settles a grab past `waitlistPlacingLeaseMinutes` and reports the sale or extra portion it finishes |
@@ -52,7 +52,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/team/assignment/[id].post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec written, not run; `updateTeamAssignment` takes `CookingTeamAssignmentUpdate` |
 | `/api/admin/team/assignment/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deleted id |
 | **Admin - users** | | | | | |
-| `/api/admin/users/index.get.ts` | ✅ | ⚠️ | ✅ | ✅ | ⚠️ raw query read; deserializes through the typed schemas |
+| `/api/admin/users/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the email query validated; deserializes through the typed schemas |
 | `/api/admin/users/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/users/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/users/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -80,7 +80,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/season/[id]/assign-cooking-teams.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/season/[id]/assign-team-affinities.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/season/[id]/scaffold-prebookings.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/season/import.post.ts` | ✅ | ✅ | ✅ | ✅ local | ✅ |
+| `/api/admin/season/import.post.ts` | ✅ | ✅ | ✅ | ✅ local | ✅ the job run triggered as `adminTrigger('season-import')` |
 | `server/utils/reconcileDinnerEvents.ts` | ✅ | N/A | ✅ | ✅ unit | ✅ |
 | **Admin - allergy types** | | | | | |
 | `/api/admin/allergy-type/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -99,11 +99,11 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/billing/periods/[id].get.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed |
 | `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec skipped, import replaced |
 | **Admin - maintenance and jobs** | | | | | |
-| `/api/admin/maintenance/daily.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial; unit | ⚠️ raw body read; the scaffold step drops cancelled and consumed dinners; the run sends the notifications of the dinners (`sendNotifications`) and then the chef deadlines (`sendChefDeadlines`), counted per sender event in `notifications` (`BOOKING_STATUS`, `CHEF_DEADLINES`); the pending dinners read as `DinnerEventDate[]` (`fetchPendingDinnersInActiveSeason`); each notification step (booking status, chef deadlines) stands alone: a failed step logs `console.error`, the next step runs, and the run completes PARTIAL with the step's message and the result of each step that ran; a failed data step completes the run FAILED with its message and rethrows |
-| `/api/admin/maintenance/monthly.post.ts` | ✅ | ⚠️ | ✅ | ✅ serial; unit | ⚠️ raw body read |
+| `/api/admin/maintenance/daily.post.ts` | ✅ | ✅ | ❓ | ✅ serial; unit | ❓ the trigger query through `JobTriggerQuerySchema`; the scaffold step drops cancelled and consumed dinners; the run sends the notifications of the dinners (`sendNotifications`) and then the chef deadlines (`sendChefDeadlines`), counted per sender event in `notifications` (`BOOKING_STATUS`, `CHEF_DEADLINES`); the pending dinners read as `DinnerEventDate[]` (`fetchPendingDinnersInActiveSeason`); each notification step (booking status, chef deadlines) stands alone: a failed step logs `console.error`, the next step runs, and the run completes PARTIAL with the step's message and the result of each step that ran; a failed data step completes the run FAILED with its message and rethrows |
+| `/api/admin/maintenance/monthly.post.ts` | ✅ | ✅ | ✅ | ✅ serial; unit | ✅ the trigger query through `JobTriggerQuerySchema` |
 | `/api/admin/maintenance/job-run/index.get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/maintenance/job-run/[id].get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
-| `/api/admin/heynabo/import.get.ts` | ✅ | ⚠️ | ✅ | ✅ serial | ⚠️ raw query read |
+| `/api/admin/heynabo/import.get.ts` | ✅ | ✅ | ✅ | ✅ serial | ⚠️ a GET that writes (ADR-004 compliance 1); the trigger query through `JobTriggerQuerySchema`; the import service links users to inhabitants in chunks of 50 (`chunkUserLinks`), as it saves households, inhabitants and users in chunks (`chunkSaves`); both chunkers live in `useHeynabo` |
 | **Admin - sender events** | | | | | |
 | `/api/admin/sender/event/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ batched, 100 per call |
 | `/api/admin/sender/event/monthly-billing.post.ts` | ✅ | ✅ | ✅ | ✅ `billing-notifications.feature`; unit | ✅ the admin's re-send of a period's accountant notification through `deliverDesired` as the admin's override, logged with the admin |

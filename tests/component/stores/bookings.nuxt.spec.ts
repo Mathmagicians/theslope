@@ -19,7 +19,7 @@ import {useCookingTeam} from '~/composables/useCookingTeam'
 import {COLOR, COMPONENTS, EMPTY_STATE_MESSAGES} from '~/composables/useTheSlopeDesignSystem'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {Season} from '~/composables/useSeasonValidation'
-import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay, TicketType as TicketTypeValue} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import {useBookingValidation, DinnerState} from '~/composables/useBookingValidation'
 import {adminBypassQuery} from '~/composables/useCoreValidation'
@@ -29,11 +29,15 @@ import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {addDays} from 'date-fns'
 import {flushPromises} from '@vue/test-utils'
-import {asyncDataStatus, resetStores, registerEmptyStoreEndpoints, holdEndpoint} from '~~/tests/component/testHelpers'
+import {asyncDataStatus, resetStores, registerEmptyStoreEndpoints, holdEndpoint, itemAt, present} from '~~/tests/component/testHelpers'
 const Action = useBookingValidation().BookingActionSchema.enum
 
 const DINNER_ID = 100
 const TEAM = SeasonFactory.defaultCookingTeamDisplay({id: 7, name: 'Madhold A - Winter 2026'})
+// An economy order carries its dinner and its eater
+const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDisplay('upcoming'), id: DINNER_ID}
+const inhabitant = itemAt(HouseholdFactory.defaultHouseholdDetail('upcoming').inhabitants, 0)
+const economyOrder = OrderFactory.defaultOrder('upcoming', {dinnerEventId: DINNER_ID, inhabitantId: inhabitant.id, dinnerEvent, inhabitant})
 
 // The test runtime has no session cookie and no /api/_auth endpoint, so the session is the one
 // thing faked; the auth, plan and users stores are real
@@ -55,8 +59,8 @@ registerEndpoint(`/api/admin/dinner-event/${GONE_DINNER_ID}`, goneDinnerEndpoint
 
 const assignRoleEndpoint = vi.fn()
 const updateDinnerEndpoint = vi.fn()
-const ordersEndpoint = vi.fn()
-const scaffoldEndpoint = vi.fn()
+const ordersEndpoint = vi.fn<(event: H3Event) => unknown>()
+const scaffoldEndpoint = vi.fn<(event: H3Event) => unknown>()
 const dailyMaintenanceEndpoint = vi.fn()
 const householdBillingEndpoint = vi.fn()
 const dinnerEventDetailEndpoint = vi.fn(() => DinnerEventFactory.defaultDinnerEventDetail('gated'))
@@ -95,9 +99,11 @@ const {findTicketPriceByType} = useTicket()
 const TicketType = TicketTypeSchema.enum
 // Ids on the season's prices: a waiting-list entry names its price by id, the store reads the ticket type off it
 const ticketPrices = SEASON.ticketPrices.map((price, index) => ({...price, id: index + 1}))
-const priceOf = (ticketType: typeof TicketType[keyof typeof TicketType]) => findTicketPriceByType(ticketType, ticketPrices)!
+const priceOf = (ticketType: TicketTypeValue) => present(findTicketPriceByType(ticketType, ticketPrices), `${ticketType} price`)
 // The session user's household is the households store's default selection
-const MY_HOUSEHOLD_ID = UserFactory.defaultUserWithInhabitant('bookings-store').Inhabitant!.household!.id
+const me = UserFactory.defaultUserWithInhabitant('bookings-store')
+const myInhabitant = present(me.Inhabitant, 'session inhabitant')
+const MY_HOUSEHOLD_ID = present(myInhabitant.household, 'session household').id
 registerEndpoint(`/api/admin/household/${MY_HOUSEHOLD_ID}`, () => ({...HouseholdFactory.defaultHouseholdDetail('bookings-store'), id: MY_HOUSEHOLD_ID}))
 registerEndpoint('/api/admin/billing/periods', billingPeriodsEndpoint)
 const currentPeriodEndpoint = vi.fn((): unknown[] => [])
@@ -108,8 +114,8 @@ registerEndpoint('/api/order', ordersEndpoint)
 registerEndpoint(`/api/team/cooking/${DINNER_ID}/assign-role`, {method: 'POST', handler: assignRoleEndpoint})
 registerEndpoint(`/api/chef/dinner/${DINNER_ID}`, {method: 'POST', handler: updateDinnerEndpoint})
 registerEndpoint('/api/household/order/scaffold', {method: 'POST', handler: scaffoldEndpoint})
-// The scaffold's dry run is a read (ADR-004): the expected bookings and the draft previews
-const scaffoldReadEndpoint = vi.fn()
+// The scaffold's dry run is a read: the expected bookings and the draft previews
+const scaffoldReadEndpoint = vi.fn<(event: H3Event) => unknown>()
 registerEndpoint('/api/household/order/scaffold', {method: 'GET', handler: scaffoldReadEndpoint})
 registerEndpoint('/api/admin/maintenance/daily', {method: 'POST', handler: dailyMaintenanceEndpoint})
 registerEndpoint('/api/billing', householdBillingEndpoint)
@@ -133,8 +139,7 @@ const dinnerResponse = (cookingTeam: CookingTeamDisplay | null = TEAM) => ({
 
 const toastTitles = () => useToast().toasts.value.map(toast => String(toast.title))
 
-const me = UserFactory.defaultUserWithInhabitant('bookings-store')
-const ME = me.Inhabitant!.id
+const ME = myInhabitant.id
 
 let getTeamShortName: ReturnType<typeof useCookingTeam>['getTeamShortName']
 beforeAll(() => {
@@ -163,9 +168,9 @@ afterEach(() => {
 
 describe('Bookings store — updateDinnerEventField', () => {
     it.each([
-        {desc: 'vacant chef + team → auto-claims',           chefId: null, team: TEAM as CookingTeamDisplay | null, claimed: true,  claimCalls: 1, expectChef: true,  expectTeam: true,  expectDate: true},
+        {desc: 'vacant chef + team → auto-claims',           chefId: null, team: TEAM, claimed: true,  claimCalls: 1, expectChef: true,  expectTeam: true,  expectDate: true},
         {desc: 'vacant chef + no team → auto-claims',        chefId: null, team: null,                              claimed: true,  claimCalls: 1, expectChef: true,  expectTeam: false, expectDate: true},
-        {desc: 'chef already set → plain "Menu gemt" toast', chefId: ME,   team: TEAM as CookingTeamDisplay | null, claimed: false, claimCalls: 0, expectChef: false, expectTeam: false, expectDate: false}
+        {desc: 'chef already set → plain "Menu gemt" toast', chefId: ME,   team: TEAM, claimed: false, claimCalls: 0, expectChef: false, expectTeam: false, expectDate: false}
     ])('$desc', async ({chefId, team, claimed, claimCalls, expectChef, expectTeam, expectDate}) => {
         const dinner = dinnerResponse(team)
         updateDinnerEndpoint.mockImplementation(() => dinner)
@@ -205,7 +210,7 @@ describe('Bookings store — updateDinnerEventField', () => {
     })
 })
 
-const lastQuery = (endpoint: typeof ordersEndpoint) => getQuery(endpoint.mock.calls.at(-1)![0] as H3Event)
+const lastQuery = (endpoint: typeof ordersEndpoint) => getQuery(itemAt(endpoint.mock.calls, -1)[0])
 
 describe('Bookings store — orders', () => {
     beforeEach(() => {
@@ -219,7 +224,7 @@ describe('Bookings store — orders', () => {
         store.loadOrdersForDinners({dinnerEventIds: [DINNER_ID]})
 
         await vi.waitFor(() => expect(store.orders).toHaveLength(1))
-        expect(store.orders[0]!.createdAt).toBeInstanceOf(Date)
+        expect(itemAt(store.orders, 0).createdAt).toBeInstanceOf(Date)
         expect(ordersEndpoint).toHaveBeenCalled()
     })
 
@@ -249,19 +254,32 @@ describe('Bookings store — upcoming orders', () => {
     beforeEach(() => {
         resetStores()
         selectSeason()
-        ordersEndpoint.mockImplementation(() => [OrderFactory.defaultOrder('upcoming', {dinnerEventId: DINNER_ID})])
+        ordersEndpoint.mockImplementation(() => [economyOrder])
     })
 
     it.each([
         {scope: 'all households', allHouseholds: true, param: 'allHouseholds', value: 'true'},
         {scope: 'the selected household', allHouseholds: false, param: 'householdId', value: String(MY_HOUSEHOLD_ID)}
-    ])('reads the selected season\'s upcoming orders for $scope with their dinner context', async ({allHouseholds, param, value}) => {
+    ])('reads the selected season\'s upcoming orders for $scope with their dinner and their eater', async ({allHouseholds, param, value}) => {
         const store = useBookingsStore()
 
         store.loadUpcomingOrders(allHouseholds)
 
         await vi.waitFor(() => expect(store.upcomingOrders).toHaveLength(1))
-        expect(lastQuery(ordersEndpoint)).toMatchObject({upcomingForSeason: String(SEASON_ID), includeDinnerContext: 'true', [param]: value})
+        expect(lastQuery(ordersEndpoint)).toMatchObject({upcomingForSeason: String(SEASON_ID), includeCostContext: 'true', [param]: value})
+    })
+
+    it.each([
+        {missing: 'its dinner', order: {...economyOrder, dinnerEvent: undefined}},
+        {missing: 'its eater', order: {...economyOrder, inhabitant: undefined}}
+    ])('reads an upcoming order without $missing as an error', async ({order}) => {
+        ordersEndpoint.mockImplementation(() => [order])
+        const store = useBookingsStore()
+
+        store.loadUpcomingOrders(true)
+
+        await vi.waitFor(() => expect(store.isUpcomingOrdersLoaded).toBe(true))
+        expect(store.upcomingOrders).toEqual([])
     })
 
     it('requests nothing without a season', async () => {
@@ -291,7 +309,7 @@ describe('Bookings store — scaffold bookings', () => {
 
     // The run's dinners, one a day from Monday 19/10/2026, each named by its day in the toast
     const runDinners = [1, 2, 3].map(id => ({id, date: new Date(2026, 9, 18 + id)}))
-    const dayOf = (dinnerEventId: number) => formatDate(runDinners.find(({id}) => id === dinnerEventId)!.date, DATE_SETTINGS.DAY_MONTH_MASK)
+    const dayOf = (dinnerEventId: number) => formatDate(present(runDinners.find(({id}) => id === dinnerEventId), `dinner ${dinnerEventId}`).date, DATE_SETTINGS.DAY_MONTH_MASK)
 
     it.each([
         {view: 'day', failedOrders: 0, color: COLOR.success, description: () => `${dayOf(1)}  tilmeldt: Anna\n${dayOf(2)}  tilmeldt: Anna d. 01/01/2026`},
@@ -337,7 +355,7 @@ describe('Bookings store — scaffold bookings', () => {
 
         await store.processSingleEventBookings(1, DINNER_ID, [], false, {title: 'day', householdOrder: [anna.inhabitantId, bo.inhabitantId]})
 
-        expect(useToast().toasts.value.at(-1)!.description).toBe(`${dayOf(1)}  på ventelisten: Anna (Voksen #3), Bo (Barn #1)\n${dayOf(2)}  forlod ventelisten: Anna`)
+        expect(itemAt(useToast().toasts.value, -1).description).toBe(`${dayOf(1)}  på ventelisten: Anna (Voksen #3), Bo (Barn #1)\n${dayOf(2)}  forlod ventelisten: Anna`)
     })
 
     it('sends an admin correction as one scaffold with adminBypass, a new guest booked on the household\'s inhabitant', async () => {
@@ -356,7 +374,7 @@ describe('Bookings store — scaffold bookings', () => {
         expect(result.totals[Action.CANCEL]).toBe(1)
     })
 
-    // An admin's save on a household carries the override; the household's own save carries no parameter (ADR-004)
+    // An admin's save on a household carries the override; the household's own save carries no parameter
     it.each([
         {save: 'a member\'s day view save', adminBypass: false, run: (store: ReturnType<typeof useBookingsStore>) => store.processSingleEventBookings(1, DINNER_ID, [], false)},
         {save: 'a member\'s grid save', adminBypass: false, run: (store: ReturnType<typeof useBookingsStore>) => store.processMultipleEventsBookings(1, [DINNER_ID], [], false)},
@@ -367,10 +385,10 @@ describe('Bookings store — scaffold bookings', () => {
 
         await run(store)
 
-        expect(scaffoldEndpoint.mock.calls.map(([event]) => getQuery(event as H3Event))).toEqual([adminBypassQuery(adminBypass)])
+        expect(scaffoldEndpoint.mock.calls.map(([event]) => getQuery(event))).toEqual([adminBypassQuery(adminBypass)])
     })
 
-    // The scaffold's dry run is a read (ADR-004): the request travels in the query of a GET, each desired order encoded,
+    // The scaffold's dry run is a read: the request travels in the query of a GET, each desired order encoded,
     // outside the booking write. No orders is the household's expected bookings; an admin's draft previews with the
     // deadlines lifted, a dry-run parameter and no override
     const READ_DINNER_IDS = [DINNER_ID, DINNER_ID + 1]
@@ -394,7 +412,7 @@ describe('Bookings store — scaffold bookings', () => {
         expect(store.isProcessingBookings).toBe(false)
 
         expect(await preview).toEqual(previewed.scaffoldResult)
-        expect(scaffoldReadEndpoint.mock.calls.map(([event]) => getQuery(event as H3Event)))
+        expect(scaffoldReadEndpoint.mock.calls.map(([event]) => getQuery(event)))
             .toEqual([{householdId: '7', dinnerEventIds: READ_DINNER_IDS.map(String), ...orders()}])
         expect(scaffoldEndpoint).not.toHaveBeenCalled()
         expect(useToast().toasts.value).toHaveLength(0)
@@ -414,7 +432,7 @@ describe('Bookings store — one booking write', () => {
     // A dinner past its booking deadline on view: the household's orders, the tickets for sale, the waiting list and its Detail read it
     const dinner = {...DinnerEventFactory.defaultDinnerEventDisplay('one-write'), id: 1, date: addDays(new Date(), 1)}
     const {OrderStateSchema} = useBookingValidation()
-    const queries = (endpoint: typeof ordersEndpoint) => endpoint.mock.calls.map(([event]) => getQuery(event as H3Event))
+    const queries = (endpoint: typeof ordersEndpoint) => endpoint.mock.calls.map(([event]) => getQuery(event))
 
     beforeEach(() => {
         resetStores()
@@ -580,7 +598,7 @@ describe('Bookings store — household billing', () => {
         store.loadHouseholdBilling()
 
         await vi.waitFor(() => expect(store.householdBilling?.householdId).toBe(MY_HOUSEHOLD_ID))
-        expect(store.householdBilling!.currentPeriod.periodStart).toBeInstanceOf(Date)
+        expect(present(store.householdBilling, 'household billing').currentPeriod.periodStart).toBeInstanceOf(Date)
         expect(lastQuery(householdBillingEndpoint)).toEqual({householdId: String(MY_HOUSEHOLD_ID)})
     })
 })
@@ -603,7 +621,7 @@ describe('Bookings store — gated reads', () => {
     beforeEach(() => {
         resetStores()
         selectSeason()
-        ordersEndpoint.mockImplementation(() => [OrderFactory.defaultOrder('gated', {dinnerEventId: DINNER_ID})])
+        ordersEndpoint.mockImplementation(() => [economyOrder])
         householdBillingEndpoint.mockImplementation(() => BillingFactory.defaultHouseholdBilling(MY_HOUSEHOLD_ID))
     })
 
@@ -726,7 +744,7 @@ describe('Bookings store — the dinner on the selected date', () => {
 
         await vi.waitFor(() => expect(showErrorSpy).toHaveBeenCalledTimes(1))
         const shownLines = EMPTY_STATE_MESSAGES.dinnerGone.map(({emoji, text}) => `${emoji} ${text}`)
-        expect(shownLines).toContain(showErrorSpy.mock.calls[0]![0].message)
+        expect(shownLines).toContain(itemAt(showErrorSpy.mock.calls, 0)[0].message)
         expect(store.selectedDinnerEventId).toBeNull()
         expect(goneDinnerEndpoint).toHaveBeenCalledTimes(1)
     })
@@ -752,7 +770,7 @@ describe('Bookings store — the billing selection a getter names', () => {
         {
             dataset: 'invoice', key: INVOICE_KEY, toast: 'Kan ikke finde fakturaen',
             detailEndpoint: invoiceTransactionsEndpoint, goneEndpoint: goneInvoiceEndpoint, listEndpoint: billingPeriodDetailEndpoint,
-            listWith: (ids: number[]) => billingPeriodDetailEndpoint.mockReturnValue({...SUMMARY, invoices: ids.map(id => ({...SUMMARY.invoices[0]!, id}))}),
+            listWith: (ids: number[]) => billingPeriodDetailEndpoint.mockReturnValue({...SUMMARY, invoices: ids.map(id => ({...itemAt(SUMMARY.invoices, 0), id}))}),
             select: (store: Store, choice: Choice) => {
                 store.loadBillingOverview(() => true)
                 store.selectBillingPeriod(() => ID)
@@ -1017,7 +1035,7 @@ describe('Bookings store — ticket changes', () => {
         const store = useBookingsStore()
         const since = new Date('2026-04-03T18:00:00Z')
         const response = await store.fetchTicketChanges(DINNER_ID, since)
-        expect(response.changes[0]!.timestamp).toBeInstanceOf(Date)
+        expect(itemAt(response.changes, 0).timestamp).toBeInstanceOf(Date)
         expect(response.changes[0]).toMatchObject({households: TICKET_CHANGE.households, revenue: TICKET_CHANGE.revenue})
         expect(response.olderCount).toBe(3)
         expect(lastQuery(ticketChangesEndpoint)).toMatchObject({since: since.toISOString()})
@@ -1069,7 +1087,7 @@ describe('Bookings store — waiting list', () => {
         store.loadOrdersForDinners({dinnerEventIds: [WAITLIST_DINNER_ID]})
 
         await vi.waitFor(() => expect(store.waitlistEntries).toHaveLength(QUEUE.length))
-        expect(store.waitlistEntries[0]!.createdAt).toBeInstanceOf(Date)
+        expect(itemAt(store.waitlistEntries, 0).createdAt).toBeInstanceOf(Date)
         expect(lastQuery(waitlistEntriesEndpoint)).toEqual({dinnerEventIds: String(WAITLIST_DINNER_ID)})
         await vi.waitFor(() => expect(store.householdWaitlist).toHaveLength(1))
         expect(store.householdWaitlist[0]).toMatchObject({id: 22, position: 1})
@@ -1093,7 +1111,7 @@ describe('Bookings store — waiting list', () => {
         store.selectDinnerDate(() => new Date(queuedDinner.date))
 
         await vi.waitFor(() => expect(store.selectedDinnerWaitlist).toMatchObject({dinnerEventId: WAITLIST_DINNER_ID, entries: 2, portions: 1.5}))
-        expect(store.selectedDinnerWaitlist!.lines.map(({ticketType, entries}) => [ticketType, entries.map(entry => entry.id)]))
+        expect(present(store.selectedDinnerWaitlist, 'queue on the dinner on view').lines.map(({ticketType, entries}) => [ticketType, entries.map(entry => entry.id)]))
             .toEqual([[TicketType.ADULT, [21]], [TicketType.CHILD, [22]]])
     })
 

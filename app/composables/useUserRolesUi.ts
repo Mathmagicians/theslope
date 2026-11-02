@@ -1,5 +1,5 @@
 /**
- * Pure UI composable for user role display (ADR-017)
+ * Pure UI composable for user role display
  *
  * Client-only: reads the auth store and the design system. The server-safe role
  * reconciliation (RoleOwner, ROLE_OWNERSHIP, reconcileUserRoles) lives in

@@ -8,11 +8,11 @@ import {getActivePinia, setActivePinia, type Pinia} from 'pinia'
 import {flushPromises, type BaseWrapper, type DOMWrapper} from '@vue/test-utils'
 import {toCalendarDate} from '~/utils/date'
 import {sumBy} from '~/utils/ledger'
-import {TICKET_COUNTS} from '~/composables/useBilling'
 import {LAYOUTS} from '~/composables/useTheSlopeDesignSystem'
 import {CLOCK_STATE} from '~/composables/useClock'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {useBookingValidation, type ScaffoldOrdersRequest, type ScaffoldOrdersResponse, type TicketType} from '~/composables/useBookingValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {getQuery, type H3Event} from 'h3'
 import type {ZodType} from 'zod'
@@ -82,13 +82,13 @@ export const useTestScope = () => {
 /** The store instance a mounted component uses: components inject the Nuxt app's pinia, not the spec's active one */
 export const mountedStore = <S>(useStore: (pinia: Pinia) => S): S => useStore(usePinia())
 
-/** The datasets the stores request on creation, answered empty; a spec's own route for one of them registers after this call, as the last registration of a url answers */
+/** The stores' reads answered empty, those requested on creation and those a component asks for (own teams, all users, allergy managers); a spec's own route for one of them registers after this call, as the last registration of a url answers */
 export const registerEmptyStoreEndpoints = () => {
     registerEndpoint('/api/admin/season/active', () => null)
     registerEndpoint('/api/admin/season', () => [])
     registerEndpoint('/api/admin/household', () => [])
     registerEndpoint('/api/team/my', () => [])
-    registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
+    registerEndpoint(`/api/admin/users/by-role/${useCoreValidation().SystemRoleSchema.enum.ALLERGYMANAGER}`, () => [])
     registerEndpoint('/api/admin/users', () => [])
     registerEndpoint('/api/admin/billing/periods', () => [])
     registerEndpoint('/api/admin/billing/current-period', () => [])
@@ -197,7 +197,7 @@ export const findComponentByTestId = <Props>(wrapper: BaseWrapper<Node>, name: s
     return found
 }
 
-export {itemAt} from '~~/tests/component/listHelpers'
+export {itemAt, present} from '~~/tests/component/listHelpers'
 
 /**
  * The payload of an event's emit, the last one by default, parsed by the schema of what the component emits: the
@@ -282,10 +282,10 @@ export const expectMasterDetail = (master: Element, detail: Element | null) => {
 }
 
 type TicketTypeCounts = Partial<Record<TicketType, number>>
-/** A locked dinner's supply from its tickets for sale and its waiting list per ticket type, with the totals and the compact counts */
+/** A locked dinner's supply from its tickets for sale and its waiting list per ticket type, with the totals */
 export const lockedDinnerSupply = (byType: TicketTypeCounts = {}, queuedByType: TicketTypeCounts = {}): ReleasedTicketCounts => ({
-    total: sumBy(Object.values(byType), count => count), formatted: TICKET_COUNTS.compact.text(byType), byType,
-    queued: sumBy(Object.values(queuedByType), count => count), queuedFormatted: TICKET_COUNTS.compact.text(queuedByType), queuedByType
+    total: sumBy(Object.values(byType), count => count), byType,
+    queued: sumBy(Object.values(queuedByType), count => count), queuedByType
 })
 
 /**

@@ -6,10 +6,12 @@
  */
 import {runDailyMaintenance} from '~~/server/utils/dailyMaintenanceService'
 import {emailChannel} from '~~/server/utils/sender/config'
+import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const LOG = '🔧 > TASK > [DAILY_MAINTENANCE]'
 const {throwH3Error} = eventHandlerHelper
+const {JobTrigger} = useMaintenanceValidation()
 
 export default defineTask({
     meta: {
@@ -24,7 +26,7 @@ export default defineTask({
         }
 
         try {
-            const result = await runDailyMaintenance(d1Client, 'CRON', emailChannel(env ?? {}))
+            const result = await runDailyMaintenance(d1Client, JobTrigger.CRON, emailChannel(env ?? {}))
             return { result }
         } catch (error) {
             return throwH3Error(`${LOG} Failed`, error)

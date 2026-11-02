@@ -83,13 +83,6 @@
  *   form:  Kan du frigive [ 2,5 ] portioner?  [Frigiv] [Fortryd]     UForm on ExtraPortionsRequestSchema,
  *                                                                    prefilled with the queue's portion need
  *
- * ADR Compliance:
- * - ADR-001: Types from validation composables, FORM_MODES from ~/types/form
- * - ADR-010: Domain types throughout
- * - Mobile-first responsive design
- * - Uses useSeason for deadline logic (no manual date calculations)
- * - Uses design system (useTheSlopeDesignSystem)
- *
  * Visual check: /chef and /dinner, the compact card with a budget, the full card with the menu form and the Flere panel
  * open, the waiting-list alert and a cancelled dinner, phone and desktop.
  */
@@ -179,7 +172,7 @@ const { formatNameWithInitials } = useHousehold()
 
 // The dinner's money: the expense lines' helping numbers read it, the Budget pane shows it
 const {calculateBudget} = useOrder()
-const {convertPriceToDecimalFormat} = useTicket()
+const {convertPriceToDecimalFormat, formatTicketCounts} = useTicket()
 const {baseRatePercent, vatPercent} = useAppConfig().theslope.kitchen
 const budget = computed(() => calculateBudget(props.dinnerEvent.tickets ?? [], baseRatePercent, vatPercent))
 // The round's words, built once for the Madbestilling hint and the Budget pane's round table, when the team cooks several days in a row
@@ -291,9 +284,8 @@ const isMoreOpen = ref(false)
 const { ExtraPortionsRequestSchema } = useWaitlistValidation()
 // The dinner's queue while anyone waits on it
 const queue = computed(() => props.waitlist && props.waitlist.entries > 0 ? props.waitlist : null)
-// The waiting list by ticket type, from its lines: "2V 2B"
-const queuedFormatted = computed(() => useBilling().formatTicketCounts(
-  Object.fromEntries((props.waitlist?.lines ?? []).map(line => [line.ticketType, line.entries.length]))))
+// The waiting list by ticket type: "2V 2B"
+const queuedFormatted = computed(() => formatTicketCounts(props.waitlist?.queuedByType ?? {}))
 // The Flere entry and the CTA open one form; the draft starts on the open, prefilled with the queue's portion need
 const isAddingExtraPortions = ref(false)
 const extraPortionsDraft = ref<Partial<ExtraPortionsRequest>>({})

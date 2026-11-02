@@ -2,7 +2,7 @@
 /**
  * BookingGridView - Unified week/month grid for household booking management
  *
- * ADR-016: Draft state pattern with Cancel/Save
+ * Edits collect in a draft that Cancel drops and Save sends
  * @see HouseholdCard.vue for synthetic row pattern (power mode)
  *
  * VIEW MODE:
@@ -171,6 +171,7 @@ import type {DeadlineBadgeData, TicketPresentation} from '~/composables/useBooki
 import {compareAsc, isSameDay} from 'date-fns'
 import {BookingViewSchema, BookingRowTypeSchema, type BookingView, type BookingRowType} from '~/composables/useBookingView'
 import {BOOKING_WORDS} from '~/config/bookingWords'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 import type {DateRange} from '~/types/dateTypes'
 import {EMPTY_RELEASED_TICKET_COUNTS, bookingContextOf, type BookingChanges, type BookingContext, type GuestBookingIntent, type ReleasedTicketCounts, type WaitlistEntryIntent} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
@@ -217,7 +218,7 @@ interface Props {
   loading?: boolean // The range's bookings are on the way
   hasPrev?: boolean
   hasNext?: boolean
-  adminBypass?: boolean // An admin's save lifts the deadlines (ADR-016): its preview reads the same run
+  adminBypass?: boolean // An admin's save lifts the deadlines: its preview reads the same run
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -259,7 +260,7 @@ const bookingsStore = useBookingsStore()
 const {OrderStateSchema, BookingActionSchema, DinnerModeSchema} = useBookingValidation()
 
 // ============================================================================
-// DRAFT STATE (ADR-016)
+// DRAFT STATE
 // ============================================================================
 
 // Keyed by the cell (expectedBookingKey); the draft names its person and dinner for the save
@@ -458,7 +459,7 @@ const previewDays = computed(() => preview.value ? formatPreviewLines(preview.va
 
 const columns = computed(() => {
   const fixedColumns = [
-    {id: 'name', header: 'Beboer', footer: () => 'Sum', size: 120}
+    {id: 'name', header: HOUSEHOLD_WORDS.inhabitant, footer: () => BOOKING_WORDS.gridSum, size: 120}
   ]
 
   // Dynamic columns for each dinner event (footer via slot template)
@@ -907,7 +908,7 @@ const getEventSummary = (eventId: number) => {
               </UBadge>
             </template>
           </UserListItem>
-          <span v-else :class="COMPONENTS.bookingGrid.guestUnknown">ukendt</span>
+          <span v-else :class="COMPONENTS.bookingGrid.guestUnknown">{{ BOOKING_WORDS.guests.unknownBooker }}</span>
         </div>
         <!-- Guest add row -->
         <div v-else-if="row.original.rowType === BookingRow['guest-add']" :class="COMPONENTS.bookingGrid.guestAddName">
@@ -1070,7 +1071,7 @@ const getEventSummary = (eventId: number) => {
         </div>
       </template>
 
-      <!-- Footer: Cancel/Save buttons (ADR-016) - using body-bottom slot per NuxtUI docs -->
+      <!-- Footer: Cancel/Save buttons in the body-bottom slot -->
       <template v-if="formMode === FORM_MODES.EDIT" #body-bottom>
         <tr>
           <td :colspan="columns.length" :class="COMPONENTS.bookingGrid.actionCell">

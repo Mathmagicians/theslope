@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, BookingResult, QueuePosition, TicketType, BookingTotals, OrderDetail, OrderHistoryDisplay, TicketChange, TicketChangesResponse, OrderSnapshot, OrderCreateWithPrice, AuditContext, OrderAuditSource,CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
+import type { OrderDisplay, BookingResult, QueuePosition, TicketType, BookingTotals, OrderDetail, OrderHistoryDisplay, TicketChange, TicketChangesResponse, OrderAuditSnapshot, OrderCreateWithPrice, AuditContext, OrderAuditSource,CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult, OrderState, OrderSortBy } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useTicket } from '~/composables/useTicket'
@@ -7,6 +7,7 @@ import { useCoreValidation } from '~/composables/useCoreValidation'
 import type { APIResponse, BrowserContext } from '@playwright/test';
 import { expect } from '@playwright/test'
 import testHelpers from '../testHelpers'
+import {itemAt, present} from '~~/tests/component/listHelpers'
 
 // Re-export SeasonFactory for date generation
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -23,7 +24,7 @@ const { headers, salt, temporaryAndRandom, getSessionUserInfo } = testHelpers
 const HOUSEHOLD_SCAFFOLD_ENDPOINT = '/api/household/order/scaffold'
 
 // Get enum schemas from composable
-const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema, OrderAuditSourceSchema, BookingActionSchema, TicketChangeKindSchema } = useBookingValidation()
+const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema, OrderAuditSourceSchema, BookingActionSchema, BookingTotalsSchema, TicketChangeKindSchema } = useBookingValidation()
 const { findTicketPriceByType } = useTicket()
 
 // API endpoints
@@ -33,13 +34,13 @@ const ORDER_ENDPOINT = '/api/order'
 export type OrderSetupRequest = {
   householdId: number
   dinnerEventId: number
-  orders: Array<Pick<DesiredOrder, 'inhabitantId' | 'ticketPriceId' | 'dinnerMode'> & { isGuestTicket?: boolean }>
+  orders: Array<Partial<DesiredOrder>>
 }
 
 export class OrderFactory {
 
   /** Default order item - pass inhabitantId & ticketPriceId, rest uses defaults */
-  static readonly defaultOrderItem = (overrides: Partial<OrderSetupRequest['orders'][number]>) => ({
+  static readonly defaultOrderItem = (overrides: Partial<DesiredOrder>) => ({
     inhabitantId: 1,
     ticketPriceId: 1,
     dinnerMode: DinnerModeSchema.enum.DINEIN,
@@ -148,7 +149,7 @@ export class OrderFactory {
     overrides?: Partial<OrderDetail>
   ): OrderDetail => {
     const base = OrderFactory.defaultOrderDetail(`allergy-${inhabitantId}`, {id: inhabitantId, inhabitantId, ...overrides})
-    const [allergyTemplate] = AllergyFactory.createMockAllergies()
+    const allergyTemplate = itemAt(AllergyFactory.createMockAllergies(), 0)
     return {
       ...base,
       inhabitant: {
@@ -156,7 +157,7 @@ export class OrderFactory {
         id: inhabitantId,
         name,
         allergies: allergyTypes.map(allergyType => ({
-          ...allergyTemplate!,
+          ...allergyTemplate,
           id: inhabitantId * 10 + allergyType.id,
           inhabitantId,
           allergyTypeId: allergyType.id,
@@ -196,7 +197,7 @@ export class OrderFactory {
   }
 
   /**
-   * OrderHistoryDisplay - lightweight for lists (ADR-009)
+   * OrderHistoryDisplay - lightweight for lists
    */
   static readonly defaultOrderHistoryDisplay = (_testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderHistoryDisplay>): OrderHistoryDisplay => ({
     id: 1,
@@ -219,10 +220,10 @@ export class OrderFactory {
   })
 
   /**
-   * OrderSnapshot - for audit data (derived from OrderDisplaySchema + provenance)
+   * OrderAuditSnapshot - for audit data (derived from OrderDisplaySchema + provenance)
    * Provenance fields enable "🔄 fra AR_1" display on claimed tickets
    */
-  static readonly defaultOrderSnapshot = (overrides?: Partial<OrderSnapshot>): OrderSnapshot => ({
+  static readonly defaultOrderAuditSnapshot = (overrides?: Partial<OrderAuditSnapshot>): OrderAuditSnapshot => ({
     // From OrderDisplaySchema
     id: 1,
     inhabitantId: 10,
@@ -246,8 +247,8 @@ export class OrderFactory {
    */
   static readonly legacyAuditData = {
     creation: (source: OrderAuditSource, orderData: OrderCreateWithPrice): string => JSON.stringify({source, orderData}),
-    update: (scalars: Pick<OrderDisplay, 'state' | 'dinnerMode'> & {ticketPriceId: number | null, priceAtBooking: number | null}): string => JSON.stringify(scalars),
-    snapshot: (orderSnapshot: OrderSnapshot): string => JSON.stringify({orderSnapshot})
+    update: (scalars: {state: OrderState, dinnerMode: DinnerMode, ticketPriceId: number | null, priceAtBooking: number | null}): string => JSON.stringify(scalars),
+    snapshot: (orderSnapshot: OrderAuditSnapshot): string => JSON.stringify({orderSnapshot})
   }
 
   // === BULK ORDER CREATION ===
@@ -375,16 +376,16 @@ export class OrderFactory {
     expectedStatus: number = 200,
     withAdminBypass: boolean = false
   ): Promise<OrderDetail | null> => {
-    const order = await this.getOrder(context, orderId)
+    const order = present(await this.getOrder(context, orderId), `order ${orderId}`)
     await this.scaffoldOrders(context, {
-      householdId: order!.inhabitant.householdId,
-      seasonId: order!.dinnerEvent.seasonId ?? undefined,
-      dinnerEventIds: [order!.dinnerEventId],
+      householdId: order.inhabitant.householdId,
+      seasonId: order.dinnerEvent.seasonId ?? undefined,
+      dinnerEventIds: [order.dinnerEventId],
       orders: [this.defaultDesiredOrder({
-        inhabitantId: order!.inhabitantId,
-        dinnerEventId: order!.dinnerEventId,
-        ticketPriceId: order!.ticketPriceId!,
-        isGuestTicket: order!.isGuestTicket,
+        inhabitantId: order.inhabitantId,
+        dinnerEventId: order.dinnerEventId,
+        ticketPriceId: present(order.ticketPriceId, `ticket price of order ${orderId}`),
+        isGuestTicket: order.isGuestTicket,
         dinnerMode: updateData.dinnerMode,
         orderId
       })]
@@ -419,7 +420,7 @@ export class OrderFactory {
       orders: [this.defaultDesiredOrder({
         inhabitantId: order.inhabitantId,
         dinnerEventId: order.dinnerEventId,
-        ticketPriceId: order.ticketPriceId!,
+        ticketPriceId: present(order.ticketPriceId, `ticket price of order ${orderId}`),
         isGuestTicket: order.isGuestTicket,
         dinnerMode: DinnerModeSchema.enum.NONE,
         orderId
@@ -442,9 +443,9 @@ export class OrderFactory {
       upcomingForSeason?: number
       householdId?: number
       allHouseholds?: boolean
-      state?: string
-      sortBy?: 'createdAt' | 'releasedAt'
-      includeDinnerContext?: boolean
+      state?: OrderState
+      sortBy?: OrderSortBy
+      includeCostContext?: boolean
       includeProvenance?: boolean
     } = {},
     expectedStatus: number = 200
@@ -461,7 +462,7 @@ export class OrderFactory {
     if (options.allHouseholds) params.append('allHouseholds', 'true')
     if (options.state) params.append('state', options.state)
     if (options.sortBy) params.append('sortBy', options.sortBy)
-    if (options.includeDinnerContext) params.append('includeDinnerContext', 'true')
+    if (options.includeCostContext) params.append('includeCostContext', 'true')
     if (options.includeProvenance) params.append('includeProvenance', 'true')
 
     const response = await context.request.get(`${ORDER_ENDPOINT}?${params.toString()}`, { headers })
@@ -555,7 +556,7 @@ export class OrderFactory {
     for (const id of orderIds) await this.deleteOrder(context, id)
   }
 
-  // === SCAFFOLD ORDERS (ADR-016 Unified Booking) ===
+  // === SCAFFOLD ORDERS (Unified Booking) ===
 
   /**
    * Default DesiredOrder for scaffold operations
@@ -602,7 +603,7 @@ export class OrderFactory {
     {totals, ...overrides}: Partial<Omit<ScaffoldResult, 'totals'>> & {totals?: Partial<BookingTotals>} = {}
   ): ScaffoldResult => ({
     seasonId: 1, dinners: [], positions: [], unchanged: 0, households: 1, errored: 0,
-    totals: {...Object.fromEntries(BookingActionSchema.options.map(action => [action, 0])) as BookingTotals, ...totals},
+    totals: {...BookingTotalsSchema.parse(Object.fromEntries(BookingActionSchema.options.map(action => [action, 0]))), ...totals},
     results: [], failed: [],
     outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: [], waitlistPortionsAssigned: []},
     ...overrides
@@ -629,7 +630,7 @@ export class OrderFactory {
 
   /**
    * Scaffold orders via household endpoint (POST /api/household/order/scaffold)
-   * ADR-016: Unified booking mutation - creates, updates, releases, and deletes orders
+   * Unified booking mutation - creates, updates, releases, and deletes orders
    *
    * @param context - Browser context for API requests
    * @param request - ScaffoldOrdersRequest with householdId, dinnerEventIds, orders
@@ -779,11 +780,12 @@ export class OrderFactory {
     // A one-day season with ticket prices: the season-wide scaffold below runs over its few dinners only
     const defaultSeason = SeasonFactory.defaultSeason(testSalt)
     const season = await SeasonFactory.createSeason(context, {...defaultSeason, seasonDates: {start: defaultSeason.seasonDates.start, end: defaultSeason.seasonDates.start}})
+    const seasonId = present(season.id, 'season id')
 
     // Create dinner event at specified days from now
     const eventDate = new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000)
     const dinnerEvent = await DinnerEventFactory.createDinnerEvent(context, {
-      seasonId: season.id!,
+      seasonId,
       date: eventDate,
       menuTitle: salt(`Fixture-${daysFromNow}d`, testSalt)
     })
@@ -802,16 +804,16 @@ export class OrderFactory {
         context, HouseholdFactory.defaultHouseholdData(testSalt), 1
       )
       householdId = created.household.id
-      inhabitantId = created.inhabitants[0]!.id
+      inhabitantId = itemAt(created.inhabitants, 0).id
       isTestHousehold = true
 
       // Set DINEIN preferences so scaffold creates order
       const {createDefaultWeekdayMap} = useCoreValidation()
       const allDaysDineIn = createDefaultWeekdayMap(DinnerModeSchema.enum.DINEIN)
-      await HouseholdFactory.updateInhabitant(context, inhabitantId, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
+      await HouseholdFactory.updateInhabitant(context, inhabitantId, {dinnerPreferences: allDaysDineIn}, 200, seasonId)
 
       // Scaffold creates order
-      await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+      await SeasonFactory.scaffoldPrebookingsForSeason(context, seasonId)
       const orders = await this.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
       const found = orders.find(o => o.inhabitantId === inhabitantId)
       if (!found) throw new Error(`Order not created by scaffold for inhabitant ${inhabitantId}`)
@@ -834,7 +836,7 @@ export class OrderFactory {
         })]
       })
       if (!createResult) throw new Error('Order creation failed')
-      const fetched = await this.getOrder(context, createResult.createdIds[0]!)
+      const fetched = await this.getOrder(context, itemAt(createResult.createdIds, 0))
       if (!fetched) throw new Error('Order fetch failed')
       order = fetched
     }

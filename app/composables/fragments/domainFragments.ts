@@ -17,7 +17,7 @@ import {AppearanceSchema, DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} fro
  * Purpose: Break circular dependencies between validation composables
  * Pattern: Each domain composable imports fragments and extends with domain-specific fields
  *
- * ADR-001 Compliance:
+ * Rules:
  * - Single source of truth for core scalar fields
  * - Fragments contain DOMAIN types (Date objects, parsed arrays)
  * - Serialization/deserialization happens in domain composables
@@ -34,7 +34,7 @@ import {AppearanceSchema, DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} fro
 // ============================================================================
 
 /**
- * Positive integer ID - single source of truth for entity ids (ADR-001), re-exported by useCoreValidation.
+ * Positive integer ID - single source of truth for entity ids, re-exported by useCoreValidation.
  * Use IdSchema for required ids, IdSchema.nullable() for FK fields.
  */
 export const IdSchema = z.number().int().positive()
@@ -44,7 +44,7 @@ export const IdSchema = z.number().int().positive()
  * Used by: useCoreValidation, useBookingValidation (bookedByUser)
  *
  * notificationChannels and appearance carry the column defaults, so application code reads
- * `user.appearance.palette` without a fallback (ADR-010: the repository holds the JSON strings).
+ * `user.appearance.palette` without a fallback (the repository holds the JSON strings).
  */
 export const UserFragmentSchema = z.object({
     id: IdSchema,
@@ -184,9 +184,35 @@ export const PayerSnapshotSchema = z.object({
 })
 
 /**
+ * Order Snapshot - the order a transaction freezes at the close (its dinner, its eater and the eater's household),
+ * kept in Transaction.orderSnapshot; the price is the transaction's amount.
+ * Used by: useBillingValidation (TransactionDisplay), useBookingValidation (OrderForTransaction), useBilling (the groupers)
+ */
+export const OrderSnapshotSchema = z.object({
+    dinnerEvent: z.object({
+        id: z.number().int(),
+        date: z.coerce.date(),
+        menuTitle: z.string()
+    }),
+    inhabitant: z.object({
+        id: z.number().int(),
+        name: z.string(),
+        household: z.object({
+            id: z.number().int(),
+            pbsId: z.number().int(),
+            address: z.string()
+        })
+    }),
+    ticketType: TicketTypeSchema.nullable(),
+    isGuestTicket: z.boolean().optional(),
+    provenanceHousehold: z.string().nullable().optional(),
+    dinnerMode: DinnerModeSchema.optional()
+})
+
+/**
  * Expense Fragment - a cost paid from the kitchen's money; a REGULAR row belongs to a dinner, an ADHOC row to the pool
  * Used by: useBillingValidation (the ledger home), useBookingValidation (DinnerEventDetail.expenses)
- * The two transforms live beside the fragment so both composables share them without importing each other (ADR-010)
+ * The two transforms live beside the fragment so both composables share them without importing each other
  */
 export const ExpenseFragmentSchema = z.object({
     id: IdSchema,
@@ -258,5 +284,6 @@ export type TicketPriceFragment = z.infer<typeof TicketPriceFragmentSchema>
 export type AllergyTypeFragment = z.infer<typeof AllergyTypeFragmentSchema>
 export type AllergyFragment = z.infer<typeof AllergyFragmentSchema>
 export type PayerSnapshot = z.infer<typeof PayerSnapshotSchema>
+export type OrderSnapshot = z.infer<typeof OrderSnapshotSchema>
 export type ExpenseFragment = z.infer<typeof ExpenseFragmentSchema>
 export type SerializedExpenseFragment = z.infer<typeof SerializedExpenseFragmentSchema>

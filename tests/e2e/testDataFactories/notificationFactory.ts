@@ -6,7 +6,7 @@ import {templatePlaceholders} from '~/utils/template'
 import type {EmailChannel} from '~~/server/utils/sender/config'
 import type {DesiredOutgoing} from '~~/server/utils/sender/deliveries'
 
-const {DeliveryKindSchema, DeliverySubjectSchema, deliveryReferencePrefix} = useDeliveryValidation()
+const {DeliveryKindSchema, DeliverySubjectSchema, NotificationKindSchema, deliveryReferencePrefix} = useDeliveryValidation()
 
 // The masked address a recorded delivery's reference carries: every recipient's masks alike
 const MASKED_ADDRESS = 'a***@e***.com'
@@ -24,7 +24,7 @@ export class NotificationFactory {
     static readonly Kind = NotificationKind
 
     /** The mail kind a dedupe key leads with (`{kind}:{channel}:{maskedRecipient}:{messageId}`), as a result and a Delivery row's reference carry it */
-    static readonly mailKindOf = (dedupeKey: string): string => dedupeKey.split(':')[0]!
+    static readonly mailKindOf = (dedupeKey: string): NotificationKind => NotificationKindSchema.parse(dedupeKey.split(':')[0])
 
     static readonly config = (overrides: Partial<NotificationConfig> = {}): NotificationConfig => ({
         environment: 'dev',

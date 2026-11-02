@@ -10,7 +10,9 @@ import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {mountWithTooltipProvider, mountedStore, resetStores, registerEmptyStoreEndpoints, holdEndpoint, findAllLoadingRows, untilTrue, isTableLoading, findByTestId, cellsByHeader, tableHeaders} from '~~/tests/component/testHelpers'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {mountWithTooltipProvider, mountedStore, resetStores, registerEmptyStoreEndpoints, holdEndpoint, findAllLoadingRows, untilTrue, isTableLoading, findByTestId, cellsByHeader, tableHeaders, itemAt, present} from '~~/tests/component/testHelpers'
 import type {StatBox} from '~/components/economy/CostEntry.vue'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {BUTTON_WORDS} from '~/config/buttonWords'
@@ -26,7 +28,7 @@ mockNuxtImport('useUserSession', () => useUserSession)
 mockNavigateTo.mockImplementation(landNavigation)
 
 const period = BillingFactory.defaultSummaryData('admin-economy')
-const invoice = period.invoices[0]!
+const invoice = itemAt(period.invoices, 0)
 registerEmptyStoreEndpoints()
 registerEndpoint(`/api/admin/billing/periods/${period.id}`, () => period)
 registerEndpoint('/api/admin/billing/periods', () => [period])
@@ -41,7 +43,7 @@ type Wrapper = Awaited<ReturnType<typeof mountWithTooltipProvider>>
 // Opens the table row that reads `row` by its button `label`
 const open = async (wrapper: Wrapper, row: string, label: string) => {
     await vi.waitFor(() => expect(wrapper.findAll('tr').some(tr => tr.text().includes(row))).toBe(true))
-    await wrapper.findAll('tr').find(tr => tr.text().includes(row))!.find(`button[aria-label="${label}"]`).trigger('click')
+    await present(wrapper.findAll('tr').find(tr => tr.text().includes(row)), row).find(`button[aria-label="${label}"]`).trigger('click')
 }
 
 // Each open cost entry's title and the labels of its boxes. CostEntry is generic over its entry: the spec hands the
@@ -76,7 +78,7 @@ describe('AdminEconomy - the billing selection in the URL', () => {
             await mountWithTooltipProvider(AdminEconomy)
 
             expect(select).toHaveBeenCalledTimes(1)
-            const choice = select.mock.calls[0]![0]
+            const [choice] = itemAt(select.mock.calls, 0)
             expect(toValue(choice)).toBe(id)
             await vi.waitFor(() => expect(selectedId(useBookingsStore())).toBe(id))
 
@@ -123,10 +125,13 @@ describe('AdminEconomy - an opened invoice while its transactions load', () => {
 
 describe('AdminEconomy - the upcoming orders', () => {
     const season = {...SeasonFactory.defaultSeason('admin-economy'), id: 7}
-    const dinnerEvent = {id: 31, date: new Date(2030, 0, 7), menuTitle: 'Lasagne'}
-    const upcoming = [OrderFactory.defaultOrder('admin-economy', {id: 501, dinnerEventId: dinnerEvent.id, dinnerEvent})]
+    const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDisplay('admin-economy'), id: 31, date: new Date(2030, 0, 7), menuTitle: 'Lasagne'}
+    // The households list loaded before the eater's name changed: the order carries the name of now
+    const household = HouseholdFactory.defaultHouseholdDetail('admin-economy')
+    const eater = {...itemAt(household.inhabitants, 0), name: 'Nyt navn'}
+    const upcoming = [OrderFactory.defaultOrder('admin-economy', {id: 501, dinnerEventId: dinnerEvent.id, inhabitantId: eater.id, dinnerEvent, inhabitant: eater})]
     const upcomingTable = (wrapper: Wrapper) =>
-        wrapper.findAllComponents({name: 'EconomyTable'}).find(table => table.props('loadingText') === 'Henter fremtidige bestillinger')!
+        present(wrapper.findAllComponents({name: 'EconomyTable'}).find(table => table.props('loadingText') === 'Henter fremtidige bestillinger'), 'the upcoming orders table')
     const dinnerRow = (wrapper: Wrapper) => findByTestId(wrapper, `future-orders-expand-${dinnerEvent.id}`)
     const mountLoaded = async () => {
         const wrapper = await mountWithTooltipProvider(AdminEconomy)
@@ -145,6 +150,7 @@ describe('AdminEconomy - the upcoming orders', () => {
             registerEndpoint('/api/admin/season', () => [season]),
             registerEndpoint(`/api/admin/season/${season.id}`, () => season),
             registerEndpoint('/api/order', () => upcoming),
+            registerEndpoint('/api/admin/household', () => [household]),
             registerEndpoint('/api/household/order/scaffold', {method: 'POST', handler: () => OrderFactory.defaultScaffoldOrdersResponse()})
         )
         mountedStore(useBookingsStore).loadBillingOverview(() => true)
@@ -173,11 +179,25 @@ describe('AdminEconomy - the upcoming orders', () => {
         expect(costEntriesOf(upcomingTable(wrapper)).map(entry => entry.stats)).toEqual([[stats.households, stats.tickets, stats.total]])
     })
 
+    it('GIVEN an upcoming order WHEN its dinner and its household open THEN its line reads the name its order carries', async () => {
+        const wrapper = await mountLoaded()
+        await dinnerRow(wrapper).trigger('click')
+        await nextTick()
+
+        await vi.waitFor(() => expect(upcomingTable(wrapper).find(`button[aria-label="${BOOKING_WORDS.billing.show.orders}"]`).exists()).toBe(true))
+        await upcomingTable(wrapper).find(`button[aria-label="${BOOKING_WORDS.billing.show.orders}"]`).trigger('click')
+        await nextTick()
+
+        const line = upcomingTable(wrapper).findComponent({name: 'CostLine'}).text()
+        expect(line).toContain(eater.name)
+        expect(line).not.toContain(`#${eater.id}`)
+    })
+
     it('GIVEN the billing periods have loaded WHEN a closed period opens THEN the table heads its columns and the period reads its title and its counts in the billing words', async () => {
         const wrapper = await mountLoaded()
         const {period, columns, stats, state} = BOOKING_WORDS.billing
         await vi.waitFor(() => expect(wrapper.text()).toContain(state.closed))
-        const periodsTable = wrapper.findAllComponents({name: 'EconomyTable'}).find(table => table.text().includes(state.closed))!
+        const periodsTable = present(wrapper.findAllComponents({name: 'EconomyTable'}).find(table => table.text().includes(state.closed)), 'the billing periods table')
         // Read before the period opens: its invoices' table nests in the row
         expect(tableHeaders(periodsTable)).toEqual(['', columns.status, columns.period, stats.dinners, stats.tickets, stats.households, columns.revenue, columns.control, columns.share])
 

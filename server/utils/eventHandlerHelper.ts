@@ -214,7 +214,7 @@ const getSessionUser = async (event: H3Event): Promise<UserDetail | null> => {
 
     const parsed = UserDetailSchema.safeParse(user)
     if (!parsed.success) {
-        // ADR-004: the schema's complaint names fields and expectations, never the user's values
+        // The schema's complaint names fields and expectations, never the user's values
         console.warn(`🔒 > [SESSION] > Session user rejected by the schema: ${z.prettifyError(parsed.error)}`)
         return null
     }

@@ -7,10 +7,12 @@
  */
 import {runMonthlyBilling} from '~~/server/utils/monthlyBillingService'
 import {emailChannel} from '~~/server/utils/sender/config'
+import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const LOG = '🔧 > TASK > [MONTHLY_BILLING]'
 const {throwH3Error} = eventHandlerHelper
+const {JobTrigger} = useMaintenanceValidation()
 
 export default defineTask({
     meta: {
@@ -24,7 +26,7 @@ export default defineTask({
         }
 
         try {
-            const result = await runMonthlyBilling(env.DB, 'CRON', {archive: env.ARCHIVE, email: emailChannel(env)})
+            const result = await runMonthlyBilling(env.DB, JobTrigger.CRON, {archive: env.ARCHIVE, email: emailChannel(env)})
             return { result }
         } catch (error) {
             return throwH3Error(`${LOG} Failed`, error)

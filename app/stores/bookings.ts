@@ -3,7 +3,6 @@ import type {MonthlyBillingResponse, Expense, ExpenseCreate} from '~/composables
 import type {WaitlistAssignmentResult, TicketWaitlistDisplay, TicketWaitlistDetail, WaitlistQueueSummary} from '~/composables/useWaitlistValidation'
 import {useWaitlist} from '~/composables/useWaitlist'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
-import {useBilling} from '~/composables/useBilling'
 import {TEAM_WORDS} from '~/config/teamWords'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
@@ -16,16 +15,17 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const {OrderDisplaySchema, OrderDetailSchema, OrderStateSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema, TicketChangesResponseSchema, TicketTypeSchema, encodeDesiredOrder} = useBookingValidation()
     const {formatScaffoldResult} = useBooking()
     const {formatDailyMaintenanceStats, jobTypeLabels} = useMaintenance()
-    const {JobType} = useMaintenanceValidation()
+    const {JobType, adminTrigger} = useMaintenanceValidation()
     const DinnerState = DinnerStateSchema.enum
     const toast = useToast()
 
     const CTX = `${LOG_CTX} 🎟️ > BOOKINGS_STORE >`
     const planStore = usePlanStore()
+    const usersStore = useUsersStore()
     const householdsStore = useHouseholdsStore()
 
     // ========================================
-    // State (ADR-007)
+    // State
     // ========================================
 
     // Keys of datasets that read the season or household selection stay constant: the selection
@@ -105,8 +105,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         .filter(entry => entry.order.householdId === waitlistHouseholdId.value)
         .map(entry => ({...entry, position: positionOf(waitlistOf(entry.dinnerEventId), entry.id, entryTicketType.value) ?? 1})))
 
-    // The queue on the dinner on view: its size and its portion need (the chef card, the kitchen box), and its lines in
-    // ticket type order (the kitchen box)
+    // The queue on the dinner on view: its size, its portion need and its count per ticket type (the chef card, the kitchen
+    // box), and its lines in ticket type order (the kitchen box)
     const selectedDinnerWaitlist = computed((): WaitlistQueueSummary | null => {
         const dinnerEventId = selectedDinnerEventId.value
         if (!dinnerEventId) return null
@@ -116,7 +116,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
             dinnerEventId,
             entries: queue.length,
             portions: portionNeed(queue, portionsOfEntryFor(planStore.selectedSeason?.ticketPrices ?? [])),
-            lines: TicketTypeSchema.options.flatMap(ticketType => lines.has(ticketType) ? [{ticketType, entries: lines.get(ticketType)!}] : [])
+            lines: TicketTypeSchema.options.flatMap(ticketType => {
+                const entries = lines.get(ticketType)
+                return entries ? [{ticketType, entries}] : []
+            }),
+            queuedByType: waitlistCounts.value.get(dinnerEventId)?.queuedByType ?? {}
         }
     })
 
@@ -141,7 +145,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         console.info(CTX, `Loading orders for ${toValue(filter).dinnerEventIds.length} dinner(s)`)
     }
 
-    // Upcoming orders of the selected season with their dinner context. The page names the scope:
+    // Upcoming orders of the selected season, each with its dinner and its eater. The page names the scope:
     // every household or the selected one; nothing is requested until a page asks
     const upcomingOrdersForAllHouseholds = ref<boolean | null>(null)
 
@@ -157,11 +161,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 upcomingForSeason: planStore.selectedSeasonId,
                 allHouseholds: queryFlag(allHouseholds),
                 householdId: allHouseholds ? undefined : householdsStore.selectedHouseholdId,
-                includeDinnerContext: queryFlag(true)
+                includeCostContext: queryFlag(true)
             })}`
         },
         {
-            schema: OrderDisplaySchema.array(),
+            schema: OrderDisplaySchema.required({dinnerEvent: true, inhabitant: true}).array(),
             default: () => [],
             enabled: () => upcomingOrdersForAllHouseholds.value !== null && !!planStore.selectedSeasonId
                 && (upcomingOrdersForAllHouseholds.value || !!householdsStore.selectedHouseholdId),
@@ -193,7 +197,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // ========================================
     // Lock Status (reactive, watches planStore)
     // ========================================
-    const {countTicketTypes, formatTicketCounts} = useBilling()
+    const {countTicketTypes} = useTicket()
 
     const {data: releasedCounts, refresh: refreshReleasedCounts} = storeAsyncData(
         'bookings-store-released-counts',
@@ -204,7 +208,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 const counts = new Map<number, ForSaleCounts>()
                 for (const [dinnerEventId, orders] of grouped) {
                     const byType = countTicketTypes(orders)
-                    counts.set(dinnerEventId, {total: orders.length, formatted: formatTicketCounts(byType), byType})
+                    counts.set(dinnerEventId, {total: orders.length, byType})
                 }
                 return counts
             }),
@@ -217,7 +221,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const waitlistCounts = computed(() => new Map([...groupBy<TicketWaitlistDisplay, number>(entry => entry.dinnerEventId)(waitlistEntries.value)]
         .map(([dinnerEventId, queue]): [number, WaitlistCounts] => {
             const queuedByType = countTicketTypes(queue.map(entry => ({ticketType: entryTicketType.value(entry) ?? null})))
-            return [dinnerEventId, {queued: queue.length, queuedFormatted: formatTicketCounts(queuedByType), queuedByType}]
+            return [dinnerEventId, {queued: queue.length, queuedByType}]
         })))
 
     // Exposed computed: lockStatus map for calendar display
@@ -267,7 +271,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     type ScaffoldToast = {title: string, suffix?: string, householdOrder?: number[]}
 
     /**
-     * ADR-016: Scaffold endpoint call shared by the single- and multi-event entry points;
+     * Scaffold endpoint call shared by the single- and multi-event entry points;
      * with a toast given, the result is reported in it.
      */
     const processBookings = async (
@@ -317,7 +321,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         previewBookings({householdId, dinnerEventIds, orders: []})
 
     /**
-     * ADR-016: Process bookings for a single dinner event.
+     * Process bookings for a single dinner event.
      * Used by day view, power mode, and guest booking.
      */
     const processSingleEventBookings = (
@@ -330,7 +334,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         processBookings({householdId, dinnerEventIds: [dinnerEventId], orders}, adminBypass, report, 'processSingleEventBookings')
 
     /**
-     * ADR-016: Process bookings for multiple dinner events.
+     * Process bookings for multiple dinner events.
      * Used by grid view (week/month).
      */
     const processMultipleEventsBookings = (
@@ -364,7 +368,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // DINNER EVENT ACTIONS
     type DinnerUpdate = Partial<DinnerEventUpdate> & { allergenIds?: number[], state?: DinnerState }
 
-    // The page names the date it shows; the dinner on that date resolves from the selected season
+    // The page names the date it shows; the dinner on that date resolves from the selected season. A page may name
+    // the date from a team's dinners, its own or the selected team's, so the server render resolves it after both
     const dinnerDate = shallowRef<() => Date | null>(() => null)
     const selectedDinnerEventId = computed(() => {
         const date = dinnerDate.value()
@@ -383,7 +388,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             schema: DinnerEventDetailSchema.nullable(),
             default: () => null,
             enabled: () => !!selectedDinnerEventId.value,
-            dependsOn: [planStore.selectedSeasonDataset],
+            dependsOn: [planStore.selectedSeasonDataset, planStore.selectedTeamDataset, usersStore.myTeamsDataset],
             errorMessage: BOOKING_WORDS.failed.dinner,
             notFound: {
                 recover: () => {
@@ -517,7 +522,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     })
 
     // ========================================
-    // WAITING LIST (ADR-007)
+    // WAITING LIST
     // ========================================
 
     // The release places the first entries that fit as orders: the dinner's tickets and the queue both change
@@ -550,7 +555,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         (id: number, currentChefId: number | null) => tryAutoClaim(
             currentChefId,
             authStore.inhabitantId,
-            () => planStore.assignRoleToDinner(id, authStore.inhabitantId!, TeamRoleSchema.enum.CHEF)
+            inhabitantId => planStore.assignRoleToDinner(id, inhabitantId, TeamRoleSchema.enum.CHEF)
         )
     )
 
@@ -579,7 +584,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     }
 
     // ========================================
-    // DAILY MAINTENANCE JOB (ADR-007)
+    // DAILY MAINTENANCE JOB
     // ========================================
     const authStore = useAuthStore()
     const dailyMaintenanceLabel = jobTypeLabels[JobType.DAILY_MAINTENANCE]
@@ -587,7 +592,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const {result: dailyMaintenanceResult, error: dailyMaintenanceError, isRunning: isDailyMaintenanceRunning, run: runDailyMaintenanceJob} = runJob<DailyMaintenanceResult>({
         url: '/api/admin/maintenance/daily',
         method: 'POST',
-        query: () => ({triggeredBy: `ADMIN:${authStore.email}`}),
+        query: () => ({triggeredBy: adminTrigger(authStore.email)}),
         schema: DailyMaintenanceResultSchema,
         action: 'runDailyMaintenance',
         errorMessage: MAINTENANCE_WORDS.job.failed(dailyMaintenanceLabel),
@@ -604,7 +609,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const runDailyMaintenance = () => runDailyMaintenanceJob().then(() => undefined, () => undefined)
 
     // ========================================
-    // BILLING PERIODS (ADR-007)
+    // BILLING PERIODS
     // ========================================
 
     const {MonthlyBillingResponseSchema, TransactionDisplaySchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema} = useBillingValidation()
@@ -729,7 +734,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     }
 
     // ========================================
-    // MONTHLY BILLING JOB (ADR-007)
+    // MONTHLY BILLING JOB
     // ========================================
 
     const {formatMonthlyBillingStats} = useMaintenance()
@@ -738,7 +743,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const {result: monthlyBillingResult, error: monthlyBillingError, isRunning: isMonthlyBillingRunning, run: runMonthlyBillingJob} = runJob<MonthlyBillingResponse>({
         url: '/api/admin/maintenance/monthly',
         method: 'POST',
-        query: () => ({triggeredBy: `ADMIN:${authStore.email}`}),
+        query: () => ({triggeredBy: adminTrigger(authStore.email)}),
         schema: MonthlyBillingResponseSchema,
         action: 'runMonthlyBilling',
         errorMessage: MAINTENANCE_WORDS.job.failed(monthlyBillingLabel),
@@ -786,7 +791,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         processMultipleEventsBookings,
         processAdminCorrection,
 
-        // dinner event detail (store-owned per ADR-007)
+        // dinner event detail (store-owned)
         selectedDinnerEventId,
         selectedDinnerEventDetail,
         isSelectedDinnerEventLoading,

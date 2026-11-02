@@ -4,7 +4,7 @@ import {useSeason} from '~/composables/useSeason'
 import {useCookingTeam} from '~/composables/useCookingTeam'
 import type {CookingTeamCreate, CookingTeamUpdate, CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
-import type {H3Error} from 'h3'
+import {isError} from 'h3'
 
 export interface TeamOperationResult {
     teams: CookingTeamDetail[]
@@ -91,8 +91,8 @@ export async function assignAffinitiesAndEvents(
     for (const batch of affinityBatches) {
         await Promise.all(
             batch.map(team => updateTeam(d1Client, team.id, {id: team.id, affinity: team.affinity})
-                .catch((error: H3Error) => {
-                    if (error.statusCode !== 404) throw error
+                .catch((error: unknown) => {
+                    if (!isError(error) || error.statusCode !== 404) throw error
                     console.warn(`${LOG} Team ${team.id} deleted since the season was read, affinity skipped`)
                 }))
         )
@@ -107,17 +107,10 @@ export async function assignAffinitiesAndEvents(
 
     // Step 2: Compute and save team-to-event assignments
     console.info(`${LOG} Assigning teams to dinner events for season ${seasonId}`)
-    const eventsWithAssignments = assignTeamsToEvents(updatedSeason)
-        .filter(event => event.id && event.cookingTeamId)
-
-    const eventBatches = chunkTeamAssignments(eventsWithAssignments)
+    const assignments = assignTeamsToEvents(updatedSeason).flatMap(({id, cookingTeamId}) => cookingTeamId ? [{id, cookingTeamId}] : [])
     const updatedEvents: DinnerEventDisplay[] = []
-
-    for (const batch of eventBatches) {
-        const batchResults = await Promise.all(
-            batch.map(event => assignCookingTeamToDinnerEvent(d1Client, event.id!, event.cookingTeamId!))
-        )
-        updatedEvents.push(...batchResults)
+    for (const batch of chunkTeamAssignments(assignments)) {
+        updatedEvents.push(...await Promise.all(batch.map(({id, cookingTeamId}) => assignCookingTeamToDinnerEvent(d1Client, id, cookingTeamId))))
     }
 
     console.info(`${LOG} Assigned teams to ${updatedEvents.length} dinner events`)

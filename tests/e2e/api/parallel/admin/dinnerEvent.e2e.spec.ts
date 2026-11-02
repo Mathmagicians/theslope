@@ -50,7 +50,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(createdDinnerEvent.state).toBe(dinnerEventData.state)
         expect(createdDinnerEvent.seasonId).toBe(testSeasonId)
 
-        // AND: Dinner event can be retrieved with full relations (ADR-009: detail endpoint includes comprehensive data)
+        // AND: Dinner event can be retrieved with full relations
         const retrievedDinnerEvent = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id!)
         expect(retrievedDinnerEvent?.id).toBe(createdDinnerEvent.id)
         expect(retrievedDinnerEvent?.menuTitle).toBe(dinnerEventData.menuTitle)
@@ -100,7 +100,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
             }
         }
 
-        // AND: Detail includes tickets with full relations (ADR-009: detail endpoint comprehensive)
+        // AND: Detail includes tickets with full relations
         expect(detailWithTickets).not.toBeNull()
         expect(detailWithTickets!.tickets).toBeDefined()
         expect(detailWithTickets!.tickets!.length).toBe(1)
@@ -236,10 +236,10 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         await attemptAll('Dinner Event /api/admin/dinner-event CRUD operations cleanup', [
-            // Household delete cascades its inhabitants' orders and allergies (ADR-005)
+            // Household delete cascades its inhabitants' orders and allergies
             () => HouseholdFactory.deleteHousehold(context, testHouseholdIds),
             () => AllergyFactory.cleanupAllergyTypes(context, testAllergyTypeIds),
-            // Clean up the test season (CASCADE deletes all dinner events automatically per ADR-005)
+            // Clean up the test season (CASCADE deletes its dinner events)
             () => SeasonFactory.cleanupSeasons(context, testSeasonIds)
         ]).finally(() => context.close())
     })

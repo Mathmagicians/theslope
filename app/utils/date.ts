@@ -17,6 +17,7 @@ export const DATE_SETTINGS =
         DAY_MONTH_MASK: 'dd/MM',
         DATE_TIME_MASK: 'dd/MM/yyyy HH:mm',
         DATE_AT_TIME_MASK: "dd/MM/yyyy 'kl.' HH:mm",
+        LONG_DATE_MASK: 'd. MMMM yyyy',
         ISO_MONTH_MASK: 'yyyy-MM',
         locale: da,
         localeString: 'da-DK',

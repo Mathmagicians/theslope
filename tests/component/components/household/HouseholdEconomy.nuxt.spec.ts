@@ -12,11 +12,10 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
-import {mountWithTooltipProvider, mountedStore, resetStores, registerEmptyStoreEndpoints, untilTrue, cellsByHeader, tableHeaders} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, resetStores, registerEmptyStoreEndpoints, untilTrue, cellsByHeader, tableHeaders, itemAt, present} from '~~/tests/component/testHelpers'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {BUTTON_WORDS} from '~/config/buttonWords'
 import {useBillingValidation} from '~/composables/useBillingValidation'
-import {useBilling} from '~/composables/useBilling'
 import {useTicket} from '~/composables/useTicket'
 
 // The test environment has no session cookie
@@ -26,12 +25,14 @@ mockNuxtImport('useUserSession', () => useUserSession)
 const SALT = 'household-economy'
 const member = UserFactory.defaultUserWithInhabitant(SALT)
 // The member's own household: the households store selects it from the session
-const household = {...HouseholdFactory.defaultHouseholdDetail(SALT), id: member.Inhabitant!.household!.id}
+const household = {...HouseholdFactory.defaultHouseholdDetail(SALT), id: present(member.Inhabitant?.household, 'the member\'s household').id}
 const season = {...SeasonFactory.defaultSeason(SALT), id: 7}
 const dinnerEvent = DinnerEventFactory.defaultDinnerEventDisplay(SALT)
-const upcoming = [OrderFactory.defaultOrder(SALT, {dinnerEventId: dinnerEvent.id, inhabitantId: household.inhabitants[0]!.id, dinnerEvent})]
+// A member who moved in after the household loaded: the order carries an eater the household does not list yet
+const eater = {...itemAt(household.inhabitants, 0), id: 9001, name: 'Nyindflyttet'}
+const upcoming = [OrderFactory.defaultOrder(SALT, {dinnerEventId: dinnerEvent.id, inhabitantId: eater.id, dinnerEvent, inhabitant: eater})]
 
-// Only HTTP is faked (testing.md Rule 6)
+// Only HTTP is faked
 registerEmptyStoreEndpoints()
 registerEndpoint('/api/admin/season/active', () => season.id)
 registerEndpoint('/api/admin/season', () => [season])
@@ -69,6 +70,16 @@ describe('HouseholdEconomy - the upcoming orders', () => {
         expect(cellsByHeader(wrapper.findComponent({name: 'EconomyTable'})).Menu).toBe(dinnerEvent.menuTitle)
     })
 
+    it('GIVEN an upcoming order WHEN its dinner opens THEN its line reads the name its order carries', async () => {
+        const wrapper = await mountLoaded()
+
+        await wrapper.findComponent({name: 'EconomyTable'}).find(`button[aria-label="${BUTTON_WORDS.openDetails}"]`).trigger('click')
+
+        const line = wrapper.findComponent({name: 'CostLine'}).text()
+        expect(line).toContain(eater.name)
+        expect(line).not.toContain(`#${eater.id}`)
+    })
+
     it('GIVEN the billing has loaded THEN the cards, the expected sum, the running period\'s badge, the period search and the row toggles read the billing and button words', async () => {
         const wrapper = await mountLoaded()
         const {titles, sums, state, search} = BOOKING_WORDS.billing
@@ -92,14 +103,13 @@ describe('HouseholdEconomy - the upcoming orders', () => {
 
 describe('HouseholdEconomy - the running period', () => {
     const {TicketType} = useBillingValidation()
-    const {formatTicketCounts} = useBilling()
-    const {formatPrice} = useTicket()
+    const {formatTicketCounts, formatPrice} = useTicket()
     const dinners = [{id: 1, date: new Date(2025, 9, 20), menuTitle: 'Lasagne'}, {id: 2, date: new Date(2025, 9, 22), menuTitle: 'Suppe'}]
     // Two tickets on the first dinner, one on the second
     const transactions = [
-        BillingFactory.defaultTransactionDisplay({id: 1, orderId: 1, dinnerEvent: dinners[0]!}),
-        BillingFactory.defaultTransactionDisplay({id: 2, orderId: 2, dinnerEvent: dinners[0]!, ticketType: TicketType.CHILD, amount: 1700}),
-        BillingFactory.defaultTransactionDisplay({id: 3, orderId: 3, dinnerEvent: dinners[1]!})
+        BillingFactory.defaultTransactionDisplay({id: 1, orderId: 1, dinnerEvent: itemAt(dinners, 0)}),
+        BillingFactory.defaultTransactionDisplay({id: 2, orderId: 2, dinnerEvent: itemAt(dinners, 0), ticketType: TicketType.CHILD, amount: 1700}),
+        BillingFactory.defaultTransactionDisplay({id: 3, orderId: 3, dinnerEvent: itemAt(dinners, 1)})
     ]
     const totalAmount = 9700
 
@@ -112,7 +122,7 @@ describe('HouseholdEconomy - the running period', () => {
     it('GIVEN the running period holds three tickets on two dinners WHEN its row is opened THEN it reads the open period\'s title and stats, and each dinner opens to its ticket lines', async () => {
         const wrapper = await mountLoaded()
 
-        const periods = wrapper.findAllComponents({name: 'EconomyTable'})[1]!
+        const periods = itemAt(wrapper.findAllComponents({name: 'EconomyTable'}), 1)
         await periods.find(`button[aria-label="${BUTTON_WORDS.openDetails}"]`).trigger('click')
         const period = wrapper.findComponent({name: 'CostEntry'})
         const {period: periodWords, stats} = BOOKING_WORDS.billing

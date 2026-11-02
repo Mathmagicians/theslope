@@ -21,7 +21,7 @@ import {DATE_WORDS} from '~/config/dateWords'
 
 const model = defineModel<BookingView>({default: BookingViewSchema.enum.day})
 
-const {COLOR, NOISE, ICONS, SIZES, COMPONENTS} = useTheSlopeDesignSystem()
+const {COLOR, NOISE, ICONS, SIZES, COMPONENTS, ORIENTATIONS} = useTheSlopeDesignSystem()
 
 const View = BookingViewSchema.enum
 const VIEW_ICONS: Record<BookingView, string> = {
@@ -37,7 +37,7 @@ const getVariant = (view: BookingView) => isSelected(view) ? NOISE.loud : NOISE.
 </script>
 
 <template>
-  <UFieldGroup :size="SIZES.standard" orientation="horizontal">
+  <UFieldGroup :size="SIZES.standard" :orientation="ORIENTATIONS.horizontal">
     <UButton
       v-for="view in views"
       :key="view"

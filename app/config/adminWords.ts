@@ -1,6 +1,6 @@
 /**
  * The admin page's words: its head, its tabs, the banner a member without the admin role reads, and a failed read
- * behind a tab. Plain module without auto-imports (ADR-017).
+ * behind a tab. Plain module without auto-imports.
  */
 export const ADMIN_WORDS = {
     /** The document's title and meta description */
@@ -8,7 +8,7 @@ export const ADMIN_WORDS = {
         title: '😎 Administration',
         description: 'Administration af fællesspisningen: planlægning, madhold, husstande, allergier, brugere, økonomi og system'
     },
-    /** The tabs, by the path segment each one owns */
+    /** The tabs, by the path segment each one owns; the names of the areas they hold wherever the app names them */
     tabs: {
         planning: 'Planlægning',
         teams: 'Madhold',

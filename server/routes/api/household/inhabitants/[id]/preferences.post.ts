@@ -62,13 +62,13 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
 
         const inhabitants = allInhabitants ? (await fetchHouseholds(d1Client, inhabitant.householdId)).flatMap(household => household.inhabitants) : [inhabitant]
         console.info(`${LOG} User ${user.email} updating preferences for ${allInhabitants ? `the ${inhabitants.length} inhabitants of household ${inhabitant.householdId}` : `inhabitant ${inhabitant.name} ${inhabitant.lastName}`}`)
-        // The reply's inhabitant first, then the household's others one write after another (ADR-014)
+        // The reply's inhabitant first, then the household's others one write at a time: D1 allows six connections per invocation
         const updatedInhabitant = await updateInhabitant(d1Client, id, {dinnerPreferences})
         for (const other of inhabitants.filter(({id: inhabitantId}) => inhabitantId !== id)) {
             await updateInhabitant(d1Client, other.id, {dinnerPreferences})
         }
 
-        // Re-scaffold the household on the weekdays the draft changes, the DAILY_MAINTENANCE job keeps the rest in step (ADR-015)
+        // Re-scaffold the household on the weekdays the draft changes, the DAILY_MAINTENANCE job keeps the rest in step
         const weekdays = changedWeekdays(inhabitants.map(stored => stored.dinnerPreferences), dinnerPreferences)
         console.info(`${LOG} Re-scaffolding household ${updatedInhabitant.householdId} on ${weekdays.join(', ') || 'no weekday'}`)
         const scaffoldResult: ScaffoldResult = await scaffoldPrebookings(d1Client, {

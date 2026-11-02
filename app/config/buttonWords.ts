@@ -1,6 +1,6 @@
 /**
  * The words a button reads, as its label or as the accessible name of an icon button. Plain module without
- * auto-imports (ADR-017). A label that names its domain's object ("Tilføj gæst", "Gem for alle") lives in that
+ * auto-imports. A label that names its domain's object ("Tilføj gæst", "Gem for alle") lives in that
  * domain's words.
  */
 export const BUTTON_WORDS = {
@@ -19,5 +19,8 @@ export const BUTTON_WORDS = {
     /** The toggle that shows an order's history */
     history: 'Vis ordrehistorik',
     /** A link out to Heynabo: the logo's name, and the link to a dinner's event there */
-    heynabo: {name: 'Heynabo', openEvent: 'Se på Heynabo'}
+    heynabo: {name: 'Heynabo', openEvent: 'Se på Heynabo'},
+    /** The button back to the view before, and the button that prints a sheet */
+    back: 'Tilbage',
+    print: 'Print'
 } as const

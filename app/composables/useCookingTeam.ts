@@ -9,31 +9,34 @@ import type {JokerSlot} from '~/composables/useDutyValidation'
 import {startOfDay, endOfDay, isWithinInterval} from 'date-fns'
 
 /**
- * Run the chef auto-claim when the dinner is vacant and the caller has an Inhabitant.
+ * Run the chef auto-claim when the dinner is vacant and the caller has an Inhabitant; `claim` receives that inhabitant.
  * Returns the value the caller assigns to `wasAutoClaimed`. Propagates `claim` errors
  * for the caller's wrapper to handle.
  */
 export const tryAutoClaim = async <T>(
     currentChefId: number | null,
     myInhabitantId: number | null,
-    claim: () => Promise<T>
+    claim: (inhabitantId: number) => Promise<T>
 ): Promise<boolean> => {
     if (currentChefId !== null || myInhabitantId === null) return false
-    await claim()
+    await claim(myInhabitantId)
     return true
 }
+
+// Between a team's short name and its season in a default team name: "Madhold 2 - 08/25-06/26"
+const TEAM_NAME_SEPARATOR = ' - '
 
 /**
  * Business logic for working with cooking teams
  *
  * A team's colour is not here: it is the brand rainbow stop of the team's number (`getTeamNumber`), which a
- * consumer takes from `getRainbowBand` in the design system (ADR-017, ADR-018).
+ * consumer takes from `getRainbowBand` in the design system.
  */
 export const useCookingTeam = () => {
     const {CookingTeamSchema, TeamRoleSchema} = useCookingTeamValidation()
 
     const createDefaultTeamName = (seasonShortName: string, teamNumber: number): string => {
-        return `Madhold ${teamNumber} - ${seasonShortName}`
+        return `${TEAM_WORDS.card.fallbackName(teamNumber)}${TEAM_NAME_SEPARATOR}${seasonShortName}`
     }
 
     /**
@@ -41,8 +44,8 @@ export const useCookingTeam = () => {
      * Returns null if no number found in the name
      */
     const extractTeamNumber = (teamName: string): number | null => {
-        const match = teamName.match(/(\d+)/)
-        return match ? parseInt(match[1]!, 10) : null
+        const digits = teamName.match(/\d+/)?.[0]
+        return digits ? parseInt(digits, 10) : null
     }
 
     /**
@@ -67,7 +70,7 @@ export const useCookingTeam = () => {
      * Fallback: Returns full name if no dash found
      */
     const getTeamShortName = (teamName: string): string => {
-        const dashIndex = teamName.indexOf(' - ')
+        const dashIndex = teamName.indexOf(TEAM_NAME_SEPARATOR)
         return dashIndex !== -1 ? teamName.substring(0, dashIndex) : teamName
     }
 

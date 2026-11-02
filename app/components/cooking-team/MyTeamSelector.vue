@@ -38,10 +38,7 @@
  *
  * Pattern:
  * - CookingTeamBadges in the tab bodies (the shared team badge row)
- *
- * ADR Compliance:
- * - ADR-001: Types from useCookingTeamValidation
- * - ADR-006: Selection synced with URL query param by parent
+ * - The parent syncs the selection with the URL query param
  */
 import type { CookingTeamDisplay } from '~/composables/useCookingTeamValidation'
 import { TEAM_WORDS } from '~/config/teamWords'
@@ -62,7 +59,6 @@ const emit = defineEmits<{
   'update:modelValue': [teamId: number]
 }>()
 
-// Design system
 const { SIZES, ORIENTATIONS, ICONS, ALERTS, COMPONENTS } = useTheSlopeDesignSystem()
 const { getTeamShortName, getTeamNumber } = useCookingTeam()
 
@@ -74,7 +70,7 @@ const tabTeams = computed(() => props.visitingTeam ? [...props.teams, props.visi
 // - 3+ tabs on mobile: horizontal (standard mobile pattern)
 const tabOrientation = computed(() => ORIENTATIONS.forItemCount(tabTeams.value.length))
 
-// Find selected team index from team ID
+// The selected team's tab; the first while no tab holds it
 const selectedTeamIndex = computed({
   get: () => Math.max(0, tabTeams.value.findIndex(t => t.id === props.modelValue)),
   set: (index: number) => {
@@ -129,7 +125,7 @@ const teamTabs = computed(() => {
               :team-name="item.label"
               :show-counts="false"
               :show-team-icon="false"
-              size="small"
+              :size="SIZES.small"
             />
             <UBadge
               v-if="item.visiting"

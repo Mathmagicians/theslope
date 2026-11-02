@@ -7,12 +7,12 @@
  * - Faktureringsperioder: unified table with virtual (🟢) + closed (✓) periods
  *
  * Uses EconomyTable for date-based filtering, CostEntry/CostLine for grouped items.
- * Data: Uses bookings store (ADR-007) with lazy loading for details.
+ * Data: Uses bookings store with lazy loading for details.
  */
 import {formatDate, formatDateRange, parseDate} from '~/utils/date'
 import type {DateRange} from '~/types/dateTypes'
-import type {TransactionDisplay, CostEntry, InhabitantInfo, HouseholdEntry} from '~/composables/useBillingValidation'
-import type {OrderDisplay, DesiredOrder, DinnerEventDisplay, DinnerEventInfo} from '~/composables/useBookingValidation'
+import {CostLineKind} from '~/composables/useBillingValidation'
+import type {OrderDisplay, DesiredOrder, DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {StatBox} from '~/components/economy/CostEntry.vue'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
@@ -28,8 +28,8 @@ const props = withDefaults(defineProps<{
   canEdit: false
 })
 
-const {formatKroner} = useTicket()
-const {groupByCostEntry, groupByHouseholdEntry, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
+const {formatKroner, formatTicketCounts} = useTicket()
+const {groupByCostEntry, groupByHouseholdEntry, calculateCurrentBillingPeriod, controlInvoices} = useBilling()
 const now = useClock()
 const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, BORDER, NOISE} = useTheSlopeDesignSystem()
 
@@ -38,10 +38,6 @@ const {selectedSeason, isPlanStoreReady} = storeToRefs(planStore)
 
 const householdsStore = useHouseholdsStore()
 const {households} = storeToRefs(householdsStore)
-
-const allInhabitants = computed(() =>
-    households.value.flatMap(h => h.inhabitants)
-)
 
 const bookingsStore = useBookingsStore()
 const {
@@ -57,7 +53,7 @@ const {
     isInvoiceTransactionsLoading
 } = storeToRefs(bookingsStore)
 
-// ?period= and ?invoice= carry the expanded billing period and invoice (ADR-006)
+// ?period= and ?invoice= carry the expanded billing period and invoice
 const useIdParam = (key: string) => useQueryParam<number | null>(key, {
     serialize: (id) => id === null ? '' : String(id),
     deserialize: (s) => {
@@ -82,9 +78,6 @@ const toggleSelection = <Row extends TableData>(row: TableRow<Row>, id: number, 
 
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 
-const inhabitantsMap = computed(() => new Map(allInhabitants.value.map(i => [i.id, i.name])))
-const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id}`
-
 const {getHouseholdForInhabitant} = householdsStore
 
 const {upcomingOrders, isUpcomingOrdersLoaded} = storeToRefs(bookingsStore)
@@ -94,28 +87,17 @@ const isUpcomingOrdersLoading = computed(() =>
     !isPlanStoreReady.value || !isUpcomingOrdersLoaded.value
 )
 
-type OrderWithInhabitant = OrderDisplay & { inhabitant: InhabitantInfo, dinnerEvent: DinnerEventInfo }
-const upcomingOrdersEnriched = computed((): OrderWithInhabitant[] =>
-    upcomingOrders.value
-        .filter((o): o is OrderDisplay & { dinnerEvent: DinnerEventInfo } => o.dinnerEvent !== undefined)
-        .map(o => ({
-            ...o,
-            inhabitant: {
-                id: o.inhabitantId,
-                name: getInhabitantName(o.inhabitantId),
-                household: getHouseholdForInhabitant(o.inhabitantId) ?? {id: 0, pbsId: 0, address: BOOKING_WORDS.billing.unknownAddress}
-            }
-        }))
-)
-const groupOrdersByDinner = groupByCostEntry<OrderWithInhabitant>()
-const upcomingOrdersGrouped = computed(() =>
-    groupOrdersByDinner(upcomingOrdersEnriched.value, o => o.priceAtBooking)
-)
+const upcomingOrdersGrouped = computed(() => groupByCostEntry(upcomingOrders.value, o => o.priceAtBooking))
 
-const groupOrdersByHousehold = groupByHouseholdEntry<OrderWithInhabitant>(o => o.inhabitant.household)
-const upcomingOrdersTotal = computed(() =>
-    upcomingOrdersEnriched.value.reduce((sum, o) => sum + o.priceAtBooking, 0)
+// The PBS view groups by the eater's household; an eater the households list does not hold yet has no address to show
+const ordersWithHousehold = computed(() => upcomingOrders.value.flatMap(order => {
+    const household = getHouseholdForInhabitant(order.inhabitant.id)
+    return household ? [{...order, household}] : []
+}))
+const householdEntriesOf = (dinnerEventId: number) => groupByHouseholdEntry(
+    ordersWithHousehold.value.filter(o => o.dinnerEventId === dinnerEventId), o => o.priceAtBooking, o => o.household
 )
+const upcomingOrdersTotal = computed(() => sumBy(upcomingOrders.value, o => o.priceAtBooking))
 
 const dinnerColumns = [
     {id: 'expand'},
@@ -142,7 +124,7 @@ const setHouseholdSearch = (dinnerEventId: number, query: string) => {
     householdSearchQueries.value.set(dinnerEventId, query)
 }
 
-const filterHouseholds = (entries: HouseholdEntry<OrderWithInhabitant>[], query: string): HouseholdEntry<OrderWithInhabitant>[] => {
+const filterHouseholds = (entries: ReturnType<typeof householdEntriesOf>, query: string): ReturnType<typeof householdEntriesOf> => {
     if (!query) return entries
     const q = query.toLowerCase()
     return entries.filter(entry =>
@@ -151,32 +133,28 @@ const filterHouseholds = (entries: HouseholdEntry<OrderWithInhabitant>[], query:
     )
 }
 
-const futureDinnerStatsAccessor = (entry: CostEntry<OrderWithInhabitant, DinnerEventInfo>): StatBox[] => {
-    const households = new Set(entry.items.map(o => o.inhabitant.household.id))
+const futureDinnerStatsAccessor = (entry: (typeof upcomingOrdersGrouped.value)[number]): StatBox[] => {
+    const households = new Set(entry.items.map(o => o.inhabitant.householdId))
     return [
         {icon: ICONS.household, value: households.size, label: BOOKING_WORDS.billing.stats.households},
         {icon: ICONS.dinner, value: formatTicketCounts(entry.items), label: BOOKING_WORDS.billing.stats.tickets},
-        {icon: ICONS.shoppingCart, value: formatKroner(entry.items.reduce((sum, o) => sum + o.priceAtBooking, 0)), label: BOOKING_WORDS.billing.stats.total}
+        {icon: ICONS.shoppingCart, value: formatKroner(sumBy(entry.items, o => o.priceAtBooking)), label: BOOKING_WORDS.billing.stats.total}
     ]
 }
 
 const currentPeriod = computed(() => calculateCurrentBillingPeriod(now.value))
 
-const groupTxByDinner = groupByCostEntry<TransactionDisplay>()
-
-const groupTxByHousehold = groupByHouseholdEntry<TransactionDisplay>(tx => tx.inhabitant.household)
-
 // The current period's virtual invoices: one per household, as a closed period lists its invoices
 const currentPeriodByHousehold = computed(() =>
-    groupTxByHousehold(currentPeriodTransactions.value, tx => tx.amount)
+    groupByHouseholdEntry(currentPeriodTransactions.value, tx => tx.amount, tx => tx.inhabitant.household)
 )
 
 const currentPeriodGrouped = computed(() =>
-    groupTxByDinner(currentPeriodTransactions.value, tx => tx.amount)
+    groupByCostEntry(currentPeriodTransactions.value, tx => tx.amount)
 )
 
 const invoiceTransactionsGrouped = computed(() =>
-    groupTxByDinner(selectedInvoiceTransactions.value, tx => tx.amount)
+    groupByCostEntry(selectedInvoiceTransactions.value, tx => tx.amount)
 )
 
 const currentPeriodTotal = computed(() =>
@@ -330,7 +308,7 @@ const selectedHouseholdOption = computed({
     }
 })
 
-// An admin's correction lifts every deadline (ADR-016)
+// An admin's correction lifts every deadline
 const adminDeadlines: SeasonDeadlines = {
     getDinnerStartTime: (date: Date) => date,
     getMenuDeadlineTime: (date: Date) => date,
@@ -351,7 +329,7 @@ const editingOrders = computed((): OrderDisplay[] => {
     if (!editingDinnerId.value || !editingHouseholdId.value) return []
     return upcomingOrders.value.filter(o =>
         o.dinnerEventId === editingDinnerId.value &&
-        getHouseholdForInhabitant(o.inhabitantId)?.id === editingHouseholdId.value
+        o.inhabitant.householdId === editingHouseholdId.value
     )
 })
 
@@ -490,7 +468,7 @@ const dinnerBreakdownStats = computed(() => {
                   </div>
 
                   <UTable
-                      :data="filterHouseholds(sortByAddress(groupOrdersByHousehold(row.original.items, o => o.priceAtBooking)), getHouseholdSearch(row.original.dinnerEvent.id))"
+                      :data="filterHouseholds(sortByAddress(householdEntriesOf(row.original.dinnerEvent.id)), getHouseholdSearch(row.original.dinnerEvent.id))"
                       :columns="householdOrderColumns"
                       :ui="COMPONENTS.table.ui"
                       :get-row-id="rowIdOf"
@@ -524,7 +502,7 @@ const dinnerBreakdownStats = computed(() => {
                         <CostLine
                             v-for="order in householdRow.original.items"
                             :key="order.id"
-                            :item="order"
+                            :line="{kind: CostLineKind.ORDER, order, inhabitant: order.inhabitant}"
                             :history-order-id="historyOrderId"
                             compact
                             @toggle-history="toggleHistory"
@@ -653,7 +631,7 @@ const dinnerBreakdownStats = computed(() => {
                           <CostLine
                               v-for="tx in householdRow.original.items"
                               :key="tx.id"
-                              :item="tx"
+                              :line="{kind: CostLineKind.TRANSACTION, transaction: tx}"
                               :history-order-id="historyOrderId"
                               compact
                               @toggle-history="toggleHistory"
@@ -777,7 +755,7 @@ const dinnerBreakdownStats = computed(() => {
                               <CostLine
                                   v-for="tx in dinnerRow.original.items"
                                   :key="tx.id"
-                                  :item="tx"
+                                  :line="{kind: CostLineKind.TRANSACTION, transaction: tx}"
                                   :history-order-id="historyOrderId"
                                   compact
                                   @toggle-history="toggleHistory"

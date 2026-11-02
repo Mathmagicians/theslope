@@ -13,6 +13,8 @@
  * - HouseholdAllergies: comments mode, immediate save to API
  */
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
+import {ADMIN_WORDS} from '~/config/adminWords'
+import {ALLERGY_WORDS} from '~/config/allergyWords'
 
 // Allergy with comment data (for showComments mode)
 export interface AllergyItem {
@@ -36,8 +38,8 @@ const props = withDefaults(defineProps<Props>(), {
   selectedIds: () => [],
   allergies: () => [],
   showComments: false,
-  label: 'Allergier',
-  placeholder: '🥛🥐🥚🥜 Vælg allergi...'
+  label: ADMIN_WORDS.tabs.allergies,
+  placeholder: ALLERGY_WORDS.editor.placeholder
 })
 
 const emit = defineEmits<{
@@ -142,7 +144,7 @@ const handleCommentSave = (typeId: number) => {
         <div :class="editor.commentRow">
           <UInput
             v-model="editingComments[type.id]"
-            :placeholder="`Kommentar til ${type.name}...`"
+            :placeholder="ALLERGY_WORDS.editor.comment(type.name)"
             :size="SIZES.sm"
             :class="editor.commentInput"
             @keyup.enter="handleCommentSave(type.id)"
@@ -153,7 +155,7 @@ const handleCommentSave = (typeId: number) => {
                 :variant="NOISE.quiet"
                 :icon="ICONS.check"
                 :size="SIZES.small"
-                aria-label="Gem kommentar"
+                :aria-label="ALLERGY_WORDS.editor.saveComment"
                 :data-testid="`allergy-${type.id}-save-comment`"
                 @click="handleCommentSave(type.id)"
               />
@@ -161,7 +163,7 @@ const handleCommentSave = (typeId: number) => {
           </UInput>
           <UButton
             v-bind="BUTTONS.remove"
-            aria-label="Fjern allergi"
+            :aria-label="ALLERGY_WORDS.editor.remove"
             :data-testid="`allergy-${type.id}-remove`"
             @click="handleRemove(type.id)"
           />
@@ -188,7 +190,7 @@ const handleCommentSave = (typeId: number) => {
             :icon="ICONS.xMark"
             :size="SIZES.small"
             :class="editor.badgeRemove"
-            aria-label="Fjern allergi"
+            :aria-label="ALLERGY_WORDS.editor.remove"
             @click="handleRemove(type.id)"
           />
         </span>

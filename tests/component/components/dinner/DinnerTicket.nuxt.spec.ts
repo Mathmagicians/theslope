@@ -11,6 +11,7 @@ import {mountSuspended} from '@nuxt/test-utils/runtime'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
 import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {TicketState} from '~/composables/useBookingValidation'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {findByTestId, iconNamesIn, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
 
@@ -39,9 +40,9 @@ const mountTicket = (props: Record<string, unknown> = {}, isMd = true) =>
 
 type Mounted = Awaited<ReturnType<typeof mountTicket>>
 
-const iconNamed = (wrapper: Mounted, name: string) => wrapper.findAllComponents({name: 'UIcon'}).find(icon => icon.props('name') === name)!
+const iconNamed = (wrapper: Mounted, name: string) => wrapper.findAllComponents({name: 'UIcon'}).find(icon => icon.props('name') === name)
 const bindsToken = (wrapper: Mounted, name: string, token: string) =>
-    expect(iconNamed(wrapper, name).classes()).toEqual(expect.arrayContaining(token.split(' ')))
+    expect(iconNamed(wrapper, name)?.classes()).toEqual(expect.arrayContaining(token.split(' ')))
 
 // No outcome depends on the width: the ticket binds static sizes, so the cases mount once
 describe('DinnerTicket', () => {
@@ -115,8 +116,8 @@ describe('DinnerTicket', () => {
         })
 
         it.each([
-            {guestCount: 1, label: 'Gæst'},
-            {guestCount: 2, label: '2 Gæster'}
+            {guestCount: 1, label: BOOKING_WORDS.guests.label(1)},
+            {guestCount: 2, label: BOOKING_WORDS.guests.label(2)}
         ])('GIVEN guestCount $guestCount THEN the badge reads $label', async ({guestCount, label}) => {
             const wrapper = await mountTicket({guestCount})
 

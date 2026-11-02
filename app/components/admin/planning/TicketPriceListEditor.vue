@@ -21,10 +21,10 @@
  *
  * Visual check: /admin/planning in view and edit, the prices and the empty line, phone and desktop.
  */
-import type {TicketPrice} from "~/composables/useTicketPriceValidation"
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {TicketType as TicketTypeValue} from '~/composables/useBookingValidation'
-import {getErrorMessage, mapZodErrorsToFormErrors} from "~/utils/validtation"
 import {SEASON_WORDS} from '~/config/seasonWords'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 const {BUTTONS, COLOR, COMPONENTS, ICONS, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
 const {TicketTypeSchema, TicketPricesArraySchema, createTicketPrice} = useTicketPriceValidation()
@@ -92,7 +92,7 @@ const onRemoveTicketPrice = (index: number) => {
 
       <div :class="COMPONENTS.ticketPriceEditor.addStack">
         <div :class="COMPONENTS.ticketPriceEditor.addRow">
-          <UFormField :label="WORDS.ticketType" name="ticketType" :class="COMPONENTS.ticketPriceEditor.addField">
+          <UFormField :label="BOOKING_WORDS.ticketType" name="ticketType" :class="COMPONENTS.ticketPriceEditor.addField">
             <USelect
                 v-model="newTicket.ticketType"
                 :items="ticketTypeOptions"

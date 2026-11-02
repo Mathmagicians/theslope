@@ -4,10 +4,11 @@
 import {PERIOD_VIEWS, type PeriodView} from '~/types/dateTypes'
 
 const [DAY, WEEK, MONTH] = PERIOD_VIEWS
+const weekWord = 'Uge'
 
 export const DATE_WORDS = {
     /** A week by its ISO number: "Uge 3" */
-    week: 'Uge',
+    week: weekWord,
     /** A countdown whose moment has passed */
     overdue: 'Overskredet',
     /** The countdown's units under a day: "2T 30M" */
@@ -29,7 +30,7 @@ export const DATE_WORDS = {
     /** The legend every calendar shows: its panel's title, and the entries the calendars share (the selected day, a holiday of the season) */
     calendarLegend: {title: 'Forklaring', selected: 'Valgt dato', holiday: 'Ferie'},
     /** A period view's name: the booking view switcher's labels */
-    periodViews: {[DAY]: 'Dag', [WEEK]: 'Uge', [MONTH]: 'Måned'} satisfies Record<PeriodView, string>,
+    periodViews: {[DAY]: 'Dag', [WEEK]: weekWord, [MONTH]: 'Måned'} satisfies Record<PeriodView, string>,
     /**
      * A date's rules: a missing date, a typed date in the wrong format, a typed date that does not exist, an ISO date that
      * does not parse, a period that ends before it starts or spans a year; the typed field's description names its format

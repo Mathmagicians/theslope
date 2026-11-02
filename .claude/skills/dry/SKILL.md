@@ -1,6 +1,6 @@
 ---
 name: dry
-description: Use when the user asks for a DRY check, a duplication review, or "/dry" on the current branch. Audits changed code for copy-paste, repetition, unfinished refactorings, and extracted helpers/components not applied everywhere. Reports violations and a cleanup plan the user signs off before any edit. Pre-existing duplicates of a pattern the branch abstracts are IN scope (no broken windows).
+description: Use before any change starts (ADR compliance and sibling agreement, § Before any work starts), at its end (§ After any work: the gate), and when the user asks for a DRY check, a duplication review, or "/dry" on the current branch. Audits changed code for copy-paste, repetition, unfinished refactorings, and extracted helpers/components not applied everywhere. Reports violations and a cleanup plan the user signs off before any edit. Pre-existing duplicates of a pattern the branch abstracts are IN scope (no broken windows).
 ---
 
 # DRY Check
@@ -13,6 +13,33 @@ Audit the current branch for duplication and for refactorings left half-done. Re
 - **A refactoring is done when nothing of the old shape remains:** no local copies, no dead exports, no unreferenced files, no stale comments or docs describing the old way.
 - **An extracted helper is checked against every other case that needs it.** Whoever extracts a helper - in app code or in a spec (`docs/testing.md` Rule 4) - runs the Step 3 sweep for its body's pattern in the same change and moves each hit onto the helper; a brief that extracts a helper names the sweep.
 - **Report, then ask.** Never fix while auditing. The user signs off on the plan.
+
+## Before any work starts
+
+Every change, a package, a fix or a sweep, starts with these two checks; a brief names their result.
+
+- **ADR compliance.** Read the ADR lines the change touches in `docs/adr.md` and its rows in
+  `docs/adr-compliance-backend.md` / `docs/adr-compliance-frontend.md`; the plan names the line it follows. Code that
+  breaches a line it touches is fixed in the same change.
+- **Siblings agree.** Find every other implementation of the same thing and compare them: the other chunkers of the
+  area (`chunkHeynaboIds` in `useHeynabo.ts`), the other endpoints of the resource, the other members of a component
+  family, the other readers of the same words. The change follows what the siblings share and the ADR names; a sibling
+  that disagrees is fixed in the same change, never copied.
+
+## After any work: the gate
+
+Every change ends with this gate before its handback. The handback lists each grep with its hit count; a hit left is a
+failed gate, never a finding reported beside "done".
+
+1. **The old shape is gone.** For every abstraction the change adds, moves or replaces, grep its old shape (Step 3)
+   and the replaced name, type or literal across the whole tree, docs and comments included: zero hits outside the
+   abstraction.
+2. **The new thing is used everywhere.** Grep the new name: every site the first grep found reads it; a new export
+   nothing imports fails.
+3. **No sibling keeps the same sin.** For each breach the change fixes (a cast, a `!`, a literal where a type exists,
+   an inline chunker, a join in the browser, a hand-rolled type, a repeated word), grep the siblings from § Before any
+   work starts for the same breach: each hit is fixed in the same change, or listed with its `file:line` when another
+   session owns the file.
 
 ## Step 1: Scope
 

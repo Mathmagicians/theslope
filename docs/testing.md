@@ -476,13 +476,14 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 | `clickByTestId(wrapper, id)` | Click + `await nextTick()` |
 | `pollFor(condition, maxAttempts?)` | Poll a predicate across ticks (store readiness) |
 | `resetStores()` | Fresh stores over a fresh data layer per test: the stores of the app's pinia and of the active one are disposed, the app's pinia stays active so a spec and the components it mounts share one store instance, and the keyed `useAsyncData` entries earlier stores registered go with them |
-| `registerEmptyStoreEndpoints()` | The datasets the stores request on creation, answered empty; a spec's own route for one of them registers after this call, as the last registration of a url answers |
+| `registerEmptyStoreEndpoints()` | The stores' reads answered empty, those requested on creation and those a component asks for (own teams, all users, allergy managers); a spec's own route for one of them registers after this call, as the last registration of a url answers |
 | `VIEWPORTS` | The two layouts a responsive token answers for, the phone (`isMd: false`) and md and up (`isMd: true`), as the table of a `describe.each` |
 | `expectMasterDetail(master, detail)` | The master and the detail stand side by side in one `LAYOUTS.masterDetailPage` root, in its left and center slots |
 | `lockedDinnerSupply(byType?, queuedByType?)` | A locked dinner's supply (`ReleasedTicketCounts`) from its tickets for sale and its waiting list per ticket type, with the totals and the compact counts |
 | `kitchenConfig()` | The kitchen's rates the money components calculate with, read from the app config inside a hook or a test |
 | `useTestScope()` | A scope per test for the composables a test body creates: the watchers they start stop with the test, as they do when a component unmounts |
 | `itemAt(items, index)` | The item at an index of a list the case reads or builds, typed; a missing one fails the case by its index. It lives in `tests/component/listHelpers.ts`, which imports no Nuxt runtime: a node unit spec imports it from there |
+| `present(value, name)` | A value the case reads and expects present (a store selection, a looked-up price), typed; a missing one fails the case by its name. It lives beside `itemAt` in `tests/component/listHelpers.ts` |
 
 Shared `data-testid` contracts live next to the specs that share them: `tests/component/components/allergy/allergyTestIds.ts` (the allergy catalog UI), `cooking-team/jokerSlotIds.ts` (JokerSlotForm and the team card's joker box, shared with the AdminTeams e2e spec) and `dinner/waitlistTestIds.ts` (the waiting list UI).
 
@@ -628,7 +629,7 @@ import {flushPromises} from '@vue/test-utils'
 
 const clickSubmit = async (wrapper: Awaited<ReturnType<typeof mount>>) => {
     const submitBtn = wrapper.findAll('button').find(b => b.text().includes('Gem'))
-    await submitBtn!.trigger('click')
+    await present(submitBtn, 'submit button').trigger('click')
     // UForm.submit() validates schema + contextual rules asynchronously
     await flushPromises()
     await nextTick()
@@ -709,7 +710,8 @@ dependency, no second implementation.
 
 The pairs are **derived by walking the exported tokens**, so a token added tomorrow is measured tomorrow. Four groups:
 text on the neutral surfaces (`BG.panel`, `BG.inset`, …), a token that carries both its ink and its fill (hero
-backgrounds, calendar days, kitchen panels, Pantone chips), borders/rings against the page and `BG.panel` (an edge that carries meaning on a token with its own
+backgrounds, calendar days, kitchen panels, Pantone chips) or an ink and the gradient it is drawn on (`INK_ON_GRADIENT`, every
+stop the mode paints), borders/rings against the page and `BG.panel` (an edge that carries meaning on a token with its own
 fill, `MEANINGFUL_EDGES_ON_FILL` such as the ticket faces, also against that fill), and the Nuxt
 UI semantic slots (`text-<slot>` on the page and on the soft `bg-<slot>/10` alert surface, `text-inverted` on the solid
 fill). Three scoping rules keep the inventory on the standard: a token whose own classes make its text large-scale
@@ -1015,7 +1017,7 @@ await HouseholdFactory.updateInhabitantPreferences(
     inhabitant.id,
     preferences,
     200,
-    testSeason.season.id!  // Explicit seasonId
+    present(testSeason.season.id, 'season id')  // Explicit seasonId
 )
 ```
 
@@ -1046,7 +1048,7 @@ test('RELEASE bucket: after-deadline orders are RELEASED not deleted', async ({b
 
     // GIVEN: Trigger scaffold to create orders for BEFORE-deadline events
     await HouseholdFactory.updateInhabitantPreferences(
-        adminContext, inhabitant.id, dineInPrefs, 200, testSeason.season.id!
+        adminContext, inhabitant.id, dineInPrefs, 200, present(testSeason.season.id, 'season id')
     )
 
     // GIVEN: Manually create orders for AFTER-deadline events
@@ -1067,7 +1069,7 @@ test('RELEASE bucket: after-deadline orders are RELEASED not deleted', async ({b
     // WHEN: Change preferences to NONE
     const nonePrefs = createDinnerModeWeekdayMap(DinnerMode.NONE)
     await HouseholdFactory.updateInhabitantPreferences(
-        adminContext, inhabitant.id, nonePrefs, 200, testSeason.season.id!
+        adminContext, inhabitant.id, nonePrefs, 200, present(testSeason.season.id, 'season id')
     )
 
     // THEN: After-deadline orders should be RELEASED (not deleted)

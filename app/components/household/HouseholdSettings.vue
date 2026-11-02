@@ -70,7 +70,7 @@ const toast = useToast()
 // Move-out date state
 const isSaving = ref(false)
 const isEditing = ref(false)
-// The draft starts on the edit button (ADR-007)
+// Filled by the edit button, never at setup, so the server render and the hydrated page agree
 const moveOutDate = ref<Date | null>(null)
 
 // A changed household (a save) closes the edit

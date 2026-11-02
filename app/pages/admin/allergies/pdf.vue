@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import {formatDate} from '~/utils/date'
+import {ALLERGY_WORDS} from '~/config/allergyWords'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 // Age categories - the active season's ticket prices carry the age limits
-const {groupInhabitantsByTicketCategory} = useTicket()
-const {formatTicketCounts} = useBilling()
+const {groupInhabitantsByTicketCategory, formatTicketCounts} = useTicket()
 const {TYPOGRAPHY, BUTTONS, COLOR, ICONS, COMPONENTS} = useTheSlopeDesignSystem()
 const poster = COMPONENTS.allergyPoster
 
@@ -21,7 +21,7 @@ const {activeSeason} = storeToRefs(planStore)
 const now = useClock()
 
 // Current date for header (formatted in Danish)
-const currentDate = computed(() => formatDate(now.value, 'd. MMMM yyyy'))
+const currentDate = computed(() => formatDate(now.value, DATE_SETTINGS.LONG_DATE_MASK))
 
 // QR Code URL (uses current request URL for correct environment - local/dev/prod)
 const requestUrl = useRequestURL()
@@ -66,7 +66,7 @@ const printPage = () => {
             :icon="ICONS.arrowLeft"
             to="/admin/allergies"
         >
-          Tilbage
+          {{ BUTTON_WORDS.back }}
         </UButton>
         <UButton
             v-bind="BUTTONS.primaryAction"
@@ -74,7 +74,7 @@ const printPage = () => {
             :icon="ICONS.printer"
             @click="printPage"
         >
-          Print
+          {{ BUTTON_WORDS.print }}
         </UButton>
       </div>
 
@@ -84,9 +84,9 @@ const printPage = () => {
         <!-- Header -->
         <div :class="poster.header">
           <h1 :class="poster.title">
-            ALLERGI-LISTE for skrånere
+            {{ ALLERGY_WORDS.poster.title }}
           </h1>
-          <p :class="TYPOGRAPHY.bodyTextMuted">pr. {{ currentDate }}</p>
+          <p :class="TYPOGRAPHY.bodyTextMuted">{{ ALLERGY_WORDS.poster.asOf(currentDate) }}</p>
         </div>
 
         <!-- Main content with QR code -->
@@ -96,8 +96,8 @@ const printPage = () => {
             <table data-testid="allergy-table" :class="poster.table">
               <thead>
               <tr>
-                <th :class="poster.headCell.allergen">ALLERGEN / INTOLERANCE</th>
-                <th :class="poster.headCell.person">PERSON</th>
+                <th :class="poster.headCell.allergen">{{ ALLERGY_WORDS.poster.allergen }}</th>
+                <th :class="poster.headCell.person">{{ ALLERGY_WORDS.poster.person }}</th>
               </tr>
               </thead>
               <tbody>
@@ -140,10 +140,10 @@ const printPage = () => {
           <div :class="poster.qrColumn">
             <QrCode
                 :value="qrCodeUrl"
-                label="Scan for online version"
+                :label="ALLERGY_WORDS.poster.scan"
                 :class="poster.qrFrame"
             />
-            <p :class="poster.qrCaption">Scan for online version</p>
+            <p :class="poster.qrCaption">{{ ALLERGY_WORDS.poster.scan }}</p>
           </div>
         </div>
 
@@ -153,7 +153,7 @@ const printPage = () => {
         <!-- Allergy manager contact -->
         <AllergyManagersList
             kind="legend"
-            message="Tal med allergiansvarlig for hjælp til at spotte allergener i opskrifterne og udtænke allergihensyn!"
+            :message="ALLERGY_WORDS.managers.posterMessage"
             :class="poster.managers"
         />
       </div>

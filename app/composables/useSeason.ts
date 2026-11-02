@@ -200,7 +200,7 @@ export const useSeason = () => {
     // Team assignment batching (D1 rate limit safe)
     // Update is lightweight: 2 params (dinnerEventId, cookingTeamId), batch of 50 is safe
     const TEAM_ASSIGNMENT_BATCH_SIZE = 50
-    const chunkTeamAssignments = chunkArray<DinnerEventDisplay>(TEAM_ASSIGNMENT_BATCH_SIZE)
+    const chunkTeamAssignments = <T>(items: T[]): T[][] => chunkArray<T>(TEAM_ASSIGNMENT_BATCH_SIZE)(items)
 
     // ========================================================================
     // PREFERENCE CLIPPING - Align inhabitant preferences to season cooking days

@@ -19,7 +19,7 @@ const PREPEND = '🎟️ > ORDER > [BATCH CREATE]'
 const prismaError = (code: string, message: string) =>
     new Prisma.PrismaClientKnownRequestError(message, {code, clientVersion: 'test'})
 
-// Prisma's known request errors map to the HTTP code that describes the client's situation (ADR-002)
+// Prisma's known request errors map to the HTTP code that describes the client's situation
 describe.each([
     {code: 'P2002', message: 'Unique constraint failed on the fields: (`inhabitantId`,`dinnerEventId`)', statusCode: 409, statusMessage: 'Conflict'},
     {code: 'P2025', message: 'Record to update not found.', statusCode: 404, statusMessage: 'Not Found'},
@@ -79,8 +79,6 @@ describe('getSessionUser', () => {
         await expect(getSessionUser(event)).resolves.toEqual(expected)
         expect(logs.warn).toHaveBeenCalledTimes(warned)
     })
-
-    // ADR-004: the warning names the schema's complaint, never the user's data
     it('GIVEN a session user the schema rejects THEN the warning carries none of its data', async () => {
         getUserSession.mockResolvedValue({user: withoutEmail})
 
