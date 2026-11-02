@@ -80,7 +80,7 @@ registerEndpoint(`/api/admin/team/${TEAM_ID}/joker-slot`, { method: 'PUT', handl
 // Season, team and dinner writes answer with entities carrying dates: only a schema parse turns
 // the JSON date strings back into the Date objects the fixtures hold
 const { id: _newSeasonId, ...newSeason } = season2
-const deactivateSeasonEndpoint = vi.fn(() => season1)
+const deactivateSeasonEndpoint = vi.fn((): typeof season1 | null => season1)
 const teamDetail = SeasonFactory.defaultCookingTeamDetail({ id: TEAM_ID })
 const updateTeamEndpoint = vi.fn(() => teamDetail)
 const deleteTeamEndpoint = vi.fn(() => TEAM_ID)
@@ -206,6 +206,8 @@ describe('Plan Store - Season save and activation', () => {
         activeSeasonIdEndpoint.mockReturnValue(season1.id)
         updateSeasonEndpoint.mockImplementation(() => seasonUpdate)
         createSeasonEndpoint.mockImplementation(() => season2)
+        activateSeasonEndpoint.mockImplementation(() => season2)
+        deactivateSeasonEndpoint.mockImplementation(() => season1)
     })
 
     // createSeason's return, reload and toast are a row of the write actions below
@@ -227,7 +229,9 @@ describe('Plan Store - Season save and activation', () => {
 
     it.each([
         {action: 'updateSeason', endpoint: updateSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.updateSeason(season1), title: SEASON_WORDS.toasts.updated.title},
-        {action: 'createSeason', endpoint: createSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.createSeason(season2), title: SEASON_WORDS.toasts.created}
+        {action: 'createSeason', endpoint: createSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.createSeason(season2), title: SEASON_WORDS.toasts.created},
+        {action: 'activateSeason', endpoint: activateSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.activateSeason(season2.id), title: SEASON_WORDS.toasts.activated.title},
+        {action: 'deactivateSeason', endpoint: deactivateSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.deactivateSeason(), title: SEASON_WORDS.toasts.deactivated.title}
     ])('$action resolves null when the save fails, with no success toast', async ({endpoint, save, title}) => {
         useToast().clear()
         endpoint.mockImplementation(failure)
@@ -236,6 +240,15 @@ describe('Plan Store - Season save and activation', () => {
         expect(await save(store)).toBeNull()
         expect(store.isSavingSeasonFlowInProgress).toBe(false)
         expect(useToast().toasts.value.map(toast => toast.title)).not.toContain(title)
+    })
+
+    it('deactivateSeason with no season active resolves null and reports the deactivation all the same', async () => {
+        deactivateSeasonEndpoint.mockImplementation(() => null)
+        const store = await setupStore()
+        useToast().clear()
+
+        expect(await store.deactivateSeason()).toBeNull()
+        expect(useToast().toasts.value.map(toast => toast.title)).toEqual([SEASON_WORDS.toasts.deactivated.title])
     })
 
     it('activateSeason posts the season and reloads the active season', async () => {
@@ -407,6 +420,8 @@ describe('Plan Store - write actions', () => {
         seasonByIdEndpoint.mockReturnValue(season1)
         activeSeasonIdEndpoint.mockReturnValue(season1.id)
         createSeasonEndpoint.mockImplementation(() => season2)
+        activateSeasonEndpoint.mockImplementation(() => season2)
+        deactivateSeasonEndpoint.mockImplementation(() => season1)
     })
 
     // `parsed` holds Date objects and schema defaults: only a schema parse of the JSON response yields it
@@ -427,7 +442,7 @@ describe('Plan Store - write actions', () => {
             parsed: season2,
             refreshes: 'the active season id',
             refreshed: activeSeasonIdEndpoint,
-            toast: null
+            toast: {title: SEASON_WORDS.toasts.activated.title, description: SEASON_WORDS.toasts.activated.description(season2.shortName)}
         },
         {
             action: 'deactivateSeason',
@@ -436,7 +451,7 @@ describe('Plan Store - write actions', () => {
             parsed: season1,
             refreshes: 'the active season id',
             refreshed: activeSeasonIdEndpoint,
-            toast: null
+            toast: {title: SEASON_WORDS.toasts.deactivated.title, description: SEASON_WORDS.toasts.deactivated.description}
         },
         {
             action: 'updateTeam (affinity)',

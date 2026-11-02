@@ -18,7 +18,10 @@ export const SEASON_WORDS = {
     },
     /** The season the URL names and is gone, as the not-found toast names it before its shortName */
     notFound: 'sæsonen',
-    /** The toasts of the admin's season saves; an update's description reports what the save set in motion */
+    /**
+     * The toasts of the admin's season saves, an update's description reporting what the save set in motion, and of a
+     * season's activation and deactivation
+     */
     toasts: {
         created: 'Sæson oprettet',
         updated: {
@@ -26,7 +29,9 @@ export const SEASON_WORDS = {
             reconciled: (created: number, deleted: number) => `${created} datoer tilføjet, ${deleted} fjernet.`,
             scaffolded: 'Forudbestillinger er opdateret.',
             assignTeams: 'Husk at tildele madhold til nye datoer.'
-        }
+        },
+        activated: {title: 'Sæson aktiveret', description: (shortName: string) => `${shortName} er nu den aktive sæson`},
+        deactivated: {title: 'Sæson deaktiveret', description: 'Der er nu ingen aktiv sæson'}
     },
     /** The rules of the admin's season form: its cooking days, its holidays and its ticket prices */
     form: {

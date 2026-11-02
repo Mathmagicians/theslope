@@ -82,7 +82,7 @@ const tabItems = tabs.map(tab => ({
 const householdStore = useHouseholdsStore()
 const {
   selectedHousehold, isSelectedHouseholdErrored, selectedHouseholdError,
-  householdsError, isHouseholdsErrored, isHouseholdsStoreReady,
+  householdsError, isHouseholdsErrored, isHouseholdsStoreReady, isNoHouseholds,
   households, isHouseholdsInitialized, myHousehold
 } = storeToRefs(householdStore)
 
@@ -163,6 +163,7 @@ v-if="isHouseholdsErrored" :error="householdsError?.statusCode"
 v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
                :message="HOUSEHOLD_WORDS.failed.householdPage(shortname)" :cause="selectedHouseholdError"/>
     <Loader v-else-if="!isHouseholdsStoreReady" :text="`Henter husstanden ${shortname}`"/>
+    <UAlert v-else-if="isNoHouseholds" v-bind="ALERTS.emptyState" :title="HOUSEHOLD_WORDS.page.noHouseholds"/>
     <UCard v-else v-bind="COMPONENTS.householdPage.card">
       <!-- Household status ribbon -->
       <div

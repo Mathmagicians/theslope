@@ -21,12 +21,19 @@ export const ALLERGY_WORDS = {
         editorLabel: 'Tilføj og rediger allergier',
         unknownType: 'ukendt'
     },
-    /** The toasts of the household's allergies: an allergy added or removed, by its name, and a saved comment */
+    /**
+     * The toasts of the household's allergies: an allergy added or removed, by its name, and a saved comment; and of the
+     * catalog: an allergy type created, updated or deleted, by its name, and the saved poster notes
+     */
     toasts: {
         title: 'Allergi',
         added: (allergy: string) => `${allergy} tilføjet`,
         removed: (allergy: string) => `${allergy} fjernet`,
-        commentSaved: 'Din kommentar er gemt'
+        commentSaved: 'Din kommentar er gemt',
+        typeCreated: {title: 'Allergi oprettet', description: (allergy: string) => `${allergy} er tilføjet til kataloget`},
+        typeUpdated: {title: 'Allergi opdateret', description: (allergy: string) => `${allergy} er opdateret`},
+        typeDeleted: {title: 'Allergi slettet', description: (allergy: string) => `${allergy} er fjernet fra kataloget`},
+        posterNotesSaved: 'Bemærkninger gemt'
     },
     /** A failed read of the allergy catalog, the allergy poster's notes or the household's allergies */
     failed: {

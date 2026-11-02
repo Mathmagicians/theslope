@@ -235,7 +235,7 @@ const pagination = ref({
         <div :class="COMPONENTS.adminHouseholds.empty">
           <UIcon :name="ICONS.household" :class="[COMPONENTS.adminHouseholds.emptyIcon, TEXT.gray[400]]"/>
           <p v-if="searchQuery" :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500]]">Ingen husstande matcher søgningen "{{ searchQuery }}"</p>
-          <p v-else :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500]]">💤 Ingen er flyttet ind i appen endnu. Vent lige, lad os se om der kommer nogen snart ...</p>
+          <p v-else :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500]]">{{ HOUSEHOLD_WORDS.page.noHouseholds }}</p>
         </div>
       </template>
     </UTable>

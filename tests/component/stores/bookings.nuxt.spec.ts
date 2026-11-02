@@ -358,6 +358,16 @@ describe('Bookings store — scaffold bookings', () => {
         expect(itemAt(useToast().toasts.value, -1).description).toBe(`${dayOf(1)}  på ventelisten: Anna (Voksen #3), Bo (Barn #1)\n${dayOf(2)}  forlod ventelisten: Anna`)
     })
 
+    it('reports an admin correction in the toast it is given, the address above the result\'s lines', async () => {
+        const results = [OrderFactory.defaultBookingResult({inhabitantName: 'Anna', dinnerEventId: 1, action: Action.BOOK})]
+        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({dinners: runDinners, totals: {[Action.BOOK]: 1}, results}))
+        const store = useBookingsStore()
+
+        await store.processAdminCorrection(7, DINNER_ID, [], 3, {title: 'correction', prefix: 'Andeby 1\n'})
+
+        expect(useToast().toasts.value.at(-1)).toMatchObject({title: 'correction', description: `Andeby 1\n${dayOf(1)}  tilmeldt: Anna`})
+    })
+
     it('sends an admin correction as one scaffold with adminBypass, a new guest booked on the household\'s inhabitant', async () => {
         const sent: {query: Record<string, unknown>, body: unknown}[] = []
         scaffoldEndpoint.mockImplementation(async (event: H3Event) => {
@@ -996,6 +1006,23 @@ describe('Bookings store — the chef\'s dinner actions', () => {
         expect(await act(store)).not.toBeNull()
 
         expectToast(toast)
+    })
+
+    it.each([
+        {action: 'allergens are saved', act: saveAllergens([1, 2]), title: Toasts.allergensSaved.title},
+        {action: 'a line is added', act: (store: Store) => store.addExpense(DINNER_ID, ExpenseFactory.defaultExpenseCreate()), title: Toasts.expenseAdded.title},
+        {action: 'a line is removed', act: (store: Store) => store.removeExpense(DINNER_ID, EXPENSE_LINE.id), title: Toasts.expenseRemoved.title},
+        {action: 'the cancel of a dinner is undone', act: undoCancel, title: Toasts.reopened.title},
+        {action: 'the menu is saved', act: (store: Store) => store.updateDinnerEventField(DINNER_ID, {menuTitle: 'X'}, ME), title: Toasts.menuSaved.title(null)}
+    ])('WHEN $action THEN the toast wears the check icon in the success colour', async ({act, title}) => {
+        addExpenseEndpoint.mockImplementation(() => EXPENSE_LINE)
+        removeExpenseEndpoint.mockImplementation(() => EXPENSE_LINE)
+        updateDinnerEndpoint.mockImplementation(() => titled)
+        const store = useBookingsStore()
+
+        await act(store)
+
+        expect(useToast().toasts.value).toEqual([expect.objectContaining({title, icon: ICONS.checkCircle, color: COLOR.success})])
     })
 
     it('WHEN the dinner on view is already ANNOUNCED THEN announcing it again toasts the update of the menu', async () => {
