@@ -29,6 +29,8 @@ export const DATE_WORDS = {
     },
     /** The legend every calendar shows: its panel's title, and the entries the calendars share (the selected day, a holiday of the season) */
     calendarLegend: {title: 'Forklaring', selected: 'Valgt dato', holiday: 'Ferie'},
+    /** The date navigation's arrows, as a screen reader names them */
+    dateNav: {previous: 'Forrige', next: 'Næste'},
     /** A period view's name: the booking view switcher's labels */
     periodViews: {[DAY]: 'Dag', [WEEK]: weekWord, [MONTH]: 'Måned'} satisfies Record<PeriodView, string>,
     /**

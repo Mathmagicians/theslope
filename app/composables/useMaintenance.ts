@@ -1,4 +1,4 @@
-import {useMaintenanceValidation, type JobType, type JobStatus} from '~/composables/useMaintenanceValidation'
+import {useMaintenanceValidation, type JobType, type JobStatus, type SeasonImportResponse} from '~/composables/useMaintenanceValidation'
 import {useBookingValidation, type DailyMaintenanceResult} from '~/composables/useBookingValidation'
 import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 import {useBillingValidation, type MonthlyBillingJobResult} from '~/composables/useBillingValidation'
@@ -25,7 +25,7 @@ export const formatJobStats = (stats: JobStat[]): string => stats.map(formatJobS
  * Following ADR-015: Idempotent Automated Jobs with Rolling Window
  */
 export const useMaintenance = () => {
-    const {JobType, JobStatus} = useMaintenanceValidation()
+    const {JobType, JobStatus, SeasonImportResponseSchema} = useMaintenanceValidation()
     const {DailyMaintenanceResultSchema} = useBookingValidation()
     const {formatScaffoldResult} = useBooking()
     const {HeynaboImportResponseSchema} = useHeynaboValidation()
@@ -169,9 +169,25 @@ export const useMaintenance = () => {
         ]
     }
 
+    /** The names a season import could not match: their count and the names, `0` for none */
+    const formatUnmatchedNames = (unmatchedNames: SeasonImportResponse['unmatchedNames']): string =>
+        unmatchedNames.length > 0 ? `${unmatchedNames.length} (${unmatchedNames.join(', ')})` : '0'
+
+    /** Format a season import result as stats array for the job history */
+    const formatSeasonImportStats = (result: SeasonImportResponse): JobStat[] => {
+        const label = MAINTENANCE_WORDS.stats[JobType.MAINTENANCE_IMPORT]
+        return [
+            { icon: ICONS.calendar, label: label.season, value: result.seasonShortName },
+            { icon: ICONS.team, label: label.teams, value: `${result.teamsCreated}` },
+            { icon: ICONS.dinner, label: label.dinners, value: `${result.dinnerEventsCreated}` },
+            { icon: ICONS.users, label: label.assignments, value: `${result.teamAssignmentsCreated}` },
+            { icon: ICONS.warning, label: label.unmatched, value: formatUnmatchedNames(result.unmatchedNames) }
+        ]
+    }
+
     /**
      * A run's stats from its stored result, read with its job's schema (monthly billing: {results, periods});
-     * null for a run whose result its schema does not read, and for the jobs that report no stats
+     * null for a run whose result its schema does not read, and for the job that reports no stats
      */
     const jobRunStats = (jobType: JobType, resultSummary: string | null): JobStat[] | null => {
         const stored = readStoredResult(resultSummary)
@@ -179,27 +195,15 @@ export const useMaintenance = () => {
             case JobType.DAILY_MAINTENANCE: return statsOf(DailyMaintenanceResultSchema, formatDailyMaintenanceStats, stored)
             case JobType.HEYNABO_IMPORT: return statsOf(HeynaboImportResponseSchema, formatHeynaboStats, stored)
             case JobType.MONTHLY_BILLING: return statsOf(MonthlyBillingJobResultSchema, formatMonthlyBillingStats, stored)
-            case JobType.MAINTENANCE_IMPORT:
-            case JobType.MAINTENANCE_EXPORT:
-                return null
+            case JobType.MAINTENANCE_IMPORT: return statsOf(SeasonImportResponseSchema, formatSeasonImportStats, stored)
+            case JobType.MAINTENANCE_EXPORT: return null
         }
     }
 
-    /** A run's result as the job history's line: its stats, or the stored JSON of a job without stats */
+    /** A run's result as the job history's line: its stats, a dash for a run without them */
     const formatResultSummary = (jobType: JobType, resultSummary: string | null): string => {
-        switch (jobType) {
-            case JobType.DAILY_MAINTENANCE:
-            case JobType.HEYNABO_IMPORT:
-            case JobType.MONTHLY_BILLING: {
-                const stats = jobRunStats(jobType, resultSummary)
-                return stats ? formatJobStats(stats) : '-'
-            }
-            case JobType.MAINTENANCE_IMPORT:
-            case JobType.MAINTENANCE_EXPORT: {
-                const stored = readStoredResult(resultSummary)
-                return stored ? JSON.stringify(stored) : '-'
-            }
-        }
+        const stats = jobRunStats(jobType, resultSummary)
+        return stats ? formatJobStats(stats) : '-'
     }
 
     return {

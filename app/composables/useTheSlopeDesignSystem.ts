@@ -1,6 +1,6 @@
 import {computed} from 'vue'
 import type {WeekDay} from '~/types/dateTypes'
-import type {AlertProps, AvatarProps, ButtonProps, BadgeProps, ChipProps} from '@nuxt/ui'
+import type {AlertProps, AvatarProps, ButtonProps, BadgeProps, ChipProps, FieldGroupProps} from '@nuxt/ui'
 import {SEASON_STATUS} from '~/config/seasonWords'
 import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 import {BOOKING_WORDS} from '~/config/bookingWords'
@@ -15,6 +15,7 @@ export type NuxtUIChipSize = NonNullable<ChipProps['size']>
 export type NuxtUIBadgeColor = NonNullable<BadgeProps['color']>
 export type NuxtUIBadgeVariant = NonNullable<BadgeProps['variant']>
 export type NuxtUIButtonVariant = NonNullable<ButtonProps['variant']>
+export type NuxtUIOrientation = NonNullable<FieldGroupProps['orientation']>
 
 /**
  * Color System - TheSlope Design System
@@ -1952,6 +1953,19 @@ export const COMPONENTS = {
         }
     },
 
+    calendarDateNav: {
+        row: 'flex items-center justify-center gap-1',
+        // The date in the toggle keeps the surrounding ink, not the button's colour
+        toggle: '!text-[inherit]'
+    },
+
+    weekDayMapDisplay: {
+        compactDays: 'flex flex-wrap gap-1',
+        day: 'capitalize',
+        noDays: 'text-lg',
+        checkboxes: 'flex flex-col gap-3'
+    },
+
     // An ALERTS.legend panel (CalendarLegend, DinnerModeLegend's rows in its slot) is one `list`, one entry per row:
     // the sample in a fixed-width column (`sample`) beside its name (`entry`), so every name starts on one vertical
     // line; a team badge sample is the calendar's size
@@ -1966,6 +1980,14 @@ export const COMPONENTS = {
         iconChip: QUEUE_LOCK_CHIP,
         // The operating hint under the entries, in the design system's muted text (AA on every surface)
         hint: `mt-2 ${TEXT.muted}`
+    },
+
+    shareLinks: {
+        actions: 'flex gap-1',
+        panel: 'p-3 space-y-3 min-w-72',
+        linkLabel: `${TYPOGRAPHY.bodyTextMuted} mb-1 text-xs`,
+        linkRow: 'flex gap-2',
+        linkInput: 'flex-1 font-mono text-xs'
     },
 
     // Economy table hierarchy - ready-to-grab classes for each nesting level
@@ -3043,7 +3065,7 @@ const createOrientations = (isMd: Ref<boolean | null>) => ({
      * @param count - Number of items
      * @param threshold - Max count for always-horizontal (default: 2)
      */
-    forItemCount: (count: number, threshold = 2): 'horizontal' | 'vertical' => {
+    forItemCount: (count: number, threshold = 2): NuxtUIOrientation => {
         if (count <= threshold) return 'horizontal'
         return isMd.value ? 'vertical' : 'horizontal'
     }

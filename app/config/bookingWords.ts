@@ -106,8 +106,8 @@ export const BOOKING_WORDS = {
      * household's closed on its PBS invoice or the one running, the admin's settled or the next; a period's badge; the
      * counts the boxes read; the tables' columns; the facts of a billing summary; the cards' titles and sum lines; the
      * toggles that open a row's orders or transactions; the searches; a household's invoice by its payment month; the
-     * share with the accountant; the admin's correction of a dinner's bookings and the address of a household the list
-     * lacks; the accountant's page; a failed read
+     * share with the accountant and the share popover's links; the admin's correction of a dinner's bookings and the
+     * address of a household the list lacks; the accountant's page; a failed read
      */
     billing: {
         period: {closed: pbsInvoice, open: 'Aktuel periode', settled: 'Samlet PBS Afregning', next: 'Næste PBS'},
@@ -133,6 +133,13 @@ export const BOOKING_WORDS = {
         search: {period: 'Søg periode...', household: 'Søg adresse eller navn...'},
         invoice: (month: string) => `${pbsInvoice} for ${month}`,
         share: 'Del med bogholder:',
+        shareLinks: {
+            openPublicPage: 'Åbn offentlig side',
+            share: 'Del links',
+            shareProminent: 'Del CSV',
+            publicPage: 'Offentlig side:',
+            csv: 'CSV download:'
+        },
         correction: {
             label: 'Admin Korrektion',
             confirm: 'Klik igen for at rette',

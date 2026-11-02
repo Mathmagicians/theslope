@@ -35,9 +35,7 @@ import {WEEKDAYS} from '~/types/dateTypes'
 import type {WeekDayMap, WeekDay} from '~/types/dateTypes'
 import type {DinnerMode as DinnerModeValue} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
-import type {ButtonProps} from '@nuxt/ui'
-
-type ButtonSize = ButtonProps['size']
+import type {NuxtUISize} from '~/composables/useTheSlopeDesignSystem'
 
 interface Props {
   modelValue?: WeekDayMap<DinnerModeValue> | null
@@ -47,7 +45,7 @@ interface Props {
   parentRestriction?: WeekDayMap | null // Filter which weekdays to display (e.g., season cooking days)
   showLabels?: boolean // Whether to show weekday labels (default true for standalone, false for table)
   consensus?: WeekDayMap<boolean> | null // Which days have consensus (power mode)
-  size?: ButtonSize // Size passed through to DinnerModeSelector
+  size?: NuxtUISize // Size passed through to DinnerModeSelector
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -86,7 +84,6 @@ const updateDay = (day: WeekDay, value: DinnerModeValue) => {
   emit('update:modelValue', updated)
 }
 
-// Filter weekdays based on parent restriction (e.g., season cooking days)
 const visibleDays = computed(() => {
   const restriction = props.parentRestriction
   return restriction ? WEEKDAYS.filter(day => restriction[day]) : WEEKDAYS
@@ -96,7 +93,7 @@ const getDayValue = (day: WeekDay): DinnerModeValue => {
   return props.modelValue?.[day] ?? DinnerMode.DINEIN
 }
 
-// Check if day has consensus (undefined if no consensus map = not power mode)
+// Undefined without a consensus map: not power mode
 const getDayConsensus = (day: WeekDay): boolean | undefined => {
   return props.consensus?.[day]
 }
@@ -127,7 +124,6 @@ const getDayConsensus = (day: WeekDay): boolean | undefined => {
   <!-- EDIT MODE: Responsive button groups (vertical on mobile, horizontal on desktop) -->
   <div v-else-if="formMode === FORM_MODES.EDIT" :class="WEEKDAY.editRow">
     <div v-for="day in visibleDays" :key="day" :class="WEEKDAY.editDay">
-      <!-- Weekday label (if enabled) -->
       <DinnerModeSelector
         v-if="showLabels"
         :model-value="day"

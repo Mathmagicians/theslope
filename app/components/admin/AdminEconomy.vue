@@ -81,7 +81,7 @@ const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 const {getHouseholdForInhabitant} = householdsStore
 
 const {upcomingOrders, isUpcomingOrdersLoaded} = storeToRefs(bookingsStore)
-bookingsStore.loadUpcomingOrders(true)
+bookingsStore.loadUpcomingOrders({allHouseholds: true})
 // Loading until the upcoming orders have answered: a dataset idle in the server render reads as loading, not empty
 const isUpcomingOrdersLoading = computed(() =>
     !isPlanStoreReady.value || !isUpcomingOrdersLoaded.value

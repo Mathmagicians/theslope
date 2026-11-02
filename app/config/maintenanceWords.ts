@@ -77,6 +77,13 @@ export const MAINTENANCE_WORDS = {
             csvUploaded: 'CSV uploadet',
             mailsSent: 'Mails sendt',
             pending: 'Afventer'
+        },
+        [Job.MAINTENANCE_IMPORT]: {
+            season: 'Sæson',
+            teams: ADMIN_WORDS.tabs.teams,
+            dinners: BOOKING_WORDS.billing.stats.dinners,
+            assignments: 'Tildelinger',
+            unmatched: 'Ikke fundet'
         }
     }
 } as const

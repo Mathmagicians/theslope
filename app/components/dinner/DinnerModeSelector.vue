@@ -63,17 +63,14 @@
  *   ┌ ─ ─ ┐
  *     [mode]   - A click cycles as above; the parent's draft then replaces the ghost
  *   └ ─ ─ ┘
+ *
+ * Visual check: /household/[shortname]/bookings, the grid's toggle; /dinner, the booking form's buttons; phone and desktop.
  */
 import {DinnerMode} from '~/composables/useBookingValidation'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {WEEKDAYS, type WeekDay} from '~/types/dateTypes'
 import {FORM_MODES, type FormMode} from '~/types/form'
-import type {BadgeProps, ButtonProps} from '@nuxt/ui'
-
-type BadgeColor = NonNullable<BadgeProps['color']>
-type BadgeVariant = NonNullable<BadgeProps['variant']>
-type ButtonSize = NonNullable<ButtonProps['size']>
-type ButtonVariant = NonNullable<ButtonProps['variant']>
+import type {NuxtUIBadgeColor, NuxtUIBadgeVariant, NuxtUIButtonVariant, NuxtUIOrientation, NuxtUISize} from '~/composables/useTheSlopeDesignSystem'
 
 interface Props {
   modelValue?: WeekDay | DinnerMode // Optional - defaults to NONE when no order exists
@@ -82,10 +79,10 @@ interface Props {
   enabledModes?: DinnerMode[] // The modes the row may pick (getBookingOptions)
   name?: string
   showLabel?: boolean // Show mode label text below selector (both VIEW and EDIT modes)
-  size?: ButtonSize
+  size?: NuxtUISize
   consensus?: boolean // Power mode: true=all agree, false=mixed preferences, undefined=not power mode
   interaction?: 'buttons' | 'toggle' // buttons = show all options, toggle = click cycles through modes
-  orientation?: 'horizontal' | 'vertical' | 'responsive' // Override default responsive orientation (vertical mobile, horizontal desktop)
+  orientation?: NuxtUIOrientation // Overrides the responsive default (vertical mobile, horizontal desktop)
   isModified?: boolean // Grid booking: show left border accent when cell has unsaved changes
   ghost?: boolean // The mode is a wish on the waiting list, not a booking, untouched
   expected?: boolean // The mode is the booking the preferences give a cell without an order, untouched
@@ -102,7 +99,7 @@ const props = withDefaults(defineProps<Props>(), {
   size: undefined, // Falls back to responsive SIZES.small
   consensus: undefined,
   interaction: 'buttons',
-  orientation: 'responsive', // Default: vertical on mobile, horizontal on desktop
+  orientation: undefined,
   isModified: false,
   ghost: false,
   expected: false,
@@ -121,38 +118,28 @@ watch(() => props.consensus, () => {
   hasUserSelected.value = false
 })
 
-// Design system
 const { WEEKDAY, ORIENTATIONS, ICONS, SIZES, TYPOGRAPHY, COMPONENTS, COLOR, NOISE } = useTheSlopeDesignSystem()
 const selector = COMPONENTS.dinnerModeSelector
 const waitlistFace = COMPONENTS.waitlist
 const expectedFace = COMPONENTS.bookingGrid.expectedBadge
 
-// Responsive size: use prop if provided, otherwise use responsive default
 const responsiveSize = computed(() => props.size ?? SIZES.small)
 
-// Icon size class based on size prop (scales with button/badge size); without a size it follows the weekday badge
-const iconSizeClass = computed(() => {
-  const size = props.size
-  return size && size in selector.iconSize ? selector.iconSize[size as keyof typeof selector.iconSize] : WEEKDAY.badgeContentSize
-})
+// The icon scales with the given size; without one it follows the weekday badge
+const iconSizeClass = computed(() => props.size ? selector.iconSize[props.size] : WEEKDAY.badgeContentSize)
 
-// Determine if we're in title mode (showing weekday) or selector mode (showing dinner mode)
-const isTitle = computed(() => WEEKDAYS.includes(props.modelValue as WeekDay))
+// The weekday a title badge shows; a dinner mode gives none
+const weekday = computed(() => WEEKDAYS.find(day => day === props.modelValue))
 
-// Button orientation: use prop override if provided, otherwise responsive (vertical mobile, horizontal desktop)
-const buttonOrientation = computed(() => {
-  if (props.orientation === 'responsive') return ORIENTATIONS.responsive.value
-  return props.orientation
-})
+const buttonOrientation = computed(() => props.orientation ?? ORIENTATIONS.responsive.value)
 
-// Display config type
 type ModeDisplayConfig = {
   label: string
   icon: string
-  activeColor: BadgeColor
-  viewVariant: BadgeVariant
-  editActiveVariant: ButtonVariant
-  editInactiveVariant: ButtonVariant
+  activeColor: NuxtUIBadgeColor
+  viewVariant: NuxtUIBadgeVariant
+  editActiveVariant: NuxtUIButtonVariant
+  editInactiveVariant: NuxtUIButtonVariant
 }
 
 // Dinner mode display config: the words (label, glyph) come from MODE_WORDS, the colours and variants live here
@@ -187,7 +174,6 @@ const dinnerModeConfig: Record<DinnerMode, ModeDisplayConfig> = {
   }
 }
 
-// Mixed/no consensus config (used when consensus === false)
 const mixedModeConfig: ModeDisplayConfig = {
   label: BOOKING_WORDS.mixedModes,
   icon: ICONS.help,
@@ -200,9 +186,8 @@ const mixedModeConfig: ModeDisplayConfig = {
 const isModeDisabled = (mode: DinnerMode): boolean => props.disabled || !props.enabledModes.includes(mode)
 const isToggleDisabled = computed(() => props.disabled || props.enabledModes.length === 0)
 
-// Update value (selector mode only)
 const updateMode = (value: DinnerMode) => {
-  if (props.disabled || isModeDisabled(value) || props.formMode === FORM_MODES.VIEW || isTitle.value) return
+  if (props.disabled || isModeDisabled(value) || props.formMode === FORM_MODES.VIEW || weekday.value) return
   hasUserSelected.value = true
   emit('update:modelValue', value)
 }
@@ -210,42 +195,35 @@ const updateMode = (value: DinnerMode) => {
 // Toggle to the next enabled mode after the current one; with no other, the toggle stays put.
 // On a plan the first click adopts the shown mode as the person's own instead
 const toggleMode = () => {
-  if (isToggleDisabled.value || props.formMode === FORM_MODES.VIEW || isTitle.value) return
+  if (isToggleDisabled.value || props.formMode === FORM_MODES.VIEW || weekday.value) return
   if (props.expected && !isModeDisabled(dinnerMode.value)) {
     hasUserSelected.value = true
     emit('update:modelValue', dinnerMode.value)
     return
   }
   const currentIndex = DINNER_MODE_ORDER.indexOf(dinnerMode.value)
-  for (let i = 1; i < DINNER_MODE_ORDER.length; i++) {
-    const nextIndex = (currentIndex + i) % DINNER_MODE_ORDER.length
-    const nextMode = DINNER_MODE_ORDER[nextIndex]!
-    if (!isModeDisabled(nextMode)) {
-      hasUserSelected.value = true
-      emit('update:modelValue', nextMode)
-      return
-    }
-  }
+  const nextMode = [...DINNER_MODE_ORDER.slice(currentIndex + 1), ...DINNER_MODE_ORDER.slice(0, currentIndex)]
+    .find(mode => !isModeDisabled(mode))
+  if (!nextMode) return
+  hasUserSelected.value = true
+  emit('update:modelValue', nextMode)
 }
 
-// Get dinner mode value (when in selector mode)
-const dinnerMode = computed(() => props.modelValue as DinnerMode)
+const dinnerMode = computed(() => DINNER_MODE_ORDER.find(mode => mode === props.modelValue) ?? DinnerMode.NONE)
 
-// Get effective config - uses mixedModeConfig when consensus === false (VIEW mode only)
 const getViewConfig = (): ModeDisplayConfig => {
   if (props.consensus === false) return mixedModeConfig
-  return dinnerModeConfig[dinnerMode.value]!
+  return dinnerModeConfig[dinnerMode.value]
 }
 
-// Get icon for current mode (VIEW mode uses mixedModeConfig when no consensus)
 const getModeIcon = (): string => getViewConfig().icon
 
 // VIEW mode badge: the mode's colour and variant, the ghost of a wish on the waiting list, or an expected booking's ghost
-const getBadgeColor = (): BadgeColor => {
+const getBadgeColor = (): NuxtUIBadgeColor => {
   if (props.ghost) return waitlistFace.ghostBadge.color
   return props.expected ? expectedFace.color : getViewConfig().activeColor
 }
-const getBadgeVariant = (): BadgeVariant => {
+const getBadgeVariant = (): NuxtUIBadgeVariant => {
   if (props.ghost) return waitlistFace.ghostBadge.variant
   return props.expected ? expectedFace.variant : getViewConfig().viewVariant
 }
@@ -257,28 +235,26 @@ const badgeFace = computed(() => props.cancelled
 const planInk = computed(() => props.expected && !props.cancelled ? expectedFace.ink : undefined)
 const inkClass = computed(() => props.ghost && !props.cancelled ? waitlistFace.ghostInk : planInk.value)
 
-// Get mode label (VIEW mode uses mixedModeConfig when no consensus)
 const getModeLabel = (): string => getViewConfig().label
 
-type ButtonFace = {color: BadgeColor, variant: ButtonVariant}
+type ButtonFace = {color: NuxtUIBadgeColor, variant: NuxtUIButtonVariant}
 
 // The toggle wears a wish's or a plan's ghost, as the view face does, until a click; else the shown mode's colour
 const toggleFace = computed((): ButtonFace => {
   if (props.ghost) return waitlistFace.ghostBadge
   return props.expected
     ? {color: expectedFace.color, variant: expectedFace.variant}
-    : {color: dinnerModeConfig[dinnerMode.value]!.activeColor, variant: dinnerModeConfig[dinnerMode.value]!.editActiveVariant}
+    : {color: dinnerModeConfig[dinnerMode.value].activeColor, variant: dinnerModeConfig[dinnerMode.value].editActiveVariant}
 })
 const toggleIconClass = computed(() => inkClass.value ? `${iconSizeClass.value} ${inkClass.value}` : iconSizeClass.value)
 
 // A button of the group: the selected mode in its colour, on a plan the plan's mode hinted and none selected
 const buttonFace = (mode: DinnerMode): ButtonFace => {
-  if (dinnerMode.value !== mode) return {color: COLOR.neutral, variant: dinnerModeConfig[mode]!.editInactiveVariant}
-  return props.expected ? selector.plannedButton : {color: dinnerModeConfig[mode]!.activeColor, variant: dinnerModeConfig[mode]!.editActiveVariant}
+  if (dinnerMode.value !== mode) return {color: COLOR.neutral, variant: dinnerModeConfig[mode].editInactiveVariant}
+  return props.expected ? selector.plannedButton : {color: dinnerModeConfig[mode].activeColor, variant: dinnerModeConfig[mode].editActiveVariant}
 }
 
-// Check if button should pulse (DINEIN is fallback default without consensus)
-// Stop pulsing once user makes any selection (consensus decided)
+// DINEIN is the fallback without consensus: its button pulses until the person picks a mode
 const shouldPulse = (mode: DinnerMode): boolean => {
   if (hasUserSelected.value) return false
   return mode === DinnerMode.DINEIN && dinnerMode.value === DinnerMode.DINEIN && props.consensus === false
@@ -288,7 +264,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
 <template>
   <div :class="isModified && selector.modified">
     <!-- TITLE MODE: Weekday header badge -->
-    <template v-if="isTitle">
+    <template v-if="weekday">
       <UBadge
         v-bind="WEEKDAY.titleBadgeProps"
         :size="responsiveSize"
@@ -296,7 +272,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
         :data-testid="name"
       >
         <div :class="[iconSizeClass, selector.weekdayLabel]">
-          {{ WEEKDAY.getLabel(modelValue as WeekDay) }}
+          {{ WEEKDAY.getLabel(weekday) }}
         </div>
       </UBadge>
     </template>
@@ -344,7 +320,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
           v-for="mode in DINNER_MODE_ORDER"
           :key="mode"
           v-bind="buttonFace(mode)"
-          :icon="dinnerModeConfig[mode]!.icon"
+          :icon="dinnerModeConfig[mode].icon"
           :disabled="isModeDisabled(mode)"
           :size="responsiveSize"
           :data-testid="`${name}-${mode}`"

@@ -186,7 +186,9 @@ test.describe('AdminPlanningSeason Form UI', () => {
             await expect(holidayItem).not.toBeVisible()
 
             // Submit and verify via API
+            const saved = waitForApi(page, `/api/admin/season/${season.id}`, 'POST')
             await page.getByTestId('submit-season').click()
+            await saved
             await expect(page).toHaveURL(/.*mode=view/)
 
             const updatedSeason = await pollUntil(

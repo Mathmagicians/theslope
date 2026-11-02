@@ -1,6 +1,6 @@
 import {beforeAll, describe, expect, it} from 'vitest'
 import {useMaintenance, type JobStat} from '~/composables/useMaintenance'
-import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
+import {useMaintenanceValidation, type SeasonImportResponse} from '~/composables/useMaintenanceValidation'
 import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {NOTIFICATION_COUNT_WORDS} from '~/config/notificationTemplates'
 import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
@@ -20,6 +20,7 @@ const {JobType} = useMaintenanceValidation()
 const billingLabel = MAINTENANCE_WORDS.stats[JobType.MONTHLY_BILLING]
 
 const billed = {billingPeriodSummaryId: 8, billingPeriod: '18/08/2026-17/09/2026', invoiceCount: 3, transactionCount: 12, totalAmount: 41230}
+const imported: SeasonImportResponse = {seasonId: 31, seasonShortName: '26/27', isNew: true, teamsCreated: 8, dinnerEventsCreated: 52, teamAssignmentsCreated: 34, unmatchedNames: []}
 const stat = (stats: JobStat[] | null, label: string) => stats?.find(s => s.label === label)?.value
 
 describe('formatMonthlyBillingStats', () => {
@@ -87,7 +88,7 @@ describe('jobRunStats for MONTHLY_BILLING', () => {
     })
 })
 
-// A run whose result cannot be read shows a dash in the job history; a job without stats shows its stored JSON
+// A run whose result cannot be read shows a dash in the job history, as does a job without stats
 describe('formatResultSummary', () => {
     it.each([
         {stored: 'no result', jobType: JobType.DAILY_MAINTENANCE, resultSummary: null},
@@ -98,9 +99,12 @@ describe('formatResultSummary', () => {
         expect(formatResultSummary(jobType, resultSummary)).toBe('-')
     })
 
-    it('GIVEN a run of a job without stats WHEN its result formats THEN it reads the stored JSON', () => {
-        const stored = JSON.stringify({imported: 3})
+    it.each([
+        {unmatched: 'two names it could not match', unmatchedNames: ['Anna Hansen', 'Bo Berg'], line: 'Sæson: 26/27, Madhold: 8, Middage: 52, Tildelinger: 34, Ikke fundet: 2 (Anna Hansen, Bo Berg)'},
+        {unmatched: 'every name matched', unmatchedNames: [], line: 'Sæson: 26/27, Madhold: 8, Middage: 52, Tildelinger: 34, Ikke fundet: 0'}
+    ])('GIVEN a season import run with $unmatched WHEN its result formats THEN it reads $line', ({unmatchedNames, line}) => {
+        const stored = JSON.stringify({...imported, unmatchedNames})
 
-        expect(formatResultSummary(JobType.MAINTENANCE_IMPORT, stored)).toBe(stored)
+        expect(formatResultSummary(JobType.MAINTENANCE_IMPORT, stored)).toBe(line)
     })
 })

@@ -145,9 +145,10 @@ export const useBookingsStore = defineStore("Bookings", () => {
         console.info(CTX, `Loading orders for ${toValue(filter).dinnerEventIds.length} dinner(s)`)
     }
 
-    // Upcoming orders of the selected season, each with its dinner and its eater. The page names the scope:
-    // every household or the selected one; nothing is requested until a page asks
-    const upcomingOrdersForAllHouseholds = ref<boolean | null>(null)
+    // Upcoming orders of the selected season, each with its dinner and its eater. The page names the scope through a
+    // getter: every household or one household; nothing is requested until a page names one
+    type UpcomingOrdersFilter = {householdId?: number, allHouseholds?: boolean}
+    const upcomingOrdersFilter = shallowRef<() => UpcomingOrdersFilter>(() => ({}))
 
     const {
         data: upcomingOrders, isLoading: isUpcomingOrdersLoading,
@@ -155,21 +156,17 @@ export const useBookingsStore = defineStore("Bookings", () => {
         refresh: refreshUpcomingOrders
     } = storeAsyncData(
         'bookings-store-upcoming-orders',
-        () => {
-            const allHouseholds = upcomingOrdersForAllHouseholds.value === true
-            return `/api/order?${stringifyQuery({
-                upcomingForSeason: planStore.selectedSeasonId,
-                allHouseholds: queryFlag(allHouseholds),
-                householdId: allHouseholds ? undefined : householdsStore.selectedHouseholdId,
-                includeCostContext: queryFlag(true)
-            })}`
-        },
+        () => `/api/order?${stringifyQuery({
+            upcomingForSeason: planStore.selectedSeasonId,
+            allHouseholds: queryFlag(upcomingOrdersFilter.value().allHouseholds),
+            householdId: upcomingOrdersFilter.value().householdId,
+            includeCostContext: queryFlag(true)
+        })}`,
         {
             schema: OrderDisplaySchema.required({dinnerEvent: true, inhabitant: true}).array(),
             default: () => [],
-            enabled: () => upcomingOrdersForAllHouseholds.value !== null && !!planStore.selectedSeasonId
-                && (upcomingOrdersForAllHouseholds.value || !!householdsStore.selectedHouseholdId),
-            dependsOn: [planStore.selectedSeasonDataset, householdsStore.selectedHouseholdDataset]
+            enabled: () => !!planStore.selectedSeasonId && (!!upcomingOrdersFilter.value().allHouseholds || !!upcomingOrdersFilter.value().householdId),
+            dependsOn: [planStore.selectedSeasonDataset]
         }
     )
 
@@ -177,8 +174,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // The upcoming orders have answered, with rows, none or an error; until then a table shows its loading row
     const isUpcomingOrdersLoaded = computed(() => isUpcomingOrdersInitialized.value || isUpcomingOrdersErrored.value)
 
-    const loadUpcomingOrders = (allHouseholds: boolean) => {
-        upcomingOrdersForAllHouseholds.value = allHouseholds
+    const loadUpcomingOrders = (filter: MaybeRefOrGetter<UpcomingOrdersFilter>) => {
+        upcomingOrdersFilter.value = () => toValue(filter)
     }
 
     // Order detail with its audit history - no store state, a component keeps one per expanded row
@@ -614,27 +611,26 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     const {MonthlyBillingResponseSchema, TransactionDisplaySchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema} = useBillingValidation()
 
-    // The selected household's billing: the current period and its past invoices. Only the economy
-    // page shows it, so nothing is requested until a page asks
-    const isHouseholdBillingRequested = ref(false)
+    // A household's billing: the current period and its past invoices. Only the economy tab shows it: it names the
+    // household through a getter, and nothing is requested until it does
+    const householdBillingId = shallowRef<() => number | null>(() => null)
 
     const {
         data: householdBilling, isLoading: isHouseholdBillingLoading, isErrored: isHouseholdBillingErrored,
         error: householdBillingError
     } = storeAsyncData(
         'bookings-store-household-billing',
-        () => `/api/billing?householdId=${householdsStore.selectedHouseholdId}`,
+        () => `/api/billing?householdId=${householdBillingId.value()}`,
         {
             schema: HouseholdBillingResponseSchema.nullable(),
             default: () => null,
-            enabled: () => isHouseholdBillingRequested.value && !!householdsStore.selectedHouseholdId,
-            dependsOn: [householdsStore.selectedHouseholdDataset]
+            enabled: () => !!householdBillingId.value()
         }
     )
 
 
-    const loadHouseholdBilling = () => {
-        isHouseholdBillingRequested.value = true
+    const loadHouseholdBilling = (householdId: MaybeRefOrGetter<number | null>) => {
+        householdBillingId.value = () => toValue(householdId)
     }
 
     // The admin economy page asks for the billing periods and the current period; nothing is requested until it does

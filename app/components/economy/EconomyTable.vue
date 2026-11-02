@@ -153,7 +153,7 @@ const toggleSort = () => {
         ref="table"
         v-model:expanded="expanded"
         v-model:pagination="pagination"
-        :data="filteredData"
+        :data="loading ? [] : filteredData"
         :columns="columns"
         :ui="COMPONENTS.table.ui"
         :loading="loading"

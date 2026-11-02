@@ -1,10 +1,11 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeEach, afterEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, resetStores, findLoadingRow, isTableLoading} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, resetStores, findLoadingRow, isTableLoading, itemAt} from '~~/tests/component/testHelpers'
 import EconomyTableGeneric from '~/components/economy/EconomyTable.vue'
-import {nextTick, ref, type DefineComponent} from 'vue'
+import {h, nextTick, ref, type DefineComponent} from 'vue'
+import type {Row} from '@tanstack/vue-table'
 import {rowIdOf} from '~/utils/utils'
 
 // A generic component's type is a function; the mount helper keys on a constructor
@@ -46,8 +47,7 @@ describe('EconomyTable', () => {
         {accessorKey: 'totalAmount', header: 'Beløb'}
     ]
 
-    // Required dateAccessor for EconomyTable (typed as unknown for mount compatibility)
-    const dateAccessor = (item: unknown) => (item as TestRow).date
+    const dateAccessor = (item: TestRow) => item.date
 
     beforeEach(() => {
         resetStores()
@@ -60,6 +60,8 @@ describe('EconomyTable', () => {
 
     type WrapperType = Awaited<ReturnType<typeof createWrapper>>
 
+    const vmOf = (wrapper: WrapperType) => wrapper.vm as unknown as EconomyTableVm
+
     const getSearchInput = (wrapper: WrapperType) =>
         wrapper.find('input[type="text"]')
 
@@ -71,7 +73,7 @@ describe('EconomyTable', () => {
             const wrapper = await createWrapper()
             expect(getSearchInput(wrapper).exists()).toBe(true)
             expect(getSortButton(wrapper).exists()).toBe(true)
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
             expect(vm.filteredData.length).toBe(6)
         })
 
@@ -86,11 +88,11 @@ describe('EconomyTable', () => {
     describe('Sorting', () => {
         it('sorts descending when defaultSortDesc=true', async () => {
             const wrapper = await createWrapper({defaultSortDesc: true})
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
 
             // First item should be latest date (Feb 15)
-            expect(vm.filteredData[0]!.date.getDate()).toBe(15)
-            expect(vm.filteredData[0]!.date.getMonth()).toBe(1) // February
+            expect(itemAt(vm.filteredData, 0).date.getDate()).toBe(15)
+            expect(itemAt(vm.filteredData, 0).date.getMonth()).toBe(1) // February
         })
 
         it('toggles to descending on click', async () => {
@@ -100,29 +102,29 @@ describe('EconomyTable', () => {
             await sortButton.trigger('click')
             await nextTick()
 
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
             // First item should be latest date (Feb 15)
-            expect(vm.filteredData[0]!.date.getDate()).toBe(15)
-            expect(vm.filteredData[0]!.date.getMonth()).toBe(1) // February
+            expect(itemAt(vm.filteredData, 0).date.getDate()).toBe(15)
+            expect(itemAt(vm.filteredData, 0).date.getMonth()).toBe(1) // February
         })
     })
 
     describe('Pagination', () => {
         it('shows pagination when data exceeds pageSize', async () => {
             const wrapper = await createWrapper({data: createTestData(), pageSize: 5})
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
             expect(vm.showPagination).toBe(true)
         })
 
         it('hides pagination when data equals pageSize', async () => {
             const wrapper = await createWrapper({data: createTestData().slice(0, 5), pageSize: 5})
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
             expect(vm.showPagination).toBe(false)
         })
 
         it('handles page change', async () => {
             const wrapper = await createWrapper()
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
 
             vm.handlePageChange(2)
             await nextTick()
@@ -156,13 +158,40 @@ describe('EconomyTable', () => {
             expect(findLoadingRow(wrapper).exists()).toBe(false)
         })
 
-        // With rows, UTable runs its loading bar over them: the rows stay, the loading row is for a table without rows
-        it.each([true, false])('GIVEN rows and loading=%s THEN the table receives it and the rows stay', async (loading) => {
-            const wrapper = await createWrapper({loading, loadingText: 'Henter fremtidige bestillinger'})
+        // While the data loads the loading row fills the table, so a re-read shows no row of the earlier answer
+        it('GIVEN rows and loading=true THEN the table receives it, the rows go and the loading row shows', async () => {
+            const wrapper = await createWrapper({loading: true, loadingText: 'Henter fremtidige bestillinger'})
 
-            expect(isTableLoading(wrapper)).toBe(loading)
+            expect(isTableLoading(wrapper)).toBe(true)
+            expect(wrapper.text()).not.toContain('Pasta')
+            expect(findLoadingRow(wrapper).text()).toContain('Henter fremtidige bestillinger')
+        })
+
+        it('GIVEN rows and loading=false THEN the rows show and there is no loading row', async () => {
+            const wrapper = await createWrapper({loading: false, loadingText: 'Henter fremtidige bestillinger'})
+
+            expect(isTableLoading(wrapper)).toBe(false)
             expect(wrapper.text()).toContain('Pasta')
             expect(findLoadingRow(wrapper).exists()).toBe(false)
+        })
+
+        it('GIVEN an open row WHEN the data reloads THEN the row goes with the rows and reopens by its id once loading ends', async () => {
+            const wrapper = await mountSuspended(EconomyTable, {
+                props: {data: createTestData(), columns: defaultColumns, getRowId: rowIdOf, dateAccessor, loading: false},
+                slots: {
+                    'expand-cell': ({row}: {row: Row<TestRow>}) => h('button', {'data-testid': `open-${row.id}`, 'onClick': () => row.toggleExpanded()}),
+                    'expanded': ({row}: {row: Row<TestRow>}) => h('div', {'data-testid': 'open-row'}, row.original.menuTitle)
+                },
+                global: {provide: {isMd: ref(true)}}
+            })
+            await findByTestId(wrapper, 'open-1').trigger('click')
+            await vi.waitFor(() => expect(findByTestId(wrapper, 'open-row').text()).toBe('Pasta'))
+
+            await wrapper.setProps({loading: true})
+            await vi.waitFor(() => expect(findByTestId(wrapper, 'open-row').exists()).toBe(false))
+
+            await wrapper.setProps({loading: false, data: createTestData()})
+            await vi.waitFor(() => expect(findByTestId(wrapper, 'open-row').text()).toBe('Pasta'))
         })
     })
 
@@ -175,12 +204,12 @@ describe('EconomyTable', () => {
             await searchInput.setValue('/01/')
             await nextTick()
 
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
             // Should have 3 January items, default is ascending (10, 15, 20)
             expect(vm.filteredData.length).toBe(3)
-            expect(vm.filteredData[0]!.date.getDate()).toBe(10)
-            expect(vm.filteredData[1]!.date.getDate()).toBe(15)
-            expect(vm.filteredData[2]!.date.getDate()).toBe(20)
+            expect(itemAt(vm.filteredData, 0).date.getDate()).toBe(10)
+            expect(itemAt(vm.filteredData, 1).date.getDate()).toBe(15)
+            expect(itemAt(vm.filteredData, 2).date.getDate()).toBe(20)
         })
     })
 })

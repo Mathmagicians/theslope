@@ -1,7 +1,8 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {nextTick} from 'vue'
+import {nextTick, shallowReactive} from 'vue'
+import {getQuery, type H3Event} from 'h3'
 import {enableAutoUnmount} from '@vue/test-utils'
 import HouseholdEconomy from '~/components/household/HouseholdEconomy.vue'
 import {useBookingsStore} from '~/stores/bookings'
@@ -41,15 +42,17 @@ registerEndpoint(`/api/admin/household/${household.id}`, () => household)
 // A case that needs transactions in the running period sets its own billing
 const emptyBilling = BillingFactory.defaultHouseholdBilling(household.id)
 let billing = emptyBilling
-registerEndpoint('/api/billing', () => billing)
-registerEndpoint('/api/order', () => upcoming)
+const billingEndpoint = vi.fn<(event: H3Event) => unknown>(() => billing)
+const ordersEndpoint = vi.fn<(event: H3Event) => unknown>(() => upcoming)
+registerEndpoint('/api/billing', billingEndpoint)
+registerEndpoint('/api/order', ordersEndpoint)
 
 // The next test's resetStores drops the datasets a still-mounted view reads
 enableAutoUnmount(afterEach)
 
 // The view once the season, the upcoming orders and the billing have loaded
-const mountLoaded = async () => {
-    const wrapper = await mountWithTooltipProvider(HouseholdEconomy, {props: {household}})
+const mountLoaded = async (props = {household}) => {
+    const wrapper = await mountWithTooltipProvider(HouseholdEconomy, {props})
     const bookings = mountedStore(useBookingsStore)
     await untilTrue(() => mountedStore(usePlanStore).isSelectedSeasonInitialized && bookings.isUpcomingOrdersLoaded && bookings.householdBilling !== null)
     await nextTick()
@@ -133,5 +136,58 @@ describe('HouseholdEconomy - the running period', () => {
 
         for (const open of period.findAll(`button[aria-label="${BOOKING_WORDS.billing.show.orders}"]`)) await open.trigger('click')
         expect(period.findAllComponents({name: 'CostLine'})).toHaveLength(transactions.length)
+    })
+})
+
+describe('HouseholdEconomy - the household on view', () => {
+    const nextHousehold = {...household, id: household.id + 1}
+    const nextDinner = {...dinnerEvent, id: dinnerEvent.id + 1, menuTitle: 'Suppe hos naboen'}
+    const nextOrders = [OrderFactory.defaultOrder(SALT, {dinnerEventId: nextDinner.id, inhabitantId: eater.id, dinnerEvent: nextDinner, inhabitant: eater})]
+    const householdQuery = (endpoint: typeof ordersEndpoint) => getQuery(itemAt(endpoint.mock.calls, -1)[0]).householdId
+    const nextHouseholdQuery = String(nextHousehold.id)
+
+    beforeEach(() => {
+        resetStores()
+        session.user.value = member
+        billing = emptyBilling
+        billingEndpoint.mockClear()
+        ordersEndpoint.mockClear()
+    })
+
+    it('GIVEN one household\'s economy WHEN the household prop changes THEN both requests name the new one and its orders replace the previous household\'s', async () => {
+        const props = shallowReactive({household})
+        const wrapper = await mountLoaded(props)
+        ordersEndpoint.mockImplementationOnce(() => nextOrders)
+
+        props.household = nextHousehold
+
+        await vi.waitFor(() => expect(cellsByHeader(wrapper.findComponent({name: 'EconomyTable'})).Menu).toBe(nextDinner.menuTitle))
+        expect(wrapper.text()).not.toContain(dinnerEvent.menuTitle)
+        expect([householdQuery(ordersEndpoint), householdQuery(billingEndpoint)]).toEqual([nextHouseholdQuery, nextHouseholdQuery])
+    })
+
+    it('GIVEN the new household\'s billing has landed WHILE its orders are on the way THEN no order and no sum of the previous household shows', async () => {
+        const props = shallowReactive({household})
+        const wrapper = await mountLoaded(props)
+        const bookings = mountedStore(useBookingsStore)
+        const {titles, sums} = BOOKING_WORDS.billing
+        expect(wrapper.text()).toContain(sums.expected)
+        let land = () => {}
+        ordersEndpoint.mockImplementationOnce(() => new Promise(resolve => {
+            land = () => resolve(nextOrders)
+        }))
+
+        props.household = nextHousehold
+        await vi.waitFor(() => expect(householdQuery(billingEndpoint)).toBe(nextHouseholdQuery))
+        await vi.waitFor(() => expect(householdQuery(ordersEndpoint)).toBe(nextHouseholdQuery))
+        await untilTrue(() => !bookings.isHouseholdBillingLoading)
+        await nextTick()
+
+        const onTheWay = wrapper.text()
+        land()
+
+        expect(onTheWay).toContain(titles.upcoming)
+        expect(onTheWay).not.toContain(dinnerEvent.menuTitle)
+        expect(onTheWay).not.toContain(sums.expected)
     })
 })

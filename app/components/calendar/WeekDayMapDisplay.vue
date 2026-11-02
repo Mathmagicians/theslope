@@ -1,7 +1,10 @@
 <script setup lang="ts">
+/**
+ * Visual check: /admin/planning, the cooking days compact and with checkboxes, none selected included, phone and desktop.
+ */
 import { WEEKDAYS } from '~/types/dateTypes'
 import type { WeekDayMap, WeekDay } from '~/types/dateTypes'
-import type { BadgeProps } from '#ui/types'
+import {COLOR, type NuxtUIBadgeColor} from '~/composables/useTheSlopeDesignSystem'
 
 interface Props {
   modelValue?: WeekDayMap | null
@@ -11,7 +14,7 @@ interface Props {
   hideRestricted?: boolean
   label?: string
   name?: string
-  color?: BadgeProps['color']
+  color?: NuxtUIBadgeColor
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -22,7 +25,7 @@ const props = withDefaults(defineProps<Props>(), {
   hideRestricted: false,
   label: '',
   name: undefined,
-  color: 'success'
+  color: COLOR.success
 })
 
 const emit = defineEmits<{
@@ -30,16 +33,15 @@ const emit = defineEmits<{
 }>()
 
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
-const { NOISE } = useTheSlopeDesignSystem()
+const { NOISE, COMPONENTS } = useTheSlopeDesignSystem()
+const display = COMPONENTS.weekDayMapDisplay
 
-// Compute selected days for compact view
 const selectedDays = computed(() => {
   if (!props.modelValue) return []
 
   return WEEKDAYS.filter(day => props.modelValue?.[day])
 })
 
-// Format day for compact display (first 3 letters)
 const formatDayCompact = (day: WeekDay) => {
   return day.substring(0, 3)
 }
@@ -48,19 +50,16 @@ const isRestricted = (day: WeekDay) => {
   return props.parentRestriction ? !props.parentRestriction[day] : false
 }
 
-// Days to show in full view (respects hideRestricted)
 const visibleDays = computed(() =>
     props.hideRestricted ? WEEKDAYS.filter(day => !isRestricted(day)) : WEEKDAYS
 )
 
-// Update local model value
 const updateDay = (day: WeekDay, value: boolean | 'indeterminate') => {
   if (props.disabled) return
 
   // Treat indeterminate as false for weekday maps
   const boolValue = value === 'indeterminate' ? false : value
 
-  // Initialize with all days set to false if modelValue is null/undefined
   const updated: WeekDayMap = props.modelValue
     ? { ...props.modelValue }
     : createDefaultWeekdayMap(false)
@@ -72,24 +71,24 @@ const updateDay = (day: WeekDay, value: boolean | 'indeterminate') => {
 
 <template>
   <!-- COMPACT VIEW: Only render selected days (no empty placeholders) -->
-  <div v-if="compact && selectedDays.length > 0" class="flex flex-wrap gap-1">
+  <div v-if="compact && selectedDays.length > 0" :class="display.compactDays">
     <UBadge
       v-for="day in selectedDays"
       :key="day"
       :color="color"
-      class="capitalize"
+      :class="display.day"
       :variant="NOISE.soft"
     >
       {{ formatDayCompact(day) }}
     </UBadge>
   </div>
-  <span v-else-if="compact && selectedDays.length === 0" class="text-lg">
+  <span v-else-if="compact && selectedDays.length === 0" :class="display.noDays">
       💤
   </span>
 
   <!-- FULL VIEW: Show all days with checkboxes -->
   <UFormField v-else :label="label" :name="name">
-    <div class="flex flex-col gap-3">
+    <div :class="display.checkboxes">
       <UCheckbox
         v-for="day in visibleDays"
         :key="day"
@@ -97,7 +96,7 @@ const updateDay = (day: WeekDay, value: boolean | 'indeterminate') => {
         :label="day"
         :disabled="disabled || isRestricted(day)"
         :color="color"
-        class="capitalize"
+        :class="display.day"
         @update:model-value="(value) => updateDay(day, value)"
       />
     </div>

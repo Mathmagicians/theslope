@@ -23,7 +23,7 @@ interface Props {
     household: HouseholdDetail
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 const {formatKroner, formatTicketCounts} = useTicket()
 const {groupByCostEntry, calculateCurrentBillingPeriod} = useBilling()
@@ -61,8 +61,8 @@ const {
     isHouseholdBillingLoading: isLoading,
     isHouseholdBillingErrored: isErrored
 } = storeToRefs(bookingsStore)
-bookingsStore.loadHouseholdBilling()
-bookingsStore.loadUpcomingOrders(false)
+bookingsStore.loadHouseholdBilling(() => props.household.id)
+bookingsStore.loadUpcomingOrders(() => ({householdId: props.household.id}))
 const isUpcomingOrdersLoading = computed(() => isOrdersLoading.value || !isSelectedSeasonInitialized.value)
 
 const upcomingOrdersData = computed(() => groupByCostEntry(orders.value.filter(isPendingOrder), o => o.priceAtBooking))
@@ -216,7 +216,7 @@ const upcomingPeriodStart = computed(() => addDays(calculateCurrentBillingPeriod
           </template>
         </EconomyTable>
 
-        <template v-if="upcomingOrdersData.length > 0" #footer>
+        <template v-if="!isUpcomingOrdersLoading && upcomingOrdersData.length > 0" #footer>
           <div :class="COMPONENTS.adminEconomy.totalRow">
             <span :class="TYPOGRAPHY.bodyTextMedium">{{ BOOKING_WORDS.billing.sums.expected }}</span>
             <span :class="TYPOGRAPHY.cardTitle">{{ formatKroner(upcomingTotal) }}</span>

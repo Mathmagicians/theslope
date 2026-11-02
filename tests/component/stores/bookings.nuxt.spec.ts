@@ -258,12 +258,12 @@ describe('Bookings store — upcoming orders', () => {
     })
 
     it.each([
-        {scope: 'all households', allHouseholds: true, param: 'allHouseholds', value: 'true'},
-        {scope: 'the selected household', allHouseholds: false, param: 'householdId', value: String(MY_HOUSEHOLD_ID)}
-    ])('reads the selected season\'s upcoming orders for $scope with their dinner and their eater', async ({allHouseholds, param, value}) => {
+        {scope: 'all households', filter: {allHouseholds: true}, param: 'allHouseholds', value: 'true'},
+        {scope: 'the household the page names', filter: {householdId: MY_HOUSEHOLD_ID}, param: 'householdId', value: String(MY_HOUSEHOLD_ID)}
+    ])('reads the selected season\'s upcoming orders for $scope with their dinner and their eater', async ({filter, param, value}) => {
         const store = useBookingsStore()
 
-        store.loadUpcomingOrders(allHouseholds)
+        store.loadUpcomingOrders(filter)
 
         await vi.waitFor(() => expect(store.upcomingOrders).toHaveLength(1))
         expect(lastQuery(ordersEndpoint)).toMatchObject({upcomingForSeason: String(SEASON_ID), includeCostContext: 'true', [param]: value})
@@ -276,7 +276,7 @@ describe('Bookings store — upcoming orders', () => {
         ordersEndpoint.mockImplementation(() => [order])
         const store = useBookingsStore()
 
-        store.loadUpcomingOrders(true)
+        store.loadUpcomingOrders({allHouseholds: true})
 
         await vi.waitFor(() => expect(store.isUpcomingOrdersLoaded).toBe(true))
         expect(store.upcomingOrders).toEqual([])
@@ -287,7 +287,7 @@ describe('Bookings store — upcoming orders', () => {
         activeSeasonIdEndpoint.mockReturnValue(null)
         const store = useBookingsStore()
 
-        store.loadUpcomingOrders(true)
+        store.loadUpcomingOrders({allHouseholds: true})
 
         await vi.waitFor(() => expect(usePlanStore().isPlanStoreReady).toBe(true))
         expect(store.upcomingOrders).toEqual([])
@@ -590,12 +590,12 @@ describe('Bookings store — daily maintenance', () => {
 })
 
 describe('Bookings store — household billing', () => {
-    it('reads the billing of the selected household, parsed to domain types', async () => {
+    it('reads the billing of the household the page names, parsed to domain types', async () => {
         resetStores()
         householdBillingEndpoint.mockImplementation(() => BillingFactory.defaultHouseholdBilling(MY_HOUSEHOLD_ID))
         const store = useBookingsStore()
 
-        store.loadHouseholdBilling()
+        store.loadHouseholdBilling(MY_HOUSEHOLD_ID)
 
         await vi.waitFor(() => expect(store.householdBilling?.householdId).toBe(MY_HOUSEHOLD_ID))
         expect(present(store.householdBilling, 'household billing').currentPeriod.periodStart).toBeInstanceOf(Date)
@@ -629,9 +629,9 @@ describe('Bookings store — gated reads', () => {
         {dataset: 'orders', idleKey: 'bookings-store-orders', requestedKey: 'bookings-store-orders',
             endpoint: ordersEndpoint, request: (store: Store) => store.loadOrdersForDinners({dinnerEventIds: [ID]})},
         {dataset: 'upcoming orders', idleKey: 'bookings-store-upcoming-orders', requestedKey: 'bookings-store-upcoming-orders',
-            endpoint: ordersEndpoint, request: (store: Store) => store.loadUpcomingOrders(true)},
+            endpoint: ordersEndpoint, request: (store: Store) => store.loadUpcomingOrders({allHouseholds: true})},
         {dataset: 'household billing', idleKey: 'bookings-store-household-billing', requestedKey: 'bookings-store-household-billing',
-            endpoint: householdBillingEndpoint, request: (store: Store) => store.loadHouseholdBilling()},
+            endpoint: householdBillingEndpoint, request: (store: Store) => store.loadHouseholdBilling(ID)},
         {dataset: 'billing periods', idleKey: 'bookings-store-billing-periods', requestedKey: 'bookings-store-billing-periods',
             endpoint: billingPeriodsEndpoint, request: (store: Store) => store.loadBillingOverview(() => true)},
         {dataset: 'current period', idleKey: 'bookings-store-current-period', requestedKey: 'bookings-store-current-period',
@@ -669,6 +669,21 @@ describe('Bookings store — gated reads', () => {
 
         await vi.waitFor(() => expect(asyncDataStatus(requestedKey)).toBe('success'))
         expect(endpoint).toHaveBeenCalled()
+    })
+
+    it.each([
+        {dataset: 'upcoming orders', endpoint: ordersEndpoint,
+            follow: (store: Store, householdId: () => number) => store.loadUpcomingOrders(() => ({householdId: householdId()}))},
+        {dataset: 'household billing', endpoint: householdBillingEndpoint,
+            follow: (store: Store, householdId: () => number) => store.loadHouseholdBilling(householdId)}
+    ])('$dataset follows the page\'s household through a getter', async ({endpoint, follow}) => {
+        const householdId = ref(ID)
+        follow(useBookingsStore(), () => householdId.value)
+        await vi.waitFor(() => expect(lastQuery(endpoint)).toMatchObject({householdId: String(ID)}))
+
+        householdId.value = ID + 1
+
+        await vi.waitFor(() => expect(lastQuery(endpoint)).toMatchObject({householdId: String(ID + 1)}))
     })
 
     it('reads unrequested orders as neither loading, loaded nor empty', async () => {

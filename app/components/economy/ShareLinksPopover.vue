@@ -5,7 +5,11 @@
  * Two buttons:
  * 1. External link - direct navigation to public page (optional)
  * 2. Share - popover with copyable links (public page + CSV)
+ *
+ * Visual check: /admin/economy, the small buttons and the open popover; /public/billing/[token], the prominent button; phone and desktop.
  */
+import {BOOKING_WORDS} from '~/config/bookingWords'
+
 interface Props {
     shareToken: string
     /** Hide the external link button (useful when already on public page) */
@@ -19,7 +23,9 @@ const props = withDefaults(defineProps<Props>(), {
     prominent: false
 })
 
-const {ICONS, SIZES, TYPOGRAPHY, COLOR, NOISE} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, COLOR, NOISE, COMPONENTS} = useTheSlopeDesignSystem()
+const share = COMPONENTS.shareLinks
+const WORDS = BOOKING_WORDS.billing.shareLinks
 
 // Compute base URL lazily - useRequestURL is SSR-safe
 const baseUrl = computed(() => useRequestURL().origin)
@@ -43,8 +49,7 @@ const copyCsvLink = async () => {
 </script>
 
 <template>
-  <div class="flex gap-1">
-    <!-- Button 1: Direct link to public page (opens in new tab) -->
+  <div :class="share.actions">
     <a
         v-if="!hideExternalLink"
         :href="getShareUrl()"
@@ -57,30 +62,29 @@ const copyCsvLink = async () => {
           :variant="NOISE.quiet"
           :icon="ICONS.externalLink"
           :size="SIZES.small"
-          aria-label="Åbn offentlig side"
+          :aria-label="WORDS.openPublicPage"
       />
     </a>
-    <!-- Button 2: Popover with copyable links -->
     <UPopover>
       <UButton
-          :color="prominent ? COLOR.primary : 'neutral'"
-          :variant="prominent ? 'solid' : 'ghost'"
+          :color="prominent ? COLOR.primary : COLOR.neutral"
+          :variant="prominent ? NOISE.loud : NOISE.quiet"
           :icon="ICONS.share"
           :size="prominent ? SIZES.standard : SIZES.small"
-          aria-label="Del links"
+          :aria-label="WORDS.share"
           @click.stop
       >
-        <template v-if="prominent">Del CSV</template>
+        <template v-if="prominent">{{ WORDS.shareProminent }}</template>
       </UButton>
       <template #content>
-        <div class="p-3 space-y-3 min-w-72">
+        <div :class="share.panel">
           <div v-if="!hideExternalLink">
-            <p :class="[TYPOGRAPHY.bodyTextMuted, 'mb-1 text-xs']">Offentlig side:</p>
-            <div class="flex gap-2">
+            <p :class="share.linkLabel">{{ WORDS.publicPage }}</p>
+            <div :class="share.linkRow">
               <UInput
                   :model-value="getShareUrl()"
                   readonly
-                  class="flex-1 font-mono text-xs"
+                  :class="share.linkInput"
                   :size="SIZES.small"
               />
               <UButton
@@ -92,12 +96,12 @@ const copyCsvLink = async () => {
             </div>
           </div>
           <div>
-            <p :class="[TYPOGRAPHY.bodyTextMuted, 'mb-1 text-xs']">CSV download:</p>
-            <div class="flex gap-2">
+            <p :class="share.linkLabel">{{ WORDS.csv }}</p>
+            <div :class="share.linkRow">
               <UInput
                   :model-value="getCsvUrl()"
                   readonly
-                  class="flex-1 font-mono text-xs"
+                  :class="share.linkInput"
                   :size="SIZES.small"
               />
               <UButton

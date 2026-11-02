@@ -1,19 +1,20 @@
 // @vitest-environment nuxt
 /**
  * DinnerModeSelector in edit mode offers a row's enabledModes: the toggle cycles to the next of them after the current
- * one, the buttons render a mode outside them disabled. Real component, real design system (testing.md Rule 6).
+ * one, the buttons render a mode outside them disabled, and the button group follows the breakpoint unless an
+ * orientation is given. Real component, real design system (testing.md Rule 6).
  */
 import {describe, it, expect, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
-import type {ButtonProps} from '@nuxt/ui'
-import {findByTestId, findComponentByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import type {ButtonProps, FieldGroupProps} from '@nuxt/ui'
+import {findByTestId, findComponentByTestId, clickByTestId, mountWithTooltipProvider, VIEWPORTS} from '~~/tests/component/testHelpers'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
 import {useBookingValidation, type DinnerMode} from '~/composables/useBookingValidation'
 import {DINNER_MODE_ORDER} from '~/composables/useBooking'
 import {MODE_WORDS} from '~/composables/useBookingUi'
 import {FORM_MODES, type FormMode} from '~/types/form'
-import {COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, type NuxtUIOrientation} from '~/composables/useTheSlopeDesignSystem'
 
 enableAutoUnmount(afterEach)
 
@@ -98,6 +99,27 @@ describe('DinnerModeSelector buttons', () => {
 
         const disabledOf = (modes: DinnerMode[]) => Object.fromEntries(modes.map(mode => [mode, findByTestId(wrapper, `${NAME}-${mode}`).attributes('disabled') !== undefined]))
         expect(disabledOf(ALL)).toEqual(Object.fromEntries(ALL.map(mode => [mode, !enabledModes.includes(mode)])))
+    })
+})
+
+describe.each(VIEWPORTS)('DinnerModeSelector button orientation on $viewport', ({isMd}) => {
+    const breakpoints: NuxtUIOrientation = isMd ? 'horizontal' : 'vertical'
+    const other: NuxtUIOrientation = isMd ? 'vertical' : 'horizontal'
+
+    const groupOrientation = async (orientation?: NuxtUIOrientation) => {
+        const wrapper = await mountWithTooltipProvider(DinnerModeSelector, {
+            props: {formMode: FORM_MODES.EDIT, modelValue: DINEIN, name: NAME, orientation},
+            isMd
+        })
+        return findComponentByTestId<FieldGroupProps>(wrapper, 'UFieldGroup', NAME).props('orientation')
+    }
+
+    it('GIVEN no orientation THEN the button group follows the breakpoint', async () => {
+        expect(await groupOrientation()).toBe(breakpoints)
+    })
+
+    it('GIVEN an orientation THEN it wins over the breakpoint', async () => {
+        expect(await groupOrientation(other)).toBe(other)
     })
 })
 

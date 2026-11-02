@@ -165,7 +165,7 @@ affected order sits CLOSED on a past dinner and matches exactly one ticket price
 
 ### Solution
 
-1. `ticketType` and `allergyTypeIds` (§ Ticket allergies on the order) join `OrderSnapshotSchema`; the first round of the package settles the backfill shape — the schema
+1. `ticketType` and `allergyTypeIds` (§ Ticket allergies on the order) join `OrderAuditSnapshotSchema`; the first round of the package settles the backfill shape — the schema
    has ten required fields, two of them formatted in TypeScript (`inhabitantNameWithInitials`, `householdShortname`),
    so the backfill is either a slimmer snapshot with optional provenance fields or a TypeScript job.
 2. `Order.orderSnapshot String?` — `ALTER TABLE "Order" ADD COLUMN "orderSnapshot" TEXT`, taken as Prisma emits it.
@@ -212,7 +212,7 @@ Rule signed 2026-10-11. A ticket carries a stored list or follows its holder's l
 | Guest | ids chosen in the form | at booking |
 | Swapped | releasing owner's profile ids | at the claim, after the booking deadline; a second swap keeps the first list |
 
-1. The stored list is `allergyTypeIds` in `OrderSnapshotSchema`, kept in the `Order.orderSnapshot` column of § Order
+1. The stored list is `allergyTypeIds` in `OrderAuditSnapshotSchema`, kept in the `Order.orderSnapshot` column of § Order
    snapshot (B6): one column, one migration for both (signed 2026-10-11). The names field goes.
 2. Creation (`createOrders`) stores a guest ticket's ids; the create schemas and the four callers carry
    `allergyTypeIds` through. The claim (`claimOrder`) selects the releasing inhabitant's allergy rows and stores their
