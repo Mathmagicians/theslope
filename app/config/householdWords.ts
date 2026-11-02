@@ -197,6 +197,7 @@ export const HOUSEHOLD_WORDS = {
     /** The household page: its description, the banner a visitor reads and the admin's override */
     page: {
         description: (shortName: string) => `Tilmeldinger for husstanden ${shortName}`,
+        noHouseholds: '💤 Ingen er flyttet ind i appen endnu. Vent lige, lad os se om der kommer nogen snart ...',
         visitor: {
             title: 'Du besøger nu en anden husstand end din egen',
             description: 'Kigge, ikke røre',

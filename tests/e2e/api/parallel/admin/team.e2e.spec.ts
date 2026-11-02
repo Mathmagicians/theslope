@@ -78,6 +78,11 @@ test.describe('Admin Teams API', () => {
             const assignedEvents = eventsAfter.filter(dinnerEvent => dinnerEvent.cookingTeamId !== null)
             expect(assignedEvents.length).toBeGreaterThan(0)
             expect(envelope.eventsAssigned).toBe(assignedEvents.length)
+
+            // AND: each team holds its computed weekdays, and the dinners go to both teams
+            const teamsAfter = await SeasonFactory.getCookingTeamsForSeason(context, season.id as number)
+            expect(teamsAfter.every(team => Object.values(team.affinity ?? {}).some(Boolean))).toBe(true)
+            expect(new Set(assignedEvents.map(dinnerEvent => dinnerEvent.cookingTeamId)).size).toBe(2)
         })
 
         test('GET /api/admin/team should list all teams', async ({browser}) => {

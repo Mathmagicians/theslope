@@ -13,7 +13,7 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
-import {mountWithTooltipProvider, mountedStore, resetStores, registerEmptyStoreEndpoints, untilTrue, cellsByHeader, tableHeaders, itemAt, present} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, resetStores, registerEmptyStoreEndpoints, holdEndpoint, findLoadingRow, isTableLoading, untilTrue, cellsByHeader, tableHeaders, itemAt, present} from '~~/tests/component/testHelpers'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {BUTTON_WORDS} from '~/config/buttonWords'
 import {useBillingValidation} from '~/composables/useBillingValidation'
@@ -140,11 +140,30 @@ describe('HouseholdEconomy - the running period', () => {
 })
 
 describe('HouseholdEconomy - the household on view', () => {
+    const {columns} = BOOKING_WORDS.billing
+    const {formatKroner} = useTicket()
     const nextHousehold = {...household, id: household.id + 1}
     const nextDinner = {...dinnerEvent, id: dinnerEvent.id + 1, menuTitle: 'Suppe hos naboen'}
     const nextOrders = [OrderFactory.defaultOrder(SALT, {dinnerEventId: nextDinner.id, inhabitantId: eater.id, dinnerEvent: nextDinner, inhabitant: eater})]
     const householdQuery = (endpoint: typeof ordersEndpoint) => getQuery(itemAt(endpoint.mock.calls, -1)[0]).householdId
     const nextHouseholdQuery = String(nextHousehold.id)
+    const billingOf = (householdId: number, totalAmount: number) => {
+        const householdBilling = BillingFactory.defaultHouseholdBilling(householdId)
+        return {...householdBilling, currentPeriod: {...householdBilling.currentPeriod, totalAmount}}
+    }
+    // The two tables: their loading bars, the upcoming dinner's menu and the running period's amount
+    const tablesOf = (wrapper: Awaited<ReturnType<typeof mountLoaded>>) => {
+        const tables = wrapper.findAllComponents({name: 'EconomyTable'})
+        const [upcomingTable, periodsTable] = [itemAt(tables, 0), itemAt(tables, 1)]
+        return {
+            loading: [isTableLoading(upcomingTable), isTableLoading(periodsTable)],
+            menu: cellsByHeader(upcomingTable)[columns.menu],
+            amount: cellsByHeader(periodsTable)[columns.amount]
+        }
+    }
+    const unregister: Array<() => void> = []
+
+    afterEach(() => unregister.splice(0).forEach(remove => remove()))
 
     beforeEach(() => {
         resetStores()
@@ -166,28 +185,78 @@ describe('HouseholdEconomy - the household on view', () => {
         expect([householdQuery(ordersEndpoint), householdQuery(billingEndpoint)]).toEqual([nextHouseholdQuery, nextHouseholdQuery])
     })
 
-    it('GIVEN the new household\'s billing has landed WHILE its orders are on the way THEN no order and no sum of the previous household shows', async () => {
+    it('GIVEN one household\'s economy WHEN the household prop changes WHILE its data is on the way THEN both tables run the loading bar and keep their rows, the cards stay, and the new household\'s rows replace them once they land', async () => {
+        billing = billingOf(household.id, 9700)
         const props = shallowReactive({household})
         const wrapper = await mountLoaded(props)
         const bookings = mountedStore(useBookingsStore)
-        const {titles, sums} = BOOKING_WORDS.billing
-        expect(wrapper.text()).toContain(sums.expected)
-        let land = () => {}
-        ordersEndpoint.mockImplementationOnce(() => new Promise(resolve => {
-            land = () => resolve(nextOrders)
-        }))
+        expect(tablesOf(wrapper)).toEqual({loading: [false, false], menu: dinnerEvent.menuTitle, amount: formatKroner(9700)})
 
-        props.household = nextHousehold
-        await vi.waitFor(() => expect(householdQuery(billingEndpoint)).toBe(nextHouseholdQuery))
-        await vi.waitFor(() => expect(householdQuery(ordersEndpoint)).toBe(nextHouseholdQuery))
-        await untilTrue(() => !bookings.isHouseholdBillingLoading)
-        await nextTick()
+        const heldOrders = holdEndpoint('/api/order', nextOrders)
+        const heldBilling = holdEndpoint('/api/billing', billingOf(nextHousehold.id, 5400))
+        unregister.push(heldOrders.unregister, heldBilling.unregister)
+        try {
+            props.household = nextHousehold
+            await untilTrue(() => !bookings.isUpcomingOrdersLoaded && bookings.isHouseholdBillingLoading)
+            await nextTick()
 
-        const onTheWay = wrapper.text()
-        land()
+            expect(tablesOf(wrapper)).toEqual({loading: [true, true], menu: dinnerEvent.menuTitle, amount: formatKroner(9700)})
+            expect(wrapper.findAllComponents({name: 'UCard'})).toHaveLength(2)
 
-        expect(onTheWay).toContain(titles.upcoming)
-        expect(onTheWay).not.toContain(dinnerEvent.menuTitle)
-        expect(onTheWay).not.toContain(sums.expected)
+            heldOrders.release()
+            heldBilling.release()
+            await untilTrue(() => bookings.isUpcomingOrdersLoaded && !bookings.isHouseholdBillingLoading)
+            await nextTick()
+
+            expect(tablesOf(wrapper)).toEqual({loading: [false, false], menu: nextDinner.menuTitle, amount: formatKroner(5400)})
+        } finally {
+            // The held reads settle inside the case, so nothing answers into the next one
+            heldOrders.release()
+            heldBilling.release()
+        }
+    })
+
+    it('GIVEN the upcoming orders on their first answer THEN the upcoming table shows its loading row and not its empty state', async () => {
+        const held = holdEndpoint('/api/order', upcoming)
+        unregister.push(held.unregister)
+        const wrapper = await mountWithTooltipProvider(HouseholdEconomy, {props: {household}})
+        const bookings = mountedStore(useBookingsStore)
+        try {
+            await untilTrue(() => mountedStore(usePlanStore).isSelectedSeasonInitialized && bookings.householdBilling !== null)
+            await nextTick()
+
+            const upcomingTable = wrapper.findComponent({name: 'EconomyTable'})
+            expect(findLoadingRow(upcomingTable).text()).toContain('Henter fremtidige bestillinger')
+            expect(upcomingTable.text()).not.toContain('Ingen kommende bestillinger')
+        } finally {
+            held.release()
+        }
+    })
+
+    it('GIVEN the billing on its first answer THEN the tab shows the Loader and neither table, and both cards show once it lands', async () => {
+        const held = holdEndpoint('/api/billing', emptyBilling)
+        unregister.push(held.unregister)
+        const wrapper = await mountWithTooltipProvider(HouseholdEconomy, {props: {household}})
+        const bookings = mountedStore(useBookingsStore)
+        const {upcoming: upcomingTitle, periods: periodsTitle} = BOOKING_WORDS.billing.titles
+        const viewOf = () => ({
+            loader: wrapper.findComponent({name: 'Loader'}).exists(),
+            tables: wrapper.findAllComponents({name: 'EconomyTable'}).length,
+            cardTitles: [upcomingTitle, periodsTitle].filter(title => wrapper.text().includes(title))
+        })
+        try {
+            await untilTrue(() => bookings.isHouseholdBillingLoading)
+            await nextTick()
+
+            expect(viewOf()).toEqual({loader: true, tables: 0, cardTitles: []})
+
+            held.release()
+            await untilTrue(() => bookings.householdBilling !== null)
+            await nextTick()
+
+            expect(viewOf()).toEqual({loader: false, tables: 2, cardTitles: [upcomingTitle, periodsTitle]})
+        } finally {
+            held.release()
+        }
     })
 })

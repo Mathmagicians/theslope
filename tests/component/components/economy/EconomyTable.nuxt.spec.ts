@@ -1,11 +1,10 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
 import {mountWithTooltipProvider, findByTestId, resetStores, findLoadingRow, isTableLoading, itemAt} from '~~/tests/component/testHelpers'
 import EconomyTableGeneric from '~/components/economy/EconomyTable.vue'
-import {h, nextTick, ref, type DefineComponent} from 'vue'
-import type {Row} from '@tanstack/vue-table'
+import {nextTick, ref, type DefineComponent} from 'vue'
 import {rowIdOf} from '~/utils/utils'
 
 // A generic component's type is a function; the mount helper keys on a constructor
@@ -158,40 +157,13 @@ describe('EconomyTable', () => {
             expect(findLoadingRow(wrapper).exists()).toBe(false)
         })
 
-        // While the data loads the loading row fills the table, so a re-read shows no row of the earlier answer
-        it('GIVEN rows and loading=true THEN the table receives it, the rows go and the loading row shows', async () => {
-            const wrapper = await createWrapper({loading: true, loadingText: 'Henter fremtidige bestillinger'})
+        // With rows, UTable runs its loading bar over them: the rows stay, the loading row is for a table without rows
+        it.each([true, false])('GIVEN rows and loading=%s THEN the table receives it and the rows stay', async (loading) => {
+            const wrapper = await createWrapper({loading, loadingText: 'Henter fremtidige bestillinger'})
 
-            expect(isTableLoading(wrapper)).toBe(true)
-            expect(wrapper.text()).not.toContain('Pasta')
-            expect(findLoadingRow(wrapper).text()).toContain('Henter fremtidige bestillinger')
-        })
-
-        it('GIVEN rows and loading=false THEN the rows show and there is no loading row', async () => {
-            const wrapper = await createWrapper({loading: false, loadingText: 'Henter fremtidige bestillinger'})
-
-            expect(isTableLoading(wrapper)).toBe(false)
+            expect(isTableLoading(wrapper)).toBe(loading)
             expect(wrapper.text()).toContain('Pasta')
             expect(findLoadingRow(wrapper).exists()).toBe(false)
-        })
-
-        it('GIVEN an open row WHEN the data reloads THEN the row goes with the rows and reopens by its id once loading ends', async () => {
-            const wrapper = await mountSuspended(EconomyTable, {
-                props: {data: createTestData(), columns: defaultColumns, getRowId: rowIdOf, dateAccessor, loading: false},
-                slots: {
-                    'expand-cell': ({row}: {row: Row<TestRow>}) => h('button', {'data-testid': `open-${row.id}`, 'onClick': () => row.toggleExpanded()}),
-                    'expanded': ({row}: {row: Row<TestRow>}) => h('div', {'data-testid': 'open-row'}, row.original.menuTitle)
-                },
-                global: {provide: {isMd: ref(true)}}
-            })
-            await findByTestId(wrapper, 'open-1').trigger('click')
-            await vi.waitFor(() => expect(findByTestId(wrapper, 'open-row').text()).toBe('Pasta'))
-
-            await wrapper.setProps({loading: true})
-            await vi.waitFor(() => expect(findByTestId(wrapper, 'open-row').exists()).toBe(false))
-
-            await wrapper.setProps({loading: false, data: createTestData()})
-            await vi.waitFor(() => expect(findByTestId(wrapper, 'open-row').text()).toBe('Pasta'))
         })
     })
 

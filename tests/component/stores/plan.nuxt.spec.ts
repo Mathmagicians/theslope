@@ -84,9 +84,6 @@ const deactivateSeasonEndpoint = vi.fn(() => season1)
 const teamDetail = SeasonFactory.defaultCookingTeamDetail({ id: TEAM_ID })
 const updateTeamEndpoint = vi.fn(() => teamDetail)
 const deleteTeamEndpoint = vi.fn(() => TEAM_ID)
-// Answers unknown, so a case can hand the store an envelope its schema refuses
-const assignAffinitiesEndpoint = vi.fn((): unknown => ({ seasonId: season1.id, teamCount: 1, teams: [teamDetail] }))
-const assignCookingTeamsEndpoint = vi.fn(() => ({ seasonId: season1.id, eventCount: 1, events: [DinnerEventFactory.defaultDinnerEventDisplay()] }))
 const dinner = { ...DinnerEventFactory.defaultDinnerEventDetail(), id: 21 }
 const assignRoleEndpoint = vi.fn(() => dinner)
 const removeRoleEndpoint = vi.fn(() => dinner)
@@ -99,8 +96,6 @@ emptyReads.forEach(url => registerEndpoint(url, () => []))
 const myTeamsEndpoint = vi.fn(() => [teamDetail])
 registerEndpoint('/api/team/my', myTeamsEndpoint)
 registerEndpoint('/api/admin/season/deactivate', { method: 'POST', handler: deactivateSeasonEndpoint })
-registerEndpoint(`/api/admin/season/${season1.id}/assign-team-affinities`, { method: 'POST', handler: assignAffinitiesEndpoint })
-registerEndpoint(`/api/admin/season/${season1.id}/assign-cooking-teams`, { method: 'POST', handler: assignCookingTeamsEndpoint })
 registerEndpoint(`/api/admin/team/${TEAM_ID}`, { method: 'POST', handler: updateTeamEndpoint })
 registerEndpoint(`/api/admin/team/${TEAM_ID}`, { method: 'DELETE', handler: deleteTeamEndpoint })
 const teamByIdEndpoint = vi.fn(() => teamDetail)
@@ -444,15 +439,6 @@ describe('Plan Store - write actions', () => {
             toast: null
         },
         {
-            action: 'assignTeamAffinitiesAndEvents',
-            endpoint: assignCookingTeamsEndpoint,
-            write: (store: PlanStore) => store.assignTeamAffinitiesAndEvents(season1.id),
-            parsed: {teamCount: 1, eventCount: 1},
-            refreshes: 'the selected season',
-            refreshed: seasonByIdEndpoint,
-            toast: null
-        },
-        {
             action: 'updateTeam (affinity)',
             endpoint: updateTeamEndpoint,
             write: (store: PlanStore) => store.updateTeam({id: TEAM_ID, affinity: jokerSlot.affinity}),
@@ -567,13 +553,6 @@ describe('Plan Store - write actions', () => {
         expect(result).toEqual(parsed)
         expect(refreshed.mock.calls.length).toBeGreaterThan(refreshesBefore)
         expect(useToast().toasts.value).toEqual(toast ? [expect.objectContaining({...toast, icon: ICONS.checkCircle, color: COLOR.success})] : [])
-    })
-
-    it('assignTeamAffinitiesAndEvents rejects an envelope its schema refuses', async () => {
-        assignAffinitiesEndpoint.mockReturnValueOnce({seasonId: season1.id, teamCount: 1, teams: [{id: TEAM_ID}]})
-        const store = await setupStore()
-
-        await expect(store.assignTeamAffinitiesAndEvents(season1.id)).rejects.toThrow()
     })
 
     const TEAM_WRITES = ['updateTeam (affinity)', 'updateTeam (name)', 'addTeamMember', 'updateTeamMember', 'removeTeamMember', 'createJokerSlot', 'deleteJokerSlot', 'assignRoleToDinner', 'claimRoleForMe', 'resignRoleForMe']

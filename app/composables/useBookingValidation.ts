@@ -782,13 +782,6 @@ export const useBookingValidation = () => {
         scaffoldResult: ScaffoldResultSchema
     })
 
-    // Operation result of POST /api/admin/season/[id]/assign-cooking-teams
-    const AssignCookingTeamsResponseSchema = z.object({
-        seasonId: IdSchema,
-        eventCount: z.number().int().min(0),
-        events: z.array(DinnerEventDisplaySchema)
-    })
-
     // ============================================================================
     // UNIFIED BOOKING SCAFFOLD
     // Every household booking write goes through the scaffolder, the claim and the queue included
@@ -1053,7 +1046,6 @@ export const useBookingValidation = () => {
         QueuePositionSchema,
         InhabitantUpdateResponseSchema,
         HouseholdUpdateResponseSchema,
-        AssignCookingTeamsResponseSchema,
 
         // Unified Booking Scaffold
         DesiredOrderSchema,

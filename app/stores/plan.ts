@@ -90,9 +90,9 @@ export const usePlanStore = defineStore("Plan", () => {
             isLoading: isSelectedSeasonFetching, isErrored: isSelectedSeasonErrored, isInitialized: isSelectedSeasonFetched
         } = selectedSeasonDataset
 
-        const {CookingTeamDetailSchema, CreateTeamsResponseSchema, AssignTeamAffinitiesResponseSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
+        const {CookingTeamDetailSchema, CreateTeamsResponseSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
         const {IdSchema} = useCoreValidation()
-        const {DinnerEventDetailSchema, AssignCookingTeamsResponseSchema} = useBookingValidation()
+        const {DinnerEventDetailSchema} = useBookingValidation()
         const {JokerSlotSchema} = useDutyValidation()
         const {formatRoleClaimedTitle} = useCookingTeam()
 
@@ -236,23 +236,6 @@ export const usePlanStore = defineStore("Plan", () => {
             await loadSeasons()
             toastSaved(SEASON_WORDS.toasts.created)
             return created
-        }
-
-        const assignTeamAffinitiesAndEvents = async (seasonId: number) => {
-            // Step 1: Assign affinities to teams
-            const affinityResult = await apiRequest(`/api/admin/season/${seasonId}/assign-team-affinities`, {method: 'POST', schema: AssignTeamAffinitiesResponseSchema, action: 'assignTeamAffinitiesAndEvents'})
-            console.info(`👥 > PLAN_STORE > Assigned affinities to ${affinityResult.teamCount} teams for season ${seasonId}`)
-
-            // Step 2: Assign teams to dinner events
-            const assignmentResult = await apiRequest(`/api/admin/season/${seasonId}/assign-cooking-teams`, {method: 'POST', schema: AssignCookingTeamsResponseSchema, action: 'assignTeamAffinitiesAndEvents'})
-            console.info(`🍽️ > PLAN_STORE > Assigned teams to ${assignmentResult.eventCount} dinner events for season ${seasonId}`)
-
-            // Refresh selected season to get updated teams with affinities and event assignments
-            await settleSeason()
-            return {
-                teamCount: affinityResult.teamCount,
-                eventCount: assignmentResult.eventCount
-            }
         }
 
         // Returns the operation envelope so callers can report what the save changed
@@ -545,7 +528,6 @@ export const usePlanStore = defineStore("Plan", () => {
             updateSeason,
             activateSeason,
             deactivateSeason,
-            assignTeamAffinitiesAndEvents,
             createTeam,
             updateTeam,
             deleteTeam,

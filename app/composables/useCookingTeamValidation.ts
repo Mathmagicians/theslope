@@ -131,13 +131,6 @@ export const useCookingTeamValidation = () => {
         eventsAssigned: z.number().int().min(0)
     })
 
-    // Operation result of POST /api/admin/season/[id]/assign-team-affinities (ADR-009)
-    const AssignTeamAffinitiesResponseSchema = z.object({
-        seasonId: IdSchema,
-        teamCount: z.number().int().min(0),
-        teams: z.array(CookingTeamDetailSchema)
-    })
-
     /**
      * PrismaTeamUpdateData - Return type for toPrismaUpdateData
      * The columns a team update sets, its affinity serialized; the id stays in the where clause
@@ -282,7 +275,6 @@ export const useCookingTeamValidation = () => {
         CookingTeamCreateSchema,             // For PUT operations (ADR-009)
         CookingTeamUpdateSchema,             // For POST operations (ADR-009)
         CreateTeamsResponseSchema,           // Operation result for PUT /api/admin/team (ADR-009)
-        AssignTeamAffinitiesResponseSchema,  // Operation result for POST /api/admin/season/[id]/assign-team-affinities (ADR-009)
         CookingTeamAssignmentSchema,         // For nested assignments
         CookingTeamAssignmentCreateSchema,   // For creating assignments (ADR-009)
         CookingTeamAssignmentUpdateSchema,   // For updating an assignment (ADR-009)

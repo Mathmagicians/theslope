@@ -64,7 +64,6 @@ export async function updateTeamWithAssignments(
 
 /**
  * Assign team affinities from member affinities, then assign teams to dinner events
- * Core logic extracted from assign-team-affinities.post.ts and assign-cooking-teams.post.ts
  */
 export async function assignAffinitiesAndEvents(
     d1Client: D1Database,

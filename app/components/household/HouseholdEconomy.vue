@@ -55,7 +55,7 @@ const {isSelectedSeasonInitialized} = storeToRefs(planStore)
 const bookingsStore = useBookingsStore()
 const {
     upcomingOrders: orders,
-    isUpcomingOrdersLoading: isOrdersLoading,
+    isUpcomingOrdersLoaded,
     householdBilling: billing,
     householdBillingError: error,
     isHouseholdBillingLoading: isLoading,
@@ -63,7 +63,8 @@ const {
 } = storeToRefs(bookingsStore)
 bookingsStore.loadHouseholdBilling(() => props.household.id)
 bookingsStore.loadUpcomingOrders(() => ({householdId: props.household.id}))
-const isUpcomingOrdersLoading = computed(() => isOrdersLoading.value || !isSelectedSeasonInitialized.value)
+// Loading until the upcoming orders have answered: a dataset idle in the server render reads as loading, not empty
+const isUpcomingOrdersLoading = computed(() => !isSelectedSeasonInitialized.value || !isUpcomingOrdersLoaded.value)
 
 const upcomingOrdersData = computed(() => groupByCostEntry(orders.value.filter(isPendingOrder), o => o.priceAtBooking))
 
@@ -159,7 +160,7 @@ const upcomingPeriodStart = computed(() => addDays(calculateCurrentBillingPeriod
 <template>
   <div data-testid="household-economy" :class="COMPONENTS.adminEconomy.page">
     <ViewError v-if="isErrored" :error="error?.statusCode" :message="BOOKING_WORDS.billing.failed.overview"/>
-    <Loader v-else-if="isLoading" text="Henter økonomioversigt..."/>
+    <Loader v-else-if="isLoading && !billing" text="Henter økonomioversigt..."/>
 
     <template v-else-if="billing">
       <UCard>
@@ -180,6 +181,7 @@ const upcomingPeriodStart = computed(() => addDays(calculateCurrentBillingPeriod
             :get-row-id="dinnerRowIdOf"
             :date-accessor="(item) => item.dinnerEvent.date"
             :loading="isUpcomingOrdersLoading"
+            loading-text="Henter fremtidige bestillinger"
         >
           <template #expand-cell="{ row }">
             <UButton
@@ -216,7 +218,7 @@ const upcomingPeriodStart = computed(() => addDays(calculateCurrentBillingPeriod
           </template>
         </EconomyTable>
 
-        <template v-if="!isUpcomingOrdersLoading && upcomingOrdersData.length > 0" #footer>
+        <template v-if="upcomingOrdersData.length > 0" #footer>
           <div :class="COMPONENTS.adminEconomy.totalRow">
             <span :class="TYPOGRAPHY.bodyTextMedium">{{ BOOKING_WORDS.billing.sums.expected }}</span>
             <span :class="TYPOGRAPHY.cardTitle">{{ formatKroner(upcomingTotal) }}</span>
@@ -238,6 +240,7 @@ const upcomingPeriodStart = computed(() => addDays(calculateCurrentBillingPeriod
             :get-row-id="rowIdOf"
             :date-accessor="(item) => item.period.start"
             :search-placeholder="BOOKING_WORDS.billing.search.period"
+            :loading="isLoading"
             :default-sort-desc="true"
         >
           <template #expand-cell="{ row }">

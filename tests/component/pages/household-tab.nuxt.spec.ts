@@ -11,6 +11,7 @@ import HouseholdEconomy from '~/components/household/HouseholdEconomy.vue'
 import HouseholdSettings from '~/components/household/HouseholdSettings.vue'
 import {useHouseholdsStore} from '~/stores/households'
 import {HELP_TEXTS} from '~/config/help-texts'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 import {useCoreValidation, type HouseholdDetail, type SystemRole} from '~/composables/useCoreValidation'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -103,6 +104,27 @@ describe('household/[shortname]/[tab] - the household in the URL', () => {
             expect(toValue(choice)).toEqual({shortName: mine.shortName, pbsId: undefined})
             expect(selectHousehold).toHaveBeenCalledTimes(1)
         })
+    })
+})
+
+describe('household/[shortname]/[tab] - an app with no households', () => {
+    let unregister: () => void = () => {}
+    beforeEach(() => {
+        resetStores()
+        session.user.value = me
+        unregister = registerEndpoint('/api/admin/household', () => [])
+    })
+    afterEach(() => {
+        unregister()
+    })
+
+    it('GIVEN no households THEN the page says so and mounts no tab', async () => {
+        landOn('nowhere', {})
+
+        const wrapper = await mountWithTooltipProvider(HouseholdPage)
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain(HOUSEHOLD_WORDS.page.noHouseholds))
+        expect(wrapper.findAll('[role="tab"]')).toHaveLength(0)
     })
 })
 

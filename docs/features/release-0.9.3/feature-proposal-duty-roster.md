@@ -663,7 +663,7 @@ The current document. Reviewable artifact before code.
 - `useDutyValidation` composable + unit tests.
 - `getDutyTimeRange` added to `app/utils/season.ts` next to `getDinnerTimeRange` + unit tests.
 - Repository functions in `cookingRepository.ts` (or extend `prismaRepository.ts`): `writeDutyHistory(entries[])`, `fetchDutyHistoryForDinner(dinnerEventId)`, `fetchDutyHistoryForMember(cookingTeamId, inhabitantId)`.
-- Instrument existing mutation sites: `assign-role`, `admin/team/assignment` PUT/DELETE/POST, `admin/dinner-event/[id]`, `admin/season/[id]/assign-cooking-teams`, `admin/season/import`. Each site adds a paired audit write in the same pass.
+- Instrument existing mutation sites: `assign-role`, `admin/team/assignment` PUT/DELETE/POST, `admin/dinner-event/[id]`, `server/utils/teamService.ts`, `admin/season/import`. Each site adds a paired audit write in the same pass.
 - Instrument the shipped chef-swap endpoints retroactively (`assign-role`, `remove-role`, move-out cascade).
 - E2E tests: each mutation site asserts the corresponding `DutyHistory` row is created with the right action and actor.
 
