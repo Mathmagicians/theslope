@@ -18,7 +18,7 @@ import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {CostLineKind, type CostLine} from '~/composables/useBillingValidation'
 import {ticketTypeLabel} from '~/composables/useTicket'
 import {BOOKING_WORDS} from '~/config/bookingWords'
-import {formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
+import {formatDate, formatDateRange, formatCompactWeekdayDate, DATE_SETTINGS} from '~/utils/date'
 import appConfig from '~/app.config'
 
 const {DinnerStateSchema, DinnerModeSchema, BookingActionSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
@@ -723,7 +723,7 @@ describe('formatPreviewLines', () => {
 
     it('a day carries its dinner\'s date and its weekday with the date as the separator reads it', () => {
         const [day] = formatPreviewLines(inDays({results: resultsAt(ANNA, Action.BOOK, 4)}))
-        expect(day).toMatchObject({date: dateOf(4), label: `${formatDate(dateOf(4), 'EEEEEE')} ${formatDate(dateOf(4))}`})
+        expect(day).toMatchObject({date: dateOf(4), label: formatCompactWeekdayDate(dateOf(4))})
     })
 
     it('a ticket sold to the waiting list wears the glyph and the colour of a ticket bought', () => {

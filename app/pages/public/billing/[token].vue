@@ -88,7 +88,7 @@ const columns: TableColumn<InvoiceDisplay>[] = [
             </div>
             <div :class="[publicBilling.fact, BG.invoiceStat]">
               <p :class="TYPOGRAPHY.bodyTextMuted">{{ BOOKING_WORDS.billing.summary.paymentDate }}</p>
-              <p :class="TYPOGRAPHY.cardTitle">{{ formatDate(billing.paymentDate, 'MMMM yyyy') }}</p>
+              <p :class="TYPOGRAPHY.cardTitle">{{ formatMonthYear(billing.paymentDate) }}</p>
             </div>
             <div :class="[publicBilling.fact, BG.invoiceStat]">
               <p :class="TYPOGRAPHY.bodyTextMuted">{{ BOOKING_WORDS.billing.stats.total }}</p>

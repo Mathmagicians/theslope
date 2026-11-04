@@ -145,7 +145,7 @@ describe('the chef deadlines notices of the DAILY_MAINTENANCE job', () => {
     // is ahead or the time since it once overdue, and the line of its own alarm level, the menu before the groceries
     describe('the deadlines a notice lists', () => {
         type Level = 'met' | 'green' | 'yellow' | 'red' | 'overdue'
-        const at = (moment: Date): string => formatDateInTimezone(moment, DATE_SETTINGS.DATE_AT_TIME_MASK)
+        const at = (moment: Date): string => formatDateInTimezone(moment, DATE_SETTINGS.DATE_TIME_MASK)
         const booking = at(deadlines.getBookingDeadlineTime(dinnerDate))
         const {today, tomorrow} = CHEF_DEADLINE_WORDS.deadlineDay
         // A deadline's lines at its level at the moment, the countdown as the chef page shows it while the deadline is

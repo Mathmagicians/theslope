@@ -22,8 +22,8 @@ describe('ActionPreview', () => {
         ({dinnerEventId, date: new Date(2026, 9, 18 + dinnerEventId), label, lines})
 
     const TWO_DAYS = [
-        day(4, 'to 22/10/2026', [line({text: 'Anna ændrer spisemåde til Takeaway'}), line({name: 'Lars', text: 'Lars ændrer spisemåde til Takeaway'})]),
-        day(5, 'fr 23/10/2026', [line({text: 'Anna frigiver sin billet', action: Action.RELEASE, color: 'error'})])
+        day(4, 'tor. 22/10', [line({text: 'Anna ændrer spisemåde til Takeaway'}), line({name: 'Lars', text: 'Lars ændrer spisemåde til Takeaway'})]),
+        day(5, 'fre. 23/10', [line({text: 'Anna frigiver sin billet', action: Action.RELEASE, color: 'error'})])
     ]
 
     const mount = (props: {days: ActionPreviewDay[], title?: string, pending?: boolean}) => mountSuspended(ActionPreview, {props})

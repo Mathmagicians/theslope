@@ -16,8 +16,6 @@ export const DATE_SETTINGS =
         DATE_MASK: 'dd/MM/yyyy',
         DAY_MONTH_MASK: 'dd/MM',
         DATE_TIME_MASK: 'dd/MM/yyyy HH:mm',
-        DATE_AT_TIME_MASK: "dd/MM/yyyy 'kl.' HH:mm",
-        LONG_DATE_MASK: 'd. MMMM yyyy',
         ISO_MONTH_MASK: 'yyyy-MM',
         locale: da,
         localeString: 'da-DK',
@@ -238,32 +236,11 @@ export function isNew(dateString: string | Date, now: Date): boolean {
     return days <= 7
 }
 
-/**
- * Format date with Danish 3-letter weekday abbreviation
- * @param date - Date to format
- * @returns Formatted string like "Man 15/11"
- */
-export function formatDanishWeekdayDate(date: Date): string {
-    return formatDate(date, 'EEE dd/MM')
-}
-
-/**
- * Format date with single-letter weekday and day number (compact for grids)
- * @param date - Date to format
- * @returns Formatted string like "M 15" (Monday 15th)
- */
-export function formatCompactWeekdayDate(date: Date): string {
-    return formatDate(date, 'EEEEE d')
-}
-
-/**
- * Format date with full weekday and dd/MM (for day view navigation)
- * @param date - Date to format
- * @returns Formatted string like "Tirsdag 14/01"
- */
-export function formatFullWeekdayDate(date: Date): string {
-    return formatDate(date, 'EEEE dd/MM')
-}
+// A date with its weekday, compact ("tor. 04/11") or full ("torsdag 04/11")
+const formatWeekdayDate = (weekdayMask: string) => (date: Date): string =>
+    formatDate(date, `${weekdayMask} ${DATE_SETTINGS.DAY_MONTH_MASK}`)
+export const formatCompactWeekdayDate = formatWeekdayDate('EEE')
+export const formatFullWeekdayDate = formatWeekdayDate('EEEE')
 
 /**
  * Format month and year (for month view navigation)

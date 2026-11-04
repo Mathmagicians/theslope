@@ -42,8 +42,9 @@ carries `make bdd-report suite=smoke` and `make bdd-steps summary=1`; the artifa
 A behaviour a unit or component spec proves gets no e2e case. A glyph, a colour, an alignment or a label is a component
 spec plus the browser check; the e2e case asserts the flow around it, in GIVEN/WHEN/THEN, as what the system does for
 the user. A check of behaviour is a spec at its level, never a scratch script or an ad-hoc run; the runners are the
-project's `npm` and `make` targets, whose `webServer` boots the server they need. The user's `npm run dev` is for the
-user's exploratory testing; no test or agent uses it.
+project's `npm` and `make` targets, whose `webServer` boots the server they need, or reuses the user's `npm run dev`
+when it is up (`reuseExistingServer`, as designed). The user's `npm run dev` is for the user's exploratory testing; no
+agent starts, probes or relies on it.
 
 An outcome is asserted in one case; a case that reaches an outcome another case asserts extends that case.
 

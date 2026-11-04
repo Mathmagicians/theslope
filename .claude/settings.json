@@ -167,7 +167,6 @@
       "Bash(*/private/tmp/*)",
       "Bash(*/tmp/*)",
       "Bash(*playwright/.auth*)",
-      "Bash(sed -i*)",
       "Bash(* > *)",
       "Bash(* >> *)",
       "Bash(tee*)",
@@ -246,6 +245,10 @@
       "Bash(wrangler d1 export*)"
     ],
     "ask": [
+      "Edit(./.claude/skills/**)",
+      "Write(./.claude/skills/**)",
+      "Edit(./.claude/agents/**)",
+      "Write(./.claude/agents/**)"
     ]
   },
   "attribution": {

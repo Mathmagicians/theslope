@@ -697,7 +697,7 @@ const dinnerBreakdownStats = computed(() => {
                         <div v-if="invoiceTransactionsGrouped.length > 0 || isInvoiceTransactionsLoading" :class="[COMPONENTS.adminEconomy.invoiceFrame, BORDER.gray.frame]">
                           <div :class="[COMPONENTS.adminEconomy.invoiceHeader, COMPONENTS.economyTable.level2.header]">
                             <div :class="COMPONENTS.adminEconomy.invoiceTitle">
-                              <h4 :class="TYPOGRAPHY.cardTitle">{{ BOOKING_WORDS.billing.invoice(formatDate(selectedBillingPeriodDetail.paymentDate, 'MMMM yyyy')) }}</h4>
+                              <h4 :class="TYPOGRAPHY.cardTitle">{{ BOOKING_WORDS.billing.invoice(formatMonthYear(selectedBillingPeriodDetail.paymentDate)) }}</h4>
                               <p :class="TYPOGRAPHY.bodyTextMuted">{{ invoiceRow.original.address }} · {{ HOUSEHOLD_WORDS.facts.pbs(invoiceRow.original.pbsId) }}</p>
                             </div>
                             <div :class="COMPONENTS.adminEconomy.statBoxes">

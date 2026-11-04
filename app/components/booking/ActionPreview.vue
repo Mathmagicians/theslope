@@ -7,15 +7,15 @@ ASCII mockup (ALERTS.legend; each day a USeparator on COMPONENTS.separator.momen
 a badge with its glyph in COMPONENTS.actionPreview):
 ┌──────────────────────────────────────────────────────────────┐
 │ (ticket) Du er ved at ændre familiens booking                │
-│ ──────────────────── ti 20/10/2026 ───────────────────────── │
+│ ──────────────────── tir. 20/10 ──────────────────────────── │
 │   [queue]     Anna skrives på ventelisten (Voksen #3)        │
-│ ──────────────────── to 22/10/2026 ───────────────────────── │
+│ ──────────────────── tor. 22/10 ──────────────────────────── │
 │   [edit]      Anna ændrer spisemåde til Takeaway             │
 │   [edit]      Lars ændrer spisemåde til Takeaway             │
-│ ──────────────────── fr 23/10/2026 ───────────────────────── │
+│ ──────────────────── fre. 23/10 ──────────────────────────── │
 │   [released]  Anna frigiver sin billet                       │
 │   [released]  Lars frigiver sin billet                       │
-│ ──────────────────── ti 27/10/2026 ───────────────────────── │
+│ ──────────────────── tir. 27/10 ──────────────────────────── │
 │   [buy]       Anna køber en billet til salg                  │
 │   [sold]      1 billet sælges til ventelisten                │
 └──────────────────────────────────────────────────────────────┘

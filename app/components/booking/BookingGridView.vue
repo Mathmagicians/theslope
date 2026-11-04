@@ -10,7 +10,7 @@
  * │  ◀  Uge 3 (13-19 jan)  ▶                               ✏️  │
  * ├──────────────────┬──────┬──────╫──────┬──────┬──────╫──────┤
  * │ Beboer           │  M   │  T   ║  O   │  T   │  F   ║  S   │
- * │                  │ 13/1 │ 14/1 ║ 15/1 │ 16/1 │ 17/1 ║ 19/1 │
+ * │                  │13/01 │14/01 ║15/01 │16/01 │17/01 ║19/01 │
  * │                  │      │      ║      │      │      ║      │ <- chip row (fixed h)
  * ├──────────────────┼──────┼──────╫──────┼──────┼──────╫──────┤
  * │⚡Alle            │  🍽️  │  ?   ║  🍽️  │  🍽️  │  🍽️  ║  ❌  │ <- consensus
@@ -45,10 +45,10 @@
  *
  * THE COLUMN CHIP on a dinner past its booking deadline shows the dinner's supply, as the dinner calendar's chip and the
  * day view's Framelding badge (lockChip on the store's lockStatus); the name cells keep the household's own counts.
- * Mon 13/1 nothing for sale, nobody waiting; Tue 14/1 3 tickets for sale (2V 1B), 2 of them released by the household;
- * Wed 15/1 nothing for sale, 8V on the waiting list:
+ * Mon 13/01 nothing for sale, nobody waiting; Tue 14/01 3 tickets for sale (2V 1B), 2 of them released by the household;
+ * Wed 15/01 nothing for sale, 8V on the waiting list:
  * | Beboer                      |    M     |    T     |    O      |
- * |                             |   13/1   |   14/1   |   15/1    |
+ * |                             |  13/01   |  14/01   |  15/01    |
  * |                             | (closed) |   (3)    |(hourglass)|
  * | Hele familien               |   ...    |   ...    |   ...     |
  * | Lars  tickets 3, released 1 |   ...    |   ...    |   ...     |
@@ -111,7 +111,7 @@
  *   expected cell counts its expected mode, and its Ingen leaves the places.
  *
  * RELEASED CELL (a ticket released after the booking deadline, which the household pays for unless it is sold):
- * | Beboer                       | T 14/1                |
+ * | Beboer                       | T 14/01               |
  * | Anna  [Voksen · 55 kr]       | Ingen  (released)     | <- the released icon in the released colour, in the corner
  * | Gæst af Anna [Baby · 0 kr]   | Ingen  (released)     |    and at the size of the hourglass (COMPONENTS.waitlist.chip)
  * | Lars  [Voksen · 55 kr]       | Spisesal (hourglass)  |
@@ -125,7 +125,7 @@
  * the column headers and the rows stay; the lock chips wait, they count the household's orders:
  * Familiens bookinger                       [Dag] [Uge] [Måned]
  *                  <-   oktober 2026   ->
- * Beboer      | M 28/9 | T 29/9 | O 30/9 | ... | T 29/10 |
+ * Beboer      | M 28/09 | T 29/09 | O 30/09 | ... | T 29/10 |
  * ===================================================== <- UTable's loading bar
  * ⚡Alle      |  🍽️    |  ?     |  🍽️    | ... |  ❌     |
  * Anna V 🎟️4 |  🍽️    |  🍽️    |  🛍️    | ... |  ❌     |
@@ -468,7 +468,6 @@ const columns = computed(() => {
     const boundaryClass = isWeekBoundary ? COMPONENTS.bookingGrid.weekBoundary : ''
     return {
       id: `event-${event.id}`,
-      header: formatCompactWeekdayDate(event.date),
       size: 50,
       meta: {
         eventId: event.id,
@@ -789,11 +788,11 @@ const getEventSummary = (eventId: number) => {
         </UAlert>
       </template>
 
-      <!-- Dynamic event column headers: M / 29/1 / chip (fixed height) -->
+      <!-- Dynamic event column headers: M / 29/01 / chip (fixed height) -->
       <template v-for="event in flatEvents" :key="`header-${event.id}`" #[`event-${event.id}-header`]>
         <div :class="[COMPONENTS.bookingGrid.eventHeader, isEventDisabled(event) && COMPONENTS.bookingGrid.eventHeaderDisabled]">
-          <span :class="TYPOGRAPHY.caption">{{ formatDate(event.date, 'EEEEE') }}</span>
-          <span :class="TYPOGRAPHY.finePrint">{{ formatDate(event.date, 'd/M') }}</span>
+          <span :class="TYPOGRAPHY.caption">{{ formatWeekdayCompact(dateToWeekDay(event.date), true) }}</span>
+          <span :class="TYPOGRAPHY.finePrint">{{ formatDate(event.date, DATE_SETTINGS.DAY_MONTH_MASK) }}</span>
           <!-- Fixed height slot for chip: 🟠=locked, 🟡N=locked with N tickets; a cancelled dinner's state badge in its place -->
           <div :class="COMPONENTS.bookingGrid.chipSlot">
             <UBadge

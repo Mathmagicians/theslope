@@ -69,8 +69,7 @@ const badges = computed(() => createChefBadges(props.dinnerEvent, props.deadline
 // The date wears the calendar's colour for its category; a cancelled dinner wears the past
 const dateColorClass = computed(() => isCancelled.value ? CALENDAR.day.past : dayColorClass(CHEF_CALENDAR, props.temporalCategory))
 
-// Format dinner date with weekday (matches countdown timer style: "Lør 16/01")
-const formattedDate = computed(() => formatDanishWeekdayDate(props.dinnerEvent.date))
+const formattedDate = computed(() => formatCompactWeekdayDate(props.dinnerEvent.date))
 
 // Menu title or placeholder
 const menuTitle = computed(() => props.dinnerEvent.menuTitle || 'Ingen menu endnu')

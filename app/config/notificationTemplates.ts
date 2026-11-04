@@ -73,7 +73,7 @@ export const NOTIFICATION_TEMPLATES = {
 }
 
 /**
- * The moments a chef deadline's lines name, as the chef reads them: "10/10/2026 kl. 18:00"; and the deadline's day on
+ * The moments a chef deadline's lines name, as the chef reads them: "10/10/2026 18:00"; and the deadline's day on
  * the run's day, which the red lines name: a red alarm starts 24 hours before its deadline, so the deadline falls on
  * the run's day or the day after
  */

@@ -10,7 +10,7 @@ import {useCookingTeam} from '~/composables/useCookingTeam'
 import {TEAM_WORDS} from '~/config/teamWords'
 import {SEASON_CONFIG} from '~/config/season'
 import {computeCookingDates, getDinnerOnDate, splitDinnerEvents} from '~/utils/season'
-import {formatDanishWeekdayDate, formatDate, parseDate} from '~/utils/date'
+import {formatCompactWeekdayDate, formatDate, parseDate} from '~/utils/date'
 
 const {getSessionUserInfo, gotoHydrated, collectHydrationWarnings, salt, pageCalendarToMonth, doScreenshot, waitForApi} = testHelpers
 const {TeamRoleSchema} = useCookingTeamValidation()
@@ -238,7 +238,7 @@ Then('{actor} sees the next cooking day of team {int}', async ({adminContext: ad
     const team = await SeasonFactory.getCookingTeamById(admin, teamOf(scene, number).id!)
     const {nextDinner} = nextDinnerOf(team!.dinnerEvents, new Date())
     expect(nextDinner, `team ${number} has a dinner ahead`).not.toBeNull()
-    await expect(fromScene(scene, 'page').getByTestId('chef-next-cooking-countdown')).toContainText(formatDanishWeekdayDate(nextDinner!.date))
+    await expect(fromScene(scene, 'page').getByTestId('chef-next-cooking-countdown')).toContainText(formatCompactWeekdayDate(nextDinner!.date))
 })
 
 Then('{actor} sees the visiting tab and the visitor line of team {int}', async ({scene}, actor: Actor, number: number) => {

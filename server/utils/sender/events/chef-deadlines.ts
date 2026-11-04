@@ -57,8 +57,8 @@ const alarmLineOf = (words: ChefDeadlineWords, alarm: AlarmLevel) => {
     }
 }
 
-// A moment as the chef reads it in Copenhagen: "10/10/2026 kl. 18:00"
-const momentOf = (moment: Date): string => formatDateInTimezone(moment, DATE_SETTINGS.DATE_AT_TIME_MASK)
+// A moment as the chef reads it in Copenhagen: "10/10/2026 18:00"
+const momentOf = (moment: Date): string => formatDateInTimezone(moment, DATE_SETTINGS.DATE_TIME_MASK)
 
 // A deadline's lines: check once met; missing, its deadline, the countdown the chef page shows while the deadline is
 // ahead or the time since it once overdue, and the line of its alarm level

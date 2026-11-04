@@ -20,8 +20,7 @@ const planStore = usePlanStore()
 const {activeSeason} = storeToRefs(planStore)
 const now = useClock()
 
-// Current date for header (formatted in Danish)
-const currentDate = computed(() => formatDate(now.value, DATE_SETTINGS.LONG_DATE_MASK))
+const currentDate = computed(() => formatDate(now.value))
 
 // QR Code URL (uses current request URL for correct environment - local/dev/prod)
 const requestUrl = useRequestURL()

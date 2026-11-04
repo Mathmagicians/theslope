@@ -53,11 +53,11 @@
  *  Opdater fællesspisning præferencer for Knud
  *  Man [Spis][Sen][Take][Ingen]  Tir [...]  Ons [...]  Tor [...]
  *  (ticket) Du er ved at ændre familiens booking
- *  ── ti 20/10/2026 ──────────────────────────────
+ *  ── tir. 20/10 ─────────────────────────────────
  *     [released badge]  Knud frigiver sin billet
- *  ── ti 27/10/2026 ──────────────────────────────
+ *  ── tir. 27/10 ─────────────────────────────────
  *     [edit badge]      Knud ændrer spisemåde til Takeaway
- *  ── ma 02/11/2026 ──────────────────────────────
+ *  ── man. 02/11 ─────────────────────────────────
  *     [cancel badge]    Knud frameldes
  *                                                    [Annuller] [Gem]
  *
@@ -66,9 +66,9 @@
  *  (warning) Du er ved at aktivere power mode ...
  *  Man [Spis][Sen][Take][Ingen]  Tir [...]  Ons [...]  Tor [...]
  *  (ticket) Du er ved at ændre familiens booking
- *  ── ti 20/10/2026 ──────────────────────────────
+ *  ── tir. 20/10 ─────────────────────────────────
  *     [released badge]  Lene frigiver sin billet
- *  ── ma 02/11/2026 ──────────────────────────────
+ *  ── man. 02/11 ─────────────────────────────────
  *     [cancel badge]    Knud frameldes
  *     [cancel badge]    Lene frameldes
  *                                            [Annuller] [Gem for alle]

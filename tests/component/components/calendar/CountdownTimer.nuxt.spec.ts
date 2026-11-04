@@ -6,7 +6,7 @@ import CountdownTimer, {COUNTDOWN_PALETTE, type CountdownPalette} from '~/compon
 import {CHEF_CALENDAR, DINNER_CALENDAR} from '~/composables/useTheSlopeDesignSystem'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {DATE_WORDS} from '~/config/dateWords'
-import {calculateCountdown, formatDanishWeekdayDate} from '~/utils/date'
+import {calculateCountdown, formatCompactWeekdayDate} from '~/utils/date'
 import {resetStores, setClock} from '~~/tests/component/testHelpers'
 
 /**
@@ -43,7 +43,7 @@ describe('CountdownTimer', () => {
         const wrapper = await mountCountdown(EVENT)
 
         expect(wrapper.text()).toContain(title)
-        expect(wrapper.text()).toContain(formatDanishWeekdayDate(EVENT.date))
+        expect(wrapper.text()).toContain(formatCompactWeekdayDate(EVENT.date))
         expect(wrapper.text()).toContain(DATE_WORDS.countdown.in)
         expect(wrapper.text()).toContain(calculateCountdown(eventStart(), NOW).formatted)
         expect(wrapper.text()).toContain(`${timeLabel} ${DATE_WORDS.countdown.at}`)

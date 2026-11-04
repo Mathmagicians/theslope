@@ -105,7 +105,7 @@ describe('admin/allergies/pdf (allergy poster)', () => {
     it('prints its title, the date, the columns and the scan caption, and hands the managers\' box the poster\'s line', async () => {
         const wrapper = await mountPage()
         const {poster, managers} = ALLERGY_WORDS
-        const words = [poster.title, poster.asOf(formatDate(useClock().value, DATE_SETTINGS.LONG_DATE_MASK)), poster.allergen, poster.person, poster.scan]
+        const words = [poster.title, poster.asOf(formatDate(useClock().value)), poster.allergen, poster.person, poster.scan]
 
         expect(words.filter(word => !wrapper.text().includes(word))).toEqual([])
         expect(wrapper.findComponent(AllergyManagersList).props('message')).toBe(managers.posterMessage)

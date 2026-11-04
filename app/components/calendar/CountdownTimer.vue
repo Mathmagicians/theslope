@@ -130,9 +130,8 @@ export type CountdownPalette = typeof COUNTDOWN_PALETTE[keyof typeof COUNTDOWN_P
 
       <!-- Active event state -->
       <template v-if="nextEvent && displayState !== COUNTDOWN_STATE.empty">
-        <!-- Weekday + Date (Danish 3-letter) -->
         <div :class="[CALENDAR.countdown.date, paletteStyles.accent]">
-          {{ formatDanishWeekdayDate(nextEvent.date) }}
+          {{ formatCompactWeekdayDate(nextEvent.date) }}
         </div>
 
         <!-- Countdown (Large - Most Important) -->

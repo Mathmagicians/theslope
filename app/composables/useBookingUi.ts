@@ -34,7 +34,7 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {TicketWaitlistDetail, WaitlistOrder} from '~/composables/useWaitlistValidation'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 import {ICONS, COLOR, COMPONENTS, ALARM_TO_BADGE, BOOKING_LOCK_STATUS, ORDER_STATE_COLORS, TICKET_TYPE_COLORS, TICKET_TYPE_ICONS, type NuxtUIColor, type TicketTypeColor} from '~/composables/useTheSlopeDesignSystem'
-import {calculateCountdown, formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
+import {calculateCountdown, formatDate, formatDateRange, formatCompactWeekdayDate, DATE_SETTINGS} from '~/utils/date'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {groupBy, linesBy} from '~/utils/batchUtils'
 import {compareAsc} from 'date-fns'
@@ -588,8 +588,6 @@ export interface ActionPreviewDay {
     lines: ActionPreviewItem[]
 }
 
-const previewDayLabel = (date: Date): string => `${formatDate(date, 'EEEEEE')} ${formatDate(date)}`
-
 // Each action's colour is the colour of the order state it leads to
 const ACTION_TO_STATE = {
     [Action.BOOK]: OrderStateEnum.BOOKED,
@@ -699,7 +697,7 @@ export const formatPreviewLines = (
         .map(({dinnerEventId, date, lines, soldToWaitlist}) => ({
             dinnerEventId,
             date,
-            label: previewDayLabel(date),
+            label: formatCompactWeekdayDate(date),
             lines: [...lines.map(line => previewItem(line.name, line.row.action, wordsOf(line.row), line.places)), ...saleLine(soldToWaitlist.length)]
         }))
         .filter(day => day.lines.length > 0)

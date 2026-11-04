@@ -493,6 +493,14 @@ describe('BookingGridView', () => {
     expect(selectorNamed(wrapper, cellOf(anna.id, cancelled.id)).props()).toMatchObject({modelValue: DINEIN, cancelled: true, enabledModes: [], formMode: FORM_MODES.VIEW})
   })
 
+  // The column header reads the weekday's letter over the day and month, both padded
+  it('GIVEN a dinner on Saturday 5 January THEN its column header reads L over 05/01', async () => {
+    const dinner = {...DinnerEventFactory.dinnerEventAt(1, 1), date: new Date(2030, 0, 5)}
+    const wrapper = await mountGrid([dinner])
+
+    expect(wrapper.find('thead').text()).toContain('L05/01')
+  })
+
   // The column header carries the dinner's supply, as the dinner calendar's chip on that day: its tickets for sale
   // counting up, else the hourglass of its waiting list, else the closed chip. A dinner open for booking and a past
   // dinner carry none, and the chip waits with the rows while they load
