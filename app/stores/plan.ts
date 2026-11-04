@@ -10,7 +10,7 @@ export const usePlanStore = defineStore("Plan", () => {
         // DEPENDENCIES
         const {storeAsyncData, loadOrThrow, apiRequest, toastSaved, notFoundToast} = useApiHandler()
         const now = useClock()
-        const {SeasonSchema, SeasonUpdateResponseSchema, ActiveSeasonIdSchema} = useSeasonValidation()
+        const {SeasonSchema, SeasonUpdateResponseSchema, SeasonDeactivationResponseSchema, ActiveSeasonIdSchema} = useSeasonValidation()
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
         const usersStore = useUsersStore()
@@ -255,14 +255,14 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         // Shared implementation for activate/deactivate
-        // Resolves the season the server activated or deactivated; null when the request fails
-        const executeSeasonActivation = async (seasonId: number | null): Promise<Season | null> => {
+        // Resolves the season the server activated or deactivated, shown in its toast once the seasons have re-read; null when the
+        // request fails. A deactivation with no season active resolves null too, so a landed write shows its toast here, never by
+        // its result
+        const executeSeasonActivation = async <T extends Season | null>(request: () => Promise<T>, showToast: (season: T) => void): Promise<T | null> => {
             isActivatingSeason.value = true
-            let season: Season | null
+            let season: T
             try {
-                season = await (seasonId
-                    ? apiRequest('/api/admin/season/active', {method: 'POST', body: {seasonId}, schema: SeasonSchema, action: 'seasonActivation'})
-                    : apiRequest('/api/admin/season/deactivate', {method: 'POST', schema: SeasonSchema.nullable(), action: 'seasonActivation'}))
+                season = await request()
             } catch {
                 return null
             } finally {
@@ -271,21 +271,31 @@ export const usePlanStore = defineStore("Plan", () => {
 
             await loadActiveSeason()
             await loadSeasons()
+            showToast(season)
             return season
         }
 
-        const activateSeason = async (seasonId: number): Promise<Season | null> => {
+        const activateSeason = (seasonId: number): Promise<Season | null> => {
             console.info(`🌞 > PLAN_STORE > Activating season ${seasonId}`)
-            const activated = await executeSeasonActivation(seasonId)
-            console.info(`🌞 > PLAN_STORE > Successfully activated season ${seasonId}`)
-            return activated
+            return executeSeasonActivation(
+                () => apiRequest('/api/admin/season/active', {method: 'POST', body: {seasonId}, schema: SeasonSchema, action: 'seasonActivation'}),
+                ({shortName}) => {
+                    console.info(`🌞 > PLAN_STORE > Successfully activated season ${seasonId}`)
+                    toastSaved(SEASON_WORDS.toasts.activated.title, SEASON_WORDS.toasts.activated.description(shortName))
+                }
+            )
         }
 
         const deactivateSeason = async (): Promise<Season | null> => {
             console.info(`🌞 > PLAN_STORE > Deactivating season`)
-            const deactivated = await executeSeasonActivation(null)
+            const deactivated = await executeSeasonActivation(
+                () => apiRequest('/api/admin/season/deactivate', {method: 'POST', schema: SeasonDeactivationResponseSchema, action: 'seasonActivation'}),
+                () => {
+                    console.info(`🌞 > PLAN_STORE > Successfully deactivated season`)
+                    toastSaved(SEASON_WORDS.toasts.deactivated.title, SEASON_WORDS.toasts.deactivated.description)
+                }
+            )
             await settleSeason()
-            console.info(`🌞 > PLAN_STORE > Successfully deactivated season`)
             return deactivated
         }
 

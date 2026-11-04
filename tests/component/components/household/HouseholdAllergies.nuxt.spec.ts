@@ -126,7 +126,7 @@ describe('HouseholdAllergies and the override', () => {
             registerEndpoint('/api/household/allergy', {method: 'GET', handler: () => [allergy]}),
             registerEndpoint('/api/household/allergy', {method: 'PUT', handler: write(allergy)}),
             registerEndpoint(`/api/household/allergy/${allergy.id}`, {method: 'POST', handler: write(allergy)}),
-            registerEndpoint(`/api/household/allergy/${allergy.id}`, {method: 'DELETE', handler: write({id: allergy.id})})
+            registerEndpoint(`/api/household/allergy/${allergy.id}`, {method: 'DELETE', handler: write(allergy)})
         ]
     })
 

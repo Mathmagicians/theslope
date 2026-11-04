@@ -44,7 +44,7 @@ import {ADMIN_WORDS} from '~/config/adminWords'
 import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 // Design system
-const {SIZES, COLOR, COMPONENTS, NOISE, TYPOGRAPHY, ICONS} = useTheSlopeDesignSystem()
+const {SIZES, COMPONENTS, NOISE, TYPOGRAPHY, ICONS} = useTheSlopeDesignSystem()
 const now = useClock()
 const display = COMPONENTS.householdAllergies
 
@@ -75,18 +75,8 @@ const {loadAllergiesForHousehold} = allergyStore
 // The household shown is the households store's selection; the store reads its allergies
 loadAllergiesForHousehold()
 
-// Toast notifications
-const toast = useToast()
-const showSuccessToast = (title: string, description?: string) => {
-  toast.add({ title, description, color: COLOR.success })
-}
-
 // Track which inhabitant's allergies are being edited
 const editingInhabitantId = ref<number | null>(null)
-
-// Helper to get allergy type name
-const getAllergyTypeName = (allergyTypeId: number): string =>
-  allergyTypes.value.find(t => t.id === allergyTypeId)?.name ?? ALLERGY_WORDS.household.unknownType
 
 // Add allergy - receives allergyTypeId from AllergyEditor @add event
 const handleAddAllergy = async (allergyTypeId: number) => {
@@ -97,8 +87,6 @@ const handleAddAllergy = async (allergyTypeId: number) => {
     allergyTypeId,
     inhabitantComment: null
   }, props.adminBypass)
-
-  showSuccessToast(ALLERGY_WORDS.toasts.title, ALLERGY_WORDS.toasts.added(getAllergyTypeName(allergyTypeId)))
 }
 
 // Remove allergy - receives allergyTypeId from AllergyEditor @remove event
@@ -108,8 +96,6 @@ const handleRemoveAllergy = async (allergyTypeId: number) => {
   if (!allergy) return
 
   await allergyStore.deleteAllergy(allergy.id, props.adminBypass)
-
-  showSuccessToast(ALLERGY_WORDS.toasts.title, ALLERGY_WORDS.toasts.removed(getAllergyTypeName(allergyTypeId)))
 }
 
 // Update comment - receives allergyTypeId from AllergyEditor @update:comment event
@@ -120,8 +106,6 @@ const handleCommentUpdate = async (allergyTypeId: number, comment: string) => {
   await allergyStore.updateAllergy(allergy.id, {
     inhabitantComment: comment || null
   }, props.adminBypass)
-
-  showSuccessToast(ALLERGY_WORDS.toasts.title, ALLERGY_WORDS.toasts.commentSaved)
 }
 
 // Table row type definition

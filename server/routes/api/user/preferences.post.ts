@@ -29,7 +29,7 @@ export default defineEventHandler(async (event): Promise<UserDetail> => {
     const {id: userId} = await getRequiredUser(event)
 
     // Validation - FAIL EARLY (400)
-    let body!: UserPreferencesUpdate
+    let body: UserPreferencesUpdate
     try {
         body = await readValidatedBody(event, UserPreferencesUpdateSchema.parse)
     } catch (error) {

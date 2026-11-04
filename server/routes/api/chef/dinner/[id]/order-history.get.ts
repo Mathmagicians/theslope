@@ -30,7 +30,7 @@ export default defineEventHandler(async (event): Promise<TicketChangesResponse> 
     const {deadlinesForSeason} = useSeason()
     const {findTicketPriceById} = useTicket()
 
-    let id!: number
+    let id: number
     let since: Date | undefined
     try {
         ({id} = await getValidatedRouterParams(event, paramSchema.parse))

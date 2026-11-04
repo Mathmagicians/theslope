@@ -42,8 +42,8 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     const PREFIX = '👩‍🍳 > TEAM > COOKING > ASSIGN_ROLE > [POST] > '
 
     // Input validation try-catch - FAIL EARLY
-    let id!: number
-    let assignData!: AssignRole
+    let id: number
+    let assignData: AssignRole
     try {
         ({ id } = await getValidatedRouterParams(event, paramSchema.parse))
         assignData = await readValidatedBody(event, AssignRoleSchema.parse)

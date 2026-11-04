@@ -3,6 +3,7 @@ import type {MonthlyBillingResponse, Expense, ExpenseCreate} from '~/composables
 import type {WaitlistAssignmentResult, TicketWaitlistDisplay, TicketWaitlistDetail, WaitlistQueueSummary} from '~/composables/useWaitlistValidation'
 import {useWaitlist} from '~/composables/useWaitlist'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import type {ScaffoldToast} from '~/composables/useBookingUi'
 import {TEAM_WORDS} from '~/config/teamWords'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
@@ -10,7 +11,7 @@ import {stringifyQuery} from 'ufo'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
-    const {storeAsyncData, apiRequest, runJob} = useApiHandler()
+    const {storeAsyncData, apiRequest, toastSaved, runJob} = useApiHandler()
     const now = useClock()
     const {OrderDisplaySchema, OrderDetailSchema, OrderStateSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema, TicketChangesResponseSchema, TicketTypeSchema, encodeDesiredOrder} = useBookingValidation()
     const {formatScaffoldResult} = useBooking()
@@ -264,17 +265,14 @@ export const useBookingsStore = defineStore("Bookings", () => {
         if (seasonId !== null && request.dinnerEventIds.some(id => shownOpen.has(id) && !covered.has(id))) await refreshSelectedSeason()
     }
 
-    // A scaffold result toast: the title names the view, the suffix the dinner (guest bookings), the household's order its people
-    type ScaffoldToast = {title: string, suffix?: string, householdOrder?: number[]}
-
     /**
      * Scaffold endpoint call shared by the single- and multi-event entry points;
-     * with a toast given, the result is reported in it.
+     * the result shows in the toast given.
      */
     const processBookings = async (
         request: ScaffoldOrdersRequest,
         adminBypass: boolean,
-        report: ScaffoldToast | undefined,
+        toastText: ScaffoldToast,
         label: string
     ): Promise<ScaffoldOrdersResponse> => {
         const result = await writeBookings(() => apiRequest('/api/household/order/scaffold', {
@@ -286,10 +284,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }))
         await refreshSeasonOnClosedDinners(request, result.scaffoldResult)
         console.info(CTX, `${label}: ${formatScaffoldResult(result.scaffoldResult)}`)
-        if (report) {
-            const reported = scaffoldToast(report.title, result.scaffoldResult, report.householdOrder)
-            toast.add({...reported, description: `${reported.description}${report.suffix ?? ''}`})
-        }
+        toast.add(scaffoldToast(toastText, result.scaffoldResult))
         return result
     }
 
@@ -326,9 +321,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
         dinnerEventId: number,
         orders: DesiredOrder[],
         adminBypass: boolean,
-        report?: ScaffoldToast
+        toastText: ScaffoldToast
     ): Promise<ScaffoldOrdersResponse> =>
-        processBookings({householdId, dinnerEventIds: [dinnerEventId], orders}, adminBypass, report, 'processSingleEventBookings')
+        processBookings({householdId, dinnerEventIds: [dinnerEventId], orders}, adminBypass, toastText, 'processSingleEventBookings')
 
     /**
      * Process bookings for multiple dinner events.
@@ -339,13 +334,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
         dinnerEventIds: number[],
         orders: DesiredOrder[],
         adminBypass: boolean,
-        report?: ScaffoldToast
+        toastText: ScaffoldToast
     ): Promise<ScaffoldOrdersResponse> =>
-        processBookings({householdId, dinnerEventIds, orders}, adminBypass, report, 'processMultipleEventsBookings')
+        processBookings({householdId, dinnerEventIds, orders}, adminBypass, toastText, 'processMultipleEventsBookings')
 
     /**
      * Admin correction of a household's bookings on one dinner: the scaffold with adminBypass lifts the deadlines
-     * (NONE deletes, a mode change lands after the deadline). Returns the ScaffoldResult; the caller toasts it.
+     * (NONE deletes, a mode change lands after the deadline). Returns the ScaffoldResult, shown in the toast given.
      *
      * @param guestBookerInhabitantId - A new guest ticket books on this inhabitant of the target household
      */
@@ -353,12 +348,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
         householdId: number,
         dinnerEventId: number,
         orders: DesiredOrder[],
-        guestBookerInhabitantId?: number
+        guestBookerInhabitantId: number | undefined,
+        toastText: ScaffoldToast
     ): Promise<ScaffoldResult> => {
         const corrected = orders.map(order => order.isGuestTicket && !order.orderId && guestBookerInhabitantId
             ? {...order, inhabitantId: guestBookerInhabitantId}
             : order)
-        const {scaffoldResult} = await processBookings({householdId, dinnerEventIds: [dinnerEventId], orders: corrected}, true, undefined, 'processAdminCorrection')
+        const {scaffoldResult} = await processBookings({householdId, dinnerEventIds: [dinnerEventId], orders: corrected}, true, toastText, 'processAdminCorrection')
         return scaffoldResult
     }
 
@@ -447,12 +443,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const updateDinnerEventAllergens = withLoading(async (id: number, allergenIds: number[]) => {
         const words = TEAM_WORDS.toasts.allergensSaved
         const updated = await updateDinner(id, {allergenIds}, {action: 'updateDinnerEventAllergens', errorMessage: words.failed})
-        toast.add({
-            title: words.title,
-            description: allergenIds.length > 0 ? words.withAllergens : words.withoutAllergens,
-            icon: ICONS.checkCircle,
-            color: COLOR.success
-        })
+        toastSaved(words.title, allergenIds.length > 0 ? words.withAllergens : words.withoutAllergens)
         return updated
     })
     // The chef's grocery lines: the API answers the line, the dinner detail re-reads for its computed cost
@@ -465,7 +456,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             method: 'PUT', body: line, schema: ExpenseSchema, action: 'addExpense', errorMessage: words.failed
         })
         await refreshDinnerIfSelected(dinnerEventId)
-        toast.add({title: words.title, description: words.description(expense.description, formatPrice(expense.amount)), color: COLOR.success})
+        toastSaved(words.title, words.description(expense.description, formatPrice(expense.amount)))
         return expense
     })
     const removeExpense = withLoading(async (dinnerEventId: number, expenseId: number): Promise<Expense> => {
@@ -473,7 +464,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             method: 'DELETE', schema: ExpenseSchema, action: 'removeExpense', errorMessage: TEAM_WORDS.toasts.expenseRemoved.failed
         })
         await refreshDinnerIfSelected(dinnerEventId)
-        toast.add({title: TEAM_WORDS.toasts.expenseRemoved.title, description: removed.description, color: COLOR.success})
+        toastSaved(TEAM_WORDS.toasts.expenseRemoved.title, removed.description)
         return removed
     })
 
@@ -509,12 +500,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     })
     const undoCancelDinner = withLoading(async (id: number, targetState: DinnerState = DinnerState.SCHEDULED) => {
         const reopened = await updateDinnerState(id, targetState, {action: 'undoCancelDinner', errorMessage: TEAM_WORDS.toasts.reopened.failed})
-        toast.add({
-            title: TEAM_WORDS.toasts.reopened.title,
-            description: TEAM_WORDS.toasts.reopened.description(...dinnerWords(reopened)),
-            icon: ICONS.checkCircle,
-            color: COLOR.success
-        })
+        toastSaved(TEAM_WORDS.toasts.reopened.title, TEAM_WORDS.toasts.reopened.description(...dinnerWords(reopened)))
         return reopened
     })
 
@@ -571,11 +557,10 @@ export const useBookingsStore = defineStore("Bookings", () => {
         const dinner = await saveMenuFields(id, updates)
         if (dinner === null) return null
 
-        toast.add({
-            title: TEAM_WORDS.toasts.menuSaved.title(wasAutoClaimed ? formatRoleClaimedTitle(dinner, TeamRoleSchema.enum.CHEF) : null),
-            description: TEAM_WORDS.toasts.menuSaved.description(dinner.menuTitle),
-            color: COLOR.success
-        })
+        toastSaved(
+            TEAM_WORDS.toasts.menuSaved.title(wasAutoClaimed ? formatRoleClaimedTitle(dinner, TeamRoleSchema.enum.CHEF) : null),
+            TEAM_WORDS.toasts.menuSaved.description(dinner.menuTitle)
+        )
 
         return {dinner, wasAutoClaimed}
     }

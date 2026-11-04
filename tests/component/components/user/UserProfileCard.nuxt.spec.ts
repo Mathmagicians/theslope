@@ -16,7 +16,7 @@ import {mountWithTooltipProvider, findByTestId, clickByTestId, itemAt, resetStor
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {useCoreValidation, type UserDetail} from '~/composables/useCoreValidation'
 import {ROLE_OWNERSHIP, RoleOwner} from '~/composables/useUserRoles'
-import {getHouseholdUrl} from '~/utils/household'
+import {getHouseholdUrl, HOUSEHOLD_TAB} from '~/utils/household'
 import {USER_WORDS} from '~/config/userWords'
 import {BUTTON_WORDS} from '~/config/buttonWords'
 import {PREF_TEST_IDS} from './userPreferencesTestIds'
@@ -123,7 +123,7 @@ describe('UserProfileCard - links', () => {
         const household = me.Inhabitant?.household
         if (!household?.shortName) throw new Error('The factory user has no household')
 
-        expect(wrapper.find(`a[href="${getHouseholdUrl(household.shortName, household.pbsId)}"]`).exists()).toBe(true)
+        expect(wrapper.find(`a[href="${getHouseholdUrl(household.shortName, household.pbsId, HOUSEHOLD_TAB.bookings)}"]`).exists()).toBe(true)
         expect(findByTestId(wrapper, PROFILE_TEST_IDS.heynaboProfile).text()).toBe(BUTTON_WORDS.heynabo.name)
     })
 })

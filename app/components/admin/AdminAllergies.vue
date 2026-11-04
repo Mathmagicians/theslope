@@ -147,14 +147,12 @@ const handleSubmit = async (data: AllergyTypeCreate) => {
   try {
     if (formMode.value === FORM_MODES.CREATE) {
       await createAllergyType(data)
-      showSuccessToast('Allergi oprettet', `${data.name} er tilføjet til kataloget`)
     } else if (formMode.value === FORM_MODES.EDIT && editingId.value) {
       await updateAllergyType(editingId.value, data)
-      showSuccessToast('Allergi opdateret', `${data.name} er opdateret`)
     }
     cancelEdit()
-  } catch (error) {
-    console.error('🥜 > AdminAllergies > Error submitting:', error)
+  } catch {
+    // The request has toasted the failure
   }
 }
 
@@ -178,25 +176,13 @@ const confirmDelete = async () => {
   if (!allergyType) return
   isDeleting.value = true
   try {
-    await deleteAllergyType(allergyType.id!)
-    showSuccessToast('Allergi slettet', `${allergyType.name} er fjernet fra kataloget`)
-  } catch (error) {
-    console.error('🥜 > AdminAllergies > Error deleting:', error)
+    await deleteAllergyType(allergyType.id)
+  } catch {
+    // The request has toasted the failure
   } finally {
     isDeleting.value = false
     isConfirmingDelete.value = false
   }
-}
-
-// UTILITY
-const showSuccessToast = (title: string, description?: string) => {
-  const toast = useToast()
-  toast.add({
-    title,
-    description,
-    icon: ICONS.checkCircle,
-    color: COLOR.success
-  })
 }
 
 // ACTIONS - catalog selection (single mode); the shared table highlights via modelValue
@@ -258,9 +244,8 @@ const handleNotesSave = async (notes: string) => {
   isSavingNotes.value = true
   try {
     await savePosterNotes(notes)
-    showSuccessToast('Bemærkninger gemt')
-  } catch (error) {
-    console.error('🥜 > AdminAllergies > Error saving poster notes:', error)
+  } catch {
+    // The request has toasted the failure
   } finally {
     isSavingNotes.value = false
   }

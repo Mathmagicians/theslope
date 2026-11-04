@@ -569,8 +569,15 @@ describe('scaffoldToast', () => {
         {desc: 'a run where every order landed', result: inResultDays({results: resultsAt(ANNA, Action.BOOK, 11)})},
         {desc: 'a run with a failed order', result: inResultDays({failed: resultsAt(ANNA, Action.BOOK, 11), errored: 1})}
     ])('$desc toasts the view\'s title with the result\'s lines in the result\'s look', ({result}) => {
-        expect(scaffoldToast('Præferencer opdateret', result, [ANNA.inhabitantId]))
+        expect(scaffoldToast({title: 'Præferencer opdateret', householdOrder: [ANNA.inhabitantId]}, result))
             .toEqual({title: 'Præferencer opdateret', description: formatResultLines(result, [ANNA.inhabitantId]), ...scaffoldToastLook(result)})
+    })
+
+    it('the prefix stands before the result\'s lines and the suffix after them', () => {
+        const result = inResultDays({results: resultsAt(ANNA, Action.BOOK, 11)})
+
+        expect(scaffoldToast({title: 'Administrator Korrektion', prefix: 'Andeby 1\n', suffix: ' d. 01/01/2026'}, result).description)
+            .toBe(`Andeby 1\n${formatResultLines(result)} d. 01/01/2026`)
     })
 })
 

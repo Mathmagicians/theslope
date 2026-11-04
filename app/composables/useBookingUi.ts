@@ -498,7 +498,7 @@ export const bookingSaveLabel = (outcome: BookingOutcome): string => OUTCOME_WOR
 /** The guest form's button names the guests; its preview lines name the guests per outcome */
 export const guestSaveLabel = (count: number): string => BOOKING_WORDS.guests.save(count)
 
-/** The look of a toast that reports a booking result: the ticket, red as soon as one order failed, green otherwise; a line per day */
+/** The look of a booking result's toast: the ticket, red as soon as one order failed, green otherwise; a line per day */
 export const scaffoldToastLook = (result: ScaffoldResult) => ({
     color: result.errored > 0 ? COLOR.error : COLOR.success,
     icon: ICONS.ticket,
@@ -772,9 +772,16 @@ export const formatResultLines = (result: ScaffoldResult, householdOrder: number
     return allLines.length > 0 ? allLines.join('\n') : RESULT_WORDS.nothingChanged
 }
 
-/** The toast that reports a booking result: the view's title, the result's lines in the result's look */
-export const scaffoldToast = (title: string, result: ScaffoldResult, householdOrder: number[] = []) =>
-    ({title, description: formatResultLines(result, householdOrder), ...scaffoldToastLook(result)})
+/**
+ * The text of a booking result's toast, handed from a caller to a store: the title names the view, the prefix stands before the result's
+ * lines (an admin's correction names the address), the suffix after them (a guest booking names the dinner), the
+ * household's order names its people
+ */
+export type ScaffoldToast = {title: string, prefix?: string, suffix?: string, householdOrder?: number[]}
+
+/** A booking result's toast: the view's title, the result's lines in the result's look */
+export const scaffoldToast = ({title, prefix = '', suffix = '', householdOrder}: ScaffoldToast, result: ScaffoldResult) =>
+    ({title, description: `${prefix}${formatResultLines(result, householdOrder)}${suffix}`, ...scaffoldToastLook(result)})
 
 /** A person's own cell on a dinner: the key of a grid cell's draft and of its expected booking */
 export const expectedBookingKey = (inhabitantId: number, dinnerEventId: number): string => `${inhabitantId}-${dinnerEventId}`

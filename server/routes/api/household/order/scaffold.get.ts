@@ -38,8 +38,8 @@ export default defineEventHandler<Promise<ScaffoldOrdersResponse>>(async (event)
     const {ScaffoldOrdersRequestSchema, ScaffoldOrdersResponseSchema} = useBookingValidation()
 
     // Input validation (ADR-002)
-    let requestData!: ScaffoldOrdersRequest
-    let bypassDeadlines!: boolean
+    let requestData: ScaffoldOrdersRequest
+    let bypassDeadlines: boolean
     try {
         const query = await getValidatedQuery(event, querySchema.parse)
         requestData = ScaffoldOrdersRequestSchema.parse({

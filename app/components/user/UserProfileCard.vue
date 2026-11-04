@@ -229,7 +229,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
       <div v-if="household?.shortName && household.pbsId" :class="COMPONENTS.householdSettings.fact">
         <UIcon :name="ICONS.household" :class="COMPONENTS.householdSettings.factIcon" />
         <NuxtLink
-          :to="getHouseholdUrl(household.shortName, household.pbsId)"
+          :to="getHouseholdUrl(household.shortName, household.pbsId, HOUSEHOLD_TAB.bookings)"
           :class="[TYPOGRAPHY.bodyTextMuted, COMPONENTS.userProfileCard.householdLink]"
         >
           {{ household.shortName }}

@@ -35,7 +35,6 @@ const props = withDefaults(defineProps<Props>(), {
 const {ALERTS, BUTTONS, COLOR, ICONS, LAYOUTS} = useTheSlopeDesignSystem()
 const {getDefaultSeason, getDefaultHolidays} = useSeason()
 const now = useClock()
-const toast = useToast()
 const store = usePlanStore()
 const {
   isSeasonsLoading,
@@ -87,16 +86,6 @@ const showAdminSeason = computed(() => {
 
 const canEditSeason = computed(() => props.canEdit && !disabledModes.value.includes(FORM_MODES.EDIT))
 
-// UTILITY
-const showSuccessToast = (title: string, description?: string) => {
-  toast.add({
-    title,
-    description,
-    icon: ICONS.checkCircle,
-    color: COLOR.success
-  })
-}
-
 // SEASON-SPECIFIC BUSINESS LOGIC
 const handleSeasonUpdate = async (updatedSeason: Season) => {
   if (formMode.value === FORM_MODES.CREATE) {
@@ -117,22 +106,7 @@ const handleCancel = async () => {
 
 const handleActivateSeason = async () => {
   if (!selectedSeason.value?.id) return
-
-  try {
-    await activateSeason(selectedSeason.value.id)
-    showSuccessToast('Sæson aktiveret', `${selectedSeason.value.shortName} er nu den aktive sæson`)
-  } catch (error) {
-    console.error('Failed to activate season:', error)
-  }
-}
-
-const handleDeactivateSeason = async () => {
-  try {
-    await deactivateSeason()
-    showSuccessToast('Sæson deaktiveret', 'Der er nu ingen aktiv sæson')
-  } catch (error) {
-    console.error('Failed to deactivate season:', error)
-  }
+  await activateSeason(selectedSeason.value.id)
 }
 
 </script>
@@ -175,7 +149,7 @@ const handleDeactivateSeason = async () => {
             :show-activation-button="props.canEdit && formMode === FORM_MODES.EDIT"
             class="mb-6"
             @activate="handleActivateSeason"
-            @deactivate="handleDeactivateSeason"
+            @deactivate="deactivateSeason"
         />
 
         <AdminPlanningSeason

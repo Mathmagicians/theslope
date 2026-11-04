@@ -229,7 +229,7 @@ describe('AdminEconomy - the upcoming orders', () => {
 
         const held = holdEndpoint('/api/order', upcoming)
         unregister.push(held.unregister)
-        const saved = store.processAdminCorrection(1, 1, [])
+        const saved = store.processAdminCorrection(1, 1, [], 1, {title: 'a correction'})
         try {
             await untilTrue(() => !store.isUpcomingOrdersLoaded)
             await nextTick()

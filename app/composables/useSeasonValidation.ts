@@ -118,6 +118,9 @@ export const useSeasonValidation = () => {
     // GET /api/admin/season/active: a null id arrives as an empty body
     const ActiveSeasonIdSchema = z.preprocess(id => id || null, IdSchema.nullable())
 
+    // POST /api/admin/season/deactivate: no season to deactivate arrives as an empty body
+    const SeasonDeactivationResponseSchema = z.preprocess(season => season ?? null, SeasonSchema.nullable())
+
     // Serialization and deserialization functions
     const serializeSeason = (season: Season): SerializedSeason => SerializedSeasonSchema.parse(season)
 
@@ -153,6 +156,7 @@ export const useSeasonValidation = () => {
         ReconciliationResultSchema,
         SeasonUpdateResponseSchema,
         ActiveSeasonIdSchema,
+        SeasonDeactivationResponseSchema,
         serializeSeason,
         deserializeSeason,
         createWeekDayMapFromSelection,

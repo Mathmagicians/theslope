@@ -1,5 +1,4 @@
 import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus, getRequestURL} from 'h3'
-import type {H3Error} from 'h3'
 import {updateDinnerEvent, updateDinnerEventAllergens} from '~~/server/data/financesRepository'
 import {createHeynaboEvent, updateHeynaboEvent, cancelHeynaboEvent, uploadDefaultDinnerPictureToEvent} from '~~/server/integration/heynabo/heynaboClient'
 import {useBookingValidation} from '~/composables/useBookingValidation'
@@ -10,7 +9,7 @@ import {requireChefForDinner, getRequiredHeynaboToken} from '~~/server/utils/aut
 import {z} from 'zod'
 import {idParams} from '~/composables/useCoreValidation'
 
-const {throwH3Error} = eventHandlerHelper
+const {throwH3Error, h3eFromCatch} = eventHandlerHelper
 const {DinnerStateSchema, DinnerEventUpdateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -46,8 +45,8 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     const PREFIX = '👨‍🍳 > CHEF > DINNER > UPDATE > '
 
     // Input validation - FAIL EARLY
-    let id!: number
-    let updates!: ChefDinnerUpdate
+    let id: number
+    let updates: ChefDinnerUpdate
     try {
         ({id} = await getValidatedRouterParams(event, paramSchema.parse))
         updates = await readValidatedBody(event, ChefDinnerUpdateSchema.parse)
@@ -86,9 +85,9 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
                     if (heynaboEventId) {
                         const result = await updateHeynaboEvent(heynaboToken, heynaboEventId, heynaboPayload)
                             .then(() => 'ok' as const)
-                            .catch((error: H3Error) => {
+                            .catch((error: unknown) => {
                                 heynaboSyncDegraded = true
-                                return error.statusCode === 404 ? 'missing' : 'failed'
+                                return h3eFromCatch(PREFIX + 'Heynabo update failed', error).statusCode === 404 ? 'missing' : 'failed'
                             })
                         if (result === 'missing') heynaboEventId = null
                     }

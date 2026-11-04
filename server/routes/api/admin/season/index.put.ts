@@ -35,7 +35,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let seasonData!: Season
+    let seasonData: Season
     try {
         seasonData = await readValidatedBody(event, PutSeasonSchema.parse)
     } catch (error) {

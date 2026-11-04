@@ -12,7 +12,7 @@ const paramSchema = idParams('id')
 export default defineEventHandler(async (event): Promise<number> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
-    let id!: number
+    let id: number
 
     try {
         ({id} = await getValidatedRouterParams(event, paramSchema.parse))

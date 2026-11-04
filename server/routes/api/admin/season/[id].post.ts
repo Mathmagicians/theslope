@@ -43,8 +43,8 @@ export default defineEventHandler(async (event): Promise<SeasonUpdateResponse> =
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch
-    let id!: number
-    let seasonData!: Season
+    let id: number
+    let seasonData: Season
     try {
         const params = await getValidatedRouterParams(event, paramSchema.parse)
         id = params.id

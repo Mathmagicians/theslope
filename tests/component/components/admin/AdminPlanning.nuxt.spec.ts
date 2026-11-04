@@ -6,11 +6,14 @@ import {nextTick} from 'vue'
 import {mountWithTooltipProvider, findByTestId, clickByTestId, pollFor, resetStores} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import AdminPlanning from '~/components/admin/AdminPlanning.vue'
+import SeasonStatusDisplay from '~/components/shared/SeasonStatusDisplay.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
 import {useAuthStore} from '~/stores/auth'
 import {FORM_MODES} from '~/types/form'
 import {useCoreValidation} from '~/composables/useCoreValidation'
+import {API_ERROR_WORDS} from '~/config/apiErrorWords'
+import {SEASON_WORDS} from '~/config/seasonWords'
 
 const SystemRole = useCoreValidation().SystemRoleSchema.enum
 
@@ -28,6 +31,10 @@ registerEndpoint('/api/_auth/session', sessionEndpoint)
 registerEndpoint('/api/admin/season/active', () => 1)
 registerEndpoint('/api/admin/season/1', () => season)
 registerEndpoint('/api/admin/season', seasonsEndpoint)
+// Activation and deactivation answer the season; method-specific after the generic route above (reverse-order lookup)
+const activationEndpoint = vi.fn()
+registerEndpoint('/api/admin/season/active', {method: 'POST', handler: activationEndpoint})
+registerEndpoint('/api/admin/season/deactivate', {method: 'POST', handler: activationEndpoint})
 
 // Container spec: every test mounts the whole planning card with the real plan store
 vi.setConfig({testTimeout: 20_000})
@@ -99,6 +106,31 @@ describe('AdminPlanning', () => {
 
             expect(lastModeQuery()).toBe(FORM_MODES.CREATE)
             expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).exists()).toBe(true)
+        })
+    })
+
+    // The store reports an activation; the card reports nothing of its own
+    describe('activating the season', () => {
+        const failure = () => {
+            throw createError({statusCode: 500})
+        }
+
+        it.each([
+            {outcome: 'an activation lands', emits: 'activate', answer: () => season, toast: {title: SEASON_WORDS.toasts.activated.title, color: COLOR.success}},
+            {outcome: 'a deactivation lands', emits: 'deactivate', answer: () => season, toast: {title: SEASON_WORDS.toasts.deactivated.title, color: COLOR.success}},
+            {outcome: 'an activation fails', emits: 'activate', answer: failure, toast: {title: API_ERROR_WORDS.toastTitle(500), color: COLOR.warning}}
+        ])('WHEN $outcome THEN one toast tells it', async ({emits, answer, toast}) => {
+            activationEndpoint.mockImplementation(answer)
+            const wrapper = await mountPlanning()
+            useToast().clear()
+
+            wrapper.findComponent(SeasonStatusDisplay).vm.$emit(emits)
+
+            // The report comes last, once the seasons have re-read; a copy from the card would follow it
+            await vi.waitFor(() => expect(useToast().toasts.value).not.toEqual([]))
+            await flushPromises()
+            expect(activationEndpoint).toHaveBeenCalledTimes(1)
+            expect(useToast().toasts.value.map(({title, color}) => ({title, color}))).toEqual([toast])
         })
     })
 })

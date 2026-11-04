@@ -33,9 +33,6 @@ const { COLOR, COMPONENTS, ICONS, ALERTS, LAYOUTS, getRandomEmptyMessage, NOISE,
 const now = useClock()
 const noTeamMessage = getRandomEmptyMessage('noTeamAssigned', now.value)
 
-// Toast for user feedback
-const toast = useToast()
-
 // Auth store for current user info (used in booking handlers)
 const authStore = useAuthStore()
 const {user} = storeToRefs(authStore)
@@ -118,8 +115,7 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
   const toastTitle = isGuestBooking ? BOOKING_TOAST_TITLES.guest : BOOKING_TOAST_TITLES.booking
 
   try {
-    const response = await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders, false)
-    toast.add(scaffoldToast(toastTitle, response.scaffoldResult, selectedHousehold.value?.inhabitants.map(({id}) => id)))
+    await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders, false, {title: toastTitle, householdOrder: selectedHousehold.value?.inhabitants.map(({id}) => id)})
   } catch {
     // The request has toasted the failure
   }

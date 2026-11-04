@@ -48,7 +48,6 @@ export default defineEventHandler(async (event): Promise<string> => {
 
         return csv
     } catch (error) {
-        if ((error as {statusCode?: number}).statusCode === 404) throw error
         return throwH3Error(`${LOG} Error generating CSV export`, error)
     }
 })

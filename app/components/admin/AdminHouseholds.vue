@@ -175,7 +175,7 @@ const pagination = ref({
     >
       <template #shortName-cell="{ row }">
         <NuxtLink
-            :to="getHouseholdUrl(row.original.shortName, row.original.pbsId)"
+            :to="getHouseholdUrl(row.original.shortName, row.original.pbsId, HOUSEHOLD_TAB.bookings)"
             :class="COMPONENTS.adminHouseholds.shortNameLink"
         >
           {{ row.original.shortName }}

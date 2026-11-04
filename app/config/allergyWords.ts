@@ -13,13 +13,11 @@ export const ALLERGY_WORDS = {
         remove: 'Fjern allergi'
     },
     /**
-     * The household's allergies: the card's title, the editor's label on an inhabitant's row, the name of an allergy type
-     * the catalog lacks
+     * The household's allergies: the card's title and the editor's label on an inhabitant's row
      */
     household: {
         title: 'Familiens allergier og diætkrav',
-        editorLabel: 'Tilføj og rediger allergier',
-        unknownType: 'ukendt'
+        editorLabel: 'Tilføj og rediger allergier'
     },
     /**
      * The toasts of the household's allergies: an allergy added or removed, by its name, and a saved comment; and of the

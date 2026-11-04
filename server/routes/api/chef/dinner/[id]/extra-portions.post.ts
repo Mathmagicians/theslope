@@ -21,8 +21,8 @@ export default defineEventHandler(async (event): Promise<WaitlistAssignmentResul
     const d1Client = cloudflare.env.DB
     const {ExtraPortionsRequestSchema, WaitlistAssignmentResultSchema} = useWaitlistValidation()
 
-    let id!: number
-    let body!: ExtraPortionsRequest
+    let id: number
+    let body: ExtraPortionsRequest
     try {
         id = (await getValidatedRouterParams(event, paramSchema.parse)).id
         body = await readValidatedBody(event, ExtraPortionsRequestSchema.parse)

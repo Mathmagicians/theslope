@@ -4,9 +4,10 @@ import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {getQuery, type H3Event} from 'h3'
 import {ref} from 'vue'
-import {mountWithTooltipProvider, clickByTestId, findByTestId, findComponentByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, clickByTestId, findByTestId, findComponentByTestId, resetStores, untilTrue, VIEWPORTS} from '~~/tests/component/testHelpers'
 import type {ButtonProps} from '@nuxt/ui'
 import HouseholdCard from '~/components/household/HouseholdCard.vue'
+import {useBookingsStore} from '~/stores/bookings'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -199,5 +200,38 @@ describe('HouseholdCard reports a saved preference change', () => {
         expect(findByTestId(wrapper, 'last-result-alert').text()).toContain(HOUSEHOLD_WORDS.preferences.lastResult.description(line))
         expect(sent.filter(({method}) => method === 'POST').map(({inhabitantId, query}) => ({inhabitantId, allInhabitants: query.allInhabitants})))
             .toEqual([{inhabitantId: first!.id, ...allInhabitantsQuery(allInhabitants)}])
+    })
+})
+
+// A failed save shows the request's toast alone, and the open row keeps its draft
+describe('HouseholdCard and a failed preference save', () => {
+    const MONDAY = WEEKDAYS[0]
+    let unregister = () => {}
+
+    beforeEach(() => {
+        resetStores()
+        useToast().clear()
+        unregister = registerEndpoint(`/api/household/inhabitants/${inhabitant.id}/preferences`, {
+            method: 'POST',
+            handler: () => {
+                throw createError({statusCode: 500})
+            }
+        })
+    })
+
+    afterEach(() => unregister())
+
+    it('GIVEN the save fails THEN one toast names the failed save and the row stays open', async () => {
+        const wrapper = await mountCard(false)
+        await clickByTestId(wrapper, `inhabitant-${inhabitant.id}-edit-preferences`)
+        await clickByTestId(wrapper, `inhabitant-${inhabitant.id}-preferences-edit-${MONDAY}-${DinnerMode.NONE}`)
+        await clickByTestId(wrapper, 'save-preferences')
+
+        await vi.waitFor(() => expect(useToast().toasts.value).not.toEqual([]))
+        await untilTrue(() => !mountedStore(useBookingsStore).isProcessingBookings)
+        await flushPromises()
+
+        expect(useToast().toasts.value.map(toast => toast.description)).toEqual([HOUSEHOLD_WORDS.failed.save.description])
+        expect(findByTestId(wrapper, 'save-preferences').exists()).toBe(true)
     })
 })

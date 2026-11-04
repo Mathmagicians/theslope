@@ -1,11 +1,12 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
-import {enableAutoUnmount} from '@vue/test-utils'
+import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
 import {nextTick} from 'vue'
 import {addDays} from 'date-fns'
-import {mountWithTooltipProvider, clickByTestId, findByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, clickByTestId, findByTestId, resetStores, registerEmptyStoreEndpoints, untilTrue} from '~~/tests/component/testHelpers'
 import HouseholdSettings from '~/components/household/HouseholdSettings.vue'
+import {useBookingsStore} from '~/stores/bookings'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
@@ -59,6 +60,40 @@ describe('HouseholdSettings reports an undone move-out', () => {
         const alert = findByTestId(wrapper, 'last-move-out-result-alert').text()
         expect(alert).toContain(HOUSEHOLD_WORDS.preferences.lastResult.title)
         expect(alert).toContain(HOUSEHOLD_WORDS.moveOut.lastResult(line))
+    })
+})
+
+// A failed save shows the request's toast alone
+describe('HouseholdSettings and a failed move-out save', () => {
+    let unregister = () => {}
+
+    beforeEach(() => {
+        resetStores()
+        useToast().clear()
+        unregister = registerEndpoint(`/api/household/${household.id}/update`, {
+            method: 'POST',
+            handler: () => {
+                throw createError({statusCode: 500})
+            }
+        })
+    })
+
+    afterEach(() => unregister())
+
+    it('GIVEN the save fails THEN one toast names the failed save and the edit stays open', async () => {
+        const wrapper = await mountWithTooltipProvider(HouseholdSettings, {props: {household}})
+        await clickByTestId(wrapper, 'edit-move-out-date')
+        for (const _click of [1, 2]) {
+            await findByTestId(wrapper, 'clear-move-out-date').find('button').trigger('click')
+            await nextTick()
+        }
+
+        await vi.waitFor(() => expect(useToast().toasts.value).not.toEqual([]))
+        await untilTrue(() => !mountedStore(useBookingsStore).isProcessingBookings)
+        await flushPromises()
+
+        expect(useToast().toasts.value.map(toast => toast.description)).toEqual([HOUSEHOLD_WORDS.failed.save.description])
+        expect(findByTestId(wrapper, 'cancel-edit-move-out-date').exists()).toBe(true)
     })
 })
 

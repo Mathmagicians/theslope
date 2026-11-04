@@ -174,7 +174,7 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
           :color="COLOR.secondary"
           :header-bg="BG.pink[50]"
           :button-label="USER_WORDS.login.household.open"
-          :to="householdShortName && householdPbsId ? getHouseholdUrl(householdShortName, householdPbsId) : '/household'"
+          :to="householdShortName && householdPbsId ? getHouseholdUrl(householdShortName, householdPbsId, HOUSEHOLD_TAB.bookings) : '/household'"
         />
 
         <!-- Cooking Team Card -->

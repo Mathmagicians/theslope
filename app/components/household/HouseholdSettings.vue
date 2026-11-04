@@ -64,9 +64,6 @@ const {lastMoveOutResult} = storeToRefs(householdsStore)
 // The order the toast and the "Sidste ændring" alert name the people in
 const householdOrder = computed(() => props.household.inhabitants.map(({id}) => id))
 
-// Toast notifications
-const toast = useToast()
-
 // Move-out date state
 const isSaving = ref(false)
 const isEditing = ref(false)
@@ -107,15 +104,9 @@ const setMoveOutDate = async () => {
   if (!moveOutDate.value) return
   isSaving.value = true
   try {
-    const result = await householdsStore.setMoveOutDate(props.household.id, moveOutDate.value, props.adminBypass)
-    toast.add(scaffoldToast(HOUSEHOLD_WORDS.moveOut.toasts.set, result, householdOrder.value))
-  } catch (error) {
-    console.error('Failed to set move-out date:', error)
-    toast.add({
-      ...HOUSEHOLD_WORDS.failed.save,
-      icon: ICONS.exclamationCircle,
-      color: COLOR.error
-    })
+    await householdsStore.setMoveOutDate(props.household.id, moveOutDate.value, props.adminBypass, {title: HOUSEHOLD_WORDS.moveOut.toasts.set, householdOrder: householdOrder.value})
+  } catch {
+    // The request has toasted the failure
   } finally {
     isSaving.value = false
   }
@@ -124,15 +115,9 @@ const setMoveOutDate = async () => {
 const clearMoveOutDate = async () => {
   isSaving.value = true
   try {
-    const result = await householdsStore.setMoveOutDate(props.household.id, null, props.adminBypass)
-    toast.add(scaffoldToast(HOUSEHOLD_WORDS.moveOut.toasts.cleared, result, householdOrder.value))
-  } catch (error) {
-    console.error('Failed to clear move-out date:', error)
-    toast.add({
-      ...HOUSEHOLD_WORDS.failed.save,
-      icon: ICONS.exclamationCircle,
-      color: COLOR.error
-    })
+    await householdsStore.setMoveOutDate(props.household.id, null, props.adminBypass, {title: HOUSEHOLD_WORDS.moveOut.toasts.cleared, householdOrder: householdOrder.value})
+  } catch {
+    // The request has toasted the failure
   } finally {
     isSaving.value = false
   }

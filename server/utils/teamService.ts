@@ -4,7 +4,7 @@ import {useSeason} from '~/composables/useSeason'
 import {useCookingTeam} from '~/composables/useCookingTeam'
 import type {CookingTeamCreate, CookingTeamUpdate, CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
-import {isError} from 'h3'
+import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 export interface TeamOperationResult {
     teams: CookingTeamDetail[]
@@ -91,7 +91,7 @@ export async function assignAffinitiesAndEvents(
         await Promise.all(
             batch.map(team => updateTeam(d1Client, team.id, {id: team.id, affinity: team.affinity})
                 .catch((error: unknown) => {
-                    if (!isError(error) || error.statusCode !== 404) throw error
+                    if (eventHandlerHelper.h3eFromCatch(LOG, error).statusCode !== 404) throw error
                     console.warn(`${LOG} Team ${team.id} deleted since the season was read, affinity skipped`)
                 }))
         )

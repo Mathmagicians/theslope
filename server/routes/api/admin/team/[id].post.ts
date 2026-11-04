@@ -23,8 +23,8 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id!: number
-    let teamData!: CookingTeamUpdate
+    let id: number
+    let teamData: CookingTeamUpdate
     try {
         const params = await getValidatedRouterParams(event, paramSchema.parse)
         id = params.id

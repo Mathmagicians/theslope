@@ -14,6 +14,7 @@ import {
 } from '~/composables/useCoreValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { countTotals } from '~/composables/useBooking'
+import { scaffoldToast, type ScaffoldToast } from '~/composables/useBookingUi'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { UserFactory } from '~~/tests/e2e/testDataFactories/userFactory'
 import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
@@ -37,6 +38,7 @@ const { InhabitantUpdateResponseSchema } = useBookingValidation()
 const { createDefaultWeekdayMap, serializeWeekDayMap } = useCoreValidation()
 // The draft a preference save sends: every weekday dines in
 const weekMap = createDefaultWeekdayMap(DinnerMode.DINEIN)
+const aToastText: ScaffoldToast = {title: 'a save'}
 
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
@@ -211,7 +213,7 @@ describe('Households Store', () => {
       const mockResponse = createMockInhabitantUpdateResponse()
       preferencesEndpoint1.mockReturnValue(mockResponse)
 
-      const result = await store.updateInhabitantPreferences(1, weekMap, false)
+      const result = await store.updateInhabitantPreferences(1, weekMap, false, aToastText)
 
       expect(preferencesEndpoint1).toHaveBeenCalled()
       expect(result).toEqual(mockResponse.scaffoldResult)
@@ -228,7 +230,7 @@ describe('Households Store', () => {
       // Clear previous calls
       householdByIdEndpoint.mockClear()
 
-      await store.updateInhabitantPreferences(1, weekMap, false)
+      await store.updateInhabitantPreferences(1, weekMap, false, aToastText)
 
       // Verify refresh was called
       expect(householdByIdEndpoint).toHaveBeenCalled()
@@ -244,7 +246,7 @@ describe('Households Store', () => {
       })
 
       await expect(
-        store.updateInhabitantPreferences(1, weekMap, false)
+        store.updateInhabitantPreferences(1, weekMap, false, aToastText)
       ).rejects.toThrow()
     })
   })
@@ -261,7 +263,7 @@ describe('Households Store', () => {
       })
       const store = await setupStore()
 
-      const result = await store.updateAllInhabitantPreferences(1, weekMap, false)
+      const result = await store.updateAllInhabitantPreferences(1, weekMap, false, aToastText)
 
       expect(requests).toEqual([{query: allInhabitantsQuery(true), body: {dinnerPreferences: weekMap}}])
       expect(preferencesEndpoint2).not.toHaveBeenCalled()
@@ -278,7 +280,7 @@ describe('Households Store', () => {
       // Clear previous calls from loadHousehold
       householdByIdEndpoint.mockClear()
 
-      await store.updateAllInhabitantPreferences(1, weekMap, false)
+      await store.updateAllInhabitantPreferences(1, weekMap, false, aToastText)
 
       expect(householdByIdEndpoint).toHaveBeenCalledTimes(1)
     })
@@ -293,7 +295,7 @@ describe('Households Store', () => {
       })
 
       await expect(
-        store.updateAllInhabitantPreferences(1, weekMap, false)
+        store.updateAllInhabitantPreferences(1, weekMap, false, aToastText)
       ).rejects.toThrow()
     })
   })
@@ -408,13 +410,19 @@ describe('Households Store', () => {
     })
   })
 
+  // The writes that re-scaffold a household, each with the override and the toast a caller hands it
+  type Store = ReturnType<typeof useHouseholdsStore>
+  const householdWrites = [
+    {write: 'a preference change', endpoint: preferencesEndpoint1, run: (store: Store, adminBypass = false, toastText = aToastText) => store.updateInhabitantPreferences(1, weekMap, adminBypass, toastText)},
+    {write: 'a power mode change', endpoint: preferencesEndpoint1, run: (store: Store, adminBypass = false, toastText = aToastText) => store.updateAllInhabitantPreferences(1, weekMap, adminBypass, toastText)},
+    {write: 'a move-out date', endpoint: moveOutEndpoint, run: (store: Store, adminBypass = false, toastText = aToastText) => store.setMoveOutDate(1, new Date(), adminBypass, toastText)}
+  ]
+
   // A write that changes bookings goes through the bookings store's one write, which re-reads what a booking touches
   describe('booking writes', () => {
     it.each([
-      {write: 'a preference change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateInhabitantPreferences(1, weekMap, false)},
-      {write: 'a power mode change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateAllInhabitantPreferences(1, weekMap, false)},
-      {write: 'a move-out date', run: (store: ReturnType<typeof useHouseholdsStore>) => store.setMoveOutDate(1, new Date(), false)},
-      {write: 'a move to another household', run: (store: ReturnType<typeof useHouseholdsStore>) => store.moveInhabitant(1, 2)}
+      ...householdWrites,
+      {write: 'a move to another household', run: (store: Store) => store.moveInhabitant(1, 2)}
     ])('$write goes through the one booking write', async ({run}) => {
       moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult: OrderFactory.defaultScaffoldResult() })
       const store = await setupStore()
@@ -425,6 +433,38 @@ describe('Households Store', () => {
       await write
 
       expect(bookingsStore.isProcessingBookings).toBe(false)
+    })
+  })
+
+  // The store reports what a write's run did in the toast its caller hands it; a failed write shows the request's toast alone
+  describe('the toast of a booking write', () => {
+    const toastText: ScaffoldToast = {title: HOUSEHOLD_WORDS.moveOut.toasts.set, householdOrder: [2, 1]}
+    const scaffoldResult = OrderFactory.defaultScaffoldResult({totals: {[Action.CANCEL]: 4}})
+
+    beforeEach(() => {
+      moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult })
+      preferencesEndpoint1.mockReturnValue(InhabitantUpdateResponseSchema.parse({inhabitant: createMockInhabitant(1, 1), scaffoldResult}))
+    })
+
+    it.each(householdWrites)('GIVEN $write WHEN saved THEN one toast shows the run', async ({run}) => {
+      const store = await setupStore()
+      useToast().clear()
+
+      await run(store, false, toastText)
+
+      expect(useToast().toasts.value).toEqual([expect.objectContaining(scaffoldToast(toastText, scaffoldResult))])
+    })
+
+    it.each(householdWrites)('WHEN $write fails THEN the one toast is the request\'s, naming the failed save', async ({endpoint, run}) => {
+      endpoint.mockImplementation(() => {
+        throw createError({ statusCode: 500, statusMessage: 'Server error' })
+      })
+      const store = await setupStore()
+      useToast().clear()
+
+      await expect(run(store, false, toastText)).rejects.toThrow()
+
+      expect(useToast().toasts.value.map(toast => toast.description)).toEqual([HOUSEHOLD_WORDS.failed.save.description])
     })
   })
 
@@ -452,14 +492,7 @@ describe('Households Store', () => {
 
   // An admin's change of a household carries the override; the household's own change carries no parameter
   describe('the override on a write', () => {
-    type Store = ReturnType<typeof useHouseholdsStore>
-    const writes = [
-      {write: 'a preference change', endpoint: preferencesEndpoint1, run: (store: Store, adminBypass: boolean) => store.updateInhabitantPreferences(1, weekMap, adminBypass)},
-      {write: 'a power mode change', endpoint: preferencesEndpoint1, run: (store: Store, adminBypass: boolean) => store.updateAllInhabitantPreferences(1, weekMap, adminBypass)},
-      {write: 'a move-out date', endpoint: moveOutEndpoint, run: (store: Store, adminBypass: boolean) => store.setMoveOutDate(1, new Date(), adminBypass)}
-    ]
-
-    it.each(writes.flatMap(write => [false, true].map(adminBypass => ({...write, adminBypass}))))(
+    it.each(householdWrites.flatMap(write => [false, true].map(adminBypass => ({...write, adminBypass}))))(
       'GIVEN $write with adminBypass $adminBypass WHEN saved THEN the request carries the override query of its role', async ({endpoint, run, adminBypass}) => {
         moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult: OrderFactory.defaultScaffoldResult() })
         const store = await setupStore()
@@ -478,7 +511,7 @@ describe('Households Store', () => {
       })
       const store = await setupStore()
 
-      await store.updateInhabitantPreferences(1, draft, false)
+      await store.updateInhabitantPreferences(1, draft, false, aToastText)
 
       expect(bodies).toEqual([{dinnerPreferences: draft}])
     })
@@ -510,7 +543,7 @@ describe('Households Store', () => {
       await expect(store.createHousehold(payload(), [])).resolves.toBeNull()
     })
 
-    it('GIVEN a prev owner at the address WHEN created THEN the create carries the household alone and the prev owner moves out by override', async () => {
+    it('GIVEN a prev owner at the address WHEN created THEN the create carries the household alone, the prev owner moves out by override, and the one toast reports the created household', async () => {
       const created: unknown[] = []
       createHouseholdEndpoint.mockImplementation(async (event: H3Event) => {
         created.push(await readBody(event))
@@ -524,11 +557,13 @@ describe('Households Store', () => {
       const store = await setupStore()
       const household = payload()
       const moveOutDate = new Date('2026-11-01T00:00:00Z')
+      useToast().clear()
 
       await store.createHousehold(household, [{id: 1, moveOutDate}])
 
       expect(created).toEqual([JSON.parse(JSON.stringify(household))])
       expect(movedOut).toEqual([{query: adminBypassQuery(true), body: {moveOutDate: moveOutDate.toISOString()}}])
+      expect(useToast().toasts.value.map(toast => toast.title)).toEqual([HOUSEHOLD_WORDS.moveOut.toasts.set, HOUSEHOLD_WORDS.toasts.created.title])
     })
   })
 })

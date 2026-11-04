@@ -29,9 +29,9 @@ export default defineEventHandler<Promise<HouseholdUpdateResponse>>(async (event
     const {HouseholdUpdateSchema} = useCoreValidation()
     const {HouseholdUpdateResponseSchema} = useBookingValidation()
 
-    let id!: number
-    let adminBypass!: boolean
-    let householdData!: Partial<HouseholdUpdate>
+    let id: number
+    let adminBypass: boolean
+    let householdData: Partial<HouseholdUpdate>
     try {
         ({id} = await getValidatedRouterParams(event, paramSchema.parse))
         const query = await getValidatedQuery(event, AdminBypassQuerySchema.parse)

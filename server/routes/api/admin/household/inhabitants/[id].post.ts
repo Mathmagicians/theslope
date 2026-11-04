@@ -20,9 +20,9 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    let id!: number
+    let id: number
     let seasonId: number | undefined
-    let inhabitantData!: Partial<InhabitantUpdate>
+    let inhabitantData: Partial<InhabitantUpdate>
     try {
         const {InhabitantUpdateSchema} = useCoreValidation()
         const params = await getValidatedRouterParams(event, paramSchema.parse)

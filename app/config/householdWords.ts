@@ -32,7 +32,7 @@ export const HOUSEHOLD_WORDS = {
         household: 'Kunne ikke hente husstand',
         householdDetail: (householdId: number) => `Kunne ikke hente husstand ${householdId}`,
         householdPage: (shortName: string) => `Kunne ikke hente data for husstanden ${shortName}`,
-        save: {title: 'Kunne ikke gemme', description: 'Der opstod en fejl. Prøv igen senere.'}
+        save: {description: 'Der opstod en fejl. Prøv igen senere.'}
     },
     /**
      * The household card's dinner preferences: its title, an inhabitant's toggle, the power row's name and the label of

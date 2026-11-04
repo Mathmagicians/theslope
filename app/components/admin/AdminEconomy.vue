@@ -337,20 +337,22 @@ const ticketPrices = computed((): TicketPrice[] =>
     selectedSeason.value?.ticketPrices ?? []
 )
 
-const toast = useToast()
 const {processAdminCorrection} = bookingsStore
 
 const handleAdminSave = async (orders: DesiredOrder[]) => {
     if (!editingDinnerId.value || !editingHouseholdId.value || !editingDinnerEvent.value || !editingHousehold.value) return
     const guestBookerInhabitantId = editingHousehold.value.inhabitants[0]?.id
-    const result = await processAdminCorrection(
+    await processAdminCorrection(
         editingHouseholdId.value,
         editingDinnerId.value,
         orders,
-        guestBookerInhabitantId
+        guestBookerInhabitantId,
+        {
+            title: BOOKING_WORDS.billing.correction.toast,
+            prefix: `${editingHousehold.value.address}\n`,
+            householdOrder: editingHousehold.value.inhabitants.map(({id}) => id)
+        }
     )
-    const reported = scaffoldToast(BOOKING_WORDS.billing.correction.toast, result, editingHousehold.value.inhabitants.map(({id}) => id))
-    toast.add({...reported, description: `${editingHousehold.value.address}\n${reported.description}`})
     cancelEditing()
 }
 

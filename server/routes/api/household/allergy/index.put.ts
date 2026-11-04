@@ -20,8 +20,8 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
     const {AllergyCreateSchema} = useAllergyValidation()
 
     // Validate input - fail early on invalid data
-    let allergyData!: AllergyCreate
-    let adminBypass!: boolean
+    let allergyData: AllergyCreate
+    let adminBypass: boolean
     try {
         allergyData = await readValidatedBody(event, AllergyCreateSchema.parse)
         adminBypass = (await getValidatedQuery(event, AdminBypassQuerySchema.parse)).adminBypass

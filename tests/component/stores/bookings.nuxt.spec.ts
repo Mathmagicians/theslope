@@ -33,6 +33,7 @@ import {asyncDataStatus, resetStores, registerEmptyStoreEndpoints, holdEndpoint,
 const Action = useBookingValidation().BookingActionSchema.enum
 
 const DINNER_ID = 100
+const aToastText = {title: 'a save'}
 const TEAM = SeasonFactory.defaultCookingTeamDisplay({id: 7, name: 'Madhold A - Winter 2026'})
 // An economy order carries its dinner and its eater
 const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDisplay('upcoming'), id: DINNER_ID}
@@ -299,7 +300,7 @@ describe('Bookings store — scaffold bookings', () => {
     it('returns the scaffold response and clears the processing flag', async () => {
         const store = useBookingsStore()
 
-        const promise = store.processSingleEventBookings(1, DINNER_ID, [OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID})], false)
+        const promise = store.processSingleEventBookings(1, DINNER_ID, [OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID})], false, aToastText)
         expect(store.isProcessingBookings).toBe(true)
         const response = await promise
 
@@ -328,14 +329,6 @@ describe('Bookings store — scaffold bookings', () => {
             color,
             ui: {description: COMPONENTS.bookingResult.lines}
         })
-    })
-
-    it('shows no toast when none is given', async () => {
-        const store = useBookingsStore()
-
-        await store.processMultipleEventsBookings(1, [DINNER_ID], [], false)
-
-        expect(useToast().toasts.value).toHaveLength(0)
     })
 
     it('reports the queued places after the names and the queue left, a line per day, the people in the household\'s order', async () => {
@@ -378,7 +371,7 @@ describe('Bookings store — scaffold bookings', () => {
         const regular = OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID, orderId: 5, inhabitantId: 2})
         const guest = OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID, inhabitantId: 99, isGuestTicket: true})
 
-        const result = await store.processAdminCorrection(7, DINNER_ID, [regular, guest], 3)
+        const result = await store.processAdminCorrection(7, DINNER_ID, [regular, guest], 3, aToastText)
 
         expect(sent).toEqual([{query: adminBypassQuery(true), body: {householdId: 7, dinnerEventIds: [DINNER_ID], orders: [regular, {...guest, inhabitantId: 3}]}}])
         expect(result.totals[Action.CANCEL]).toBe(1)
@@ -386,10 +379,10 @@ describe('Bookings store — scaffold bookings', () => {
 
     // An admin's save on a household carries the override; the household's own save carries no parameter
     it.each([
-        {save: 'a member\'s day view save', adminBypass: false, run: (store: ReturnType<typeof useBookingsStore>) => store.processSingleEventBookings(1, DINNER_ID, [], false)},
-        {save: 'a member\'s grid save', adminBypass: false, run: (store: ReturnType<typeof useBookingsStore>) => store.processMultipleEventsBookings(1, [DINNER_ID], [], false)},
-        {save: 'an admin\'s day view save', adminBypass: true, run: (store: ReturnType<typeof useBookingsStore>) => store.processSingleEventBookings(1, DINNER_ID, [], true)},
-        {save: 'an admin\'s grid save', adminBypass: true, run: (store: ReturnType<typeof useBookingsStore>) => store.processMultipleEventsBookings(1, [DINNER_ID], [], true)}
+        {save: 'a member\'s day view save', adminBypass: false, run: (store: ReturnType<typeof useBookingsStore>) => store.processSingleEventBookings(1, DINNER_ID, [], false, aToastText)},
+        {save: 'a member\'s grid save', adminBypass: false, run: (store: ReturnType<typeof useBookingsStore>) => store.processMultipleEventsBookings(1, [DINNER_ID], [], false, aToastText)},
+        {save: 'an admin\'s day view save', adminBypass: true, run: (store: ReturnType<typeof useBookingsStore>) => store.processSingleEventBookings(1, DINNER_ID, [], true, aToastText)},
+        {save: 'an admin\'s grid save', adminBypass: true, run: (store: ReturnType<typeof useBookingsStore>) => store.processMultipleEventsBookings(1, [DINNER_ID], [], true, aToastText)}
     ])('GIVEN $save WHEN saved THEN the scaffold receives the override query of its role', async ({adminBypass, run}) => {
         const store = useBookingsStore()
 
@@ -432,7 +425,7 @@ describe('Bookings store — scaffold bookings', () => {
         scaffoldEndpoint.mockImplementation(failure)
         const store = useBookingsStore()
 
-        await expect(store.processMultipleEventsBookings(1, [DINNER_ID], [], false)).rejects.toBeTruthy()
+        await expect(store.processMultipleEventsBookings(1, [DINNER_ID], [], false, aToastText)).rejects.toBeTruthy()
         expect(store.isProcessingBookings).toBe(false)
     })
 })
@@ -466,7 +459,7 @@ describe('Bookings store — one booking write', () => {
         waitlistEntriesEndpoint.mockClear()
         dinnerEventDetailEndpoint.mockClear()
 
-        await expect(store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [], false))[outcome].toBeTruthy()
+        await expect(store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [], false, aToastText))[outcome].toBeTruthy()
 
         expect(store.isProcessingBookings).toBe(false)
         expect(queries(ordersEndpoint)).toEqual(expect.arrayContaining([
@@ -487,7 +480,7 @@ describe('Bookings store — one booking write', () => {
         {when: 'a booking save\'s re-read of the orders', before: async (store: Store) => {
             loadDinner(store)
             await vi.waitFor(() => expect(asyncDataStatus('bookings-store-orders')).toBe('success'))
-        }, read: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [], false)}
+        }, read: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [], false, aToastText)}
     ])('WHEN $when are on the way THEN the bookings read as reloading, until they land', async ({before, read}) => {
         const store = useBookingsStore()
         await before(store)
@@ -554,7 +547,7 @@ describe('Bookings store — a cancelled dinner', () => {
 
     const vias = [
         {via: 'a read of the expected bookings', run: (store: Store) => store.fetchExpectedBookings(MY_HOUSEHOLD_ID, [dinner.id])},
-        {via: 'a save', run: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [], false)}
+        {via: 'a save', run: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [], false, aToastText)}
     ]
     const replies = [
         {reply: 'leaves the asked dinner out', dinners: [], reads: 1},

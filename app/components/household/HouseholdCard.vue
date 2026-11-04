@@ -118,7 +118,7 @@ const householdOrder = computed(() => props.household.inhabitants.map(({id}) => 
 
 const {computeAggregatedPreferences} = useHousehold()
 
-const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES, ALERTS, NOISE, ORIENTATIONS, TABLE_COLUMNS } = useTheSlopeDesignSystem()
+const { WEEKDAY, COMPONENTS, ICONS, BUTTONS, SIZES, ALERTS, NOISE, ORIENTATIONS, TABLE_COLUMNS } = useTheSlopeDesignSystem()
 const now = useClock()
 const { powerMode } = COMPONENTS
 
@@ -201,33 +201,25 @@ const previewDays = computed(() => preview.value
   ? formatPreviewLines(preview.value, householdOrder.value)
   : [])
 
-const toast = useToast()
-
 const savePreferences = async () => {
   const target = saveTarget.value
   if (!target || !draftPreferences.value) return
 
   isSaving.value = true
 
-  try {
-    const result = target.allInhabitants
-      ? await householdsStore.updateAllInhabitantPreferences(target.inhabitantId, draftPreferences.value, props.adminBypass)
-      : await householdsStore.updateInhabitantPreferences(target.inhabitantId, draftPreferences.value, props.adminBypass)
+  const savedWords = HOUSEHOLD_WORDS.preferences.saved
+  const toastText = {title: target.allInhabitants ? savedWords.household : savedWords.inhabitant, householdOrder: householdOrder.value}
 
-    const savedWords = HOUSEHOLD_WORDS.preferences.saved
-    toast.add(scaffoldToast(target.allInhabitants ? savedWords.household : savedWords.inhabitant, result, householdOrder.value))
+  try {
+    await (target.allInhabitants
+      ? householdsStore.updateAllInhabitantPreferences(target.inhabitantId, draftPreferences.value, props.adminBypass, toastText)
+      : householdsStore.updateInhabitantPreferences(target.inhabitantId, draftPreferences.value, props.adminBypass, toastText))
 
     expanded.value = {}
     editingInhabitantId.value = null
     draftPreferences.value = null
-  } catch (error) {
-    console.error('🏠 > HOUSEHOLD_CARD > [savePreferences] Failed to update preferences', error)
-    toast.add({
-      title: HOUSEHOLD_WORDS.failed.save.title,
-      description: HOUSEHOLD_WORDS.failed.save.description,
-      icon: ICONS.exclamationCircle,
-      color: COLOR.error
-    })
+  } catch {
+    // The request has toasted the failure
   } finally {
     isSaving.value = false
   }

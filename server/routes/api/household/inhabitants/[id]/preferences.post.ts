@@ -29,10 +29,10 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    let id!: number
+    let id: number
     let seasonId: number | undefined
-    let adminBypass!: boolean
-    let allInhabitants!: boolean
+    let adminBypass: boolean
+    let allInhabitants: boolean
     let dinnerPreferences: WeekDayMap<DinnerMode>
     try {
         const {WeekDayMapSchemaOptional} = useCoreValidation()

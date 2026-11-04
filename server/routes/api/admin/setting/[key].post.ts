@@ -28,8 +28,8 @@ export default defineEventHandler(async (event): Promise<SettingDetail> => {
     const d1Client = cloudflare.env.DB
 
     // Validation - FAIL EARLY (400). The key comes first: it selects the value schema
-    let key!: SettingKey
-    let value!: string
+    let key: SettingKey
+    let value: string
     try {
         key = (await getValidatedRouterParams(event, paramsSchema.parse)).key
         const bodySchema = z.object({value: SETTING_REGISTRY[key].valueSchema})

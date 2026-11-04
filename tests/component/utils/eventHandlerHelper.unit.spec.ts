@@ -46,6 +46,20 @@ it('nuxtErrorFromCatch reaches the Prisma mapping', () => {
 })
 
 // A unique violation reads as a conflict whether it arrives raw from Prisma or already mapped by throwH3Error
+// A status a handler throws inside its own try leaves its catch unchanged; anything else is a server error
+describe('nuxtErrorFromCatch', () => {
+    it('GIVEN an H3 error WHEN caught THEN the same error comes back with its status', () => {
+        const notFound = createError({statusCode: 404, message: 'not found'})
+
+        expect(nuxtErrorFromCatch(PREPEND, notFound)).toBe(notFound)
+        expect(nuxtErrorFromCatch(PREPEND, notFound).statusCode).toBe(404)
+    })
+
+    it('GIVEN a plain error WHEN caught THEN it reads as a server error', () => {
+        expect(nuxtErrorFromCatch(PREPEND, new Error('boom')).statusCode).toBe(500)
+    })
+})
+
 describe('isConflict', () => {
     it.each([
         {name: 'a Prisma unique violation', error: prismaError('P2002', 'Unique constraint failed'), expected: true},

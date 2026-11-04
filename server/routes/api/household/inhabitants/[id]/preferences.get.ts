@@ -32,10 +32,10 @@ const querySchema = AllInhabitantsQuerySchema.extend({
 export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (event) => {
     const d1Client = event.context.cloudflare.env.DB
 
-    let id!: number
+    let id: number
     let seasonId: number | undefined
-    let allInhabitants!: boolean
-    let dinnerPreferences!: WeekDayMap<DinnerMode>
+    let allInhabitants: boolean
+    let dinnerPreferences: WeekDayMap<DinnerMode>
     try {
         id = (await getValidatedRouterParams(event, paramSchema.parse)).id
         const query = await getValidatedQuery(event, querySchema.parse)

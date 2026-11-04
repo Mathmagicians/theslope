@@ -7,6 +7,7 @@ import type {
 import {useBookingValidation, type ScaffoldResult, type DinnerMode} from '~/composables/useBookingValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
 import {useBooking} from '~/composables/useBooking'
+import type {ScaffoldToast} from '~/composables/useBookingUi'
 import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 /**
@@ -18,6 +19,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     // DEPENDENCIES
     const {storeAsyncData, loadOrThrow, apiRequest, toastSaved, notFoundToast} = useApiHandler()
+    const toast = useToast()
     const now = useClock()
     const {formatScaffoldResult} = useBooking()
     const {HouseholdDisplaySchema, HouseholdDetailSchema, serializeWeekDayMap} = useCoreValidation()
@@ -155,18 +157,20 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     /**
      * The preference save of the inhabitant, or with `allInhabitants` of every inhabitant of its household in one run
-     * (power mode); the reply's scaffold result covers the household
+     * (power mode); the reply's scaffold result covers the household, shown in the toast given
      */
-    const savePreferences = async (inhabitantId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean, allInhabitants: boolean, action: string) => {
+    const savePreferences = async (inhabitantId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean, allInhabitants: boolean, action: string, toastText: ScaffoldToast) => {
         console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for ${allInhabitants ? 'the household of ' : ''}inhabitant ${inhabitantId}${adminBypass ? ' (admin bypass)' : ''}`)
 
         // The week map travels as it is; the endpoint serializes it (ADR-010)
-        const result = await useBookingsStore().writeBookings(() => apiRequest(preferencesUrl(inhabitantId), {
+        const bookingsStore = useBookingsStore()
+        const result = await bookingsStore.writeBookings(() => apiRequest(preferencesUrl(inhabitantId), {
             method: 'POST',
             body: {dinnerPreferences: preferences},
             query: {...adminBypassQuery(adminBypass), ...allInhabitantsQuery(allInhabitants)},
             schema: InhabitantUpdateResponseSchema,
-            action
+            action,
+            errorMessage: HOUSEHOLD_WORDS.failed.save.description
         }))
 
         lastPreferenceResult.value = result.scaffoldResult
@@ -176,16 +180,17 @@ export const useHouseholdsStore = defineStore("Households", () => {
             await refreshSelectedHousehold()
         }
 
+        toast.add(scaffoldToast(toastText, result.scaffoldResult))
         return result.scaffoldResult
     }
 
     /** Update inhabitant dinner preferences through the household endpoint (not admin), which requires household access */
-    const updateInhabitantPreferences = (inhabitantId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean) =>
-        savePreferences(inhabitantId, preferences, adminBypass, false, 'updateInhabitantPreferences')
+    const updateInhabitantPreferences = (inhabitantId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean, toastText: ScaffoldToast) =>
+        savePreferences(inhabitantId, preferences, adminBypass, false, 'updateInhabitantPreferences', toastText)
 
     /** Power mode: the draft for every inhabitant of the inhabitant's household, saved through the inhabitant's path */
-    const updateAllInhabitantPreferences = (inhabitantId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean) =>
-        savePreferences(inhabitantId, preferences, adminBypass, true, 'updateAllInhabitantPreferences')
+    const updateAllInhabitantPreferences = (inhabitantId: number, preferences: WeekDayMap<DinnerMode>, adminBypass: boolean, toastText: ScaffoldToast) =>
+        savePreferences(inhabitantId, preferences, adminBypass, true, 'updateAllInhabitantPreferences', toastText)
 
     /**
      * What a save of the draft preferences would do, read without writing: the save's dry run (GET), for the inhabitant
@@ -207,15 +212,18 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * Triggers re-scaffolding of prebookings when moveOutDate changes (server-side)
      * @param householdId - ID of the household
      * @param moveOutDate - Date to set, or null to clear
+     * @param toastText - The toast that shows the run
      */
-    const setMoveOutDate = async (householdId: number, moveOutDate: Date | null, adminBypass: boolean) => {
+    const setMoveOutDate = async (householdId: number, moveOutDate: Date | null, adminBypass: boolean, toastText: ScaffoldToast) => {
         console.info(`🏠 > HOUSEHOLDS_STORE > Setting moveOutDate for household ${householdId}: ${moveOutDate?.toISOString() ?? 'null'}`)
-        const result = await useBookingsStore().writeBookings(() => apiRequest(`/api/household/${householdId}/update`, {
+        const bookingsStore = useBookingsStore()
+        const result = await bookingsStore.writeBookings(() => apiRequest(`/api/household/${householdId}/update`, {
             method: 'POST',
             body: { moveOutDate },
             query: adminBypassQuery(adminBypass),
             schema: HouseholdUpdateResponseSchema,
-            action: 'setMoveOutDate'
+            action: 'setMoveOutDate',
+            errorMessage: HOUSEHOLD_WORDS.failed.save.description
         }))
 
         lastMoveOutResult.value = result.scaffoldResult
@@ -227,6 +235,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         // Also refresh household list to update display badges
         await refreshHouseholds()
 
+        toast.add(scaffoldToast(toastText, result.scaffoldResult))
         return result.scaffoldResult
     }
 
@@ -309,7 +318,10 @@ export const useHouseholdsStore = defineStore("Households", () => {
             console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Created household ${created.id} at ${created.address}`)
 
             for (const update of prevOwnerMoveOutUpdates) {
-                await setMoveOutDate(update.id, update.moveOutDate, true)
+                await setMoveOutDate(update.id, update.moveOutDate, true, {
+                    title: HOUSEHOLD_WORDS.moveOut.toasts.set,
+                    householdOrder: households.value.find(({id}) => id === update.id)?.inhabitants.map(({id}) => id)
+                })
             }
 
             await refreshHouseholds()

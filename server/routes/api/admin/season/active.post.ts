@@ -27,7 +27,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch
-    let requestData!: {seasonId: number}
+    let requestData: {seasonId: number}
     try {
         requestData = await readValidatedBody(event, activateSeasonSchema.parse)
     } catch (error) {

@@ -5,6 +5,7 @@ import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick, toValue} from 'vue'
 import AdminAllergies from '~/components/admin/AdminAllergies.vue'
 import AllergyCatalogTable from '~/components/allergy/AllergyCatalogTable.vue'
+import AllergyDetailPanel from '~/components/allergy/AllergyDetailPanel.vue'
 import {useAllergiesStore} from '~/stores/allergies'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from '../allergy/allergyTestIds'
@@ -28,6 +29,8 @@ const posterNotesPostEndpoint = vi.fn()
 AllergyFactory.createMockAllergyTypesWithInhabitants().forEach(allergyType =>
     registerEndpoint(`/api/admin/allergy-type/${allergyType.id}`, () => allergyType))
 registerEndpoint('/api/admin/allergy-type', allergyTypesEndpoint)
+const createEndpoint = vi.fn()
+registerEndpoint('/api/admin/allergy-type', {handler: createEndpoint, method: 'PUT'})
 // Generic (GET) registered BEFORE method-specific so POST wins (reverse-order lookup)
 registerEndpoint(POSTER_NOTES_ENDPOINT, posterNotesGetEndpoint)
 registerEndpoint(POSTER_NOTES_ENDPOINT, {handler: posterNotesPostEndpoint, method: 'POST'})
@@ -166,6 +169,25 @@ describe('AdminAllergies', () => {
 
             expect(findByTestId(wrapper, ALLERGY_TEST_IDS.form).exists()).toBe(true)
             expect(wrapper.text()).toContain('Opret allergi')
+        })
+
+        // The form closes on a landed save; a failed one keeps the draft, and the request has toasted the failure
+        it.each([
+            {outcome: 'lands', answer: () => firstType, isFormOpen: false, color: COLOR.success},
+            {outcome: 'fails', answer: () => {
+                throw createError({statusCode: 500})
+            }, isFormOpen: true, color: COLOR.warning}
+        ])('WHEN the create form\'s save $outcome THEN one toast tells it and the form is open: $isFormOpen', async ({answer, isFormOpen, color}) => {
+            createEndpoint.mockImplementation(answer)
+            const wrapper = await mountAdmin()
+            await clickByTestId(wrapper, ALLERGY_TEST_IDS.create)
+            useToast().clear()
+
+            wrapper.findComponent(AllergyDetailPanel).vm.$emit('save', {name: firstType!.name, description: firstType!.description})
+
+            await vi.waitFor(() => expect(useToast().toasts.value.map(toast => toast.color)).toEqual([color]))
+            await nextTick()
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.form).exists()).toBe(isFormOpen)
         })
     })
 

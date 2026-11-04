@@ -2,7 +2,7 @@ import type {
     AllergyTypeCreate,
     AllergyTypeUpdate,
     AllergyTypeDisplay,
-    AllergyDisplay,
+    AllergyDetail,
     AllergyCreate,
     AllergyUpdate
 } from '~/composables/useAllergyValidation'
@@ -20,8 +20,8 @@ const POSTER_NOTES_ENDPOINT = `/api/admin/setting/${POSTER_NOTES_KEY}`
 export const useAllergiesStore = defineStore("Allergies", () => {
 
     // DEPENDENCIES
-    const {storeAsyncData, loadOrThrow, apiRequest} = useApiHandler()
-    const {AllergyTypeDisplaySchema, AllergyTypeDetailSchema, AllergyDetailSchema} = useAllergyValidation()
+    const {storeAsyncData, loadOrThrow, apiRequest, toastSaved} = useApiHandler()
+    const {AllergyTypeDisplaySchema, AllergyTypeDetailSchema, AllergyDisplaySchema, AllergyDetailSchema} = useAllergyValidation()
     const {SettingDetailSchema, SETTING_REGISTRY} = useSettingValidation()
 
     // ========================================
@@ -150,33 +150,38 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     }
 
     const createAllergyType = async (allergyTypeData: AllergyTypeCreate): Promise<AllergyTypeDisplay> => {
-        const created = await apiRequest<AllergyTypeDisplay>('/api/admin/allergy-type', {
+        const created = await apiRequest('/api/admin/allergy-type', {
             method: 'PUT',
             body: allergyTypeData,
+            schema: AllergyTypeDisplaySchema,
             action: 'createAllergyType'
         })
         await loadAllergyTypes()
         console.info(`🥜 > ALLERGY_STORE > Created allergy type: ${created.name}`)
+        toastSaved(ALLERGY_WORDS.toasts.typeCreated.title, ALLERGY_WORDS.toasts.typeCreated.description(created.name))
         return created
     }
 
     const updateAllergyType = async (id: number, allergyTypeData: Omit<AllergyTypeUpdate, 'id'>): Promise<AllergyTypeDisplay> => {
-        const updated = await apiRequest<AllergyTypeDisplay>(`/api/admin/allergy-type/${id}`, {
+        const updated = await apiRequest(`/api/admin/allergy-type/${id}`, {
             method: 'POST',
             body: allergyTypeData,
+            schema: AllergyTypeDisplaySchema,
             action: 'updateAllergyType'
         })
         await loadAllergyTypes()
         console.info(`🥜 > ALLERGY_STORE > Updated allergy type: ${updated.name}`)
+        toastSaved(ALLERGY_WORDS.toasts.typeUpdated.title, ALLERGY_WORDS.toasts.typeUpdated.description(updated.name))
         return updated
     }
 
     const deleteAllergyType = async (id: number): Promise<void> => {
-        await apiRequest(`/api/admin/allergy-type/${id}`, {method: 'DELETE', action: 'deleteAllergyType'})
+        const deleted = await apiRequest(`/api/admin/allergy-type/${id}`, {method: 'DELETE', schema: AllergyTypeDisplaySchema, action: 'deleteAllergyType'})
         await loadAllergyTypes()
         // CASCADE removed the type's household allergies — refresh that cache too
         await refreshAllergies()
         console.info(`🥜 > ALLERGY_STORE > Deleted allergy type ID: ${id}`)
+        toastSaved(ALLERGY_WORDS.toasts.typeDeleted.title, ALLERGY_WORDS.toasts.typeDeleted.description(deleted.name))
     }
 
     // ========================================
@@ -196,6 +201,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             action: 'savePosterNotes'
         })
         console.info('🥜 > ALLERGY_STORE > Saved poster notes')
+        toastSaved(ALLERGY_WORDS.toasts.posterNotesSaved)
     }
 
     // ========================================
@@ -213,35 +219,40 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         await refreshAllergyTypes()
     }
 
-    const createAllergy = async (allergyData: AllergyCreate, adminBypass: boolean): Promise<AllergyDisplay> => {
-        const created = await apiRequest<AllergyDisplay>('/api/household/allergy', {
+    const createAllergy = async (allergyData: AllergyCreate, adminBypass: boolean): Promise<AllergyDetail> => {
+        const created = await apiRequest('/api/household/allergy', {
             method: 'PUT',
             body: allergyData,
             query: adminBypassQuery(adminBypass),
+            schema: AllergyDetailSchema,
             action: 'createAllergy'
         })
         await refreshAfterAllergyMutation()
         console.info(`🥜 > ALLERGY_STORE > Created allergy for inhabitant ID: ${created.inhabitantId}`)
+        toastSaved(ALLERGY_WORDS.toasts.title, ALLERGY_WORDS.toasts.added(created.allergyType.name))
         return created
     }
 
     // id travels in the path, not the body - the endpoint injects it (mirrors updateAllergyType)
-    const updateAllergy = async (id: number, allergyData: Omit<AllergyUpdate, 'id'>, adminBypass: boolean): Promise<AllergyDisplay> => {
-        const updated = await apiRequest<AllergyDisplay>(`/api/household/allergy/${id}`, {
+    const updateAllergy = async (id: number, allergyData: Omit<AllergyUpdate, 'id'>, adminBypass: boolean): Promise<AllergyDetail> => {
+        const updated = await apiRequest(`/api/household/allergy/${id}`, {
             method: 'POST',
             body: allergyData,
             query: adminBypassQuery(adminBypass),
+            schema: AllergyDetailSchema,
             action: 'updateAllergy'
         })
         await refreshAfterAllergyMutation()
         console.info(`🥜 > ALLERGY_STORE > Updated allergy ID: ${updated.id}`)
+        toastSaved(ALLERGY_WORDS.toasts.title, ALLERGY_WORDS.toasts.commentSaved)
         return updated
     }
 
     const deleteAllergy = async (id: number, adminBypass: boolean): Promise<void> => {
-        await apiRequest(`/api/household/allergy/${id}`, {method: 'DELETE', query: adminBypassQuery(adminBypass), action: 'deleteAllergy'})
+        const deleted = await apiRequest(`/api/household/allergy/${id}`, {method: 'DELETE', query: adminBypassQuery(adminBypass), schema: AllergyDisplaySchema, action: 'deleteAllergy'})
         await refreshAfterAllergyMutation()
         console.info(`🥜 > ALLERGY_STORE > Deleted allergy ID: ${id}`)
+        toastSaved(ALLERGY_WORDS.toasts.title, ALLERGY_WORDS.toasts.removed(deleted.allergyType.name))
     }
 
     return {

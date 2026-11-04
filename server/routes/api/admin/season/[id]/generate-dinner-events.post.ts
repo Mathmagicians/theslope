@@ -32,7 +32,7 @@ export default defineEventHandler(async (event): Promise<GenerateDinnerEventsRes
     const d1Client = cloudflare.env.DB
 
     // Input validation - FAIL EARLY
-    let seasonId!: number
+    let seasonId: number
     try {
         const params = await getValidatedRouterParams(event, paramSchema.parse)
         seasonId = params.id

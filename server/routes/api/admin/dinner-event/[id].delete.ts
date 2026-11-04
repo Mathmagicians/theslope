@@ -21,7 +21,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     const PREFIX = '🍽️ > DINNER_EVENT > [DELETE]'
 
     // Input validation - FAIL EARLY
-    let id!: number
+    let id: number
     try {
         ({id} = await getValidatedRouterParams(event, paramSchema.parse))
     } catch (error) {
