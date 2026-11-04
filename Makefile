@@ -642,7 +642,7 @@ theslope-admin-get-households:
 	@$(call require_base_url,$(ENV_local)) && curl -s -b .cookies.txt $$BASE_URL/api/admin/household | jq
 
 theslope-admin-import:
-	@$(call require_base_url,$(ENV_local)) && curl -s -b .cookies.txt $$BASE_URL/api/admin/heynabo/import | jq
+	@$(call require_base_url,$(ENV_local)) && curl -s -X POST -b .cookies.txt $$BASE_URL/api/admin/heynabo/import | jq
 
 theslope-put-user:
 	@$(call require_base_url,$(ENV_local)) && curl -b .cookies.txt -X PUT "$$BASE_URL/api/admin/users" \

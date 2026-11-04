@@ -355,7 +355,7 @@ Tjek `unmatchedNames` i svaret - disse skal tildeles manuelt eller rettes i CSV.
 Synkronisér husstande og beboere fra Heynabo. På dev og prod: Admin → System → **Heynabo Import**. Lokalt:
 
 ```bash
-make theslope-login-local && make theslope-admin-import   # GET /api/admin/heynabo/import på den lokale server
+make theslope-login-local && make theslope-admin-import   # POST /api/admin/heynabo/import på den lokale server
 ```
 
 ---

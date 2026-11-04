@@ -85,6 +85,7 @@ export const useUsersStore = defineStore("Users", () => {
     const heynaboImportLabel = jobTypeLabels[JobType.HEYNABO_IMPORT]
     const {result: heynaboImport, error: heynaboImportError, isRunning: isImportHeynaboLoading, run: runHeynaboImport} = runJob<HeynaboImportResponse>({
         url: '/api/admin/heynabo/import',
+        method: 'POST',
         query: () => ({triggeredBy: adminTrigger(authStore.email)}),
         action: 'importHeynaboData',
         errorMessage: MAINTENANCE_WORDS.job.failed(heynaboImportLabel),

@@ -613,7 +613,7 @@ export class HouseholdFactory {
         context: BrowserContext,
         expectedStatus: number = 200
     ): Promise<HeynaboImportResponse> => {
-        const response = await context.request.get(HEYNABO_IMPORT_ENDPOINT)
+        const response = await context.request.post(HEYNABO_IMPORT_ENDPOINT)
         const responseBody = await response.text()
         const status = response.status()
 

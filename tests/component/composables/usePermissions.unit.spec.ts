@@ -181,6 +181,12 @@ describe('usePermissions - Route Permission Table', () => {
             expect(check!(regularUser)).toBe(false)
         })
 
+        it('starting the Heynabo import should allow ADMIN only', () => {
+            const check = getRoutePermission('/api/admin/heynabo/import', 'POST')
+            expect(check?.(adminUser)).toBe(true)
+            expect(check?.(regularUser)).toBe(false)
+        })
+
         it('admin GET should allow any authenticated user', () => {
             const check = getRoutePermission('/api/admin/season', 'GET')
             expect(check!(adminUser)).toBe(true)

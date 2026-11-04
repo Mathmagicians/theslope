@@ -171,7 +171,7 @@ package's ask is one optional line.
 ## Hard rules (from `working-style-rules`)
 
 - Agents never commit, never `git add`, never run migrations, db or infra commands; prepare files and command lines, the user runs them.
-- No python. Stay inside the project folder (transient files go to gitignored dirs such as `test-results/`).
+- Project tools only: the scripts in `package.json`, the targets in the `Makefile`, the test commands in `CLAUDE.md`. A claim is proved by a spec's assertion. `.claude/settings.json` refuses the rest.
 
 ## Extraction rule
 

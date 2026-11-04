@@ -101,7 +101,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/maintenance/monthly.post.ts` | ✅ | ✅ | ✅ | ✅ serial; unit | ✅ the trigger query through `JobTriggerQuerySchema` |
 | `/api/admin/maintenance/job-run/index.get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/maintenance/job-run/[id].get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
-| `/api/admin/heynabo/import.get.ts` | ✅ | ✅ | ✅ | ✅ serial | ⚠️ a GET that writes (ADR-004 compliance 1); the trigger query through `JobTriggerQuerySchema`; the import service links users to inhabitants in chunks of 50 (`chunkUserLinks`), as it saves households, inhabitants and users in chunks (`chunkSaves`); both chunkers live in `useHeynabo` |
+| `/api/admin/heynabo/import.post.ts` | ✅ | ✅ | ✅ | ✅ serial | The trigger query through `JobTriggerQuerySchema`; the import service links users to inhabitants in chunks of 50 (`chunkUserLinks`), as it saves households, inhabitants and users in chunks (`chunkSaves`); both chunkers live in `useHeynabo` |
 | **Admin - sender events** | | | | | |
 | `/api/admin/sender/event/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ batched, 100 per call |
 | `/api/admin/sender/event/monthly-billing.post.ts` | ✅ | ✅ | ✅ | ✅ `billing-notifications.feature`; unit | ✅ the admin's re-send of a period's accountant notification through `deliverDesired` as the admin's override, logged with the admin |

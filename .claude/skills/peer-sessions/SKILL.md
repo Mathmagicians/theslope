@@ -38,6 +38,12 @@ session; the sessions talk to each other through `SendMessage`.
 
 - One session per file; re-read a shared file right before editing it; edits are anchored on text, never on line numbers.
 - One environment: no worktree, no second install, D1, seed or dev server.
+- Processes: the tests run through the project's targets (`npm run test:*`, `make`), whose `webServer` boots the
+  server they need. The user's `npm run dev` is the user's, for exploratory testing; no session or subagent uses it,
+  probes it or relies on it. A session or its subagent runs shell utilities and what the project provides in `make`
+  and `package.json`, each in the foreground to its end; anything else (`caffeinate`, a `node` script, a server, a
+  background job) needs the user's authorization first, and a process a session started is gone when its turn ends.
+  A check of behaviour is a test case, never a scratch script.
 - Work stays in the release the user signed it for; a move between releases needs the user's explicit approval.
 - A subagent works under its session's claims and holds: the orchestrator relays a hold to its running subagents; a
   subagent never runs Playwright, edits no claimed e2e spec, leaves docs/features to documentar and writes no line of

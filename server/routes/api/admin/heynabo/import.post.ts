@@ -8,7 +8,7 @@ const {throwH3Error} = eventHandlerHelper
 const LOG = '🏠 > IMPORT >'
 
 /**
- * GET /api/admin/heynabo/import
+ * POST /api/admin/heynabo/import
  *
  * Manual trigger for Heynabo synchronization (admin UI).
  * Same logic as cron task, but triggered via HTTP.

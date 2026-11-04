@@ -144,7 +144,7 @@ gh api repos/Mathmagicians/theslope/pulls/<n> -q .body | grep -c '<new text>'   
 - A UI term in a guide is the app's own word (badge, legend, button, help text): `grep` the label in `app/` and copy it.
 - A symbol is the real icon as an image, from its `ICONS` entry:
   `![Venteliste](https://api.iconify.design/hugeicons/hourglass.svg?height=20&color=%23737373)`; a badge without an icon
-  renders as its shape (`mdi:circle` in the badge colour); `curl -s <url> | head -c 60` shows `<svg`.
+  renders as its shape (`mdi:circle` in the badge colour).
 - Sync check: per user-visible change in `git log main..HEAD`, the guide's flow, labels and statuses are read against
   the component; the `Sidst opdateret` line names the topics; anchors resolve after a heading changes.
 

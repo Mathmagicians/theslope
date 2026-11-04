@@ -71,10 +71,13 @@ const BOX_JOBS = [
 const buttonRun = {fails: false}
 const heldRuns = shallowReactive(new Set<string>())
 for (const {runUrl, summary} of BOX_JOBS) {
-    registerEndpoint(runUrl, async () => {
-        await untilTrue(() => !heldRuns.has(runUrl))
-        if (buttonRun.fails) throw createError({statusCode: 500, statusMessage: 'D1 down'})
-        return summary
+    registerEndpoint(runUrl, {
+        method: 'POST',
+        handler: async () => {
+            await untilTrue(() => !heldRuns.has(runUrl))
+            if (buttonRun.fails) throw createError({statusCode: 500, statusMessage: 'D1 down'})
+            return summary
+        }
     })
 }
 

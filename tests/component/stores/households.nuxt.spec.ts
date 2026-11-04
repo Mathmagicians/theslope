@@ -474,7 +474,7 @@ describe('Households Store', () => {
       moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult })
       const store = await setupStore()
 
-      const result = await store.setMoveOutDate(1, new Date(), false)
+      const result = await store.setMoveOutDate(1, new Date(), false, aToastText)
 
       expect(result).toEqual(scaffoldResult)
       expect(store.lastMoveOutResult).toEqual(scaffoldResult)
@@ -486,7 +486,7 @@ describe('Households Store', () => {
       })
       const store = await setupStore()
 
-      await expect(store.setMoveOutDate(1, null, false)).rejects.toThrow()
+      await expect(store.setMoveOutDate(1, null, false, aToastText)).rejects.toThrow()
     })
   })
 

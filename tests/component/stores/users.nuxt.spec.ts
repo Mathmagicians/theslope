@@ -26,7 +26,7 @@ registerEndpoint(`/api/admin/users/by-role/${SystemRole.ALLERGYMANAGER}`, allerg
 registerEndpoint('/api/admin/users/1', {method: 'POST', handler: updateUserEndpoint})
 registerEndpoint('/api/admin/users', usersEndpoint)
 registerEndpoint('/api/team/my', myTeamsEndpoint)
-registerEndpoint('/api/admin/heynabo/import', heynaboImportEndpoint)
+registerEndpoint('/api/admin/heynabo/import', {method: 'POST', handler: heynaboImportEndpoint})
 
 const failure = () => {
     throw createError({statusCode: 500})
