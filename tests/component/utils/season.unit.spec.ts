@@ -337,7 +337,7 @@ describe('computeAffinitiesForTeams', () => {
         // WHEN: Computing affinities (first call)
         const firstResult = computeAffinitiesForTeams(teams, cookingDays, 1, firstDay)
 
-        // THEN: T1 keeps its existing affinity (Wed), T2 gets Mon, T3 gets Fri
+        // THEN: T1 keeps its existing affinity (Wed), T2 gets Mon, T3 gets Wed
         const t1AfterFirst = firstResult.find(t => t.id === 1)
         const t2AfterFirst = firstResult.find(t => t.id === 2)
         const t3AfterFirst = firstResult.find(t => t.id === 3)

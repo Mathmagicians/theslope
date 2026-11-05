@@ -69,6 +69,7 @@ const props = withDefaults(defineProps<Props>(), {
   canEdit: false
 })
 
+const LOG_PREFIX = '⚙️ > ADMIN_SYSTEM'
 const { COLOR, ICONS, IMG, SIZES, TYPOGRAPHY, LAYOUTS, ALERTS, COMPONENTS, getRandomEmptyMessageText, getRainbowBand, NOISE } = useTheSlopeDesignSystem()
 
 const {
@@ -122,8 +123,8 @@ const isLatestRunLoading = (jobType: SystemJobType) => latestJobRuns[jobType].is
 const runAndRefresh = async (jobType: SystemJobType, run: () => Promise<void>) => {
     try {
         await run()
-    } catch {
-        // The failure stays in its store, which has toasted it
+    } catch (error) {
+        console.warn(`${LOG_PREFIX} > [RUN] Error running ${jobType}:`, error)
     } finally {
         await Promise.all([refreshJobHistory(), latestJobRuns[jobType].refresh()])
     }

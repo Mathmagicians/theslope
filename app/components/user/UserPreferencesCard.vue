@@ -40,6 +40,7 @@ import {USER_WORDS} from '~/config/userWords'
 import {BUTTON_WORDS} from '~/config/buttonWords'
 
 const authStore = useAuthStore()
+const LOG_PREFIX = '👤 > USER_PREFERENCES'
 const {TYPOGRAPHY, LAYOUTS, BUTTONS, COMPONENTS, ICONS, COLOR, SIZES, NOISE} = useTheSlopeDesignSystem()
 const {NotificationChannelSchema, PaletteSchema, TextScaleSchema} = useUserPreferenceValidation()
 const Channel = NotificationChannelSchema.enum
@@ -99,8 +100,9 @@ const save = async () => {
       appearance: draftAppearance.value
     })
     isEditing.value = false
-  } catch {
-    // The store reported it (toast + ADR-004 log); stay in edit so the draft is not lost
+  } catch (error) {
+    // Stays in edit so the draft is not lost
+    console.warn(`${LOG_PREFIX} > [SAVE] Error saving the preferences:`, error)
   } finally {
     isSaving.value = false
   }
@@ -110,8 +112,8 @@ const sendTest = async () => {
   isSendingTest.value = true
   try {
     await authStore.sendTestNotification()
-  } catch {
-    // The store reported it (toast + ADR-004 log)
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} > [TEST] Error sending the test notification:`, error)
   } finally {
     isSendingTest.value = false
   }

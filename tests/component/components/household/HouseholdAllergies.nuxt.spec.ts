@@ -24,6 +24,8 @@ registerEmptyStoreEndpoints()
 registerEndpoint('/api/admin/allergy-type', () => [])
 registerEndpoint('/api/household/allergy', () => [])
 registerEndpoint(`/api/admin/household/${household.id}`, () => household)
+// The allergies store reads the poster notes beside the catalog; without the row the read toasts a 404
+registerEndpoint('/api/admin/setting/allergy-poster-notes', () => ({key: 'allergy-poster-notes', value: '', updatedAt: new Date('2026-09-18T10:00:00.000Z').toISOString(), updatedByUserId: 3}))
 
 // The next test's resetStores drops the datasets a still-mounted table reads
 enableAutoUnmount(afterEach)

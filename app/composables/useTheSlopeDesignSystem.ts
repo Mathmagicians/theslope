@@ -1227,8 +1227,9 @@ export const COMPONENTS = {
     /**
      * PageHeader: UHeader's slots collapse at md instead of the framework's lg, the drawer's content and overlay with
      * them, so a drawer opened on a phone leaves with the burger. The bar is as wide as its content, centred, sticky
-     * with the md offset; the title holds the logo's width. On the right, the areas' icons for a phone and the
-     * person's links from md, each menu's labels shown from md
+     * with the md offset; the title, a block, holds the logo's width (the SVG has no size of its own, and as a flex item
+     * Firefox gives it none). On the right, the areas' icons for a phone and the person's links from md, each menu's
+     * labels shown from md
      */
     pageHeader: {
         ui: {
@@ -1237,7 +1238,7 @@ export const COMPONENTS = {
             left: 'md:flex-1',
             center: 'hidden md:flex',
             right: 'flex items-center justify-end md:flex-1 gap-1.5',
-            title: 'w-16 md:w-32',
+            title: 'block w-16 md:w-32',
             content: 'md:hidden',
             overlay: 'md:hidden'
         },

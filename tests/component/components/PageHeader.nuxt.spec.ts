@@ -10,6 +10,7 @@ import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import PageHeader from '~/components/PageHeader.vue'
 import {COMPONENTS, NAVIGATION} from '~/composables/useTheSlopeDesignSystem'
 import {getHouseholdUrl, HOUSEHOLD_TAB} from '~/utils/household'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 const {session, useUserSession} = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
 mockNuxtImport('useUserSession', () => useUserSession)
@@ -70,6 +71,20 @@ describe('PageHeader', () => {
             expect(toggle.attributes('aria-label')).toBe(en.messages.header.close)
             expect(headerOf(wrapper).props('toggle')).toEqual(NAVIGATION.toggle(true))
             expect(menusIn(wrapper, 'body').map(routesOf)).toEqual([person])
+        })
+
+        // The drawer lists its items with their names; the bar's help is its icon alone
+        it('GIVEN the drawer open on a phone THEN the drawer\'s help carries its label and the bar\'s none', async () => {
+            const wrapper = await mountHeader(false)
+            await wrapper.find('[data-slot="toggle"]').trigger('click')
+            await flushPromises()
+
+            const helpIn = (slot: string) => wrapper.findAllComponents({name: 'HelpButton'})
+                .filter(help => help.element.closest(`[data-slot="${slot}"]`))
+                .map(help => help.props('label'))
+            expect(helpIn('body')).toEqual([BUTTON_WORDS.help])
+            // The bar's right side, and the drawer's own header row that repeats it
+            expect(helpIn('right')).toEqual([undefined, undefined])
         })
 
         // A drawer hidden by CSS would keep the page's scroll lock and focus trap

@@ -38,6 +38,18 @@ const sendFeedback = async (description: string) => {
     return wrapper
 }
 
+// The button reads its label where one is given, as in the header's drawer, and its icon alone in the bar
+describe('HelpButton - the button', () => {
+    it.each([
+        {face: 'the icon alone', props: {}, text: ''},
+        {face: 'its label beside the icon', props: {label: 'Hjælp'}, text: 'Hjælp'}
+    ])('GIVEN $face THEN the button reads "$text"', async ({props, text}) => {
+        const wrapper = await mountWithTooltipProvider(HelpButton, {props})
+
+        expect(wrapper.findComponent({name: 'UButton'}).text()).toBe(text)
+    })
+})
+
 describe('HelpButton - feedback', () => {
     beforeEach(() => {
         resetStores()

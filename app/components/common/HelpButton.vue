@@ -36,11 +36,15 @@ import { HELP_TEXTS } from '~/config/help-texts'
 import type { FeedbackIssue, FeedbackType } from '~/composables/useFeedbackValidation'
 import { BUTTON_WORDS } from '~/config/buttonWords'
 
+// The label beside the icon where the button sits in a list, as in the header's drawer; the bar's button has none
+defineProps<{label?: string}>()
+
 const route = useRoute()
 const requestUrl = useRequestURL()
 const isOpen = ref(false)
 const doClose = () => isOpen.value = false
 
+const LOG_PREFIX = '❓ > HELP_BUTTON'
 const { NAVIGATION, ICONS, SIZES, COLOR, TYPOGRAPHY, BUTTONS, NOISE, COMPONENTS, ORIENTATIONS } = useTheSlopeDesignSystem()
 const { FeedbackTypeSchema } = useFeedbackValidation()
 const Feedback = FeedbackTypeSchema.enum
@@ -69,8 +73,9 @@ const submitFeedback = async () => {
             description: feedbackDescription.value,
             currentUrl: requestUrl.href
         })
-    } catch {
-        // The store reported it (toast + ADR-004 log); the form keeps the draft
+    } catch (error) {
+        // The form keeps the draft
+        console.warn(`${LOG_PREFIX} > [FEEDBACK] Error sending the feedback:`, error)
     } finally {
         isSubmitting.value = false
     }
@@ -126,6 +131,7 @@ watch(() => route.path, () => {
   >
     <UButton
         :icon="ICONS.help"
+        :label="label"
         :color="isOpen ? NAVIGATION.link.activeColor : NAVIGATION.link.color"
         :variant="isOpen ? NAVIGATION.link.activeVariant : NAVIGATION.link.variant"
     />

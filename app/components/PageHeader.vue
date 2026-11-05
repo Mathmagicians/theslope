@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type {NavigationMenuItem} from '@nuxt/ui'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 /**
  * PageHeader - the main navigation
@@ -113,7 +114,7 @@ const signInLinks = computed((): NavItem[] => [{
           :items="personLinks"
           :orientation="ORIENTATIONS.vertical"
       />
-      <HelpButton/>
+      <HelpButton :label="BUTTON_WORDS.help"/>
     </template>
   </UHeader>
 </template>

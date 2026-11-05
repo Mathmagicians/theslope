@@ -22,5 +22,7 @@ export const BUTTON_WORDS = {
     heynabo: {name: 'Heynabo', openEvent: 'Se på Heynabo'},
     /** The button back to the view before, and the button that prints a sheet */
     back: 'Tilbage',
-    print: 'Print'
+    print: 'Print',
+    /** The help button where it carries a label, in the header's drawer */
+    help: 'Hjælp'
 } as const

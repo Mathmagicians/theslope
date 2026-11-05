@@ -128,17 +128,21 @@ describe('AdminEconomy - an opened invoice while its transactions load', () => {
 })
 
 describe('AdminEconomy - the upcoming orders', () => {
-    const season = {...SeasonFactory.defaultSeason('admin-economy'), id: 7}
     const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDisplay('admin-economy'), id: 31, date: new Date(2030, 0, 7), menuTitle: 'Lasagne'}
+    // The correction's booking form takes the dinner from the selected season
+    const season = {...SeasonFactory.defaultSeason('admin-economy'), id: 7, dinnerEvents: [dinnerEvent]}
     // The households list loaded before the eater's name changed: the order carries the name of now
     const household = HouseholdFactory.defaultHouseholdDetail('admin-economy')
     const eater = {...itemAt(household.inhabitants, 0), name: 'Nyt navn'}
+    // The booking form of a correction reads the session user's own household, the allergy catalog and the poster notes
+    const user = UserFactory.defaultUserWithInhabitant('admin-economy')
+    const ownHousehold = present(user.Inhabitant?.household, 'the session user\'s household')
     const upcoming = [OrderFactory.defaultOrder('admin-economy', {id: 501, dinnerEventId: dinnerEvent.id, inhabitantId: eater.id, dinnerEvent, inhabitant: eater})]
     const upcomingTable = (wrapper: Wrapper) =>
         present(wrapper.findAllComponents({name: 'EconomyTable'}).find(table => table.props('loadingText') === 'Henter fremtidige bestillinger'), 'the upcoming orders table')
     const dinnerRow = (wrapper: Wrapper) => findByTestId(wrapper, `future-orders-expand-${dinnerEvent.id}`)
-    const mountLoaded = async () => {
-        const wrapper = await mountWithTooltipProvider(AdminEconomy)
+    const mountLoaded = async (props: Record<string, unknown> = {}) => {
+        const wrapper = await mountWithTooltipProvider(AdminEconomy, {props})
         await untilTrue(() => mountedStore(usePlanStore).isPlanStoreReady && mountedStore(useBookingsStore).isUpcomingOrdersLoaded)
         await nextTick()
         return wrapper
@@ -147,9 +151,13 @@ describe('AdminEconomy - the upcoming orders', () => {
 
     beforeEach(() => {
         resetStores()
-        session.user.value = UserFactory.defaultUserWithInhabitant('admin-economy')
+        session.user.value = user
         mockRoute.query = {}
+        useToast().clear()
         unregister.push(
+            registerEndpoint(`/api/admin/household/${ownHousehold.id}`, () => ({...household, id: ownHousehold.id})),
+            registerEndpoint('/api/admin/allergy-type', () => []),
+            registerEndpoint('/api/admin/setting/allergy-poster-notes', () => ({key: 'allergy-poster-notes', value: '', updatedAt: new Date('2026-09-18T10:00:00.000Z').toISOString(), updatedByUserId: 3})),
             registerEndpoint('/api/admin/season/active', () => season.id),
             registerEndpoint('/api/admin/season', () => [season]),
             registerEndpoint(`/api/admin/season/${season.id}`, () => season),
@@ -205,12 +213,13 @@ describe('AdminEconomy - the upcoming orders', () => {
                 throw createError({statusCode: 500})
             }})
         )
-        const wrapper = await mountLoaded()
+        const wrapper = await mountLoaded({canEdit: true})
         await dinnerRow(wrapper).trigger('click')
         await nextTick()
         findComponentByTestId(wrapper, 'DangerButton', 'admin-correction-btn').vm.$emit('confirm')
         await nextTick()
-        findComponentByTestId(wrapper, 'USelectMenu', 'admin-correction-household-select').vm.$emit('update:modelValue', {label: `${household.address} · PBS ${household.pbsId}`, value: household.id})
+        const select = present(wrapper.findAllComponents({name: 'USelectMenu'}).find(menu => findByTestId(menu, 'admin-correction-household-select').exists()), 'the household select')
+        select.vm.$emit('update:modelValue', {label: `${household.address} · PBS ${household.pbsId}`, value: household.id})
         await vi.waitFor(() => expect(wrapper.findComponent(DinnerBookingForm).exists()).toBe(true))
 
         wrapper.findComponent(DinnerBookingForm).vm.$emit('saveBookings', [])

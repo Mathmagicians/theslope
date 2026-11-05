@@ -3,8 +3,16 @@ import withNuxt from './.nuxt/eslint.config.mjs'
 
 export default withNuxt(
   {
-    // Generated: `make typegen` (wrangler types) and `make d1-prisma` (Prisma client + zod)
-    ignores: ['**/worker-configuration.d.ts', 'prisma/generated/**']
+    // Generated: `make typegen` (wrangler types) and `make d1-prisma` (Prisma client + zod). Nuxt's ignore of the
+    // static `public/` folder (`**/public`) also hides the public routes, which are source
+    ignores: [
+      '**/worker-configuration.d.ts',
+      'prisma/generated/**',
+      '!app/pages/public/',
+      '!app/pages/public/**',
+      '!server/routes/api/public/',
+      '!server/routes/api/public/**'
+    ]
   },
   {
     rules: {
