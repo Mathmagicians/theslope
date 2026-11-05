@@ -17,25 +17,27 @@
  */
 
 import {type BookingView, BookingViewSchema} from '~/composables/useBookingView'
+import {DATE_WORDS} from '~/config/dateWords'
 
-const model = defineModel<BookingView>({default: 'day'})
+const model = defineModel<BookingView>({default: BookingViewSchema.enum.day})
 
-const {COLOR, ICONS, SIZES, COMPONENTS} = useTheSlopeDesignSystem()
+const {COLOR, NOISE, ICONS, SIZES, COMPONENTS, ORIENTATIONS} = useTheSlopeDesignSystem()
 
-const VIEW_CONFIG: Record<BookingView, { label: string; icon: string }> = {
-    day: {label: 'Dag', icon: ICONS.calendar},
-    week: {label: 'Uge', icon: ICONS.calendarDays},
-    month: {label: 'Måned', icon: ICONS.clipboard}
+const View = BookingViewSchema.enum
+const VIEW_ICONS: Record<BookingView, string> = {
+    [View.day]: ICONS.calendar,
+    [View.week]: ICONS.calendarDays,
+    [View.month]: ICONS.clipboard
 }
 
 const views = BookingViewSchema.options
 
 const isSelected = (view: BookingView) => model.value === view
-const getVariant = (view: BookingView) => isSelected(view) ? 'solid' : 'outline'
+const getVariant = (view: BookingView) => isSelected(view) ? NOISE.loud : NOISE.medium
 </script>
 
 <template>
-  <UFieldGroup :size="SIZES.standard" orientation="horizontal">
+  <UFieldGroup :size="SIZES.standard" :orientation="ORIENTATIONS.horizontal">
     <UButton
       v-for="view in views"
       :key="view"
@@ -47,9 +49,9 @@ const getVariant = (view: BookingView) => isSelected(view) ? 'solid' : 'outline'
       @click="model = view"
     >
       <template #leading>
-        <UIcon :name="VIEW_CONFIG[view].icon" />
+        <UIcon :name="VIEW_ICONS[view]" />
       </template>
-      <span class="hidden md:block">{{ VIEW_CONFIG[view].label }}</span>
+      <span :class="COMPONENTS.bookingViewSwitcher.label">{{ DATE_WORDS.periodViews[view] }}</span>
     </UButton>
   </UFieldGroup>
 </template>

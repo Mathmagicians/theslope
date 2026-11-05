@@ -3,6 +3,8 @@ Holiday list. The rows are drawn in AdminPlanningSeason.vue's mockup.
 
 Edit and create render every row as a CalendarDateRangePicker (selection="holiday") and
 validate the whole list on each change; view renders the rows read-only.
+
+Visual check: /admin/planning in view and edit, the holidays and the empty line, phone and desktop.
 -->
 
 <script setup lang="ts">
@@ -10,12 +12,11 @@ import type {DateRange} from "~/types/dateTypes"
 import {createDateRange, formatDateRange, sortDateRanges} from "~/utils/date"
 import {mapZodErrorsToFormErrors} from "~/utils/validtation"
 import type {CalendarPickerSelection} from "~/composables/useTheSlopeDesignSystem"
+import {DATE_WORDS} from '~/config/dateWords'
 
-// COMPONENT DEPENDENCIES
-const {BUTTONS, COLOR, ICONS} = useTheSlopeDesignSystem()
+const {BUTTONS, COLOR, ICONS, COMPONENTS} = useTheSlopeDesignSystem()
+const HOLIDAYS = DATE_WORDS.picker.holidays
 const {holidaysSchema} = useSeasonValidation()
-
-// COMPONENT DEFINITION
 
 const model = defineModel<DateRange[]>({required: true, default: () => []})
 const props = withDefaults(defineProps<{
@@ -31,22 +32,18 @@ const SELECTION: CalendarPickerSelection = 'holiday'
 const ADD_ROW_NAME = 'holidayRangeList'
 const rowName = (index: number) => `${ADD_ROW_NAME}-${index}`
 
-// STATE
 const errors = ref<Map<string, string[]>>(new Map())
 
-// COMPUTED
-const defaultDate = computed(() => props.seasonDates?.start ?? new Date())
+// Without season dates the picker starts on the day of the first render; a fallback that followed the clock would reset the draft every minute
+const today = useClock().value
+const defaultDate = computed(() => props.seasonDates?.start ?? today)
 
-//  STATE & INITIALIZATION
 const addedRange = ref<DateRange>(createDateRange(defaultDate.value, defaultDate.value))
 
-// WATCHERS
-// Update addedRange when season dates change
 watch(defaultDate, (newDate) => {
   addedRange.value = createDateRange(newDate, newDate)
 })
 
-// ACTIONS
 /**
  * Validate the whole list (overlap, inside season) before it reaches the model.
  * Returns whether the list was accepted.
@@ -80,14 +77,15 @@ const onUpdateHoliday = (index: number, range: DateRange) => {
   ))
 }
 
+const onRemoveHoliday = (index: number) => {
+  model.value = model.value.filter((_, i) => i !== index)
+}
+
 </script>
 
 <template>
   <div>
-    <!-- Calendar Date Range Picker with validation -->
-    <div
-        v-if="!props.disabled"
-        class="flex flex-col md:flex-row items-center md:items-end  space-x-2 md:space-x-4">
+    <div v-if="!props.disabled" :class="COMPONENTS.holidayListPicker.addRow">
       <UFormField
           name="holidayPicker"
           :error="errors.get('_')?.[0] || errors.get('holidays')?.[0] || ''">
@@ -99,23 +97,22 @@ const onUpdateHoliday = (index: number, range: DateRange) => {
       </UFormField>
       <UButton
           v-bind="BUTTONS.secondaryAction"
-          :class="errors.size ? 'md:mb-8' : 'md:mb-1' "
+          :class="errors.size ? COMPONENTS.holidayListPicker.addButton.withError : COMPONENTS.holidayListPicker.addButton.plain"
           data-testid="holiday-range-add"
           :color="COLOR.info"
           :icon="ICONS.holiday"
           @click="onAddHolidayRange">
-        Tilføj ferie
+        {{ HOLIDAYS.add }}
       </UButton>
     </div>
 
-    <!-- List of holidays -->
-    <ul v-if="model?.length > 0" class="mt-4 space-y-2">
+    <ul v-if="model?.length > 0" :class="COMPONENTS.seasonFormList.list">
       <li
           v-for="(dates, index) in model"
           :key="`holiday-${index}`"
           :data-testid="rowName(index)">
-        <UFormField :label="index === 0 ?  'Valgte ferieperioder' : '' ">
-          <div class="flex items-center gap-2">
+        <UFormField :label="index === 0 ? HOLIDAYS.chosen : ''">
+          <div :class="COMPONENTS.holidayListPicker.row">
             <CalendarDateRangePicker
                 :model-value="dates"
                 :name="rowName(index)"
@@ -128,14 +125,12 @@ const onUpdateHoliday = (index: number, range: DateRange) => {
                 v-if="!props.disabled"
                 v-bind="BUTTONS.remove"
                 :data-testid="`holiday-range-remove-${index}`"
-                :aria-label="`Fjern ferieperiode ${formatDateRange(dates)}`"
-                @click="model.splice(index, 1)"/>
+                :aria-label="HOLIDAYS.remove(formatDateRange(dates))"
+                @click="onRemoveHoliday(index)"/>
           </div>
         </UFormField>
       </li>
     </ul>
-    <h3
-v-else
-        class="text-md mx-auto">Fællesspisning sæsonen har ingen ferier.</h3>
+    <h3 v-else :class="COMPONENTS.seasonFormList.empty">Fællesspisning sæsonen har ingen ferier.</h3>
   </div>
 </template>

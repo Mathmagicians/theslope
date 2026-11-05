@@ -7,6 +7,7 @@
 import type {EmailMessage} from '~/contract'
 import {RetryableError, TerminalError} from '~/utils/delivery'
 import type {DeliveryResult, EmailProvider} from '~/utils/providers/types'
+import {errorMessage} from '../../../common/error'
 
 /** The retryable codes of the Email Service; every other `E_*` code is terminal. */
 const RETRYABLE_CODES: readonly string[] = ['E_RATE_LIMIT_EXCEEDED', 'E_DAILY_LIMIT_EXCEEDED', 'E_INTERNAL_SERVER_ERROR']
@@ -45,7 +46,7 @@ export const createCloudflareEmailProvider = (binding: SendEmail): EmailProvider
             return {providerMessageId: messageId}
         } catch (error) {
             const code = errorCode(error)
-            const message = error instanceof Error ? error.message : String(error)
+            const message = errorMessage(error)
             if (code === undefined) throw new RetryableError(NETWORK_CODE, message)
             if (RETRYABLE_CODES.includes(code)) throw new RetryableError(code, message)
             throw new TerminalError(code, message)

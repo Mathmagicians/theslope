@@ -1,9 +1,10 @@
-import {test, expect, type Page} from '@playwright/test'
+import {test, expect, type Page} from '~~/tests/e2e/uiTest'
 import {authFiles} from '../config'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import testHelpers from '../testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
+import {SEASON_STATUS, SEASON_WORDS} from '~/config/seasonWords'
 
 const {adminUIFile} = authFiles
 const {validatedBrowserContext, selectDropdownOption, doScreenshot, salt, temporaryAndRandom, gotoHydrated, pollUntil} = testHelpers
@@ -140,10 +141,10 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         const activateButton = page.getByTestId('activate-season')
         await expect(activateButton).toBeVisible()
         await expect(activateButton).not.toBeDisabled()
-        await expect(activateButton).toContainText('Aktiver Sæson')
+        await expect(activateButton).toContainText(SEASON_WORDS.activation.activate)
 
         // Verify status text
-        await expect(page.getByText('Fremtidig sæson')).toBeVisible()
+        await expect(page.getByText(SEASON_WORDS.statusAlert[SEASON_STATUS.FUTURE].title)).toBeVisible()
 
         // Take screenshot
         await doScreenshot(page, 'admin/season-status-display-future-season', true)
@@ -157,9 +158,9 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         const deactivateButton = page.getByTestId('deactivate-season')
         await expect(deactivateButton).toBeVisible()
         await expect(deactivateButton).not.toBeDisabled()
-        await expect(deactivateButton).toContainText('Deaktiver Sæson')
+        await expect(deactivateButton).toContainText(SEASON_WORDS.activation.deactivate)
 
         // Verify status text
-        await expect(page.getByText('Aktiv sæson', {exact: true})).toBeVisible()
+        await expect(page.getByText(SEASON_WORDS.statusAlert[SEASON_STATUS.ACTIVE].title, {exact: true})).toBeVisible()
     })
 })

@@ -50,7 +50,8 @@ The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL
 - **Deploy**: `npm run deploy` - Build and deploy with Wrangler
 - **Lint**: `npm run lint`, `npm run lint-fix` - Run ESLint
 - **Typecheck**: `npm run ts` (root/app project), `npm run ts:server` (Nitro server project - catches bare auto-imports in composables the server imports, ADR-017), `npm run ts:node` (build-time project)
-- **Pre-ship gate**: `npm run pre:all` - lint + all three typechecks; identical to the CI "Lint and typecheck" step
+- **Pre-ship gate**: `npm run pre:all` - lint, the workflow lint when the branch or the working tree changes `.github/`, the C4 check and the four typechecks; the CI "Lint and typecheck" step (CI skips the workflow lint)
+- **Workflow lint**: `make lint-gh-actions` - the workflows' YAML syntax (`yaml valid`) and CodeQL's Actions queries on `.github/`; `pre:all` runs it through `make lint-gh-actions-changed`
 - **Test**: 
   - All unit and component tests: `npm run test:unit` - Run all Vitest tests
   - E2E tests: `npm run test:e2e` - Run Playwright tests
@@ -60,6 +61,7 @@ The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL
   - Run test once and exit: `npx vitest run tests/component/path/file.unit.spec.ts` - Run without watch mode (won't hang)
   - Run test with verbose output: `npx vitest run tests/component/path/file.unit.spec.ts --reporter=verbose` - Detailed test output
 - **Database**: the Database section in [README.md](./README.md) holds the setup and migration commands; schema and migration work follows `.claude/skills/prisma/SKILL.md`
+- **Processes**: the tests run through the project's targets (`npm run test:*`, `make`), whose `webServer` boots the server they need, or reuses the user's `npm run dev` when it is up (`reuseExistingServer`, as designed). The user's `npm run dev` is the user's, for exploratory testing; no agent starts, probes or relies on it. An agent runs shell utilities and the project's `make` and `package.json` targets to their end; a test run or gate (`npm run test:*`, `npm run pre:all`, `npx vitest`, `npx playwright test`) may run in the background, nothing else does; anything beyond those (`caffeinate`, a `node` script, a server) needs the user's authorization first, and a process an agent started is gone when its turn ends. A check of behaviour is a test case, never a scratch script (`.claude/skills/peer-sessions/SKILL.md` § Rules)
 
 ## Code Style
 - **Approach**: Test-Driven Development (TDD)

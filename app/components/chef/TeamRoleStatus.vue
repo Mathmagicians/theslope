@@ -1,86 +1,55 @@
 <script setup lang="ts">
 /**
- * TeamRoleStatus - Displays user's role and responsibilities on selected team
+ * TeamRoleStatus - the person's place on the team on view
  *
- * Shows:
- * - User's role (CHEF, COOK, JUNIORHELPER)
- * - Team name and color
- * - Role-specific responsibilities/deadlines
+ * A role on the team (ALERTS.warning for the chef, ALERTS.info for a cook or a kokkespire, the role's ROLE_ICONS glyph):
+ * +--------------------------------------------------+
+ * | (whisk) Du er kok                                |
+ * |         Du hjælper cheffen på Madhold 3 med ...  |
+ * +--------------------------------------------------+
+ *
+ * No role on the team, a visit (ALERTS.neutral):
+ * +--------------------------------------------------+
+ * | (team) Du er ikke på Madhold 3                   |
+ * +--------------------------------------------------+
+ *
+ * Visual check: /chef on an own team and on a visiting tab, phone and desktop.
  *
  * Used in:
- * - /chef/index.vue (top of master panel)
+ * - /chef/index.vue (master panel, under the team tabs)
  */
-import type { CookingTeamDetail } from '~/composables/useCookingTeamValidation'
+import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
+import {TEAM_WORDS} from '~/config/teamWords'
 
 interface Props {
-  team: CookingTeamDetail
+  team: CookingTeamDisplay
   inhabitantId: number
 }
 
 const props = defineProps<Props>()
 
-// Design system
-const { COLOR, ICONS, ALERTS } = useTheSlopeDesignSystem()
+const {ICONS, ALERTS, ROLE_ICONS} = useTheSlopeDesignSystem()
+const {getTeamShortName} = useCookingTeam()
+const Role = useCookingTeamValidation().TeamRoleSchema.enum
 
-// Team utilities
-const { getTeamShortName } = useCookingTeam()
-
-// Validation schemas
-const { TeamRoleSchema } = useCookingTeamValidation()
-const Role = TeamRoleSchema.enum
-
-// Get user's role on this team
-const userAssignment = computed(() => {
-  return props.team.assignments?.find(a => a.inhabitantId === props.inhabitantId)
-})
-
-const userRole = computed(() => {
-  return userAssignment.value?.role
-})
-
-const isChef = computed(() => userRole.value === Role.CHEF)
-
-// Team short name for display (e.g., "Madhold 2" instead of "Madhold 2 - 08/25-06/26")
 const teamShortName = computed(() => getTeamShortName(props.team.name))
+const role = computed(() => props.team.assignments.find(a => a.inhabitantId === props.inhabitantId)?.role ?? null)
 
-// Role display configuration
-const roleConfig = computed(() => {
-  const configs = {
-    [Role.CHEF]: {
-      title: 'Du er chefkok',
-      icon: ICONS.chef,
-      color: COLOR.warning,
-      description: `Du er chefkok på ${teamShortName.value} og har ansvaret for at slå en menu op, handle ind og håndtere madlavningen.`
-    },
-    [Role.COOK]: {
-      title: 'Du er kok',
-      icon: 'i-heroicons-user',
-      color: COLOR.primary,
-      description: `Du hjælper cheffen på ${teamShortName.value} med at lave maden`
-    },
-    [Role.JUNIORHELPER]: {
-      title: 'Du er kokkespire',
-      icon: 'i-heroicons-heart',
-      color: COLOR.success,
-      description: `Du er en sej kokkespire, som hjælper de voksne på ${teamShortName.value}`
+const status = computed(() => role.value
+  ? {
+      icon: ROLE_ICONS[role.value],
+      title: TEAM_WORDS.roles[role.value].title,
+      description: TEAM_WORDS.roles[role.value].description(teamShortName.value)
     }
-  }
-  return configs[userRole.value as keyof typeof configs]
-})
-
+  : {icon: ICONS.team, title: TEAM_WORDS.visit.line(teamShortName.value), description: undefined})
 </script>
 
 <template>
   <UAlert
-    v-if="userRole && roleConfig"
-    v-bind="isChef ? ALERTS.warning : ALERTS.info"
-    :icon="roleConfig.icon"
-  >
-    <template #title>
-      {{ roleConfig.title }}
-    </template>
-    <template #description>
-      {{ roleConfig.description }}
-    </template>
-  </UAlert>
+    v-bind="!role ? ALERTS.neutral : role === Role.CHEF ? ALERTS.warning : ALERTS.info"
+    :icon="status.icon"
+    :title="status.title"
+    :description="status.description"
+    data-testid="team-role-status"
+  />
 </template>

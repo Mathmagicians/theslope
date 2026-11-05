@@ -4,22 +4,24 @@
  *
  * Features:
  * - Calendar view: Shows team assignments on calendar with colored badges
- * - Selection support: Click to select dinner event (optional via emit)
  * - Multi-team support: a team wears the rainbow stop of its number (`getTeamNumber` over the season's teams, `getRainbowBand`); the stops repeat after the last
  * - Holiday awareness: Displays holidays as green rings
  *
  * Uses BaseCalendar for consistent calendar structure.
  *
  * Used in:
- * - /admin/teams (all-teams overview - no selection)
- * - CookingTeamCard (the team's own calendar, on /admin/teams)
+ * - /admin/teams (all-teams overview)
+ * - CookingTeamCard (the team's own calendar in its regular and edit modes, on /admin/teams)
+ *
+ * Visual check: /admin/teams, the all-teams calendar and a team's card calendar, phone and desktop.
  */
 import type {DateRange} from '~/types/dateTypes'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type{DayEventList} from '~/composables/useCalendarEvents'
 import type {DateValue} from '@internationalized/date'
-import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
+import {LEGEND_KIND, type CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
+import {DATE_WORDS} from '~/config/dateWords'
 
 interface Props {
   seasonDates: DateRange
@@ -27,22 +29,13 @@ interface Props {
   seasonTeams: CookingTeamDisplay[] // The season's full team list: the number fallback for a team whose name carries none
   dinnerEvents: DinnerEventDisplay[]
   holidays?: DateRange[]
-  selectedDinnerId?: number | null // For chef page selection
-  showSelection?: boolean // Enable selection mode
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  holidays: () => [],
-  selectedDinnerId: null,
-  showSelection: false
+  holidays: () => []
 })
 
-const emit = defineEmits<{
-  select: [dinnerId: number]
-}>()
-
 const {createEventList} = useCalendarEvents()
-const {getDinnerForDay} = useTemporalCalendar()
 const {getHolidayDatesFromDateRangeList} = useSeason()
 const {CALENDAR, COMPONENTS, dayCircleClasses, getRainbowBand, SIZES} = useTheSlopeDesignSystem()
 const {getTeamNumber} = useCookingTeam()
@@ -50,9 +43,9 @@ const teamBandIndex = (team: CookingTeamDisplay) => getTeamNumber(team, props.se
 
 // Legend: each team wears the rainbow stop of its number, then the holiday ring when the season has holidays
 const legendItems = computed((): CalendarLegendItem[] => [
-  ...props.teams.map(team => ({label: team.name, kind: 'badge' as const, badgeClass: getRainbowBand(teamBandIndex(team))})),
+  ...props.teams.map(team => ({label: team.name, kind: LEGEND_KIND.badge, badgeClass: getRainbowBand(teamBandIndex(team))})),
   ...(props.holidays && props.holidays.length > 0
-    ? [{label: 'Ferie', kind: 'circle' as const, circleClass: dayCircleClasses(CALENDAR.holiday)}]
+    ? [{label: DATE_WORDS.calendarLegend.holiday, kind: LEGEND_KIND.circle, circleClass: dayCircleClasses(CALENDAR.holiday)}]
     : [])
 ])
 
@@ -70,48 +63,30 @@ const teamEventLists = computed(() => {
       .filter(event => event.cookingTeamId === team.id)
       .map(event => event.date)
 
-    return createEventList(teamEvents, `team-${team.id}`, 'badge', {
+    return createEventList(teamEvents, `team-${team.id}`, {
       label: team.name,
-      color: teamBandIndex(team),
+      band: teamBandIndex(team),
       metadata: { teamId: team.id, teamName: team.name }
     })
   })
 })
-
-// Combine all event lists
-const allEventLists = computed(() => teamEventLists.value)
 
 // Check if a day is a holiday using isCalendarDateInDateList
 const isHoliday = (day: DateValue): boolean => {
   return isCalendarDateInDateList(day, holidayDates.value)
 }
 
-// Helper to find team event list for a day (for rendering logic)
-const getTeamEventList = (eventLists: DayEventList[]) => {
-  return eventLists.find(list => list.listId.startsWith('team-'))
-}
+// The day's team list: the tooltip names the team, the badge wears its band
+const getTeamEventList = (eventLists: DayEventList[]) => eventLists.find(list => list.listId.startsWith('team-'))
 
-// Calendar selection support - match agenda view behavior
-const handleCalendarDayClick = (day: DateValue) => {
-  if (!props.showSelection) return
-  const dinner = getDinnerForDay(props.dinnerEvents, day)
-  if (dinner) emit('select', dinner.id)
+const teamBandOf = (eventLists: DayEventList[]) => {
+  const band = getTeamEventList(eventLists)?.band
+  return band === undefined ? undefined : getRainbowBand(band)
 }
-
-const isCalendarDaySelected = (day: DateValue): boolean => {
-  if (!props.selectedDinnerId || !props.showSelection) return false
-  const dinner = getDinnerForDay(props.dinnerEvents, day)
-  return dinner?.id === props.selectedDinnerId
-}
-
-const getCalendarDayClasses = (day: DateValue) => [
-  props.showSelection ? COMPONENTS.teamCalendar.selectableDay : '',
-  isCalendarDaySelected(day) ? COMPONENTS.teamCalendar.selectedDay : ''
-]
 </script>
 
 <template>
-  <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists">
+  <BaseCalendar :season-dates="seasonDates" :event-lists="teamEventLists">
         <template #day="{ day, eventLists }">
           <!-- Holiday takes precedence (green ring) -->
           <div
@@ -121,16 +96,15 @@ const getCalendarDayClasses = (day: DateValue) => [
             {{ day.day }}
           </div>
 
-          <!-- Team cooking day with tooltip and selection -->
+          <!-- Team cooking day with tooltip -->
           <UTooltip
             v-else-if="getTeamEventList(eventLists)"
-            :text="getTeamEventList(eventLists)!.events[0]?.label"
+            :text="getTeamEventList(eventLists)?.events[0]?.label"
           >
             <UBadge
               :size="SIZES.md"
               data-testid="team-calendar-day"
-              :class="[getRainbowBand(getTeamEventList(eventLists)!.color as number), ...getCalendarDayClasses(day)]"
-              @click="handleCalendarDayClick(day)"
+              :class="teamBandOf(eventLists)"
             >
               {{ day.day }}
             </UBadge>

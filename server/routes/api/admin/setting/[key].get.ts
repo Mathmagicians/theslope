@@ -28,7 +28,7 @@ export default defineEventHandler(async (event): Promise<SettingDetail> => {
     const d1Client = cloudflare.env.DB
 
     // Validation - FAIL EARLY (400): an unregistered key is a bad request, not a missing row
-    let key!: SettingKey
+    let key: SettingKey
     try {
         key = (await getValidatedRouterParams(event, paramsSchema.parse)).key
     } catch (error) {

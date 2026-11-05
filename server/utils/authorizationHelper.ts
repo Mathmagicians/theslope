@@ -24,6 +24,17 @@ export const getRequiredUser = async (event: H3Event): Promise<UserDetail> => {
 }
 
 /**
+ * Get the session's Heynabo token or throw 401: chef sync acts in Heynabo as the signed-in user
+ */
+export const getRequiredHeynaboToken = async (event: H3Event): Promise<string> => {
+    const {secure} = await getUserSession(event)
+    if (!secure?.heynaboToken) {
+        return throwH3Error(`${PREFIX} No Heynabo token in the session`, new Error('Authentication required'), 401)
+    }
+    return secure.heynaboToken
+}
+
+/**
  * Check route permission using the route table
  */
 export const requireRoutePermission = async (
@@ -60,7 +71,7 @@ export const requireHouseholdAccess = async (
     const user = await getRequiredUser(event)
 
     if (adminBypass(user)) {
-        console.info(`${PREFIX} Admin bypass for user ${user.email} on household ${targetHouseholdId}`)
+        console.info(`${PREFIX} Admin bypass for user ${user.email} roles=${JSON.stringify(user.systemRoles)} on household ${targetHouseholdId}`)
         return user
     }
 
@@ -166,6 +177,7 @@ export const requireChefForDinner = async (
 
 const authorizationHelper = {
     getRequiredUser,
+    getRequiredHeynaboToken,
     requireRoutePermission,
     requireHouseholdAccess,
     requireSettingWriteAccess,

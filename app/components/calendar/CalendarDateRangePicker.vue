@@ -4,19 +4,18 @@ import {eachDayOfManyIntervals, isCalendarDateInDateList} from "~/utils/date"
 import type {DateValue} from '@internationalized/date'
 import {applyValidation, getErrorMessage} from "~/utils/validtation"
 import type {CalendarPickerSelection} from "~/composables/useTheSlopeDesignSystem"
+import {DATE_WORDS} from '~/config/dateWords'
 
-// COMPONENT DEFINITIONS
 const model = defineModel<DateRange>({required: true})
 const props = withDefaults(defineProps<{ name?: string, disabled?: boolean, selection?: CalendarPickerSelection, label?: string, icon?: string }>(), {
   name: undefined,
   disabled: false,
   selection: 'cookingDay',
-  label: 'Start dato - Slut dato',
+  label: DATE_WORDS.picker.range,
   icon: undefined
 })
-const emit = defineEmits(['update:model-value', 'close'])
+const emit = defineEmits<{close: []}>()
 
-// DESIGN SYSTEM
 const {SIZES, COMPONENTS} = useTheSlopeDesignSystem()
 
 const selectedDays = computed(() => model.value?.start && model.value?.end
@@ -24,19 +23,13 @@ const selectedDays = computed(() => model.value?.start && model.value?.end
     : [])
 const isDaySelected = (day: DateValue) => isCalendarDateInDateList(day, selectedDays.value)
 
-// STATE
 const errors = ref<Map<string, string[]>>(new Map())
 
-// COMPUTED STATE
 // One model: the field's typed segments and the range calendar read and write the same range
 const calendarRange = computed(() => {
-  if (model.value?.start && model.value?.end) {
-    return {
-      start: toCalendarDate(model.value.start)!,
-      end: toCalendarDate(model.value.end)!
-    }
-  }
-  return null
+  const start = toCalendarDate(model.value?.start)
+  const end = toCalendarDate(model.value?.end)
+  return start && end ? {start, end} : null
 })
 
 const fieldRange = computed({
@@ -59,13 +52,8 @@ const pickerDateRange = computed({
   }
 })
 
-// ACTIONS
 const updateDateRange = (newRange: DateRange) => {
-  const validated = applyValidation(dateRangeSchema, newRange, errors)
-  if (validated === undefined) return false
-  model.value = newRange
-  emit('update:model-value', newRange)
-  return true
+  if (applyValidation(dateRangeSchema, newRange, errors) !== undefined) model.value = newRange
 }
 
 // The disabled face: a range reads as one compact field, the presentation every range shares
@@ -77,23 +65,17 @@ const viewInput = computed(() => ({
   ui: COMPONENTS.dateRangeField.viewUi
 }))
 
-// Expose for testing
-defineExpose({
-  errors,
-  updateDateRange
-})
-
 </script>
 
 <template>
   <!-- A host with its own UFormField passes label="": nested UFormFields recurse Nuxt UI's props forwarding -->
-  <UFormField v-if="props.disabled && props.label" :class="COMPONENTS.dateRangeField.field" :label="props.label">
+  <UFormField v-if="props.disabled && props.label" :class="COMPONENTS.datePickerField" :label="props.label">
     <UInput v-bind="viewInput" />
   </UFormField>
   <UInput v-else-if="props.disabled" v-bind="viewInput" />
   <div v-else :name="props.name">
     <UFormField
-        :class="COMPONENTS.dateRangeField.field"
+        :class="COMPONENTS.datePickerField"
         :name="props.name"
         :label="props.label"
         :error="getErrorMessage(errors, ['_', 'start', 'end'])">

@@ -13,7 +13,7 @@ const paramSchema = idParams('id')
 export default defineEventHandler(async (event): Promise<InhabitantDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
-    let id!: number
+    let id: number
 
     // Input validation try-catch - FAIL EARLY
     try {

@@ -6,7 +6,8 @@
  *   Arbejdstid    [100%         v]
  */
 import type {TeamRole} from '~/composables/useCookingTeamValidation'
-import {ROLE_OPTIONS, ALLOCATION_PERCENTAGE_OPTIONS} from '~/composables/useCookingTeamValidation'
+import {ALLOCATION_PERCENTAGE_OPTIONS} from '~/composables/useCookingTeamValidation'
+import {TEAM_WORDS} from '~/config/teamWords'
 
 defineProps<{
   roleLabel: string
@@ -17,8 +18,9 @@ const role = defineModel<TeamRole>('role', {required: true})
 const allocationPercentage = defineModel<number | undefined>('allocationPercentage')
 
 const {SIZES, COMPONENTS, ROLE_ICONS} = useTheSlopeDesignSystem()
+const {TeamRoleSchema} = useCookingTeamValidation()
 
-const roleOptions = ROLE_OPTIONS.map(option => ({...option, icon: ROLE_ICONS[option.value]}))
+const roleOptions = TeamRoleSchema.options.map(role => ({label: TEAM_WORDS.roles[role].label, value: role, icon: ROLE_ICONS[role]}))
 </script>
 
 <template>

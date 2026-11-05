@@ -3,30 +3,29 @@
  * AdminTeams - one master table, one portable team detail
  *
  * Selection is the open state and rides in ?team=; the detail's face rides in
- * ?mode=view|edit|create (ADR-006). The master table is constant - one third
- * of the row from md, the same columns in every state - and only the region
- * beside it swaps: the all-teams calendar with no selection (the overview, at
- * a glance), the framed team detail when a row is open. Everything inside the
- * edit face saves immediately. The toggle chevron turns toward the open detail
- * (up folds the phone dock, right points into the md+ pane) and the row click
- * toggles the same way.
+ * ?mode=view|edit|create. The master table is constant - the master
+ * of LAYOUTS.masterDetailPage, the same columns in every state - and only the
+ * detail beside it swaps: the all-teams calendar with no selection (the
+ * overview, at a glance), the framed team detail when a row is open. Everything
+ * inside the edit face saves immediately. The toggle chevron turns toward the
+ * open detail (up folds the phone dock, right points into the md+ pane) and the
+ * row click toggles the same way.
  *
  * Overview (default; desktop shown, the phone stacks the calendar below)
  * +--Madhold-------------------------------------------------------------+
  * | [Saeson: 12/26-01/27 v]                       [(plus) Opret madhold] |
- * +---------------------------------+-------------------------------------+
- * | v | Madhold           | Dage    |                                     |
- * | v | [Madhold 1]...    | tir, ons|   ALL-TEAMS CALENDAR                |
- * | v | [Madhold 2]...    | man, tor|   (all teams at a glance)           |
- * +---------------------------------+-------------------------------------+
+ * +-- a third, at least 245px ------+ +-- the rest -----------------------+
+ * | v | Madhold           | Dage    | |                                   |
+ * | v | [Madhold 1]...    | tir, ons| |   ALL-TEAMS CALENDAR              |
+ * | v | [Madhold 2]...    | man, tor| |   (all teams at a glance)         |
+ * +---------------------------------+ +-----------------------------------+
  *
  * Desktop (md+), team open - the same master, the framed detail in its place
- * +---------------------------------+-------------------------------------+
- * | v | Madhold           | Dage    | +---------------------------------+ |
- * | > I [Madhold 2]...    | man, tor| | Madhold 2  [(pencil) Rediger]   | |
- * | v | [Madhold 3]...    | man     | | medlemmer, finder, dage +       | |
- * |   |                   |         | | holdets kalender                | |
- * +---------------------------------+-+---------------------------------+-+
+ * +-- a third, at least 245px ------+ +-- the rest, framed ---------------+
+ * | v | Madhold           | Dage    | | Madhold 2  [(pencil) Rediger]     |
+ * | > I [Madhold 2]...    | man, tor| | medlemmer, finder, dage +         |
+ * | v | [Madhold 3]...    | man     | | holdets kalender                  |
+ * +---------------------------------+ +-----------------------------------+
  *   I = left tab accent in the team's rainbow colour (getRainbowAccent)
  *   the edit face swaps the pencil for [(arrow) Tilbage]
  *
@@ -41,10 +40,13 @@
  * footer [Annuller] [Opret N madhold]; batch create numbers from N+1.
  */
 import {h, resolveComponent} from 'vue'
-import {FORM_MODES} from "~/types/form"
-import type {TeamRole, CookingTeamDisplay} from "~/composables/useCookingTeamValidation"
+import {FORM_MODES, TEAM_CARD_MODES} from "~/types/form"
+import type {TeamRole, CookingTeamCreate, CookingTeamDisplay} from "~/composables/useCookingTeamValidation"
 import type {WeekDayMap} from "~/types/dateTypes"
 import type {JokerSlotCreate} from "~/composables/useDutyValidation"
+import {BUTTON_WORDS} from "~/config/buttonWords"
+import {TEAM_WORDS} from "~/config/teamWords"
+import {ADMIN_WORDS} from "~/config/adminWords"
 
 // Props - canEdit from parent for authorization
 interface Props {
@@ -56,6 +58,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const {getDefaultCookingTeam, countChefs, getTeamShortName, getTeamNumber} = useCookingTeam()
 
+const LOG_PREFIX = '👥 > ADMIN_TEAMS'
 const {ICONS, RESPONSIVE_ICONS, SIZES, BUTTONS, ALERTS, COLOR, COMPONENTS, LAYOUTS, getRainbowAccent, NOISE} = useTheSlopeDesignSystem()
 const store = usePlanStore()
 const {
@@ -90,7 +93,7 @@ const {formMode, onModeChange: baseOnModeChange} = useEntityFormManager<CookingT
 
 const onModeChange = baseOnModeChange
 
-// SEASON SELECTION MANAGEMENT - delegated to composable (ADR-007)
+// SEASON SELECTION MANAGEMENT - delegated to composable
 const selectedSeasonId = computed(() => selectedSeason.value?.id ?? null)
 const {season} = useSeasonSelector({
   seasons: computed(() => seasons.value),
@@ -107,7 +110,7 @@ const handleSeasonChange = (id: number) => {
 
 // CREATE MODE - Component owns draft (dynamic generation based on teamCount)
 const teamCount = ref(1)
-const createDraft = ref<CookingTeamDisplay[]>([])
+const createDraft = ref<CookingTeamCreate[]>([])
 
 // Watch component state to regenerate CREATE draft
 watch([formMode, teamCount, selectedSeason, teams], () => {
@@ -125,16 +128,7 @@ watch([formMode, teamCount, selectedSeason, teams], () => {
   }
 }, {immediate: true})
 
-// DISPLAYED TEAMS - Component-owned draft for CREATE, live data for EDIT/VIEW
-// NOTE: Must be defined BEFORE selectedTeam and teamTabs that depend on it
-const displayedTeams = computed(() => {
-  if (formMode.value === FORM_MODES.CREATE) {
-    return createDraft.value
-  }
-  return teams.value
-})
-
-// EDIT MODE - Team selection via ?team= query param (ADR-006, survives store refresh)
+// EDIT MODE - Team selection via ?team= query param (survives store refresh)
 // Cleanup (strip ?team= on mode change) handled by onModeChange wrapper above.
 const {value: selectedTeamId, setValue: setSelectedTeamParam} = useQueryParam<number>('team', {
   serialize: (id) => id.toString(),
@@ -142,17 +136,16 @@ const {value: selectedTeamId, setValue: setSelectedTeamParam} = useQueryParam<nu
     const parsed = parseInt(s)
     return !isNaN(parsed) ? parsed : null
   },
-  validate: (id) => displayedTeams.value.some(t => t.id === id),
-  normalize: (id) => (id && displayedTeams.value.some(t => t.id === id)) ? id : null,
+  validate: (id) => teams.value.some(t => t.id === id),
+  normalize: (id) => (id && teams.value.some(t => t.id === id)) ? id : null,
   defaultValue: () => 0,
-  syncWhen: () => formMode.value !== FORM_MODES.CREATE && displayedTeams.value.some(t => t.id)
+  syncWhen: () => formMode.value !== FORM_MODES.CREATE && teams.value.length > 0
 })
 
 // Selection IS the open state: with no team selected the page shows the overview
 // (full-width table + the all-teams calendar); the toggle deselects like a chevron folds
-const selectedTeamIndex = computed(() => displayedTeams.value.findIndex(t => t.id === selectedTeamId.value))
-const selectedTeam = computed(() => displayedTeams.value[selectedTeamIndex.value] ?? null)
-const teamNumberOf = (team: CookingTeamDisplay) => getTeamNumber(team, displayedTeams.value)
+const selectedTeam = computed(() => teams.value.find(t => t.id === selectedTeamId.value) ?? null)
+const teamNumberOf = (team: CookingTeamDisplay) => getTeamNumber(team, teams.value)
 const selectedTeamNumber = computed(() => selectedTeam.value ? teamNumberOf(selectedTeam.value) : 1)
 
 const handleToggleTeam = async (id: number) => {
@@ -168,13 +161,13 @@ const handleToggleTeam = async (id: number) => {
 
 // MOBILE EXPANSION - derived from the selection: the dock under the row IS the open detail
 const expanded = computed({
-  get: (): Record<number, boolean> => {
-    if (COMPONENTS.masterDetail.detailAsPane || formMode.value === FORM_MODES.CREATE || selectedTeamIndex.value < 0) return {}
-    return {[selectedTeamIndex.value]: true}
+  get: (): Record<string, boolean> => {
+    if (COMPONENTS.masterDetail.detailAsPane || formMode.value === FORM_MODES.CREATE || !selectedTeam.value) return {}
+    return {[rowIdOf(selectedTeam.value)]: true}
   },
-  set: (value: Record<number, boolean>) => {
-    const openIndex = Object.keys(value).find(key => value[Number(key)])
-    const target = openIndex !== undefined ? displayedTeams.value[Number(openIndex)]?.id : selectedTeam.value?.id
+  set: (value: Record<string, boolean>) => {
+    const openRowId = Object.keys(value).find(key => value[key])
+    const target = openRowId !== undefined ? findRowById(teams.value, openRowId)?.id : selectedTeam.value?.id
     if (target) void handleToggleTeam(target)
   }
 })
@@ -188,14 +181,14 @@ const detailProps = computed(() => ({
   seasonCookingDays: selectedSeason.value?.cookingDays,
   seasonDates: selectedSeason.value?.seasonDates,
   holidays: selectedSeason.value?.holidays,
-  teams: displayedTeams.value.map(t => ({id: t.id!, name: t.name})),
-  mode: formMode.value === FORM_MODES.EDIT ? 'edit' as const : 'regular' as const,
+  teams: teams.value,
+  mode: formMode.value === FORM_MODES.EDIT ? TEAM_CARD_MODES.EDIT : TEAM_CARD_MODES.REGULAR,
   useShortName: true
 }))
 
 const detailEvents = computed(() => ({
-  'update:teamName': (newName: string) => handleUpdateTeamName(selectedTeam.value!.id!, newName),
-  'update:affinity': (affinity: WeekDayMap<boolean> | null) => handleUpdateTeamAffinity(selectedTeam.value!.id!, affinity),
+  'update:teamName': (newName: string) => handleUpdateTeamName(selectedTeam.value!.id, newName),
+  'update:affinity': (affinity: WeekDayMap<boolean> | null) => handleUpdateTeamAffinity(selectedTeam.value!.id, affinity),
   'delete': handleDeleteTeam,
   'add:member': handleAddMember,
   'update:member': handleUpdateMember,
@@ -218,12 +211,12 @@ const handleBatchCreateTeams = async () => {
   if (!createDraft.value.length || !selectedSeason.value?.id) return
 
   try {
-    // The store's toast reports the operation result (ADR-009), not the draft
+    // The store's toast reports the operation result, not the draft
     await createTeam(createDraft.value)
     await onModeChange(FORM_MODES.VIEW)
   } catch (error) {
-    console.error('👥 > ADMIN_TEAMS > [CREATE] Error creating teams:', error)
-    throw error
+    // The store's apiRequest has toasted the failure; the form stays in create mode
+    console.warn(`${LOG_PREFIX} > [CREATE] Error creating teams:`, error)
   }
 }
 
@@ -306,20 +299,20 @@ const columns = [
         variant: NOISE.quiet,
         icon: isOpen ? RESPONSIVE_ICONS.detailOpen : ICONS.chevronDown,
         square: true,
-        'aria-label': isOpen ? 'Luk' : 'Åbn detaljer',
+        'aria-label': isOpen ? BUTTON_WORDS.close : BUTTON_WORDS.openDetails,
         'data-testid': `team-toggle-${row.original.id}`,
-        onClick: () => handleToggleTeam(row.original.id!)
+        onClick: () => handleToggleTeam(row.original.id)
       })
     }
   },
   {
     accessorKey: 'name',
-    header: 'Madhold',
+    header: ADMIN_WORDS.tabs.teams,
     meta: {class: COMPONENTS.masterDetail.primaryColumn}
   },
   {
     accessorKey: 'affinity',
-    header: 'Madlavningsdage',
+    header: TEAM_WORDS.card.cookingDays.view,
     meta: {class: COMPONENTS.masterDetail.compactColumn}
   }
 ]
@@ -351,7 +344,7 @@ const columns = [
             :disabled="disabledModes.includes(FORM_MODES.CREATE)"
             @click="onModeChange(FORM_MODES.CREATE)"
         >
-          Opret madhold
+          {{ TEAM_WORDS.admin.create }}
         </UButton>
       </div>
     </template>
@@ -364,10 +357,7 @@ const columns = [
         <div v-if="formMode === FORM_MODES.CREATE" :class="COMPONENTS.adminTeams.createFace">
           <div :class="COMPONENTS.adminTeams.countRow">
             <label for="team-count" :class="COMPONENTS.adminTeams.countLabel">
-              <span v-if="teams.length > 0">Vi har allerede {{
-                  teams.length
-                }} madhold. Hvor mange nye vil du lave?</span>
-              <span v-else>Hvor mange madhold skal vi have?</span>
+              {{ teams.length > 0 ? TEAM_WORDS.admin.count.more(teams.length) : TEAM_WORDS.admin.count.first }}
             </label>
             <UInput
                 id="team-count"
@@ -379,7 +369,7 @@ const columns = [
             />
           </div>
           <div :class="LAYOUTS.gridTwoCol">
-            <div v-for="(team, index) in displayedTeams" :key="index" :class="COMPONENTS.adminTeams.previewTeam">
+            <div v-for="(team, index) in createDraft" :key="index" :class="COMPONENTS.adminTeams.previewTeam">
               <h3 :class="COMPONENTS.adminTeams.previewName">{{ team.name }}</h3>
             </div>
           </div>
@@ -387,12 +377,13 @@ const columns = [
 
         <!-- VIEW + EDIT: one master table; the detail mounts in the md+ pane or docks under the selected row -->
         <div v-else :class="COMPONENTS.adminTeams.viewFace">
-          <div :class="COMPONENTS.adminTeams.masterDetailRow">
-          <div :class="COMPONENTS.adminTeams.master">
+          <div :class="LAYOUTS.masterDetailPage.root">
+          <div :class="LAYOUTS.masterDetailPage.left">
           <UTable
               v-model:expanded="expanded"
               :columns="columns"
-              :data="displayedTeams"
+              :data="teams"
+              :get-row-id="rowIdOf"
               :loading="isSelectedSeasonLoading"
               :ui="COMPONENTS.table.ui"
           >
@@ -400,7 +391,7 @@ const columns = [
               <div
                   :class="[COMPONENTS.table.clickableCell, row.original.id === selectedTeamId && getRainbowAccent(teamNumberOf(row.original) - 1)]"
                   :data-testid="`team-row-${row.original.id}`"
-                  @click="handleToggleTeam(row.original.id!)"
+                  @click="handleToggleTeam(row.original.id)"
               >
                 <CookingTeamBadges
                     :team-number="teamNumberOf(row.original)"
@@ -409,7 +400,7 @@ const columns = [
                     :member-count="row.original.assignments?.length ?? 0"
                     :joker-slot-count="row.original.jokerSlotCount ?? 0"
                     :cooking-days-count="row.original.cookingDaysCount ?? 0"
-                    size="small"
+                    :size="SIZES.small"
                 />
               </div>
             </template>
@@ -430,7 +421,7 @@ const columns = [
                       :team-number="selectedTeamNumber"
                       :team-name="getTeamShortName(selectedTeam.name)"
                       :show-counts="false"
-                      size="small"
+                      :size="SIZES.small"
                   />
                   <UButton
                       v-if="props.canEdit && formMode === FORM_MODES.VIEW"
@@ -441,7 +432,7 @@ const columns = [
                       :aria-label="`Rediger ${getTeamShortName(selectedTeam.name)}`"
                       @click="onModeChange(FORM_MODES.EDIT)"
                   >
-                    Rediger
+                    {{ BUTTON_WORDS.edit }}
                   </UButton>
                   <UButton
                       v-else-if="formMode === FORM_MODES.EDIT"
@@ -450,7 +441,7 @@ const columns = [
                       data-testid="back-to-view"
                       @click="onModeChange(FORM_MODES.VIEW)"
                   >
-                    Tilbage
+                    {{ BUTTON_WORDS.back }}
                   </UButton>
                 </div>
                 <div :class="COMPONENTS.masterDetail.dockBody">
@@ -495,7 +486,7 @@ const columns = [
 
           <!-- Detail pane (md+): the same card as the dock, framed so the team's own
                calendar reads apart from the all-teams calendar of the overview -->
-          <div v-if="COMPONENTS.masterDetail.detailAsPane && selectedTeam?.id" :class="[COMPONENTS.adminTeams.pane, COMPONENTS.masterDetail.pane]">
+          <div v-if="COMPONENTS.masterDetail.detailAsPane && selectedTeam?.id" :class="[LAYOUTS.masterDetailPage.center, COMPONENTS.adminTeams.pane, COMPONENTS.masterDetail.pane]">
             <div :class="COMPONENTS.adminTeams.detailHeaderRow">
               <CookingTeamBadges
                   :team-number="selectedTeamNumber"
@@ -520,18 +511,18 @@ const columns = [
                   data-testid="back-to-view"
                   @click="onModeChange(FORM_MODES.VIEW)"
               >
-                Tilbage
+                {{ BUTTON_WORDS.back }}
               </UButton>
             </div>
             <CookingTeamCard v-bind="detailProps" v-on="detailEvents" />
           </div>
 
           <!-- No selection: the all-teams calendar fills the detail region, at a glance -->
-          <div v-else-if="selectedSeason && displayedTeams.length > 0" :class="COMPONENTS.adminTeams.overviewCalendar">
+          <div v-else-if="selectedSeason && teams.length > 0" :class="[LAYOUTS.masterDetailPage.center, COMPONENTS.adminTeams.overviewCalendar]">
             <TeamCalendarDisplay
                 :season-dates="selectedSeason.seasonDates"
-                :teams="displayedTeams"
-                :season-teams="displayedTeams"
+                :teams="teams"
+                :season-teams="teams"
                 :dinner-events="selectedSeason.dinnerEvents ?? []"
                 :holidays="selectedSeason.holidays"
             />
@@ -543,11 +534,11 @@ const columns = [
 
     <template #footer>
       <div v-if="formMode === FORM_MODES.CREATE" :class="COMPONENTS.adminTeams.createFooter">
-        <UButton data-testid="submit-create-teams" :color="COLOR.secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
-          {{ isActionLoading ? 'Arbejder...' : 'Opret madhold' }}
+        <UButton v-bind="BUTTONS.save" :color="COLOR.secondary" data-testid="submit-create-teams" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
+          {{ isActionLoading ? BUTTON_WORDS.working : TEAM_WORDS.admin.create }}
         </UButton>
-        <UButton :color="COLOR.neutral" :variant="NOISE.quiet" @click="handleCancel">
-          Annuller
+        <UButton v-bind="BUTTONS.cancel" @click="handleCancel">
+          {{ BUTTON_WORDS.cancel }}
         </UButton>
       </div>
 

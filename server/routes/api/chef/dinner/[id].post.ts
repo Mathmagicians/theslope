@@ -1,17 +1,15 @@
 import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus, getRequestURL} from 'h3'
-import type {H3Error} from 'h3'
 import {updateDinnerEvent, updateDinnerEventAllergens} from '~~/server/data/financesRepository'
-import {createHeynaboEvent, updateHeynaboEvent, cancelHeynaboEvent, uploadDefaultDinnerPictureToEvent, updateHeynaboEventWithFallback} from '~~/server/integration/heynabo/heynaboClient'
+import {createHeynaboEvent, updateHeynaboEvent, cancelHeynaboEvent, uploadDefaultDinnerPictureToEvent} from '~~/server/integration/heynabo/heynaboClient'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
-import type {UserSession} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
-import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
+import {requireChefForDinner, getRequiredHeynaboToken} from '~~/server/utils/authorizationHelper'
 import {z} from 'zod'
 import {idParams} from '~/composables/useCoreValidation'
 
-const {throwH3Error} = eventHandlerHelper
+const {throwH3Error, h3eFromCatch} = eventHandlerHelper
 const {DinnerStateSchema, DinnerEventUpdateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -39,7 +37,7 @@ type ChefDinnerUpdate = z.infer<typeof ChefDinnerUpdateSchema>
  * - State transitions (ANNOUNCED creates Heynabo event, CANCELLED cancels it)
  * - Allergens (NO Heynabo sync - we're source of truth)
  *
- * ADR-013: Uses user's Heynabo token. Falls back to system token for admins without Heynabo.
+ * Heynabo sync acts with the chef's own token from the session; a session without it is a 401.
  */
 export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     const {cloudflare} = event.context
@@ -47,8 +45,8 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     const PREFIX = '👨‍🍳 > CHEF > DINNER > UPDATE > '
 
     // Input validation - FAIL EARLY
-    let id!: number
-    let updates!: ChefDinnerUpdate
+    let id: number
+    let updates: ChefDinnerUpdate
     try {
         ({id} = await getValidatedRouterParams(event, paramSchema.parse))
         updates = await readValidatedBody(event, ChefDinnerUpdateSchema.parse)
@@ -61,10 +59,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     // Throws 401/403/404.
     const {dinner} = await requireChefForDinner(event, id)
 
-    // Get user session and Heynabo token
-    const session = await getUserSession(event)
-    const user = session?.user as UserSession | undefined
-    const heynaboToken = user?.passwordHash // User's Heynabo token stored in session
+    const heynaboToken = await getRequiredHeynaboToken(event)
 
     // Business logic
     try {
@@ -81,9 +76,6 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
                     if (dinner.state === DinnerState.CONSUMED) {
                         throw createError({statusCode: 400, message: PREFIX + `Cannot announce consumed dinner event ${id}`})
                     }
-                    if (!heynaboToken) {
-                        throw createError({statusCode: 401, message: PREFIX + 'Not authenticated or missing Heynabo token'})
-                    }
 
                     const heynaboPayload = createHeynaboEventPayload(dinner, baseUrl)
 
@@ -93,9 +85,9 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
                     if (heynaboEventId) {
                         const result = await updateHeynaboEvent(heynaboToken, heynaboEventId, heynaboPayload)
                             .then(() => 'ok' as const)
-                            .catch((error: H3Error) => {
+                            .catch((error: unknown) => {
                                 heynaboSyncDegraded = true
-                                return error.statusCode === 404 ? 'missing' : 'failed'
+                                return h3eFromCatch(PREFIX + 'Heynabo update failed', error).statusCode === 404 ? 'missing' : 'failed'
                             })
                         if (result === 'missing') heynaboEventId = null
                     }
@@ -126,7 +118,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
                         throw createError({statusCode: 400, message: PREFIX + `Cannot cancel dinner ${id}: ${reason}`})
                     }
 
-                    if (dinner.heynaboEventId && heynaboToken) {
+                    if (dinner.heynaboEventId) {
                         const heynaboPayload = createHeynaboEventPayload(dinner, baseUrl)
                         try {
                             await cancelHeynaboEvent(heynaboToken, dinner.heynaboEventId, heynaboPayload)
@@ -165,7 +157,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
 
             if (updatedDinner.heynaboEventId) {
                 const heynaboPayload = createHeynaboEventPayload(updatedDinner, baseUrl)
-                await updateHeynaboEventWithFallback(heynaboToken, updatedDinner.heynaboEventId, heynaboPayload)
+                await updateHeynaboEvent(heynaboToken, updatedDinner.heynaboEventId, heynaboPayload)
                     .catch(() => { heynaboSyncDegraded = true })
             }
         }

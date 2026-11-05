@@ -1,10 +1,15 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { useCookingTeam } from '~/composables/useCookingTeam'
 import { useCookingTeamValidation, type CookingTeamAssignment, type TeamRole } from '~/composables/useCookingTeamValidation'
 import type { InhabitantDisplay } from '~/composables/useCoreValidation'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
+import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import { TEAM_WORDS } from '~/config/teamWords'
+import { formatDate } from '~/utils/date'
 import { createDefaultWeekdayMap } from '~/types/dateTypes'
 import { RAINBOW, getRainbowBand } from '~/composables/useTheSlopeDesignSystem'
+import { itemAt, present } from '~~/tests/component/listHelpers'
 
 describe('useCookingTeam', () => {
 
@@ -31,14 +36,14 @@ describe('useCookingTeam', () => {
   })
 
   describe('getTeamNumber', () => {
-    const { getTeamNumber, getDefaultCookingTeam } = useCookingTeam()
+    const { getTeamNumber } = useCookingTeam()
     // Listed out of number order, so a position-derived number differs from the named one
-    const seasonTeams = [3, 1, 2].map(n => getDefaultCookingTeam(1, 'S1', n, { id: 10 + n }))
-    const unnumbered = (id: number) => getDefaultCookingTeam(1, 'S1', 1, { id, name: 'Holdet uden tal' })
-    const named = (id: number, name: string) => getDefaultCookingTeam(1, 'S1', 1, { id, name })
+    const seasonTeams = [3, 1, 2].map(n => SeasonFactory.defaultCookingTeamDisplay({ id: 10 + n, name: `Madhold ${n} - S1` }))
+    const unnumbered = (id: number) => SeasonFactory.defaultCookingTeamDisplay({ id, name: 'Holdet uden tal' })
+    const named = (id: number, name: string) => SeasonFactory.defaultCookingTeamDisplay({ id, name })
 
     it.each([
-      { team: seasonTeams[0]!, teams: seasonTeams, expected: 3, description: 'number in the name, listed first' },
+      { team: itemAt(seasonTeams, 0), teams: seasonTeams, expected: 3, description: 'number in the name, listed first' },
       { team: unnumbered(20), teams: [...seasonTeams, unnumbered(20)], expected: 4, description: 'no number: position in the season list + 1' },
       { team: unnumbered(30), teams: seasonTeams, expected: 1, description: 'no number and outside the season list' },
       { team: named(40, 'Madhold 0'), teams: [...seasonTeams, named(40, 'Madhold 0')], expected: 4, description: 'a zero in the name: position in the season list + 1' },
@@ -57,7 +62,7 @@ describe('useCookingTeam', () => {
     const { countChefs } = useCookingTeam()
     const { TeamRoleSchema } = useCookingTeamValidation()
     const { CHEF, COOK, JUNIORHELPER } = TeamRoleSchema.enum
-    const roles = (...values: TeamRole[]) => values.map(role => ({ role }))
+    const roles = (...values: TeamRole[]) => values.map(role => SeasonFactory.defaultCookingTeamAssignment({ role }))
 
     it.each([
       { assignments: roles(COOK, JUNIORHELPER), expected: 0, description: 'no chefs among members' },
@@ -87,6 +92,38 @@ describe('useCookingTeam', () => {
     })
   })
 
+  describe('formatRoleClaimedTitle', () => {
+    const { formatRoleClaimedTitle } = useCookingTeam()
+    const { TeamRoleSchema } = useCookingTeamValidation()
+    const dinner = DinnerEventFactory.defaultDinnerEventDetail()
+    const team = SeasonFactory.defaultCookingTeamDisplay({ name: 'Madhold 2 - 08/25-06/26' })
+
+    it.each([
+      { cookingTeam: team, teamShortName: 'Madhold 2', description: 'names the dinner\'s team by its short name' },
+      { cookingTeam: null, teamShortName: null, description: 'leaves the team out when the dinner has none' }
+    ])('reads the role and the dinner date into the toast title ($description)', ({ cookingTeam, teamShortName }) => {
+      const role = TeamRoleSchema.enum.COOK
+      expect(formatRoleClaimedTitle({ ...dinner, cookingTeam }, role))
+        .toBe(TEAM_WORDS.toasts.roleClaimed(TEAM_WORDS.roles[role].label, formatDate(dinner.date), teamShortName))
+    })
+  })
+
+  describe('tryAutoClaim', () => {
+    const { tryAutoClaim } = useCookingTeam()
+    const MY_INHABITANT_ID = 42
+
+    it.each([
+      { desc: 'a vacant dinner and the caller\'s inhabitant: the caller claims the chef role', currentChefId: null, myInhabitantId: MY_INHABITANT_ID, claimedBy: [MY_INHABITANT_ID] },
+      { desc: 'a dinner with a chef: no claim', currentChefId: 7, myInhabitantId: MY_INHABITANT_ID, claimedBy: [] },
+      { desc: 'a caller without an inhabitant: no claim', currentChefId: null, myInhabitantId: null, claimedBy: [] }
+    ])('GIVEN $desc', async ({ currentChefId, myInhabitantId, claimedBy }) => {
+      const claim = vi.fn(async (_inhabitantId: number) => undefined)
+
+      expect(await tryAutoClaim(currentChefId, myInhabitantId, claim)).toBe(claimedBy.length > 0)
+      expect(claim.mock.calls).toEqual(claimedBy.map(inhabitantId => [inhabitantId]))
+    })
+  })
+
   describe('getDefaultCookingTeam', () => {
     it('creates default team with generated name', () => {
       const { getDefaultCookingTeam } = useCookingTeam()
@@ -95,9 +132,7 @@ describe('useCookingTeam', () => {
       expect(team).toEqual({
         seasonId: 1,
         name: 'Madhold 2 - Winter 2025',
-        assignments: [],
-        cookingDaysCount: 0,
-        jokerSlotCount: 0
+        assignments: []
       })
     })
 
@@ -137,11 +172,11 @@ describe('useCookingTeam', () => {
       const result = mergeInhabitantsWithAssignments([anna, bob, charlie], teams)
 
       expect(result).toHaveLength(3)
-      const annaResult = result.find(i => i.id === 1)!
+      const annaResult = present(result.find(i => i.id === 1), 'Anna')
       expect(annaResult.CookingTeamAssignment).toHaveLength(1)
-      expect(annaResult.CookingTeamAssignment![0]!.cookingTeamId).toBe(1)
-      expect(result.find(i => i.id === 2)!.CookingTeamAssignment).toHaveLength(1)
-      expect(result.find(i => i.id === 3)!.CookingTeamAssignment).toBeUndefined()
+      expect(itemAt(present(annaResult.CookingTeamAssignment, 'Anna\'s assignments'), 0).cookingTeamId).toBe(1)
+      expect(present(result.find(i => i.id === 2), 'Bob').CookingTeamAssignment).toHaveLength(1)
+      expect(present(result.find(i => i.id === 3), 'Charlie').CookingTeamAssignment).toBeUndefined()
     })
 
     it('returns all assignments when inhabitant is in multiple teams', () => {
@@ -153,9 +188,10 @@ describe('useCookingTeam', () => {
 
       const result = mergeInhabitantsWithAssignments([anna], teams)
 
-      expect(result[0]!.CookingTeamAssignment).toHaveLength(2)
-      expect(result[0]!.CookingTeamAssignment!.map(a => a.cookingTeamId)).toEqual([1, 2])
-      expect(result[0]!.CookingTeamAssignment!.map(a => a.allocationPercentage)).toEqual([50, 50])
+      const annaAssignments = present(itemAt(result, 0).CookingTeamAssignment, 'Anna\'s assignments')
+      expect(annaAssignments).toHaveLength(2)
+      expect(annaAssignments.map(a => a.cookingTeamId)).toEqual([1, 2])
+      expect(annaAssignments.map(a => a.allocationPercentage)).toEqual([50, 50])
     })
   })
 
@@ -194,6 +230,8 @@ describe('useCookingTeam', () => {
     const cookingDates = [6, 8, 13, 15, 20, 22].map(day => new Date(2026, 9, day))
     const tuesday = createDefaultWeekdayMap([false, true, false, false, false, false, false])
     const tuesdayAndThursday = createDefaultWeekdayMap([false, true, false, true, false, false, false])
+    const savedSlot = (startDate: Date, endDate: Date, affinity: typeof tuesday) =>
+      ({...SeasonFactory.defaultJokerSlot({startDate, endDate, affinity}), id: 1, cookingTeamId: 1, note: null, createdAt: startDate, updatedAt: startDate})
 
     describe.each([
       {desc: 'period across weeks', start: new Date(2026, 9, 5), end: new Date(2026, 9, 21), affinity: tuesday, expected: 3},
@@ -202,7 +240,7 @@ describe('useCookingTeam', () => {
       {desc: 'period with no cooking day', start: new Date(2026, 9, 23), end: new Date(2026, 9, 31), affinity: tuesdayAndThursday, expected: 0}
     ])('$desc', ({start, end, affinity, expected}) => {
       it(`counts ${expected} shifts`, () => {
-        expect(countJokerSlotShifts({startDate: start, endDate: end, affinity}, cookingDates)).toBe(expected)
+        expect(countJokerSlotShifts(savedSlot(start, end, affinity), cookingDates)).toBe(expected)
       })
     })
   })

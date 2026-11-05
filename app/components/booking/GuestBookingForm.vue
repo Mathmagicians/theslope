@@ -11,15 +11,20 @@
  * The preview above the buttons is the server's dry run of the guests' orders (ActionPreview, titled
  * "Du er ved at tilføje gæster"): the loader while it works, then a line per outcome naming the guests; the button
  * names the guests.
+ *
+ * Visual check: /household/[shortname]/bookings and /dinner, Tilføj gæst open before and after the deadline, with
+ * tickets for sale and with a failed rule, phone and desktop.
  */
-import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData, ScaffoldOrdersRequest} from '~/composables/useBookingValidation'
+import {z} from 'zod'
+import type {DinnerEventDisplay, DinnerMode, DesiredOrder, ScaffoldOrdersRequest} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import type {BookingContext, ReleasedTicketCounts} from '~/composables/useBooking'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import type {FormSubmitEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 interface Props {
   householdId: number
@@ -29,8 +34,7 @@ interface Props {
   deadlines: SeasonDeadlines
   releasedTicketCounts: ReleasedTicketCounts
   bookerId: number
-  bookerName: string
-  isHouseholdInResidency: boolean
+  bookingContext: BookingContext // The household's booking context on the dinner (bookingContextOf)
   adminBypass?: boolean
 }
 
@@ -43,76 +47,74 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-// Design system
 const {SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, LAYOUTS, NOISE, COMPONENTS, ORIENTATIONS} = useTheSlopeDesignSystem()
+const addCard = COMPONENTS.addCard
 const guestForm = COMPONENTS.guestBookingForm
+const WORDS = BOOKING_WORDS.guestForm
 
-// Empty state message when no booking action available
-const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets'))
+const now = useClock()
 
-// Booking logic
-const {getBookingOptions} = useBooking()
+const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets', now.value))
+
+const {getBookingOptions, buildGuestOrder} = useBooking()
+const {findTicketPriceByType} = useTicket()
 const {createBookingBadges, guestSaveLabel} = useBookingUi()
 const bookingsStore = useBookingsStore()
 
-// Validation schemas
-const {DinnerModeSchema, OrderStateSchema, GuestBookingFormSchema, TicketTypeSchema} = useBookingValidation()
+const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
-const OrderStateEnum = OrderStateSchema.enum
 
-// The guests a save books: how many, at which ticket price, how they eat and their allergies
-type GuestDraft = Pick<DesiredOrder, 'dinnerMode'> & {count: number, ticketPriceId: number, allergyTypeIds: number[]}
+// The schema's bounds on the number of guests are the count field's
+const GUEST_COUNT = {min: 1, max: 10}
 
-// Form state - reactive object for UForm binding
+// The form's input schema, read by this form alone: z.coerce turns the inputs' strings into numbers
+const GuestBookingFormSchema = z.object({
+  count: z.coerce.number({error: WORDS.countMissing})
+    .int({message: WORDS.countNotInteger})
+    .min(GUEST_COUNT.min, {message: WORDS.countMin})
+    .max(GUEST_COUNT.max, {message: WORDS.countMax}),
+  ticketPriceId: z.coerce.number({error: WORDS.ticketPriceMissing})
+    .int()
+    .positive({message: WORDS.ticketPriceMissing}),
+  allergyTypeIds: z.array(z.coerce.number().int().positive()).default([]),
+  dinnerMode: DinnerModeSchema.refine(
+    mode => mode !== DinnerModeEnum.NONE,
+    {message: WORDS.dinnerModeMissing}
+  )
+})
+type GuestBookingFormData = z.infer<typeof GuestBookingFormSchema>
+
+// The guests a save books, as the form schema reads them; the mode holds Ingen while the form tries each mode
+type GuestDraft = Omit<GuestBookingFormData, 'dinnerMode'> & {dinnerMode: DinnerMode}
+
 const formState = reactive<Omit<GuestDraft, 'ticketPriceId'> & {ticketPriceId: number | undefined}>({
   count: 1,
   // The form opens on the adult ticket
-  ticketPriceId: props.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)?.id,
+  ticketPriceId: findTicketPriceByType(TicketTypeSchema.enum.ADULT, props.ticketPrices)?.id,
   allergyTypeIds: [],
   dinnerMode: DinnerModeEnum.DINEIN
 })
 const isSaving = ref(false)
 
-
-// Contextual validation - business logic that needs props/computed access
-// Zod schema handles structural validation (type, min, max)
-const validateForm = () => {
-  const errors: {name: string, message: string}[] = []
-  // No mode: the dinner is cancelled or past, or the household lives elsewhere on the day
-  if (enabledModes.value.length === 0) {
-    errors.push({name: 'count', message: 'Kan desværre ikke tilmelde dine gæster'})
-  }
-
-  return errors
-}
-
-
-// Deadline badges using existing factory
-const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
+// Deadline badges, counted from the page's clock
+const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, now.value, props.releasedTicketCounts))
 // The header's badge while tickets are for sale
 const forSaleWords = computed(() => ticketsForSale(props.releasedTicketCounts))
 
 // The guests the form books: count orders at the picked ticket price, booked by the booker
 const guestOrdersOf = ({count, ticketPriceId, dinnerMode, allergyTypeIds}: GuestDraft): DesiredOrder[] =>
-  Array.from({length: count}, () => ({
-    inhabitantId: props.bookerId,
-    dinnerEventId: props.dinnerEvent.id,
-    dinnerMode,
-    ticketPriceId,
-    isGuestTicket: true,
-    allergyTypeIds: allergyTypeIds.length > 0 ? allergyTypeIds : undefined,
-    state: OrderStateEnum.BOOKED
-  }))
+  Array.from({length: count}, () =>
+    buildGuestOrder(props.bookerId, props.dinnerEvent.id, ticketPriceId, dinnerMode, allergyTypeIds.length > 0 ? allergyTypeIds : undefined))
 
-// The modes the guest may take: the guest the save books in each mode, as the decision matrix lands it. The decision
-// reads no price, so a season price stands in while none is picked
+// The modes the guest may take: the guest the save books in each mode, as getBookingOptions lands it, at the picked
+// price; while none is picked, the season's first price stands in
 const enabledModes = computed((): DinnerMode[] => {
   const ticketPriceId = formState.ticketPriceId ?? props.ticketPrices[0]?.id
   return getBookingOptions({
     order: null,
     waitlistEntry: null,
     candidate: dinnerMode => ticketPriceId === undefined ? null : guestOrdersOf({...formState, count: 1, ticketPriceId, dinnerMode})[0] ?? null
-  }, {event: props.dinnerEvent, deadlines: props.deadlines, isHouseholdInResidency: () => props.isHouseholdInResidency})
+  }, props.bookingContext)
 })
 
 // The preview: the server's dry run of the guests a valid draft books
@@ -130,20 +132,15 @@ const previewDays = computed(() => preview.value ? formatPreviewLines(preview.va
 // The button names the guests; the preview lines name what saving does for them, one line per outcome
 const saveLabel = computed(() => guestSaveLabel(formState.count))
 
-// Allergy options for AllergySelectMenu (pass full AllergyTypeDisplay)
-const allergyOptions = computed(() => props.allergyTypes)
-
-// Default to first enabled eating mode
+// A mode the guest may no longer take moves to the first one it may
 watch(enabledModes, (modes) => {
-  if (modes.length > 0 && !modes.includes(formState.dinnerMode)) {
-    formState.dinnerMode = modes[0]!
+  const [firstMode] = modes
+  if (firstMode !== undefined && !modes.includes(formState.dinnerMode)) {
+    formState.dinnerMode = firstMode
   }
 }, {immediate: true})
 
-// UForm submit handler - receives validated data from FormSubmitEvent
 const handleSubmit = async (event: FormSubmitEvent<GuestBookingFormData>) => {
-  if (!event.data.ticketPriceId || enabledModes.value.length === 0) return
-
   isSaving.value = true
 
   try {
@@ -166,36 +163,34 @@ const handleCancel = () => emit('cancel')
     <template #title>{{ emptyStateMessage.text }}</template>
   </UAlert>
 
-  <!-- Booking form -->
   <UForm
     v-else
     :state="formState"
     :schema="GuestBookingFormSchema"
-    :validate="validateForm"
     @submit="handleSubmit"
   >
     <template #default="{ errors }">
       <UCard
       :color="COLOR.info"
-      v-bind="guestForm.card"
+      v-bind="addCard.card"
     >
       <template #header>
-        <div :class="guestForm.header">
-          <UIcon :name="ICONS.userPlus" :class="guestForm.headerIcon" />
-          <h4 :class="guestForm.title">Tilføj gæst</h4>
+        <div :class="addCard.header">
+          <UIcon :name="ICONS.userPlus" :class="addCard.headerIcon" />
+          <h4 :class="addCard.title">{{ BOOKING_WORDS.guests.add }}</h4>
           <UBadge v-if="forSaleWords" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
             {{ forSaleWords }}
           </UBadge>
         </div>
       </template>
 
-      <!-- Deadline badges + Dinner mode selector (top, like regular form) -->
+      <!-- The deadlines and the mode on top, as on the booking form's rows -->
       <div :class="guestForm.deadlines">
         <DeadlineBadge :badge="badges.booking" />
         <DeadlineBadge :badge="badges.diningMode" />
       </div>
 
-      <UFormField label="Hvordan spiser I?" name="dinnerMode" :size="SIZES.standard">
+      <UFormField :label="WORDS.fields.dinnerMode" name="dinnerMode" :size="SIZES.standard">
         <DinnerModeSelector
           v-model="formState.dinnerMode"
           :form-mode="FORM_MODES.EDIT"
@@ -206,27 +201,25 @@ const handleCancel = () => emit('cancel')
         />
       </UFormField>
 
-      <!-- Two columns: ticket info | allergies (stacked on mobile) -->
       <div :class="guestForm.columns">
-        <!-- Left: Antal + Billettype -->
         <div :class="guestForm.fieldStack">
-          <UFormField label="Antal gæster" name="count" :size="SIZES.small">
+          <UFormField :label="WORDS.fields.count" name="count" :size="SIZES.small">
             <UInput
               v-model.number="formState.count"
               type="number"
-              :min="1"
-              :max="10"
+              :min="GUEST_COUNT.min"
+              :max="GUEST_COUNT.max"
               :size="SIZES.small"
             />
           </UFormField>
 
-          <UFormField label="Billettype" name="ticketPriceId" :size="SIZES.small">
+          <UFormField :label="WORDS.fields.ticketType" name="ticketPriceId" :size="SIZES.small">
             <USelectMenu
               v-model="formState.ticketPriceId"
               :items="ticketPriceSelectItems(ticketPrices).toReversed()"
               value-key="id"
-              placeholder="Vælg billettype..."
-              :class="guestForm.select"
+              :placeholder="WORDS.fields.ticketTypePlaceholder"
+              :class="addCard.select"
               data-testid="guest-ticket-type-select"
             >
               <template #item="{ item }">
@@ -241,25 +234,22 @@ const handleCancel = () => emit('cancel')
           </UFormField>
         </div>
 
-        <!-- Right: Allergies -->
-        <UFormField v-if="allergyOptions.length > 0" name="allergyTypeIds" :size="SIZES.small">
+        <UFormField v-if="allergyTypes.length > 0" name="allergyTypeIds" :size="SIZES.small">
           <AllergyEditor
-            :allergy-types="allergyOptions"
+            :allergy-types="allergyTypes"
             :selected-ids="formState.allergyTypeIds"
-            label="Allergier (valgfrit)"
+            :label="WORDS.fields.allergies"
             @add="id => formState.allergyTypeIds.push(id)"
             @remove="id => formState.allergyTypeIds = formState.allergyTypeIds.filter(i => i !== id)"
           />
         </UFormField>
       </div>
 
-      <!-- Footer: Action preview + error messages + buttons -->
       <template #footer>
         <div :class="guestForm.footer">
-          <!-- Action preview: show what will happen when saving -->
           <ActionPreview :days="previewDays" :pending="isPreviewPending" :title="BOOKING_WORDS.preview.guestTitle" />
 
-          <!-- Error messages near buttons -->
+          <!-- The form's messages sit by the buttons that trip them -->
           <div v-if="errors.length > 0" :class="guestForm.errors">
             <div v-for="error in errors" :key="error.name" :class="guestForm.error">
               <UIcon :name="ICONS.xMark" :class="guestForm.errorIcon" />
@@ -267,14 +257,13 @@ const handleCancel = () => emit('cancel')
             </div>
           </div>
 
-          <!-- Action buttons - stacked on mobile (primary on top), horizontal on desktop -->
           <div :class="LAYOUTS.formButtonRow">
             <UButton
               v-bind="BUTTONS.cancel"
               data-testid="guest-form-cancel"
               @click="handleCancel"
             >
-              Annuller
+              {{ BUTTON_WORDS.cancel }}
             </UButton>
             <UButton
               v-bind="BUTTONS.save"

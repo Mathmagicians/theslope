@@ -25,8 +25,8 @@ export default defineEventHandler(async (event): Promise<UserDetail> => {
         })
 
     // Validate input - fail early on invalid data
-    let userId!: number
-    let body!: z.infer<typeof UpdateUserBodySchema>
+    let userId: number
+    let body: z.infer<typeof UpdateUserBodySchema>
     try {
         userId = (await getValidatedRouterParams(event, paramSchema.parse)).id
         body = await readValidatedBody(event, UpdateUserBodySchema.parse)

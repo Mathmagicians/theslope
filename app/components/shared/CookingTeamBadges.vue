@@ -9,27 +9,29 @@
  * (joker) = ICONS.joker, only while the team holds a joker slot, (calendar) = ICONS.calendar
  *
  * Every badge wears the team's rainbow stop - fill and ink as classes, so the
- * badge needs no colour slot (ADR-018). Icons lead, counts follow.
+ * badge needs no colour slot. Icons lead, counts follow. The site binds a SIZES token; a row without one is standard.
  *
  * Used in:
  * - AdminTeams table cell and vertical team strip
  * - MyTeamSelector tabs (name only; the trigger stacks its own team icon, so showTeamIcon is off)
  * - CookingTeamCard headers (large; the edit row shows counts only via showName)
+ *
+ * Visual check: /admin/teams table and team strip, /chef team tabs and the team card headers on /admin/teams and
+ * /dinner, phone and desktop: the table, strip and tabs at the small size, the card headers at the large.
  */
+import type {NuxtUISize} from '~/composables/useTheSlopeDesignSystem'
 
 const { SIZES, ICONS, COMPONENTS, getRainbowBand, getCalendarCountBadge } = useTheSlopeDesignSystem()
 
-type BadgeSize = 'small' | 'standard' | 'large'
-
 interface Props {
   teamNumber: number        // Logical number 1..N in season (for color)
-  teamName: string          // Team name to display
-  chefCount?: number        // Number of CHEF-role members
-  memberCount?: number      // Number of team members
-  jokerSlotCount?: number   // Number of joker slots the team holds
-  cookingDaysCount?: number // Number of cooking days assigned
-  size?: BadgeSize
-  showCounts?: boolean      // Member and cooking-days badges
+  teamName: string
+  chefCount?: number
+  memberCount?: number
+  jokerSlotCount?: number
+  cookingDaysCount?: number
+  size?: NuxtUISize
+  showCounts?: boolean      // The chef, member, joker and cooking-day badges
   showName?: boolean        // Name badge (off for a counts-only row)
   showTeamIcon?: boolean    // Team icon on the name badge (off when the host renders its own)
 }
@@ -39,14 +41,14 @@ const props = withDefaults(defineProps<Props>(), {
   memberCount: 0,
   jokerSlotCount: 0,
   cookingDaysCount: 0,
-  size: 'standard',
+  size: undefined,
   showCounts: true,
   showName: true,
   showTeamIcon: true
 })
 
 const teamBand = computed(() => getRainbowBand(props.teamNumber - 1))
-const badgeSize = computed(() => ({small: SIZES.small, standard: SIZES.standard, large: SIZES.large}[props.size]))
+const badgeSize = computed(() => props.size ?? SIZES.standard)
 </script>
 
 <template>

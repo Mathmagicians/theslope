@@ -1,19 +1,19 @@
 /**
- * Pure UI composable for user role display (ADR-017)
+ * Pure UI composable for user role display
  *
  * Client-only: reads the auth store and the design system. The server-safe role
  * reconciliation (RoleOwner, ROLE_OWNERSHIP, reconcileUserRoles) lives in
  * useUserRoles, which server code imports.
  */
 import type {ComputedRef} from 'vue'
-import {useCoreValidation} from '~/composables/useCoreValidation'
-
-type RoleColor = 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' | 'neutral'
+import {useCoreValidation, type SystemRole} from '~/composables/useCoreValidation'
+import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import {USER_WORDS} from '~/config/userWords'
 
 export interface RoleConfig {
   label: string
   icon: string
-  color: RoleColor
+  color: NuxtUIColor
   predicate: ComputedRef<boolean>
 }
 
@@ -22,49 +22,34 @@ export interface RoleConfig {
  */
 export const useUserRolesUi = () => {
   const {SystemRoleSchema} = useCoreValidation()
+  const SystemRole = SystemRoleSchema.enum
   const authStore = useAuthStore()
   const {systemRoles, isAdmin, isAllergyManager} = storeToRefs(authStore)
-  const {ICONS} = useTheSlopeDesignSystem()
+  const {ICONS, COLOR} = useTheSlopeDesignSystem()
 
-  /**
-   * Get role configuration by role type
-   */
+  const roleLabels: Record<SystemRole, RoleConfig> = {
+    [SystemRole.ADMIN]: {
+      label: USER_WORDS.roles[SystemRole.ADMIN],
+      icon: ICONS.authorize,
+      color: COLOR.primary,
+      predicate: isAdmin
+    },
+    [SystemRole.ALLERGYMANAGER]: {
+      label: USER_WORDS.roles[SystemRole.ALLERGYMANAGER],
+      icon: ICONS.allergy,
+      color: COLOR.success,
+      predicate: isAllergyManager
+    }
+  }
+
+  // A role the session or a user row carries that the app does not know shows no badge
   const getRoleConfig = (role: string): RoleConfig | null => {
-    switch (role) {
-      case SystemRoleSchema.enum.ADMIN:
-        return {
-          label: 'Admin',
-          icon: ICONS.authorize,
-          color: 'primary',
-          predicate: isAdmin
-        }
-      case SystemRoleSchema.enum.ALLERGYMANAGER:
-        return {
-          label: 'Allergichef',
-          icon: ICONS.allergy,
-          color: 'success',
-          predicate: isAllergyManager
-        }
-      default:
-        return null
-    }
+    const known = SystemRoleSchema.safeParse(role)
+    return known.success ? roleLabels[known.data] : null
   }
 
-  // Build role labels object for convenience
-  const roleLabels: Record<string, RoleConfig> = {}
-  for (const role of Object.values(SystemRoleSchema.enum)) {
-    const config = getRoleConfig(role)
-    if (config) {
-      roleLabels[role] = config
-    }
-  }
-
-  // Visible roles based on predicates
   const visibleRoles = computed(() =>
-    systemRoles.value.filter((role: string) => {
-      const config = getRoleConfig(role)
-      return config && config.predicate.value
-    })
+    systemRoles.value.filter(role => getRoleConfig(role)?.predicate.value)
   )
 
   return {

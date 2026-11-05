@@ -1,19 +1,23 @@
 import {defineEventHandler, readValidatedBody, createError, setResponseStatus} from 'h3'
 import {useNotificationValidation, type SenderEmitResult} from '~/composables/useNotificationValidation'
+import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {notifyBillingPeriod} from '~~/server/utils/monthlyBillingService'
 import {emailChannel} from '~~/server/utils/sender/config'
 import {fetchBillingPeriodSummary} from '~~/server/data/prismaRepository'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
+import {getRequiredUser} from '~~/server/utils/authorizationHelper'
 
 const {SenderEventMonthlyBillingBodySchema} = useNotificationValidation()
+const {SenderEventSchema} = useDeliveryValidation()
 const {throwH3Error} = eventHandlerHelper
-const LOG = '📮 > SENDER > [EVENT monthly-billing]'
+const LOG = `📮 > SENDER > [EVENT ${SenderEventSchema.enum.MONTHLY_BILLING}]`
 
 /**
  * POST /api/admin/sender/event/monthly-billing
  *
- * Re-sends the accountant mail (BILLING_PERIOD_CLOSED, CSV attached, cc admin) for one billing period and
- * stamps the period as notified for its current CSV — the HTTP twin of the mail runMonthlyBilling sends.
+ * The admin's re-send of the accountant notification (CSV attached, cc admin) of one billing period's current
+ * version: the admin's override (ADR-004), so it goes whatever the delivery records say, records a delivery row and
+ * logs the admin. The HTTP twin of the notification runMonthlyBilling sends.
  * Admin only (route table: /api/admin/ POST → isAdmin).
  *
  * Body: {billingPeriodSummaryId}. 404 when the period does not exist.
@@ -41,8 +45,10 @@ export default defineEventHandler(async (event): Promise<SenderEmitResult> => {
         throw createError({statusCode: 404, message: 'Billing period not found'})
     }
 
+    const admin = await getRequiredUser(event)
+
     try {
-        const result = await notifyBillingPeriod(env.DB, emailChannel(env), summary)
+        const result = await notifyBillingPeriod(env.DB, emailChannel(env), summary, {adminOverride: {adminUserId: admin.id}})
         console.info(`${LOG} ${result.queued ? 'queued' : 'not queued'}`, {dedupeKey: result.dedupeKey, degraded: result.degraded})
         setResponseStatus(event, 200)
         return result

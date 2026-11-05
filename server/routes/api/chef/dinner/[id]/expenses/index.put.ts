@@ -22,8 +22,8 @@ export default defineEventHandler(async (event): Promise<Expense> => {
     const d1Client = event.context.cloudflare.env.DB
     const {ExpenseCreateSchema, LedgerEntryTypeSchema} = useBillingValidation()
 
-    let id!: number
-    let body!: ExpenseCreate
+    let id: number
+    let body: ExpenseCreate
     try {
         ({id} = await getValidatedRouterParams(event, paramSchema.parse))
         body = await readValidatedBody(event, ExpenseCreateSchema.parse)

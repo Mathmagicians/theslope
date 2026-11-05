@@ -10,7 +10,8 @@ import { useBookingValidation } from '~/composables/useBookingValidation'
 import { ICONS } from '~/composables/useTheSlopeDesignSystem'
 import {formatPortions} from '~/utils/utils'
 import { ALLERGY_TEST_IDS } from './allergyTestIds'
-import { mountWithTooltipProvider, findByTestId, clickByTestId, resetStores } from '~~/tests/component/testHelpers'
+import type { AlertProps } from '@nuxt/ui'
+import { mountWithTooltipProvider, findByTestId, findComponentByTestId, clickByTestId, resetStores } from '~~/tests/component/testHelpers'
 
 const {TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
@@ -93,10 +94,9 @@ describe('AllergenMultiSelector', () => {
         it('carries the allergy glyph, the title and the overview of the selected allergens, each its compact allergy type, and opens the names behind Hvem', async () => {
             const wrapper = await createWrapper({ modelValue: selection })
 
-            const panel = wrapper.findAllComponents({ name: 'UAlert' })
-                .find(alert => alert.attributes('data-testid') === ALLERGY_TEST_IDS.allergyPanel)
-            expect(panel?.props('icon')).toBe(ICONS.allergy)
-            expect(panel?.text()).toContain('Allergier blandt gæsterne')
+            const panel = findComponentByTestId<AlertProps>(wrapper, 'UAlert', ALLERGY_TEST_IDS.allergyPanel)
+            expect(panel.props('icon')).toBe(ICONS.allergy)
+            expect(panel.text()).toContain('Allergier blandt gæsterne')
             expect(partsOf(findByTestId(wrapper, ALLERGY_TEST_IDS.allergyPanelOverview))).toEqual([
                 `${formatPortions(1)} kuv.`,
                 '|',

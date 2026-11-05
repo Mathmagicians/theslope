@@ -38,7 +38,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { TYPOGRAPHY, IMG, LAYOUTS, RESPONSIVE_ICONS } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, IMG, LAYOUTS, RESPONSIVE_ICONS, COMPONENTS } = useTheSlopeDesignSystem()
 
 // Effective picture URL: use menu picture if available, otherwise default dinner picture
 const effectivePictureUrl = computed(() =>
@@ -50,7 +50,7 @@ const hasNoDinnerSelected = computed(() => !props.dinnerEvent && !props.isLoadin
 </script>
 
 <template>
-  <UPageBody class="!mt-0 !space-y-2 md:!space-y-8">
+  <UPageBody :class="COMPONENTS.dinnerDetailPanel.body">
     <!-- No dinner selected -->
     <UPageCard
       v-if="hasNoDinnerSelected"
@@ -71,14 +71,12 @@ const hasNoDinnerSelected = computed(() => !props.dinnerEvent && !props.isLoadin
       <UPageHero
         data-testid="dinner-detail-panel"
         :class="LAYOUTS.cardResponsive"
-        :ui="{
-          root: `relative bg-cover bg-center min-h-[300px] md:min-h-[400px] overflow-hidden`
-        }"
+        :ui="COMPONENTS.dinnerDetailPanel.heroUi"
         :style="{ backgroundImage: `url(${effectivePictureUrl})` }"
       >
         <!-- Radial gradient overlay: transparent center (80%), dark edges for text readability -->
         <template #top>
-          <div class="absolute inset-0 pointer-events-none bg-radial from-transparent from-80% to-black/60" />
+          <div :class="COMPONENTS.dinnerDetailPanel.heroShade" />
         </template>
 
         <!-- Hero: background visible immediately, content appears when ready (no loader - less jarring) -->
@@ -86,26 +84,26 @@ const hasNoDinnerSelected = computed(() => !props.dinnerEvent && !props.isLoadin
       </UPageHero>
 
       <!-- #team: Cooking team section -->
-      <UPageCard :class="`mt-1 md:mt-4 ${LAYOUTS.cardResponsive}`">
+      <UPageCard :class="COMPONENTS.dinnerDetailPanel.section">
         <template #title>
           <h3 :class="TYPOGRAPHY.cardTitle">Hvem laver maden?</h3>
         </template>
 
         <!-- Team loading state - matches CookingTeamCard monitor mode approximate height -->
-        <div v-if="isLoading" class="flex items-center justify-center min-h-[150px] md:min-h-[180px]">
+        <div v-if="isLoading" :class="COMPONENTS.dinnerDetailPanel.teamLoader">
           <Loader text="Henter madhold..." />
         </div>
         <slot v-else name="team" />
       </UPageCard>
 
       <!-- #stats: Kitchen statistics section -->
-      <UPageCard :class="`mt-1 md:mt-4 ${LAYOUTS.cardResponsive}`">
+      <UPageCard :class="COMPONENTS.dinnerDetailPanel.section">
         <template #title>
           <h3 :class="TYPOGRAPHY.cardTitle">Hvem kommer og spiser?</h3>
         </template>
 
         <!-- Stats loading state - matches KitchenPreparation approximate height -->
-        <div v-if="isLoading" class="flex items-center justify-center min-h-[180px] md:min-h-[220px]">
+        <div v-if="isLoading" :class="COMPONENTS.dinnerDetailPanel.statsLoader">
           <Loader text="Henter tilmeldinger..." />
         </div>
         <slot v-else name="stats" />

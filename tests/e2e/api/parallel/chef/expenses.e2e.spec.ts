@@ -12,7 +12,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
  * Setup: season + team + member as CHEF. The admin is not on the team and stands in for a non-chef. A test that
  * writes owns its dinner (the file runs fully parallel); the tests that are refused share one.
  */
-const {validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, getSessionUserInfo, attemptAll} = testHelpers
 const {LedgerEntryTypeSchema} = useBillingValidation()
 
 type Context = Awaited<ReturnType<typeof validatedBrowserContext>>
@@ -42,9 +42,12 @@ test.describe('Chef dinner expenses', () => {
     test.afterAll(async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
-        // An expense row outlives its dinner (SetNull), so the lines go before the season cascade
-        for (const {dinnerEventId, expenseIds} of cleanup) await ExpenseFactory.cleanupExpenses(memberContext, dinnerEventId, expenseIds)
-        await SeasonFactory.cleanupSeasons(adminContext, seasonIds)
+        // A line outlives its dinner (SetNull) and only the dinner's chef removes it, through the dinner: the lines go before
+        // the season
+        await attemptAll('Chef dinner expenses cleanup', [
+            ...cleanup.map(({dinnerEventId, expenseIds}) => () => ExpenseFactory.cleanupExpenses(memberContext, dinnerEventId, expenseIds)),
+            () => SeasonFactory.cleanupSeasons(adminContext, seasonIds)
+        ]).finally(() => Promise.all([adminContext.close(), memberContext.close()]))
     })
 
     // A dinner of the chef's team; the lines a test adds to it are registered for cleanup

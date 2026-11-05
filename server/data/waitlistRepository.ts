@@ -6,7 +6,7 @@ import {
     useWaitlistValidation, type GrabbedWaitlistEntry, type PlacementOrder, type TicketWaitlistCreate, type TicketWaitlistDisplay,
     type WaitlistAuditContext, type WaitlistOrder
 } from '~/composables/useWaitlistValidation'
-import {useBookingValidation, OrderAuditAction, type ClearWaitlistResult, type OrderAuditChange, type OrderSnapshot} from '~/composables/useBookingValidation'
+import {useBookingValidation, OrderAuditAction, type ClearWaitlistResult, type OrderAuditChange, type OrderAuditSnapshot} from '~/composables/useBookingValidation'
 import {recordCancellation} from '~~/server/data/financesRepository'
 import {readByIds} from '~~/server/data/prismaRepository'
 import {byTimeThenId} from '~/composables/useWaitlist'
@@ -19,27 +19,27 @@ const LOG = '⏳ > WAITLIST'
 const beingPlaced = (ids: number[]) => createError({statusCode: 409, message: `Queue entry ${ids.join(', ')} is being placed`})
 
 // The history row of a write to an entry: no order, the person and the dinner its snapshot names
-const entryHistoryRow = (audit: WaitlistAuditContext, change: OrderAuditChange) => (snapshot: OrderSnapshot) => ({
+const entryHistoryRow = (audit: WaitlistAuditContext, change: OrderAuditChange) => (snapshot: OrderAuditSnapshot) => ({
     orderId: null, ...audit, inhabitantId: snapshot.inhabitantId, dinnerEventId: snapshot.dinnerEventId,
     auditData: useBookingValidation().createOrderAuditData(change, snapshot)
 })
 
 /** A wish that joins a queue, and the order its history row keeps, built from the household the caller holds */
-export type WaitlistJoin = {entry: TicketWaitlistCreate, snapshot: OrderSnapshot}
+export type WaitlistJoin = {entry: TicketWaitlistCreate, snapshot: OrderAuditSnapshot}
 
 /** A place that leaves its queue, and the order its LEAVE row keeps, built from the household the caller holds */
-export type WaitlistLeave = {id: number, snapshot: OrderSnapshot}
+export type WaitlistLeave = {id: number, snapshot: OrderAuditSnapshot}
 
 /** A place with a new wish, and the order its REQUEUE row keeps, built from the household the caller holds */
-export type WaitlistRequeue = {id: number, order: WaitlistOrder, snapshot: OrderSnapshot}
+export type WaitlistRequeue = {id: number, order: WaitlistOrder, snapshot: OrderAuditSnapshot}
 
 /**
  * The waiting list rows: an entry per unplaced order, read FIFO by `createdAt`. The `order` column carries the
- * order-create shape as JSON (ADR-010); the partial unique index on (dinnerEventId, inhabitantId) for regular
+ * order-create shape as JSON; the partial unique index on (dinnerEventId, inhabitantId) for regular
  * entries answers a second regular entry with the unique-violation code, which the error floor maps to 409.
- * Each write to an entry writes its OrderHistory row with no order after the write (ADR-011), which
+ * Each write to an entry writes its OrderHistory row with no order after the write, which
  * fetchUserIntentKeys reads as the person's act.
- * The joins write their entries in one insert and their QUEUE rows in another (ADR-014); returns the entries in insert
+ * The joins write their entries in one insert and their QUEUE rows in another; returns the entries in insert
  * order, and the caller pairs each with its join by the entry's person, dinner and guest flag.
  */
 export async function createWaitlistEntries(d1Client: D1Database, joins: WaitlistJoin[], audit: WaitlistAuditContext): Promise<TicketWaitlistDisplay[]> {
@@ -60,7 +60,7 @@ export async function createWaitlistEntries(d1Client: D1Database, joins: Waitlis
 }
 
 // The queues of the dinners, first joined first; the entries of the dinners interleave by join time. The dinner ids read
-// in chunks, one after another (ADR-014)
+// in chunks, one after another
 export async function fetchWaitlistForDinners(d1Client: D1Database, dinnerEventIds: number[]): Promise<TicketWaitlistDisplay[]> {
     const {deserializeTicketWaitlist} = useWaitlistValidation()
     const prisma = await getPrismaClientConnection(d1Client)
@@ -77,7 +77,7 @@ export async function fetchWaitlistForDinners(d1Client: D1Database, dinnerEventI
 
 /**
  * The household's places with a new wish: one update per place, one after another, each writing its own `order`, then
- * their REQUEUE rows in one insert (ADR-011). `createdAt` stays, so each keeps its place in its line. A place a run holds
+ * their REQUEUE rows in one insert. `createdAt` stays, so each keeps its place in its line. A place a run holds
  * or has placed refuses the write with a conflict; the places before it keep their new wish and no row is written
  */
 export async function updateWaitlistEntryOrders(d1Client: D1Database, requeues: WaitlistRequeue[], audit: WaitlistAuditContext): Promise<number> {
@@ -104,7 +104,7 @@ export async function updateWaitlistEntryOrders(d1Client: D1Database, requeues: 
 
 /**
  * The household's places leave their queues in one delete, then their cancellations (recordCancellation) whose change is
- * LEAVE (ADR-011). The caller hands at most 90 places, D1's bound parameters. A place a run holds or has placed stays,
+ * LEAVE. The caller hands at most 90 places, D1's bound parameters. A place a run holds or has placed stays,
  * and the batch answers 409 with no row
  */
 export async function deleteWaitlistEntries(d1Client: D1Database, leaves: WaitlistLeave[], audit: WaitlistAuditContext): Promise<number> {
@@ -236,7 +236,7 @@ export async function deleteWaitlistForConsumedDinners(d1Client: D1Database): Pr
         })
         const result = await prisma.ticketWaitlist.deleteMany({where: ofConsumedDinners})
         const dinners = [...groupBy((entry: typeof entries[number]) => entry.dinnerEventId)(entries).values()]
-            .map(rows => ({dinnerEventId: rows[0]!.dinnerEventId, date: rows[0]!.dinnerEvent.date, cleared: rows.length}))
+            .flatMap(rows => rows.slice(0, 1).map(({dinnerEventId, dinnerEvent}) => ({dinnerEventId, date: dinnerEvent.date, cleared: rows.length})))
             .sort((a, b) => a.date.getTime() - b.date.getTime())
         console.info(`${LOG} > [SWEEP] Cleared ${result.count} queue entries of ${dinners.length} consumed dinners`)
         return {cleared: result.count, dinners}

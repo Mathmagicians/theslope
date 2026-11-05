@@ -211,6 +211,16 @@ describe('useHeynaboValidation', () => {
                 const result = inhabitantFromMember(member)
                 expect(result.birthDate).toEqual(expected)
             })
+
+            // A user's channels and appearance change only through the user's own save: the import's payload carries
+            // neither, so a new user starts on the column defaults and an existing user keeps its own
+            it('GIVEN a member with a login WHEN mapped THEN its user carries no notification channels and no appearance', () => {
+                const {user} = inhabitantFromMember(parsedMembers[0]!)
+
+                expect(user).toBeDefined()
+                expect(user).not.toHaveProperty('notificationChannels')
+                expect(user).not.toHaveProperty('appearance')
+            })
         })
 
         describe('findInhabitantsByLocation', () => {
@@ -243,7 +253,7 @@ describe('useHeynaboValidation', () => {
                 const locations = locationIds.map(id => parsedLocations.find(l => l.id === id)!)
                 const members = memberLocations.map((locId, idx) => ({...parsedMembers[idx]!, locationId: locId}))
 
-                const result = createHouseholdsFromImport(locations, members)
+                const result = createHouseholdsFromImport(locations, members, new Date())
 
                 expect(result).toHaveLength(expectedHouseholds)
                 result.forEach((household, idx) => {

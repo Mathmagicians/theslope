@@ -1,26 +1,32 @@
-import type {OrderDisplay, OrderDetail, OrderState, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState, TicketChangesResponse} from '~/composables/useBookingValidation'
+import {CLOSED_DINNER_STATES, type OrderDisplay, type OrderDetail, type OrderState, type DinnerEventDetail, type DinnerEventUpdate, type DailyMaintenanceResult, type ScaffoldOrdersRequest, type ScaffoldOrdersResponse, type DesiredOrder, type DinnerState, type TicketChangesResponse, type ForSaleCounts, type WaitlistCounts} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, Expense, ExpenseCreate} from '~/composables/useBillingValidation'
 import type {WaitlistAssignmentResult, TicketWaitlistDisplay, TicketWaitlistDetail, WaitlistQueueSummary} from '~/composables/useWaitlistValidation'
 import {useWaitlist} from '~/composables/useWaitlist'
-import type {ReleasedTicketCounts, WaitlistCounts} from '~/composables/useBooking'
-import {useBilling} from '~/composables/useBilling'
-import {isSameDay} from 'date-fns'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import type {ScaffoldToast} from '~/composables/useBookingUi'
+import {TEAM_WORDS} from '~/config/teamWords'
+import {BOOKING_WORDS} from '~/config/bookingWords'
+import {MAINTENANCE_WORDS} from '~/config/maintenanceWords'
+import {stringifyQuery} from 'ufo'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
-    const {storeAsyncData, apiRequest, runJob} = useApiHandler()
-    const {OrderDisplaySchema, OrderDetailSchema, OrderStateSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema, TicketChangesResponseSchema, TicketTypeSchema} = useBookingValidation()
+    const {storeAsyncData, apiRequest, toastSaved, runJob} = useApiHandler()
+    const now = useClock()
+    const {OrderDisplaySchema, OrderDetailSchema, OrderStateSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema, TicketChangesResponseSchema, TicketTypeSchema, encodeDesiredOrder} = useBookingValidation()
     const {formatScaffoldResult} = useBooking()
-    const {formatDailyMaintenanceStats} = useMaintenance()
+    const {formatDailyMaintenanceStats, jobTypeLabels} = useMaintenance()
+    const {JobType, adminTrigger} = useMaintenanceValidation()
     const DinnerState = DinnerStateSchema.enum
     const toast = useToast()
 
     const CTX = `${LOG_CTX} 🎟️ > BOOKINGS_STORE >`
     const planStore = usePlanStore()
+    const usersStore = useUsersStore()
     const householdsStore = useHouseholdsStore()
 
     // ========================================
-    // State (ADR-007)
+    // State
     // ========================================
 
     // Keys of datasets that read the season or household selection stay constant: the selection
@@ -30,15 +36,14 @@ export const useBookingsStore = defineStore("Bookings", () => {
     type OrdersFilter = {dinnerEventIds: number[], householdId?: number | null, includeProvenance?: boolean, allHouseholds?: boolean}
     const ordersFilter = shallowRef<() => OrdersFilter>(() => ({dinnerEventIds: []}))
 
-    const orderQuery = ({dinnerEventIds, householdId, state, includeProvenance, allHouseholds}: OrdersFilter & {state?: OrderState}) => {
-        const params = new URLSearchParams()
-        dinnerEventIds.forEach(id => params.append('dinnerEventIds', String(id)))
-        if (householdId) params.append('householdId', String(householdId))
-        if (state) params.append('state', state)
-        if (includeProvenance) params.append('includeProvenance', 'true')
-        if (allHouseholds) params.append('allHouseholds', 'true')
-        return params.toString()
-    }
+    // stringifyQuery leaves an undefined parameter out of the url: no household, no state, an unset flag
+    const orderQuery = ({dinnerEventIds, householdId, state, includeProvenance, allHouseholds}: OrdersFilter & {state?: OrderState}) => stringifyQuery({
+        dinnerEventIds,
+        householdId: householdId || undefined,
+        state,
+        includeProvenance: queryFlag(includeProvenance),
+        allHouseholds: queryFlag(allHouseholds)
+    })
     const ordersQuery = computed(() => orderQuery(ordersFilter.value()))
 
     // An unfiltered request returns every order of the household
@@ -55,7 +60,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             default: () => [],
             enabled: hasFilters,
             dependsOn: [planStore.selectedSeasonDataset],
-            errorMessage: 'Kunne ikke hente bookinger'
+            errorMessage: BOOKING_WORDS.failed.orders
         }
     )
 
@@ -70,8 +75,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const lockedDinnerIds = computed(() => {
         const season = planStore.selectedSeason
         if (!season?.dinnerEvents?.length) return []
-        const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents)
-        return getLockedFutureDinnerIds(nextDinner, futureDinners, deadlinesForSeason(season))
+        const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents, now.value)
+        return getLockedFutureDinnerIds(nextDinner, futureDinners, deadlinesForSeason(season, now.value))
     })
 
     // The locked dinners are read too: the calendar counts their waiting lists
@@ -88,7 +93,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             default: () => [],
             enabled: () => waitlistDinnerIds.value.length > 0,
             dependsOn: [planStore.selectedSeasonDataset],
-            errorMessage: 'Kunne ikke hente ventelisten'
+            errorMessage: BOOKING_WORDS.failed.waitlist
         }
     )
 
@@ -101,8 +106,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         .filter(entry => entry.order.householdId === waitlistHouseholdId.value)
         .map(entry => ({...entry, position: positionOf(waitlistOf(entry.dinnerEventId), entry.id, entryTicketType.value) ?? 1})))
 
-    // The queue on the dinner on view: its size and its portion need (the chef card, the kitchen box), and its lines in
-    // ticket type order (the kitchen box)
+    // The queue on the dinner on view: its size, its portion need and its count per ticket type (the chef card, the kitchen
+    // box), and its lines in ticket type order (the kitchen box)
     const selectedDinnerWaitlist = computed((): WaitlistQueueSummary | null => {
         const dinnerEventId = selectedDinnerEventId.value
         if (!dinnerEventId) return null
@@ -112,7 +117,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
             dinnerEventId,
             entries: queue.length,
             portions: portionNeed(queue, portionsOfEntryFor(planStore.selectedSeason?.ticketPrices ?? [])),
-            lines: TicketTypeSchema.options.flatMap(ticketType => lines.has(ticketType) ? [{ticketType, entries: lines.get(ticketType)!}] : [])
+            lines: TicketTypeSchema.options.flatMap(ticketType => {
+                const entries = lines.get(ticketType)
+                return entries ? [{ticketType, entries}] : []
+            }),
+            queuedByType: waitlistCounts.value.get(dinnerEventId)?.queuedByType ?? {}
         }
     })
 
@@ -137,9 +146,10 @@ export const useBookingsStore = defineStore("Bookings", () => {
         console.info(CTX, `Loading orders for ${toValue(filter).dinnerEventIds.length} dinner(s)`)
     }
 
-    // Upcoming orders of the selected season with their dinner context. The page names the scope:
-    // every household or the selected one; nothing is requested until a page asks
-    const upcomingOrdersForAllHouseholds = ref<boolean | null>(null)
+    // Upcoming orders of the selected season, each with its dinner and its eater. The page names the scope through a
+    // getter: every household or one household; nothing is requested until a page names one
+    type UpcomingOrdersFilter = {householdId?: number, allHouseholds?: boolean}
+    const upcomingOrdersFilter = shallowRef<() => UpcomingOrdersFilter>(() => ({}))
 
     const {
         data: upcomingOrders, isLoading: isUpcomingOrdersLoading,
@@ -147,20 +157,17 @@ export const useBookingsStore = defineStore("Bookings", () => {
         refresh: refreshUpcomingOrders
     } = storeAsyncData(
         'bookings-store-upcoming-orders',
-        () => {
-            const params = new URLSearchParams()
-            params.append('upcomingForSeason', String(planStore.selectedSeasonId))
-            if (upcomingOrdersForAllHouseholds.value) params.append('allHouseholds', 'true')
-            else params.append('householdId', String(householdsStore.selectedHouseholdId))
-            params.append('includeDinnerContext', 'true')
-            return `/api/order?${params.toString()}`
-        },
+        () => `/api/order?${stringifyQuery({
+            upcomingForSeason: planStore.selectedSeasonId,
+            allHouseholds: queryFlag(upcomingOrdersFilter.value().allHouseholds),
+            householdId: upcomingOrdersFilter.value().householdId,
+            includeCostContext: queryFlag(true)
+        })}`,
         {
-            schema: OrderDisplaySchema.array(),
+            schema: OrderDisplaySchema.required({dinnerEvent: true, inhabitant: true}).array(),
             default: () => [],
-            enabled: () => upcomingOrdersForAllHouseholds.value !== null && !!planStore.selectedSeasonId
-                && (upcomingOrdersForAllHouseholds.value || !!householdsStore.selectedHouseholdId),
-            dependsOn: [planStore.selectedSeasonDataset, householdsStore.selectedHouseholdDataset]
+            enabled: () => !!planStore.selectedSeasonId && (!!upcomingOrdersFilter.value().allHouseholds || !!upcomingOrdersFilter.value().householdId),
+            dependsOn: [planStore.selectedSeasonDataset]
         }
     )
 
@@ -168,8 +175,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // The upcoming orders have answered, with rows, none or an error; until then a table shows its loading row
     const isUpcomingOrdersLoaded = computed(() => isUpcomingOrdersInitialized.value || isUpcomingOrdersErrored.value)
 
-    const loadUpcomingOrders = (allHouseholds: boolean) => {
-        upcomingOrdersForAllHouseholds.value = allHouseholds
+    const loadUpcomingOrders = (filter: MaybeRefOrGetter<UpcomingOrdersFilter>) => {
+        upcomingOrdersFilter.value = () => toValue(filter)
     }
 
     // Order detail with its audit history - no store state, a component keeps one per expanded row
@@ -182,29 +189,28 @@ export const useBookingsStore = defineStore("Bookings", () => {
             query: since ? {since: since.toISOString()} : {},
             schema: TicketChangesResponseSchema,
             action: 'fetchTicketChanges',
-            errorMessage: 'Kunne ikke hente billetændringer'
+            errorMessage: BOOKING_WORDS.ticketChange.failed
         })
 
     // ========================================
     // Lock Status (reactive, watches planStore)
     // ========================================
-    const {countTicketTypes, formatTicketCounts} = useBilling()
+    const {countTicketTypes} = useTicket()
 
     const {data: releasedCounts, refresh: refreshReleasedCounts} = storeAsyncData(
         'bookings-store-released-counts',
         () => `/api/order?${orderQuery({dinnerEventIds: lockedDinnerIds.value, state: OrderStateSchema.enum.RELEASED, allHouseholds: true})}`,
         {
-            // Group orders by dinnerEventId
             schema: OrderDisplaySchema.array().transform(released => {
                 const grouped = groupBy<OrderDisplay, number>(o => o.dinnerEventId)(released)
-                const counts = new Map<number, Omit<ReleasedTicketCounts, keyof WaitlistCounts>>()
+                const counts = new Map<number, ForSaleCounts>()
                 for (const [dinnerEventId, orders] of grouped) {
                     const byType = countTicketTypes(orders)
-                    counts.set(dinnerEventId, {total: orders.length, formatted: formatTicketCounts(byType), byType})
+                    counts.set(dinnerEventId, {total: orders.length, byType})
                 }
                 return counts
             }),
-            default: () => new Map<number, Omit<ReleasedTicketCounts, keyof WaitlistCounts>>(),
+            default: () => new Map<number, ForSaleCounts>(),
             enabled: () => lockedDinnerIds.value.length > 0,
             dependsOn: [planStore.selectedSeasonDataset]
         }
@@ -213,14 +219,14 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const waitlistCounts = computed(() => new Map([...groupBy<TicketWaitlistDisplay, number>(entry => entry.dinnerEventId)(waitlistEntries.value)]
         .map(([dinnerEventId, queue]): [number, WaitlistCounts] => {
             const queuedByType = countTicketTypes(queue.map(entry => ({ticketType: entryTicketType.value(entry) ?? null})))
-            return [dinnerEventId, {queued: queue.length, queuedFormatted: formatTicketCounts(queuedByType), queuedByType}]
+            return [dinnerEventId, {queued: queue.length, queuedByType}]
         })))
 
     // Exposed computed: lockStatus map for calendar display
     const lockStatus = computed(() => {
         const season = planStore.selectedSeason
         if (!season?.dinnerEvents) return new Map<number, ReleasedTicketCounts | null>()
-        return computeLockStatus(season.dinnerEvents, deadlinesForSeason(season), releasedCounts.value, waitlistCounts.value)
+        return computeLockStatus(season.dinnerEvents, deadlinesForSeason(season, now.value), releasedCounts.value, waitlistCounts.value)
     })
 
 
@@ -254,46 +260,47 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const refreshSeasonOnClosedDinners = async (request: ScaffoldOrdersRequest, {seasonId, dinners}: ScaffoldResult) => {
         const covered = new Set(dinners.map(({id}) => id))
         const shownOpen = new Set((planStore.selectedSeason?.dinnerEvents ?? [])
-            .filter(({state}) => state !== DinnerState.CANCELLED && state !== DinnerState.CONSUMED)
+            .filter(({state}) => !CLOSED_DINNER_STATES.includes(state))
             .map(({id}) => id))
         if (seasonId !== null && request.dinnerEventIds.some(id => shownOpen.has(id) && !covered.has(id))) await refreshSelectedSeason()
     }
 
-    // A scaffold result toast: the title names the view, the suffix the dinner (guest bookings), the household's order its people
-    type ScaffoldToast = {title: string, suffix?: string, householdOrder?: number[]}
-
     /**
-     * ADR-016: Scaffold endpoint call shared by the single- and multi-event entry points;
-     * with a toast given, the result is reported in it.
+     * Scaffold endpoint call shared by the single- and multi-event entry points;
+     * the result shows in the toast given.
      */
     const processBookings = async (
         request: ScaffoldOrdersRequest,
         adminBypass: boolean,
-        report: ScaffoldToast | undefined,
+        toastText: ScaffoldToast,
         label: string
     ): Promise<ScaffoldOrdersResponse> => {
         const result = await writeBookings(() => apiRequest('/api/household/order/scaffold', {
             method: 'POST',
             body: request,
-            query: {adminBypass},
+            query: adminBypassQuery(adminBypass),
             schema: ScaffoldOrdersResponseSchema,
-            action: 'processBookings', errorMessage: 'Kunne ikke gemme bookinger'
+            action: 'processBookings', errorMessage: BOOKING_WORDS.failed.save
         }))
         await refreshSeasonOnClosedDinners(request, result.scaffoldResult)
         console.info(CTX, `${label}: ${formatScaffoldResult(result.scaffoldResult)}`)
-        if (report) {
-            const reported = scaffoldToast(report.title, result.scaffoldResult, report.householdOrder)
-            toast.add({...reported, description: `${reported.description}${report.suffix ?? ''}`})
-        }
+        toast.add(scaffoldToast(toastText, result.scaffoldResult))
         return result
     }
 
-    /** What the save of the request would do, read without writing: the scaffold's preview, outside the booking write */
-    const previewBookings = async (request: ScaffoldOrdersRequest, adminBypass = false): Promise<ScaffoldResult> => {
+    /**
+     * What the save of the request would do, read without writing: the scaffold's dry run (GET), outside the booking
+     * write. `bypassDeadlines` previews an admin's change with the deadlines lifted; the server ignores it for a member
+     */
+    const previewBookings = async (request: ScaffoldOrdersRequest, bypassDeadlines = false): Promise<ScaffoldResult> => {
         const {scaffoldResult} = await apiRequest('/api/household/order/scaffold', {
-            method: 'POST',
-            body: request,
-            query: {adminBypass, preview: true},
+            query: {
+                householdId: request.householdId,
+                seasonId: request.seasonId,
+                dinnerEventIds: request.dinnerEventIds,
+                orders: request.orders.map(encodeDesiredOrder),
+                bypassDeadlines: queryFlag(bypassDeadlines)
+            },
             schema: ScaffoldOrdersResponseSchema,
             action: 'previewBookings'
         })
@@ -301,35 +308,39 @@ export const useBookingsStore = defineStore("Bookings", () => {
         return scaffoldResult
     }
 
+    /** The bookings the household's next run makes on the dinners: the dry run with no orders, on the season's deadlines */
+    const fetchExpectedBookings = (householdId: number, dinnerEventIds: number[]): Promise<ScaffoldResult> =>
+        previewBookings({householdId, dinnerEventIds, orders: []})
+
     /**
-     * ADR-016: Process bookings for a single dinner event.
+     * Process bookings for a single dinner event.
      * Used by day view, power mode, and guest booking.
      */
     const processSingleEventBookings = (
         householdId: number,
         dinnerEventId: number,
         orders: DesiredOrder[],
-        adminBypass = false,
-        report?: ScaffoldToast
+        adminBypass: boolean,
+        toastText: ScaffoldToast
     ): Promise<ScaffoldOrdersResponse> =>
-        processBookings({householdId, dinnerEventIds: [dinnerEventId], orders}, adminBypass, report, 'processSingleEventBookings')
+        processBookings({householdId, dinnerEventIds: [dinnerEventId], orders}, adminBypass, toastText, 'processSingleEventBookings')
 
     /**
-     * ADR-016: Process bookings for multiple dinner events.
+     * Process bookings for multiple dinner events.
      * Used by grid view (week/month).
      */
     const processMultipleEventsBookings = (
         householdId: number,
         dinnerEventIds: number[],
         orders: DesiredOrder[],
-        adminBypass = false,
-        report?: ScaffoldToast
+        adminBypass: boolean,
+        toastText: ScaffoldToast
     ): Promise<ScaffoldOrdersResponse> =>
-        processBookings({householdId, dinnerEventIds, orders}, adminBypass, report, 'processMultipleEventsBookings')
+        processBookings({householdId, dinnerEventIds, orders}, adminBypass, toastText, 'processMultipleEventsBookings')
 
     /**
      * Admin correction of a household's bookings on one dinner: the scaffold with adminBypass lifts the deadlines
-     * (NONE deletes, a mode change lands after the deadline). Returns the ScaffoldResult; the caller toasts it.
+     * (NONE deletes, a mode change lands after the deadline). Returns the ScaffoldResult, shown in the toast given.
      *
      * @param guestBookerInhabitantId - A new guest ticket books on this inhabitant of the target household
      */
@@ -337,24 +348,26 @@ export const useBookingsStore = defineStore("Bookings", () => {
         householdId: number,
         dinnerEventId: number,
         orders: DesiredOrder[],
-        guestBookerInhabitantId?: number
+        guestBookerInhabitantId: number | undefined,
+        toastText: ScaffoldToast
     ): Promise<ScaffoldResult> => {
         const corrected = orders.map(order => order.isGuestTicket && !order.orderId && guestBookerInhabitantId
             ? {...order, inhabitantId: guestBookerInhabitantId}
             : order)
-        const {scaffoldResult} = await processBookings({householdId, dinnerEventIds: [dinnerEventId], orders: corrected}, true, undefined, 'processAdminCorrection')
+        const {scaffoldResult} = await processBookings({householdId, dinnerEventIds: [dinnerEventId], orders: corrected}, true, toastText, 'processAdminCorrection')
         return scaffoldResult
     }
 
     // DINNER EVENT ACTIONS
-    type DinnerUpdate = Partial<DinnerEventUpdate> & { allergenIds?: number[], state?: typeof DinnerState[keyof typeof DinnerState] }
+    type DinnerUpdate = Partial<DinnerEventUpdate> & { allergenIds?: number[], state?: DinnerState }
 
-    // The page names the date it shows; the dinner on that date resolves from the selected season
+    // The page names the date it shows; the dinner on that date resolves from the selected season. A page may name
+    // the date from a team's dinners, its own or the selected team's, so the server render resolves it after both
     const dinnerDate = shallowRef<() => Date | null>(() => null)
     const selectedDinnerEventId = computed(() => {
         const date = dinnerDate.value()
         if (!date) return null
-        return planStore.selectedSeason?.dinnerEvents?.find(dinner => isSameDay(dinner.date, date))?.id ?? null
+        return getDinnerOnDate(planStore.selectedSeason?.dinnerEvents ?? [])(date)?.id ?? null
     })
 
     const {
@@ -368,15 +381,15 @@ export const useBookingsStore = defineStore("Bookings", () => {
             schema: DinnerEventDetailSchema.nullable(),
             default: () => null,
             enabled: () => !!selectedDinnerEventId.value,
-            dependsOn: [planStore.selectedSeasonDataset],
-            errorMessage: 'Kunne ikke hente fællesspisning',
+            dependsOn: [planStore.selectedSeasonDataset, planStore.selectedTeamDataset, usersStore.myTeamsDataset],
+            errorMessage: BOOKING_WORDS.failed.dinner,
             notFound: {
                 recover: () => {
                     dinnerDate.value = () => null
                 },
                 retries: 0,
-                toast: 'Kan ikke finde middagen',
-                message: () => getRandomEmptyMessageText('dinnerGone')
+                toast: BOOKING_WORDS.notFound.dinner,
+                message: () => getRandomEmptyMessageText('dinnerGone', now.value)
             }
         }
     )
@@ -393,25 +406,25 @@ export const useBookingsStore = defineStore("Bookings", () => {
         if (selectedDinnerEventId.value === dinnerEventId) await refreshSelectedDinnerEventDetail()
     }
 
-    const updateDinner = async (id: number, updates: DinnerUpdate, action: string): Promise<DinnerEventDetail> => {
+    // A dinner write names its action for the log and its word for a failure's toast, as apiRequest takes them
+    type DinnerWrite = {action: string, errorMessage: string}
+
+    const updateDinner = async (id: number, updates: DinnerUpdate, {action, errorMessage}: DinnerWrite): Promise<DinnerEventDetail> => {
         const parsed = await apiRequest(`/api/chef/dinner/${id}`, {
             method: 'POST',
             body: updates,
             onResponse: ({response}) => {
                 if (response.status === 207) {
-                    const base = 'Din ændring er gemt, men Heynabo havde et problem. Vi har forsøgt at fikse det, tjek om det ser rigtig ud i Heynabo.'
-                    const description = response._data?.heynaboEventId
-                        ? base
-                        : `${base} Tryk på Publicer knappen igen`
                     toast.add({
-                        title: 'Heynabo-synkronisering',
-                        description,
+                        title: TEAM_WORDS.toasts.heynaboSync.title,
+                        description: TEAM_WORDS.toasts.heynaboSync.description(response._data?.heynaboEventId ?? null),
                         color: COLOR.error
                     })
                 }
             },
             schema: DinnerEventDetailSchema,
-            action
+            action,
+            errorMessage
         })
         console.info(`${CTX} Updated dinner ${id}: ${Object.keys(updates).join(', ')} → state: ${parsed.state}`)
         await refreshDinnerIfSelected(id)
@@ -427,52 +440,85 @@ export const useBookingsStore = defineStore("Bookings", () => {
             finally { isDinnerUpdating.value = false }
         }
 
-    const updateDinnerEventAllergens = withLoading((id: number, allergenIds: number[]) => updateDinner(id, {allergenIds}, 'Kunne ikke gemme allergeninformation'))
+    const updateDinnerEventAllergens = withLoading(async (id: number, allergenIds: number[]) => {
+        const words = TEAM_WORDS.toasts.allergensSaved
+        const updated = await updateDinner(id, {allergenIds}, {action: 'updateDinnerEventAllergens', errorMessage: words.failed})
+        toastSaved(words.title, allergenIds.length > 0 ? words.withAllergens : words.withoutAllergens)
+        return updated
+    })
     // The chef's grocery lines: the API answers the line, the dinner detail re-reads for its computed cost
     const {ExpenseSchema} = useBillingValidation()
     const {formatPrice} = useTicket()
     const expensesUrl = (dinnerEventId: number) => `/api/chef/dinner/${dinnerEventId}/expenses`
     const addExpense = withLoading(async (dinnerEventId: number, line: ExpenseCreate): Promise<Expense> => {
+        const words = TEAM_WORDS.toasts.expenseAdded
         const expense = await apiRequest(expensesUrl(dinnerEventId), {
-            method: 'PUT', body: line, schema: ExpenseSchema, action: 'addExpense', errorMessage: 'Kunne ikke gemme indkøbet'
+            method: 'PUT', body: line, schema: ExpenseSchema, action: 'addExpense', errorMessage: words.failed
         })
         await refreshDinnerIfSelected(dinnerEventId)
-        toast.add({title: 'Indkøb gemt', description: `${expense.description}: ${formatPrice(expense.amount)} kr`, color: COLOR.success})
+        toastSaved(words.title, words.description(expense.description, formatPrice(expense.amount)))
         return expense
     })
     const removeExpense = withLoading(async (dinnerEventId: number, expenseId: number): Promise<Expense> => {
         const removed = await apiRequest(`${expensesUrl(dinnerEventId)}/${expenseId}`, {
-            method: 'DELETE', schema: ExpenseSchema, action: 'removeExpense', errorMessage: 'Kunne ikke slette indkøbet'
+            method: 'DELETE', schema: ExpenseSchema, action: 'removeExpense', errorMessage: TEAM_WORDS.toasts.expenseRemoved.failed
         })
         await refreshDinnerIfSelected(dinnerEventId)
-        toast.add({title: 'Indkøb slettet', description: removed.description, color: COLOR.success})
+        toastSaved(TEAM_WORDS.toasts.expenseRemoved.title, removed.description)
         return removed
     })
 
-    const announceDinner = withLoading((id: number) => updateDinner(id, {state: DinnerState.ANNOUNCED}, 'Kunne ikke annoncere fællesspisningen'))
+    // An announce of a dinner on view that is already announced republishes its menu; read before the write re-reads the detail
+    const announceDinner = withLoading(async (id: number) => {
+        const isRepublish = selectedDinnerEventDetail.value?.id === id && selectedDinnerEventDetail.value.state === DinnerState.ANNOUNCED
+        const announced = await updateDinner(id, {state: DinnerState.ANNOUNCED}, {action: 'announceDinner', errorMessage: TEAM_WORDS.toasts.announced.failed})
+        toast.add({
+            title: TEAM_WORDS.toasts.announced.title(isRepublish),
+            description: TEAM_WORDS.toasts.announced.description(announced.heynaboEventId),
+            icon: ICONS.megaphone,
+            color: COLOR.success
+        })
+        return announced
+    })
     // A cancel and its undo change what the booking views offer on the dinner: the season they read it off is read again
-    const updateDinnerState = async (id: number, state: DinnerState, action: string): Promise<DinnerEventDetail> => {
-        const updated = await updateDinner(id, {state}, action)
+    const updateDinnerState = async (id: number, state: DinnerState, write: DinnerWrite): Promise<DinnerEventDetail> => {
+        const updated = await updateDinner(id, {state}, write)
         await refreshSelectedSeason()
         return updated
     }
-    const cancelDinner = withLoading((id: number) => updateDinnerState(id, DinnerState.CANCELLED, 'Kunne ikke aflyse fællesspisningen'))
-    const undoCancelDinner = withLoading((id: number, targetState: DinnerState = DinnerState.SCHEDULED) => updateDinnerState(id, targetState, 'Kunne ikke annullere aflysningen'))
+    const dinnerWords = (dinner: DinnerEventDetail) =>
+        [dinner.menuTitle || TEAM_WORDS.toasts.untitledDinner, formatDate(dinner.date)] as const
+    const cancelDinner = withLoading(async (id: number) => {
+        const cancelled = await updateDinnerState(id, DinnerState.CANCELLED, {action: 'cancelDinner', errorMessage: TEAM_WORDS.toasts.cancelled.failed})
+        toast.add({
+            title: TEAM_WORDS.toasts.cancelled.title,
+            description: TEAM_WORDS.toasts.cancelled.description(...dinnerWords(cancelled)),
+            icon: ICONS.xMark,
+            color: COLOR.warning
+        })
+        return cancelled
+    })
+    const undoCancelDinner = withLoading(async (id: number, targetState: DinnerState = DinnerState.SCHEDULED) => {
+        const reopened = await updateDinnerState(id, targetState, {action: 'undoCancelDinner', errorMessage: TEAM_WORDS.toasts.reopened.failed})
+        toastSaved(TEAM_WORDS.toasts.reopened.title, TEAM_WORDS.toasts.reopened.description(...dinnerWords(reopened)))
+        return reopened
+    })
 
     // ========================================
-    // WAITING LIST (ADR-007)
+    // WAITING LIST
     // ========================================
 
     // The release places the first entries that fit as orders: the dinner's tickets and the queue both change
     const addExtraPortions = withLoading(async (dinnerEventId: number, portions: number): Promise<WaitlistAssignmentResult> => {
+        const words = TEAM_WORDS.toasts.extraPortions
         const result = await writeBookings(() => apiRequest(`/api/chef/dinner/${dinnerEventId}/extra-portions`, {
             method: 'POST', body: {portions}, schema: WaitlistAssignmentResultSchema,
-            action: 'addExtraPortions', errorMessage: 'Kunne ikke frigive portionerne'
+            action: 'addExtraPortions', errorMessage: words.failed
         }))
         console.info(CTX, `Released ${portions} portions on dinner ${dinnerEventId}: ${result.assigned.length} assigned, ${result.waiting} waiting`)
         toast.add({
-            title: 'Portioner frigivet',
-            description: `${result.assigned.length} fik billet, ${result.waiting} står stadig på ventelisten`,
+            title: words.title,
+            description: words.description(result.assigned.length, result.waiting),
             color: COLOR.success,
             icon: ICONS.waitlist
         })
@@ -482,8 +528,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     /**
      * Update dinner menu fields with implicit chef auto-claim.
      * If the dinner has no chef and the caller has an Inhabitant, the chef role is
-     * claimed first; then menu fields are saved. Returns `{dinner, wasAutoClaimed}`
-     * so the caller can adjust toast copy ("Menu gemt — du er nu chefkok…" vs plain "Menu gemt").
+     * claimed first; then menu fields are saved. Returns `{dinner, wasAutoClaimed}`;
+     * the toast names the claimed role.
      */
     const {TeamRoleSchema} = useCookingTeamValidation()
     const {tryAutoClaim, formatRoleClaimedTitle} = useCookingTeam()
@@ -492,12 +538,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
         (id: number, currentChefId: number | null) => tryAutoClaim(
             currentChefId,
             authStore.inhabitantId,
-            () => planStore.assignRoleToDinner(id, authStore.inhabitantId!, TeamRoleSchema.enum.CHEF)
+            inhabitantId => planStore.assignRoleToDinner(id, inhabitantId, TeamRoleSchema.enum.CHEF)
         )
     )
 
     const saveMenuFields = withLoading(
-        (id: number, updates: Partial<DinnerEventUpdate>) => updateDinner(id, updates, 'Kunne ikke gemme ændringer til menuen')
+        (id: number, updates: Partial<DinnerEventUpdate>) =>
+            updateDinner(id, updates, {action: 'updateDinnerEventField', errorMessage: TEAM_WORDS.toasts.menuSaved.failed})
     )
 
     const updateDinnerEventField = async (
@@ -510,31 +557,29 @@ export const useBookingsStore = defineStore("Bookings", () => {
         const dinner = await saveMenuFields(id, updates)
         if (dinner === null) return null
 
-        toast.add({
-            title: wasAutoClaimed
-                ? `Menu gemt — ${formatRoleClaimedTitle(dinner, TeamRoleSchema.enum.CHEF)}`
-                : 'Menu gemt',
-            description: `"${dinner.menuTitle}" er nu opdateret`,
-            color: COLOR.success
-        })
+        toastSaved(
+            TEAM_WORDS.toasts.menuSaved.title(wasAutoClaimed ? formatRoleClaimedTitle(dinner, TeamRoleSchema.enum.CHEF) : null),
+            TEAM_WORDS.toasts.menuSaved.description(dinner.menuTitle)
+        )
 
         return {dinner, wasAutoClaimed}
     }
 
     // ========================================
-    // DAILY MAINTENANCE JOB (ADR-007)
+    // DAILY MAINTENANCE JOB
     // ========================================
     const authStore = useAuthStore()
+    const dailyMaintenanceLabel = jobTypeLabels[JobType.DAILY_MAINTENANCE]
 
     const {result: dailyMaintenanceResult, error: dailyMaintenanceError, isRunning: isDailyMaintenanceRunning, run: runDailyMaintenanceJob} = runJob<DailyMaintenanceResult>({
         url: '/api/admin/maintenance/daily',
         method: 'POST',
-        query: () => ({triggeredBy: `ADMIN:${authStore.email}`}),
+        query: () => ({triggeredBy: adminTrigger(authStore.email)}),
         schema: DailyMaintenanceResultSchema,
         action: 'runDailyMaintenance',
-        errorMessage: 'Daglig vedligeholdelse fejlede',
+        errorMessage: MAINTENANCE_WORDS.job.failed(dailyMaintenanceLabel),
         formatStats: formatDailyMaintenanceStats,
-        title: 'Daglig vedligeholdelse afsluttet',
+        title: MAINTENANCE_WORDS.job.done(dailyMaintenanceLabel),
         log: `${CTX} Daily maintenance completed:`,
         // Maintenance closes orders and creates transactions server-side
         onSuccess: () => Promise.all([refreshOrders(), refreshCurrentPeriodTransactions()])
@@ -546,32 +591,31 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const runDailyMaintenance = () => runDailyMaintenanceJob().then(() => undefined, () => undefined)
 
     // ========================================
-    // BILLING PERIODS (ADR-007)
+    // BILLING PERIODS
     // ========================================
 
     const {MonthlyBillingResponseSchema, TransactionDisplaySchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema} = useBillingValidation()
 
-    // The selected household's billing: the current period and its past invoices. Only the economy
-    // page shows it, so nothing is requested until a page asks
-    const isHouseholdBillingRequested = ref(false)
+    // A household's billing: the current period and its past invoices. Only the economy tab shows it: it names the
+    // household through a getter, and nothing is requested until it does
+    const householdBillingId = shallowRef<() => number | null>(() => null)
 
     const {
         data: householdBilling, isLoading: isHouseholdBillingLoading, isErrored: isHouseholdBillingErrored,
         error: householdBillingError
     } = storeAsyncData(
         'bookings-store-household-billing',
-        () => `/api/billing?householdId=${householdsStore.selectedHouseholdId}`,
+        () => `/api/billing?householdId=${householdBillingId.value()}`,
         {
             schema: HouseholdBillingResponseSchema.nullable(),
             default: () => null,
-            enabled: () => isHouseholdBillingRequested.value && !!householdsStore.selectedHouseholdId,
-            dependsOn: [householdsStore.selectedHouseholdDataset]
+            enabled: () => !!householdBillingId.value()
         }
     )
 
 
-    const loadHouseholdBilling = () => {
-        isHouseholdBillingRequested.value = true
+    const loadHouseholdBilling = (householdId: MaybeRefOrGetter<number | null>) => {
+        householdBillingId.value = () => toValue(householdId)
     }
 
     // The admin economy page asks for the billing periods and the current period; nothing is requested until it does
@@ -606,13 +650,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
             default: () => null,
             enabled: () => !!selectedBillingPeriodId.value,
             dependsOn: [billingPeriodsDataset],
-            errorMessage: 'Kan ikke finde faktureringsperioden',
+            errorMessage: BOOKING_WORDS.notFound.billingPeriod,
             notFound: {
                 recover: async () => {
                     skipGoneId(billingPeriodChoice, selectedBillingPeriodId.value)
                     await refreshBillingPeriods()
                 },
-                toast: 'Kan ikke finde faktureringsperioden'
+                toast: BOOKING_WORDS.notFound.billingPeriod
             }
         }
     )
@@ -654,13 +698,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
             default: () => [],
             enabled: () => !!selectedInvoiceId.value,
             dependsOn: [selectedBillingPeriodDataset],
-            errorMessage: 'Kan ikke finde fakturaen',
+            errorMessage: BOOKING_WORDS.notFound.invoice,
             notFound: {
                 recover: async () => {
                     skipGoneId(invoiceChoice, selectedInvoiceId.value)
                     await refreshSelectedBillingPeriod()
                 },
-                toast: 'Kan ikke finde fakturaen'
+                toast: BOOKING_WORDS.notFound.invoice
             }
         }
     )
@@ -671,20 +715,21 @@ export const useBookingsStore = defineStore("Bookings", () => {
     }
 
     // ========================================
-    // MONTHLY BILLING JOB (ADR-007)
+    // MONTHLY BILLING JOB
     // ========================================
 
     const {formatMonthlyBillingStats} = useMaintenance()
+    const monthlyBillingLabel = jobTypeLabels[JobType.MONTHLY_BILLING]
 
     const {result: monthlyBillingResult, error: monthlyBillingError, isRunning: isMonthlyBillingRunning, run: runMonthlyBillingJob} = runJob<MonthlyBillingResponse>({
         url: '/api/admin/maintenance/monthly',
         method: 'POST',
-        query: () => ({triggeredBy: `ADMIN:${authStore.email}`}),
+        query: () => ({triggeredBy: adminTrigger(authStore.email)}),
         schema: MonthlyBillingResponseSchema,
         action: 'runMonthlyBilling',
-        errorMessage: 'Månedlig fakturering fejlede',
+        errorMessage: MAINTENANCE_WORDS.job.failed(monthlyBillingLabel),
         formatStats: formatMonthlyBillingStats,
-        title: 'Månedlig fakturering afsluttet',
+        title: MAINTENANCE_WORDS.job.done(monthlyBillingLabel),
         log: `${CTX} Monthly billing completed:`,
         // Billing moves transactions out of the unbilled current period into invoiced periods
         onSuccess: () => Promise.all([refreshBillingPeriods(), refreshCurrentPeriodTransactions()])
@@ -722,11 +767,12 @@ export const useBookingsStore = defineStore("Bookings", () => {
         isBookingsReloading,
         writeBookings,
         previewBookings,
+        fetchExpectedBookings,
         processSingleEventBookings,
         processMultipleEventsBookings,
         processAdminCorrection,
 
-        // dinner event detail (store-owned per ADR-007)
+        // dinner event detail (store-owned)
         selectedDinnerEventId,
         selectedDinnerEventDetail,
         isSelectedDinnerEventLoading,

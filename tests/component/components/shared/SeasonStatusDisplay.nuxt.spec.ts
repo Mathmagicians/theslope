@@ -8,6 +8,7 @@ import SeasonStatusDisplay from '~/components/shared/SeasonStatusDisplay.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
 import {nextTick} from 'vue'
+import {SEASON_STATUS, SEASON_WORDS} from '~/config/seasonWords'
 
 // Test seasons - active (id=1) and inactive (id=2); the component reads them from the real store
 const activeSeason = {...SeasonFactory.defaultSeason('active'), id: 1, isActive: true}
@@ -40,7 +41,7 @@ describe('SeasonStatusDisplay', () => {
 
     describe('status display', () => {
         it.each([
-            {seasonId: 1, expectedText: 'Aktiv'},
+            {seasonId: 1, expectedText: SEASON_WORDS.statusAlert[SEASON_STATUS.ACTIVE].title},
             {seasonId: 2, expectedText: 'sæson'}
         ])('seasonId=$seasonId shows "$expectedText"', async ({seasonId, expectedText}) => {
             const wrapper = await mount({seasonId})
@@ -59,7 +60,7 @@ describe('SeasonStatusDisplay', () => {
             const wrapper = await mount({seasonId: 2, showActivationButton: true})
             const activateButton = findByTestId(wrapper, PLANNING_TEST_IDS.activate)
 
-            expect(activateButton.text()).toContain('Aktiver Sæson')
+            expect(activateButton.text()).toContain(SEASON_WORDS.activation.activate)
 
             await activateButton.trigger('click')
             expect(wrapper.emitted('activate')).toBeTruthy()
@@ -69,6 +70,7 @@ describe('SeasonStatusDisplay', () => {
             const wrapper = await mount({seasonId: 1, showActivationButton: true})
             // DangerButton wraps UButton - find the actual button element inside
             const button = findByTestId(wrapper, PLANNING_TEST_IDS.deactivate).find('button')
+            expect(button.text()).toContain(SEASON_WORDS.activation.deactivate)
             // DangerButton requires 2 clicks: first to arm, second to confirm
             await button.trigger('click')
             await nextTick()

@@ -8,7 +8,8 @@ import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from '~~/server/data/
 import {createOrders} from '~~/server/data/financesRepository'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {getSystemUserId} from '~~/server/utils/systemUser'
-import {isSameDay} from 'date-fns'
+import {formatDate} from '~/utils/date'
+import {getDinnerOnDate} from '~/utils/season'
 import {getHouseholdShortName} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
@@ -18,9 +19,8 @@ const {throwH3Error} = eventHandlerHelper
  *
  * Import orders from CSV file (framelding format) into ACTIVE season
  *
- * ADR-002: Separate validation vs business logic
- * ADR-004: Logging standards
- * ADR-009: Batch by household, Promise.all for parallel processing
+ * A malformed request fails with 400 before the import runs; the orders are created in batches per household, the
+ * batches in parallel
  */
 export default defineEventHandler(async (event): Promise<BillingImportResponse> => {
     const {cloudflare} = event.context
@@ -84,32 +84,38 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
         const adultPrice = findTicketPriceByType(TicketType.ADULT, season.ticketPrices)
         const childPrice = findTicketPriceByType(TicketType.CHILD, season.ticketPrices)
 
-        if (!adultPrice) {
+        if (!adultPrice?.id) {
             return throwH3Error(LOG, createError({statusCode: 400, message: 'Season has no ADULT ticket price'}))
         }
-        if (!childPrice) {
+        if (!childPrice?.id) {
             return throwH3Error(LOG, createError({statusCode: 400, message: 'Season has no CHILD ticket price'}))
         }
+        const adultPriceId = adultPrice.id
+        const childPriceId = childPrice.id
 
-        // Build OrderCreateWithPrice grouped by household (functional reduce)
-        const ordersByHousehold = parsedOrders.reduce<Map<number, OrderCreateWithPrice[]>>((acc, parsedOrder) => {
-            const shortName = getHouseholdShortName(parsedOrder.address)
-            const household = householdByShortName.get(shortName)!
-            const dinnerEvent = season.dinnerEvents?.find(de => isSameDay(de.date, parsedOrder.date))
-            const firstInhabitant = household.inhabitants?.[0]
+        // Every address matched a household above, so each order pairs with its household
+        const householdOrders = parsedOrders.flatMap(parsedOrder => {
+            const household = householdByShortName.get(getHouseholdShortName(parsedOrder.address))
+            return household ? [{parsedOrder, household}] : []
+        })
+
+        // The orders to create, grouped by household
+        const ordersByHousehold = householdOrders.reduce<Map<number, OrderCreateWithPrice[]>>((acc, {parsedOrder, household}) => {
+            const dinnerEvent = getDinnerOnDate(season.dinnerEvents ?? [])(parsedOrder.date)
+            const firstInhabitant = household.inhabitants[0]
 
             if (!dinnerEvent) {
-                throw createError({statusCode: 400, message: `No dinner event for ${parsedOrder.date.toISOString().split('T')[0]} (${parsedOrder.address})`})
+                throw createError({statusCode: 400, message: `No dinner event for ${formatDate(parsedOrder.date)} (${parsedOrder.address})`})
             }
             if (!firstInhabitant) {
                 throw createError({statusCode: 400, message: `No inhabitants in household ${household.address}`})
             }
 
             const baseOrder = {
-                dinnerEventId: dinnerEvent.id!,
-                inhabitantId: firstInhabitant.id!,
+                dinnerEventId: dinnerEvent.id,
+                inhabitantId: firstInhabitant.id,
                 bookedByUserId: firstInhabitant.userId ?? null,
-                householdId: household.id!,
+                householdId: household.id,
                 dinnerMode: DinnerMode.DINEIN,
                 state: OrderState.BOOKED,
                 isGuestTicket: false
@@ -118,21 +124,21 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
             const orders: OrderCreateWithPrice[] = [
                 ...Array.from({length: parsedOrder.adultCount}, () => ({
                     ...baseOrder,
-                    ticketPriceId: adultPrice.id!,
+                    ticketPriceId: adultPriceId,
                     priceAtBooking: adultPrice.price
                 })),
                 ...Array.from({length: parsedOrder.childCount}, () => ({
                     ...baseOrder,
-                    ticketPriceId: childPrice.id!,
+                    ticketPriceId: childPriceId,
                     priceAtBooking: childPrice.price
                 }))
             ]
 
-            const existing = acc.get(household.id!) ?? []
-            return acc.set(household.id!, [...existing, ...orders])
+            const existing = acc.get(household.id) ?? []
+            return acc.set(household.id, [...existing, ...orders])
         }, new Map())
 
-        // Get system user for audit trail (ADR-013: system operations use cached admin user)
+        // The audit trail names the system user, cached for system operations
         const systemUserId = await getSystemUserId(d1Client)
 
         // Audit context for batch import

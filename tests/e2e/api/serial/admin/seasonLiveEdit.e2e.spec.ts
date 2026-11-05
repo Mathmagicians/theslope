@@ -13,7 +13,7 @@ const Action = useActionValidation().BookingActionSchema.enum
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap: createDefaultDinnerModeMap} = useCoreValidation()
-const {validatedBrowserContext, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, temporaryAndRandom, attemptAll} = testHelpers
 
 /**
  * Editing the ACTIVE season - SERIAL
@@ -43,7 +43,7 @@ test.describe('POST /api/admin/season/[id] on the active season', () => {
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        const created = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 10, deadline: 2, cookingDays: 'all'})
+        const created = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 3, deadline: 2, cookingDays: 'all'})
         season = created.season
         createdSeasonIds.push(season.id!)
 
@@ -61,22 +61,22 @@ test.describe('POST /api/admin/season/[id] on the active season', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        for (const householdId of createdHouseholdIds) {
-            await HouseholdFactory.deleteHousehold(context, householdId)
-        }
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
-        // Hand the singleton active season back to the suites that follow
-        await SeasonFactory.createActiveSeason(context)
+        await attemptAll('POST /api/admin/season/[id] on the active season cleanup', [
+            ...createdHouseholdIds.map(householdId => () => HouseholdFactory.deleteHousehold(context, householdId)),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds),
+            // Hand the singleton active season back to the suites that follow
+            () => SeasonFactory.createActiveSeason(context)
+        ]).finally(() => context.close())
     })
 
     test('GIVEN the active season WHEN a holiday is added and the season extended THEN orders are reconciled, the other bookings survive and the new dinner is scaffolded', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // GIVEN: a scaffolded dinner far enough out to be removable, and the event count before the save
+        // GIVEN: a scaffolded dinner before the deadline, removable, and the one after it
         const before = await SeasonFactory.getSeason(context, season.id!)
         const eventsByDate = [...before.dinnerEvents!].sort((a, b) => a.date.getTime() - b.date.getTime())
-        const holidayEvent = eventsByDate[4]!
-        const keptEvent = eventsByDate[5]!
+        const holidayEvent = eventsByDate[2]!
+        const keptEvent = eventsByDate[3]!
         const ordersBefore = await OrderFactory.getAllOrdersForEvents(context, holidayEvent.id)
         expect(ordersBefore.filter(o => o.inhabitantId === inhabitantId).length,
             'Scaffolding should have booked the inhabitant on the holiday date').toBeGreaterThan(0)

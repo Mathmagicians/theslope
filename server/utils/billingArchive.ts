@@ -4,6 +4,8 @@
  * Returns a result in every case, so billing completes independently of the archive.
  */
 import {useBillingValidation, type BillingArchiveResult, type BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
+import {DATE_SETTINGS, formatDate} from '~/utils/date'
+import {errorMessage} from '~~/workers/common/error'
 
 const {generateBillingCsv, generateCsvFilename} = useBillingValidation()
 const LOG = '💰 > BILLING > [ARCHIVE]'
@@ -11,7 +13,7 @@ const CONTENT_TYPE = 'text/csv; charset=utf-8'
 
 /** ASCII key from the cutoff month and the version (billingPeriod's `dd/MM/yyyy-dd/MM/yyyy` carries slashes) */
 export const getBillingArchiveKey = (cutoffDate: Date, version: number): string => {
-    const month = cutoffDate.toISOString().slice(0, 7)
+    const month = formatDate(cutoffDate, DATE_SETTINGS.ISO_MONTH_MASK)
     return `billing/${month}/pbs-opgoerelse-${month}-v${version}.csv`
 }
 
@@ -33,7 +35,7 @@ export const archiveBillingCsv = async (bucket: R2Bucket | undefined, summary: B
         console.info(`${LOG} archived`, {key, sizeBytes: result.sizeBytes})
         return {...result, archived: true, degraded: false}
     } catch (error) {
-        console.error(`${LOG} put failed`, {key, reason: error instanceof Error ? error.message : String(error)})
+        console.error(`${LOG} put failed`, {key, reason: errorMessage(error)})
         return {...result, archived: false, degraded: false}
     }
 }

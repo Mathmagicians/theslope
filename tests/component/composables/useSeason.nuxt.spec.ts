@@ -100,7 +100,7 @@ const createExisting = (id: number, date: Date, heynaboEventId: number | null = 
 describe('useSeasonSchema', () => {
     it('should validate default season', async () => {
         const {SeasonSchema, getDefaultSeason} = useSeason()
-        const defaultSeason = getDefaultSeason()
+        const defaultSeason = getDefaultSeason(new Date())
         const result = SeasonSchema.safeParse(defaultSeason)
 
         expect(result.success, result.success ? '' : JSON.stringify(result.error.format(), null, 2)).toBe(true)
@@ -148,7 +148,7 @@ describe('useSeasonSchema', () => {
 describe('getDefaultSeason', () => {
     it('should validate against both application and serialization schemas', () => {
         const { getDefaultSeason, SeasonSchema, serializeSeason, deserializeSeason } = useSeason()
-        const defaultSeason = getDefaultSeason()
+        const defaultSeason = getDefaultSeason(new Date())
 
         // Test application schema
         const schemaResult = SeasonSchema.safeParse(defaultSeason)
@@ -212,7 +212,7 @@ describe('generateDinnerEventDataForSeason', () => {
         const invalidSeason = {} as Season
 
         // WHEN: Generating dinner event data
-        const events = generateDinnerEventDataForSeason(invalidSeason)
+        const events = generateDinnerEventDataForSeason(invalidSeason, new Date())
 
         // THEN: Returns empty array
         expect(events).toEqual([])
@@ -231,7 +231,7 @@ describe('generateDinnerEventDataForSeason', () => {
         }
 
         // WHEN: Generating dinner event data
-        const events = generateDinnerEventDataForSeason(season)
+        const events = generateDinnerEventDataForSeason(season, new Date())
 
         // THEN: Creates valid DinnerEventCreate objects
         expect(events.length).toBe(5)
@@ -376,6 +376,7 @@ describe('deadlinesForSeason', () => {
     // Default season config (matches app.config.ts defaults)
     // Note: booking deadline (8 days) is from season, menu deadline (10 days) is from config
     const defaultSeasonConfig = {
+        ...SeasonFactory.defaultSeason(),
         ticketIsCancellableDaysBefore: 8,  // Booking deadline (from season)
         diningModeIsEditableMinutesBefore: 60
     }
@@ -387,7 +388,7 @@ describe('deadlinesForSeason', () => {
     describe('canModifyOrders (booking deadline from season = 8 days)', () => {
         let canModifyOrders: SeasonDeadlines['canModifyOrders']
         beforeAll(() => {
-            ({ canModifyOrders } = deadlinesForSeason(defaultSeasonConfig))
+            ({ canModifyOrders } = deadlinesForSeason(defaultSeasonConfig, new Date()))
         })
 
         it('should allow modifications when dinner is far in future', () => {
@@ -420,8 +421,8 @@ describe('deadlinesForSeason', () => {
 
         it('should use season-specific deadline value', () => {
             // GIVEN: Season with short 2-day deadline
-            const shortDeadlineSeason = { ticketIsCancellableDaysBefore: 2, diningModeIsEditableMinutesBefore: 60 }
-            const { canModifyOrders: shortDeadlineCheck } = deadlinesForSeason(shortDeadlineSeason)
+            const shortDeadlineSeason = { ...defaultSeasonConfig, ticketIsCancellableDaysBefore: 2 }
+            const { canModifyOrders: shortDeadlineCheck } = deadlinesForSeason(shortDeadlineSeason, new Date())
 
             // Dinner 3 days from now
             const today = new Date()
@@ -440,7 +441,7 @@ describe('deadlinesForSeason', () => {
     describe('canEditDiningMode', () => {
         let canEditDiningMode: SeasonDeadlines['canEditDiningMode']
         beforeAll(() => {
-            ({ canEditDiningMode } = deadlinesForSeason(defaultSeasonConfig))
+            ({ canEditDiningMode } = deadlinesForSeason(defaultSeasonConfig, new Date()))
         })
 
         it('should allow editing when dinner is tomorrow', () => {
@@ -472,7 +473,7 @@ describe('deadlinesForSeason', () => {
     describe('isAnnounceMenuPastDeadline (menu deadline from config = 10 days)', () => {
         let isAnnounceMenuPastDeadline: SeasonDeadlines['isAnnounceMenuPastDeadline']
         beforeAll(() => {
-            ({ isAnnounceMenuPastDeadline } = deadlinesForSeason(defaultSeasonConfig))
+            ({ isAnnounceMenuPastDeadline } = deadlinesForSeason(defaultSeasonConfig, new Date()))
         })
 
         // Verify the menu deadline is correctly read from config
@@ -503,7 +504,7 @@ describe('deadlinesForSeason', () => {
             const dinnerDate = new Date(today)
             dinnerDate.setDate(today.getDate() + 9)
 
-            const { canModifyOrders, isAnnounceMenuPastDeadline } = deadlinesForSeason(defaultSeasonConfig)
+            const { canModifyOrders, isAnnounceMenuPastDeadline } = deadlinesForSeason(defaultSeasonConfig, new Date())
 
             // WHEN: Checking both deadlines
             const canBook = canModifyOrders(dinnerDate)
@@ -637,7 +638,7 @@ describe('getScheduleChangeDesiredEvents', () => {
         const oldSeason = baseSeason()
         const newSeason = modify(baseSeason())
 
-        const result = getScheduleChangeDesiredEvents(oldSeason, newSeason)
+        const result = getScheduleChangeDesiredEvents(oldSeason, newSeason, new Date())
 
         if (expectNull) {
             expect(result).toBeNull()
@@ -654,7 +655,7 @@ describe('getScheduleChangeDesiredEvents', () => {
         const newSeason = {...baseSeason(), cookingDays: createDefaultWeekdayMap([true, true, true, false, true, false, false])}
 
         // WHEN: Checking schedule change
-        const result = getScheduleChangeDesiredEvents(oldSeason, newSeason)
+        const result = getScheduleChangeDesiredEvents(oldSeason, newSeason, new Date())
 
         // THEN: Returns array with 4 events (Mon, Tue, Wed, Fri)
         expect(result).not.toBeNull()
@@ -696,7 +697,7 @@ describe('reconcileDinnerEventsForSeason - Heynabo cleanup of dropped dinner dat
 
     // Seed the database with the season's scheduled events (+ an optional dropped one), return the scheduled ones
     const seedDinnerEvents = (droppedEvent?: DinnerEventDisplay): DinnerEventDisplay[] => {
-        const scheduled = generateDinnerEventDataForSeason(baseSeason())
+        const scheduled = generateDinnerEventDataForSeason(baseSeason(), new Date())
             .map((event, index) => createExisting(index + 1, event.date))
         dinnerEventRows.splice(0, dinnerEventRows.length, ...scheduled, ...(droppedEvent ? [droppedEvent] : []))
         return scheduled
@@ -744,7 +745,7 @@ describe('getOrderCancellationAction', () => {
     const testSeason = SeasonFactory.defaultSeason()
     let getOrderCancellationAction: SeasonDeadlines['getOrderCancellationAction']
     beforeAll(() => {
-        ({ getOrderCancellationAction } = deadlinesForSeason(testSeason))
+        ({ getOrderCancellationAction } = deadlinesForSeason(testSeason, new Date()))
     })
     const cancellableDaysBefore = testSeason.ticketIsCancellableDaysBefore
 

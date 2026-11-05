@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect} from '~~/tests/e2e/uiTest'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import {ExpenseFactory} from '../testDataFactories/expenseFactory'
@@ -7,7 +7,7 @@ import {useTicket} from '~/composables/useTicket'
 import {formatDate} from '~/utils/date'
 import testHelpers from '../testHelpers'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, gotoHydrated, waitForApi} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, gotoHydrated, waitForApi, attemptAll} = testHelpers
 const {ExpenseSchema} = useBillingValidation()
 const {formatPrice} = useTicket()
 
@@ -48,10 +48,13 @@ test.describe('Chef expense lines', () => {
     test.afterAll(async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
-        // An expense row outlives its dinner (SetNull): the lines go first; the dinner and the team accept a 404
-        await ExpenseFactory.cleanupExpenses(memberContext, dinnerEventId, expenseIds)
-        for (const id of createdDinnerIds) await DinnerEventFactory.deleteDinnerEvent(adminContext, id)
-        for (const id of createdTeamIds) await SeasonFactory.deleteCookingTeam(adminContext, id)
+        // A line outlives its dinner (SetNull) and only the dinner's chef removes it, through the dinner: the lines go before
+        // the dinner and the team
+        await attemptAll('Chef expense lines cleanup', [
+            () => ExpenseFactory.cleanupExpenses(memberContext, dinnerEventId, expenseIds),
+            ...createdDinnerIds.map(id => () => DinnerEventFactory.deleteDinnerEvent(adminContext, id)),
+            ...createdTeamIds.map(id => () => SeasonFactory.deleteCookingTeam(adminContext, id))
+        ]).finally(() => Promise.all([adminContext.close(), memberContext.close()]))
     })
 
     test('GIVEN the chef on the dinner WHEN adding a line and removing it THEN the pane and the API follow', async ({browser}) => {

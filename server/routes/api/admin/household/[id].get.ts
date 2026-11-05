@@ -14,11 +14,11 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let id!: number
+    let id: number
     try {
         ({id}  = await getValidatedRouterParams(event, paramSchema.parse))
     } catch (error) {
-        throwH3Error('🏠 > HOUSEHOLD > [GET] Input validation error', error)
+        return throwH3Error('🏠 > HOUSEHOLD > [GET] Input validation error', error)
     }
 
     // Database operations try-catch - separate concerns

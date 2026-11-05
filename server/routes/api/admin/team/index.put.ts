@@ -16,7 +16,7 @@ export default defineEventHandler(async (event): Promise<CreateTeamsResponse> =>
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let teams!: CookingTeamCreate[]
+    let teams: CookingTeamCreate[]
 
     try {
         const body = await readBody(event)

@@ -140,6 +140,11 @@ describe('useTabNavigation.ts', () => {
       const { constructUrlForTab } = createNavigationInstance(nestedRouteConfig)
       expect(constructUrlForTab('tab2', { tab: 'tab1' })).toBe('/nested/tab2')
     })
+
+    it('constructUrlForTab takes the first segment of a param that holds several', () => {
+      const { constructUrlForTab } = createNavigationInstance(nestedRouteConfig)
+      expect(constructUrlForTab('tab2', { param1: ['value1', 'value2'] })).toBe('/nested/value1/tab2')
+    })
   })
 
   describe('isValidTab', () => {

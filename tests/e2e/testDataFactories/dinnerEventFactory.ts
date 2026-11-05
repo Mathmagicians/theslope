@@ -5,9 +5,13 @@ import {
     type DinnerEventCreate,
     type HeynaboEventResponse,
     type MenuSwapStrategy,
+    type SerializedDinnerEvent,
+    type SerializedDinnerEventDetail,
+    type SerializedDinnerTicket,
     useBookingValidation
 } from "~/composables/useBookingValidation"
-import type { TeamRole } from "~/composables/useCookingTeamValidation"
+import type { TeamRole, SerializedCookingTeamDisplay } from "~/composables/useCookingTeamValidation"
+import type { SerializedInhabitant } from "~/composables/useCoreValidation"
 import type {Season} from "~/composables/useSeasonValidation"
 import {computeCookingDates} from "~/utils/season"
 import testHelpers from "../testHelpers"
@@ -15,7 +19,7 @@ import {expect, type BrowserContext} from "@playwright/test"
 
 const {salt, headers, pollUntil, temporaryAndRandom} = testHelpers
 const DINNER_EVENT_ENDPOINT = '/api/admin/dinner-event'
-const { DinnerStateSchema } = useBookingValidation()
+const { DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema } = useBookingValidation()
 
 export class DinnerEventFactory {
     static readonly today = new Date()
@@ -66,6 +70,12 @@ export class DinnerEventFactory {
         updatedAt: this.today
     })
 
+    /** A dinner row as a read loads it: the Display's columns and the expense rows behind its cost */
+    static readonly serializedDinnerEvent = (overrides: Partial<SerializedDinnerEvent> = {}): SerializedDinnerEvent => {
+        const {allergens: _allergens, ...columns} = this.defaultDinnerEventDisplay()
+        return {...columns, expenses: [], ...overrides}
+    }
+
     /**
      * Create dinner event display at specific days from today
      * Useful for testing deadline-based logic (before/after cancellation deadline)
@@ -106,12 +116,7 @@ export class DinnerEventFactory {
      * Create a Prisma-format dinner event detail with JSON strings for testing deserialization (ADR-010)
      * Simulates what comes directly from the database before deserialization
      */
-    static readonly defaultSerializedDinnerEventDetail = (overrides: {
-        chef?: Record<string, unknown> | null,
-        cookingTeam?: Record<string, unknown> | null,
-        tickets?: Array<Record<string, unknown>>,
-        allergens?: Array<{allergyType: Record<string, unknown>}>
-    } = {}) => ({
+    static readonly defaultSerializedDinnerEventDetail = (overrides: Partial<SerializedDinnerEventDetail> = {}): SerializedDinnerEventDetail => ({
         id: 1,
         date: this.tomorrow,
         menuTitle: 'Test Menu',
@@ -125,18 +130,19 @@ export class DinnerEventFactory {
         seasonId: null,
         createdAt: this.today,
         updatedAt: this.today,
-        chef: overrides.chef ?? null,
-        cookingTeam: overrides.cookingTeam ?? null,
-        tickets: overrides.tickets ?? [],
-        allergens: overrides.allergens ?? [],
-        expenses: []
+        chef: null,
+        cookingTeam: null,
+        tickets: [],
+        allergens: [],
+        expenses: [],
+        ...overrides
     })
 
     /**
      * Create a serialized inhabitant (chef/ticket holder) with dinnerPreferences as JSON string
      * Used for testing deserialization
      */
-    static readonly serializedInhabitant = (dinnerPreferences: string | null = null) => ({
+    static readonly serializedInhabitant = (dinnerPreferences: string | null = null): SerializedInhabitant => ({
         id: 1,
         heynaboId: 12345,
         householdId: 1,
@@ -147,11 +153,32 @@ export class DinnerEventFactory {
         dinnerPreferences
     })
 
+    /** A ticket row as the dinner's Detail read loads it: the order, its holder's row with allergies, its payer and its price row */
+    static readonly serializedTicket = (overrides: Partial<SerializedDinnerTicket> = {}): SerializedDinnerTicket => ({
+        id: 1,
+        dinnerEventId: 1,
+        inhabitantId: 1,
+        bookedByUserId: null,
+        ticketPriceId: 1,
+        priceAtBooking: 4000,
+        dinnerMode: DinnerModeSchema.enum.DINEIN,
+        state: OrderStateSchema.enum.BOOKED,
+        isGuestTicket: false,
+        releasedAt: null,
+        closedAt: null,
+        createdAt: this.today,
+        updatedAt: this.today,
+        inhabitant: {...this.serializedInhabitant(), allergies: []},
+        bookedByUser: null,
+        ticketPrice: {id: 1, seasonId: 1, ticketType: TicketTypeSchema.enum.ADULT, price: 4000, description: null, maximumAgeLimit: null},
+        ...overrides
+    })
+
     /**
      * Create a serialized cooking team with affinity as JSON string
      * Used for testing deserialization
      */
-    static readonly serializedCookingTeam = (affinity: string | null = null) => ({
+    static readonly serializedCookingTeam = (affinity: string | null = null): SerializedCookingTeamDisplay => ({
         id: 1,
         seasonId: 1,
         name: 'Test Team',
@@ -163,7 +190,8 @@ export class DinnerEventFactory {
         context: BrowserContext,
         dinnerEventData: Partial<DinnerEventCreate> = this.defaultDinnerEvent(),
         expectedStatus: number = 201
-    ): Promise<DinnerEventDisplay> => {
+    ): Promise<DinnerEventDetail> => {
+        const {DinnerEventDetailSchema} = useBookingValidation()
         const requestData = {
             ...this.defaultDinnerEvent(),
             ...dinnerEventData
@@ -178,13 +206,25 @@ export class DinnerEventFactory {
         expect(status, `Expected status ${expectedStatus}`).toBe(expectedStatus)
 
         if (expectedStatus === 201) {
-            const responseBody = await response.json()
-            expect(responseBody.id, 'Response should contain dinner event ID').toBeDefined()
-            return responseBody
+            return DinnerEventDetailSchema.parse(await response.json())
         }
 
         return await response.json()
     }
+
+    /** A dinner of the season `daysFromToday` days from today (negative in the past), at midnight, in `state` */
+    static readonly createDinnerEventInState = (
+        context: BrowserContext,
+        seasonId: number,
+        state: DinnerEventCreate['state'],
+        daysFromToday: number,
+        testSalt: string = temporaryAndRandom()
+    ): Promise<DinnerEventDisplay> => this.createDinnerEvent(context, {
+        seasonId,
+        date: startOfDay(addDays(new Date(), daysFromToday)),
+        menuTitle: salt(state, testSalt),
+        state
+    })
 
     /**
      * A browser spec's dinner stands alone on its day: the dinner and chef pages select a dinner by date, so a second
@@ -203,7 +243,7 @@ export class DinnerEventFactory {
         const givenUp: Date[] = []
         for (let attempt = 0; attempt < attempts; attempt++) {
             const dinners = await this.getDinnerEventsForSeason(context, season.id!)
-            const occupied = [...dinners.map(dinner => new Date(dinner.date)), ...givenUp]
+            const occupied = [...dinners.map(dinner => dinner.date), ...givenUp]
             const freeDays: Date[] = []
             for (let day = first; day <= last; day = addDays(day, 1)) {
                 if (!occupied.some(date => isSameDay(date, day))) freeDays.push(day)
@@ -239,8 +279,8 @@ export class DinnerEventFactory {
     }
 
     /** The season's dinners on `day` */
-    private static readonly dinnersOnDay = async (context: BrowserContext, seasonId: number, day: Date): Promise<DinnerEventDisplay[]> =>
-        (await this.getDinnerEventsForSeason(context, seasonId)).filter(dinner => isSameDay(new Date(dinner.date), day))
+    private static readonly dinnersOnDay =async (context: BrowserContext, seasonId: number, day: Date): Promise<DinnerEventDisplay[]> =>
+        (await this.getDinnerEventsForSeason(context, seasonId)).filter(dinner => isSameDay(dinner.date, day))
 
     static readonly getDinnerEvent = async (
         context: BrowserContext,

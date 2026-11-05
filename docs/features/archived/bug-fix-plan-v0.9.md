@@ -7,7 +7,7 @@
 
 Moved out on archival: B6 → [chores-0.9.1.md](../chores-0.9.1.md) (the Order
 snapshot package, schema in the Prisma bundle); billing delivery report + interrupted job runs →
-[bug-fix-billing-delivery-report.md](../bug-fix-billing-delivery-report.md).
+[bug-fix-billing-delivery-report.md](../release-0.9.2/bug-fix-billing-delivery-report.md).
 
 ## Fixes
 

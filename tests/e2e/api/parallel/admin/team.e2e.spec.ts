@@ -8,7 +8,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 
 const {CookingTeamDisplaySchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
 const {createWeekDayMapFromSelection} = useWeekDayMapValidation()
-const {headers, validatedBrowserContext, salt, temporaryAndRandom} = testHelpers
+const {headers, validatedBrowserContext, salt, temporaryAndRandom, attemptAll} = testHelpers
 
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
@@ -78,6 +78,11 @@ test.describe('Admin Teams API', () => {
             const assignedEvents = eventsAfter.filter(dinnerEvent => dinnerEvent.cookingTeamId !== null)
             expect(assignedEvents.length).toBeGreaterThan(0)
             expect(envelope.eventsAssigned).toBe(assignedEvents.length)
+
+            // AND: each team holds its computed weekdays, and the dinners go to both teams
+            const teamsAfter = await SeasonFactory.getCookingTeamsForSeason(context, season.id as number)
+            expect(teamsAfter.every(team => Object.values(team.affinity ?? {}).some(Boolean))).toBe(true)
+            expect(new Set(assignedEvents.map(dinnerEvent => dinnerEvent.cookingTeamId)).size).toBe(2)
         })
 
         test('GET /api/admin/team should list all teams', async ({browser}) => {
@@ -342,7 +347,8 @@ test.describe('Admin Teams API', () => {
             // Remove one assignment to test member removal
             const firstAssignmentId = createdTeam.assignments[0]!.id!
             expect(createdTeam.id).toBeDefined()
-            await SeasonFactory.removeMemberFromTeam(context, createdTeam.id!, firstAssignmentId)
+            const deletedId = await SeasonFactory.removeMemberFromTeam(context, createdTeam.id!, firstAssignmentId)
+            expect(deletedId).toBe(firstAssignmentId)
 
             // Verify the assignment was removed
             await SeasonFactory.getCookingTeamAssignment(context, firstAssignmentId, 404)
@@ -367,7 +373,9 @@ test.describe('Admin Teams API', () => {
         // Only need to delete root entities - CASCADE will handle the rest
         // Deleting Season cascades to CookingTeam → CookingTeamAssignment
         // Deleting Household cascades to Inhabitants
-        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        await attemptAll('Admin Teams API cleanup', [
+            () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 })

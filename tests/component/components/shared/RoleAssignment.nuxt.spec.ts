@@ -8,7 +8,8 @@ import {readBody, type H3Event} from 'h3'
 import RoleAssignment from '~/components/shared/RoleAssignment.vue'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
-import {useCookingTeamValidation, ROLE_LABELS} from '~/composables/useCookingTeamValidation'
+import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {TEAM_WORDS} from '~/config/teamWords'
 import type {InhabitantDisplay, UserDetail} from '~/composables/useCoreValidation'
 
 /**
@@ -71,17 +72,17 @@ describe('RoleAssignment', () => {
     it.each([
         {desc: 'self is chef',  chef: ME},
         {desc: 'other is chef', chef: OTHER}
-    ])('assigned trigger ($desc) shows a label distinct from vacant', async ({chef}) => {
+    ])('assigned trigger ($desc) reads the duty change, distinct from vacant', async ({chef}) => {
         const vacant = findByTestId(await mountWith(null), TEST_IDS.trigger).text().trim()
         const assigned = findByTestId(await mountWith(chef), TEST_IDS.trigger).text().trim()
+        expect(assigned).toBe(TEAM_WORDS.dutyChange.trigger)
         expect(assigned).not.toBe(vacant)
-        expect(assigned).not.toBe('')
     })
 
     // The store settles a claim over several requests (the claim, the teams, the dinner on view), so the emit is awaited
     it('volunteer flow: the vacant trigger names the role, opens the collapsible panel, and save claims the role for me on the dinner and emits role-assigned', async () => {
         const wrapper = await mountWith()
-        expect(findByTestId(wrapper, TEST_IDS.trigger).text().toLowerCase()).toContain(ROLE_LABELS[TeamRole.CHEF].toLowerCase())
+        expect(findByTestId(wrapper, TEST_IDS.trigger).text().toLowerCase()).toContain(TEAM_WORDS.roles[TeamRole.CHEF].label.toLowerCase())
         expect(findByTestId(wrapper, TEST_IDS.save).exists()).toBe(false)
 
         await clickByTestId(wrapper, TEST_IDS.trigger)

@@ -19,7 +19,7 @@ const props = withDefaults(defineProps<Props>(), {
     showAmount: true
 })
 
-const {formatPrice} = useTicket()
+const {formatKroner} = useTicket()
 const {ICONS, SIZES, COLOR, NOISE} = useTheSlopeDesignSystem()
 
 const isValid = computed(() => props.computed === props.expected)
@@ -28,10 +28,10 @@ const isValid = computed(() => props.computed === props.expected)
 <template>
   <UBadge v-if="isValid" :color="COLOR.success" :variant="NOISE.subtle" :size="SIZES.small">
     <UIcon :name="ICONS.robotHappy" :class="SIZES.smallBadgeIcon"/>
-    <span v-if="showAmount">{{ formatPrice(computed) }} kr</span>
+    <span v-if="showAmount">{{ formatKroner(computed) }}</span>
   </UBadge>
   <UBadge v-else :color="COLOR.error" :variant="NOISE.subtle" :size="SIZES.small">
     <UIcon :name="ICONS.robotDead" :class="SIZES.smallBadgeIcon"/>
-    <span v-if="showAmount">{{ formatPrice(computed) }} kr ≠ {{ formatPrice(expected) }} kr</span>
+    <span v-if="showAmount">{{ formatKroner(computed) }} ≠ {{ formatKroner(expected) }}</span>
   </UBadge>
 </template>

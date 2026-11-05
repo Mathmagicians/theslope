@@ -89,15 +89,14 @@
  *
  * The three dining modes walk the brand rainbow in its order; TIL SALG stays grey, because a
  * released ticket on offer is not a dining mode. Fill, ink and divider come from
- * `COMPONENTS.kitchenPanel` (ADR-018); this component owns the layout and the numbers.
+ * `COMPONENTS.kitchenPanel`; this component owns the layout and the numbers.
  */
-import type {OrderDetail, TicketType} from '~/composables/useBookingValidation'
+import type {OrderDetail, TicketType, KitchenPanel} from '~/composables/useBookingValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {AllergenOverview} from '~/composables/useAllergy'
 import type {DiningModeStats} from '~/composables/useOrder'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 import type {TicketWaitlistDisplay, WaitlistQueueSummary} from '~/composables/useWaitlistValidation'
-import type {KitchenPanelKey} from '~/composables/useTheSlopeDesignSystem'
 
 // A box's ticket count line: each ticket type's count under its Danish name, then the total
 interface TicketFigures {
@@ -105,10 +104,18 @@ interface TicketFigures {
   total: number
 }
 
+// The waiting-list part of the TIL SALG box: the queue's portions, its ticket count and its lines
+interface KitchenQueue {
+  portions: number
+  ticketFigures: TicketFigures
+  lines: WaitlistQueueSummary['lines']
+}
+
 // Extended stats with component-specific fields
 interface ExtendedDiningModeStats extends DiningModeStats {
   ticketFigures: TicketFigures | null
   allergies: AllergenOverview
+  queue: KitchenQueue | null
 }
 
 interface Props {
@@ -122,7 +129,6 @@ const props = withDefaults(defineProps<Props>(), {
   waitlist: null
 })
 
-// Use business logic composables (ADR-001)
 const {
   getActiveOrders,
   getReleasedOrders,
@@ -133,7 +139,7 @@ const {
 const {TicketTypeSchema, OrderStateSchema} = useBookingValidation()
 const OrderState = OrderStateSchema.enum
 const {computeAllergenOverview} = useAllergy()
-const {formatTicketCounts, countTicketTypes} = useBilling()
+const {formatTicketCounts, countTicketTypes} = useTicket()
 const {getHouseholdForInhabitant} = useHouseholdsStore()
 
 const ticketFiguresOf = (counts: Partial<Record<TicketType, number>>): TicketFigures => ({
@@ -141,10 +147,23 @@ const ticketFiguresOf = (counts: Partial<Record<TicketType, number>>): TicketFig
   total: sumBy(TicketTypeSchema.options, ticketType => counts[ticketType] ?? 0)
 })
 
-// Panel expansion state
-const selectedPanel = ref<string | null>(null)
-const togglePanel = (key: string) => {
+const selectedPanel = ref<KitchenPanel | null>(null)
+const togglePanel = (key: KitchenPanel) => {
   selectedPanel.value = selectedPanel.value === key ? null : key
+}
+
+// The items of each household, the households in the order their first item names them; an item whose inhabitant
+// belongs to no loaded household is left out
+const byHousehold = <T extends object>(items: T[], inhabitantIdOf: (item: T) => number): {household: HouseholdDisplay, items: T[]}[] => {
+  const groups = new Map<number, {household: HouseholdDisplay, items: T[]}>()
+  for (const item of items) {
+    const household = getHouseholdForInhabitant(inhabitantIdOf(item))
+    if (!household) continue
+    const group = groups.get(household.id) ?? {household, items: []}
+    group.items.push(item)
+    groups.set(household.id, group)
+  }
+  return Array.from(groups.values())
 }
 
 // Group orders by household for breakdown display
@@ -154,21 +173,9 @@ interface HouseholdBreakdownEntry {
 }
 const selectedPanelBreakdown = computed((): HouseholdBreakdownEntry[] => {
   if (!selectedPanel.value) return []
-  const orders = getOrdersForMode(selectedPanel.value)
-
-  const byHousehold = new Map<number, { household: HouseholdDisplay, orders: OrderDetail[] }>()
-  for (const order of orders) {
-    const household = getHouseholdForInhabitant(order.inhabitantId)
-    if (!household) continue
-    if (!byHousehold.has(household.id)) {
-      byHousehold.set(household.id, { household, orders: [] })
-    }
-    byHousehold.get(household.id)!.orders.push(order)
-  }
-
-  return Array.from(byHousehold.values()).map(({ household, orders }) => ({
+  return byHousehold(getOrdersForMode(selectedPanel.value), order => order.inhabitantId).map(({household, items}) => ({
     shortName: getHouseholdShortName(household.address),
-    orders
+    orders: items
   }))
 })
 
@@ -184,40 +191,40 @@ const totalFigures = computed(() => ticketFiguresOf(countTicketTypes(props.order
 const totalPortions = computed(() => calculateTotalPortions(props.orders))
 
 // Get orders for a specific mode (for extending base stats)
-const getOrdersForMode = (key: string): OrderDetail[] => {
+const getOrdersForMode = (key: KitchenPanel): OrderDetail[] => {
   if (key === OrderState.RELEASED) return releasedOrders.value
   return activeOrders.value.filter(o => o.dinnerMode === key)
 }
+
+// While anyone waits, the TIL SALG box carries the queue
+const queue = computed((): KitchenQueue | null => {
+  const waitlist = props.waitlist
+  if (!waitlist || waitlist.entries === 0) return null
+  return {
+    portions: waitlist.portions,
+    ticketFigures: ticketFiguresOf(waitlist.queuedByType),
+    lines: waitlist.lines
+  }
+})
+const queueOf = (key: KitchenPanel): KitchenQueue | null => key === OrderState.RELEASED ? queue.value : null
+const canOpen = (key: KitchenPanel) => getOrdersForMode(key).length > 0 || queueOf(key) !== null
 
 // Calculate dining mode statistics using composable, then extend with component-specific fields
 const diningModeStats = computed((): ExtendedDiningModeStats[] => {
   // Get base stats from composable (percentage based on PORTIONS)
   const baseStats = calculateDiningModeStats(props.orders)
 
-  // Extend with component-specific fields
   return baseStats.map(stat => {
     const modeOrders = getOrdersForMode(stat.key)
 
     return {
       ...stat,
       ticketFigures: modeOrders.length > 0 ? ticketFiguresOf(countTicketTypes(modeOrders)) : null,
-      allergies: computeAllergenOverview(modeOrders, props.allergens ?? [])
+      allergies: computeAllergenOverview(modeOrders, props.allergens ?? []),
+      queue: queueOf(stat.key)
     }
   })
 })
-
-// While anyone waits, the TIL SALG box carries the queue: its portions, its ticket count and its lines
-const queue = computed(() => {
-  const waitlist = props.waitlist
-  if (!waitlist || waitlist.entries === 0) return null
-  return {
-    portions: waitlist.portions,
-    ticketFigures: ticketFiguresOf(countTicketTypes(waitlist.lines.flatMap(({ticketType, entries}) => entries.map(() => ({ticketType}))))),
-    lines: waitlist.lines
-  }
-})
-const hasQueue = (key: string) => key === OrderState.RELEASED && queue.value !== null
-const canOpen = (key: string) => getOrdersForMode(key).length > 0 || hasQueue(key)
 
 // The waiting list by household, like the other boxes' rows: households in the order their first inhabitant joined, each
 // person with the place in the line of the ticket type, as the booking form numbers it
@@ -227,22 +234,13 @@ interface QueuedPerson {
   place: number
 }
 const selectedQueueRows = computed(() => {
-  if (!selectedPanel.value || !hasQueue(selectedPanel.value)) return []
-  const people: QueuedPerson[] = queue.value!.lines
+  const panelQueue = selectedPanel.value ? queueOf(selectedPanel.value) : null
+  if (!panelQueue) return []
+  const people: QueuedPerson[] = panelQueue.lines
     .flatMap(({ticketType, entries}) => entries.map((entry, index) => ({entry, ticketType, place: index + 1})))
     .sort((a, b) => a.entry.createdAt.getTime() - b.entry.createdAt.getTime())
 
-  const byHousehold = new Map<number, { household: HouseholdDisplay, people: QueuedPerson[] }>()
-  for (const person of people) {
-    const household = getHouseholdForInhabitant(person.entry.inhabitantId)
-    if (!household) continue
-    if (!byHousehold.has(household.id)) {
-      byHousehold.set(household.id, { household, people: [] })
-    }
-    byHousehold.get(household.id)!.people.push(person)
-  }
-
-  return Array.from(byHousehold.values()).map(({ household, people }) => ({
+  return byHousehold(people, person => person.entry.inhabitantId).map(({household, items: people}) => ({
     id: household.id,
     shortName: getHouseholdShortName(household.address),
     ticketCounts: formatTicketCounts(people),
@@ -261,13 +259,9 @@ const allergensByOrder = computed(() => new Map(
   selectedPanelAllergies.value?.affectedList.flatMap(diner => diner.orderIds.map(orderId => [orderId, diner.matchingAllergens] as const)) ?? []
 ))
 
-// Use design system for kitchen panel colors
 const { getKitchenPanelClasses, COMPONENTS, ICONS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
-// Get background color classes for each dining mode
-const getModeClasses = (key: string) => {
-  return getKitchenPanelClasses(key as KitchenPanelKey)
-}
+const getModeClasses = (key: KitchenPanel) => getKitchenPanelClasses(key)
 
 // Normalize percentages: minimum 10% each, sum always equals 100%
 const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStats.value))
@@ -335,20 +329,20 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
         </div>
 
         <!-- The waiting-list part: the waiting list buys what is for sale -->
-        <div v-if="hasQueue(mode.key)" data-testid="kitchen-waitlist-part" :class="COMPONENTS.kitchen.queue">
+        <div v-if="mode.queue" data-testid="kitchen-waitlist-part" :class="COMPONENTS.kitchen.queue">
           <div :class="COMPONENTS.kitchen.label">
             VENTELISTE
           </div>
           <div :class="COMPONENTS.kitchen.mainWithGlyph">
             <UIcon :name="ICONS.waitlist" :class="COMPONENTS.kitchen.glyph" />
-            {{ formatPortions(queue!.portions) }} kuv.
+            {{ formatPortions(mode.queue.portions) }} kuv.
           </div>
           <div :class="COMPONENTS.kitchen.breakdown" data-testid="kitchen-figures">
-            <template v-for="(figure, index) in queue!.ticketFigures.figures" :key="figure.ticketType">
+            <template v-for="(figure, index) in mode.queue.ticketFigures.figures" :key="figure.ticketType">
               <span v-if="index > 0" :class="COMPONENTS.pipe">|</span>
               <span :class="COMPONENTS.kitchen.figure">{{ figure.text }}</span>
             </template>
-            <span :class="COMPONENTS.kitchen.figureTotal"># {{ queue!.ticketFigures.total }}</span>
+            <span :class="COMPONENTS.kitchen.figureTotal"># {{ mode.queue.ticketFigures.total }}</span>
           </div>
         </div>
       </div>

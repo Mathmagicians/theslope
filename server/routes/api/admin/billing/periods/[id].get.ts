@@ -37,7 +37,6 @@ export default defineEventHandler(async (event): Promise<BillingPeriodSummaryDet
         setResponseStatus(event, 200)
         return summary
     } catch (error) {
-        if ((error as {statusCode?: number}).statusCode === 404) throw error
         return throwH3Error(`💰 > BILLING > [GET] Error fetching billing period ${id}`, error)
     }
 })

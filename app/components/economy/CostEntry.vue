@@ -18,7 +18,7 @@
  *     :items-accessor="e => e.items"
  * >
  *   <template #default="{ items }">
- *     <CostLine v-for="item in items" :item="item"/>
+ *     <CostLine v-for="tx in items" :line="{kind: CostLineKind.TRANSACTION, transaction: tx}"/>
  *   </template>
  * </CostEntry>
  *

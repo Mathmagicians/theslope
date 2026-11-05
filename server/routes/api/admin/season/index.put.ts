@@ -35,7 +35,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let seasonData!: Season
+    let seasonData: Season
     try {
         seasonData = await readValidatedBody(event, PutSeasonSchema.parse)
     } catch (error) {
@@ -50,7 +50,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
 
         // Step 2: Generate dinner events for the season
         const {generateDinnerEventDataForSeason} = useSeason()
-        const dinnerEventData = generateDinnerEventDataForSeason(savedSeason)
+        const dinnerEventData = generateDinnerEventDataForSeason(savedSeason, new Date())
 
         if (dinnerEventData.length > 0) {
             const savedEvents = await saveDinnerEvents(d1Client, dinnerEventData)

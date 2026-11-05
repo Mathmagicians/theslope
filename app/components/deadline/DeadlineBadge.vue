@@ -3,7 +3,7 @@
  * DeadlineBadge - Simple, reusable deadline status badge
  *
  * Takes pre-computed badge data and renders it. No business logic here.
- * Use badge factories from useBookingUi (createBookingBadge, createDiningModeBadge)
+ * Use badge factories from useBookingUi (createBookingBadge, createDiningModeBadge, createTicketStateBadge)
  *
  * Usage:
  *   <DeadlineBadge :badge="bookingBadge" />
@@ -20,16 +20,16 @@ withDefaults(defineProps<Props>(), {
   compact: false
 })
 
-const {SIZES, TYPOGRAPHY, TEXT, NOISE} = useTheSlopeDesignSystem()
+const {SIZES, COMPONENTS, NOISE} = useTheSlopeDesignSystem()
 </script>
 
 <template>
-  <div data-testid="deadline-badge" class="flex flex-col items-start">
+  <div data-testid="deadline-badge" :class="COMPONENTS.deadlineBadge.root">
     <UBadge :color="badge.color" :icon="badge.icon" :variant="NOISE.soft" :size="SIZES.small">
       <template v-if="!compact">{{ badge.label }}: </template>
       {{ badge.value }}
     </UBadge>
-    <span v-if="!compact" :class="[TYPOGRAPHY.finePrint, TEXT.muted, 'mt-0.5']">
+    <span v-if="!compact" :class="COMPONENTS.deadlineBadge.helpText">
       {{ badge.helpText }}
     </span>
   </div>

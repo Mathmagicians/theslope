@@ -1,12 +1,12 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, iconNamesIn, itemAt} from '~~/tests/component/testHelpers'
 import ChefMenuCard from '~/components/chef/ChefMenuCard.vue'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import AllergenMultiSelector from '~/components/allergy/AllergenMultiSelector.vue'
-import {nextTick, type ComponentPublicInstance} from 'vue'
-import {flushPromises, enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
+import {nextTick} from 'vue'
+import {flushPromises, enableAutoUnmount, type BaseWrapper} from '@vue/test-utils'
 import {useAllergiesStore} from '~/stores/allergies'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
@@ -16,14 +16,16 @@ import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {formatPortions} from '~/utils/utils'
 import {formatDate, DATE_SETTINGS} from '~/utils/date'
 import {FORM_MODES} from '~/types/form'
-import {ICONS, getRandomEmptyMessage} from '~/composables/useTheSlopeDesignSystem'
+import {ICONS, DINNER_STATE_BADGES, getRandomEmptyMessage} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from '../dinner/waitlistTestIds'
 import {SUPPLY_WORDS} from '~/composables/useBookingUi'
+import {TEAM_WORDS} from '~/config/teamWords'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 /**
  * ChefMenuCard: the allergen line and its editor over the dinner's allergens (the catalog's `id`, not a join row's
  * `allergyTypeId`), the action row, the chef portrait, the Madbestilling row and the extra-portions form.
- * Real component tree and real stores (testing.md Rule 6); only HTTP is faked.
+ * Real component tree and real stores; only HTTP is faked.
  */
 registerEmptyStoreEndpoints()
 registerEndpoint('/api/admin/allergy-type', () => AllergyFactory.createMockAllergyTypesWithInhabitants())
@@ -46,7 +48,7 @@ describe('ChefMenuCard', () => {
     let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
     beforeAll(() => {
         const {deadlinesForSeason} = useSeason()
-        defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+        defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason(), new Date())
     })
 
     const createWrapper = (props: Record<string, unknown> = {}) => mountCard({
@@ -86,7 +88,7 @@ describe('ChefMenuCard', () => {
             }
 
             const wrapper = await createWrapper({dinnerEvent})
-            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens').text)
+            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens', new Date()).text)
 
             // An empty selection, no crash
             const selector = await openAllergenEditor(wrapper)
@@ -97,53 +99,55 @@ describe('ChefMenuCard', () => {
     describe('Allergen line', () => {
         const {TicketTypeSchema} = useBookingValidation()
         const TicketType = TicketTypeSchema.enum
-        const [MILK, NUTS, GLUTEN] = AllergyFactory.createMockAllergyTypesWithInhabitants()
+        const allergyTypes = AllergyFactory.createMockAllergyTypesWithInhabitants()
+        const [MILK, NUTS, GLUTEN] = [itemAt(allergyTypes, 0), itemAt(allergyTypes, 1), itemAt(allergyTypes, 2)]
         // Adult 1 kuv., child 0,5; Cy carries only an allergen the menu does not name
         const tickets = [
-            OrderFactory.defaultOrderDetailWithAllergies(1, 'Anna', [MILK!], {ticketType: TicketType.ADULT}),
-            OrderFactory.defaultOrderDetailWithAllergies(2, 'Bo', [MILK!, NUTS!], {ticketType: TicketType.CHILD}),
-            OrderFactory.defaultOrderDetailWithAllergies(3, 'Cy', [NUTS!], {ticketType: TicketType.ADULT})
+            OrderFactory.defaultOrderDetailWithAllergies(1, 'Anna', [MILK], {ticketType: TicketType.ADULT}),
+            OrderFactory.defaultOrderDetailWithAllergies(2, 'Bo', [MILK, NUTS], {ticketType: TicketType.CHILD}),
+            OrderFactory.defaultOrderDetailWithAllergies(3, 'Cy', [NUTS], {ticketType: TicketType.ADULT})
         ]
 
         // The line renders the same in both modes; EDIT only adds the Rediger allergener button
         it('GIVEN a menu with milk and gluten THEN shows the total and each menu allergen as its compact allergy type with its kuverter, a zero included, under the Allergener title its glyph leads', async () => {
-            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [MILK!, GLUTEN!], tickets}
+            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [MILK, GLUTEN], tickets}
             const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW})
 
             const overview = findByTestId(wrapper, ALLERGEN_OVERVIEW)
             expect(overview.findAll(':scope > span').map(part => part.text())).toEqual([
                 `${formatPortions(1.5)} kuv.`,
                 '|',
-                `${MILK!.icon}${MILK!.name} · ${formatPortions(1.5)}`,
+                `${MILK.icon}${MILK.name} · ${formatPortions(1.5)}`,
                 '|',
-                `${GLUTEN!.icon}${GLUTEN!.name} · ${formatPortions(0)}`
+                `${GLUTEN.icon}${GLUTEN.name} · ${formatPortions(0)}`
             ])
-            const allergens = overview.findAllComponents(AllergyTypeDisplay) as VueWrapper<ComponentPublicInstance<{allergyType: unknown, compact: boolean, showName: boolean}>>[]
-            expect(allergens.map(allergen => allergen.props('allergyType'))).toEqual([expect.objectContaining(MILK!), expect.objectContaining(GLUTEN!)])
+            // A part typed BaseWrapper<Node> keeps the typed findAllComponents overload
+            const overviewPart: BaseWrapper<Node> = overview
+            const allergens = overviewPart.findAllComponents(AllergyTypeDisplay)
+            expect(allergens.map(allergen => allergen.props('allergyType'))).toEqual([expect.objectContaining(MILK), expect.objectContaining(GLUTEN)])
             expect(allergens.every(allergen => allergen.props('compact') && allergen.props('showName'))).toBe(true)
 
             const label = findByTestId(wrapper, ALLERGEN_LABEL)
-            expect(label.text()).toBe('Allergener')
+            expect(label.text()).toBe(TEAM_WORDS.menuCard.allergens.label)
             expect(label.element.firstElementChild).toBe(label.findComponent({name: 'UIcon'}).element)
-            expect(label.findComponent({name: 'UIcon'}).props('name')).toBe(ICONS.allergy)
-            const icons = overview.findAllComponents({name: 'UIcon'}) as VueWrapper<ComponentPublicInstance<{name: string}>>[]
-            expect(icons.filter(icon => icon.props('name') === ICONS.allergy)).toHaveLength(0)
+            expect(iconNamesIn(label)).toEqual([ICONS.allergy])
+            expect(iconNamesIn(overview)).not.toContain(ICONS.allergy)
         })
 
         it('GIVEN a menu without allergens THEN reads the no-allergens message', async () => {
             const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [], tickets}
             const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW})
 
-            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens').text)
+            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens', new Date()).text)
             expect(findByTestId(wrapper, ALLERGEN_OVERVIEW).exists()).toBe(false)
         })
 
         it('hands the allergen editor each allergen id, not a join row allergyTypeId, and the dinner tickets', async () => {
-            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [MILK!, GLUTEN!], tickets}
+            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [MILK, GLUTEN], tickets}
             const wrapper = await createWrapper({dinnerEvent})
 
             const selector = await openAllergenEditor(wrapper)
-            expect(selector.props('modelValue')).toEqual([MILK!.id, GLUTEN!.id])
+            expect(selector.props('modelValue')).toEqual([MILK.id, GLUTEN.id])
             expect(selector.props('tickets')).toHaveLength(tickets.length)
         })
     })
@@ -153,8 +157,8 @@ describe('ChefMenuCard', () => {
             const wrapper = await createWrapper()
 
             // The primary action is labelled, the overflow trigger is the quiet icon-only one
-            expect(findByTestId(wrapper, 'edit-menu').text()).toContain('Rediger menu')
-            expect(wrapper.find('[name="announce-dinner"]').text()).toContain('Publicer')
+            expect(findByTestId(wrapper, 'edit-menu').text()).toContain(TEAM_WORDS.menuCard.editMenu)
+            expect(wrapper.find('[name="announce-dinner"]').text()).toContain(TEAM_WORDS.menuCard.publish)
             expect(findByTestId(wrapper, 'dinner-more-actions').exists()).toBe(true)
 
             // Danger zone is collapsed by default - cancel action is not in the DOM
@@ -166,11 +170,22 @@ describe('ChefMenuCard', () => {
 
             const dangerZone = findByTestId(wrapper, 'dinner-danger-zone')
             expect(dangerZone.exists()).toBe(true)
-            expect(dangerZone.text()).toContain('Aflys middagen')
+            expect(dangerZone.text()).toContain(TEAM_WORDS.dutyChange.cancelDinner.action)
+            expect(dangerZone.text()).toContain(TEAM_WORDS.dutyChange.cancelDinner.effect)
+            // The way out for a chef who only resigns names the button by its own word
+            expect(dangerZone.text()).toContain(TEAM_WORDS.dutyChange.resignHint)
         })
     })
 
     describe('Mode Rendering', () => {
+        it('the compact card reads its dinner state\'s badge and its budget in whole kroner', async () => {
+            const dinnerEvent = DinnerEventFactory.defaultDinnerEventDetail()
+            const wrapper = await createWrapper({dinnerEvent, isCompact: true, budget: 126_540})
+
+            expect(wrapper.text()).toContain(DINNER_STATE_BADGES[dinnerEvent.state].label)
+            expect(wrapper.text()).toContain(TEAM_WORDS.menuCard.budget(1265))
+        })
+
         it('hides the allergen line when showAllergens is off', async () => {
             const dinnerEvent = createDinnerEventWithAllergens([1, 2])
             const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW, showAllergens: false})
@@ -180,15 +195,13 @@ describe('ChefMenuCard', () => {
     })
 
     describe('Chef portrait', () => {
-        type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
-        const chef = {id: 7, heynaboId: 7, householdId: 1, name: 'Anna', lastName: 'Kok', pictureUrl: null, birthDate: null}
+        const chef ={id: 7, heynaboId: 7, householdId: 1, name: 'Anna', lastName: 'Kok', pictureUrl: null, birthDate: null}
 
         it('renders a wanted poster without a chef, the chef glyph as its hat', async () => {
             const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), chef: null}
             const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW})
 
-            const icons = findByTestId(wrapper, 'chef-wanted').findAllComponents({name: 'UIcon'})
-            expect(icons.some((icon: IconWrapper) => icon.props('name') === ICONS.chef)).toBe(true)
+            expect(iconNamesIn(findByTestId(wrapper, 'chef-wanted'))).toContain(ICONS.chef)
         })
 
         it('renders the chef', async () => {
@@ -205,7 +218,7 @@ describe('ChefMenuCard', () => {
 describe('ChefMenuCard — Madbestilling', () => {
     let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
     beforeAll(() => {
-        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason())
+        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason(), new Date())
     })
 
     const mountChefCard = (props: Record<string, unknown> = {}) => mountCard({
@@ -223,9 +236,9 @@ describe('ChefMenuCard — Madbestilling', () => {
         const budget = html.indexOf('name="toggle-budget-details"')
         expect(lines).toBeGreaterThan(-1)
         expect(budget).toBeGreaterThan(lines)
-        expect(findByTestId(wrapper, 'expense-row').text()).toContain('Madbestilling')
-        expect(findByTestId(wrapper, 'expense-empty').text()).toBe('Madbestilling mangler')
-        expect(findByTestId(wrapper, 'expense-edit').text()).toContain('Rediger madbestilling')
+        expect(findByTestId(wrapper, 'expense-row').text()).toContain(TEAM_WORDS.menuCard.groceries.title)
+        expect(findByTestId(wrapper, 'expense-empty').text()).toBe(TEAM_WORDS.menuCard.groceries.empty)
+        expect(findByTestId(wrapper, 'expense-edit').text()).toContain(TEAM_WORDS.menuCard.groceries.edit)
     })
 
     it('GIVEN a team member in view mode WHEN rendering THEN the row shows without its button', async () => {
@@ -256,14 +269,15 @@ describe('ChefMenuCard — Madbestilling', () => {
         ]
         const wrapper = await mountChefCard({
             dinnerEvent: {...DinnerEventFactory.defaultDinnerEventDetail(), cookingTeam: team, cookingTeamId: team.id},
-            roundRows
+            roundRows,
+            teamNumber: 2
         })
         await clickByTestId(wrapper, 'expense-edit')
         await flushPromises()
         await wrapper.vm.$nextTick()
-        expect(findByTestId(wrapper, 'expense-table').text()).toContain('Rådighedsbeløb')
+        expect(findByTestId(wrapper, 'expense-table').text()).toContain(BOOKING_WORDS.allowance.budget)
         const [first, last] = roundRows.map(row => formatDate(row.date, DATE_SETTINGS.DAY_MONTH_MASK))
-        expect(findByTestId(wrapper, 'expense-hint-heading').text()).toBe(`Hele ${useCookingTeam().getTeamShortName('Madhold 2')}, periode ${first}-${last}`)
+        expect(findByTestId(wrapper, 'expense-hint-heading').text()).toBe(BOOKING_WORDS.roundHeading(useCookingTeam().getTeamShortName('Madhold 2'), `${first}-${last}`))
         expect(findAllByTestId(wrapper, 'expense-hint-row')).toHaveLength(6)
     })
 })
@@ -273,7 +287,7 @@ describe('ChefMenuCard — Madbestilling', () => {
 describe('ChefMenuCard — release portions', () => {
     let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
     beforeAll(() => {
-        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason())
+        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason(), new Date())
     })
 
     const QUEUE = WaitlistFactory.defaultQueueSummary({entries: 4, portions: 2.5})
@@ -304,12 +318,12 @@ describe('ChefMenuCard — release portions', () => {
         const queue = WaitlistFactory.defaultQueueSummary({entries: 4, portions: 3, lines: [
             lineOf(TicketTypeSchema.enum.ADULT, [1, 3]), lineOf(TicketTypeSchema.enum.CHILD, [2, 4])
         ]})
-        const queuedFormatted = useBilling().formatTicketCounts({[TicketTypeSchema.enum.ADULT]: 2, [TicketTypeSchema.enum.CHILD]: 2})
+        const queuedFormatted = useTicket().formatTicketCounts({[TicketTypeSchema.enum.ADULT]: 2, [TicketTypeSchema.enum.CHILD]: 2})
 
         const wrapper = await mountChefCard(queue)
 
         expect(findByTestId(wrapper, WAITLIST_TEST_IDS.chefAlert).text())
-            .toContain(`${SUPPLY_WORDS.queuedCount({queuedFormatted})} · ${formatPortions(queue.portions)} portioner`)
+            .toContain(TEAM_WORDS.menuCard.extraPortions.queueTitle(SUPPLY_WORDS.queuedCount(queuedFormatted), formatPortions(queue.portions)))
     })
 
     it.each([
@@ -326,7 +340,7 @@ describe('ChefMenuCard — release portions', () => {
         await open(wrapper)
 
         const form = findByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsForm)
-        expect((form.find('input').element as HTMLInputElement).value).toBe(String(QUEUE.portions))
+        expect(form.find('input').element.value).toBe(String(QUEUE.portions))
         await submitRelease(wrapper)
         expect(wrapper.emitted('extra-portions')).toEqual([[QUEUE.portions]])
         expect(findByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsForm).exists()).toBe(false)

@@ -3,18 +3,20 @@ import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
 import InhabitantSelector from '~/components/shared/InhabitantSelector.vue'
-import {nextTick, ref} from 'vue'
+import {nextTick, ref, h, type VNodeChild} from 'vue'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
-import {mountWithTooltipProvider, resetStores, findLoadingRow} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, resetStores, findLoadingRow, findOpenRows, clickByTestId} from '~~/tests/component/testHelpers'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
+
+const WORDS = HOUSEHOLD_WORDS.inhabitantSelector
 
 enableAutoUnmount(afterEach)
 
 describe('InhabitantSelector', () => {
 
-    const makeInhabitant = (id: number, name: string, lastName: string): InhabitantDisplay => ({
-        id, heynaboId: id * 10, householdId: 1, name, lastName,
-        pictureUrl: null, birthDate: null, dinnerPreferences: null
-    })
+    const makeInhabitant = (id: number, name: string, lastName: string): InhabitantDisplay =>
+        ({...HouseholdFactory.defaultInhabitantData(`inhabitant-selector-${id}`), id, name, lastName})
 
     const inhabitants: InhabitantDisplay[] = [
         makeInhabitant(1, 'Anna', 'Hansen'),
@@ -31,9 +33,10 @@ describe('InhabitantSelector', () => {
 
     const mount = (overrides: Record<string, unknown> = {}) =>
         mountWithTooltipProvider(InhabitantSelector, {props: {inhabitants, ...overrides}, isMd: true})
+    type SlotRow = {original: InhabitantDisplay, toggleExpanded: () => void}
     // Slots go through the root mount alone
-    const mountWithSlots = (slots: Record<string, (props: {row: {original: InhabitantDisplay}}) => string>) =>
-        mountSuspended(InhabitantSelector, {props: {inhabitants}, global: {provide: {isMd: ref(true)}}, slots})
+    const mountWithSlots = (slots: Record<string, (props: {row: SlotRow}) => VNodeChild>, mounted: InhabitantDisplay[] = inhabitants) =>
+        mountSuspended(InhabitantSelector, {props: {inhabitants: mounted}, global: {provide: {isMd: ref(true)}}, slots})
 
     const typeSearch = async (wrapper: Awaited<ReturnType<typeof mount>>, query: string) => {
         await wrapper.find('input').setValue(query)
@@ -46,9 +49,9 @@ describe('InhabitantSelector', () => {
         const wrapper = await mount()
         const text = wrapper.text()
         inhabitants.forEach(i => expect(text).toContain(`${i.name} ${i.lastName}`))
-        expect(text).toContain('Status')
-        expect(text).toContain('Handling')
-        expect(wrapper.find('input').attributes('placeholder')).toContain('Søg efter navn')
+        expect(text).toContain(WORDS.columns.status)
+        expect(text).toContain(WORDS.columns.action)
+        expect(wrapper.find('input').attributes('placeholder')).toBe(WORDS.search)
     })
 
     it('renders the given status and actions headers', async () => {
@@ -74,7 +77,7 @@ describe('InhabitantSelector', () => {
 
     // The table's own empty text renders through UTable's #empty slot
     it.each([
-        ['no inhabitants', [], undefined, 'Ingen beboere tilgængelige'],
+        ['no inhabitants', [], undefined, WORDS.empty],
         ['search yields no results', inhabitants, 'zzz-no-match', 'Ingen beboere fundet']
     ])('empty state: %s shows the empty text instead of inhabitant names', async (_, data, searchQuery, emptyText) => {
         const wrapper = await mount({inhabitants: data})
@@ -93,7 +96,7 @@ describe('InhabitantSelector', () => {
         const wrapper = await mount({inhabitants: [], loading})
         expect(findLoadingRow(wrapper).exists()).toBe(loadingRow)
         expect(wrapper.text().includes('Henter beboere...')).toBe(loadingRow)
-        expect(wrapper.text().includes('Ingen beboere tilgængelige')).toBe(emptyText)
+        expect(wrapper.text().includes(WORDS.empty)).toBe(emptyText)
     })
 
     // ========== SORT TOGGLE ==========
@@ -122,6 +125,24 @@ describe('InhabitantSelector', () => {
         inhabitants.forEach(i =>
             expect(text).toContain(`slot-${slotName}-${i.id}`)
         )
+    })
+
+    // ========== EXPANDED ROW ==========
+
+    // The parent opens a row through the row its #actions slot receives
+    it('GIVEN Bo\'s row open WHEN an inhabitant arrives above it THEN the #expanded slot stays under Bo\'s row', async () => {
+        const [anna, bo] = inhabitants
+        const wrapper = await mountWithSlots({
+            actions: ({row}) => h('button', {'data-testid': `open-${row.original.id}`, onClick: () => row.toggleExpanded()}),
+            expanded: ({row}) => `detail-${row.original.id}`
+        }, inhabitants.filter(inhabitant => inhabitant !== anna))
+        await clickByTestId(wrapper, `open-${bo!.id}`)
+
+        await wrapper.setProps({inhabitants})
+
+        const open = findOpenRows(wrapper)
+        expect(open.map(({row}) => row.text())).toEqual([expect.stringContaining(`${bo!.name} ${bo!.lastName}`)])
+        expect(open[0]!.detail.text()).toBe(`detail-${bo!.id}`)
     })
 
     // ========== PAGINATION ==========

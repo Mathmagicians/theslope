@@ -11,6 +11,9 @@ at a time behind an explicit approval. The plan document is the deliverable; the
 ## Where the plan lives
 
 - `docs/features/<kind>-<name>.md` (`bug-fix-…`, `feature-proposal-…`); rename when the scope outgrows the name (plain `mv`, the user stages).
+- An upcoming release is a folder `docs/features/release-x.y.z/` holding its release doc (`chores-x.y.z.md` or
+  `feature-x.y.z.md`) and the specs it develops; `this-pr/` is the current pull request's. The release doc links its
+  specs; a spec names no release.
 - A shipped doc moves to `docs/features/archived/`, trimmed to pointers, and a proposal becomes a feature there:
   `feature-proposal-<name>.md` → `archived/feature-<name>.md`. What did not ship moves to its own proposal or the branch's follow-up doc first.
 - Header: **Status** | **Date** | **Updated** | **Branch**. A **Fix inventory** table at the top; one section per fix below in this order:
@@ -20,6 +23,21 @@ at a time behind an explicit approval. The plan document is the deliverable; the
 - References to an accepted ADR are `ADR-NNN [Title]`. A new ADR is proposed in the doc's ADR Notes by its semantic name only; it gets its number
   when it is written into `docs/adr.md`.
 - Prose in the doc follows the `documentation` skill (compact, factual, only what we do); decisions and OPEN items are the one place alternatives are written down.
+
+## Writing the spec
+
+- The spec speaks the domain: a person books, releases a ticket, joins the waiting list; the chef adds portions; the
+  admin re-sends; the nightly run sends what a background run left. The Solution says what the system does, never how
+  the code does it: no code blocks, config snippets or before/after code. The mockup is its only code block.
+- Names the user gave stay verbatim (`findClosestUserInHousehold`, `SHOULD_SEND_BOOKING_EMAILS_FLAG`); the Affected
+  table names files. The `file:line` trace, function names, shapes and diffs go in the chat round and the brief.
+- A decision is written as it was discussed, one plain sentence under its date: "Monthly billing sends through the same
+  code as the booking notifications (DRY)."
+- The TDD section links the `.feature` files and carries no Gherkin; the feature file is the one source. Gherkin keeps
+  one Feature per topic, cases that differ only in data are one Scenario Outline with Examples, and a Then states its
+  outcome in numbers a reader checks.
+- The unit rules a spec lists are the new code's own; a rule an existing spec already proves is named with that spec,
+  never listed again.
 
 ## Naming
 
@@ -82,7 +100,7 @@ at a time behind an explicit approval. The plan document is the deliverable; the
 
 | Change | Required tests |
 |---|---|
-| New or changed endpoint | Playwright API spec under `tests/e2e/api/` (parallel, or serial when it needs the active season) |
+| New or changed endpoint | Playwright API spec under `tests/e2e/api/`, parallel on rows of its own; serial only on the argument `docs/testing.md` Rule 3 (Serial) asks for, approved by the user before it lands |
 | New or changed UX component / behaviour | a component spec (Vitest, real components and stores, `registerEndpoint` for HTTP); a BDD e2e (GIVEN/WHEN/THEN, Playwright) only for the interaction or integration the component spec cannot prove: a flow across pages, the URL, the server (`docs/testing.md` Rule 0) |
 | Utility / composable | unit spec |
 | Test-id changes | an old → new contract table |
@@ -94,11 +112,17 @@ Everything follows `docs/testing.md` (factories, salting, `describe.each`, no mo
 ```
 Package: <name>
 Goal: <one sentence>
+Signed block: <the block the user said yes to, word for word>
+ADR lines: <ADR-NNN [Title] and the line it follows; the compliance rows it touches>
+Siblings: <the other implementations of the same thing and the shape they share>
+Before / after: <each planned choice as code at file:line, and the sibling it follows>
 Files: create / modify / delete
 Red tests first: <spec → cases>
+Gate greps: <old shape, new name, the fixed breach across siblings → expected count>
 Test-ids: <old → new>
+E2E specs: <paths, for test-engineer's run>
 Open decisions: <none | list>
-Agent: tdd-pair-programmer | nuxt-typescript-developer | test-automation-engineer
+Agent: frontend-engineer | tdd-pair-programmer | nuxt-typescript-developer | test-automation-engineer
 User actions: <npm i …, migration, none>
 ```
 Wait for approval or fine-tuning. Launch one agent per package with the brief, the mockup and `docs/testing.md` rules.
@@ -106,12 +130,28 @@ Wait for approval or fine-tuning. Launch one agent per package with the brief, t
 - The brief covers the ask and nothing wider: the smallest change that does what the user asked. A wider idea is one optional
   line after the brief, never part of its scope or its decisions. "Measure the contrast correctly" is the pairs the components
   paint, not their hover states, checkbox parts and a button sweep; "change the default palette" is a selector, not a rebase.
+- A yes covers what it names: a yes on the guards moves no data between stores. Every planned choice (a helper, an
+  export, a type, a token, a word) sits in Before / after; the existing generic utility comes first (`chunkArray<T>(size)`
+  curried in the composable, never a new wrapper around the loop).
+- Standing permission covers the cleanup inside the files the package touches (`/architecture` § Code rules,
+  design-system deviations). A sibling hit in an untouched file, a new helper or a behaviour change (a 400 where a 500
+  was) the agent lists with `file:line` and holds on; the orchestrator brings it to the user as one round (the sin,
+  before, after, the sites, what users see) and never answers an agent's "unless you say hold" with "Go".
 - A domain rule outside the brief — a decision-matrix row, a bucket's path, an ADR line, a test case asserting a new
   rule — stops the agent: it goes to the architect as a decision, and the closing report names it. No subagent writes
   `docs/adr.md`; an ADR line is the architect's text, written after the yes on it.
-- The brief points the agent at `.claude/skills/code-comments/SKILL.md` and never dictates comment text. Source comments
-  carry no dates, decisions, sign-offs or doc references — those live in the plan doc; the architect's diff review checks
-  the comments too.
+- A held agent edits nothing; work that landed before the hold arrived is reported with its files.
+- The brief points the agent at `/dry` § Before any work starts and § After any work: the gate, and at
+  `.claude/skills/code-comments/SKILL.md`; it never dictates comment text. Source comments carry no dates, decisions,
+  sign-offs or doc references — those live in the plan doc; the architect's diff review checks the comments too.
+- The brief's verify step ends at the unit specs, `pre:all` and the full unit run; a colour token change runs
+  `make palettes` and the contrast gate inside the package. A red gate stays red: the code is fixed or the gap goes to
+  the user, never the threshold or the test. The brief names the package's e2e specs by path for the orchestrator's run
+  request to test-engineer, states "never run Playwright, e2e or BDD", and carries no `npx playwright` line (`/peer-sessions`).
+- The handback carries the red and green output, each gate grep with its count, the files by absolute path, the visual
+  check numbered, and every finding outside the brief with its `file:line`.
+- Everything for one item reaches the user in one round: the brief with its framework check, then the handback with its
+  deviations, the defects found in the same view and the follow-up changes, as one block to sign. Never in drops.
 
 ## Per-package gate
 
@@ -131,7 +171,7 @@ package's ask is one optional line.
 ## Hard rules (from `working-style-rules`)
 
 - Agents never commit, never `git add`, never run migrations, db or infra commands; prepare files and command lines, the user runs them.
-- No python. Stay inside the project folder (transient files go to gitignored dirs such as `test-results/`).
+- Project tools only: the scripts in `package.json`, the targets in the `Makefile`, the test commands in `CLAUDE.md`. A claim is proved by a spec's assertion. `.claude/settings.json` refuses the rest.
 
 ## Extraction rule
 
@@ -144,7 +184,8 @@ package's ask is one optional line.
 
 ## One e2e runner at a time
 
-The test-engineer session owns the e2e slot; the sessions, claims and holds follow `/peer-sessions`.
+The test-engineer session owns the e2e slot and is the only runner of Playwright; no subagent runs it. The sessions,
+claims and holds follow `/peer-sessions`.
 
 ## Visual check before a package is done
 
@@ -192,6 +233,9 @@ file follow the sign-off.
 
 - **One item per round.** One package, entity group or decision per message; a decision the answer raises goes into the
   next round. Several decisions in one message are rejected unread.
+- **Domain question first, code context after.** A round opens with the decision in domain terms: who sees or does
+  what, and why it is asked now. Then comes the code it lands in, precisely: `file:line`, the shape, the callers. A term
+  the spec has not defined is never the subject of the question.
 - **Re-present the full change every round**, as the user will read it in the file: a schema change as a diff against the
   live block (`+` on the added lines, untouched columns kept for context — a full model without markers hides the change);
   a UX change as the mockup; a decision as `a) … b) … c) …` with one line of pro and con each, the drafted choice marked

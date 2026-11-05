@@ -1,14 +1,21 @@
 import {z} from 'zod'
 import {useQueryParam} from '~/composables/useQueryParam'
-import {startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, addDays} from 'date-fns'
-import type {DateRange} from '~/types/dateTypes'
-import {getPeriodBoundary} from '~/utils/date'
+import {startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, addDays, isSameDay} from 'date-fns'
+import {PERIOD_VIEWS, type DateRange} from '~/types/dateTypes'
+import {getPeriodBoundary, PERIOD_DIRECTION, type PeriodDirection} from '~/utils/date'
 
 /**
  * Booking view types for household booking page
  */
-export const BookingViewSchema = z.enum(['day', 'week', 'month'])
+export const BookingViewSchema = z.enum(PERIOD_VIEWS)
 export type BookingView = z.infer<typeof BookingViewSchema>
+
+/**
+ * The rows of the day view and the grid: the power row, a person, a guest's tickets and the add-guest row.
+ * A row's test ids start with its type and id (`guest-add-guest-toggle`).
+ */
+export const BookingRowTypeSchema = z.enum(['power', 'inhabitant', 'guest-order', 'guest-add'])
+export type BookingRowType = z.infer<typeof BookingRowTypeSchema>
 
 /**
  * useDinnerDateParam - Reusable date query param for dinner navigation
@@ -21,6 +28,7 @@ export const useDinnerDateParam = (options: {
   syncWhen: () => boolean
 }) => {
   const {getNextDinnerDate} = useSeason()
+  const now = useClock()
 
   return useQueryParam<Date>('date', {
     serialize: formatDate,
@@ -28,10 +36,10 @@ export const useDinnerDateParam = (options: {
       const parsed = parseDate(s)
       return parsed && !isNaN(parsed.getTime()) ? parsed : null
     },
-    validate: (date) => options.dinnerDates().some(d => d.toDateString() === date.toDateString()),
+    validate: (date) => options.dinnerDates().some(d => isSameDay(d, date)),
     defaultValue: () => {
-      const nextDinner = getNextDinnerDate(options.dinnerDates())
-      return nextDinner?.start ?? options.dinnerDates()[0] ?? new Date()
+      const nextDinner = getNextDinnerDate(options.dinnerDates(), now.value)
+      return nextDinner?.start ?? options.dinnerDates()[0] ?? now.value
     },
     syncWhen: options.syncWhen
   })
@@ -90,7 +98,7 @@ export const useBookingView = (options: {
     /** Dinner event dates - used for adjacency lookup. Absent or empty ⇒ no navigation. */
     dinnerDates?: () => Date[]
 }) => {
-    const view = options.view ?? computed(() => 'day' as BookingView)
+    const view = options.view ?? computed<BookingView>(() => BookingViewSchema.enum.day)
     const {selectedDate, setDate} = options
     const {getAdjacentDinner} = useSeason()
 
@@ -104,14 +112,14 @@ export const useBookingView = (options: {
         const date = selectedDate.value
 
         switch (view.value) {
-            case 'day':
+            case BookingViewSchema.enum.day:
                 return {start: date, end: date}
-            case 'week':
+            case BookingViewSchema.enum.week:
                 return {
                     start: startOfWeek(date, {weekStartsOn: 1}),
                     end: endOfWeek(date, {weekStartsOn: 1})
                 }
-            case 'month':
+            case BookingViewSchema.enum.month:
                 return {
                     start: startOfMonth(date),
                     end: endOfMonth(date)
@@ -124,7 +132,7 @@ export const useBookingView = (options: {
      * Each week is Monday-Sunday
      */
     const weeks = computed<DateRange[]>(() => {
-        if (view.value !== 'month') return []
+        if (view.value !== BookingViewSchema.enum.month) return []
 
         const monthStart = startOfMonth(selectedDate.value)
         const monthEnd = endOfMonth(selectedDate.value)
@@ -144,7 +152,7 @@ export const useBookingView = (options: {
      * Single adjacency lookup used by hasPrev/hasNext and navigate.
      * Returns the Date of the adjacent dinner (or null when none).
      */
-    const findAdjacent = (direction: 1 | -1): Date | null => {
+    const findAdjacent = (direction: PeriodDirection): Date | null => {
         const dinnerDates = options.dinnerDates?.() ?? []
         if (dinnerDates.length === 0) return null
         const boundary = getPeriodBoundary(selectedDate.value, view.value, direction)
@@ -152,14 +160,14 @@ export const useBookingView = (options: {
         return getAdjacentDinner(events, boundary, direction)
     }
 
-    const hasPrev = computed(() => findAdjacent(-1) !== null)
-    const hasNext = computed(() => findAdjacent(1) !== null)
+    const hasPrev = computed(() => findAdjacent(PERIOD_DIRECTION.prev) !== null)
+    const hasNext = computed(() => findAdjacent(PERIOD_DIRECTION.next) !== null)
 
     /**
      * Navigate to the adjacent dinner in the given direction.
      * No-op when there is no adjacent dinner (e.g. first/last event of season).
      */
-    const navigate = async (direction: 1 | -1): Promise<void> => {
+    const navigate = async (direction: PeriodDirection): Promise<void> => {
         const target = findAdjacent(direction)
         if (target) await setDate(target)
     }

@@ -1,38 +1,42 @@
-import {useCookingTeamValidation, ROLE_LABELS, type CookingTeamDisplay, type CookingTeamAssignment, type TeamRole, type RoleAssignmentPlan} from '~/composables/useCookingTeamValidation'
+import {useCookingTeamValidation, type CookingTeamCreate, type CookingTeamDisplay, type CookingTeamAssignment, type TeamRole, type RoleAssignmentPlan} from '~/composables/useCookingTeamValidation'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
 import {formatDate} from '~/utils/date'
+import {TEAM_WORDS} from '~/config/teamWords'
 import {dateToWeekDay} from '~/utils/season'
 import type {JokerSlot} from '~/composables/useDutyValidation'
 import {startOfDay, endOfDay, isWithinInterval} from 'date-fns'
 
 /**
- * Run the chef auto-claim when the dinner is vacant and the caller has an Inhabitant.
+ * Run the chef auto-claim when the dinner is vacant and the caller has an Inhabitant; `claim` receives that inhabitant.
  * Returns the value the caller assigns to `wasAutoClaimed`. Propagates `claim` errors
  * for the caller's wrapper to handle.
  */
 export const tryAutoClaim = async <T>(
     currentChefId: number | null,
     myInhabitantId: number | null,
-    claim: () => Promise<T>
+    claim: (inhabitantId: number) => Promise<T>
 ): Promise<boolean> => {
     if (currentChefId !== null || myInhabitantId === null) return false
-    await claim()
+    await claim(myInhabitantId)
     return true
 }
+
+// Between a team's short name and its season in a default team name: "Madhold 2 - 08/25-06/26"
+const TEAM_NAME_SEPARATOR = ' - '
 
 /**
  * Business logic for working with cooking teams
  *
  * A team's colour is not here: it is the brand rainbow stop of the team's number (`getTeamNumber`), which a
- * consumer takes from `getRainbowBand` in the design system (ADR-017, ADR-018).
+ * consumer takes from `getRainbowBand` in the design system.
  */
 export const useCookingTeam = () => {
     const {CookingTeamSchema, TeamRoleSchema} = useCookingTeamValidation()
 
     const createDefaultTeamName = (seasonShortName: string, teamNumber: number): string => {
-        return `Madhold ${teamNumber} - ${seasonShortName}`
+        return `${TEAM_WORDS.card.fallbackName(teamNumber)}${TEAM_NAME_SEPARATOR}${seasonShortName}`
     }
 
     /**
@@ -40,15 +44,15 @@ export const useCookingTeam = () => {
      * Returns null if no number found in the name
      */
     const extractTeamNumber = (teamName: string): number | null => {
-        const match = teamName.match(/(\d+)/)
-        return match ? parseInt(match[1]!, 10) : null
+        const digits = teamName.match(/\d+/)?.[0]
+        return digits ? parseInt(digits, 10) : null
     }
 
     /**
      * A team's number: the one in its name when it is 1 or more, else its position in the season's full team list + 1,
      * else 1. Names are free text, so every site passes the same season list to agree on the fallback.
      */
-    const getTeamNumber = (team: Pick<CookingTeamDisplay, 'id' | 'name'>, seasonTeams: Array<Pick<CookingTeamDisplay, 'id'>>): number => {
+    const getTeamNumber = (team: CookingTeamDisplay, seasonTeams: CookingTeamDisplay[]): number => {
         const named = extractTeamNumber(team.name)
         return named !== null && named >= 1
             ? named
@@ -56,7 +60,7 @@ export const useCookingTeam = () => {
     }
 
     /** Number of CHEF-role assignments on a team */
-    const countChefs = (assignments: Pick<CookingTeamAssignment, 'role'>[]): number =>
+    const countChefs = (assignments: CookingTeamAssignment[]): number =>
         assignments.filter(assignment => assignment.role === TeamRoleSchema.enum.CHEF).length
 
     /**
@@ -66,31 +70,30 @@ export const useCookingTeam = () => {
      * Fallback: Returns full name if no dash found
      */
     const getTeamShortName = (teamName: string): string => {
-        const dashIndex = teamName.indexOf(' - ')
+        const dashIndex = teamName.indexOf(TEAM_NAME_SEPARATOR)
         return dashIndex !== -1 ? teamName.substring(0, dashIndex) : teamName
     }
 
     /**
      * Toast title for "the current user just took the role on this dinner".
      */
-    const formatRoleClaimedTitle = (dinner: Pick<DinnerEventDetail, 'date' | 'cookingTeam'>, role: TeamRole): string => {
-        const dateLabel = formatDate(dinner.date)
-        const teamLabel = dinner.cookingTeam ? ` med ${getTeamShortName(dinner.cookingTeam.name)}` : ''
-        return `Du er nu blevet ${ROLE_LABELS[role].toLowerCase()} for middagen d. ${dateLabel}${teamLabel}`
-    }
+    const formatRoleClaimedTitle = (dinner: DinnerEventDetail, role: TeamRole): string =>
+        TEAM_WORDS.toasts.roleClaimed(
+            TEAM_WORDS.roles[role].label,
+            formatDate(dinner.date),
+            dinner.cookingTeam ? getTeamShortName(dinner.cookingTeam.name) : null
+        )
 
     const getDefaultCookingTeam = (
         seasonId: number,
         seasonShortName: string,
         teamNumber: number = 1,
-        overrides?: Partial<CookingTeamDisplay>
-    ): CookingTeamDisplay => {
+        overrides?: Partial<CookingTeamCreate>
+    ): CookingTeamCreate => {
         return {
             seasonId,
             name: createDefaultTeamName(seasonShortName, teamNumber),
             assignments: [],
-            cookingDaysCount: 0,
-            jokerSlotCount: 0,
             ...overrides
         }
     }
@@ -153,10 +156,7 @@ export const useCookingTeam = () => {
      * The shifts a joker slot covers: the team's cooking dates inside the slot's period (both ends
      * inclusive) that fall on one of the slot's weekdays
      */
-    const countJokerSlotShifts = (
-        slot: Pick<JokerSlot, 'startDate' | 'endDate' | 'affinity'>,
-        cookingDates: Date[]
-    ): number => {
+    const countJokerSlotShifts = (slot: JokerSlot, cookingDates: Date[]): number => {
         const period = {start: startOfDay(slot.startDate), end: endOfDay(slot.endDate)}
         return cookingDates.filter(date => isWithinInterval(date, period) && slot.affinity[dateToWeekDay(date)]).length
     }

@@ -11,6 +11,9 @@ export default defineConfig({
         // Vitest writes its attachments, blob and json output under test-results, beside Playwright's
         attachmentsDir: 'test-results/vitest/attachments',
         outputFile: {json: 'test-results/vitest/results.json', blob: 'test-results/vitest/blob'},
+        // Each nuxt file boots its own app: on one worker per core the boots starve each other's cases past their timeout,
+        // and half the cores finish the suite sooner
+        maxWorkers: '50%',
         projects: [
             {
                 test: {

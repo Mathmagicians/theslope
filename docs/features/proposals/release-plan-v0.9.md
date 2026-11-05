@@ -37,7 +37,7 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 | B3 | `/admin/allergies` intermittently shows no data | ✅ Root-caused (SSR-fragile store fetch) | [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) | S–M |
 | B4 | Errors editing allergies in `/admin/allergies` | 🔎 Repro first; likely same store as B3 | [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) | S |
 | B5 | Errors adding holidays to a new season | 🔎 Repro first; suspects ranked | [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) | S–M |
-| B6 | Kitchen stats show 0 portions when `ticketPriceId` is null | ✅ Root-caused | [chores-0.9.1.md](../chores-0.9.1.md) | S |
+| B6 | Kitchen stats show 0 portions when `ticketPriceId` is null | ✅ Root-caused | [feature-0.9.3.md](../release-0.9.3/feature-0.9.3.md) § Order snapshot (B6) | S |
 
 **Approach:** see [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) — TDD per ADR-003, one branch, per-bug commits, and a DRY mandate: every fix removes the duplicated logic that caused it.
 
@@ -47,7 +47,7 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 
 | # | Improvement | Why now | Effort |
 |---|-------------|---------|--------|
-| I1 | **SSR-safe data loading sweep** — carried by the Store fetcher factory + alignment and Fetch gating packages (`../archived/release-0.9.0.md`); the 2026-04 bare-fetch notes are folded there and deleted. Chef hydration shipped with chef-swap; the past-periods symptom is tracked in `../bug-fix-billing-delivery-report.md` | New features (waitlist, ad-hoc UI) build on these stores — fix the foundation first | M |
+| I1 | **SSR-safe data loading sweep** — carried by the Store fetcher factory + alignment and Fetch gating packages (`../archived/release-0.9.0.md`); the 2026-04 bare-fetch notes are folded there and deleted. Chef hydration shipped with chef-swap; the past-periods symptom is tracked in `../release-0.9.2/bug-fix-billing-delivery-report.md` | New features (waitlist, ad-hoc UI) build on these stores — fix the foundation first | M |
 | I2 | **DRY sweep of stores + data loading** — the 7 stores implement ADR-007 with drift (e.g., `allergies.ts` alone mixes `useFetch`/`useAsyncData`/`$fetch`; repeated status-computed boilerplate). Extract a shared store-fetch helper or at minimum align every store to one reference pattern (`plan.ts`); audit `event.ts` + `tickets.ts` (still ❓ in compliance doc) — ✅ done: `storeAsyncData` (ADR-007), six stores, `tickets.ts` deleted | Same as I1; also cuts the copy-paste class of bugs the release is fixing | M |
 | I3 | **`Order` uniqueness** — dropped 2026-10-05: zero duplicates in all envs, B1 unifies the builders, an index adds write cost + a failure mode | Dropped | — |
 | I4 | **Observability baseline — stop driving blind.** Today the only signals are `console.*` logs (ADR-004) and the JobRun history panel. Add: Workers observability enabled in `wrangler.toml` (structured log retention + querying), error alerting on 5xx rates and failed jobs (Cloudflare notifications or a lightweight error tracker), a `/api/health` endpoint wired to an uptime monitor, and job-failure alerts to admins (email — first consumer of F4 infra once it lands, Cloudflare notification until then). Document in `ops-runbook.md` | Debugging B3/B4-class "sometimes fails" bugs and operating billing/notifications safely requires seeing prod. Cheap to add, pays off in every later milestone | M |
@@ -58,7 +58,7 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 ## 3. Features (P2 — in priority order)
 
 ### F1. Ad-hoc transactions ⭐ most important
-- **Proposal:** ✅ ready — `../feature-proposal-adhoc-admin-billing.md` (phases 1–5 defined: schema/serialization → endpoints + billing pipeline → read path → admin UI → ADR-011 supplement)
+- **Proposal:** ✅ ready — `../release-0.9.3/feature-proposal-adhoc-admin-billing.md` (phases 1–5 defined: schema/serialization → endpoints + billing pipeline → read path → admin UI → ADR-011 supplement)
 - **Next step:** sign off the proposal, then implement phase-by-phase on this branch (`feature/ad-hoc-transactions`)
 - **Effort:** L (5 phases, includes Transaction migration + snapshot-union rewrite)
 
@@ -67,7 +67,7 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 
 ### F3. Notifications (email + SMS)
 - **Status:** ✅ e-mail delivery implemented on `bugfix/admin-ux` (PR #166, 2026-09-18) — [`archived/feature-notifications.md`](../archived/feature-notifications.md): the `theslope-sender` worker, the admin test event, the channel preference
-- **Next:** triggers, landing-page alarms and SMS — [`feature-proposal-notification-triggers.md`](../feature-proposal-notification-triggers.md)
+- **Next:** triggers, landing-page alarms and SMS — [`feature-proposal-notification-triggers.md`](../release-0.9.3/feature-proposal-notification-triggers.md)
 
 ### F4. Waitlist (released-ticket claim)
 - **Proposal:** ❌ needs writing (`feature-proposal-waitlist.md`). Backend exists (`/api/order/claim` — FIFO by `releasedAt`, retry, audit) and claim detection is partially wired in `GuestBookingForm`/`DinnerBookingForm`. Missing: a first-class UI surfacing released tickets ("N ledige billetter"), an explicit claim flow in day + grid views, and a *subscribe-and-notify* waitlist ("tell me when a ticket frees up") — the latter depends on F3
@@ -75,7 +75,7 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 - **Effort:** M (claim UI) + M (subscription/notify, after F3)
 
 ### F5. Work shift swapping (duty roster + cross-team swap)
-- **Proposal:** ✅ draft — `../feature-proposal-duty-roster.md` (models `DinnerDutyTemplate`/`DinnerDuty`/`DutyHistory`, audit timeline, chef sign-off, cross-team swap). Builds on shipped chef-swap.
+- **Proposal:** ✅ draft — `../release-0.9.3/feature-proposal-duty-roster.md` (models `DinnerDutyTemplate`/`DinnerDuty`/`DutyHistory`, audit timeline, chef sign-off, cross-team swap). Builds on shipped chef-swap.
 - **Next step:** review draft → accept; split delivery: **F5a** templates + roster + audit trail, **F5b** cross-team swap + sign-off UI (+ swap notifications via F3)
 - **Effort:** XL (largest item in the release)
 
@@ -105,13 +105,13 @@ Rationale for the ordering: bugs and the consistency sweep de-risk everything af
 
 | Proposal | Status | Action |
 |----------|--------|--------|
-| `../feature-proposal-adhoc-admin-billing.md` | Proposal | Review + sign-off (Phase 0) |
-| `../feature-proposal-duty-roster.md` | Signed off | Implement |
-| `bug-fix-plan-v0.9.md` | Shipped, archived 2026-10-06 | B6 continues as the Order snapshot package; billing delivery report + interrupted runs in `../bug-fix-billing-delivery-report.md` |
-| `chores-0.9.1.md` § Order snapshot | Done | Implement (B6) in 0.9.1 |
+| `../release-0.9.3/feature-proposal-adhoc-admin-billing.md` | Proposal | Review + sign-off (Phase 0) |
+| `../release-0.9.3/feature-proposal-duty-roster.md` | Signed off | Implement |
+| `bug-fix-plan-v0.9.md` | Shipped, archived 2026-10-06 | B6 continues as the Order snapshot package; billing delivery report + interrupted runs in `../release-0.9.2/bug-fix-billing-delivery-report.md` |
+| `../release-0.9.3/feature-0.9.3.md` § Order snapshot | Done | Implement (B6) in 0.9.3 |
 | `bare-fetch-fix.md` | Folded into release-0.9.0's factory + gating packages, deleted 2026-10-07 | — |
 | `archived/feature-notifications.md` | ✅ Implemented (PR #166) | — |
-| `../feature-proposal-notification-triggers.md` | Proposal | Review + sign-off (triggers, alarms, SMS) |
+| `../release-0.9.3/feature-proposal-notification-triggers.md` | Proposal | Review + sign-off (triggers, alarms, SMS) |
 | `../archived/feature-waitlist.md` | ✅ Implemented (0.9.0) | — |
 | `../archived/guest-booking-form.md` (archived) | Notes | Fold into F4 claim-UI work or archive |
 

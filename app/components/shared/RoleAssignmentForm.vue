@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import {useBookingValidation, type DinnerEventDetail, type MenuSwapStrategy} from '~/composables/useBookingValidation'
-import {ROLE_LABELS, type TeamRole} from '~/composables/useCookingTeamValidation'
+import type {TeamRole} from '~/composables/useCookingTeamValidation'
+import {TEAM_WORDS} from '~/config/teamWords'
 import {useCookingTeam} from '~/composables/useCookingTeam'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 type RoleAssignmentMode = 'volunteer' | 'resign' | 'swap'
 
@@ -31,7 +33,7 @@ const formattedDate = computed(() => formatDate(props.dinnerEvent.date))
 const teamShortName = computed(() =>
     props.dinnerEvent.cookingTeam ? getTeamShortName(props.dinnerEvent.cookingTeam.name) : null
 )
-const roleLabel = computed(() => ROLE_LABELS[props.role].toLowerCase())
+const roleLabel = computed(() => TEAM_WORDS.roles[props.role].label.toLowerCase())
 
 const isSwap = computed(() => props.mode === 'swap')
 const commitTrailingIcon = computed(() => isSwap.value ? ICONS.claim : ICONS.plusCircle)
@@ -100,7 +102,7 @@ const handleSubmit = () => {
                     data-testid="role-assignment-cancel"
                     @click="emit('cancel')"
                 >
-                    Annuller
+                    {{ BUTTON_WORDS.cancel }}
                 </UButton>
                 <DangerButton
                     v-if="mode === 'resign'"

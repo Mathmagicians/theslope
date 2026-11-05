@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect} from '~~/tests/e2e/uiTest'
 import testHelpers from '../testHelpers'
 import {SettingFactory} from '../testDataFactories/settingFactory'
 

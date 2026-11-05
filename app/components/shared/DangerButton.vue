@@ -1,67 +1,53 @@
 <script setup lang="ts">
 /**
- * DangerButton - GitHub-style 2-step confirmation for destructive actions
+ * DangerButton - two-click confirmation for a destructive action or its undo
  *
- * Visual states:
- * 1. Initial: neutral/outline with xMark icon
- * 2. Confirm: error/solid with dangerConfirm icon + countdown fade
- * 3. Loading: disabled with "i gang..." text
+ * The first click arms the button: it turns loud in its mode's colour, and a countdown wipe shrinks the strong colour
+ * off the pale one until the button disarms. The second click confirms; a click outside or the timeout disarms
+ * without confirming. While the parent's action runs, the button shows the busy label.
  *
- * Features:
- * - Click-outside resets to initial state
- * - Auto-reset timeout with visual countdown (opacity fade)
- * - Configurable colors for hero contexts
+ * Visual check: the danger zone on /chef (cancel the dinner, and undo the cancellation), phone and desktop, light and
+ * dark: armed, the label reads on both colours of the wipe while the wipe shrinks to the right edge.
  */
-import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
-import type { ButtonProps } from '@nuxt/ui'
+import { COLOR, NOISE, type NuxtUIButtonVariant, type NuxtUIColor, type NuxtUISize } from '~/composables/useTheSlopeDesignSystem'
+import { BUTTON_WORDS } from '~/config/buttonWords'
 
-const { ICONS, SIZES, RING } = useTheSlopeDesignSystem()
-
-type ButtonSize = ButtonProps['size']
-type ButtonVariant = ButtonProps['variant']
+const { ICONS, SIZES, COMPONENTS } = useTheSlopeDesignSystem()
 
 interface Props {
-  /** Initial button text (e.g., "Slet", "Aflys") */
   label: string
-  /** Confirm text - defaults to "Tryk igen for at {label.toLowerCase()}..." */
   confirmLabel?: string
-  /** Loading text - defaults to "{Label} i gang..." */
   loadingLabel?: string
-  /** External loading state (parent owns API call) */
+  /** The parent owns the action and reports it running */
   loading?: boolean
-  /** Disable entire button */
   disabled?: boolean
-  /** Auto-reset timeout in ms (default: 5000, 0 = disabled) */
+  /** Time until an armed button disarms; 0 keeps it armed */
   autoResetMs?: number
-  /** Button size from design system */
-  size?: ButtonSize
-  /** Initial icon (default: xMark) */
+  size?: NuxtUISize
   icon?: string
-  /** Confirm icon (default: dangerConfirm) */
   confirmIcon?: string
-  /** Initial color for hero contexts (default: neutral) */
+  /** The unarmed colour, for a button on a hero fill */
   initialColor?: NuxtUIColor
-  /** Initial variant (default: outline) */
-  initialVariant?: ButtonVariant
-  /** Undo mode: uses success colors instead of error (for restoring/undoing actions) */
+  initialVariant?: NuxtUIButtonVariant
+  /** Restores what a destructive action took: the success face instead of the error one */
   undo?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  confirmLabel: 'Er du sikker? Tryk igen for at bekræfte',
-  loadingLabel: 'Arbejder...',
+  confirmLabel: BUTTON_WORDS.confirmAgain,
+  loadingLabel: BUTTON_WORDS.working,
   loading: false,
   disabled: false,
   autoResetMs: 10000,
   size: undefined,
   icon: undefined,
   confirmIcon: undefined,
-  initialColor: 'neutral',
-  initialVariant: 'outline',
+  initialColor: COLOR.neutral,
+  initialVariant: NOISE.medium,
   undo: false
 })
 
-// Defaults from design system (can't use in withDefaults as they're runtime values)
+// The design system comes from a composable call, which withDefaults cannot reference
 const effectiveSize = computed(() => props.size ?? SIZES.standard)
 const effectiveIcon = computed(() => props.icon ?? ICONS.xMark)
 const effectiveConfirmIcon = computed(() => props.confirmIcon ?? ICONS.dangerConfirm)
@@ -71,12 +57,11 @@ const emit = defineEmits<{
   confirm: []
 }>()
 
-// State
 const isConfirmMode = ref(false)
 const buttonRef = ref<HTMLElement | null>(null)
-const countdownProgress = ref(100) // 100% = full opacity, 0% = faded
+// Where the strong colour ends, in percent of the button's width
+const countdownProgress = ref(100)
 
-// Display computeds
 const displayText = computed(() => {
   if (props.loading) return props.loadingLabel
   if (isConfirmMode.value) return props.confirmLabel
@@ -84,31 +69,24 @@ const displayText = computed(() => {
 })
 
 const displayIcon = computed(() => {
-  if (props.loading) return undefined // UButton shows spinner when loading
+  if (props.loading) return undefined // UButton shows its spinner
   return isConfirmMode.value ? effectiveConfirmIcon.value : effectiveIcon.value
 })
 
+const face = computed(() => props.undo ? COMPONENTS.dangerButton.undo : COMPONENTS.dangerButton.danger)
+
 const displayColor = computed<NuxtUIColor>(() =>
-  isConfirmMode.value || props.loading ? (props.undo ? 'success' : 'error') : props.initialColor
+  isConfirmMode.value || props.loading ? face.value.color : props.initialColor
 )
 
-const displayVariant = computed<ButtonVariant>(() =>
-  isConfirmMode.value || props.loading ? 'solid' : props.initialVariant
+const displayVariant = computed<NuxtUIButtonVariant>(() =>
+  isConfirmMode.value || props.loading ? NOISE.loud : props.initialVariant
 )
 
-// Gradient wipe: confirm color shrinks from left as countdown progresses
-const countdownGradient = computed(() => {
-  if (!isConfirmMode.value || props.loading) return {}
-  const percent = countdownProgress.value
-  const [dark, light] = props.undo
-    ? ['--color-green-900', '--color-green-400']
-    : ['--color-red-900', '--color-red-400']
-  return {
-    background: `linear-gradient(to right, var(${dark}) ${percent}%, var(${light}) ${percent}%)`
-  }
-})
+const isArmed = computed(() => isConfirmMode.value && !props.loading)
+const armedClasses = computed(() => isArmed.value ? [face.value.armed, face.value.countdown] : [])
+const wipeStyle = computed(() => isArmed.value ? {[COMPONENTS.dangerButton.wipePosition]: `${countdownProgress.value}%`} : {})
 
-// Timeout handling
 let resetTimeout: ReturnType<typeof setTimeout> | null = null
 let countdownInterval: ReturnType<typeof setInterval> | null = null
 
@@ -116,9 +94,8 @@ const startCountdown = () => {
   if (props.autoResetMs <= 0) return
 
   countdownProgress.value = 100
-  const stepMs = 50 // Update every 50ms for smooth animation
-  const steps = props.autoResetMs / stepMs
-  const decrement = 100 / steps
+  const stepMs = 50
+  const decrement = 100 / (props.autoResetMs / stepMs)
 
   countdownInterval = setInterval(() => {
     countdownProgress.value = Math.max(0, countdownProgress.value - decrement)
@@ -146,24 +123,20 @@ const resetToInitial = () => {
   clearCountdown()
 }
 
-// Click handler
 const handleClick = () => {
   if (props.disabled || props.loading) return
 
   if (isConfirmMode.value) {
-    // Second click - emit confirm and reset
     emit('confirm')
     resetToInitial()
   } else {
-    // First click - enter confirm mode
     isConfirmMode.value = true
     startCountdown()
   }
 }
 
-// Click-outside detection
 const handleClickOutside = (event: MouseEvent) => {
-  if (isConfirmMode.value && buttonRef.value && !buttonRef.value.contains(event.target as Node)) {
+  if (isConfirmMode.value && buttonRef.value && !(event.target instanceof Node && buttonRef.value.contains(event.target))) {
     resetToInitial()
   }
 }
@@ -177,7 +150,6 @@ onUnmounted(() => {
   clearCountdown()
 })
 
-// Reset countdown when loading starts
 watch(() => props.loading, (newLoading) => {
   if (newLoading) {
     clearCountdown()
@@ -186,7 +158,7 @@ watch(() => props.loading, (newLoading) => {
 </script>
 
 <template>
-  <div ref="buttonRef" class="inline-block">
+  <div ref="buttonRef" :class="COMPONENTS.dangerButton.root">
     <UButton
       block
       :color="displayColor"
@@ -196,8 +168,8 @@ watch(() => props.loading, (newLoading) => {
       :trailing-icon="trailingIcon"
       :disabled="disabled || loading"
       :loading="loading"
-      :style="countdownGradient"
-      :class="isConfirmMode && !loading ? `ring-2 ${undo ? RING.green[500] : RING.red[500]} text-white` : ''"
+      :style="wipeStyle"
+      :class="armedClasses"
       @click="handleClick"
     >
       {{ displayText }}

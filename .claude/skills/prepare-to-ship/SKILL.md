@@ -26,10 +26,10 @@ Mirror the CI/CD pipeline locally and confirm every gate is green before the bra
 
 ## Gotchas
 
-- `pre:all` = `npm run lint && npm run ts && npm run ts:server && npm run ts:node` (eslint + `vue-tsc --noEmit` for the root/app project, the Nitro server project via `server/tsconfig.json`, and the node/build-time project). Server-reachable composables get no Nuxt auto-imports at runtime; only the server project check catches a bare `useX()` there (ADR-017). CI runs `pre:all` as its "Lint and typecheck" step.
+- `pre:all` = `npm run lint && npm run pre:gh-actions && npm run pre:c4 && npm run ts && npm run ts:server && npm run ts:node && npm run ts:workers` (eslint; CodeQL's Actions queries when the branch or the working tree changes `.github/`, skipped in CI; the C4 diagram check; `vue-tsc --noEmit` for the root/app project, the Nitro server project via `server/tsconfig.json`, the node/build-time project and the sender worker). Server-reachable composables get no Nuxt auto-imports at runtime; only the server project check catches a bare `useX()` there (ADR-017). CI runs `pre:all` as its "Lint and typecheck" step.
 - Use Vitest reporters (`--reporter=verbose` or `dot`) for unit tests. Never pass `--reporter=line` to Vitest — `line` is a Playwright reporter and Vitest fails to load it.
 - E2E gates need gate 4 to have seeded the local D1 DB first, or they fail with missing-data errors.
-- Scope a targeted e2e re-run to the affected spec, e.g. `npx playwright test tests/e2e/ui/serial/ChefSwap.e2e.spec.ts --no-deps --reporter=line`.
+- Scope a targeted e2e re-run to the affected spec, e.g. `npx playwright test tests/e2e/ui/serial/Waitlist.e2e.spec.ts --no-deps --reporter=line`.
 - CI marks the E2E UI step `continue-on-error`, so it does not block deploy on CI. Treat it as blocking locally unless the user says otherwise.
 
 ## Reporting

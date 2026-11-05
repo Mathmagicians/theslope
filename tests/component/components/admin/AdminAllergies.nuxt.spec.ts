@@ -4,10 +4,12 @@ import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick, toValue} from 'vue'
 import AdminAllergies from '~/components/admin/AdminAllergies.vue'
+import AllergyCatalogTable from '~/components/allergy/AllergyCatalogTable.vue'
+import AllergyDetailPanel from '~/components/allergy/AllergyDetailPanel.vue'
 import {useAllergiesStore} from '~/stores/allergies'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from '../allergy/allergyTestIds'
-import {mountWithTooltipProvider, mountedStore, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS, expectMasterDetail, findOpenRows} from '~~/tests/component/testHelpers'
 
 // The test environment has no router: navigateTo lands the written query on the route the component reads
 const {mockRoute, mockNavigateTo, landNavigation, useRoute} = await vi.hoisted(async () =>
@@ -27,6 +29,8 @@ const posterNotesPostEndpoint = vi.fn()
 AllergyFactory.createMockAllergyTypesWithInhabitants().forEach(allergyType =>
     registerEndpoint(`/api/admin/allergy-type/${allergyType.id}`, () => allergyType))
 registerEndpoint('/api/admin/allergy-type', allergyTypesEndpoint)
+const createEndpoint = vi.fn()
+registerEndpoint('/api/admin/allergy-type', {handler: createEndpoint, method: 'PUT'})
 // Generic (GET) registered BEFORE method-specific so POST wins (reverse-order lookup)
 registerEndpoint(POSTER_NOTES_ENDPOINT, posterNotesGetEndpoint)
 registerEndpoint(POSTER_NOTES_ENDPOINT, {handler: posterNotesPostEndpoint, method: 'POST'})
@@ -99,7 +103,7 @@ describe('AdminAllergies', () => {
                 await openDetail(wrapper)
 
                 expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.edit)).toHaveLength(1)
-                expect(wrapper.find(`tbody [data-testid="${ALLERGY_TEST_IDS.edit}"]`).exists()).toBe(!isMd)
+                expect(findByTestId(wrapper.find('tbody'), ALLERGY_TEST_IDS.edit).exists()).toBe(!isMd)
                 expect(findByTestId(wrapper, ALLERGY_TEST_IDS.form).exists()).toBe(false)
 
                 await clickByTestId(wrapper, ALLERGY_TEST_IDS.edit)
@@ -116,6 +120,15 @@ describe('AdminAllergies', () => {
                 expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.form)).toHaveLength(1)
             })
         })
+    })
+
+    it('md: the catalog is the master and the open detail pane the detail', async () => {
+        const wrapper = await mountAdmin({}, true)
+
+        // The catalog renders UTable's several roots, so its wrapper's element is the one holding it: the master
+        const master = wrapper.findComponent(AllergyCatalogTable).element
+        expectMasterDetail(master, master.nextElementSibling)
+        expect(master.nextElementSibling?.contains(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).element)).toBe(true)
     })
 
     // The phone layout: the detail opens by tapping the first row
@@ -156,6 +169,25 @@ describe('AdminAllergies', () => {
 
             expect(findByTestId(wrapper, ALLERGY_TEST_IDS.form).exists()).toBe(true)
             expect(wrapper.text()).toContain('Opret allergi')
+        })
+
+        // The form closes on a landed save; a failed one keeps the draft, and the request has toasted the failure
+        it.each([
+            {outcome: 'lands', answer: () => firstType, isFormOpen: false, color: COLOR.success},
+            {outcome: 'fails', answer: () => {
+                throw createError({statusCode: 500})
+            }, isFormOpen: true, color: COLOR.warning}
+        ])('WHEN the create form\'s save $outcome THEN one toast tells it and the form is open: $isFormOpen', async ({answer, isFormOpen, color}) => {
+            createEndpoint.mockImplementation(answer)
+            const wrapper = await mountAdmin()
+            await clickByTestId(wrapper, ALLERGY_TEST_IDS.create)
+            useToast().clear()
+
+            wrapper.findComponent(AllergyDetailPanel).vm.$emit('save', {name: firstType!.name, description: firstType!.description})
+
+            await vi.waitFor(() => expect(useToast().toasts.value.map(toast => toast.color)).toEqual([color]))
+            await nextTick()
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.form).exists()).toBe(isFormOpen)
         })
     })
 
@@ -256,10 +288,12 @@ describe('AdminAllergies', () => {
             expect(wrapper.text()).not.toContain('Detaljer')
         })
 
-        it('tapping the selected row again collapses the detail', async () => {
+        it('tapping a row docks the detail in the row after it, and tapping it again collapses the detail', async () => {
             const wrapper = await mountAdmin({}, false)
             await clickByTestId(wrapper, firstRow)
-            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).exists()).toBe(true)
+            const open = findOpenRows(wrapper)
+            expect(open.map(({row}) => findByTestId(row, firstRow).exists())).toEqual([true])
+            expect(open.map(({detail}) => findByTestId(detail, ALLERGY_TEST_IDS.edit).exists())).toEqual([true])
 
             await clickByTestId(wrapper, firstRow)
 

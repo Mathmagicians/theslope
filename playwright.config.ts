@@ -102,15 +102,43 @@ export default defineConfig({
       testMatch: /tests\/e2e\/api\/parallel\/.*\.spec\.ts/,
       dependencies: ['setup-api', 'setup-member-api', 'setup-season'],
     },
+    // API scenarios - parallel: the @api-parallel scenarios of tests/e2e/features
+    {
+      ...defineBddProject({
+        name: 'chromium-bdd-api',
+        features: 'tests/e2e/features/**/*.feature',
+        steps: ['tests/e2e/fixtures.ts', 'tests/e2e/steps/**/*.ts'],
+        tags: '@api-parallel',
+        matchKeywords: true,
+        outputDir: '.output/bdd/api',
+      }),
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['setup-api', 'setup-member-api', 'setup-season'],
+    },
     // API serial tests (heynabo imports/deletes data, maintenance scaffolds ALL households)
-    // Runs after parallel API tests to avoid interference
+    // Runs after the parallel API tests and scenarios to avoid interference
     {
       name: 'chromium-api-serial',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/api\/serial\/.*\.spec\.ts/,
       fullyParallel: false,
       workers: 1,
-      dependencies: ['chromium-api'],
+      dependencies: ['chromium-api', 'chromium-bdd-api'],
+    },
+    // API scenarios - serial: the @api-serial scenarios, after the serial API tests
+    {
+      ...defineBddProject({
+        name: 'chromium-bdd-api-serial',
+        features: 'tests/e2e/features/**/*.feature',
+        steps: ['tests/e2e/fixtures.ts', 'tests/e2e/steps/**/*.ts'],
+        tags: '@api-serial',
+        matchKeywords: true,
+        outputDir: '.output/bdd/api-serial',
+      }),
+      use: { ...devices['Desktop Chrome'] },
+      fullyParallel: false,
+      workers: 1,
+      dependencies: ['chromium-api-serial'],
     },
     // UI tests need full UI auth (excludes serial tests)
     {
@@ -119,14 +147,42 @@ export default defineConfig({
       testMatch: /tests\/e2e\/ui\/(?!serial\/).*\.spec\.ts/,
       dependencies: ['setup-ui', 'setup-member-ui', 'setup-season'],
     },
-    // UI serial tests (create their own season, must run after parallel UI tests)
+    // UI scenarios - parallel: the @e2e-parallel scenarios
+    {
+      ...defineBddProject({
+        name: 'chromium-bdd-ui',
+        features: 'tests/e2e/features/**/*.feature',
+        steps: ['tests/e2e/fixtures.ts', 'tests/e2e/steps/**/*.ts'],
+        tags: '@e2e-parallel',
+        matchKeywords: true,
+        outputDir: '.output/bdd/ui',
+      }),
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['setup-ui', 'setup-member-ui', 'setup-season'],
+    },
+    // UI serial tests (create their own season, must run after the parallel UI tests and scenarios)
     {
       name: 'chromium-ui-serial',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/ui\/serial\/.*\.spec\.ts/,
       fullyParallel: false,
       workers: 1,
-      dependencies: ['chromium-ui'],
+      dependencies: ['chromium-ui', 'chromium-bdd-ui'],
+    },
+    // UI scenarios - serial: the @e2e-serial scenarios, after the serial UI tests
+    {
+      ...defineBddProject({
+        name: 'chromium-bdd-ui-serial',
+        features: 'tests/e2e/features/**/*.feature',
+        steps: ['tests/e2e/fixtures.ts', 'tests/e2e/steps/**/*.ts'],
+        tags: '@e2e-serial',
+        matchKeywords: true,
+        outputDir: '.output/bdd/ui-serial',
+      }),
+      use: { ...devices['Desktop Chrome'] },
+      fullyParallel: false,
+      workers: 1,
+      dependencies: ['chromium-ui-serial'],
     },
     // Smoke tests - the @smoke scenarios of tests/e2e/features, run serially (shared active season state)
     {
@@ -135,6 +191,7 @@ export default defineConfig({
         features: 'tests/e2e/features/**/*.feature',
         steps: ['tests/e2e/fixtures.ts', 'tests/e2e/steps/**/*.ts'],
         tags: '@smoke',
+        matchKeywords: true,
         outputDir: '.output/bdd/smoke',
       }),
       use: { ...devices['Desktop Chrome'] },

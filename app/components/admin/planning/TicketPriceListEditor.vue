@@ -18,18 +18,22 @@
  * ┃  [  ][  ][  ]  [BABY · 0kr]      [remove]  ░[tk]░┃
  * ┃                Under 2 år · Spiser gratis       ░░░░░┃
  * ┃                smagsprøver fra forældrene        ░░░░░┃
+ *
+ * Visual check: /admin/planning in view and edit, the prices and the empty line, phone and desktop.
  */
-import type {TicketPrice} from "~/composables/useTicketPriceValidation"
-import {getErrorMessage, mapZodErrorsToFormErrors} from "~/utils/validtation"
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import type {TicketType as TicketTypeValue} from '~/composables/useBookingValidation'
+import {SEASON_WORDS} from '~/config/seasonWords'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
-// COMPONENT DEPENDENCIES
 const {BUTTONS, COLOR, COMPONENTS, ICONS, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
 const {TicketTypeSchema, TicketPricesArraySchema, createTicketPrice} = useTicketPriceValidation()
 const {portionsOf} = useTicket()
+const {typedKrToGrossOre} = useOrder()
+const WORDS = SEASON_WORDS.ticketPriceEditor
 const TICKET_TYPES = TicketTypeSchema.options
 const TicketType = TicketTypeSchema.enum
 
-// COMPONENT DEFINITION
 const model = defineModel<TicketPrice[]>({required: true, default: () => []})
 const props = withDefaults(defineProps<{
   disabled?: boolean
@@ -37,21 +41,13 @@ const props = withDefaults(defineProps<{
   disabled: false
 })
 
-// STATE
 const errors = ref<Map<string, string[]>>(new Map())
-// Single ref for new ticket - stores price in DKK for UI binding
-const newTicket = ref({
-  ticketType: TicketType.ADULT,
-  priceDKK: 0,
-  maximumAgeLimit: undefined as number | undefined,
-  description: ''
-})
 
-// Helpers
-const toOre = (dkk: number): number => Math.round(dkk * 100)
+// The add card's draft holds the price in kroner as typed; the price becomes øre on add
+type TicketDraft = {ticketType: TicketTypeValue, priceDKK: number, maximumAgeLimit: number | undefined, description: string}
+const emptyDraft = (): TicketDraft => ({ticketType: TicketType.ADULT, priceDKK: 0, maximumAgeLimit: undefined, description: ''})
+const newTicket = ref<TicketDraft>(emptyDraft())
 
-
-// COMPUTED
 // Each price with its type's presentation, its badge text and its note
 const priceItems = computed(() => ticketPriceSelectItems(model.value))
 
@@ -62,20 +58,9 @@ const ticketTypeOptions = computed(() =>
   }))
 )
 
-
-// ACTIONS
-const resetNewTicket = () => {
-  newTicket.value = {
-    ticketType: TicketType.ADULT,
-    priceDKK: 0,
-    maximumAgeLimit: undefined,
-    description: ''
-  }
-}
-
 const onAddTicketPrice = () => {
   const {ticketType, priceDKK, description, maximumAgeLimit} = newTicket.value
-  const price = toOre(priceDKK)
+  const price = typedKrToGrossOre(priceDKK, false)
   const ticketPrice = createTicketPrice({
     ticketType, price, description: description || undefined, maximumAgeLimit, portions: portionsOf({ticketType, price})
   })
@@ -85,26 +70,29 @@ const onAddTicketPrice = () => {
 
   if (validation.success) {
     model.value = newPrices
-    resetNewTicket()
+    newTicket.value = emptyDraft()
     errors.value.clear()
   } else {
     errors.value = mapZodErrorsToFormErrors(validation.error)
   }
 }
+
+const onRemoveTicketPrice = (index: number) => {
+  model.value = model.value.filter((_, i) => i !== index)
+}
 </script>
 
 <template>
   <div>
-    <!-- Add new ticket price -->
     <!-- v-if, not v-show: view mode drops the draft controls out of the DOM and the tab order, as the row trash does -->
     <UCard v-if="!props.disabled" :class="COMPONENTS.ticketPriceEditor.addCard">
       <template #header>
-        <h3 :class="COMPONENTS.ticketPriceEditor.addTitle">Tilføj billettyper</h3>
+        <h3 :class="COMPONENTS.ticketPriceEditor.addTitle">{{ WORDS.addTitle }}</h3>
       </template>
 
       <div :class="COMPONENTS.ticketPriceEditor.addStack">
         <div :class="COMPONENTS.ticketPriceEditor.addRow">
-          <UFormField label="Billettype" name="ticketType" :class="COMPONENTS.ticketPriceEditor.addField">
+          <UFormField :label="BOOKING_WORDS.ticketType" name="ticketType" :class="COMPONENTS.ticketPriceEditor.addField">
             <USelect
                 v-model="newTicket.ticketType"
                 :items="ticketTypeOptions"
@@ -113,7 +101,7 @@ const onAddTicketPrice = () => {
           </UFormField>
 
           <UFormField
-              label="Pris (DKK)"
+              :label="WORDS.price"
               name="ticketPrice"
               :class="COMPONENTS.ticketPriceEditor.addField"
               :error="getErrorMessage(errors, ['price'])">
@@ -126,23 +114,23 @@ const onAddTicketPrice = () => {
                 placeholder="0.00"/>
           </UFormField>
 
-          <UFormField label="Angiv aldersgrænse" name="maxAge" :class="COMPONENTS.ticketPriceEditor.addField">
+          <UFormField :label="WORDS.maxAge.label" name="maxAge" :class="COMPONENTS.ticketPriceEditor.addField">
             <UInput
                 v-model="newTicket.maximumAgeLimit"
                 type="number"
                 min="0"
                 name="maxAge"
-                placeholder="Eventuel aldersgrænse"/>
+                :placeholder="WORDS.maxAge.placeholder"/>
           </UFormField>
         </div>
 
-        <UFormField label="Beskrivelse (valgfrit)" name="description" :class="COMPONENTS.ticketPriceEditor.descriptionField">
+        <UFormField :label="WORDS.description.label" name="description" :class="COMPONENTS.ticketPriceEditor.descriptionField">
           <UTextarea
               v-model="newTicket.description"
               name="description"
               :rows="1"
               :ui="COMPONENTS.ticketPriceEditor.descriptionUi"
-              placeholder="F.eks. 'Fra 11 år og opefter'"/>
+              :placeholder="WORDS.description.placeholder"/>
         </UFormField>
 
         <p v-if="getErrorMessage(errors, ['_'])" :class="[TEXT.red[500], TYPOGRAPHY.bodyTextSmall]">
@@ -158,14 +146,13 @@ const onAddTicketPrice = () => {
               :color="COLOR.info"
               :icon="ICONS.ticket"
               @click="onAddTicketPrice">
-            Tilføj billet
+            {{ WORDS.add }}
           </UButton>
         </div>
       </template>
     </UCard>
 
-    <!-- List of ticket prices -->
-    <ul v-if="model?.length > 0" :class="COMPONENTS.ticketPriceEditor.list">
+    <ul v-if="model?.length > 0" :class="COMPONENTS.seasonFormList.list">
       <li
           v-for="(item, index) in priceItems"
           :key="`ticket-${index}-${item.ticketType}`">
@@ -175,13 +162,13 @@ const onAddTicketPrice = () => {
                 v-if="!props.disabled"
                 v-bind="BUTTONS.remove"
                 :data-testid="`ticket-price-remove-${index}`"
-                :aria-label="`Fjern ${item.presentation.label}-billet`"
-                @click="model.splice(index, 1)"/>
+                :aria-label="WORDS.remove(item.presentation.label)"
+                @click="onRemoveTicketPrice(index)"/>
           </template>
         </DinnerTicket>
       </li>
     </ul>
-    <h3 v-else :class="[COMPONENTS.ticketPriceEditor.empty, TEXT.gray[500]]">
+    <h3 v-else :class="[COMPONENTS.seasonFormList.empty, TEXT.gray[500]]">
       Ingen billetpriser defineret endnu.
     </h3>
   </div>

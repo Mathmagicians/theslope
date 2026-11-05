@@ -19,7 +19,7 @@ export default defineEventHandler(async (event): Promise<TicketWaitlistDisplay[]
     const d1Client = event.context.cloudflare.env.DB
     const {TicketWaitlistDisplaySchema} = useWaitlistValidation()
 
-    let dinnerEventIds!: number[]
+    let dinnerEventIds: number[]
     try {
         const query = await getValidatedQuery(event, querySchema.parse)
         dinnerEventIds = Array.isArray(query.dinnerEventIds) ? query.dinnerEventIds : [query.dinnerEventIds]

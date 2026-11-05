@@ -12,7 +12,7 @@ export default defineEventHandler(async (event): Promise<AllergyTypeDisplay> => 
     const {AllergyTypeCreateSchema} = useAllergyValidation()
 
     // Input validation - FAIL EARLY
-    let requestData!: AllergyTypeCreate
+    let requestData: AllergyTypeCreate
     try {
         requestData = await readValidatedBody(event, AllergyTypeCreateSchema.parse)
     } catch (error) {

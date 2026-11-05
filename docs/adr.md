@@ -3,32 +3,28 @@
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 ## ADR-018: Design System Owns Shared UI Patterns
 
-**Status:** Accepted | **Date:** 2026-09-16 | **Updated:** 2026-10-18
+**Status:** Accepted | **Date:** 2026-09-16 | **Updated:** 2026-10-23
 
 ### Context
 
-Shared UI values had drifted into per-component colour, variant and `:ui` patches; a token sweep that merged near-identical values changed the design.
+Shared UI values had drifted into per-component colour, variant and `:ui` patches; a token sweep that merged
+near-identical values changed the design.
 
 ### Decision
 
-**`useTheSlopeDesignSystem` owns every shared UI value. Components bind a token and pass domain props only.**
+**The design system owns every shared UI value and pattern. Components bind its tokens and pass domain props only.**
 
-| Pattern | Token | Bind |
-|---|---|---|
-| Colour | `COLOR`, `BG`, `TEXT`, `BORDER`, `RING`; surface palettes `CHEF_CALENDAR`, `DINNER_CALENDAR`, `PLANNING_CALENDAR`, `TICKET_TYPE_COLORS` (with the ticket type glyphs `TICKET_TYPE_ICONS`), `ORDER_STATE_COLORS`, `PANTONE_CHIPS` | `:class="TEXT.muted"`, `:color="COLOR.primary"` |
-| Alerts | `ALERTS.<kind>` — `info`, `neutral`, `success`, `warning`, `error`, `legend`, `emptyState`, `emptyStateCompact` — plus the `withActions` modifier | `v-bind="ALERTS.warning"`, `v-bind="{...ALERTS.info, ...ALERTS.withActions}"` |
-| Buttons | `BUTTONS.<kind>` with `ICONS` | `v-bind="BUTTONS.secondaryAction" :color="COLOR.primary" :icon="ICONS.edit"` |
-| Calendars | `COMPONENTS.calendarGrid`, `CALENDAR.picker`, `dayCircleClasses(variant)` | `v-bind="COMPONENTS.calendarGrid"`; every day circle renders through the helper |
-| Table empty states | the `UTable` `#empty` slot | one empty state per table, inside the slot |
-| Table loading | `COMPONENTS.table.loadingRow`, `COMPONENTS.table.loadingSpinner` with `ICONS.sync` | a table bound to a dataset that reloads, a new selection or a write's re-read, binds that dataset's `loading`: UTable's loading bar runs under the column headers while the rows stay, and the `#loading` slot, filled with the spinning glyph and its text, stands in a table that has no rows yet; without the slot UTable renders `#empty` while loading |
-| Separators | `COMPONENTS.separator.<kind>` on a labelled `USeparator` | `v-bind="COMPONENTS.separator.moment" :label="…"` |
-
-A token holds exactly one value. Two values are two tokens, named by where they are used. Merging values is a design
-decision the user takes from a visual proposal.
+- Colours, sizes, layouts, alerts, buttons, calendars, tables and separators are tokens in `useTheSlopeDesignSystem`;
+  `docs/ui.md` describes the families and the shared patterns
+- A token holds exactly one value. Two values are two tokens, named by where they are used. Merging values is a design
+  decision the user takes from a visual proposal
+- A responsive class carries its Tailwind breakpoint prefixes in the token; the layout's breakpoint drives only the
+  values Nuxt UI takes as properties
 
 ### Enforcement
 
-`tests/component/architecture/designSystemUsage.unit.spec.ts` reads every `.vue` under `app/` and fails on a rule breach; the rule inventory lives in `docs/testing.md` (Architecture Tests). Tests assert usage and behaviour, never a token's value.
+An architecture spec reads every `.vue` under `app/` and fails on a rule breach; the rule inventory lives in
+`docs/testing.md` (Architecture Tests). Tests assert usage and behaviour, never a token's value.
 
 ### Compliance
 
@@ -41,9 +37,9 @@ decision the user takes from a visual proposal.
 
 | File | Role |
 |------|------|
-| `app/composables/useTheSlopeDesignSystem.ts` | Tokens and the responsive factories `createResponsiveAlerts`, `createResponsiveButtons`, `createDayCircleClasses` |
-| `tests/component/architecture/designSystemUsage.unit.spec.ts` | The usage rules, one case each (14) |
-| `docs/ui.md` | Token reference, alert kinds, edit affordances, calendar presets |
+| `app/composables/useTheSlopeDesignSystem.ts` | The tokens |
+| `tests/component/architecture/designSystemUsage.unit.spec.ts` | The usage rules |
+| `docs/ui.md` | Token families and shared patterns |
 
 ### Related ADRs
 
@@ -54,7 +50,7 @@ decision the user takes from a visual proposal.
 
 ## ADR-017: Isomorphic Composables, Pure UI Composables and Per-Context Type Checking
 
-**Status:** Accepted | **Date:** 2026-09-02 | **Updated:** 2026-10-18
+**Status:** Accepted | **Date:** 2026-09-02 | **Updated:** 2026-10-27
 
 ### Context
 
@@ -66,7 +62,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 
 | Kind | Location / naming | Rules |
 |------|-------------------|-------|
-| **Texts** | `app/config/<area>.ts` (`notificationTemplates.ts`, `help-texts.ts`, `bookingWords.ts`) | Plain modules holding the words and sentence templates users read, keyed by enum members where a type exists. The app and the server import them; composables and components read them and hold no user-facing literal |
+| **Texts** | `app/config/<area>.ts` (`notificationTemplates.ts`, `help-texts.ts`, `bookingWords.ts`) | Plain modules holding the words and sentence templates users read, keyed by enum members where a type exists. The app and the server import them; composables and components read them and hold no user-facing literal beyond a component's own one-line text (compliance 7) |
 | **Isomorphic composable** | `app/composables/use<Domain>.ts`, `use<Domain>Validation.ts` — anything imported from `server/` | Explicit imports only (no auto-imports). No Vue reactivity, Pinia stores, nuxt-auth-utils app composables (`useUserSession`), NuxtUI or design-system calls. Types shared with the repository live in validation composables (`TransactionCreateData`), never imported from `server/`. Formats a domain object into its text from the texts in `app/config/` (`formatTicketCounts` "2V 1B", `formatPlace` "Voksen #3", a toast line, `formatScaffoldResult` for the logs, `buildDinnerUrl`), so the app, the mails and the logs read the same |
 | **Pure UI composable** | `app/composables/use<Domain>Ui.ts` (`useBookingUi`, `useUserRolesUi`) | Client-only, never imported from `server/`. Owns badges, icons, colours, action previews, store-aware predicates; its labels come from `app/config/`. May use auto-imports |
 | **Design system** | `useTheSlopeDesignSystem.ts` | Owns every shared UI value (ADR-018); not booking- or user-aware; never server-reachable |
@@ -86,8 +82,12 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 3. `use<Domain>Ui` and the design system MUST NOT be imported from `server/`
 4. App code MUST NOT import from `~~/server/**`; shared types go through validation composables
 5. New type augmentations go in `shared/types/` or `server/types/`
-6. User-facing text MUST live in `app/config/`; the isomorphic composable formats a domain object's text from it, and `use<Domain>Ui` adds the icon and the colour
-7. New text starts in `app/config/`; an existing literal moves there when its file is touched
+6. User-facing text MUST live in `app/config/`, a component's own one-line text excepted (rule 7); the isomorphic composable formats a domain object's text from it, and `use<Domain>Ui` adds the icon and the colour
+7. New text starts in `app/config/`; an existing literal moves there when its file is touched. A component's own
+   one-line text (an empty state, a loading line) stays in its template
+8. Date operations call the season's curried helpers (`useSeason`, `app/utils/season.ts`) and `app/utils/date.ts`;
+   `date-fns` only where neither has the operation. The app reads the time through `useClock`, and only the server calls
+   `new Date()`; a date becomes text through `formatDate` and its named formats
 
 ### Key Files
 
@@ -112,7 +112,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 
 ## ADR-016: Unified Booking Through Scaffold
 
-**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-19
+**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-28
 
 ### Context
 
@@ -149,6 +149,9 @@ Abstract composite keys (`inhabitantId-dinnerEventId`) caused bugs:
 
 A claim or a reclaim while the dining mode is locked (`canEditMode` false) lands as DINEIN, as an update does; a guest's
 bare NONE with no `orderId` lands nothing (no guest to cancel).
+
+A ticket of 0 portions takes no portion from the kitchen: it books and cancels as before the deadline at any time, so
+it neither joins the waiting list nor goes for sale.
 
 A dinner's waiting list is one first-come-first-served line per ticket type. The claim bucket executes by supply at that
 instant: a released ticket of the claim's ticket type, FIFO by `releasedAt`, while nobody waits in that type's line;
@@ -200,15 +203,15 @@ DesiredOrderSchema = {
 | Source of the desired orders | Trigger | Audit |
 |---|---|---|
 | A draft (`desiredOrders`) | the booking page, the admin's correction | `USER_*` |
-| The preferences, stored or the drafts in `preferences` | a preference change, the nightly run, a season activation or update, a residency change | `SYSTEM_*` |
+| The preferences, stored or the drafts in `preferences` | a preference change, the DAILY_MAINTENANCE job, a season activation or update, a residency change | `SYSTEM_*` |
 
 Both go through `resolveDesiredOrdersToBuckets`: before the deadline they book and cancel; after it they buy a ticket
 for sale or join its type's line, release, leave or requeue. A person's own earlier act outranks the preference:
 `fetchUserIntentKeys` reads the season's `USER_*` rows (bookings, cancellations, the waiting-list acts) and the
 generator skips those dinners. `POST /api/household/order/scaffold` is the member's booking write and
-`POST /api/household/inhabitants/[id]/preferences` the preference write; both answer `?preview=true` with the same
-run settled against the supply read and nothing written (`preview`); the scaffold's preview with no orders answers
-the household's next run on the dinners asked. The endpoint hands the scaffolder its deadlines: the season's
+`POST /api/household/inhabitants/[id]/preferences` the preference write; a preview runs the same scaffold on a draft
+against the supply it reads and writes nothing; it is a read (ADR-004). With no draft it is the household's next run on
+the season's deadlines. The endpoint hands the scaffolder its deadlines: the season's
 (`deadlinesForSeason`) for a member, `OPEN_DEADLINES` (`useSeason.ts`) for an admin's request with `?adminBypass=true`.
 
 ### Compliance
@@ -221,7 +224,7 @@ the household's next run on the dinners asked. The endpoint hands the scaffolder
 6. Generators MUST receive dinner events filtered by `isHouseholdActiveOnDay`
 7. Booking-relevant field changes MUST trigger immediate re-scaffold via `rescaffoldOnFieldChange`
 8. UI MUST include `waitlistEntryId` from the household's queue entries to leave or requeue
-9. The scaffold and the waiting-list steps send no notification: they return their outcomes (joined, sold, sold to the waiting list, the chef's extra portions), and the caller hands them to the notification service after the action (`notifyBookingOutcomes`, `notifyExtraPortions`)
+9. The scaffold and the waiting-list steps send no notification: they return their outcomes (joined, sold, sold to the waiting list, the chef's extra portions), and the caller hands them to the notification service after the action (`notifyBookingOutcomes`, `notifyExtraPortions`); the notifications go in the background after the response, and the DAILY_MAINTENANCE job sends what a background run did not finish
 10. A failed write batch is retried order by order; the reply counts the orders that landed per action (`totals`), lists them per person for a run scoped to one household (`results`) and lists the orders that failed (`failed`)
 11. A claim buys a released ticket of its type only while nobody waits in that type's line; every run ends with `sellTicketsToWaitlist` on its dinners
 12. Every write to a waiting entry writes its `OrderHistory` row (`orderId` null) with the run's audit context
@@ -251,7 +254,7 @@ the household's next run on the dinners asked. The endpoint hands the scaffolder
 
 ## ADR-015: Idempotent Automated Jobs with Rolling Window
 
-**Status:** Accepted | **Date:** 2025-12-12 | **Updated:** 2026-10-18
+**Status:** Accepted | **Date:** 2025-12-12 | **Updated:** 2026-10-28
 
 ### Context
 
@@ -282,6 +285,7 @@ Daily maintenance consumes past dinners (SCHEDULED/ANNOUNCED → CONSUMED), clos
 | **createTransactions** | Only creates for orders with `Transaction: null` (existing transaction = skipped) |
 | **generateDinnerEvents** | Uses `pruneAndCreate` to reconcile by date key |
 | **sellTicketsToWaitlist** | A placed entry leaves its line; a line without a ticket of its type for sale stops at its first miss; a grabbed entry finishes or returns to its place at the first run after the lease |
+| **Notifications** | A delivery record covers a sent notification: a re-run sends nothing, and an admin's override sends it again |
 
 ### Configuration
 
@@ -654,7 +658,7 @@ const createDraft = ref<CookingTeam[]>([])
 
 ## ADR-007: SSR-Friendly Store Pattern with useAsyncData
 
-**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2026-10-08
+**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2026-10-27
 
 ### Decision
 
@@ -721,10 +725,8 @@ const isStoreReady = computed(() => /* combine all checks */)
 
 ### Component-Local Data Exception
 
-Components MAY use `useAsyncData` directly when:
-- Data is component-specific (not shared)
-- Multiple instances need separate data
-- Fetch calls **store methods** built on `apiRequest` (`planStore.fetchTeamDetail`, `bookingsStore.fetchOrderDetail`)
+Components MAY read data themselves through `storeAsyncData` by url when it is component-specific (not shared) or
+multiple instances need separate data (`AdminSystem`'s job runs, the public billing page)
 
 ### Compliance
 
@@ -832,7 +834,7 @@ await prisma.season.delete({ where: { id: seasonId } })
 
 ## ADR-004: Logging and Security Standards
 
-**Status:** Accepted | **Date:** 2025-01-24
+**Status:** Accepted | **Date:** 2025-01-24 | **Updated:** 2026-10-23
 
 ### Decision
 
@@ -845,6 +847,23 @@ await prisma.season.delete({ where: { id: seasonId } })
 **NEVER log:** `password`, `passwordHash`, `token`, full user objects
 
 **Format:** `👨‍💻 > [MODULE] > [METHOD] message`
+
+### Access
+
+**Every member reads. A household changes its own data; an admin, or the allergy manager for allergies, changes it on the household's behalf through a logged override.**
+
+| Role | Reads | Changes household data |
+|---|---|---|
+| Member | everything | own household |
+| Admin | everything | any household, by override |
+| Allergy manager | everything | any household's allergies, by override |
+
+### Compliance
+
+1. A read changes nothing and is a `GET`; a preview is a read
+2. A change is a `POST`, `PUT` or `DELETE`, checked on the server against the household it changes
+3. An override is asked per change, never implied by the role, and logged with the actor and the household
+4. A read carries no override; a preview of an admin's change lifts its deadlines without one, since nothing changes
 
 ---
 
@@ -908,7 +927,7 @@ export default defineEventHandler(async (event) => {
 
 ## ADR-001: Core Framework and Technology Stack
 
-**Status:** Accepted | **Date:** 2025-01-22 | **Updated:** 2025-11-11
+**Status:** Accepted | **Date:** 2025-01-22 | **Updated:** 2026-10-27
 
 ### Decision
 
@@ -960,6 +979,10 @@ if (order.state === OrderStateSchema.enum.BOOKED) { }
 1. MUST import from validation composables
 2. MUST use `.enum` property for values
 3. MUST NOT import from `~~/prisma/generated/zod` or `@prisma/client`
+4. A form's input schema and the types of its state MAY live in its component when no other file reads them, derived
+   from the validation composables' schemas and types (`Omit<GuestBookingFormData, 'dinnerMode'> & {dinnerMode:
+   DinnerMode}` in `GuestBookingForm.vue`); what the form emits, stores or sends is a domain type from a validation
+   composable (`DesiredOrder[]`)
 
 **Exceptions:**
 - Build-time config (`app.config.ts`): MUST import from generated layer

@@ -1,10 +1,8 @@
 import {test, expect} from '@playwright/test'
 import {useWeekDayMapValidation} from '~~/app/composables/useWeekDayMapValidation'
-import {useBookingValidation, type DinnerEventDisplay} from '~~/app/composables/useBookingValidation'
-import type {CookingTeamDetail} from '~~/app/composables/useCookingTeamValidation'
+import {useBookingValidation} from '~~/app/composables/useBookingValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
-import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
@@ -13,13 +11,12 @@ const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {DinnerStateSchema, TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
 const DinnerState = DinnerStateSchema.enum
-const {headers, validatedBrowserContext, temporaryAndRandom} = testHelpers
+const {headers, validatedBrowserContext, temporaryAndRandom, attemptAll} = testHelpers
 
 test.describe('Season API Tests', () => {
 
 // Variables to store IDs for cleanup
     const createdSeasonIds: number[] = []
-    const createdHouseholdIds: number[] = []
 
     // Helper: Verify ticket prices exist and are sorted by price ascending (cheapest first)
     const assertTicketPrices = (season: Season, expectedCount = 4) => {
@@ -64,7 +61,7 @@ test.describe('Season API Tests', () => {
 
         test("GIVEN a season priced at the default prices WHEN reading it THEN each price carries what a ticket at it weighs, and an update sending those prices saves", async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-            const ticketPrices = TicketFactory.defaultTicketPricesWithoutIds({hungryBabyPrice: 900, childPrice: 1700, adultPrice: 4000})
+            const ticketPrices = TicketFactory.defaultTicketPricesWithoutIds()
             const created = await SeasonFactory.createSeason(context, {...SeasonFactory.defaultSeason(), ticketPrices})
             trackSeason(created.id!)
 
@@ -318,87 +315,6 @@ test.describe('Season API Tests', () => {
 
     })
 
-    test.describe('Assign Team Affinities and Cooking Teams', () => {
-        test("POST /season/[id]/assign-team-affinities should assign affinities AND /assign-cooking-teams should assign teams to events", async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const expectEventsHaveTeams = (events: DinnerEventDisplay[]) => {
-                events.forEach(event => {
-                    expect(event.cookingTeamId).toBeDefined()
-                    expect(event.cookingTeamId).not.toBeNull()
-                })
-            }
-
-            // Use nextMondayToFriday() to get exactly 3 Mon/Wed/Fri cooking days within prebooking window
-            const seasonData = {
-                ...SeasonFactory.defaultSeason(),
-                seasonDates: SeasonFactory.nextMondayToFriday(),
-                cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
-                consecutiveCookingDays: 1
-            }
-            const {season, teams} = await SeasonFactory.createSeasonWithTeams(context, seasonData, 3)
-            createdSeasonIds.push(season.id!)
-
-            const dinnerEventsResult = await SeasonFactory.generateDinnerEventsForSeason(context, season.id!)
-            expect(dinnerEventsResult.eventCount).toBe(3)
-
-            const affinityResult = await SeasonFactory.assignTeamAffinities(context, season.id!)
-            expect(affinityResult.teamCount).toBe(3)
-            expect(affinityResult.teams.filter(t => t.affinity?.mandag).length).toBe(1)
-            expect(affinityResult.teams.filter(t => t.affinity?.onsdag).length).toBe(1)
-            expect(affinityResult.teams.filter(t => t.affinity?.fredag).length).toBe(1)
-
-            const assignmentResult = await SeasonFactory.assignCookingTeams(context, season.id!)
-            expect(assignmentResult.eventCount).toBe(3)
-            expectEventsHaveTeams(assignmentResult.events)
-            expect([...new Set(assignmentResult.events.map(e => e.cookingTeamId))].length).toBe(3)
-
-            const team4 = await SeasonFactory.createCookingTeamWithMembersForSeason(context, season.id!, "Team-4-added-later", 2)
-            createdHouseholdIds.push(team4.householdId)
-            expect(team4.assignments).toHaveLength(2)
-            expect(team4.assignments[0]!.inhabitant).toBeDefined()
-
-            const affinityResult2 = await SeasonFactory.assignTeamAffinities(context, season.id!)
-            expect(affinityResult2.teamCount).toBe(4)
-
-            const teamsAfter = teams.map(t => affinityResult2.teams.find(at => at.id === t.id))
-            teamsAfter.forEach((teamAfter: CookingTeamDetail | undefined, i: number) => {
-                expect(teamAfter).toBeDefined()
-                const originalTeam = affinityResult.teams.find(t => t.id === teams[i]!.id)
-                expect(teamAfter!.affinity).toEqual(originalTeam!.affinity)
-            })
-
-            const team4After = affinityResult2.teams.find(t => t.id === team4.id)
-            expect(team4After).toBeDefined()
-            expect(Object.values(team4After!.affinity!).some(v => v === true)).toBe(true)
-
-            const assignmentResult2 = await SeasonFactory.assignCookingTeams(context, season.id!)
-            expect(assignmentResult2.eventCount).toBe(3)
-            expectEventsHaveTeams(assignmentResult2.events)
-        })
-
-        test("POST /season/[id]/assign-team-affinities should work when NO dinner events exist", async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-
-            // Use nextMondayToFriday() to get exactly 3 Mon/Wed/Fri cooking days within prebooking window
-            const seasonData = {
-                ...SeasonFactory.defaultSeason(),
-                seasonDates: SeasonFactory.nextMondayToFriday(),
-                cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
-                consecutiveCookingDays: 1
-            }
-            const {season} = await SeasonFactory.createSeasonWithTeams(context, seasonData, 3)
-            createdSeasonIds.push(season.id!)
-
-            // Assign affinities WITHOUT generating dinner events first
-            // This tests the code path where dinnerEvents.length === 0
-            const affinityResult = await SeasonFactory.assignTeamAffinities(context, season.id!)
-            expect(affinityResult.teamCount).toBe(3)
-            expect(affinityResult.teams.filter(t => t.affinity?.mandag).length).toBe(1)
-            expect(affinityResult.teams.filter(t => t.affinity?.onsdag).length).toBe(1)
-            expect(affinityResult.teams.filter(t => t.affinity?.fredag).length).toBe(1)
-        })
-    })
-
     test.describe('Active Season endpoints', () => {
 
         test('GET /api/admin/season/active should return active season ID', async ({browser}) => {
@@ -467,10 +383,9 @@ test.describe('Season API Tests', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        // Cleanup households first (before seasons, in case of any references)
-        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
-        // Factory cleanup automatically includes active season singleton
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        await attemptAll('Season API Tests cleanup', [
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 
 })

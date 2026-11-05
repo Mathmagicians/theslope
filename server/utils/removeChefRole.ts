@@ -1,10 +1,7 @@
 import {fetchDinnerEvents, updateDinnerEvent, updateDinnerEventAllergens} from '~~/server/data/financesRepository'
 import {deleteHeynaboEventAsSystem} from '~~/server/integration/heynabo/heynaboClient'
 import {CHEF_LOSS_DINNER_UPDATES} from '~/composables/useBooking'
-import {useBookingValidation, type DinnerEventDetail} from '~/composables/useBookingValidation'
-
-const {DinnerStateSchema} = useBookingValidation()
-const DinnerState = DinnerStateSchema.enum
+import {CLOSED_DINNER_STATES, type DinnerEventDetail} from '~/composables/useBookingValidation'
 
 const LOG = '👩‍🍳 > CHEF_ROLE > [REMOVE]'
 
@@ -46,7 +43,7 @@ export async function removeChefRoleForInhabitants(d1Client: D1Database, inhabit
     if (inhabitantIds.length === 0) return 0
     const dinners = await fetchDinnerEvents(d1Client, {
         chefIds: inhabitantIds,
-        excludeStates: [DinnerState.CONSUMED, DinnerState.CANCELLED]
+        excludeStates: CLOSED_DINNER_STATES
     })
     for (const dinner of dinners) {
         await removeChefRole(d1Client, dinner)

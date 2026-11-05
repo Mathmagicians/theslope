@@ -1,15 +1,16 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '~~/tests/e2e/uiTest'
 import { authFiles } from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { ADMIN_WORDS } from '~/config/adminWords'
 
 const { adminUIFile, memberUIFile } = authFiles
-const { validatedBrowserContext, doScreenshot, gotoHydrated, pollUntil } = testHelpers
+const { validatedBrowserContext, doScreenshot, gotoHydrated } = testHelpers
 
 // Every tab loads to its root test-id in MobileViewport.e2e.spec.ts; the cases here cover redirects and tab selection
 const tabs = [
-  { name: 'Økonomi', path: 'economy', selector: '[data-testid="admin-economy"]' },
-  { name: 'Planlægning', path: 'planning', selector: '[data-testid="admin-planning"]' }
+  { name: ADMIN_WORDS.tabs.economy, path: 'economy', selector: '[data-testid="admin-economy"]' },
+  { name: ADMIN_WORDS.tabs.planning, path: 'planning', selector: '[data-testid="admin-planning"]' }
 ]
 
 test.describe('Admin page path-based navigation', () => {
@@ -30,25 +31,25 @@ test.describe('Admin page path-based navigation', () => {
 
   for (const scenario of redirectScenarios) {
     test(scenario.description, async ({ page }) => {
-      await page.goto(`${adminUrl}${scenario.path}`)
+      await gotoHydrated(page, `${adminUrl}${scenario.path}`)
       await doScreenshot(page, `admin-redirect-${scenario.path.replace('/', '') || 'root'}-after-goto`)
 
-      await pollUntil(async () => page.url(), url => /\/admin\/planning/.test(url))
+      await expect(page).toHaveURL(/\/admin\/planning/)
       await doScreenshot(page, `admin-redirect-${scenario.path.replace('/', '') || 'root'}-after-url-check`)
 
-      await pollUntil(() => page.locator('[data-testid="admin-planning"]').isVisible(), visible => visible)
+      await expect(page.locator('[data-testid="admin-planning"]')).toBeVisible()
       await doScreenshot(page, `admin-redirect-${scenario.path.replace('/', '') || 'root'}-final`)
     })
   }
 
   test('Client-side navigation preserves active tab state', async ({ page }) => {
     for (const tab of tabs) {
-      await page.goto(`${adminUrl}/${tab.path}`)
+      await gotoHydrated(page, `${adminUrl}/${tab.path}`)
 
       expect(page.url()).toContain(`/admin/${tab.path}`)
 
       // Wait for component to appear
-      await pollUntil(() => page.locator(tab.selector).isVisible(), visible => visible)
+      await expect(page.locator(tab.selector)).toBeVisible()
 
       const activeTab = page.locator('button[role="tab"]').filter({ hasText: tab.name }).first()
       await expect(activeTab).toHaveAttribute('aria-selected', 'true')
@@ -66,13 +67,13 @@ test.describe('Admin season URL persistence', () => {
   })
 
   test('Invalid season redirects to a valid season', async ({ page }) => {
-    await page.goto('/admin/planning?season=invalid-123')
+    await gotoHydrated(page, '/admin/planning?season=invalid-123')
 
     // Debug: Screenshot before waiting for redirect
     await doScreenshot(page, 'admin-invalid-season-before-redirect')
 
     // Wait for URL to auto-correct to a valid season
-    await pollUntil(async () => page.url(), url => url.includes('season=') && !url.includes('invalid-123'))
+    await expect(page).toHaveURL(url => url.searchParams.has('season') && url.searchParams.get('season') !== 'invalid-123')
   })
 
 })
@@ -132,7 +133,7 @@ test.describe('Admin page authorization', () => {
           const bannerLocator = page.locator('[data-testid="admin-readonly-banner"]')
           if (userContext.expectBanner) {
             await expect(bannerLocator).toBeVisible()
-            await expect(bannerLocator).toContainText('Hej, du er ikke administrator')
+            await expect(bannerLocator).toContainText(ADMIN_WORDS.readOnly.title)
           } else {
             await expect(bannerLocator).not.toBeVisible()
           }

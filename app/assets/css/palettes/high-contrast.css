@@ -65,6 +65,7 @@ html[data-palette="high-contrast"] {
 
 html.dark[data-palette="high-contrast"] {
     --color-amber-300: #fff3e8;
+    --color-amber-400: #ae8a71;
     --color-amber-500: #663e2c;
     --color-amber-600: #b48375;
     --color-blue-300: #d9fcff;
@@ -95,7 +96,7 @@ html.dark[data-palette="high-contrast"] {
     --color-pink-800: #98143e;
     --color-red-300: #fff2f1;
     --color-red-400: #ffe2de;
-    --color-red-500: #c97973;
+    --color-red-500: #d2817b;
     --color-red-700: #cd7674;
     --color-sky-50: #f1fafa;
     --color-sky-200: #cbeef5;

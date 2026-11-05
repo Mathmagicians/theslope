@@ -1,10 +1,12 @@
-import {defineEventHandler, setResponseStatus, getQuery} from 'h3'
+import {defineEventHandler, setResponseStatus, getValidatedQuery} from 'h3'
 import {runMonthlyBilling} from '~~/server/utils/monthlyBillingService'
 import {emailChannel} from '~~/server/utils/sender/config'
 import type {MonthlyBillingResponse} from '~/composables/useBillingValidation'
+import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const {throwH3Error} = eventHandlerHelper
+const LOG = '💰 > MONTHLY > [BILLING]'
 
 /**
  * POST /api/admin/maintenance/monthly
@@ -13,19 +15,24 @@ const {throwH3Error} = eventHandlerHelper
  * Same logic as cron task, but triggered via HTTP: generation, CSV archive (ARCHIVE), accountant mail (SENDER).
  *
  * Query params:
- * - triggeredBy: "ADMIN:<email>" from the admin UI, "ADMIN" when absent
+ * - triggeredBy: the admin's trigger from the admin UI (`adminTrigger`), the admin when absent
  */
 export default defineEventHandler(async (event): Promise<MonthlyBillingResponse> => {
     const {env} = event.context.cloudflare
+    const {JobTriggerQuerySchema} = useMaintenanceValidation()
 
-    const query = getQuery(event)
-    const triggeredBy = (query.triggeredBy as string) || 'ADMIN'
+    let triggeredBy: string
+    try {
+        ({triggeredBy} = await getValidatedQuery(event, JobTriggerQuerySchema.parse))
+    } catch (error) {
+        return throwH3Error(`${LOG} Invalid query parameters`, error, 400)
+    }
 
     try {
         const result = await runMonthlyBilling(env.DB, triggeredBy, {archive: env.ARCHIVE, email: emailChannel(env)})
         setResponseStatus(event, 200)
         return result
     } catch (error) {
-        return throwH3Error('💰 > MONTHLY > [BILLING] Error during monthly billing', error)
+        return throwH3Error(`${LOG} Error during monthly billing`, error)
     }
 })

@@ -22,6 +22,8 @@ No UTooltip - the poster page renders without a layout, so there is no UApp.
 Margins belong to the mount point, not to this box.
 -->
 <script setup lang="ts">
+import {BUTTON_WORDS} from '~/config/buttonWords'
+
 const props = withDefaults(defineProps<{
   /** One note per line */
   notes: string
@@ -98,7 +100,7 @@ const save = async () => {
               data-testid="cancel-allergy-notes"
               @click="cancelEdit"
           >
-            Annuller
+            {{ BUTTON_WORDS.cancel }}
           </UButton>
           <UButton
               v-bind="BUTTONS.save"
@@ -106,7 +108,7 @@ const save = async () => {
               data-testid="save-allergy-notes"
               @click="save"
           >
-            Gem
+            {{ BUTTON_WORDS.save }}
           </UButton>
         </div>
       </div>

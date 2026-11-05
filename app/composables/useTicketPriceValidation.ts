@@ -2,6 +2,7 @@ import {z} from 'zod'
 // Import TicketType enum from generated Zod schemas (single source of truth)
 import { TicketTypeSchema } from '~~/prisma/generated/zod'
 import { pruneAndCreate } from '~/utils/batchUtils'
+import {SEASON_WORDS} from '~/config/seasonWords'
 
 /**
  * Validation schemas for TicketPrice objects
@@ -30,18 +31,21 @@ export const useTicketPriceValidation = () => {
      * Note: Multiple prices for the same ticket type are allowed (price tiers, e.g., free baby vs hungry baby)
      */
     const TicketPricesArraySchema = z.array(TicketPriceSchema)
-        .min(1, {message: "Udfyld mindst en billettype"})
+        .min(1, {message: SEASON_WORDS.form.noTicketPrice})
         .refine((prices) => {
             const seasonIds = prices.map(p => p.seasonId).filter(id => id !== undefined)
             // Only validate if seasonIds are present
             return seasonIds.length === 0 || new Set(seasonIds).size === 1
         }, {
-            message: "Alle billetpriser skal tilhøre samme sæson"
+            message: SEASON_WORDS.form.ticketPricesAcrossSeasons
         })
 
     // Creating a price: the database assigns id and seasonId, and the price row holds no portions (the server fills them on read)
     const CreateTicketPriceSchema = TicketPriceSchema.omit({id: true, seasonId: true, portions: true})
     const CreateTicketPricesArraySchema = z.array(CreateTicketPriceSchema).min(1)
+
+    // The two fields a ticket's portions are looked up by
+    const PortionTicketSchema = TicketPriceSchema.pick({ticketType: true, price: true})
 
     /**
      * Reconcile ticket prices - never deletes, only creates/updates
@@ -75,13 +79,11 @@ export const useTicketPriceValidation = () => {
         TicketPricesArraySchema,
         CreateTicketPriceSchema,
         CreateTicketPricesArraySchema,
+        PortionTicketSchema,
         createTicketPrice,
         reconcileTicketPrices
     }
 }
 
 export type TicketPrice = z.infer<ReturnType<typeof useTicketPriceValidation>['TicketPriceSchema']>
-// The two fields a ticket's portions are looked up by
-export type PortionTicket = Pick<TicketPrice, 'ticketType' | 'price'>
-// A price row's id and the portions a ticket at it weighs
-export type PricePortions = Pick<TicketPrice, 'id' | 'portions'>
+export type PortionTicket = z.infer<ReturnType<typeof useTicketPriceValidation>['PortionTicketSchema']>

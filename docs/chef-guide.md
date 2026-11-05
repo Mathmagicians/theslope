@@ -34,7 +34,7 @@ Kokkehuen hopper ikke selv op på hovedet. Når du har aftalt med dit madhold �
 Mangler en middag en chefkok, lyser portrættet med et stort **WANTED**, som en eftersøgt fra det vilde vesten. Du finder middagene to steder:
 
 - **Middagskalenderen** ([dinner](https://www.skraaningen.dk/dinner)) — viser alle middage
-- **Chefsiden** ([chef](https://www.skraaningen.dk/chef)) — viser middagene for de madhold du selv er på
+- **Chefsiden** ([chef](https://www.skraaningen.dk/chef)) — viser middage for alle madholdene: dit eget hold i farver, andres hold som grå ringe (**Andet madholds fællesspisning** i Forklaring). Klik på en grå ring, og du kigger med hos det andet madhold - fanen siger **Ikke dit hold**, menuen kan du ikke røre, men du kan melde dig som **Chefkok**, **Kok** eller **Kokkespire**. Er du ikke på et madhold, lander du hos det madhold, der laver mad næste gang
 
 Klik **Bliv chefkok**, bekræft — og dit ansigt pryder portrættet. Tjansen er din.
 
@@ -44,9 +44,9 @@ Klik **Bliv chefkok**, bekræft — og dit ansigt pryder portrættet. Tjansen er
 ![Du er chefkok](screenshots/chef/role-assigned.png)
 *Tjansen er landet — nu er det dig der svinger grydeskeen*
 
-> **Fortrød du?** Klik **Ændre tjans** på portrættet og vælg **Meld afbud** (to klik — vi vil være helt sikre). Tjansen bliver ledig igen, WANTED-skiltet popper op, og din menu nulstilles til den næste helt.
+> **Fortrød du?** Klik **Rediger chefkokketjans** på portrættet og vælg **Meld afbud** (to klik — vi vil være helt sikre). Tjansen bliver ledig igen, WANTED-skiltet popper op, og din menu nulstilles til den næste helt.
 >
-> **Bytter I?** Har en anden kok lovet at tage dagen, klikker vedkommende på **Ændre tjans** ved dit portræt og vælger **Overtag Chefkok-tjansen fra [dit navn]**. Et **Ja tak, jeg overtager Chefkok-tjansen** senere skifter tjansen hænder — uden at WANTED-skiltet kommer frem.
+> **Bytter I?** Har en anden kok lovet at tage dagen, klikker vedkommende på **Rediger chefkokketjans** ved dit portræt og vælger **Overtag Chefkok-tjansen fra [dit navn]**. Et **Ja tak, jeg overtager Chefkok-tjansen** senere skifter tjansen hænder — uden at WANTED-skiltet kommer frem.
 
 ---
 
@@ -93,7 +93,7 @@ Klik **Bliv chefkok**, bekræft — og dit ansigt pryder portrættet. Tjansen er
 | **Total kuverter** | Samlet antal portioner (voksen, barn, baby) |
 | **Takeaway** | Antal og procentdel der henter mad |
 | **Spisesal** | Antal og procentdel der spiser i salen |
-| **Spis sent** | Antal og procentdel der kommer sent |
+| **Sen** | Antal og procentdel der kommer sent |
 | **Til salg** | Frigivne billetter der kan købes. Står der naboer på ventelisten, får boksen et **timeglas** med **VENTELISTE**: hvor mange kuverter ventelisten mangler, og hvilke billettyper de venter på |
 | **Allergier** | Under hver kategori: hvor mange kuverter der har et af menuens allergener |
 
@@ -109,7 +109,7 @@ Klik **Bliv chefkok**, bekræft — og dit ansigt pryder portrættet. Tjansen er
 
 1. Klik **Frigiv portioner** i boksen - eller find den under **tandhjulet** i knaprækken
 2. Skriv hvor mange portioner du kan frigive (feltet er udfyldt med det, ventelisten mangler)
-3. Klik **Frigiv** - portionerne går til de første i køen, og de får en mail
+3. Klik **Frigiv** - portionerne går til de første i køen
 
 ---
 
@@ -122,7 +122,7 @@ Når du har handlet, skriver du beløbet ind, så budgettet følger med:
 3. Linjen gemmes med det samme - med dato og dig som bestiller. Skraldespanden fjerner den igen
 4. Klik **Tilbage** for at folde sektionen sammen
 
-Over linjerne står hjælpetallene **Rådighedsbeløb**, **Brugt** og **Tilbage** - med et flueben når der er penge tilbage, og et udråbstegn når du er over. Laver dit madhold mad flere dage i træk, står holdets samlede saldo for de dage på sin egen linje.
+Over linjerne står hjælpetallene **Rådighedsbeløb**, **Brugt** og **Tilbage** - med et flueben når der er penge tilbage, og et udråbstegn når du er over. Laver dit madhold mad flere dage i træk, står holdets samlede saldo for de dage under overskriften **Madhold 2, periode 03/11-10/11**.
 
 **Budget**-sektionen nedenunder viser tre bokse:
 
@@ -132,7 +132,7 @@ Over linjerne står hjælpetallene **Rådighedsbeløb**, **Brugt** og **Tilbage*
 | **Rådighedsbeløb** | Indtægter minus køkkenbidrag: det du kan handle for. Med **Brugt** og **Tilbage** |
 | **Køkkenbidrag** | 5 % af indtægterne, som går til køkkenet |
 
-Alle beløb står som **ex / inkl. moms**. Fold sektionen ud for **Billetter** (fordelt på voksen, barn og baby), **Billetændringer** siden menufristen - med **Vis fuld historik** - og holdets runde, hvis I laver mad flere dage i træk.
+Alle beløb står som **ex / inkl. moms**. Fold sektionen ud for **Billetter** (fordelt på voksen, barn og baby), **Billetændringer** siden **Framelding lukker** - med **Vis fuld historik** for dem før - og holdets runde, hvis I laver mad flere dage i træk.
 
 ---
 
@@ -164,7 +164,7 @@ Hvis middagen ikke kan afholdes:
 
 **Fortryd aflysning:** Klik **Annuller aflysning** og bekræft med **Tryk igen for at genåbne [dato]** — billetterne er tilbage, som de var.
 
-> **Skal du blot melde fra som chefkok?** Brug **Ændre tjans** ved kokkens portræt - så bliver middagen stående, og WANTED-skiltet finder den næste helt.
+> **Skal du blot melde fra som chefkok?** Brug **Rediger chefkokketjans** ved kokkens portræt - så bliver middagen stående, og WANTED-skiltet finder den næste helt.
 
 ---
 
@@ -181,4 +181,4 @@ Se dine holdmedlemmer på [Chef](https://www.skraaningen.dk/chef).
 
 ---
 
-*Sidst opdateret: Oktober 2026 (ventelisten og frigiv portioner, madbestilling og budget, overtag tjansen, allergener per kuvert, aflysning)*
+*Sidst opdateret: Oktober 2026 (ventelisten og frigiv portioner, madbestilling og budget, overtag tjansen, allergener per kuvert, aflysning, kig på de andre madhold, Rediger chefkokketjans)*

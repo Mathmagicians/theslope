@@ -9,9 +9,10 @@ import { getQuery, type H3Event } from 'h3'
 import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
 import { UserFactory } from '~~/tests/e2e/testDataFactories/userFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
-import { asyncDataStatus, resetStores, registerEmptyStoreEndpoints } from '~~/tests/component/testHelpers'
+import { asyncDataStatus, itemAt, resetStores, registerEmptyStoreEndpoints } from '~~/tests/component/testHelpers'
 
 import { useAllergiesStore } from '~/stores/allergies'
+import { ALLERGY_WORDS } from '~/config/allergyWords'
 
 // The test runtime has no session cookie, so the session is the one thing faked; the households store
 // selecting the household from it is real
@@ -53,7 +54,11 @@ const SELECTED_ALLERGY_TYPE_KEY = 'allergy-store-selected-allergy-type'
 registerEndpoint('/api/admin/allergy-type', allergyTypesEndpoint)
 registerEndpoint('/api/household/allergy/1', allergyByIdEndpoint)
 registerEndpoint('/api/household/allergy', allergiesEndpoint)
-// Generic (GET) registered BEFORE method-specific so POST wins (reverse-order lookup)
+// Generic (GET) registered BEFORE method-specific so the write wins (reverse-order lookup)
+const createAllergyTypeEndpoint = vi.fn()
+const createAllergyEndpoint = vi.fn()
+registerEndpoint('/api/admin/allergy-type', {handler: createAllergyTypeEndpoint, method: 'PUT'})
+registerEndpoint('/api/household/allergy', {handler: createAllergyEndpoint, method: 'PUT'})
 registerEndpoint(POSTER_NOTES_ENDPOINT, posterNotesGetEndpoint)
 registerEndpoint(POSTER_NOTES_ENDPOINT, {handler: posterNotesPostEndpoint, method: 'POST'})
 
@@ -66,6 +71,13 @@ const setupStore = async () => {
     await store.loadAllergyTypes()
     return store
 }
+
+const aSettingRow = (value: string) => ({
+    key: 'allergy-poster-notes',
+    value,
+    updatedAt: new Date('2026-09-18T10:00:00.000Z').toISOString(),
+    updatedByUserId: 3
+})
 
 // ========================================
 // Tests
@@ -182,7 +194,7 @@ describe('Allergies Store - selected allergy type', () => {
         await vi.waitFor(() => expect(allergyTypesEndpoint.mock.calls.length).toBeGreaterThan(catalogRequests))
         await vi.waitFor(() => expect(store.selectedAllergyTypeId).toBeNull())
         expect(goneAllergyTypeEndpoint).toHaveBeenCalledTimes(1)
-        expect(useToast().toasts.value.at(-1)?.title).toBe('Kan ikke finde allergitypen')
+        expect(useToast().toasts.value.at(-1)?.title).toBe(ALLERGY_WORDS.notFound.allergyType)
     })
 
     it('after a 404 the page\'s getter still drives the selection', async () => {
@@ -310,6 +322,7 @@ describe('Allergies Store - cache coherence between allergies and the catalog', 
         allergyTypeByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypes()[0])
         allergiesEndpoint.mockReturnValue(AllergyFactory.createMockAllergies())
         allergyByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergies()[0])
+        createAllergyEndpoint.mockReturnValue(AllergyFactory.createMockAllergies()[0])
     })
     afterEach(() => {
         session.user.value = null
@@ -327,16 +340,16 @@ describe('Allergies Store - cache coherence between allergies and the catalog', 
         {
             mutation: 'createAllergy',
             act: (store: ReturnType<typeof useAllergiesStore>) =>
-                store.createAllergy({inhabitantId: 1, allergyTypeId: 2, inhabitantComment: 'Mild'})
+                store.createAllergy({inhabitantId: 1, allergyTypeId: 2, inhabitantComment: 'Mild'}, false)
         },
         {
             mutation: 'updateAllergy',
             act: (store: ReturnType<typeof useAllergiesStore>) =>
-                store.updateAllergy(1, {allergyTypeId: 2, inhabitantComment: 'Worse'})
+                store.updateAllergy(1, {allergyTypeId: 2, inhabitantComment: 'Worse'}, false)
         },
         {
             mutation: 'deleteAllergy',
-            act: (store: ReturnType<typeof useAllergiesStore>) => store.deleteAllergy(1)
+            act: (store: ReturnType<typeof useAllergiesStore>) => store.deleteAllergy(1, false)
         }
     ])('$mutation refetches the allergy-type catalog', async ({act}) => {
         const store = await setupHouseholdAllergies()
@@ -359,17 +372,73 @@ describe('Allergies Store - cache coherence between allergies and the catalog', 
     })
 })
 
+// Each action reports its result in one success toast, past its re-read; a failed action shows the request's toast alone
+describe('Allergies Store - the toast of an action', () => {
+    type Store = ReturnType<typeof useAllergiesStore>
+    const Toasts = ALLERGY_WORDS.toasts
+    const allergyType = itemAt(AllergyFactory.createMockAllergyTypes(), 0)
+    const allergy = itemAt(AllergyFactory.createMockAllergies(), 0)
+    const notesRow = aSettingRow('Ny bemærkning')
+
+    // The household's allergy is named from the response: its request carries only the allergy type's id
+    const actions = [
+        {action: 'createAllergyType', endpoint: createAllergyTypeEndpoint, answer: allergyType,
+            act: (store: Store) => store.createAllergyType({name: allergyType.name, description: allergyType.description}),
+            toast: {title: Toasts.typeCreated.title, description: Toasts.typeCreated.description(allergyType.name)}},
+        {action: 'updateAllergyType', endpoint: allergyTypeByIdEndpoint, answer: allergyType,
+            act: (store: Store) => store.updateAllergyType(allergyType.id, {name: allergyType.name}),
+            toast: {title: Toasts.typeUpdated.title, description: Toasts.typeUpdated.description(allergyType.name)}},
+        {action: 'deleteAllergyType', endpoint: allergyTypeByIdEndpoint, answer: allergyType,
+            act: (store: Store) => store.deleteAllergyType(allergyType.id),
+            toast: {title: Toasts.typeDeleted.title, description: Toasts.typeDeleted.description(allergyType.name)}},
+        {action: 'savePosterNotes', endpoint: posterNotesPostEndpoint, answer: notesRow,
+            act: (store: Store) => store.savePosterNotes(notesRow.value),
+            toast: {title: Toasts.posterNotesSaved}},
+        {action: 'createAllergy', endpoint: createAllergyEndpoint, answer: allergy,
+            act: (store: Store) => store.createAllergy({inhabitantId: allergy.inhabitantId, allergyTypeId: allergy.allergyTypeId, inhabitantComment: null}, false),
+            toast: {title: Toasts.title, description: Toasts.added(allergy.allergyType.name)}},
+        {action: 'updateAllergy', endpoint: allergyByIdEndpoint, answer: allergy,
+            act: (store: Store) => store.updateAllergy(allergy.id, {inhabitantComment: 'Mild'}, false),
+            toast: {title: Toasts.title, description: Toasts.commentSaved}},
+        {action: 'deleteAllergy', endpoint: allergyByIdEndpoint, answer: allergy,
+            act: (store: Store) => store.deleteAllergy(allergy.id, false),
+            toast: {title: Toasts.title, description: Toasts.removed(allergy.allergyType.name)}}
+    ]
+
+    beforeEach(() => {
+        resetStores()
+        vi.clearAllMocks()
+        allergyTypesEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypesWithInhabitants())
+        posterNotesGetEndpoint.mockReturnValue(notesRow)
+    })
+
+    it.each(actions)('$action reports its result in one success toast', async ({endpoint, answer, act, toast}) => {
+        endpoint.mockReturnValue(answer)
+        const store = await setupStore()
+        useToast().clear()
+
+        await act(store)
+
+        expect(useToast().toasts.value).toEqual([expect.objectContaining({...toast, icon: ICONS.checkCircle, color: COLOR.success})])
+    })
+
+    it.each(actions)('$action that fails shows the request\'s toast alone', async ({endpoint, act}) => {
+        endpoint.mockImplementation(() => {
+            throw createError({statusCode: 500})
+        })
+        const store = await setupStore()
+        useToast().clear()
+
+        await expect(act(store)).rejects.toThrow()
+
+        expect(useToast().toasts.value.map(toast => toast.color)).toEqual([COLOR.warning])
+    })
+})
+
 // The catalog footer and the poster read ONE Setting row. It loads on its own status
 // refs, so the poster renders its notes even when the catalog fetch is still pending.
 describe('Allergies Store - poster notes setting', () => {
     const storedNotes = 'Glutenfri boller findes i fryseren\nHusk at give besked'
-
-    const aSettingRow = (value: string) => ({
-        key: 'allergy-poster-notes',
-        value,
-        updatedAt: new Date('2026-09-18T10:00:00.000Z').toISOString(),
-        updatedByUserId: 3
-    })
 
     // The endpoints model the one row: a write changes what the next read answers,
     // so a store that forgets to refetch fails here

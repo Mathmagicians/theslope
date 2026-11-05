@@ -17,7 +17,7 @@ export default defineEventHandler(async (event): Promise<UserDisplay[]> => {
     const d1Client = cloudflare.env.DB
 
     // Validate input - fail early on invalid data
-    let role!: SystemRole
+    let role: SystemRole
     try {
         const params = await getValidatedRouterParams(event, roleParamSchema.parse)
         role = params.role

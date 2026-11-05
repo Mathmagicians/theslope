@@ -11,8 +11,11 @@
  * - hasPrev/hasNext control arrow visibility
  * - disabled disables all buttons (e.g. during save)
  * - color configures button color (default: neutral)
+ *
+ * Visual check: /dinner, the date toggle open and closed with both arrows, phone and desktop.
  */
-import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import {COLOR, type NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import {DATE_WORDS} from '~/config/dateWords'
 
 interface Props {
   hasPrev?: boolean
@@ -27,10 +30,11 @@ withDefaults(defineProps<Props>(), {
   hasNext: true,
   disabled: false,
   open: true,
-  color: 'neutral'
+  color: COLOR.neutral
 })
 
-const {ICONS, SIZES, COLOR, NOISE} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, NOISE, COMPONENTS} = useTheSlopeDesignSystem()
+const nav = COMPONENTS.calendarDateNav
 
 const emit = defineEmits<{
   prev: []
@@ -40,7 +44,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex items-center justify-center gap-1">
+  <div :class="nav.row">
     <UButton
       v-if="hasPrev"
       :icon="ICONS.arrowLeft"
@@ -48,18 +52,18 @@ const emit = defineEmits<{
       :variant="NOISE.quiet"
       :size="SIZES.md"
       :disabled="disabled"
-      aria-label="Forrige"
+      :aria-label="DATE_WORDS.dateNav.previous"
       data-testid="date-nav-prev"
       @click="emit('prev')"
     />
     <UButton
       :color="COLOR.mocha"
-      :variant="open ? 'outline' : 'ghost'"
+      :variant="open ? NOISE.medium : NOISE.quiet"
       :size="SIZES.md"
       :disabled="disabled"
       :leading-icon="ICONS.calendar"
       :trailing-icon="open ? ICONS.chevronUp : ICONS.chevronDown"
-      class="!text-[inherit]"
+      :class="nav.toggle"
       data-testid="date-nav-toggle"
       @click="emit('toggle')"
     >
@@ -72,7 +76,7 @@ const emit = defineEmits<{
       :variant="NOISE.quiet"
       :size="SIZES.md"
       :disabled="disabled"
-      aria-label="Næste"
+      :aria-label="DATE_WORDS.dateNav.next"
       data-testid="date-nav-next"
       @click="emit('next')"
     />

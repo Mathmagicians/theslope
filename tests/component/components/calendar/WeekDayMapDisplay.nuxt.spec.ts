@@ -25,7 +25,7 @@ describe('WeekDayMapDisplay', () => {
     describe('compact view', () => {
         it('shows one badge per selected day, with abbreviated day names', async () => {
             const wrapper = await mount({modelValue: monWedFri, compact: true})
-            expect(wrapper.findAll('.capitalize').length).toBe(3)
+            expect(wrapper.findAllComponents({name: 'UBadge'}).length).toBe(3)
             const text = wrapper.text()
             expect(text).toContain('man')
             expect(text).toContain('ons')

@@ -14,7 +14,7 @@ Før du kan logge ind, skal du sikre dig følgende i **Heynabo**:
 
 1. **Du har en Heynabo-konto** - Login bruger din Heynabo email og password
 2. **Dine børn er tilføjet med fødselsdato** - Vigtigt! Billetprisen beregnes ud fra alder:
-   - **Baby** (0-1 år) - gratis
+   - **Baby** (0-1 år) - babypris
    - **Barn** (2-11 år) - reduceret pris
    - **Voksen** (12+ år) - fuld pris
 
@@ -23,9 +23,11 @@ Før du kan logge ind, skal du sikre dig følgende i **Heynabo**:
 ### Sådan tjekker du dine børns billettype
 
 1. Log ind på [skraaningen.dk](https://www.skraaningen.dk)
-2. Gå til [Husstanden](https://www.skraaningen.dk/household) (fanen med hus-ikon)
+2. Gå til [Præferencer](https://www.skraaningen.dk/household) (fanen med hus-ikon)
 3. Se listen over husstandens medlemmer
 4. Hver person vises med deres billettype: Baby, Barn eller Voksen
+
+Fylder et barn 12, skifter billettypen fra den første middag efter fødselsdagen - billetten får badgen **Ny billetpris** (*Voksen fra 20/10/2026*), og i ugegitteret får barnet en Barn- og en Voksen-række den uge.
 
 Står dit barn som **Voksen** selvom de er under 12 år? Så mangler fødselsdatoen i Heynabo. Ret det i Heynabo-appen, og det opdateres automatisk i Skrånerappen.
 
@@ -55,7 +57,7 @@ I appen bruges følgende symboler til at vise spisningsform og status:
 | Symbol | Navn | Betydning |
 |:------:|------|-----------|
 | ![Spisesal](https://api.iconify.design/hugeicons/dish-02.svg?height=20&color=%2322c55e) | **Spisesal** | Spis i fællessalen til normal tid |
-| ![Sen](https://api.iconify.design/heroicons/moon.svg?height=20&color=%2322c55e) | **Sen spisning** | Spis i fællessalen til sen spisning |
+| ![Sen](https://api.iconify.design/heroicons/moon.svg?height=20&color=%2322c55e) | **Sen** | Spis i fællessalen til sen spisning |
 | ![Takeaway](https://api.iconify.design/heroicons/shopping-bag.svg?height=20&color=%2322c55e) | **Takeaway** | Hent mad og spis hjemme |
 | ![Ingen](https://api.iconify.design/heroicons/x-circle.svg?height=20&color=%23ef4444) | **Ingen** | Ikke tilmeldt denne dag |
 | ![Blandet](https://api.iconify.design/heroicons/question-mark-circle.svg?height=20&color=%23737373) | **Blandet** | Familiemedlemmer har forskellige valg |
@@ -64,6 +66,7 @@ I appen bruges følgende symboler til at vise spisningsform og status:
 | ![Lukket](https://api.iconify.design/heroicons/lock-closed.svg?height=20&color=%23ef4444) | **Framelding: Lukket** | Lukket for framelding - du kan frigive din billet, købe en billet til salg eller skrive dig på ventelisten |
 | ![Frigivet](https://api.iconify.design/heroicons/arrow-up-tray.svg?height=20&color=%23ef4444) | **Frigivet** | Billetten er sat til salg |
 | ![Køb](https://api.iconify.design/heroicons/arrows-right-left.svg?height=20&color=%238b5cf6) | **Køb billet** | Køb en billet, som en anden har sat til salg |
+| ![Købt fra anden](https://api.iconify.design/heroicons/arrows-right-left.svg?height=20&color=%233b82f6) | **Købt fra anden** | Du har købt en frigivet billet - badgen siger *fra <husstand>* |
 | ![Venteliste](https://api.iconify.design/hugeicons/hourglass.svg?height=20&color=%23737373) | **Venteliste** | Du står i kø til en billet af din billettype |
 
 Kalenderne har også en **Forklaring** nederst, der viser symbolerne for netop den visning.
@@ -115,10 +118,12 @@ Efter login har du adgang til:
 | Sektion | Hvad du kan gøre |
 |---------|------------------|
 | **Tilmeldinger** | Se og book middage for din husstand |
-| **Husstanden** | Se medlemmer og sæt ugentlige præferencer |
+| **Præferencer** | Se medlemmer og sæt ugentlige præferencer |
 | **Allergier** | Tilføj allergier for husstandens medlemmer |
 | **Økonomi** | Se fakturaer og udgifter til fællesspisning |
 | **Indstillinger** | Opdater husstandsoplysninger |
+
+> **Kig ind hos naboerne:** Du kan åbne enhver husstands side - banneret **Du besøger nu en anden husstand end din egen** med **Kigge, ikke røre** siger, at du kun kan se.
 
 ---
 
@@ -134,7 +139,7 @@ Ugentlige præferencer bestemmer, hvornår du automatisk bliver tilmeldt fælles
 
 > **Ingen:** Ændrer du en dag til "Ingen", bliver du frameldt de kommende middage på den dag. Er frameldingsfristen passeret, frigives billetten i stedet og sættes til salg.
 
-1. Gå til **Husstanden** (fanen med hus-ikon)
+1. Gå til **Præferencer** (fanen med hus-ikon)
 2. Find den person du vil redigere
 3. Klik på **blyant-ikonet** ud for personen
 4. Vælg spisningsform for hver dag (se [Symboler i appen](#symboler-i-appen) ovenfor)
@@ -179,7 +184,7 @@ På [Middagskalenderen](https://www.skraaningen.dk/dinner) kan du se hvem der er
 | **Total kuverter** | Samlet antal tilmeldte (voksen, barn, baby) |
 | **Takeaway** | Hvem der henter mad |
 | **Spisesal** | Hvem der spiser i salen |
-| **Sen spisning** | Hvem der kommer sent |
+| **Sen** | Hvem der kommer sent |
 | **Til salg** | Billetter til salg, du kan købe - og ventelisten, når nogen venter |
 | **Allergier** | Hvor mange kuverter i hver kategori der har en af menuens allergener |
 
@@ -198,9 +203,10 @@ I uge- eller månedsvisning kan du hurtigt ændre tilmeldinger for flere dage:
 
 1. Klik på **blyanten** for at aktivere redigeringstilstand
 2. Klik på en celle for at skifte, hvordan du spiser: Spisesal → Sen → Takeaway → Ingen - det, der ikke kan vælges lige nu, springes over
-3. Brug **Power-rækken** øverst til at ændre alle medlemmer på én gang - dine gæster følger med
-4. Se **forhåndsvisning** af ændringer før du gemmer
-5. Klik **Opdater** når du er færdig - eller **Annuller** for at fortryde
+3. Over hver kolonne sidder kalenderens chip, **Booking kan ændres** eller **Lukket for framelding**; en frigivet billet viser Frigivet-ikonet i cellens hjørne
+4. Brug **Power-rækken** øverst til at ændre alle medlemmer på én gang - dine gæster følger med
+5. Se **forhåndsvisning** af ændringer før du gemmer
+6. Klik **Opdater** når du er færdig - eller **Annuller** for at fortryde
 
 Gæster har deres egen række i gitteret, så du kan ændre deres spisningsform på samme måde som familiens.
 
@@ -225,7 +231,7 @@ Før du gemmer dine bookingændringer, viser systemet en oversigt over hvad der 
 | ![Venteliste](https://api.iconify.design/hugeicons/hourglass.svg?height=20&color=%23737373) | **Emil skrives på ventelisten: 20/10/2026** | Ingen billet af den type til salg - Emil stiller sig i kø |
 | ![Venteliste](https://api.iconify.design/hugeicons/hourglass.svg?height=20&color=%23737373) | **Emil ændrer spisemåde til Sen (venteliste): 20/10/2026** | Emil beholder sin plads i køen og ønsker nu at spise sent |
 | ![Forlad](https://api.iconify.design/heroicons/x-mark.svg?height=20&color=%23ef4444) | **Emil forlader ventelisten: 20/10/2026** | Pladsen i køen opgives |
-| ![Gæst](https://api.iconify.design/heroicons/plus-circle.svg?height=20&color=%2322c55e) | **Gæst af Anna (Barn ×2) tilmeldes: 20/10/2026** | Annas to børnegæster bliver tilmeldt - gæster med samme billettype står samlet |
+| ![Gæst](https://api.iconify.design/heroicons/plus-circle.svg?height=20&color=%2322c55e) | **Gæst af Anna (Barn · *pris* ×2) tilmeldes: 20/10/2026** | Annas to børnegæster bliver tilmeldt - gæster med samme billettype og pris står samlet |
 
 Gælder en ændring mere end tre middage, står antallet og den første og sidste dato, fx **Knud frameldes: 7 middage, 02/11/2026 – 14/12/2026**. Når du har gemt, får du en kvittering med én linje per person, fx *Anna: 1 købt, 2 på ventelisten (Voksen #3, Voksen #5)* - og gik noget galt, står det der også, fx *1 opdatering fejlede*.
 
@@ -262,9 +268,11 @@ Kan du ikke komme alligevel? **Frigiv** din billet, så sættes den til salg. Vi
 | ![Køb](https://api.iconify.design/heroicons/arrows-right-left.svg?height=20&color=%238b5cf6) | **Køb billet** | Du køber en billet af din billettype, som en anden har frigivet |
 | ![Venteliste](https://api.iconify.design/hugeicons/hourglass.svg?height=20&color=%23737373) | **Skriv på venteliste** | Ingen billet til salg - du står i kø, fx **Barn #1** |
 
-Ventelisten er én kø per billettype (voksen, barn og baby): først til mølle. Frigiver en anden en billet af din type, eller laver køkkenholdet ekstra portioner, går billetten til den første i køen - og du får en mail. Vælg **Ingen** på din plads i køen og klik **Forlad ventelisten**, hvis du alligevel ikke skal med.
+Ventelisten er én kø per billettype (voksen, barn og baby): først til mølle. Frigiver en anden en billet af din type, eller laver køkkenholdet ekstra portioner, går billetten til den første i køen. Vælg **Ingen** på din plads i køen og klik **Forlad ventelisten**, hvis du alligevel ikke skal med.
 
-> **Bemærk:** Når du frigiver en billet, betaler du kun hvis ingen køber den. Bliver billetten solgt, slipper du for at betale - og du får en mail om det.
+> **Bemærk:** Når du frigiver en billet, betaler du kun hvis ingen køber den. Bliver billetten solgt, slipper du for at betale.
+
+> **Billetter på 0 portioner:** Nogle billetter tager ingen portion fra gryden - fx en babybillet. Sådan en billet tilmeldes og frameldes når som helst - også efter fristen - og går direkte ind uden om ventelisten. Billetter med portioner følger fristen ligesom resten af familien.
 
 ### Sådan bestiller du takeaway
 
@@ -291,7 +299,7 @@ Du kan tilmelde gæster til fællesspisning - de tilknyttes dig som vært.
 7. Vælg spisningsform (Spisesal, Sen eller Takeaway)
 8. Klik **Tilmeld gæst** (eller **Tilmeld gæster**) - efter fristen hedder knappen **Køb billet til gæst** eller **Skriv gæst på venteliste**
 
-Gæsten vises i tabellen som "Gæst af [dit navn]" med den valgte billettype.
+Gæsten vises i tabellen som "Gæst af [dit navn]", og billetten viser billettype og pris, fx **Barn · *pris* · Gæst** - eller **2 Gæster**, når flere af samme slags følges ad.
 
 ![Tilføj gæst](screenshots/dinner/booking-form-guest-added.png)
 *Gæsten står nederst i tabellen med sin egen billet*
@@ -301,7 +309,7 @@ Gæsten vises i tabellen som "Gæst af [dit navn]" med den valgte billettype.
 ### Sådan ser du din PBS-faktura
 
 1. Gå til **Økonomi** (pengeikonet)
-2. Se oversigt over udgifter for denne og forrige periode
+2. Se oversigt over udgifter for denne og forrige periode - hver middag med sin ret under **Menu**
 3. Fakturaen trækkes automatisk via PBS omkring den 1. i måneden
 
 ![Økonomi fanen](screenshots/household/household-economy.png)
@@ -323,7 +331,7 @@ Har I skiftet mening? Åbn samme sektion og klik **Fortryd flytning** (to-klik b
 
 ### Sådan tilføjer du allergier
 
-1. Gå til **Allergier** (advarsels-ikonet)
+1. Gå til **Allergier** (allergi-ikonet)
 2. Vælg det husstandsmedlem der har allergien
 3. Klik **Tilføj allergi**
 4. Vælg allergitype fra listen
@@ -378,4 +386,4 @@ Kontakt en administrator eller opret et issue på [GitHub](https://github.com/Ma
 
 ---
 
-*Sidst opdateret: Oktober 2026 (ventelisten, køb og frigiv efter fristen, appen på telefonen, Mine indstillinger, allergier på billetten, forventede bestillinger, aflyste middage)*
+*Sidst opdateret: Oktober 2026 (ventelisten, køb og frigiv efter fristen, appen på telefonen, Mine indstillinger, allergier på billetten, forventede bestillinger, aflyste middage, pris på billetten, billetter på 0 portioner, kig ind hos naboerne, Ny billetpris)*

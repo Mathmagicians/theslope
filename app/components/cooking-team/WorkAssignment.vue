@@ -38,7 +38,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { COMPONENTS, ICONS, ROLE_ICONS, NOISE, SIZES } = useTheSlopeDesignSystem()
+const { COMPONENTS, ICONS, ROLE_ICONS, NOISE, SIZES, ORIENTATIONS } = useTheSlopeDesignSystem()
 
 // Store integration
 const planStore = usePlanStore()
@@ -89,7 +89,7 @@ const handleRoleAssignment = async (role: typeof TeamRole[keyof typeof TeamRole]
     label="🍽️ Vil du hjælpe til med madlavningen?"
     :class="COMPONENTS.heroPanel.light.container"
     class="mt-2 md:mt-4"
-    orientation="horizontal"
+    :orientation="ORIENTATIONS.horizontal"
     data-testid="work-assignment"
   >
     <div class="flex flex-wrap gap-1 md:gap-2">

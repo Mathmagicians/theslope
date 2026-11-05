@@ -2,24 +2,17 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {nextTick} from 'vue'
+import {nextTick, type ComponentPublicInstance} from 'vue'
 import DangerButton from '~/components/shared/DangerButton.vue'
+import type {ButtonProps} from '@nuxt/ui'
 import {resetStores} from '~~/tests/component/testHelpers'
+import {COLOR, NOISE, COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
 
 enableAutoUnmount(afterEach)
 
 /**
- * DangerButton regression tests
- *
- * Documents the existing 2-phase confirm pattern:
- *  - First click → arms the button (shows confirmLabel + countdown)
- *  - Second click → emits @confirm and resets
- *  - autoResetMs auto-resets without firing
- *  - Click-outside resets without firing
- *  - disabled / loading suppresses the click
- *
- * Added during the chef-swap feature (Phase 2) as a regression guard;
- * no API changes were made to DangerButton.
+ * The two-click confirm: the first click arms the button, the second emits confirm and disarms it; the timeout and a
+ * click outside disarm it without firing, and a disabled or loading button stays unarmed
  */
 
 const LABEL = 'Slet'
@@ -91,5 +84,61 @@ describe('DangerButton', () => {
         await getButton(wrapper).trigger('click')
         await nextTick()
         expect(getButton(wrapper).text()).not.toContain(CONFIRM_LABEL)
+    })
+})
+
+// The button's face per state: quiet until armed, then loud in its mode's colour with the mode's ring and countdown wipe
+describe('DangerButton faces', () => {
+    const DANGER = COMPONENTS.dangerButton
+    const buttonProps = (wrapper: Awaited<ReturnType<typeof mountButton>>) =>
+        wrapper.findComponent<ComponentPublicInstance<ButtonProps>>({name: 'UButton'}).props()
+    const wipeOf = (wrapper: Awaited<ReturnType<typeof mountButton>>) =>
+        getButton(wrapper).element.style.getPropertyValue(DANGER.wipePosition)
+
+    beforeEach(() => {
+        resetStores()
+    })
+
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    it('GIVEN initial state THEN the root binds its token and the button reads neutral and medium without the armed ring', async () => {
+        const wrapper = await mountButton()
+
+        expect(wrapper.classes()).toEqual(DANGER.root.split(' '))
+        expect(buttonProps(wrapper)).toMatchObject({color: COLOR.neutral, variant: NOISE.medium})
+        expect(getButton(wrapper).classes()).not.toEqual(expect.arrayContaining(DANGER.danger.armed.split(' ')))
+    })
+
+    it.each([
+        {mode: 'a destructive action', undo: false, face: DANGER.danger, color: COLOR.error},
+        {mode: 'an undo', undo: true, face: DANGER.undo, color: COLOR.success}
+    ])('GIVEN $mode WHEN armed THEN the button turns loud in its colour with its ring and its countdown wipe', async ({undo, face, color}) => {
+        const wrapper = await mountButton({undo})
+
+        await getButton(wrapper).trigger('click')
+        await nextTick()
+
+        expect(buttonProps(wrapper)).toMatchObject({color, variant: NOISE.loud})
+        expect(getButton(wrapper).classes()).toEqual(expect.arrayContaining([...face.armed.split(' '), ...face.countdown.split(' ')]))
+    })
+
+    it('GIVEN armed WHEN the timeout runs THEN the wipe moves from full to half to gone, and the countdown leaves with it', async () => {
+        vi.useFakeTimers()
+        const wrapper = await mountButton({autoResetMs: 1000})
+
+        await getButton(wrapper).trigger('click')
+        await nextTick()
+        expect(parseFloat(wipeOf(wrapper))).toBe(100)
+
+        vi.advanceTimersByTime(500)
+        await nextTick()
+        expect(parseFloat(wipeOf(wrapper))).toBeCloseTo(50)
+
+        vi.advanceTimersByTime(500)
+        await nextTick()
+        expect(wipeOf(wrapper)).toBe('')
+        expect(getButton(wrapper).classes()).not.toEqual(expect.arrayContaining(DANGER.danger.countdown.split(' ')))
     })
 })

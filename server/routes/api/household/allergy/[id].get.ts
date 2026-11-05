@@ -14,7 +14,7 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
     const d1Client = cloudflare.env.DB
 
     // Validate input - fail early on invalid data
-    let allergyId!: number
+    let allergyId: number
     try {
         const {id} = await getValidatedRouterParams(event, paramSchema.parse)
         allergyId = id

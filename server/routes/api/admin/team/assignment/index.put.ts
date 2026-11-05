@@ -24,7 +24,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let assignmentData!: AssignmentCreateInput
+    let assignmentData: AssignmentCreateInput
     try {
         assignmentData = await readValidatedBody(event, AssignmentCreateSchema.parse)
     } catch (error) {
