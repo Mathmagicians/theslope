@@ -44,6 +44,7 @@ import {ADMIN_WORDS} from '~/config/adminWords'
 import {HOUSEHOLD_WORDS} from '~/config/householdWords'
 
 // Design system
+const LOG_PREFIX = '🤧 > HOUSEHOLD_ALLERGIES'
 const {SIZES, COMPONENTS, NOISE, TYPOGRAPHY, ICONS} = useTheSlopeDesignSystem()
 const now = useClock()
 const display = COMPONENTS.householdAllergies
@@ -82,11 +83,15 @@ const editingInhabitantId = ref<number | null>(null)
 const handleAddAllergy = async (allergyTypeId: number) => {
   if (!editingInhabitantId.value) return
 
-  await allergyStore.createAllergy({
-    inhabitantId: editingInhabitantId.value,
-    allergyTypeId,
-    inhabitantComment: null
-  }, props.adminBypass)
+  try {
+    await allergyStore.createAllergy({
+      inhabitantId: editingInhabitantId.value,
+      allergyTypeId,
+      inhabitantComment: null
+    }, props.adminBypass)
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} > [ADD] Error adding the allergy:`, error)
+  }
 }
 
 // Remove allergy - receives allergyTypeId from AllergyEditor @remove event
@@ -95,7 +100,11 @@ const handleRemoveAllergy = async (allergyTypeId: number) => {
   const allergy = currentAllergies.value.find(a => a.allergyTypeId === allergyTypeId)
   if (!allergy) return
 
-  await allergyStore.deleteAllergy(allergy.id, props.adminBypass)
+  try {
+    await allergyStore.deleteAllergy(allergy.id, props.adminBypass)
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} > [REMOVE] Error removing the allergy:`, error)
+  }
 }
 
 // Update comment - receives allergyTypeId from AllergyEditor @update:comment event
@@ -103,9 +112,13 @@ const handleCommentUpdate = async (allergyTypeId: number, comment: string) => {
   const allergy = currentAllergies.value.find(a => a.allergyTypeId === allergyTypeId)
   if (!allergy) return
 
-  await allergyStore.updateAllergy(allergy.id, {
-    inhabitantComment: comment || null
-  }, props.adminBypass)
+  try {
+    await allergyStore.updateAllergy(allergy.id, {
+      inhabitantComment: comment || null
+    }, props.adminBypass)
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} > [COMMENT] Error updating the comment:`, error)
+  }
 }
 
 // Table row type definition

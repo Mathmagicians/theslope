@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {enableAutoUnmount} from '@vue/test-utils'
+import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
 import {getQuery, type H3Event} from 'h3'
 import {mountWithTooltipProvider, resetStores, registerEmptyStoreEndpoints, holdEndpoint, isTableLoading, untilTrue, mountedStore, clickByTestId, findByTestId, findOpenRows} from '~~/tests/component/testHelpers'
 import HouseholdAllergies from '~/components/household/HouseholdAllergies.vue'
@@ -159,5 +159,28 @@ describe('HouseholdAllergies and the override', () => {
         // The success toast follows the write and its re-read, so no read of this case lands in the next
         await untilTrue(() => useToast().toasts.value.some(toast => toast.color === COLOR.success))
         expect(sent).toEqual([{method, query}])
+    })
+
+    // A failed write shows the request's toast alone and leaves the editor open for another try
+    it.each(changes)('GIVEN the write fails WHEN the table $change THEN one warning toast shows and the editor stays open', async ({act}) => {
+        const failing = () => {
+            throw createError({statusCode: 500})
+        }
+        unregister.push(
+            registerEndpoint('/api/household/allergy', {method: 'PUT', handler: failing}),
+            registerEndpoint(`/api/household/allergy/${allergy.id}`, {method: 'POST', handler: failing}),
+            registerEndpoint(`/api/household/allergy/${allergy.id}`, {method: 'DELETE', handler: failing})
+        )
+        const wrapper = await mountWithTooltipProvider(HouseholdAllergies, {props: {household, canEdit: true, adminBypass: false}, isMd: true})
+        await untilAllergiesLanded()
+        await clickByTestId(wrapper, `inhabitant-${anna.id}-allergy-toggle`)
+        await vi.waitFor(() => expect(findByTestId(wrapper, 'allergy-editor-select').exists()).toBe(true))
+
+        await act(wrapper)
+
+        await untilTrue(() => useToast().toasts.value.length > 0)
+        await flushPromises()
+        expect(useToast().toasts.value.map(toast => toast.color)).toEqual([COLOR.warning])
+        expect(findByTestId(wrapper, 'allergy-editor-select').exists()).toBe(true)
     })
 })

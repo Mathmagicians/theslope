@@ -41,8 +41,9 @@ session; the sessions talk to each other through `SendMessage`.
 - Processes: the tests run through the project's targets (`npm run test:*`, `make`), whose `webServer` boots the
   server they need, or reuses the user's `npm run dev` when it is up (`reuseExistingServer`, as designed). The user's
   `npm run dev` is the user's, for exploratory testing; no session or subagent starts it, probes it or relies on it. A session or its subagent runs shell utilities and what the project provides in `make`
-  and `package.json`, each in the foreground to its end; anything else (`caffeinate`, a `node` script, a server, a
-  background job) needs the user's authorization first, and a process a session started is gone when its turn ends.
+  and `package.json`, each to its end; a test run or gate (`npm run test:*`, `npm run pre:all`, `npx vitest`,
+  `npx playwright test`) may run in the background, nothing else does; anything beyond those (`caffeinate`, a `node`
+  script, a server) needs the user's authorization first, and a process a session started is gone when its turn ends.
   A check of behaviour is a test case, never a scratch script.
 - Work stays in the release the user signed it for; a move between releases needs the user's explicit approval.
 - A subagent works under its session's claims and holds: the orchestrator relays a hold to its running subagents; a

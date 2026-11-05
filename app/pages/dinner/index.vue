@@ -27,6 +27,7 @@ import type {DesiredOrder} from '~/composables/useBookingValidation'
 import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
 
 // Design system
+const LOG_PREFIX = '🍽️ > DINNER_PAGE'
 const { COLOR, COMPONENTS, ICONS, ALERTS, LAYOUTS, getRandomEmptyMessage, NOISE, SIZES } = useTheSlopeDesignSystem()
 
 // Fun empty state for no team assigned
@@ -106,7 +107,7 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
   const dinnerEventId = selectedDinnerId.value
 
   if (orders.length === 0 || !householdId || !dinnerEventId) {
-    console.warn('Missing data for booking:', {orders: orders.length, householdId, dinnerEventId})
+    console.warn(`${LOG_PREFIX} > [BOOKINGS] Missing data for booking:`, {orders: orders.length, householdId, dinnerEventId})
     return
   }
 
@@ -116,8 +117,8 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
 
   try {
     await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders, false, {title: toastTitle, householdOrder: selectedHousehold.value?.inhabitants.map(({id}) => id)})
-  } catch {
-    // The request has toasted the failure
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} > [BOOKINGS] Error saving the bookings:`, error)
   }
 }
 

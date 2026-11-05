@@ -48,6 +48,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
+const LOG_PREFIX = '🤧 > ADMIN_ALLERGIES'
 const { COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, NOISE, COMPONENTS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Household shortnames for the detail card - owned here, passed down as a plain map
@@ -151,8 +152,8 @@ const handleSubmit = async (data: AllergyTypeCreate) => {
       await updateAllergyType(editingId.value, data)
     }
     cancelEdit()
-  } catch {
-    // The request has toasted the failure
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} > [SAVE] Error saving the allergy type:`, error)
   }
 }
 
@@ -177,8 +178,8 @@ const confirmDelete = async () => {
   isDeleting.value = true
   try {
     await deleteAllergyType(allergyType.id)
-  } catch {
-    // The request has toasted the failure
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} > [DELETE] Error deleting the allergy type:`, error)
   } finally {
     isDeleting.value = false
     isConfirmingDelete.value = false
@@ -244,8 +245,8 @@ const handleNotesSave = async (notes: string) => {
   isSavingNotes.value = true
   try {
     await savePosterNotes(notes)
-  } catch {
-    // The request has toasted the failure
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} > [NOTES] Error saving the poster notes:`, error)
   } finally {
     isSavingNotes.value = false
   }

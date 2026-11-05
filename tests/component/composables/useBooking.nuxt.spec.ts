@@ -7,7 +7,7 @@ import {formatDate} from '~/utils/date'
 import {useCoreValidation, IdSchema} from '~/composables/useCoreValidation'
 import {sumBy} from '~/utils/ledger'
 import {useBookingValidation, TicketState, SupplyState, type BookingIntent, type OrderDisplay, type DinnerMode, type DinnerState, type DesiredOrder, type OrderAuditAction, type OrderAuditChange, type OrderAuditSource, type OrderAuditSnapshot, type OrderState, type TicketType, type TicketChange, type DinnerEventDisplay, type DinnerEventDate, type ForSaleCounts, type WaitlistCounts} from '~/composables/useBookingValidation'
-import type {DinnerEventDisplayInline} from '~/composables/useCookingTeamValidation'
+import type {DinnerEventFragment} from '~/composables/fragments/domainFragments'
 import {OPEN_DEADLINES, type BookingDeadlines} from '~/composables/useSeason'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {useHousehold} from '~/composables/useHousehold'
@@ -2579,7 +2579,7 @@ describe('replayTicketChanges', () => {
 })
 
 describe('consecutiveDinnerRun', () => {
-    const dinner = (id: number, day: number): DinnerEventDisplayInline => ({...DinnerEventFactory.defaultDinnerEventDisplay(), id, date: new Date(2026, 3, day, 18)})
+    const dinner = (id: number, day: number): DinnerEventFragment => ({...DinnerEventFactory.defaultDinnerEventDisplay(), id, date: new Date(2026, 3, day, 18)})
 
     it.each([
         {desc: 'three days in a row around the middle one', dinners: [dinner(1, 12), dinner(2, 13), dinner(3, 14)], around: 2, expected: [1, 2, 3]},

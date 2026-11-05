@@ -2,8 +2,10 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {nextTick, toValue, type ComponentPublicInstance} from 'vue'
-import {enableAutoUnmount} from '@vue/test-utils'
+import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
 import AdminEconomy from '~/components/admin/AdminEconomy.vue'
+import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
+import {COLOR} from '~/composables/useTheSlopeDesignSystem'
 import {useBookingsStore} from '~/stores/bookings'
 import {usePlanStore} from '~/stores/plan'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
@@ -12,7 +14,7 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
-import {mountWithTooltipProvider, mountedStore, resetStores, registerEmptyStoreEndpoints, holdEndpoint, findAllLoadingRows, untilTrue, isTableLoading, findByTestId, cellsByHeader, tableHeaders, itemAt, present} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, resetStores, registerEmptyStoreEndpoints, registerScaffoldEndpoint, holdEndpoint, findAllLoadingRows, untilTrue, isTableLoading, findByTestId, findComponentByTestId, cellsByHeader, tableHeaders, itemAt, present} from '~~/tests/component/testHelpers'
 import type {StatBox} from '~/components/economy/CostEntry.vue'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {BUTTON_WORDS} from '~/config/buttonWords'
@@ -30,6 +32,8 @@ mockNavigateTo.mockImplementation(landNavigation)
 const period = BillingFactory.defaultSummaryData('admin-economy')
 const invoice = itemAt(period.invoices, 0)
 registerEmptyStoreEndpoints()
+// The booking form of a correction reads its preview from the scaffold's dry run
+registerScaffoldEndpoint()
 registerEndpoint(`/api/admin/billing/periods/${period.id}`, () => period)
 registerEndpoint('/api/admin/billing/periods', () => [period])
 registerEndpoint(`/api/admin/billing/invoices/${invoice.id}`, () => [])
@@ -191,6 +195,31 @@ describe('AdminEconomy - the upcoming orders', () => {
         const line = upcomingTable(wrapper).findComponent({name: 'CostLine'}).text()
         expect(line).toContain(eater.name)
         expect(line).not.toContain(`#${eater.id}`)
+    })
+
+    // A failed correction shows the request's toast alone and leaves the booking form open for another try
+    it('GIVEN a household picked for a correction WHEN its save fails THEN one warning toast shows and the booking form stays open', async () => {
+        unregister.push(
+            registerEndpoint(`/api/admin/household/${household.id}`, () => household),
+            registerEndpoint('/api/household/order/scaffold', {method: 'POST', handler: () => {
+                throw createError({statusCode: 500})
+            }})
+        )
+        const wrapper = await mountLoaded()
+        await dinnerRow(wrapper).trigger('click')
+        await nextTick()
+        findComponentByTestId(wrapper, 'DangerButton', 'admin-correction-btn').vm.$emit('confirm')
+        await nextTick()
+        findComponentByTestId(wrapper, 'USelectMenu', 'admin-correction-household-select').vm.$emit('update:modelValue', {label: `${household.address} · PBS ${household.pbsId}`, value: household.id})
+        await vi.waitFor(() => expect(wrapper.findComponent(DinnerBookingForm).exists()).toBe(true))
+
+        wrapper.findComponent(DinnerBookingForm).vm.$emit('saveBookings', [])
+        await untilTrue(() => useToast().toasts.value.length > 0)
+        await untilTrue(() => !mountedStore(useBookingsStore).isProcessingBookings)
+        await flushPromises()
+
+        expect(useToast().toasts.value.map(toast => toast.color)).toEqual([COLOR.warning])
+        expect(wrapper.findComponent(DinnerBookingForm).exists()).toBe(true)
     })
 
     it('GIVEN the billing periods have loaded WHEN a closed period opens THEN the table heads its columns and the period reads its title and its counts in the billing words', async () => {

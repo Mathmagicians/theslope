@@ -58,6 +58,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const {getDefaultCookingTeam, countChefs, getTeamShortName, getTeamNumber} = useCookingTeam()
 
+const LOG_PREFIX = '👥 > ADMIN_TEAMS'
 const {ICONS, RESPONSIVE_ICONS, SIZES, BUTTONS, ALERTS, COLOR, COMPONENTS, LAYOUTS, getRainbowAccent, NOISE} = useTheSlopeDesignSystem()
 const store = usePlanStore()
 const {
@@ -215,7 +216,7 @@ const handleBatchCreateTeams = async () => {
     await onModeChange(FORM_MODES.VIEW)
   } catch (error) {
     // The store's apiRequest has toasted the failure; the form stays in create mode
-    console.error('👥 > ADMIN_TEAMS > [CREATE] Error creating teams:', error)
+    console.warn(`${LOG_PREFIX} > [CREATE] Error creating teams:`, error)
   }
 }
 
@@ -440,7 +441,7 @@ const columns = [
                       data-testid="back-to-view"
                       @click="onModeChange(FORM_MODES.VIEW)"
                   >
-                    Tilbage
+                    {{ BUTTON_WORDS.back }}
                   </UButton>
                 </div>
                 <div :class="COMPONENTS.masterDetail.dockBody">
@@ -510,7 +511,7 @@ const columns = [
                   data-testid="back-to-view"
                   @click="onModeChange(FORM_MODES.VIEW)"
               >
-                Tilbage
+                {{ BUTTON_WORDS.back }}
               </UButton>
             </div>
             <CookingTeamCard v-bind="detailProps" v-on="detailEvents" />

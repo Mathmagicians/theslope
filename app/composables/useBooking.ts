@@ -7,7 +7,7 @@ import type {InhabitantDisplay, HouseholdDisplay} from '~/composables/useCoreVal
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
-import type {DinnerEventDisplayInline} from '~/composables/useCookingTeamValidation'
+import type {DinnerEventFragment} from '~/composables/fragments/domainFragments'
 import {byTimeThenId} from '~/composables/useWaitlist'
 import {calculateCountdown, formatDate, DATE_SETTINGS} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
@@ -1425,7 +1425,7 @@ export const useBooking = () => {
     }), byTime)
 
     // The team's dinners on consecutive calendar days around one dinner; a day without a team dinner ends the run
-    const consecutiveDinnerRun = (dinners: DinnerEventDisplayInline[], aroundId: number): DinnerEventDisplayInline[] => {
+    const consecutiveDinnerRun = (dinners: DinnerEventFragment[], aroundId: number): DinnerEventFragment[] => {
         const sorted = [...dinners].sort((a, b) => a.date.getTime() - b.date.getTime())
         const index = sorted.findIndex(dinner => dinner.id === aroundId)
         if (index < 0) return []

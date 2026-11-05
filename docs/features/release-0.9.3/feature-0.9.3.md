@@ -478,7 +478,7 @@ Moved from release 0.9.1 on 2026-10-28, where 542b274 holds the first part (ADR-
   `useBookingUi.ts:586`, `BookingGridView.vue:782`, `:783`, `AdminEconomy.vue:717`, `pages/admin/allergies/pdf.vue:22`,
   `pages/public/billing/[token].vue:88`).
 - `formatDateInTimezone` (`date.ts:352`) takes a pattern string too; `chef-deadlines.ts:61` passes it the mask
-  `DATE_AT_TIME_MASK` (`date.ts:18`).
+  `DATE_TIME_MASK`.
 - A dinner date is stored at the midnight of the clock that wrote it: the workers and the season import write UTC
   midnight, a Copenhagen machine 22:00Z of the day before.
 - `dinnerEventFactory.ts:21` and `seasonFactory.ts:49` compute their dates when the file loads.

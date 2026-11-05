@@ -55,6 +55,7 @@ const props = withDefaults(defineProps<Props>(), {
   adminBypass: false
 })
 
+const LOG_PREFIX = '🏠 > HOUSEHOLD_SETTINGS'
 const {TYPOGRAPHY, ICONS, SIZES, LAYOUTS, BUTTONS, ALERTS, COLOR, NOISE, COMPONENTS, getResidencyDisplay} = useTheSlopeDesignSystem()
 const {householdSettings} = COMPONENTS
 
@@ -105,8 +106,8 @@ const setMoveOutDate = async () => {
   isSaving.value = true
   try {
     await householdsStore.setMoveOutDate(props.household.id, moveOutDate.value, props.adminBypass, {title: HOUSEHOLD_WORDS.moveOut.toasts.set, householdOrder: householdOrder.value})
-  } catch {
-    // The request has toasted the failure
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} > [MOVE_OUT] Error setting the move-out date:`, error)
   } finally {
     isSaving.value = false
   }
@@ -116,8 +117,8 @@ const clearMoveOutDate = async () => {
   isSaving.value = true
   try {
     await householdsStore.setMoveOutDate(props.household.id, null, props.adminBypass, {title: HOUSEHOLD_WORDS.moveOut.toasts.cleared, householdOrder: householdOrder.value})
-  } catch {
-    // The request has toasted the failure
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} > [MOVE_OUT] Error clearing the move-out date:`, error)
   } finally {
     isSaving.value = false
   }

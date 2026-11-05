@@ -16,6 +16,8 @@ line under § Signed off.
 | 170 | Header layout: widening with the drawer open | 375px → past 768px | The overlay gone, the page scrolls, the links and help respond | |
 | 171 | Header layout: stacking | The booking grid in edit mode, a calendar, a popover, the help card, a modal, a toast | The grid's sticky edit footer, the calendars' sticky headers and z-40 elements pass under the bar; popovers, the help card, modals and toasts open above it | |
 | 172 | Header layout: the active link | `/dinner`, `/household/…`, `/chef`, `/admin`; tab to the logo | The active link primary soft; a focus ring on the logo link | |
+| 174 | Raw date masks: the preview's separators | `/household/<short>/bookings`, a grid change; 375px and desktop | The day separators read `tor. 22/10`; the grid's column header date padded (`05/01`); the countdown on `/chef` and the chef's dinner card unchanged (`tor. 04/11`) | |
+| 175 | Raw date masks: the allergy poster | `/admin/allergies/pdf` | The header date reads `dd/MM/yyyy` | |
 | 173 | Header layout: signed out | `/login`, phone and desktop | Phone: the LOGIN icon and the burger, the drawer with help only; desktop: LOGIN with its label, an empty centre | |
 
 ## Signed off 2026-11-02

@@ -41,18 +41,18 @@ Emne: Skråningen: Din middag d. 20/10/2026 mangler noget fra din side
 
   Du er chefkok på fællesspisningen d. 20/10/2026, og din middag mangler noget fra din side:
 
-  Menu publiceret – mangler, senest 10/10/2026 kl. 18:00, om 2 dage
-    yellow:   Skrånerne kan framelde sig indtil 12/10/2026 kl. 18:00, så de skal kunne se menuen inden.
+  Menu publiceret – mangler, senest 10/10/2026 18:00, om 2 dage
+    yellow:   Skrånerne kan framelde sig indtil 12/10/2026 18:00, så de skal kunne se menuen inden.
     red:      Fristen er tæt på. Publicer menuen i dag, så skrånerne når at se den, før de ikke længere kan
               framelde sig.
-    overdue:  Fristen var 10/10/2026 kl. 18:00. Skrånerne venter på at se, hvad de skal spise. Publicer menuen,
+    overdue:  Fristen var 10/10/2026 18:00. Skrånerne venter på at se, hvad de skal spise. Publicer menuen,
               så snart du kan.
 
   Past its deadline the line counts the time since it and carries the overdue line:
-  Menu publiceret – mangler, senest 10/10/2026 kl. 18:00, 2 dage siden
-    Fristen var 10/10/2026 kl. 18:00. Skrånerne venter på at se, hvad de skal spise. Publicer menuen, så snart du kan.
+  Menu publiceret – mangler, senest 10/10/2026 18:00, 2 dage siden
+    Fristen var 10/10/2026 18:00. Skrånerne venter på at se, hvad de skal spise. Publicer menuen, så snart du kan.
 
-  Indkøb – mangler, senest 20/10/2026 kl. 18:00, om 2 dage
+  Indkøb – mangler, senest 20/10/2026 18:00, om 2 dage
     yellow:   Bestil madvarerne i god tid, så køkkenholdet har det hele på dagen.
     red:      Middagen er i dag. Husk madvarerne, så køkkenholdet har det hele.
 

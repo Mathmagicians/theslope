@@ -118,6 +118,7 @@ const householdOrder = computed(() => props.household.inhabitants.map(({id}) => 
 
 const {computeAggregatedPreferences} = useHousehold()
 
+const LOG_PREFIX = '🏠 > HOUSEHOLD_CARD'
 const { WEEKDAY, COMPONENTS, ICONS, BUTTONS, SIZES, ALERTS, NOISE, ORIENTATIONS, TABLE_COLUMNS } = useTheSlopeDesignSystem()
 const now = useClock()
 const { powerMode } = COMPONENTS
@@ -218,8 +219,8 @@ const savePreferences = async () => {
     expanded.value = {}
     editingInhabitantId.value = null
     draftPreferences.value = null
-  } catch {
-    // The request has toasted the failure
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} > [PREFERENCES] Error saving the preferences:`, error)
   } finally {
     isSaving.value = false
   }

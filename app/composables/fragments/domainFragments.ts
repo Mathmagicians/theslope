@@ -113,7 +113,7 @@ export const CookingTeamFragmentSchema = z.object({
 
 /**
  * DinnerEvent Fragment - Scheduled dinner
- * Used by: useBookingValidation, usePlanningValidation, useHealthValidation
+ * Used by: useBookingValidation (DinnerEventBase), useCookingTeamValidation (a team's dinners)
  */
 export const DinnerEventFragmentSchema = z.object({
     id: IdSchema,

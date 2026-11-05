@@ -1,8 +1,9 @@
 import {z} from 'zod'
-import {RoleSchema, DinnerStateSchema} from '~~/prisma/generated/zod'
+import {RoleSchema} from '~~/prisma/generated/zod'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useCoreValidation, IdSchema} from '~/composables/useCoreValidation'
 import {useDutyValidation} from '~/composables/useDutyValidation'
+import {DinnerEventFragmentSchema} from '~/composables/fragments/domainFragments'
 
 /**
  * Allocation percentage options for team member assignment forms
@@ -77,32 +78,12 @@ export const useCookingTeamValidation = () => {
     })
 
     /**
-     * Inline DinnerEventDisplay schema - minimal fields to avoid circular dependency with useBookingValidation
-     * Following pattern from HouseholdSummarySchema which defines inline InhabitantDisplaySchema
-     */
-    const DinnerEventDisplayInlineSchema = z.object({
-        id: z.number().int().positive(),
-        date: z.coerce.date(),
-        menuTitle: z.string().max(500),
-        menuDescription: z.string().nullable(),
-        menuPictureUrl: z.string().nullable(),
-        state: DinnerStateSchema,
-        totalCost: z.number().int().min(0),
-        chefId: z.number().int().positive().nullable(),
-        cookingTeamId: z.number().int().positive().nullable(),
-        heynaboEventId: z.number().int().positive().nullable(),
-        seasonId: z.number().int().positive().nullable(),
-        createdAt: z.coerce.date(),
-        updatedAt: z.coerce.date()
-    })
-
-    /**
      * CookingTeamDetail - Full detail with relations (ADR-009)
      * Used in: CookingTeamCard detail view (EDIT/MONITOR modes)
      * Includes: assignments + dinnerEvents (full array for calendar/filtering), jokerSlots
      */
     const CookingTeamDetailSchema = CookingTeamDisplaySchema.extend({
-        dinnerEvents: z.array(DinnerEventDisplayInlineSchema).default([]),
+        dinnerEvents: z.array(DinnerEventFragmentSchema).default([]),
         jokerSlots: z.array(JokerSlotSchema)
     })
 
@@ -196,7 +177,7 @@ export const useCookingTeamValidation = () => {
     // The Detail read adds the team's joker slot rows and its dinners, which the repository deserializes: a dinner's
     // cost sums its expense rows in useBookingValidation, which imports this composable
     const SerializedCookingTeamDetailSchema = SerializedCookingTeamDisplaySchema.extend({
-        dinnerEvents: z.array(DinnerEventDisplayInlineSchema),
+        dinnerEvents: z.array(DinnerEventFragmentSchema),
         jokerSlots: z.array(SerializedJokerSlotSchema).optional()
     })
 
@@ -281,7 +262,6 @@ export const useCookingTeamValidation = () => {
         RoleAssignmentPlanSchema,            // Plan output from decideRoleAssignmentWrites
         TeamRoleSchema,                      // For role enums
         CookingTeamSchema,                   // Base schema
-        DinnerEventDisplayInlineSchema,      // A team's dinners
         // Database rows (ADR-010)
         SerializedCookingTeamAssignmentSchema,
         SerializedCookingTeamDisplaySchema,
@@ -314,7 +294,6 @@ export type CookingTeamAssignmentCreate = z.infer<ReturnType<typeof useCookingTe
 export type CookingTeamAssignmentUpdate = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamAssignmentUpdateSchema']>
 export type RoleAssignmentPlan = z.infer<ReturnType<typeof useCookingTeamValidation>['RoleAssignmentPlanSchema']>
 export type TeamRole = z.infer<ReturnType<typeof useCookingTeamValidation>['TeamRoleSchema']>
-export type DinnerEventDisplayInline = z.infer<ReturnType<typeof useCookingTeamValidation>['DinnerEventDisplayInlineSchema']>
 // Database rows (ADR-010)
 export type SerializedCookingTeamDisplay = z.infer<ReturnType<typeof useCookingTeamValidation>['SerializedCookingTeamDisplaySchema']>
 export type SerializedCookingTeamDetail = z.infer<ReturnType<typeof useCookingTeamValidation>['SerializedCookingTeamDetailSchema']>

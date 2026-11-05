@@ -31,6 +31,7 @@ const props = withDefaults(defineProps<{
 const {formatKroner, formatTicketCounts} = useTicket()
 const {groupByCostEntry, groupByHouseholdEntry, calculateCurrentBillingPeriod, controlInvoices} = useBilling()
 const now = useClock()
+const LOG_PREFIX = '🧾 > ADMIN_ECONOMY'
 const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, BORDER, NOISE} = useTheSlopeDesignSystem()
 
 const planStore = usePlanStore()
@@ -342,18 +343,23 @@ const {processAdminCorrection} = bookingsStore
 const handleAdminSave = async (orders: DesiredOrder[]) => {
     if (!editingDinnerId.value || !editingHouseholdId.value || !editingDinnerEvent.value || !editingHousehold.value) return
     const guestBookerInhabitantId = editingHousehold.value.inhabitants[0]?.id
-    await processAdminCorrection(
-        editingHouseholdId.value,
-        editingDinnerId.value,
-        orders,
-        guestBookerInhabitantId,
-        {
-            title: BOOKING_WORDS.billing.correction.toast,
-            prefix: `${editingHousehold.value.address}\n`,
-            householdOrder: editingHousehold.value.inhabitants.map(({id}) => id)
-        }
-    )
-    cancelEditing()
+    try {
+        await processAdminCorrection(
+            editingHouseholdId.value,
+            editingDinnerId.value,
+            orders,
+            guestBookerInhabitantId,
+            {
+                title: BOOKING_WORDS.billing.correction.toast,
+                prefix: `${editingHousehold.value.address}\n`,
+                householdOrder: editingHousehold.value.inhabitants.map(({id}) => id)
+            }
+        )
+        cancelEditing()
+    } catch (error) {
+        // The correction stays open for another try
+        console.warn(`${LOG_PREFIX} > [CORRECTION] Error saving the correction:`, error)
+    }
 }
 
 const dinnerBreakdownStats = computed(() => {

@@ -14,7 +14,7 @@ import {useAllergyValidation} from '~/composables/useAllergyValidation'
 import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {chunkArray, ReconciliationBucketSchema} from '~/utils/batchUtils'
 import {sumAmounts} from '~/utils/ledger'
-import {ExpenseFragmentSchema, SerializedExpenseFragmentSchema, AllergyTypeFragmentSchema, OrderSnapshotSchema, deserializeExpense} from '~/composables/fragments/domainFragments'
+import {DinnerEventFragmentSchema, ExpenseFragmentSchema,SerializedExpenseFragmentSchema, AllergyTypeFragmentSchema, OrderSnapshotSchema, deserializeExpense} from '~/composables/fragments/domainFragments'
 
 // What a ticket is now: released and for sale, bought from another household, waited for on the waiting list, or none
 const TicketStateSchema = z.enum(['released', 'claimed', 'queued', 'normal'])
@@ -57,20 +57,11 @@ export const useBookingValidation = () => {
     // DINNER EVENT (Base + Display schemas - defined first for Order to reference)
     // ============================================================================
 
-    // all scalar fields
-    const DinnerEventBaseSchema = z.object({
-        date: z.coerce.date(),
+    // The dinner row's scalars with the menu's input rules, and its allergens where a read includes them
+    const DinnerEventBaseSchema = DinnerEventFragmentSchema.omit({id: true}).extend({
         menuTitle: z.string().max(500, "Menu titel må ikke være længere end 500 tegn"),
         menuDescription: z.string().max(500).nullable(),
         menuPictureUrl: z.url().nullable(),
-        state: DinnerStateSchema,
-        totalCost: z.number().int().min(0),
-        chefId: IdSchema.nullable(),
-        cookingTeamId: IdSchema.nullable(),
-        heynaboEventId: IdSchema.nullable(),
-        seasonId: IdSchema.nullable(),
-        createdAt: z.coerce.date(),
-        updatedAt: z.coerce.date(),
         allergens: z.array(AllergyTypeDisplaySchema).optional()
     })
 
