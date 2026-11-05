@@ -1,6 +1,6 @@
 # 0.9.2 chores
 
-**Status:** Proposed | **Date:** 2026-10-25 | **Builds on:** release 0.9.1 (`../this-pr/chores-0.9.1.md`)
+**Status:** Proposed | **Date:** 2026-10-25 | **Builds on:** release 0.9.1 (`../archived/release-0.9.1/chores-0.9.1.md`)
 
 A chore release: the booking emails go on, and two bug fixes.
 
@@ -20,7 +20,7 @@ A chore release: the booking emails go on, and two bug fixes.
 
 ## Booking emails on
 
-The booking emails go out from this release (`../this-pr/feature-notification-delivery.md`, the booking emails flag).
+The booking emails go out from this release (`../archived/release-0.9.1/feature-notification-delivery.md`, the booking emails flag).
 
 1. The delivery dry run on prod: `make theslope-sender-dry-run-booking-status-prod` lists per user the booking emails the first
    run sends.

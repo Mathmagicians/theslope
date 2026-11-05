@@ -2353,6 +2353,19 @@ export const COMPONENTS = {
     },
 
     /**
+     * DinnerDetailPanel: the page body's spacing, the hero with the menu picture as its background and the shade over
+     * its edges, the section cards below it, and the loader boxes at the height of the team card and the kitchen stats
+     */
+    dinnerDetailPanel: {
+        body: '!mt-0 !space-y-2 md:!space-y-8',
+        heroUi: {root: 'relative bg-cover bg-center min-h-[300px] md:min-h-[400px] overflow-hidden'},
+        heroShade: 'absolute inset-0 pointer-events-none bg-radial from-transparent from-80% to-black/60',
+        section: `mt-1 md:mt-4 ${LAYOUTS.cardResponsive}`,
+        teamLoader: 'flex items-center justify-center min-h-[150px] md:min-h-[180px]',
+        statsLoader: 'flex items-center justify-center min-h-[180px] md:min-h-[220px]'
+    },
+
+    /**
      * ChefMenuCard below the hero: the compact face (a calendar list row: date, title, badges, budget), the full card's
      * ring and hero header, the menu row with its title, the Flere panel above the danger zone, the stacked sections with
      * a rule above each, the chef row, the alerts under the menu row, and the menu and release forms' stack and fields

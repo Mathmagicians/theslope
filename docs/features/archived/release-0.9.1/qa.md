@@ -9,16 +9,19 @@ line under § Signed off.
 
 | # | Check | Where | What to see | Signed off |
 |---|---|---|---|---|
-| 166 | Header layout: the phone bar | 375px | The bar as wide as its content and centred; the logo 64px, its text bold, on the bar's vertical centre; the burger about 6px nearer the edge | |
-| 167 | Header layout: the drawer | 375px, the burger | The open drawer: the header row, then Admin, the person with avatar, help; the burger primary soft while open | |
-| 168 | Header layout: the desktop bar | 1280px, scrolling; also between 768 and 1023px | A centred rounded bar 16px from the top; the centre Fællesspisning / Husstand / Madhold with icons; right Admin, the person, help; the logo 128px bold; no burger | |
-| 169 | Header layout: the first paint | Desktop, cache off or throttled | No link jumps after hydration | |
-| 170 | Header layout: widening with the drawer open | 375px → past 768px | The overlay gone, the page scrolls, the links and help respond | |
-| 171 | Header layout: stacking | The booking grid in edit mode, a calendar, a popover, the help card, a modal, a toast | The grid's sticky edit footer, the calendars' sticky headers and z-40 elements pass under the bar; popovers, the help card, modals and toasts open above it | |
-| 172 | Header layout: the active link | `/dinner`, `/household/…`, `/chef`, `/admin`; tab to the logo | The active link primary soft; a focus ring on the logo link | |
-| 174 | Raw date masks: the preview's separators | `/household/<short>/bookings`, a grid change; 375px and desktop | The day separators read `tor. 22/10`; the grid's column header date padded (`05/01`); the countdown on `/chef` and the chef's dinner card unchanged (`tor. 04/11`) | |
-| 175 | Raw date masks: the allergy poster | `/admin/allergies/pdf` | The header date reads `dd/MM/yyyy` | |
-| 173 | Header layout: signed out | `/login`, phone and desktop | Phone: the LOGIN icon and the burger, the drawer with help only; desktop: LOGIN with its label, an empty centre | |
+
+## Signed off 2026-11-05
+
+- #166 Header layout, the phone bar: the logo 64px visible on the bar's centre, the burger near the edge (reopened on Firefox, the unsized logo; fixed the same day)
+- #167 Header layout, the drawer: the header row with the logo, then Admin, the person, Hjælp with its text (reopened: the help without text; fixed the same day)
+- #173 Header layout, signed out: the logo visible, LOGIN and the burger on the phone, LOGIN with its label on desktop
+- #172 Header layout, the active link: primary soft on each area; a focus ring on the logo link
+- #174 Raw date masks, the preview's separators: `tor. 22/10`, the grid's column date padded, the countdown and the chef card unchanged
+- #175 Raw date masks, the allergy poster: the header date `dd/MM/yyyy`
+- #168 Header layout, the desktop bar: centred and rounded, the centre links with icons, Admin, the person and help right, the logo 128px bold, no burger down to 768px
+- #169 Header layout, the first paint: no link jumps after hydration
+- #170 Header layout, widening with the drawer open: the overlay gone, the page scrolls, links and help respond
+- #171 Header layout, stacking: the sticky footers and headers pass under the bar; popovers, the help card, modals and toasts above it
 
 ## Signed off 2026-11-02
 

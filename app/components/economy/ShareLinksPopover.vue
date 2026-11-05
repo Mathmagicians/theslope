@@ -50,21 +50,18 @@ const copyCsvLink = async () => {
 
 <template>
   <div :class="share.actions">
-    <a
+    <UButton
         v-if="!hideExternalLink"
-        :href="getShareUrl()"
+        :to="getShareUrl()"
         target="_blank"
         rel="noopener"
+        :color="COLOR.neutral"
+        :variant="NOISE.quiet"
+        :icon="ICONS.externalLink"
+        :size="SIZES.small"
+        :aria-label="WORDS.openPublicPage"
         @click.stop
-    >
-      <UButton
-          :color="COLOR.neutral"
-          :variant="NOISE.quiet"
-          :icon="ICONS.externalLink"
-          :size="SIZES.small"
-          :aria-label="WORDS.openPublicPage"
-      />
-    </a>
+    />
     <UPopover>
       <UButton
           :color="prominent ? COLOR.primary : COLOR.neutral"

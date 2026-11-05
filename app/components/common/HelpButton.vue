@@ -132,6 +132,7 @@ watch(() => route.path, () => {
     <UButton
         :icon="ICONS.help"
         :label="label"
+        :aria-label="BUTTON_WORDS.help"
         :color="isOpen ? NAVIGATION.link.activeColor : NAVIGATION.link.color"
         :variant="isOpen ? NAVIGATION.link.activeVariant : NAVIGATION.link.variant"
     />

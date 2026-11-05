@@ -38,15 +38,18 @@ const sendFeedback = async (description: string) => {
     return wrapper
 }
 
-// The button reads its label where one is given, as in the header's drawer, and its icon alone in the bar
+// The button reads its label where one is given, as in the header's drawer, and its icon alone in the bar; its
+// accessible name is the help word either way
 describe('HelpButton - the button', () => {
     it.each([
         {face: 'the icon alone', props: {}, text: ''},
         {face: 'its label beside the icon', props: {label: 'Hjælp'}, text: 'Hjælp'}
-    ])('GIVEN $face THEN the button reads "$text"', async ({props, text}) => {
+    ])('GIVEN $face THEN the button reads "$text" and is named Hjælp', async ({props, text}) => {
         const wrapper = await mountWithTooltipProvider(HelpButton, {props})
+        const button = wrapper.findComponent({name: 'UButton'})
 
-        expect(wrapper.findComponent({name: 'UButton'}).text()).toBe(text)
+        expect(button.text()).toBe(text)
+        expect(button.attributes('aria-label')).toBe('Hjælp')
     })
 })
 

@@ -30,10 +30,6 @@ export const HELP_TEXTS = {
             title: ADMIN_WORDS.tabs.teams,
             content: '👥 Administrer madhold og tilmeldinger. Opret teams og fordel beboere på de forskellige madhold.'
         },
-        chefs: {
-            title: TEAM_WORDS.roles[Role.CHEF].plural,
-            content: '👨‍🍳 Administrer chefkokke og deres tilgængelighed. Tildel chefkokke til specifikke madlavningsdage.'
-        },
         households: {
             title: ADMIN_WORDS.tabs.households,
             content: '🏠 Oversigt over alle husstande på Skråningen. Se beboere, allergier og administrer flytninger og husstandsændringer.'
@@ -49,10 +45,6 @@ export const HELP_TEXTS = {
         economy: {
             title: ADMIN_WORDS.tabs.economy,
             content: '💰 Økonomisk overblik over fællesspisningen. Se chefkokkebudgetter, basisvarebudgetter og forbered inberetning til PBS.'
-        },
-        settings: {
-            title: USER_WORDS.profile.settings,
-            content: '⚙️ Systemindstillinger for fællesspisningen. Administrer globale præferencer og konfigurationer.'
         },
         system: {
             title: 'Systemjobs',

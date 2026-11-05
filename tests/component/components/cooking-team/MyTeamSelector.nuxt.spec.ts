@@ -7,7 +7,7 @@ import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import {useCookingTeam} from '~/composables/useCookingTeam'
 import {getRainbowBand, ICONS, createResponsiveAlerts} from '~/composables/useTheSlopeDesignSystem'
 import {TEAM_WORDS} from '~/config/teamWords'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, resetStores, VIEWPORTS, itemAt, present} from '~~/tests/component/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 
 enableAutoUnmount(afterEach)
@@ -33,11 +33,11 @@ describe('MyTeamSelector team colours', () => {
         {mine: [third, renamed], numbers: [3, 2], description: 'numbered team listed first, renamed team second'},
         {mine: [renamed], numbers: [2], description: 'the renamed team alone takes its season position'}
     ])('badges wear the stops of $numbers ($description)', async ({mine, numbers}) => {
-        const wrapper = await mountWithTooltipProvider(MyTeamSelector, {props: {teams: mine, seasonTeams, modelValue: mine[0]!.id}, isMd: true})
+        const wrapper = await mountWithTooltipProvider(MyTeamSelector, {props: {teams: mine, seasonTeams, modelValue: itemAt(mine, 0).id}, isMd: true})
         const badges = findAllByTestId(wrapper, 'team-badge-name')
         expect(badges).toHaveLength(numbers.length)
         badges.forEach((badge, index) =>
-            expect(badge.classes()).toEqual(expect.arrayContaining(getRainbowBand(numbers[index]! - 1).split(' '))))
+            expect(badge.classes()).toEqual(expect.arrayContaining(getRainbowBand(itemAt(numbers, index) - 1).split(' '))))
     })
 })
 
@@ -77,30 +77,31 @@ describe('MyTeamSelector visiting team', () => {
 
         const tabs = tabsOf(wrapper)
         expect(tabs, 'a tab per own team and one for the visit').toHaveLength(own + 1)
-        const visitTab = tabs.at(-1)!
+        const visitTab = present(tabs.at(-1), 'the visiting tab')
         expect(visitTab.text()).toContain(getTeamShortName(visiting.name))
         const badges = findAllByTestId(wrapper, VISIT_BADGE)
         expect(badges).toHaveLength(1)
-        expect(badges[0]!.text()).toBe(TEAM_WORDS.visit.badge)
-        expect(visitTab.element.contains(badges[0]!.element), 'the badge sits on the visiting tab').toBe(true)
+        const badge = itemAt(badges, 0)
+        expect(badge.text()).toBe(TEAM_WORDS.visit.badge)
+        expect(visitTab.element.contains(badge.element), 'the badge sits on the visiting tab').toBe(true)
         expect(wrapper.text()).not.toContain('Ingen madhold')
     })
 
     it.each(VIEWPORTS)('"Ikke dit hold" shares the team name\'s line and the team icon leads the tab outside it ($viewport)', async ({isMd}) => {
         const wrapper = await mountWithVisit(ownTeams(1), isMd)
 
-        const visitTab: BaseWrapper<Node> = tabsOf(wrapper).at(-1)!
+        const visitTab: BaseWrapper<Node> = present(tabsOf(wrapper).at(-1), 'the visiting tab')
         const name = findByTestId(visitTab, 'team-badge-name').element
-        const icon = visitTab.findAllComponents({name: 'UIcon'}).find(component => component.props('name') === ICONS.team)!.element
+        const icon = present(visitTab.findAllComponents({name: 'UIcon'}).find(component => component.props('name') === ICONS.team), 'the team icon').element
         const line = lineOf(name, findByTestId(visitTab, VISIT_BADGE).element)
         expect(line.contains(icon), 'the team icon stands outside the name\'s line').toBe(false)
-        expect(line.parentElement!.firstElementChild, 'the icon leads the tab body, the name\'s line follows it').toBe(icon)
+        expect(present(line.parentElement, 'the tab body').firstElementChild, 'the icon leads the tab body, the name\'s line follows it').toBe(icon)
     })
 
     it('choosing the visiting tab asks for the visiting team', async () => {
         const wrapper = await mountWithVisit(ownTeams(1))
 
-        await tabsOf(wrapper).at(-1)!.trigger('mousedown', {button: 0})
+        await present(tabsOf(wrapper).at(-1), 'the visiting tab').trigger('mousedown', {button: 0})
         await nextTick()
 
         expect(wrapper.emitted('update:modelValue')).toEqual([[visiting.id]])
