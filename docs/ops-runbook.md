@@ -116,7 +116,7 @@ record nothing; the other sender events send.
 Turning it on in an environment:
 
 ```bash
-make theslope-sender-dry-run-booking-status-prod   # the delivery dry run: per user, the booking notifications the DAILY_MAINTENANCE job sends; sends and records nothing
+make theslope-sender-dry-run-booking-emails-prod   # the delivery dry run of the two sender events the flag gates, booking status and chef deadlines: per user what the DAILY_MAINTENANCE job sends; sends and records nothing
 # set SHOULD_SEND_BOOKING_EMAILS_FLAG = "true" in [env.prod.vars], then deploy (§ Deployment Routing Table)
 ```
 
@@ -157,7 +157,7 @@ make deploy-dev                 # both workers: sender first, then the app (the 
 make theslope-sender-event-test-dev      # admin login on dev.skraaningen.dk → POST /api/admin/sender/event/test
                                 # → prints {queued, dedupeKey}; the mail arrives in the admin mailbox (NUXT_NOTIFICATIONS_ADMIN_EMAIL) with that id in its text
 make theslope-sender-event-monthly-billing-dev bpid=<id>   # re-send the accountant mail for a billing period (GET /api/admin/billing/periods lists ids)
-make theslope-sender-dry-run-booking-status-dev  # GET /api/admin/sender/delivery?dryRun=BOOKING_STATUS → the delivery dry run: per user, the booking notifications the DAILY_MAINTENANCE job sends
+make theslope-sender-dry-run-booking-emails-dev  # GET /api/admin/sender/delivery?dryRun=BOOKING_STATUS and ?dryRun=CHEF_DEADLINES → the delivery dry run of the two sender events the flag gates: per user what the DAILY_MAINTENANCE job sends
 make logs-sender-dev            # tail the sender: 📮 > SENDER > [EMAIL] delivered {dedupeKey, …}
 make queues-info-dev            # backlog of the queue
 make run-sender-local           # run the sender on this machine (miniflare, port 3100) → http://localhost:3100/sender/health

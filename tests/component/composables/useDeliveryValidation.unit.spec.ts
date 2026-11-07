@@ -76,8 +76,7 @@ describe('isDeliveryOf', () => {
 })
 
 // The delivery read's query (GET /api/admin/sender/delivery): the recorded deliveries of one subject type and its
-// subjects' ids, one or repeated; or the dry run of the booking status sender event's desired deliveries. Each names
-// its read
+// subjects' ids, one or repeated; or the dry run of a sender event the booking emails flag gates. Each names its read
 describe('DeliveryQuerySchema', () => {
     const {DeliveryQuerySchema, DeliverySubjectSchema, SenderEventSchema, DeliveryReadSchema} = useDeliveryValidation()
     const {BILLING_PERIOD} = DeliverySubjectSchema.enum
@@ -90,7 +89,7 @@ describe('DeliveryQuerySchema', () => {
         {query: 'repeated ids', given: {subjectType: BILLING_PERIOD, subjectIds: ['7', '8']}, parsed: {read: Read.RECORDED, subjectType: BILLING_PERIOD, subjectIds: [7, 8]}},
         {query: 'the booking status sender event', given: {dryRun: SenderEvent.BOOKING_STATUS}, parsed: {read: Read.DRY_RUN, senderEvent: SenderEvent.BOOKING_STATUS}},
         {query: 'the monthly billing sender event', given: {dryRun: SenderEvent.MONTHLY_BILLING}, parsed: null},
-        {query: 'the chef deadlines sender event', given: {dryRun: SenderEvent.CHEF_DEADLINES}, parsed: null},
+        {query: 'the chef deadlines sender event', given: {dryRun: SenderEvent.CHEF_DEADLINES}, parsed: {read: Read.DRY_RUN, senderEvent: SenderEvent.CHEF_DEADLINES}},
         {query: 'an unknown sender event', given: {dryRun: 'NOT_A_SENDER_EVENT'}, parsed: null},
         {query: 'an unknown subject type', given: {subjectType: 'NOT_A_SUBJECT', subjectIds: '7'}, parsed: null},
         {query: 'an id that is no number', given: {subjectType: BILLING_PERIOD, subjectIds: 'abc'}, parsed: null},

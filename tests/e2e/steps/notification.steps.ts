@@ -115,8 +115,8 @@ Then('{int} {senderEvent} email(s) is/are sent to the accountant', async ({admin
     }
 })
 
-When('{actor} runs the delivery dry run of the booking notifications', async ({scene}, actor: Actor) => {
-    const dryRun = await SenderFactory.getDeliveryDryRun(contextOfActor(scene, actor), SenderEventSchema.enum.BOOKING_STATUS)
+When('{actor} runs the delivery dry run of {senderEvent}', async ({scene}, actor: Actor, senderEvent: SenderEvent) => {
+    const dryRun = await SenderFactory.getDeliveryDryRun(contextOfActor(scene, actor), senderEvent)
     if (!dryRun) throw new Error('The delivery dry run answered nothing')
     scene.dryRun = dryRun
 })

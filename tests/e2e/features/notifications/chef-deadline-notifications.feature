@@ -16,3 +16,11 @@ Feature: Chef deadline notifications
     When the DAILY_MAINTENANCE job runs
     Then 1 CHEF_DINNER_DEADLINES delivery record is in the database for the dinner
     And 1 CHEF_DINNER_DEADLINES email is sent to the closest user of the chef
+
+  Scenario: The delivery dry run counts the chef's missed-deadline email before the job sends it
+    Given a dinner past its ANNOUNCED deadline
+    And the dinner is in the state SCHEDULED
+    And the dinner has 0 expenses
+    When the admin runs the delivery dry run of CHEF_DEADLINES
+    Then the delivery dry run counts 1 CHEF_DINNER_DEADLINES email to send to the closest user of the chef
+    And 0 delivery records are in the database for the dinner

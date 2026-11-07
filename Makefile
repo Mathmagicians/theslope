@@ -102,7 +102,7 @@ lint-gh-actions: ## Check the workflows' YAML syntax, then run CodeQL's Actions 
 	@! grep . .output/codeql-actions.csv
 
 # --- Schema → migration files → Prisma client + zod (prisma/generated, committed)
-.PHONY: d1-prisma-zod d1-prisma d1-prisma-check d1-create-migration d1-flatten-migrations
+.PHONY: d1-prisma-zod d1-prisma d1-prisma-check d1-prisma-check-changed d1-create-migration d1-flatten-migrations
 
 d1-prisma-zod:
 	@npx prisma generate zod
@@ -114,6 +114,9 @@ d1-prisma: d1-prisma-zod ## Generate Prisma client and Zod types
 
 d1-prisma-check: d1-prisma ## Fail when the committed generated layer differs from the schema
 	@git diff --exit-code --stat prisma/generated prisma/schema.prisma
+
+d1-prisma-check-changed: ## Run d1-prisma-check when the branch or the working tree changes prisma/schema.prisma (CI runs the check itself)
+	@[ -n "$$CI" ] || { git diff --quiet $$(git merge-base origin/main HEAD) -- prisma/schema.prisma && [ -z "$$(git ls-files --others --exclude-standard prisma)" ]; } || $(MAKE) --no-print-directory d1-prisma-check
 
 d1-create-migration: ## Create migration (name=xxx)
 	@echo "📝 Creating new Prisma migration..."
@@ -568,7 +571,7 @@ typegen: ## Regenerate wrangler binding typings for every worker from wrangler.t
 # ============================================================================
 .PHONY: theslope-sender-event-test-local theslope-sender-event-test-dev theslope-sender-event-test-prod \
         theslope-sender-event-monthly-billing-local theslope-sender-event-monthly-billing-dev theslope-sender-event-monthly-billing-prod queues-info-dev queues-info-prod \
-        theslope-sender-dry-run-booking-status-local theslope-sender-dry-run-booking-status-dev theslope-sender-dry-run-booking-status-prod
+        theslope-sender-dry-run-booking-emails-local theslope-sender-dry-run-booking-emails-dev theslope-sender-dry-run-booking-emails-prod
 
 # $(1)=env file. The mail goes to the environment's admin mailbox
 define theslope_sender_event_test
@@ -600,18 +603,20 @@ theslope-sender-event-monthly-billing-prod: ## Re-send the accountant mail for a
 	$(call theslope_sender_event_monthly_billing,$(ENV_prod))
 
 # $(1)=env file. The delivery dry run: per user, the booking notifications the next run sends
-define theslope_sender_dry_run_booking_status
+# $(1)=env file. The two sender events SHOULD_SEND_BOOKING_EMAILS_FLAG gates: what the DAILY_MAINTENANCE job sends once the flag is on
+define theslope_sender_dry_run_booking_emails
 	$(call theslope_call,$(1),"$$BASE_URL/api/admin/sender/delivery?dryRun=BOOKING_STATUS")
+	$(call theslope_call,$(1),"$$BASE_URL/api/admin/sender/delivery?dryRun=CHEF_DEADLINES")
 endef
 
-theslope-sender-dry-run-booking-status-local: ## Delivery dry run of the active season's booking notifications on localhost
-	$(call theslope_sender_dry_run_booking_status,$(ENV_local))
+theslope-sender-dry-run-booking-emails-local: ## Delivery dry run of the booking emails (booking status, chef deadlines) on localhost
+	$(call theslope_sender_dry_run_booking_emails,$(ENV_local))
 
-theslope-sender-dry-run-booking-status-dev: ## Delivery dry run of the active season's booking notifications on dev
-	$(call theslope_sender_dry_run_booking_status,$(ENV_dev))
+theslope-sender-dry-run-booking-emails-dev: ## Delivery dry run of the booking emails (booking status, chef deadlines) on dev
+	$(call theslope_sender_dry_run_booking_emails,$(ENV_dev))
 
-theslope-sender-dry-run-booking-status-prod: ## Delivery dry run of the active season's booking notifications on prod
-	$(call theslope_sender_dry_run_booking_status,$(ENV_prod))
+theslope-sender-dry-run-booking-emails-prod: ## Delivery dry run of the booking emails (booking status, chef deadlines) on prod
+	$(call theslope_sender_dry_run_booking_emails,$(ENV_prod))
 
 queues-info-dev: ## Backlog of the dev sender queue
 	@npx wrangler queues info theslope-sender-dev

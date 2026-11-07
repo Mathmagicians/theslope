@@ -59,13 +59,13 @@ const DeliveryDryRunSchema = z.object({
 const DeliveryReadSchema = z.enum(['RECORDED', 'DRY_RUN'])
 
 // The delivery read's query: one subject type and its subjects' ids, one id or the parameter repeated; or the sender
-// event of the dry run, the booking status alone
+// event of the dry run, one of the two SHOULD_SEND_BOOKING_EMAILS_FLAG gates
 const DeliveryQuerySchema = z.union([
     z.object({
         subjectType: DeliverySubjectSchema,
         subjectIds: z.preprocess(ids => [ids].flat(), z.array(z.coerce.number().int().positive()).min(1))
     }).transform(({subjectType, subjectIds}) => ({read: DeliveryReadSchema.enum.RECORDED, subjectType, subjectIds})),
-    z.object({dryRun: z.literal(SenderEventSchema.enum.BOOKING_STATUS)})
+    z.object({dryRun: SenderEventSchema.extract([SenderEventSchema.enum.BOOKING_STATUS, SenderEventSchema.enum.CHEF_DEADLINES])})
         .transform(({dryRun}) => ({read: DeliveryReadSchema.enum.DRY_RUN, senderEvent: dryRun}))
 ])
 

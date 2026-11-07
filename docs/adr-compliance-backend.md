@@ -105,7 +105,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | **Admin - sender events** | | | | | |
 | `/api/admin/sender/event/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ batched, 100 per call |
 | `/api/admin/sender/event/monthly-billing.post.ts` | ✅ | ✅ | ✅ | ✅ `billing-notifications.feature`; unit | ✅ the admin's re-send of a period's accountant notification through `deliverDesired` as the admin's override, logged with the admin |
-| `/api/admin/sender/delivery.get.ts` | ✅ | ✅ | ✅ | ✅ `delivery-records.feature`, `booking-notifications.feature` | ✅ the Delivery rows of the subjects in `subjectType=` and `subjectIds=`; `dryRun=BOOKING_STATUS` is the delivery dry run: per user what the DAILY_MAINTENANCE job sends, empty with no active season, an error with email off; every member reads (ADR-004) |
+| `/api/admin/sender/delivery.get.ts` | ✅ | ✅ | ✅ | ✅ `delivery-records.feature`, `booking-notifications.feature` | ✅ the Delivery rows of the subjects in `subjectType=` and `subjectIds=`; `dryRun=BOOKING_STATUS` or `dryRun=CHEF_DEADLINES` is the delivery dry run of that sender event: per user what the DAILY_MAINTENANCE job sends, empty with no active season, an error with email off; every member reads (ADR-004) |
 | **Household** | | | | | |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/inhabitants/[id]/preferences.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the save's dry run on the draft in `dinnerPreferences=` (`serializeWeekDayMap`); any member reads any household's (ADR-004); `allInhabitants=true` (`AllInhabitantsQuerySchema`) previews power mode: one run with the draft for every inhabitant of the household |

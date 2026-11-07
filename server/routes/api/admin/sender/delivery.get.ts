@@ -3,6 +3,7 @@ import {fetchDeliveries} from '~~/server/data/financesRepository'
 import {fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import {emailChannel} from '~~/server/utils/sender/config'
 import {sendNotifications} from '~~/server/utils/sender/events/waitlist'
+import {sendChefDeadlines} from '~~/server/utils/sender/events/chef-deadlines'
 import {useDeliveryValidation, type Delivery, type DeliveryDryRun} from '~/composables/useDeliveryValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
@@ -13,19 +14,19 @@ const LOG = '📬 > DELIVERY > [GET]'
  * GET /api/admin/sender/delivery?subjectType=&subjectIds= - the Delivery rows of the subjects named, the parameter
  * repeated per id
  *
- * GET /api/admin/sender/delivery?dryRun=BOOKING_STATUS - the delivery dry run of the booking notifications: before
- * SHOULD_SEND_BOOKING_EMAILS_FLAG goes on in an environment, the admin sees what the DAILY_MAINTENANCE job would send
- * (`make theslope-sender-dry-run-booking-status-<env>`). It reads the active season's dinners still to come and past
- * their booking deadline, as they stand, and their delivery records; with no active season it counts nothing. It
- * answers per user how many of each notification the run sends. It ignores the flag; without a deploy URL or a sender
- * binding the dry run answers an error naming the setting it needs.
+ * GET /api/admin/sender/delivery?dryRun=BOOKING_STATUS|CHEF_DEADLINES - the delivery dry run of a sender event
+ * SHOULD_SEND_BOOKING_EMAILS_FLAG gates: before the flag goes on in an environment, the admin sees what the
+ * DAILY_MAINTENANCE job would send (`make theslope-sender-dry-run-booking-emails-<env>` reads both). It reads the active
+ * season's dinners as they stand and their delivery records; with no active season it counts nothing. It answers per
+ * user how many of each notification the run sends. It ignores the flag; without a deploy URL or a sender binding the
+ * dry run answers an error naming the setting it needs.
  *
  * Each read sends and records nothing; every member reads (ADR-004).
  */
 export default defineEventHandler(async (event): Promise<Delivery[] | DeliveryDryRun> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
-    const {DeliveryQuerySchema, DeliveryReadSchema} = useDeliveryValidation()
+    const {DeliveryQuerySchema, DeliveryReadSchema, SenderEventSchema} = useDeliveryValidation()
 
     // Validation - ADR-002
     let query
@@ -40,7 +41,8 @@ export default defineEventHandler(async (event): Promise<Delivery[] | DeliveryDr
         switch (query.read) {
             case DeliveryReadSchema.enum.DRY_RUN: {
                 const seasonId = await fetchActiveSeasonId(d1Client)
-                const {dryRun, missing} = await sendNotifications(d1Client, emailChannel(cloudflare.env), seasonId, {dryRun: true})
+                const send = query.senderEvent === SenderEventSchema.enum.CHEF_DEADLINES ? sendChefDeadlines : sendNotifications
+                const {dryRun, missing} = await send(d1Client, emailChannel(cloudflare.env), seasonId, {dryRun: true})
                 if (!dryRun) {
                     return throwH3Error(`${LOG} The delivery dry run of ${query.senderEvent} failed`, new Error(`The delivery dry run of ${query.senderEvent} needs ${missing}`))
                 }

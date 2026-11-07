@@ -43,6 +43,6 @@ Feature: Booking notifications
       And 1 WAITLIST_JOINED email is sent to the closest user of the inhabitant
 
     Scenario: The delivery dry run counts what the DAILY_MAINTENANCE job sends
-      When the admin runs the delivery dry run of the booking notifications
+      When the admin runs the delivery dry run of BOOKING_STATUS
       Then the delivery dry run counts 1 WAITLIST_JOINED email to send to the closest user of the inhabitant
       And 0 delivery records are in the database for the dinner

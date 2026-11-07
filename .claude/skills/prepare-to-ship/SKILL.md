@@ -17,18 +17,17 @@ Mirror the CI/CD pipeline locally and confirm every gate is green before the bra
 
 | # | Gate | Command |
 |---|------|---------|
-| 1 | Lint + typecheck | `npm run pre:all` |
-| 2 | Prisma schema | `npx prisma validate` |
-| 3 | Unit tests | `npm run test:unit` |
-| 4 | Seed local D1 | `npm run db:migrate:local && npm run db:seed:local` |
-| 5 | E2E API | `npm run test:e2e:api` |
-| 6 | E2E UI | `npm run test:e2e:ui` |
+| 1 | Lint, generated layers, typecheck | `npm run pre:all` |
+| 2 | Unit tests | `npm run test:unit` |
+| 3 | Seed local D1 | `npm run db:migrate:local && npm run db:seed:local` |
+| 4 | E2E API | `npm run test:e2e:api` |
+| 5 | E2E UI | `npm run test:e2e:ui` |
 
 ## Gotchas
 
-- `pre:all` = `npm run lint && npm run pre:gh-actions && npm run pre:c4 && npm run ts && npm run ts:server && npm run ts:node && npm run ts:workers` (eslint; CodeQL's Actions queries when the branch or the working tree changes `.github/`, skipped in CI; the C4 diagram check; `vue-tsc --noEmit` for the root/app project, the Nitro server project via `server/tsconfig.json`, the node/build-time project and the sender worker). Server-reachable composables get no Nuxt auto-imports at runtime; only the server project check catches a bare `useX()` there (ADR-017). CI runs `pre:all` as its "Lint and typecheck" step.
+- `pre:all` = `npm run lint && npm run pre:gh-actions && npm run pre:prisma && npm run pre:c4 && npm run ts && npm run ts:server && npm run ts:node && npm run ts:workers` (eslint; CodeQL's Actions queries when the branch or the working tree changes `.github/`, skipped in CI; `make d1-prisma-check` when they change `prisma/schema.prisma`, which regenerates `prisma/generated` and fails on a diff against the committed layer, so a schema change ships with its regenerated client; the C4 diagram check; `vue-tsc --noEmit` for the root/app project, the Nitro server project via `server/tsconfig.json`, the node/build-time project and the sender worker). Server-reachable composables get no Nuxt auto-imports at runtime; only the server project check catches a bare `useX()` there (ADR-017). CI runs `pre:all` as its "Lint and typecheck" step and the Prisma check on its own.
 - Use Vitest reporters (`--reporter=verbose` or `dot`) for unit tests. Never pass `--reporter=line` to Vitest — `line` is a Playwright reporter and Vitest fails to load it.
-- E2E gates need gate 4 to have seeded the local D1 DB first, or they fail with missing-data errors.
+- E2E gates need gate 3 to have seeded the local D1 DB first, or they fail with missing-data errors.
 - Scope a targeted e2e re-run to the affected spec, e.g. `npx playwright test tests/e2e/ui/serial/Waitlist.e2e.spec.ts --no-deps --reporter=line`.
 - CI marks the E2E UI step `continue-on-error`, so it does not block deploy on CI. Treat it as blocking locally unless the user says otherwise.
 
