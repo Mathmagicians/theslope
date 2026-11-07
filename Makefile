@@ -96,7 +96,8 @@ lint-gh-actions: ## Check the workflows' YAML syntax, then run CodeQL's Actions 
 	@mkdir -p .output
 	@gh codeql set-version latest
 	@gh codeql pack download codeql/actions-queries
-	@gh codeql database create .output/codeql-actions --language=actions --source-root=. --overwrite --quiet
+	@rm -rf .output/codeql-actions
+	@gh codeql database create .output/codeql-actions --language=actions --source-root=. --quiet
 	@gh codeql database analyze .output/codeql-actions codeql/actions-queries --format=csv --output=.output/codeql-actions.csv --quiet
 	@! grep . .output/codeql-actions.csv
 

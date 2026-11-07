@@ -14,7 +14,7 @@ Each fact lives in one document; the others link to it.
 | [ops-runbook.md](ops-runbook.md) | Cloudflare resources, the sender, secrets, deploy and release |
 | [user-guide.md](user-guide.md), [chef-guide.md](chef-guide.md), [admin-guide.md](admin-guide.md) | Using the app, in Danish |
 | [features/features.md](features/features.md) | The feature matrix, each feature linked to its guide |
-| [features/](features/) | Proposals; the current pull request's release doc and specs in `this-pr/`; each upcoming release in `release-x.y.z/`; shipped features in `archived/` |
+| [features/](features/) | Proposals; the current pull request's release doc and specs in `this-pr/`, moved to `archived/release-x.y.z/` when the release is feature complete; each upcoming release in `release-x.y.z/` |
 | [samples/](samples/) | Heynabo API samples, an allergy list, a team import file |
 | [screenshots/](screenshots/) | The guides' images, written by the e2e specs |
 | [../.claude/skills/](../.claude/skills/) | How we work: documentation, code comments, UI, Prisma, planning, DRY, shipping |
