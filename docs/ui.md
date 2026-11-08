@@ -50,6 +50,9 @@ which patterns are shared. A component's own layout lives in its header mockup a
 | the brand tokens | rainbow stops, hero surfaces, pantone chips (Brand rainbow below) |
 | the domain maps | ticket type, order state, dinner state, deadline, residency, role glyphs |
 
+An icon is a name in `ICONS` or a component token and nowhere else; the client bundle is scanned from the design
+system file alone (`nuxt.config.ts`), so a component binds the token and a prop default takes it through a computed.
+
 ## Shared patterns
 
 ### Edit affordances

@@ -33,8 +33,9 @@ icon per mount.
 
 ### Solution
 
-The scan reads the `.ts` files too, so every icon the app names ships in the browser bundle and renders with the page.
-The Worker packs no collection; a name the scan does not see is fetched from the Iconify CDN at runtime. Four icons
+The design system is the one file that names icons, and the scan reads that file, so every icon the app names ships in
+the browser bundle and renders with the page; a component binds a token, never a name. The Worker packs no collection;
+a name the scan does not see is fetched from the Iconify CDN at runtime. Four icons
 that stood alone in their collection take a glyph from a collection the app draws on: the power row's alert carries
 the bolt of its button, the logout button a waving hand, the armed delete button a skull, the admin entry a wrench. The
 team badge keeps its icon.

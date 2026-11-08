@@ -673,7 +673,7 @@ being written with a raw `:color` (ADR-018). Violations are reported as `file:li
 
 | Spec | Reads | Rule |
 |------|-------|------|
-| `designSystemUsage.unit.spec.ts` | `.vue` under `app/` | The ADR-018 usage rules, one case each (below) |
+| `designSystemUsage.unit.spec.ts` | `.vue` and `.ts` under `app/`, the `@iconify-json/*` packages in `package.json` | The ADR-018 usage rules, one case each (below) |
 | `fetchUsage.unit.spec.ts` | `app/` | ADR-007: a `$fetch(` or `useRequestFetch(` outside `app/composables/useApiHandler.ts` fails — stores read through `storeAsyncData` and write through `apiRequest` |
 | `migrations.unit.spec.ts` | `migrations/*.sql` from `0015` on | A migration adds a column with `ALTER TABLE … ADD COLUMN` and keeps every table: D1 runs a migration inside a transaction where `PRAGMA foreign_keys=OFF` is a no-op, so a table rebuild (`DROP TABLE`, `-- RedefineTables`) fires the children's ON DELETE actions |
 | `designSystemContrast.unit.spec.ts` | the tokens and the palettes | EN 301 549 / WCAG 2.1 contrast of every pair the tokens define (next section) |
@@ -691,7 +691,9 @@ styles itself does so through a `COMPONENTS.collapsible` token; a labelled `<USe
 kind; a `.vue` names its colours through tokens (a Tailwind palette shade or a literal colour prop fails); a `<UButton>`,
 `<UBadge>`, `<UAvatar>` or `<UAvatarGroup>` takes `size`, `variant` and `icon` from a token; the form button row binds
 `LAYOUTS.formButtonRow`; the layout (`layouts/default.vue`) provides the breakpoint and the design system reads it (an
-`inject` of `isMd` in another `.vue` fails); a table empty state is the `#empty` slot (the Nuxt UI v2 name `#empty-state` fails).
+`inject` of `isMd` in another `.vue` fails); a table empty state is the `#empty` slot (the Nuxt UI v2 name `#empty-state` fails);
+an icon is named in the design system alone (`i-<collection>-<name>` or `<collection>:<name>` in another `.vue` or `.ts`
+fails); every installed `@iconify-json/*` collection is named by a token (an unused package fails until it is uninstalled).
 
 Add one whenever a fix to a Nuxt UI component family becomes a token: add the token, sweep all instances, add the rule.
 

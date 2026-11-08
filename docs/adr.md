@@ -3,7 +3,7 @@
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 ## ADR-018: Design System Owns Shared UI Patterns
 
-**Status:** Accepted | **Date:** 2026-09-16 | **Updated:** 2026-10-23
+**Status:** Accepted | **Date:** 2026-09-16 | **Updated:** 2026-11-08
 
 ### Context
 
@@ -14,12 +14,16 @@ near-identical values changed the design.
 
 **The design system owns every shared UI value and pattern. Components bind its tokens and pass domain props only.**
 
-- Colours, sizes, layouts, alerts, buttons, calendars, tables and separators are tokens in `useTheSlopeDesignSystem`;
-  `docs/ui.md` describes the families and the shared patterns
+- Colours, sizes, layouts, alerts, buttons, calendars, tables, separators and icons are tokens in
+  `useTheSlopeDesignSystem`; `docs/ui.md` describes the families and the shared patterns
 - A token holds exactly one value. Two values are two tokens, named by where they are used. Merging values is a design
   decision the user takes from a visual proposal
 - A responsive class carries its Tailwind breakpoint prefixes in the token; the layout's breakpoint drives only the
   values Nuxt UI takes as properties
+- An icon is a name in the design system (`ICONS`, a component token) and nowhere else; a component binds the token, a
+  prop default takes it through a computed. The client bundle is built from that one file (`nuxt.config.ts`,
+  `icon.clientBundle.scan`), so every icon the app renders ships with the page; a name written elsewhere reaches the
+  browser only through the runtime fallback
 
 ### Enforcement
 
@@ -32,6 +36,8 @@ An architecture spec reads every `.vue` under `app/` and fails on a rule breach;
 2. Token sweeps are value-preserving; the proof is a before/after comparison of the classes each template renders
 3. The design system is client-only and never imported from `server/` (ADR-017)
 4. `docs/ui.md` documents the token families and the shared patterns; a component's header names its visual check
+5. No icon name (`i-<collection>-<name>`, `<collection>:<name>`) outside `useTheSlopeDesignSystem.ts`; the
+   architecture spec fails one, and a collection is installed only while a token names one of its icons
 
 ### Key Files
 
@@ -39,6 +45,7 @@ An architecture spec reads every `.vue` under `app/` and fails on a rule breach;
 |------|------|
 | `app/composables/useTheSlopeDesignSystem.ts` | The tokens |
 | `tests/component/architecture/designSystemUsage.unit.spec.ts` | The usage rules |
+| `nuxt.config.ts` | `icon.clientBundle.scan` reads the design system; `serverBundle: 'remote'` is the fallback |
 | `docs/ui.md` | Token families and shared patterns |
 
 ### Related ADRs

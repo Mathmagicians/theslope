@@ -13,12 +13,28 @@ import {LAYOUTS} from '../../../app/composables/useTheSlopeDesignSystem'
  */
 
 const APP_DIR = fileURLToPath(new URL('../../../app/', import.meta.url))
+const ROOT_DIR = fileURLToPath(new URL('../../../', import.meta.url))
 
 /** The brand SVG paints itself in hex - it is the one file that owns its colours */
 const COLOUR_EXEMPT = ['components/icons/Logo.vue']
 
+/** The one file that names an icon; the client bundle is scanned from it (nuxt.config.ts) */
+const DESIGN_SYSTEM = 'composables/useTheSlopeDesignSystem.ts'
+
+/** The icon collections installed for the app: the @iconify-json/* dev dependencies */
+const ICON_COLLECTIONS: string[] = Object.keys(JSON.parse(readFileSync(`${ROOT_DIR}package.json`, 'utf8')).devDependencies)
+    .filter(name => name.startsWith('@iconify-json/'))
+    .map(name => name.slice('@iconify-json/'.length))
+
+/** `i-heroicons-user`, `heroicons:user` - an icon named where only a token belongs */
+const ICON_NAME = new RegExp(`\\b(?:i-)?(?:${ICON_COLLECTIONS.join('|')})[:-][a-z0-9-]+\\b`, 'g')
+
 const vueFiles = readdirSync(APP_DIR, {recursive: true})
     .filter((entry): entry is string => typeof entry === 'string' && entry.endsWith('.vue'))
+    .sort()
+
+const tsFiles = readdirSync(APP_DIR, {recursive: true})
+    .filter((entry): entry is string => typeof entry === 'string' && entry.endsWith('.ts') && entry.replace(/\\/g, '/') !== DESIGN_SYSTEM)
     .sort()
 
 const colourFiles = vueFiles.filter(file => !COLOUR_EXEMPT.includes(file))
@@ -264,6 +280,17 @@ describe('ADR-018: components bind design-system tokens, never raw Nuxt UI props
                 })
         })
         expect(report(violations)).toBe('')
+    })
+
+    it('no .vue or .ts outside the design system names an icon', () => {
+        const violations = scan([...vueFiles, ...tsFiles], ICON_NAME, 'icon name - bind an ICONS token or a component token')
+        expect(report(violations)).toBe('')
+    })
+
+    it('every installed icon collection is named by the design system', () => {
+        const designSystem = readVue(DESIGN_SYSTEM)
+        const unused = ICON_COLLECTIONS.filter(collection => !designSystem.includes(`i-${collection}-`))
+        expect(report(unused.map(collection => `@iconify-json/${collection} - no token names an icon of it (npm uninstall it)`))).toBe('')
     })
 
     it('no template uses the Nuxt UI v2 slot name #empty-state', () => {
