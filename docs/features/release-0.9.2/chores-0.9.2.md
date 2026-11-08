@@ -34,7 +34,8 @@ Three stages: `check` (version, generated layer, lint, typecheck, unit tests), `
 runner and a local D1 each: api, api-serial, ui, ui-serial; the api rows gate, the ui rows report) and `deploy`;
 create-release, rollback and smoke-tests read the deploy outputs. A serial project depends on the setup projects and
 caps itself at one worker, so each suite runs alone, locally in the `test:e2e` chain and on CI. `playwright.config.ts`
-names the json and Cucumber reports after `BDD_SUITE`. Artifacts per suite: `playwright-report-<suite>` and
+names the json and Cucumber reports after `BDD_SUITE`; on CI its web server waits 180 s for the cold `nuxt dev` and
+pipes the server's output into the step log. Artifacts per suite: `playwright-report-<suite>` and
 `bdd-<suite>`; the developer companion downloads `bdd-*` by pattern. One composite action installs Node, the
 dependencies and Chromium.
 
@@ -54,13 +55,13 @@ pipeline at the end of every run.
 
 ### Solution
 
-The release notes are markdown in `docs/release-notes/<version>.md`, with pictures in `docs/release-notes/<version>/`;
-the 0.9.0 poster is `docs/features/archived/release-0.9.0.pdf`; `create-release` writes the release's one-line body.
-Removed: the target, its CI step, the artifact `release-notes`, the release attachment and `poster.head.html`.
+A release's notes and their poster live with the release, `docs/features/archived/release-0.9.0/release-notes-0.9.0/`
+(markdown and PDF); `create-release` writes the release's one-line body. Removed: the target, its CI step, the artifact
+`release-notes`, the release attachment and `poster.head.html`.
 
 ### Affected
 
-`Makefile`, `.github/workflows/cicd.yml`, `docs/release-notes/`, `docs/features/archived/`.
+`Makefile`, `.github/workflows/cicd.yml`, `docs/features/archived/release-0.9.0/`.
 
 ## Booking emails on
 

@@ -5,7 +5,7 @@
 Nogle efterårsferieaftener gik med at få **Version 0.9** rullet ud. Den store nyhed er ventelisten: er en middag udsolgt, kan du få en plads på venteliste.
 
 > [!TIP]
-> <img src="release-0.9.0/qr-login.svg" width="104" align="right" alt="QR-kode til appens login-side"> <img src="../../public/app-icon.svg" width="72" align="left" alt="Skrånerappen"> **Har du installeret den som en app på din telefon?** Så ligger den på hjemmeskærmen som alle andre apps.
+> <img src="qr-login.svg" width="104" align="right" alt="QR-kode til appens login-side"> <img src="../../../../../public/app-icon.svg" width="72" align="left" alt="Skrånerappen"> **Har du installeret den som en app på din telefon?** Så ligger den på hjemmeskærmen som alle andre apps.
 >
 > | Telefon | Browser | Sådan                                                                                                                                          |
 > |---|---|------------------------------------------------------------------------------------------------------------------------------------------------|

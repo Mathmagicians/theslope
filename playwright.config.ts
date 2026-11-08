@@ -227,5 +227,8 @@ export default defineConfig({
     command: 'npm run dev',
     url: process.env.BASE_URL || 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
+    // A fresh CI runner starts nuxt dev cold, past the 60s default; its stdout carries the ready line to the CI log
+    timeout: process.env.CI ? 180_000 : 60_000,
+    stdout: process.env.CI ? 'pipe' : 'ignore',
   } : undefined,
 });
