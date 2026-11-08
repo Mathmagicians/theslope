@@ -12,7 +12,15 @@ const __filename = fileURLToPath(import.meta.url); // get the resolved path to t
 const __dirname = path.dirname(__filename); // get the name of the directory
 dotenv.config({ path: path.resolve(__dirname, '.env'), quiet: true });
 
-const isLocalhost = process.env.BASE_URL?.includes('localhost') ?? true
+const onCI = !!process.env.CI
+const baseURL = process.env.BASE_URL || 'http://localhost:3000'
+// The suites start a server for a local address; any other address is a deployed app (smoke)
+const isLocal = new URL(baseURL).hostname === 'localhost'
+// CI runs the suites on the built app (.output) under wrangler's local runtime, which takes the server's variables
+// from this process's environment (CLOUDFLARE_INCLUDE_PROCESS_ENV: the job env on CI, .env locally); else the dev server
+const server = onCI
+  ? { command: `npx wrangler dev --port ${new URL(baseURL).port}`, env: { CLOUDFLARE_INCLUDE_PROCESS_ENV: 'true', DEPLOY_URL: baseURL } }
+  : { command: 'npm run dev' }
 
 // Cloudflare bypass token for smoke tests on deployed environments
 const extraHTTPHeaders = process.env.CLOUDFLARE_BYPASS_TOKEN
@@ -34,11 +42,11 @@ export default defineConfig({
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
-  forbidOnly: !!process.env.CI,
+  forbidOnly: onCI,
   /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  retries: onCI ? 2 : 0,
   /* One worker on CI; a fixed few locally, the local D1 proxy drops requests under a wider fan-out */
-  workers: process.env.CI ? 1 : 3,
+  workers: onCI ? 1 : 3,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: bddSuite
     ? [
@@ -54,7 +62,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.BASE_URL || 'http://localhost:3000',
+    baseURL,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -222,13 +230,5 @@ export default defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests (only for localhost) */
-  webServer: isLocalhost ? {
-    command: 'npm run dev',
-    url: process.env.BASE_URL || 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    // A fresh CI runner starts nuxt dev cold, past the 60s default; its stdout carries the ready line to the CI log
-    timeout: process.env.CI ? 180_000 : 60_000,
-    stdout: process.env.CI ? 'pipe' : 'ignore',
-  } : undefined,
+  webServer: isLocal ? { ...server, url: baseURL, reuseExistingServer: !onCI } : undefined,
 });

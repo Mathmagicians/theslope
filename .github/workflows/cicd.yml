@@ -84,6 +84,13 @@ jobs:
           echo "## ❌ Unit tests failed" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Vitest exited with an error: a failed test, or an unhandled error outside the tests (the Vitest table counts tests only). The annotations and the step log name it." >> "$GITHUB_STEP_SUMMARY"
+      # The build the e2e rows run their suites on
+      - run: npm run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: build
+          path: .output/
+          retention-days: 1
 
   e2e:
     name: e2e ${{ matrix.suite }}
@@ -122,6 +129,11 @@ jobs:
           npm run db:migrate:local
           npm run db:seed:local
           npx wrangler d1 execute theslope --command="SELECT * FROM User" --local
+      # The suite runs on this build under wrangler's local runtime (playwright.config.ts webServer), the job env as its bindings
+      - uses: actions/download-artifact@v7
+        with:
+          name: build
+          path: .output
       - name: Run the suite
         id: tests
         # A row with gate false reports and lets the run go on

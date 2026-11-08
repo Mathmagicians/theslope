@@ -19,6 +19,34 @@ A chore release: the booking emails go on, and two bug fixes.
 | Household lookup | § Household lookup | – | moved from 0.9.1 on 2026-11-02 |
 | Release notes PDF removed | § Release notes PDF removed | – | specified |
 | E2E suites fan out in CI | § E2E suites fan out in CI | – | specified |
+| Build once, test locally, ship the artifact | § Build once, test locally, ship the artifact | – | specified |
+
+## Build once, test locally, ship the artifact
+
+### Problem
+
+Every e2e runner starts the dev server from scratch after installing, and the deploy stage builds the app again: four
+cold builds test code that a fifth build ships.
+
+### Solution
+
+The check stage builds the app once and keeps the build as the run's artifact. An e2e row takes the build and runs its
+suite against it under wrangler's local runtime on the runner (localhost, the local D1); the runtime takes the server's
+variables and the local address from the row's environment, nothing is written to disk. The deploy stage builds and ships. Smoke tests run on the deployed address.
+
+Locally the same run is `npm run build && CI=true npm run test:e2e`: `CI` picks the built app under the local runtime on
+port 3000, one worker and two retries, and a dev server on that port stops it with a clear message; without it the
+suites run on the dev server, or reuse the one already up. The pre-ship gate runs that sequence.
+
+### Decisions
+
+- 2026-11-08: the e2e suites run on the build artifact in CI; the check stage builds it, the deploy stage keeps its build.
+- 2026-11-08: `CI` is the switch locally too; no new variable, no new command.
+
+### Affected
+
+`.github/workflows/cicd.yml`, `playwright.config.ts`, `docs/testing.md`, `docs/ops-runbook.md`,
+`.claude/skills/prepare-to-ship/SKILL.md`.
 
 ## E2E suites fan out in CI
 

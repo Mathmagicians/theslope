@@ -80,7 +80,9 @@ npx wrangler queues info theslope-sender-dev              # expect: Queue ID + 0
 | `NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL` | any address — the local queue is a miniflare sink |
 | `NUXT_NOTIFICATIONS_ADMIN_EMAIL` | any address |
 
-The CI e2e job sets placeholder addresses the same way (`cicd.yml`).
+A CI e2e row carries placeholder addresses in its job env (`cicd.yml`). Under `CI=true` the suites run on wrangler's
+local runtime, which takes the server's variables from the Playwright process's environment
+(`CLOUDFLARE_INCLUDE_PROCESS_ENV`): the job env on CI, `.env` locally; `DEPLOY_URL` is set on that start, as `npm run dev` sets it.
 
 ### Addresses
 
