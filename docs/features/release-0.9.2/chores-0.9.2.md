@@ -18,6 +18,31 @@ A chore release: the booking emails go on, and two bug fixes.
 | Chef's available budget after the ticket deadline | `bug-fix-chef-budget-drift.md` | – | discovery |
 | Household lookup | § Household lookup | – | moved from 0.9.1 on 2026-11-02 |
 | Release notes PDF removed | § Release notes PDF removed | – | specified |
+| E2E suites fan out in CI | § E2E suites fan out in CI | – | specified |
+
+## E2E suites fan out in CI
+
+### Problem
+
+The pipeline is one job: the api, ui and ui serial suites run one after another on one runner and one D1, after the
+unit tests. The serial projects depend on the parallel ones, so the ui serial script runs with `--no-deps` and takes
+its login state from the ui run before it.
+
+### Solution
+
+Three stages: `check` (version, generated layer, lint, typecheck, unit tests), `e2e` (a matrix of four suites on a
+runner and a local D1 each: api, api-serial, ui, ui-serial; the api rows gate, the ui rows report) and `deploy`;
+create-release, rollback and smoke-tests read the deploy outputs. A serial project depends on the setup projects and
+caps itself at one worker, so each suite runs alone, locally in the `test:e2e` chain and on CI. `playwright.config.ts`
+names the json and Cucumber reports after `BDD_SUITE`. Artifacts per suite: `playwright-report-<suite>` and
+`bdd-<suite>`; the developer companion downloads `bdd-*` by pattern. One composite action installs Node, the
+dependencies and Chromium.
+
+### Affected
+
+`.github/workflows/cicd.yml`, `.github/workflows/developer.yml`, `.github/actions/setup/action.yml`,
+`playwright.config.ts`, `package.json`, `Makefile`, `docs/testing.md`, `.claude/skills/prepare-to-ship/SKILL.md`,
+`docs/features/release-1.0.0/chores-1.0.0.md`.
 
 ## Release notes PDF removed
 

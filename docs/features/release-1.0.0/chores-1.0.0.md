@@ -24,14 +24,13 @@ suites have stayed stable over a few pull requests.
 
 ### Problem
 
-`.github/workflows/cicd.yml` runs the ui step (`npm run test:e2e:ui`) and the ui serial step with
-`continue-on-error: true` and prints their reports to the run summary with a "do not fail the pipeline" note: a red
-UI case leaves the build green.
+`.github/workflows/cicd.yml` runs the e2e suites as a matrix; the `ui` and `ui-serial` rows carry `gate: false`, so
+their test step runs with `continue-on-error` and the summary carries a "does not gate the pipeline" note: a red UI
+case leaves the build green.
 
 ### Solution
 
-Both steps gate the build: `continue-on-error` goes from each step, and the note goes from its summary line. The api
-step is the model.
+The two rows carry `gate: true`, as the api rows do.
 
 ## Map.groupBy in the Workers runtime
 

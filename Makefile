@@ -91,8 +91,8 @@ c4-check: ## Fail when the C4 container diagram differs from the wrangler config
 lint-gh-actions-changed: ## Run lint-gh-actions when the branch or the working tree changes .github (skipped in CI)
 	@[ -n "$$CI" ] || { git diff --quiet $$(git merge-base origin/main HEAD) -- .github && [ -z "$$(git ls-files --others --exclude-standard .github)" ]; } || $(MAKE) --no-print-directory lint-gh-actions
 
-lint-gh-actions: ## Check the workflows' YAML syntax, then run CodeQL's Actions queries (latest) on them; prints the findings and fails on one
-	@for workflow in .github/workflows/*.yml; do npx --no-install yaml valid < "$$workflow" || { echo "❌ Not valid YAML: $$workflow"; exit 1; }; done
+lint-gh-actions: ## Check the workflows' and actions' YAML syntax, then run CodeQL's Actions queries (latest) on them; prints the findings and fails on one
+	@for workflow in .github/workflows/*.yml .github/actions/*/action.yml; do npx --no-install yaml valid < "$$workflow" || { echo "❌ Not valid YAML: $$workflow"; exit 1; }; done
 	@mkdir -p .output
 	@gh codeql set-version latest
 	@gh codeql pack download codeql/actions-queries
@@ -341,7 +341,7 @@ test-report: ## Markdown summary of a Playwright suite - report=<json> title=<te
 suite ?= api
 bdd_report = .output/bdd/reports/e2e-$(suite)-bdd.json
 
-bdd-report: ## BDD summary of a suite - [suite=api|ui|ui-serial|smoke] [report=<cucumber json>] [title=<text>] [note=<text>]
+bdd-report: ## BDD summary of a suite - [suite=<suite>, default api] [report=<cucumber json>] [title=<text>] [note=<text>]
 	@report="$(or $(report),$(bdd_report))"; title="$(or $(title),BDD $(suite) tests)"; \
 	if [ -f "$$report" ]; then \
 		jq -r -f scripts/bdd-report.jq --arg title "$$title" --arg note "$(note)" "$$report" \
@@ -359,7 +359,6 @@ DEVELOPER_OUT := .output/developer
 DEVELOPER_PUBLIC := $(DEVELOPER_OUT)/public
 site ?= $(DEVELOPER_OUT)/site
 artifacts ?= $(DEVELOPER_OUT)/artifacts
-DEVELOPER_SUITES := api ui ui-serial smoke
 DEVELOPER_ASSEMBLE_USAGE := usage: make developer-assemble env=<dev|prod> run=<pipeline run id> version=<version> sha=<commit> [url=<app url>] [site=] [artifacts=]
 # A pipeline run that deploys uploads the artifact `deployment`: RELEASE_VERSION, COMMIT_SHA, ENV and URL from its step outputs
 developer-resolve: ## What a pipeline run published, from its deployment artifact, as env lines - run=<pipeline run id> [artifacts=]
@@ -374,9 +373,9 @@ developer-resolve: ## What a pipeline run published, from its deployment artifac
 developer-assemble: ## Lay a run's results and manifest under site/environments - env= run= version= sha= [url=] [site=] [artifacts=]
 	@test -n "$(env)" -a -n "$(run)" -a -n "$(version)" -a -n "$(sha)" || { echo "$(DEVELOPER_ASSEMBLE_USAGE)"; exit 1; }
 	@rm -rf "$(site)/environments/$(env)" && mkdir -p "$(site)/environments/$(env)"
-	@suites='{}'; for suite in $(DEVELOPER_SUITES); do \
-		dest="$(site)/environments/$(env)/$$suite"; \
-		bdd="$(artifacts)/bdd-$$suite"; cucumber="$$bdd/e2e-$$suite-bdd.json"; \
+	@suites='{}'; for bdd in "$(artifacts)"/bdd-*; do \
+		[ -d "$$bdd" ] || continue; suite=$$(basename "$$bdd"); suite=$${suite#bdd-}; \
+		dest="$(site)/environments/$(env)/$$suite"; cucumber="$$bdd/e2e-$$suite-bdd.json"; \
 		if [ -f "$$cucumber" ]; then \
 			mkdir -p "$$dest" && cp "$$cucumber" "$$dest/" && cp -R "$$bdd/e2e-$$suite-bdd/." "$$dest/"; \
 			result=$$(jq -c -f scripts/bdd-report.jq --arg title "" --arg note "" --arg counts 1 "$$cucumber" \

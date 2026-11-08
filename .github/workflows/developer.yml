@@ -52,12 +52,10 @@ jobs:
           echo "PUBLISH=false" | tee -a "$GITHUB_ENV"
           checked=$(echo $candidates)
           echo "Nothing published: no successful pipeline run with a deployment artifact on $BRANCH (checked: ${checked:-none})" | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: actions/setup-node@v7
+      - uses: ./.github/actions/setup
         if: env.PUBLISH == 'true'
         with:
-          node-version-file: 'package.json'
-      - run: npm ci
-        if: env.PUBLISH == 'true'
+          browsers: true
       - name: Checkout the published site
         if: env.PUBLISH == 'true'
         uses: actions/checkout@v7
@@ -68,10 +66,10 @@ jobs:
           fetch-depth: 1
       - name: Download the BDD results and the API spec
         if: env.PUBLISH == 'true'
+        # A pattern download lands every bdd-<suite> artifact in a folder of its name; a named one lands in the folder given
         run: |
-          for name in bdd-api bdd-ui bdd-ui-serial bdd-smoke openapi; do
-            gh run download "$RUN_ID" -n "$name" -D ".output/developer/artifacts/$name" || echo "no $name artifact on run $RUN_ID"
-          done
+          gh run download "$RUN_ID" -p 'bdd-*' -D .output/developer/artifacts || echo "no bdd artifacts on run $RUN_ID"
+          gh run download "$RUN_ID" -n openapi -D .output/developer/artifacts/openapi || echo "no openapi artifact on run $RUN_ID"
       - run: make developer-assemble env="$ENV" run="$RUN_ID" version="$RELEASE_VERSION" sha="$COMMIT_SHA" url="$URL"
         if: env.PUBLISH == 'true'
       - name: Build the site
@@ -106,7 +104,5 @@ jobs:
           done
           echo "❌ GitHub Pages serves no manifest of run $RUN_ID after 10 minutes" | tee -a "$GITHUB_STEP_SUMMARY"
           exit 1
-      - run: npx playwright install chromium
-        if: env.PUBLISH == 'true'
       - run: make developer-test url="$SITE"
         if: env.PUBLISH == 'true'

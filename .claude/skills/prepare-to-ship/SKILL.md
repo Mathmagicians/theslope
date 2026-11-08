@@ -21,7 +21,9 @@ Mirror the CI/CD pipeline locally and confirm every gate is green before the bra
 | 2 | Unit tests | `npm run test:unit` |
 | 3 | Seed local D1 | `npm run db:migrate:local && npm run db:seed:local` |
 | 4 | E2E API | `npm run test:e2e:api` |
-| 5 | E2E UI | `npm run test:e2e:ui` |
+| 5 | E2E API serial | `npm run test:e2e:api-serial` |
+| 6 | E2E UI | `npm run test:e2e:ui` |
+| 7 | E2E UI serial | `npm run test:e2e:ui-serial` |
 
 ## Gotchas
 
@@ -29,7 +31,7 @@ Mirror the CI/CD pipeline locally and confirm every gate is green before the bra
 - Use Vitest reporters (`--reporter=verbose` or `dot`) for unit tests. Never pass `--reporter=line` to Vitest — `line` is a Playwright reporter and Vitest fails to load it.
 - E2E gates need gate 3 to have seeded the local D1 DB first, or they fail with missing-data errors.
 - Scope a targeted e2e re-run to the affected spec, e.g. `npx playwright test tests/e2e/ui/serial/Waitlist.e2e.spec.ts --no-deps --reporter=line`.
-- CI marks the E2E UI step `continue-on-error`, so it does not block deploy on CI. Treat it as blocking locally unless the user says otherwise.
+- CI runs the four e2e suites on a runner each (`cicd.yml` job `e2e`); the `ui` and `ui-serial` rows carry `gate: false`, so a red one does not block deploy. Treat them as blocking locally unless the user says otherwise.
 
 ## Reporting
 

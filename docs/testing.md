@@ -343,13 +343,13 @@ npm run test:bdd:generate && npx playwright test --project=<bdd project> --grep 
 | Project | Suite tag |
 |---|---|
 | `chromium-bdd-api` | `@api-parallel` |
-| `chromium-bdd-api-serial` | `@api-serial`; one scenario runs with `--no-deps`, since the project depends on the API suites |
+| `chromium-bdd-api-serial` | `@api-serial`; one scenario runs with `--no-deps`, since the project runs after `chromium-api-serial` |
 | `chromium-bdd-ui` | `@e2e-parallel` |
-| `chromium-bdd-ui-serial` | `@e2e-serial`; one scenario runs with `--no-deps`, since the project depends on the UI suites |
+| `chromium-bdd-ui-serial` | `@e2e-serial`; one scenario runs with `--no-deps`, since the project runs after `chromium-ui-serial` |
 | `chromium-smoke` | `@smoke` |
 
-**Reports.** A BDD suite's npm script sets `BDD_SUITE=<suite>` and passes no `--reporter`, so the reporter list of
-`playwright.config.ts` writes the Playwright html, line and json reports and the Cucumber reports
+**Reports.** A suite's npm script sets `BDD_SUITE=<suite>`, so the reporter list of `playwright.config.ts` writes the
+Playwright html and line reports, the Playwright json `test-results/e2e-<suite>-results.json` and the Cucumber reports
 `.output/bdd/reports/e2e-<suite>-bdd.json` and `.output/bdd/reports/e2e-<suite>-bdd/index.html` (outside `test-results/`, which Playwright empties when a run starts). The Cucumber html drops traces
 (`application/zip`); the smoke html keeps no attachment. CI uploads the two as the artifact `bdd-<suite>`;
 `make bdd-report suite=<suite>` writes the summary table and `make developer-assemble` publishes the Cucumber html as
@@ -929,30 +929,29 @@ A test runs serially on the terms of Rule 3 (Serial). Two categories:
 | **API Serial** | `tests/e2e/api/serial/` | Process ALL entities (scaffold, maintenance) |
 | **UI Serial** | `tests/e2e/ui/serial/` | Need independent ACTIVE season |
 
-**Project dependency:** each serial project depends on its parallel project (`chromium-api-serial` on `chromium-api`, `chromium-ui-serial` on `chromium-ui`). `npm run test:e2e` runs the suites one after another, in the order of the CI steps.
+**Suites and runs:** a serial project depends on the setup projects alone (`chromium-api-serial` on `setup-api`, `setup-member-api` and `setup-season`; `chromium-ui-serial` on `setup-ui`, `setup-member-ui` and `setup-season`) and caps itself at one worker (`workers: 1` on the project), so each suite is its own run. `npm run test:e2e` runs api, api-serial, ui and ui-serial one after another, the order of the pre-ship gates; CI runs the four on a runner and a local D1 each (`cicd.yml` job `e2e`). A test project belongs to one suite; only the setup projects and the global teardown run in every suite.
 
 **Running the suites:**
 
 ```bash
-# Full suite: API (parallel, then serial), UI parallel, UI serial
+# All four suites, one run each: api, api-serial, ui, ui-serial
 npm run test:e2e
 
-# API suite (parallel, then serial)
+# One suite: its projects and their setup projects (login state, the singleton season)
 npm run test:e2e:api
-
-# UI suite (parallel)
+npm run test:e2e:api-serial
 npm run test:e2e:ui
+npm run test:e2e:ui-serial
 
-# Serial suites without their parallel dependency
-npm run test:e2e:api:seq
-npm run test:e2e:ui:serial
-
-# One serial spec
+# One spec, nothing else: a spec file matches one project's testMatch; --no-deps leaves out the setup projects
 npx playwright test tests/e2e/api/serial/admin/scaffold-prebookings.e2e.spec.ts --project=chromium-api-serial --no-deps --reporter=line
 npx playwright test tests/e2e/ui/serial/HouseholdScaffolding.e2e.spec.ts --project=chromium-ui-serial --no-deps --reporter=line
+
+# One scenario, nothing else
+npm run test:bdd:generate && npx playwright test --project=chromium-bdd-ui --grep "<scenario title>" --no-deps --reporter=line
 ```
 
-**Key:** Use `--no-deps` flag to run serial tests without waiting for parallel tests.
+**Key:** `--no-deps` needs the login state an earlier suite run left in `playwright/.auth/`; without it the setup projects run first, a matter of seconds.
 
 ---
 
@@ -1154,8 +1153,9 @@ npx vitest run tests/component/path/file.spec.ts --reporter=verbose
 # E2E suites (Serial Tests above)
 npm run test:e2e
 npm run test:e2e:api
+npm run test:e2e:api-serial
 npm run test:e2e:ui
-npm run test:e2e:ui:serial
+npm run test:e2e:ui-serial
 
 # E2E, one spec (ALWAYS verify parallel isolation)
 npx playwright test tests/e2e/path/file.e2e.spec.ts --workers=4 --reporter=line

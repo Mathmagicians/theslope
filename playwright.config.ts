@@ -19,8 +19,8 @@ const extraHTTPHeaders = process.env.CLOUDFLARE_BYPASS_TOKEN
   ? { 'x-bypass-token': process.env.CLOUDFLARE_BYPASS_TOKEN }
   : {}
 
-// A BDD suite's npm script sets BDD_SUITE and passes no --reporter, so this list writes its Cucumber reports beside
-// the Playwright ones; a spec suite's script passes --reporter, which replaces the list
+// A suite's npm script sets BDD_SUITE (api, api-serial, ui, ui-serial, smoke), so this list names the Playwright json
+// and the Cucumber reports after the suite; a run without it (one spec, one scenario) reports html
 const bddSuite = process.env.BDD_SUITE
 // The published smoke report runs on live data and keeps no attachment (stdout, stderr, screenshots); a trace
 // attaches as application/zip and carries the session cookies and the bypass header
@@ -44,7 +44,7 @@ export default defineConfig({
     ? [
         ['html'],
         ['line'],
-        ['json'],
+        ['json', { outputFile: `test-results/e2e-${bddSuite}-results.json` }],
         cucumberReporter('json', { outputFile: `.output/bdd/reports/e2e-${bddSuite}-bdd.json` }),
         cucumberReporter('html', { outputFile: `.output/bdd/reports/e2e-${bddSuite}-bdd/index.html`, skipAttachments: bddSkipAttachments }),
       ]
@@ -115,15 +115,15 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       dependencies: ['setup-api', 'setup-member-api', 'setup-season'],
     },
-    // API serial tests (heynabo imports/deletes data, maintenance scaffolds ALL households)
-    // Runs after the parallel API tests and scenarios to avoid interference
+    // API serial tests (heynabo imports/deletes data, maintenance scaffolds ALL households): one worker, their own
+    // run (npm run test:e2e:api-serial) after the parallel API suite, on the setup projects alone
     {
       name: 'chromium-api-serial',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/api\/serial\/.*\.spec\.ts/,
       fullyParallel: false,
       workers: 1,
-      dependencies: ['chromium-api', 'chromium-bdd-api'],
+      dependencies: ['setup-api', 'setup-member-api', 'setup-season'],
     },
     // API scenarios - serial: the @api-serial scenarios, after the serial API tests
     {
@@ -160,14 +160,15 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       dependencies: ['setup-ui', 'setup-member-ui', 'setup-season'],
     },
-    // UI serial tests (create their own season, must run after the parallel UI tests and scenarios)
+    // UI serial tests (create their own season): one worker, their own run (npm run test:e2e:ui-serial) after the
+    // parallel UI suite, on the setup projects alone
     {
       name: 'chromium-ui-serial',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/ui\/serial\/.*\.spec\.ts/,
       fullyParallel: false,
       workers: 1,
-      dependencies: ['chromium-ui', 'chromium-bdd-ui'],
+      dependencies: ['setup-ui', 'setup-member-ui', 'setup-season'],
     },
     // UI scenarios - serial: the @e2e-serial scenarios, after the serial UI tests
     {
