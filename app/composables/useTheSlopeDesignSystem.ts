@@ -1538,7 +1538,7 @@ export const COMPONENTS = {
     // Power mode - family-wide bulk editing pattern
     powerMode: {
         color: 'warning' as const,
-        icon: 'i-fluent-emoji-high-contrast-woman-superhero',
+        icon: 'i-heroicons-bolt',
         buttonIcon: 'i-heroicons-bolt',
         // The 600 rung, so the 500 the second rainbow stop fills with stays free
         iconClass: 'size-4 md:size-6 text-warning-600 dark:text-warning-400',
@@ -2497,11 +2497,11 @@ export const ICONS = {
     allergy: 'i-mdi-food-allergy-off-outline',
     economy: 'i-heroicons-currency-dollar',
     login: 'i-guidance-entry',
-    logout: 'i-tdesign-wave-bye',
+    logout: 'i-hugeicons-waving-hand-01',
     moveIn: 'i-guidance-entry',
     moveOut: 'i-guidance-exit',
     noMoveOutPlans: 'i-heroicons-sun',
-    admin: 'i-pajamas-admin',
+    admin: 'i-heroicons-wrench-screwdriver',
     menu: 'i-heroicons-bars-3',
     help: 'i-heroicons-question-mark-circle',
 
@@ -2539,6 +2539,8 @@ export const ICONS = {
     shoppingCart: 'i-heroicons-shopping-cart',
     released: 'i-heroicons-arrow-up-tray',
     claim: 'i-heroicons-arrows-right-left',
+    /** A duty swapped between two members (WorkAssignment) */
+    swap: 'i-heroicons-arrows-right-left',
     /** A place in the queue for a sold-out dinner */
     waitlist: 'i-hugeicons-hourglass',
     archive: 'i-heroicons-archive-box',
@@ -2550,9 +2552,11 @@ export const ICONS = {
     // Empty states & system feedback
     robotDead: 'i-mage-robot-dead',
     robotHappy: 'i-mage-robot-happy',
+    /** The error page's second figure, between the dead robots */
+    confusedFace: 'i-fluent-emoji-high-contrast-confused-face',
 
     // Danger/delete confirmations
-    dangerConfirm: 'i-healthicons-death-alt',
+    dangerConfirm: 'i-hugeicons-skull',
 
     // Descriptive
     mail: 'i-guidance-mail',

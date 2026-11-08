@@ -20,6 +20,38 @@ A chore release: the booking emails go on, and two bug fixes.
 | Release notes PDF removed | § Release notes PDF removed | – | specified |
 | E2E suites fan out in CI | § E2E suites fan out in CI | – | specified |
 | Build once, test locally, ship the artifact | § Build once, test locally, ship the artifact | – | specified |
+| Icons ship in the client bundle | § Icons ship in the client bundle | – | specified |
+
+## Icons ship in the client bundle
+
+### Problem
+
+The icon module's scan reads templates only, while the app names its icons in the design system and the UI
+composables, so the client bundle holds none of them: every page fetches its icons from the Worker, which packs every
+installed collection whole, most of its size, and a component spec, with no Worker to answer, logs one warning per
+icon per mount.
+
+### Solution
+
+The scan reads the `.ts` files too, so every icon the app names ships in the browser bundle and renders with the page.
+The Worker packs no collection; a name the scan does not see is fetched from the Iconify CDN at runtime. Four icons
+that stood alone in their collection take a glyph from a collection the app draws on: the power row's alert carries
+the bolt of its button, the logout button a waving hand, the armed delete button a skull, the admin entry a wrench. The
+team badge keeps its icon.
+
+### Decisions
+
+- 2026-11-08: the client bundle from a scan over templates and `.ts`; the server bundle is remote, so a missed name
+  still renders and the Worker carries no icons.
+- 2026-11-08: `powerMode.icon` is `i-heroicons-bolt`, `ICONS.logout` `i-hugeicons-waving-hand-01`,
+  `ICONS.dangerConfirm` `i-hugeicons-skull`, `ICONS.admin` `i-heroicons-wrench-screwdriver`; `ICONS.team` stays
+  `i-fluent-mdl2-team-favorite`.
+- 2026-11-08: `@iconify-json/material-symbols`, `streamline`, `healthicons`, `pajamas` and `tdesign` leave
+  `package.json`; `fluent-emoji-high-contrast` stays for the error page's confused face (`ViewError.vue`).
+
+### Affected
+
+`nuxt.config.ts`, `app/composables/useTheSlopeDesignSystem.ts`, `package.json`.
 
 ## Build once, test locally, ship the artifact
 

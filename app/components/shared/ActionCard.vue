@@ -43,12 +43,13 @@ interface Props {
   to: string
 }
 
-withDefaults(defineProps<Props>(), {
-  stats: () => [],
-  buttonIcon: 'i-heroicons-arrow-right'
+const props = withDefaults(defineProps<Props>(), {
+  stats: () => []
 })
 
-const { TYPOGRAPHY, SIZES } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS } = useTheSlopeDesignSystem()
+// The design system comes from a composable call, which withDefaults cannot reference
+const effectiveButtonIcon = computed(() => props.buttonIcon ?? ICONS.arrowRight)
 </script>
 
 <template>
@@ -99,7 +100,7 @@ const { TYPOGRAPHY, SIZES } = useTheSlopeDesignSystem()
         :to="to"
         :color="color"
         :size="SIZES.standard"
-        :trailing-icon="buttonIcon"
+        :trailing-icon="effectiveButtonIcon"
         block
       >
         {{ buttonLabel }}

@@ -44,14 +44,14 @@ function getRotationClass(i: number) {
       <UIcon
           v-for="(item,i) in icons"
           :key="i"
-          :name="i%2 ? 'mage:robot-dead': 'fluent-emoji-high-contrast:confused-face'"
+          :name="i%2 ? ICONS.robotDead : ICONS.confusedFace"
           :class="[`size-32 md:size-64 lg:size-128 ${TEXT.red[500]}`, getRotationClass(i)]"/>
     </div>
 
     <!-- Error Content -->
     <div :class="`absolute z-50 top-10 left-10 md:top-20 md:left-20 right-10 md:right-20 opacity-90 ${BG.red[100]} flex flex-col p-2 md:p-4 rounded-lg`">
       <!-- Error Code -->
-      <UIcon name="i-mage-robot-dead" size="64"/>
+      <UIcon :name="ICONS.robotDead" size="64"/>
       <p
 v-if="props.error"
          :class="`text-2xl md:text-4xl font-mono font-bold ${BG.red[100]} ${TEXT.red[900]} rounded inline-block mb-2`">

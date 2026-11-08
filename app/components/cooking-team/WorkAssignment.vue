@@ -128,7 +128,7 @@ const handleRoleAssignment = async (role: typeof TeamRole[keyof typeof TeamRole]
       >
         <template #leading><UIcon :name="ICONS.team" /></template>
         Byt Tjans
-        <template #trailing><UIcon name="i-heroicons-arrows-right-left" /></template>
+        <template #trailing><UIcon :name="ICONS.swap" /></template>
       </UButton>
     </div>
   </UFieldGroup>
