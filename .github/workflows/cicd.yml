@@ -194,16 +194,6 @@ jobs:
         run: |
           make test-report report=$E2E_RESULTS_DIR/e2e-ui-serial-results.json title="E2E ui serial tests" note="UI serial test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
           make bdd-report suite=ui-serial >> "$GITHUB_STEP_SUMMARY"
-      # Every build renders docs/releases/*.md to one-page PDFs here, where Playwright is installed; create-release attaches them
-      - name: Release notes PDF
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: make release-notes
-      - uses: actions/upload-artifact@v7
-        with:
-          name: release-notes
-          path: docs/releases/*.pdf
-          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: Determine deployment target
         id: target
         run: |
@@ -309,11 +299,6 @@ jobs:
             git push origin "$TAG"
             echo "✅ Created tag $TAG"
           fi
-      # The PDFs the CICD job rendered (artifact release-notes), attached to the release
-      - uses: actions/download-artifact@v7
-        with:
-          name: release-notes
-          path: release-notes
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -322,10 +307,6 @@ jobs:
           DEPLOYED_URL: ${{ needs.CICD.outputs.deployed_url }}
         run: |
           TAG="v${VERSION%%+*}"
-          PDF="release-${VERSION%%+*}.pdf"
-          # The body links this version's PDF when the artifact holds it
-          NOTES_LINE=""
-          if [ -f "release-notes/$PDF" ]; then NOTES_LINE=$'\n'"**Release notes:** https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$PDF"; fi
           # Check if release already exists
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "⏭️ Release $TAG already exists, skipping"
@@ -336,12 +317,11 @@ jobs:
 
           **Environment:** production
           **URL:** $DEPLOYED_URL
-          **Commit:** $GITHUB_SHA$NOTES_LINE
+          **Commit:** $GITHUB_SHA
 
           Full version: \`$VERSION\`"
             echo "✅ Created release $TAG"
           fi
-          gh release upload "$TAG" release-notes/*.pdf --clobber
 
   rollback:
     needs: CICD

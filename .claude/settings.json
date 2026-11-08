@@ -246,9 +246,7 @@
     ],
     "ask": [
       "Edit(./.claude/skills/**)",
-      "Write(./.claude/skills/**)",
-      "Edit(./.claude/agents/**)",
-      "Write(./.claude/agents/**)"
+      "Edit(./.claude/agents/**)"
     ]
   },
   "attribution": {

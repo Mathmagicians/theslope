@@ -1,4 +1,4 @@
-<img src="../../app/assets/logo.svg" width="220" alt="Skråningen">
+<img src="../../../../../app/assets/logo.svg" width="220" alt="Skråningen">
 
 # Nyt i Theslope aka **Skrånerappen**
 
@@ -29,7 +29,7 @@ Nogle efterårsferieaftener gik med at få **Version 0.9** rullet ud. Den store 
 <tr>
 <td valign="top">
 
-<img src="release-0.9.0/venteliste.png" width="190" align="right" alt="Husstanden står på ventelisten; Support har pladsen Voksen #6">
+<img src="venteliste.png" width="190" align="right" alt="Husstanden står på ventelisten; Support har pladsen Voksen #6">
 
 ![Venteliste](https://api.iconify.design/hugeicons/hourglass.svg?height=18&color=%23737373) **Venteliste.** Udsolgt? Tryk **Skriv på venteliste**. Én kø per billettype — Voksen, Barn, Baby — først til mølle. Din plads står på billetten: **Voksen #6**. Frigiver en nabo en billet af din type, går den til den første i køen. Køberen får en mail, med mindre man ikke gider mails, og har meldt det fra.
 
@@ -44,7 +44,7 @@ Nogle efterårsferieaftener gik med at få **Version 0.9** rullet ud. Den store 
 </td>
 <td valign="top">
 
-<img src="release-0.9.0/budget.png" width="190" align="right" alt="Budget: Indtægter, Rådighedsbeløb med Brugt og Tilbage, Køkkenbidrag">
+<img src="budget.png" width="190" align="right" alt="Budget: Indtægter, Rådighedsbeløb med Brugt og Tilbage, Køkkenbidrag">
 
 ![Budget](https://api.iconify.design/heroicons/currency-dollar.svg?height=18&color=%23737373) **Madbestilling og budget.** Skriv, hvad indkøbet hos Hørkram og raidet til Lokalbrugsen koster (ex/inkl. moms), og appen regner på dit **Rådighedsbeløb** — Brugt, Tilbage og **Køkkenbidrag** på 5 % — for dig og for holdet.
 
@@ -60,6 +60,6 @@ Nogle efterårsferieaftener gik med at få **Version 0.9** rullet ud. Den store 
 </tr>
 </table>
 
-![Kode](https://api.iconify.design/hugeicons/github-01.svg?height=18&color=%23737373) **Til udviklere:** Framework upgrade, CVE fra upstream npm/nuxt lukket. Releasen er beskrevet i [release-0.9.0.md](../features/archived/release-0.9.0.md), arkitekturen i [docs/adr.md](../adr.md) (ADR-011, -016, -017), specs, OpenAPI og BDD-resultater på [developer.skraaningen.dk](https://developer.skraaningen.dk).
+![Kode](https://api.iconify.design/hugeicons/github-01.svg?height=18&color=%23737373) **Til udviklere:** Framework upgrade, CVE fra upstream npm/nuxt lukket. Releasen er beskrevet i [release-0.9.0.md](../release-0.9.0.md), arkitekturen i [docs/adr.md](../../../../adr.md) (ADR-011, -016, -017), specs, OpenAPI og BDD-resultater på [developer.skraaningen.dk](https://developer.skraaningen.dk).
 
 **skraaningen.dk** · Ser du fejl, har du forslag? Tryk på ![Hjælp](https://api.iconify.design/heroicons/question-mark-circle.svg?height=18&color=%23737373) i appen og vælg **Rapporter fejl**. · Oktober 2026

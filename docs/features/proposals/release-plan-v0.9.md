@@ -21,7 +21,7 @@
 | Item | State |
 |------|-------|
 | `app/stores/plan.ts` — refresh-ordering fix (chef page stale detail after role change) | Working tree, ready to test + commit |
-| B1 grid-save root cause + TDD plan — folded into [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) § B1 | Doc done, implementation not started |
+| B1 grid-save root cause + TDD plan — folded into [bug-fix-plan-v0.9.md](../archived/pre-release-0.9.0/bug-fix-plan-v0.9.md) § B1 | Doc done, implementation not started |
 | Chef screenshots (role-assigned/role-wanted) | Regenerated |
 
 ---
@@ -32,14 +32,14 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 
 | # | Bug | Status | Detail doc | Effort |
 |---|-----|--------|------------|--------|
-| B1 | Grid booking save shows "fejlede" despite 200s; day view works | ✅ Root-caused | [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) § B1 | M |
-| B2 | Inhabitant deleted on Heynabo survives in TheSlope (appears in allergy views) — rule: inhabitants follow Heynabo, households preserved | ✅ Root-caused + decisions made | [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) | M–L |
-| B3 | `/admin/allergies` intermittently shows no data | ✅ Root-caused (SSR-fragile store fetch) | [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) | S–M |
-| B4 | Errors editing allergies in `/admin/allergies` | 🔎 Repro first; likely same store as B3 | [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) | S |
-| B5 | Errors adding holidays to a new season | 🔎 Repro first; suspects ranked | [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) | S–M |
+| B1 | Grid booking save shows "fejlede" despite 200s; day view works | ✅ Root-caused | [bug-fix-plan-v0.9.md](../archived/pre-release-0.9.0/bug-fix-plan-v0.9.md) § B1 | M |
+| B2 | Inhabitant deleted on Heynabo survives in TheSlope (appears in allergy views) — rule: inhabitants follow Heynabo, households preserved | ✅ Root-caused + decisions made | [bug-fix-plan-v0.9.md](../archived/pre-release-0.9.0/bug-fix-plan-v0.9.md) | M–L |
+| B3 | `/admin/allergies` intermittently shows no data | ✅ Root-caused (SSR-fragile store fetch) | [bug-fix-plan-v0.9.md](../archived/pre-release-0.9.0/bug-fix-plan-v0.9.md) | S–M |
+| B4 | Errors editing allergies in `/admin/allergies` | 🔎 Repro first; likely same store as B3 | [bug-fix-plan-v0.9.md](../archived/pre-release-0.9.0/bug-fix-plan-v0.9.md) | S |
+| B5 | Errors adding holidays to a new season | 🔎 Repro first; suspects ranked | [bug-fix-plan-v0.9.md](../archived/pre-release-0.9.0/bug-fix-plan-v0.9.md) | S–M |
 | B6 | Kitchen stats show 0 portions when `ticketPriceId` is null | ✅ Root-caused | [feature-0.9.3.md](../release-0.9.3/feature-0.9.3.md) § Order snapshot (B6) | S |
 
-**Approach:** see [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) — TDD per ADR-003, one branch, per-bug commits, and a DRY mandate: every fix removes the duplicated logic that caused it.
+**Approach:** see [bug-fix-plan-v0.9.md](../archived/pre-release-0.9.0/bug-fix-plan-v0.9.md) — TDD per ADR-003, one branch, per-bug commits, and a DRY mandate: every fix removes the duplicated logic that caused it.
 
 ---
 
@@ -63,10 +63,10 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 - **Effort:** L (5 phases, includes Transaction migration + snapshot-union rewrite)
 
 ### F2. Accountant mail + offline billing archive
-- **Status:** ✅ implemented with F3 on `bugfix/admin-ux` (PR #166, 2026-09-18) — [`archived/feature-notifications.md`](../archived/feature-notifications.md): monthly billing stores the period CSV in R2 (one object per period version) and mails it to the accountant, cc the admin mailbox; re-runs converge (ADR-015)
+- **Status:** ✅ implemented with F3 on `bugfix/admin-ux` (PR #166, 2026-09-18) — [`archived/feature-notifications.md`](../archived/pre-release-0.9.0/feature-notifications.md): monthly billing stores the period CSV in R2 (one object per period version) and mails it to the accountant, cc the admin mailbox; re-runs converge (ADR-015)
 
 ### F3. Notifications (email + SMS)
-- **Status:** ✅ e-mail delivery implemented on `bugfix/admin-ux` (PR #166, 2026-09-18) — [`archived/feature-notifications.md`](../archived/feature-notifications.md): the `theslope-sender` worker, the admin test event, the channel preference
+- **Status:** ✅ e-mail delivery implemented on `bugfix/admin-ux` (PR #166, 2026-09-18) — [`archived/feature-notifications.md`](../archived/pre-release-0.9.0/feature-notifications.md): the `theslope-sender` worker, the admin test event, the channel preference
 - **Next:** triggers, landing-page alarms and SMS — [`feature-proposal-notification-triggers.md`](../release-0.9.3/feature-proposal-notification-triggers.md)
 
 ### F4. Waitlist (released-ticket claim)

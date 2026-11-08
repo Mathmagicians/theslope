@@ -17,6 +17,25 @@ A chore release: the booking emails go on, and two bug fixes.
 | Billing delivery report and interrupted job runs | `bug-fix-billing-delivery-report.md` | – | discovery |
 | Chef's available budget after the ticket deadline | `bug-fix-chef-budget-drift.md` | – | discovery |
 | Household lookup | § Household lookup | – | moved from 0.9.1 on 2026-11-02 |
+| Release notes PDF removed | § Release notes PDF removed | – | specified |
+
+## Release notes PDF removed
+
+### Problem
+
+`make release-notes` renders `docs/releases/*.md` to a one-page PDF; `cicd.yml` runs it after the e2e suites and
+`create-release` attaches the PDFs. The notes live in `docs/release-notes/`, so the guard on the poster head fails the
+pipeline at the end of every run.
+
+### Solution
+
+The release notes are markdown in `docs/release-notes/<version>.md`, with pictures in `docs/release-notes/<version>/`;
+the 0.9.0 poster is `docs/features/archived/release-0.9.0.pdf`; `create-release` writes the release's one-line body.
+Removed: the target, its CI step, the artifact `release-notes`, the release attachment and `poster.head.html`.
+
+### Affected
+
+`Makefile`, `.github/workflows/cicd.yml`, `docs/release-notes/`, `docs/features/archived/`.
 
 ## Booking emails on
 

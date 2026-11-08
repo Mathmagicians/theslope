@@ -476,30 +476,6 @@ version-info: ## Output all version components as env vars
 	@echo "SHORT_VERSION=$(VERSION)"
 
 # ============================================================================
-# RELEASE NOTES — every docs/releases/<name>.md as a one-page A4 PDF beside it (docs/releases/<name>.pdf, gitignored)
-# ============================================================================
-.PHONY: release-notes
-
-# Per notes file: GitHub renders the markdown (gh api /markdown, gfm; -F reads the file, -f would send the literal
-# "@path"), docs/releases/poster.head.html carries the stylesheet, the print scaling and the BASE_HREF placeholder,
-# replaced with the file URL of docs/releases/ so the pictures in docs/releases/<name>/ resolve, and Playwright prints
-# the page from .output (gitignored); --wait-for-timeout gives the stylesheet and the icons on cdnjs/iconify time to load
-RELEASE_NOTES_HEAD := docs/releases/poster.head.html
-RELEASE_NOTES_OUT := .output/release-notes
-RELEASE_NOTES := $(wildcard docs/releases/*.md)
-
-release-notes: ## Render every docs/releases/<name>.md to docs/releases/<name>.pdf (A4, one page)
-	@test -f "$(RELEASE_NOTES_HEAD)" || { echo "make $@: no poster head at $(RELEASE_NOTES_HEAD)"; exit 1; }
-	@mkdir -p "$(RELEASE_NOTES_OUT)"; for md in $(RELEASE_NOTES); do \
-		name=$$(basename "$$md" .md); html="$(RELEASE_NOTES_OUT)/$$name.html"; \
-		{ sed 's|BASE_HREF|file://$(CURDIR)/docs/releases/|' "$(RELEASE_NOTES_HEAD)" && \
-		  gh api /markdown -X POST -f mode=gfm -F text=@"$$md" && \
-		  printf '\n</article>\n</body>\n</html>\n'; } > "$$html" && \
-		npx playwright pdf --paper-format A4 --wait-for-timeout 3000 "file://$(CURDIR)/$$html" "docs/releases/$$name.pdf" || exit 1; \
-	done
-	@if [ -n "$(RELEASE_NOTES)" ]; then ls -l $(RELEASE_NOTES:.md=.pdf); else echo "no release notes in docs/releases/"; fi
-
-# ============================================================================
 # DEPLOYMENT & LOGS
 # ============================================================================
 # Workers: "theslope" = the Nuxt app (root wrangler.toml); every other worker is a Nitro app in workers/<name>/
