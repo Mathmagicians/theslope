@@ -3,7 +3,8 @@
  * events and compose are pure functions of the config, so unit tests build it with NotificationFactory.
  *
  * Environment and site come from the deployment's URL, the DEPLOY_URL var (wrangler.toml [env.*.vars], .env locally).
- * Sender address and display name derive from the environment; the mailboxes come from runtimeConfig.notifications.
+ * Sender address and display name derive from the environment; the mailboxes come from runtimeConfig.notifications;
+ * the templates, the signature and the footer from app.config.
  */
 import {deploymentFromUrl, useNotificationValidation, type NotificationConfig} from '~/composables/useNotificationValidation'
 import type {SenderEvent} from '~/composables/useDeliveryValidation'
@@ -22,8 +23,8 @@ export type EmailChannel =
 const notificationConfig = (deployUrl: string): NotificationConfig => {
     const {environment, site} = deploymentFromUrl(deployUrl)
     const {notifications} = useRuntimeConfig()
-    const {theslope: {notifications: {signature, templates}}} = useAppConfig()
-    return NotificationConfigSchema.parse({...notifications, environment, site, from: senderAddress(environment), fromName: senderDisplayName(environment), signature, templates})
+    const {theslope: {notifications: {signature, footer, templates}}} = useAppConfig()
+    return NotificationConfigSchema.parse({...notifications, environment, site, from: senderAddress(environment), fromName: senderDisplayName(environment), signature, footer, templates})
 }
 
 /** The booking emails go while the SHOULD_SEND_BOOKING_EMAILS_FLAG var (wrangler.toml [vars] per environment) is true */

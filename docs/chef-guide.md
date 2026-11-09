@@ -109,7 +109,7 @@ Klik **Bliv chefkok**, bekræft — og dit ansigt pryder portrættet. Tjansen er
 
 1. Klik **Frigiv portioner** i boksen - eller find den under **tandhjulet** i knaprækken
 2. Skriv hvor mange portioner du kan frigive (feltet er udfyldt med det, ventelisten mangler)
-3. Klik **Frigiv** - portionerne går til de første i køen
+3. Klik **Frigiv** - portionerne går til de første i køen, og de får en mail om, at billetten er deres
 
 ---
 
@@ -181,4 +181,4 @@ Se dine holdmedlemmer på [Chef](https://www.skraaningen.dk/chef).
 
 ---
 
-*Sidst opdateret: Oktober 2026 (ventelisten og frigiv portioner, madbestilling og budget, overtag tjansen, allergener per kuvert, aflysning, kig på de andre madhold, Rediger chefkokketjans)*
+*Sidst opdateret: November 2026 (mail ved frigivne portioner, ventelisten og frigiv portioner, madbestilling og budget, overtag tjansen, allergener per kuvert, aflysning, kig på de andre madhold, Rediger chefkokketjans)*

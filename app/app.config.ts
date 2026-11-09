@@ -1,4 +1,4 @@
-import { NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES } from './config/notificationTemplates'
+import { NOTIFICATION_FOOTER, NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES } from './config/notificationTemplates'
 import { SEASON_CONFIG } from './config/season'
 
 export default defineAppConfig({
@@ -18,6 +18,7 @@ export default defineAppConfig({
         waitlistBuildupThreshold: 3,  // Queue size at which the dinner's chef is asked to release portions
         notifications: {
             signature: NOTIFICATION_SIGNATURE,
+            footer: NOTIFICATION_FOOTER,
             templates: NOTIFICATION_TEMPLATES  // per kind, {{placeholders}} filled by server/utils/sender/compose.ts
         }
     },

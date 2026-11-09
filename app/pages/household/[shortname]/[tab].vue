@@ -14,55 +14,50 @@
  */
 import {HELP_TEXTS} from '~/config/help-texts'
 import {HOUSEHOLD_WORDS} from '~/config/householdWords'
+import {LazyHouseholdBookings, LazyHouseholdCard, LazyHouseholdAllergies, LazyHouseholdEconomy, LazyHouseholdSettings} from '#components'
 
 const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR, ALERTS, NOISE } = useTheSlopeDesignSystem()
 const now = useClock()
 
 // `edits` marks a tab whose component declares canEdit and adminBypass; the others take neither
+// A tab's component is Nuxt's lazy component: rendered on the server, its chunk loaded in the browser when the tab opens
 const tabs = [
   {
     key: HOUSEHOLD_TAB.bookings,
     label: HELP_TEXTS.household.bookings.title,
     icon: ICONS.calendar,
-    component: 'HouseholdBookings',
+    component: LazyHouseholdBookings,
     edits: true
   },
   {
     key: HOUSEHOLD_TAB.members,
     label: HELP_TEXTS.household.members.title,
     icon: ICONS.preferences,
-    component: 'HouseholdCard',
+    component: LazyHouseholdCard,
     edits: true
   },
   {
     key: HOUSEHOLD_TAB.allergies,
     label: HELP_TEXTS.household.allergies.title,
     icon: ICONS.allergy,
-    component: 'HouseholdAllergies',
+    component: LazyHouseholdAllergies,
     edits: true
   },
   {
     key: HOUSEHOLD_TAB.economy,
     label: HELP_TEXTS.household.economy.title,
     icon: ICONS.economy,
-    component: 'HouseholdEconomy',
+    component: LazyHouseholdEconomy,
     edits: false
   },
   {
     key: HOUSEHOLD_TAB.settings,
     label: HELP_TEXTS.household.settings.title,
     icon: ICONS.settings,
-    component: 'HouseholdSettings',
+    component: LazyHouseholdSettings,
     edits: true
   }
 ]
-
-const asyncComponents = Object.fromEntries(
-    tabs.map(tab => [
-      tab.key,
-      defineAsyncComponent(() => import(`~/components/household/${tab.component}.vue`))
-    ])
-)
 
 const route = useRoute()
 const shortname = computed(() => String(route.params.shortname))
@@ -164,7 +159,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
                :message="HOUSEHOLD_WORDS.failed.householdPage(shortname)" :cause="selectedHouseholdError"/>
     <Loader v-else-if="!isHouseholdsStoreReady" :text="`Henter husstanden ${shortname}`"/>
     <UAlert v-else-if="isNoHouseholds" v-bind="ALERTS.emptyState" :title="HOUSEHOLD_WORDS.page.noHouseholds"/>
-    <UCard v-else v-bind="COMPONENTS.householdPage.card">
+    <UCard v-else-if="selectedHousehold" v-bind="COMPONENTS.householdPage.card">
       <!-- Household status ribbon -->
       <div
         v-if="ribbon"
@@ -233,7 +228,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
           :color="COLOR.primary"
       >
         <template #content="{ item }">
-          <component :is="asyncComponents[item.value]" :household="selectedHousehold" v-bind="item.edits ? editProps : {}"/>
+          <component :is="item.component" :household="selectedHousehold" v-bind="item.edits ? editProps : {}"/>
         </template>
       </UTabs>
     </UCard>

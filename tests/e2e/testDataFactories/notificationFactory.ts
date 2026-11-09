@@ -1,4 +1,4 @@
-import {NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES, NotificationKind, senderAddress, senderDisplayName} from '~/config/notificationTemplates'
+import {NOTIFICATION_FOOTER, NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES, NotificationKind, senderAddress, senderDisplayName} from '~/config/notificationTemplates'
 import type {NotificationConfig} from '~/composables/useNotificationValidation'
 import {useDeliveryValidation, type Delivery, type DesiredDelivery} from '~/composables/useDeliveryValidation'
 import type {UserDisplay} from '~/composables/useCoreValidation'
@@ -17,7 +17,7 @@ const referenceOf = (notification: NotificationKind, kind: Delivery['kind'], use
     `${deliveryReferencePrefix(notification, kind, userId)}${MASKED_ADDRESS}:${crypto.randomUUID()}`
 
 /**
- * Notification config for unit tests: the real templates and signature, dev-like addresses (ADR-003 factory).
+ * Notification config for unit tests: the real templates, signature and footer, dev-like addresses (ADR-003 factory).
  */
 export class NotificationFactory {
     /** The mail kinds, one per template of the config: `Kind.WAITLIST_JOINED` */
@@ -34,6 +34,7 @@ export class NotificationFactory {
         accountantEmail: 'revisor@example.com',
         adminEmail: 'admin@example.com',
         signature: NOTIFICATION_SIGNATURE,
+        footer: NOTIFICATION_FOOTER,
         templates: NOTIFICATION_TEMPLATES,
         ...overrides
     })

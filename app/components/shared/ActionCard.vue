@@ -44,7 +44,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  stats: () => []
+  stats: () => [],
+  buttonIcon: undefined
 })
 
 const { TYPOGRAPHY, SIZES, ICONS } = useTheSlopeDesignSystem()

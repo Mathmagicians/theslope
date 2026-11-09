@@ -47,7 +47,7 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 
 | # | Improvement | Why now | Effort |
 |---|-------------|---------|--------|
-| I1 | **SSR-safe data loading sweep** — carried by the Store fetcher factory + alignment and Fetch gating packages (`../archived/release-0.9.0.md`); the 2026-04 bare-fetch notes are folded there and deleted. Chef hydration shipped with chef-swap; the past-periods symptom is tracked in `../release-0.9.2/bug-fix-billing-delivery-report.md` | New features (waitlist, ad-hoc UI) build on these stores — fix the foundation first | M |
+| I1 | **SSR-safe data loading sweep** — carried by the Store fetcher factory + alignment and Fetch gating packages (`../archived/release-0.9.0.md`); the 2026-04 bare-fetch notes are folded there and deleted. Chef hydration shipped with chef-swap; the past-periods symptom is tracked in `../release-0.9.3/bug-fix-billing-delivery-report.md` | New features (waitlist, ad-hoc UI) build on these stores — fix the foundation first | M |
 | I2 | **DRY sweep of stores + data loading** — the 7 stores implement ADR-007 with drift (e.g., `allergies.ts` alone mixes `useFetch`/`useAsyncData`/`$fetch`; repeated status-computed boilerplate). Extract a shared store-fetch helper or at minimum align every store to one reference pattern (`plan.ts`); audit `event.ts` + `tickets.ts` (still ❓ in compliance doc) — ✅ done: `storeAsyncData` (ADR-007), six stores, `tickets.ts` deleted | Same as I1; also cuts the copy-paste class of bugs the release is fixing | M |
 | I3 | **`Order` uniqueness** — dropped 2026-10-05: zero duplicates in all envs, B1 unifies the builders, an index adds write cost + a failure mode | Dropped | — |
 | I4 | **Observability baseline — stop driving blind.** Today the only signals are `console.*` logs (ADR-004) and the JobRun history panel. Add: Workers observability enabled in `wrangler.toml` (structured log retention + querying), error alerting on 5xx rates and failed jobs (Cloudflare notifications or a lightweight error tracker), a `/api/health` endpoint wired to an uptime monitor, and job-failure alerts to admins (email — first consumer of F4 infra once it lands, Cloudflare notification until then). Document in `ops-runbook.md` | Debugging B3/B4-class "sometimes fails" bugs and operating billing/notifications safely requires seeing prod. Cheap to add, pays off in every later milestone | M |
@@ -107,7 +107,7 @@ Rationale for the ordering: bugs and the consistency sweep de-risk everything af
 |----------|--------|--------|
 | `../release-0.9.3/feature-proposal-adhoc-admin-billing.md` | Proposal | Review + sign-off (Phase 0) |
 | `../release-0.9.3/feature-proposal-duty-roster.md` | Signed off | Implement |
-| `bug-fix-plan-v0.9.md` | Shipped, archived 2026-10-06 | B6 continues as the Order snapshot package; billing delivery report + interrupted runs in `../release-0.9.2/bug-fix-billing-delivery-report.md` |
+| `bug-fix-plan-v0.9.md` | Shipped, archived 2026-10-06 | B6 continues as the Order snapshot package; billing delivery report + interrupted runs in `../release-0.9.3/bug-fix-billing-delivery-report.md` |
 | `../release-0.9.3/feature-0.9.3.md` § Order snapshot | Done | Implement (B6) in 0.9.3 |
 | `bare-fetch-fix.md` | Folded into release-0.9.0's factory + gating packages, deleted 2026-10-07 | — |
 | `archived/feature-notifications.md` | ✅ Implemented (PR #166) | — |

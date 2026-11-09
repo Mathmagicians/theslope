@@ -270,6 +270,8 @@ Kan du ikke komme alligevel? **Frigiv** din billet, så sættes den til salg. Vi
 
 Ventelisten er én kø per billettype (voksen, barn og baby): først til mølle. Frigiver en anden en billet af din type, eller laver køkkenholdet ekstra portioner, går billetten til den første i køen. Vælg **Ingen** på din plads i køen og klik **Forlad ventelisten**, hvis du alligevel ikke skal med.
 
+**Du får en mail**, når der sker noget efter fristen: når du skriver dig på ventelisten, når en billet bliver din - købt, eller fra ventelisten fordi en nabo frigav en af din type eller køkkenholdet lavede ekstra portioner - og når en billet, du har frigivet, bliver solgt, så du slipper for at betale. Vil du hellere være fri for mails, så slår du **E-mail** fra under **Mine indstillinger** - linket står nederst i hver mail.
+
 > **Bemærk:** Når du frigiver en billet, betaler du kun hvis ingen køber den. Bliver billetten solgt, slipper du for at betale.
 
 > **Billetter på 0 portioner:** Nogle billetter tager ingen portion fra gryden - fx en babybillet. Sådan en billet tilmeldes og frameldes når som helst - også efter fristen - og går direkte ind uden om ventelisten. Billetter med portioner følger fristen ligesom resten af familien.
@@ -386,4 +388,4 @@ Kontakt en administrator eller opret et issue på [GitHub](https://github.com/Ma
 
 ---
 
-*Sidst opdateret: Oktober 2026 (ventelisten, køb og frigiv efter fristen, appen på telefonen, Mine indstillinger, allergier på billetten, forventede bestillinger, aflyste middage, pris på billetten, billetter på 0 portioner, kig ind hos naboerne, Ny billetpris)*
+*Sidst opdateret: November 2026 (mails om ventelisten og salg, ventelisten, køb og frigiv efter fristen, appen på telefonen, Mine indstillinger, allergier på billetten, forventede bestillinger, aflyste middage, pris på billetten, billetter på 0 portioner, kig ind hos naboerne, Ny billetpris)*

@@ -1,4 +1,4 @@
-import {expect, type BrowserContext} from '@playwright/test'
+import {expect, type BrowserContext, type ViewportSize} from '@playwright/test'
 import {defineParameterType} from 'playwright-bdd'
 import {
     Given, When, Then, fromScene, contextOfActor, createSceneHousehold, createScenePerson, createDinnerInThePastMonth,
@@ -9,15 +9,17 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {SenderFactory} from '~~/tests/e2e/testDataFactories/senderFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
-import {useBillingValidation, type InvoiceDisplay} from '~/composables/useBillingValidation'
+import {useBillingValidation, type BillingPeriodSummaryDetail, type InvoiceDisplay} from '~/composables/useBillingValidation'
 
-const {daysFromNow} = testHelpers
+const {daysFromNow, expectNoHorizontalOverflow} = testHelpers
 const {CSV_HEADER} = useBillingValidation()
 
 /** The billing periods a re-send names, by their words in a feature: the scenario's period, an id no period has, a body with no id */
 const BILLING_PERIOD = {PERIOD: 'period', UNKNOWN: 'unknown period', INVALID: 'invalid period'} as const
 type BillingPeriodWords = typeof BILLING_PERIOD[keyof typeof BILLING_PERIOD]
 const UNKNOWN_PERIOD_ID = 999_999_999
+/** A share token no billing period has: the MONTHLY_BILLING job makes version 4 tokens (`crypto.randomUUID`) */
+const UNKNOWN_SHARE_TOKEN = '00000000-0000-0000-0000-000000000000'
 
 defineParameterType({name: 'billingPeriod', regexp: Object.values(BILLING_PERIOD)})
 
@@ -46,6 +48,10 @@ Given('the past month has unbilled orders in {int} household(s)', async ({adminC
     await unbilledOrdersIn(admin, scene, households)
 })
 
+/** The billing period that bills the scenario's households, as the admin reads it */
+const periodDetailOf = async (admin: BrowserContext, scene: Scene): Promise<BillingPeriodSummaryDetail> =>
+    BillingFactory.getBillingPeriodById(admin, await periodOf(admin, scene))
+
 /** The re-send's body for the period the words name */
 const resendBodyOf = async (admin: BrowserContext, scene: Scene, period: BillingPeriodWords): Promise<unknown> => {
     switch (period) {
@@ -64,7 +70,7 @@ When('the {billingPeriod} is re-sent by {actor}', async ({adminContext: admin, s
 })
 
 Then('each invoice of the period names its household and PBS number', async ({adminContext: admin, scene}) => {
-    const {invoices} = await BillingFactory.getBillingPeriodById(admin, await periodOf(admin, scene))
+    const {invoices} = await periodDetailOf(admin, scene)
     // The households the scenario billed: the period also holds the invoices of earlier scenarios' households, removed since
     for (const {id, pbsId, address} of scene.billedHouseholds) {
         expect(invoices.filter(invoice => invoice.householdId === id).map(invoice => ({pbsId: invoice.pbsId, address: invoice.address})),
@@ -77,13 +83,13 @@ const byAddressThenPbsId = (a: InvoiceDisplay, b: InvoiceDisplay): number =>
     a.address === b.address ? a.pbsId - b.pbsId : a.address < b.address ? -1 : 1
 
 Then('the invoices of the period are ordered by address, then PBS number', async ({adminContext: admin, scene}) => {
-    const {invoices} = await BillingFactory.getBillingPeriodById(admin, await periodOf(admin, scene))
+    const {invoices} = await periodDetailOf(admin, scene)
     expect(invoices.length, 'two invoices at least to compare').toBeGreaterThanOrEqual(2)
     expect(invoices.map(invoice => invoice.id)).toEqual([...invoices].sort(byAddressThenPbsId).map(invoice => invoice.id))
 })
 
 Then('the transactions of each invoice add up to its amount', async ({adminContext: admin, scene}) => {
-    const {invoices} = await BillingFactory.getBillingPeriodById(admin, await periodOf(admin, scene))
+    const {invoices} = await periodDetailOf(admin, scene)
     for (const {id} of scene.billedHouseholds) {
         const invoice = invoices.find(invoice => invoice.householdId === id)
         expect(invoice, `household ${id} has an invoice`).toBeDefined()
@@ -93,24 +99,36 @@ Then('the transactions of each invoice add up to its amount', async ({adminConte
 })
 
 When('{actor} opens the period\'s accountant link', async ({adminContext: admin, scene}, actor: Actor) => {
-    const {shareToken} = await BillingFactory.getBillingPeriodById(admin, await periodOf(admin, scene))
+    const {shareToken} = await periodDetailOf(admin, scene)
     scene.publicPeriod = await BillingFactory.getBillingPeriodByToken(contextOfActor(scene, actor), shareToken)
 })
 
 Then('{actor} sees the period with its invoices', async ({adminContext: admin, scene}, actor: Actor) => {
     // The actor who opened the link is the one who sees it
     contextOfActor(scene, actor)
-    const period = await BillingFactory.getBillingPeriodById(admin, await periodOf(admin, scene))
+    const period = await periodDetailOf(admin, scene)
     const seen = fromScene(scene, 'publicPeriod')
     expect(seen.id).toBe(period.id)
     expect(seen.invoices.map(invoice => invoice.id), 'the link shows every invoice of the period').toEqual(period.invoices.map(invoice => invoice.id))
 })
 
 Then('the period\'s CSV file downloads through the accountant link', async ({adminContext: admin, scene}) => {
-    const period = await BillingFactory.getBillingPeriodById(admin, await periodOf(admin, scene))
+    const period = await periodDetailOf(admin, scene)
     const {csv, filename} = await BillingFactory.getBillingCsvByToken(fromScene(scene, 'context'), period.shareToken)
     const [header, ...rows] = csv.split('\n')
     expect(header).toBe(CSV_HEADER)
     expect(rows, 'one row per invoice').toHaveLength(period.invoices.length)
     expect(filename).toContain(period.billingPeriod)
+})
+
+Then('the period page does not scroll sideways on a {screen}', async ({adminContext: admin, scene}, viewport: ViewportSize) => {
+    const {shareToken} = await periodDetailOf(admin, scene)
+    const page = await fromScene(scene, 'context').newPage()
+    await expectNoHorizontalOverflow(page, `/public/billing/${shareToken}`, viewport, () =>
+        expect(page.getByTestId('public-billing').getByRole('table')).toBeVisible())
+})
+
+When('{actor} opens an unknown accountant link', async ({scene}, actor: Actor) => {
+    const {status} = await BillingFactory.getBillingByTokenRaw(contextOfActor(scene, actor), UNKNOWN_SHARE_TOKEN)
+    scene.answer = {request: REQUEST.READ, status}
 })

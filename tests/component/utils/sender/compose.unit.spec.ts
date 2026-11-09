@@ -3,7 +3,7 @@ import {composeEmail, missingAddress} from '~~/server/utils/sender/compose'
 import {deploymentFromUrl, useNotificationValidation} from '~/composables/useNotificationValidation'
 import {useDeliveryValidation} from '~/composables/useDeliveryValidation'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
-import {NOTIFICATION_SENDER_NAME, NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES, senderAddress, senderDisplayName} from '~/config/notificationTemplates'
+import {NOTIFICATION_FOOTER, NOTIFICATION_SENDER_NAME, NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES, senderAddress, senderDisplayName} from '~/config/notificationTemplates'
 import {maskEmail} from '~~/workers/common/mask'
 
 const {NotificationMessageSchema, EnvironmentSchema} = useNotificationValidation()
@@ -28,6 +28,14 @@ describe('templates name the sender through {{senderName}}', () => {
     it('signature', () => {
         expect(NOTIFICATION_SIGNATURE).toContain('{{senderName}}')
         expect(NOTIFICATION_SIGNATURE).not.toContain(NOTIFICATION_SENDER_NAME)
+    })
+})
+
+// The footer leads to the member's own settings; the link is filled per deployment, never written in the words
+describe('the footer links the settings through {{settingsUrl}}', () => {
+    it('footer', () => {
+        expect(NOTIFICATION_FOOTER).toContain('{{settingsUrl}}')
+        expect(NOTIFICATION_FOOTER).not.toContain('skraaningen.dk')
     })
 })
 
@@ -61,13 +69,14 @@ describe('missingAddress', () => {
 })
 
 describe('composeEmail', () => {
-    it('renders the kind\'s template with the built-in values, appends the signature, and takes sender, display name and environment from the config, the admin mailbox as reply-to', () => {
+    it('renders the kind\'s template with the built-in values, appends the signature and the settings footer, and takes sender, display name and environment from the config, the admin mailbox as reply-to', () => {
         const message = composeEmail(config, toAnna)
 
         expect(NotificationMessageSchema.safeParse(message).success).toBe(true)
         expect(message.subject).toBe('Skråningen: testbesked fra theslope-sender (dev)')
         expect(message.text).toContain(`id: ${message.meta.dedupeKey}`)
-        expect(message.text.endsWith('— Skråningen · dev.skraaningen.dk')).toBe(true)
+        expect(message.text).toContain('— Skråningen · dev.skraaningen.dk')
+        expect(message.text.endsWith('så kan du ændre dine indstillinger her: https://dev.skraaningen.dk/login')).toBe(true)
         expect(message).toMatchObject({from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {environment: 'dev', source: 'theslope-app', kind: NotificationFactory.Kind.TEST}})
     })
 

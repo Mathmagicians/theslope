@@ -20,10 +20,10 @@ describe('emailChannel', () => {
     })
 
     it('is on with the queue and the settings of the deployment when both are set', () => {
-        const {signature, templates, accountantEmail, adminEmail} = NotificationFactory.config()
+        const {signature, footer, templates, accountantEmail, adminEmail} = NotificationFactory.config()
         vi.stubEnv('DEPLOY_URL', 'https://dev.skraaningen.dk')
         vi.stubGlobal('useRuntimeConfig', () => ({notifications: {accountantEmail, adminEmail}}))
-        vi.stubGlobal('useAppConfig', () => ({theslope: {notifications: {signature, templates}}}))
+        vi.stubGlobal('useAppConfig', () => ({theslope: {notifications: {signature, footer, templates}}}))
 
         const channel = emailChannel({SENDER: queue})
 

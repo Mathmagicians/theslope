@@ -54,7 +54,7 @@ const NotificationTemplateSchema = z.object({
 
 /**
  * What the app knows about sending: the deployment, sender address and display name (derived from DEPLOY_URL),
- * the mailboxes (runtimeConfig.notifications — NUXT_NOTIFICATIONS_* worker secrets), templates and signature (app.config).
+ * the mailboxes (runtimeConfig.notifications — NUXT_NOTIFICATIONS_* worker secrets), templates, signature and footer (app.config).
  */
 const NotificationConfigSchema = z.object({
     environment: EnvironmentSchema,
@@ -66,6 +66,8 @@ const NotificationConfigSchema = z.object({
     /** Reply-To of every mail, recipient of the test mail, cc on the accountant mail */
     adminEmail: OptionalEmailSchema,
     signature: z.string().min(1),
+    /** Under the signature of every mail: where the member's own settings are */
+    footer: z.string().min(1),
     templates: z.record(KindSchema, NotificationTemplateSchema)
 })
 
