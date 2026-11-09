@@ -21,6 +21,27 @@ A chore release: the booking emails go on, and two bug fixes.
 | E2E suites fan out in CI | § E2E suites fan out in CI | – | specified |
 | Build once, test locally, ship the artifact | § Build once, test locally, ship the artifact | – | specified |
 | Icons ship in the client bundle | § Icons ship in the client bundle | – | specified |
+| npm audit | § npm audit | – | discovery |
+
+## npm audit
+
+### Problem
+
+Dependabot opens weekly version pull requests (`.github/dependabot.yml`); no step reads npm's advisories, so a known
+vulnerability in an installed package shows only to a developer who reads the summary `npm ci` prints.
+
+### Solution
+
+`make audit` runs `npm audit` at the agreed level and fails on a finding; the check job runs it after `npm ci`, and
+`pre:all` runs it locally. An accepted finding is recorded with its advisory id and the date it is reviewed again.
+
+OPEN: the level that fails (`high`, or `moderate`); the scope (production dependencies alone, or the dev dependencies
+the build runs on too); where an accepted finding is recorded (the runbook, or a tool with an ignore list); a scheduled
+run on main beside Dependabot, or the pull-request gate alone.
+
+### Affected
+
+`Makefile`, `package.json`, `.github/workflows/cicd.yml`, `docs/ops-runbook.md`, `.claude/skills/prepare-to-ship/SKILL.md`.
 
 ## Icons ship in the client bundle
 
@@ -38,7 +59,9 @@ the browser bundle and renders with the page; a component binds a token, never a
 a name the scan does not see is fetched from the Iconify CDN at runtime. Four icons
 that stood alone in their collection take a glyph from a collection the app draws on: the power row's alert carries
 the bolt of its button, the logout button a waving hand, the armed delete button a skull, the admin entry a wrench. The
-team badge keeps its icon.
+team badge keeps its icon. The four icon names written in components bind tokens (`ICONS.swap`, `ICONS.arrowRight`
+through a computed default, `ICONS.robotDead`, `ICONS.confusedFace`), and the architecture spec fails an icon name
+outside the design system and an installed collection no token names (ADR-018, compliance 5).
 
 ### Decisions
 
@@ -52,7 +75,9 @@ team badge keeps its icon.
 
 ### Affected
 
-`nuxt.config.ts`, `app/composables/useTheSlopeDesignSystem.ts`, `package.json`.
+`nuxt.config.ts`, `app/composables/useTheSlopeDesignSystem.ts`, `package.json`, `ViewError.vue`, `ActionCard.vue`,
+`WorkAssignment.vue`, `tests/component/architecture/designSystemUsage.unit.spec.ts`, `docs/adr.md` (ADR-018),
+`docs/testing.md`, `docs/ui.md`.
 
 ## Build once, test locally, ship the artifact
 
