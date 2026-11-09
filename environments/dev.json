@@ -1,0 +1,45 @@
+{
+  "environment": "dev",
+  "version": "0.9.1-rc.5+6a0cb41",
+  "sha": "6a0cb412f0dbe1b3af8c9a20a31109f93d2f49e4",
+  "deployedAt": "2026-11-09T11:37:09Z",
+  "run": 42606682446,
+  "suites": {
+    "api": {
+      "passed": 5,
+      "failed": 0,
+      "flaky": 0,
+      "skipped": 0,
+      "report": "index.html"
+    },
+    "api-serial": {
+      "passed": 33,
+      "failed": 0,
+      "flaky": 0,
+      "skipped": 0,
+      "report": "index.html"
+    },
+    "smoke": {
+      "passed": 12,
+      "failed": 0,
+      "flaky": 0,
+      "skipped": 0,
+      "report": "index.html"
+    },
+    "ui": {
+      "passed": 23,
+      "failed": 0,
+      "flaky": 0,
+      "skipped": 0,
+      "report": "index.html"
+    },
+    "ui-serial": {
+      "passed": 0,
+      "failed": 0,
+      "flaky": 0,
+      "skipped": 0,
+      "report": "index.html"
+    }
+  },
+  "url": "https://dev.skraaningen.dk"
+}

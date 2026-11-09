@@ -1,0 +1,2539 @@
+[
+  {
+    "description": "  The user takes the chef duty of a dinner on the chef page or the dinner page, from a dinner without a chef or from\n  another chef, and resigns from it again.",
+    "elements": [
+      {
+        "description": "",
+        "id": "chef-duty;on-/chef,-the-user-takes-the-chef-duty-of-a-dinner-without-a-chef-and-resigns-from-it",
+        "keyword": "Scenario Outline",
+        "line": 24,
+        "name": "On /chef, the user takes the chef duty of a dinner without a chef and resigns from it",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 87000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 8,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 20000000
+            }
+          },
+          {
+            "arguments": [
+              {
+                "rows": [
+                  {
+                    "cells": [
+                      "team",
+                      "role"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "1",
+                      "CHEF"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "keyword": "And ",
+            "line": 9,
+            "name": "the user is on the teams",
+            "result": {
+              "status": "passed",
+              "duration": 206000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 15,
+            "name": "team 1 cooks a dinner without a chef",
+            "result": {
+              "status": "passed",
+              "duration": 147000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 16,
+            "name": "the user opens /chef on the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 3109000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "the user takes the chef duty",
+            "result": {
+              "status": "passed",
+              "duration": 418000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 18,
+            "name": "the user is the chef of the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 3069000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 19,
+            "name": "the user resigns from the chef duty",
+            "result": {
+              "status": "passed",
+              "duration": 404000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 20,
+            "name": "the dinner has no chef",
+            "result": {
+              "status": "passed",
+              "duration": 390000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 108000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@slow",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "chef-duty;on-/dinner,-the-user-takes-the-chef-duty-of-a-dinner-without-a-chef-and-resigns-from-it",
+        "keyword": "Scenario Outline",
+        "line": 25,
+        "name": "On /dinner, the user takes the chef duty of a dinner without a chef and resigns from it",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 8,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 20000000
+            }
+          },
+          {
+            "arguments": [
+              {
+                "rows": [
+                  {
+                    "cells": [
+                      "team",
+                      "role"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "1",
+                      "CHEF"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "keyword": "And ",
+            "line": 9,
+            "name": "the user is on the teams",
+            "result": {
+              "status": "passed",
+              "duration": 5000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 15,
+            "name": "team 1 cooks a dinner without a chef",
+            "result": {
+              "status": "passed",
+              "duration": 144000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 16,
+            "name": "the user opens /dinner on the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 3892000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "the user takes the chef duty",
+            "result": {
+              "status": "passed",
+              "duration": 286000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 18,
+            "name": "the user is the chef of the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 4422000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 19,
+            "name": "the user resigns from the chef duty",
+            "result": {
+              "status": "passed",
+              "duration": 363000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 20,
+            "name": "the dinner has no chef",
+            "result": {
+              "status": "passed",
+              "duration": 1030000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 77000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@slow",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "chef-duty;on-/chef,-the-user-takes-the-chef-duty-of-a-dinner-with-the-admin-as-its-chef-and-resigns-from-it",
+        "keyword": "Scenario Outline",
+        "line": 26,
+        "name": "On /chef, the user takes the chef duty of a dinner with the admin as its chef and resigns from it",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 8,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 19000000
+            }
+          },
+          {
+            "arguments": [
+              {
+                "rows": [
+                  {
+                    "cells": [
+                      "team",
+                      "role"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "1",
+                      "CHEF"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "keyword": "And ",
+            "line": 9,
+            "name": "the user is on the teams",
+            "result": {
+              "status": "passed",
+              "duration": 6000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 15,
+            "name": "team 1 cooks a dinner with the admin as its chef",
+            "result": {
+              "status": "passed",
+              "duration": 275000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 16,
+            "name": "the user opens /chef on the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 3050000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "the user takes the chef duty",
+            "result": {
+              "status": "passed",
+              "duration": 398000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 18,
+            "name": "the user is the chef of the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 3061000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 19,
+            "name": "the user resigns from the chef duty",
+            "result": {
+              "status": "passed",
+              "duration": 363000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 20,
+            "name": "the dinner has no chef",
+            "result": {
+              "status": "passed",
+              "duration": 387000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 105000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@slow",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "chef-duty;on-/dinner,-the-user-takes-the-chef-duty-of-a-dinner-with-the-admin-as-its-chef-and-resigns-from-it",
+        "keyword": "Scenario Outline",
+        "line": 27,
+        "name": "On /dinner, the user takes the chef duty of a dinner with the admin as its chef and resigns from it",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 8,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 18000000
+            }
+          },
+          {
+            "arguments": [
+              {
+                "rows": [
+                  {
+                    "cells": [
+                      "team",
+                      "role"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "1",
+                      "CHEF"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "keyword": "And ",
+            "line": 9,
+            "name": "the user is on the teams",
+            "result": {
+              "status": "passed",
+              "duration": 6000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 15,
+            "name": "team 1 cooks a dinner with the admin as its chef",
+            "result": {
+              "status": "passed",
+              "duration": 260000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 16,
+            "name": "the user opens /dinner on the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 3360000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "the user takes the chef duty",
+            "result": {
+              "status": "passed",
+              "duration": 475000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 18,
+            "name": "the user is the chef of the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 4362000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 19,
+            "name": "the user resigns from the chef duty",
+            "result": {
+              "status": "passed",
+              "duration": 357000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 20,
+            "name": "the dinner has no chef",
+            "result": {
+              "status": "passed",
+              "duration": 1042000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 168000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@slow",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-ui-›-chef-duty",
+    "line": 3,
+    "keyword": "Feature",
+    "name": "Chef duty",
+    "tags": [
+      {
+        "name": "@e2e-parallel",
+        "line": 2
+      },
+      {
+        "name": "@slow",
+        "line": 2
+      }
+    ],
+    "uri": "tests/e2e/features/chef/chef-duty.feature"
+  },
+  {
+    "description": "  The user who cooks on a team plans the team's dinners on the chef page. The user is on a team through their\n  inhabitant.",
+    "elements": [
+      {
+        "description": "",
+        "id": "the-chef-page;the-user-plans-the-dinners-of-their-own-teams;the-chef-page-renders-on-the-server-and-hydrates-without-a-mismatch",
+        "keyword": "Scenario",
+        "line": 22,
+        "name": "The chef page renders on the server and hydrates without a mismatch",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 20000000
+            }
+          },
+          {
+            "arguments": [
+              {
+                "rows": [
+                  {
+                    "cells": [
+                      "team",
+                      "role"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "1",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "2",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "3",
+                      "COOK"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "4",
+                      "none"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user is on the teams",
+            "result": {
+              "status": "passed",
+              "duration": 328000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 19,
+            "name": "team 1 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 65000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "team 2 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 58000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 23,
+            "name": "the user opens the chef page of team 1",
+            "result": {
+              "status": "passed",
+              "duration": 3043000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 24,
+            "name": "the page hydrates without a mismatch",
+            "result": {
+              "status": "passed",
+              "duration": 2000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 25,
+            "name": "the user sees the chef calendar and one footer",
+            "result": {
+              "status": "passed",
+              "duration": 46000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 20000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "the-chef-page;the-user-plans-the-dinners-of-their-own-teams;the-user-switches-from-the-tab-of-team-1-to-the-tab-of-team-2",
+        "keyword": "Scenario Outline",
+        "line": 35,
+        "name": "The user switches from the tab of team 1 to the tab of team 2",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 18000000
+            }
+          },
+          {
+            "arguments": [
+              {
+                "rows": [
+                  {
+                    "cells": [
+                      "team",
+                      "role"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "1",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "2",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "3",
+                      "COOK"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "4",
+                      "none"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user is on the teams",
+            "result": {
+              "status": "passed",
+              "duration": 5000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 19,
+            "name": "team 1 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "team 2 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 28,
+            "name": "the user opens the chef page of team 1",
+            "result": {
+              "status": "passed",
+              "duration": 3008000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 29,
+            "name": "the user chooses the tab of team 2",
+            "result": {
+              "status": "passed",
+              "duration": 98000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 30,
+            "name": "the user sees the role line of a CHEF on team 2",
+            "result": {
+              "status": "passed",
+              "duration": 48000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 31,
+            "name": "the user sees the next cooking day of team 2",
+            "result": {
+              "status": "passed",
+              "duration": 224000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 16000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "the-chef-page;the-user-plans-the-dinners-of-their-own-teams;the-user-switches-from-the-tab-of-team-2-to-the-tab-of-team-1",
+        "keyword": "Scenario Outline",
+        "line": 36,
+        "name": "The user switches from the tab of team 2 to the tab of team 1",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 19000000
+            }
+          },
+          {
+            "arguments": [
+              {
+                "rows": [
+                  {
+                    "cells": [
+                      "team",
+                      "role"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "1",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "2",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "3",
+                      "COOK"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "4",
+                      "none"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user is on the teams",
+            "result": {
+              "status": "passed",
+              "duration": 5000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 19,
+            "name": "team 1 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "team 2 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 28,
+            "name": "the user opens the chef page of team 2",
+            "result": {
+              "status": "passed",
+              "duration": 2962000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 29,
+            "name": "the user chooses the tab of team 1",
+            "result": {
+              "status": "passed",
+              "duration": 91000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 30,
+            "name": "the user sees the role line of a CHEF on team 1",
+            "result": {
+              "status": "passed",
+              "duration": 52000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 31,
+            "name": "the user sees the next cooking day of team 1",
+            "result": {
+              "status": "passed",
+              "duration": 236000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 16000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "the-chef-page;the-user-plans-the-dinners-of-their-own-teams;on-a-desktop-with-the-view-none,-the-calendar-on-/chef-is-open",
+        "keyword": "Scenario Outline",
+        "line": 44,
+        "name": "On a desktop with the view none, the calendar on /chef is open",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 21000000
+            }
+          },
+          {
+            "arguments": [
+              {
+                "rows": [
+                  {
+                    "cells": [
+                      "team",
+                      "role"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "1",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "2",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "3",
+                      "COOK"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "4",
+                      "none"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user is on the teams",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 19,
+            "name": "team 1 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "team 2 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 39,
+            "name": "the user opens /chef on a desktop with the view none",
+            "result": {
+              "status": "passed",
+              "duration": 3067000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 40,
+            "name": "the calendar on /chef is open",
+            "result": {
+              "status": "passed",
+              "duration": 32000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 12000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "the-chef-page;the-user-plans-the-dinners-of-their-own-teams;on-a-phone-with-the-view-none,-the-calendar-on-/chef-is-closed",
+        "keyword": "Scenario Outline",
+        "line": 45,
+        "name": "On a phone with the view none, the calendar on /chef is closed",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 18000000
+            }
+          },
+          {
+            "arguments": [
+              {
+                "rows": [
+                  {
+                    "cells": [
+                      "team",
+                      "role"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "1",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "2",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "3",
+                      "COOK"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "4",
+                      "none"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user is on the teams",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 19,
+            "name": "team 1 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "team 2 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 39,
+            "name": "the user opens /chef on a phone with the view none",
+            "result": {
+              "status": "passed",
+              "duration": 2928000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 40,
+            "name": "the calendar on /chef is closed",
+            "result": {
+              "status": "passed",
+              "duration": 21000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 15000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "the-chef-page;the-user-plans-the-dinners-of-their-own-teams;on-a-desktop-with-the-view-closed,-the-calendar-on-/chef-is-closed",
+        "keyword": "Scenario Outline",
+        "line": 46,
+        "name": "On a desktop with the view closed, the calendar on /chef is closed",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 19000000
+            }
+          },
+          {
+            "arguments": [
+              {
+                "rows": [
+                  {
+                    "cells": [
+                      "team",
+                      "role"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "1",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "2",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "3",
+                      "COOK"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "4",
+                      "none"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user is on the teams",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 19,
+            "name": "team 1 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "team 2 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 39,
+            "name": "the user opens /chef on a desktop with the view closed",
+            "result": {
+              "status": "passed",
+              "duration": 2893000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 40,
+            "name": "the calendar on /chef is closed",
+            "result": {
+              "status": "passed",
+              "duration": 25000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 15000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "the-chef-page;the-user-plans-the-dinners-of-their-own-teams;on-a-phone-with-the-view-open,-the-calendar-on-/chef-is-open",
+        "keyword": "Scenario Outline",
+        "line": 47,
+        "name": "On a phone with the view open, the calendar on /chef is open",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 23000000
+            }
+          },
+          {
+            "arguments": [
+              {
+                "rows": [
+                  {
+                    "cells": [
+                      "team",
+                      "role"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "1",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "2",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "3",
+                      "COOK"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "4",
+                      "none"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user is on the teams",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 19,
+            "name": "team 1 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "team 2 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 39,
+            "name": "the user opens /chef on a phone with the view open",
+            "result": {
+              "status": "passed",
+              "duration": 3006000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 40,
+            "name": "the calendar on /chef is open",
+            "result": {
+              "status": "passed",
+              "duration": 24000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 16000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "the-chef-page;the-user-visits-a-team-they-are-not-on;the-user-opens-the-chef-page-of-a-team-they-are-not-on",
+        "keyword": "Scenario",
+        "line": 55,
+        "name": "The user opens the chef page of a team they are not on",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 16000000
+            }
+          },
+          {
+            "arguments": [
+              {
+                "rows": [
+                  {
+                    "cells": [
+                      "team",
+                      "role"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "1",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "2",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "3",
+                      "COOK"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "4",
+                      "none"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user is on the teams",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 52,
+            "name": "team 3 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 57000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 53,
+            "name": "team 4 cooks the only dinner of its day",
+            "result": {
+              "status": "passed",
+              "duration": 138000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 56,
+            "name": "the user opens the chef page of team 4",
+            "result": {
+              "status": "passed",
+              "duration": 2920000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 57,
+            "name": "the user sees the visiting tab and the visitor line of team 4",
+            "result": {
+              "status": "passed",
+              "duration": 49000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 58,
+            "name": "the user reads the menu card of team 4 without edit controls",
+            "result": {
+              "status": "passed",
+              "duration": 68000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 59,
+            "name": "the user sees the role buttons",
+            "result": {
+              "status": "passed",
+              "duration": 10000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 62000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "the-chef-page;the-user-visits-a-team-they-are-not-on;the-user-clicks-another-team's-dinner-in-the-chef-calendar",
+        "keyword": "Scenario",
+        "line": 61,
+        "name": "The user clicks another team's dinner in the chef calendar",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 18000000
+            }
+          },
+          {
+            "arguments": [
+              {
+                "rows": [
+                  {
+                    "cells": [
+                      "team",
+                      "role"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "1",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "2",
+                      "CHEF"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "3",
+                      "COOK"
+                    ]
+                  },
+                  {
+                    "cells": [
+                      "4",
+                      "none"
+                    ]
+                  }
+                ]
+              }
+            ],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user is on the teams",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 52,
+            "name": "team 3 cooks a dinner",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 53,
+            "name": "team 4 cooks the only dinner of its day",
+            "result": {
+              "status": "passed",
+              "duration": 144000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 62,
+            "name": "the user opens the chef page of team 3",
+            "result": {
+              "status": "passed",
+              "duration": 3057000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 63,
+            "name": "the user clicks the dinner of team 4 in the chef calendar",
+            "result": {
+              "status": "passed",
+              "duration": 41000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 64,
+            "name": "the user sees the visiting tab and the visitor line of team 4",
+            "result": {
+              "status": "passed",
+              "duration": 60000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 65,
+            "name": "the user reads the menu card of team 4 without edit controls",
+            "result": {
+              "status": "passed",
+              "duration": 666000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 66,
+            "name": "the user sees the role buttons",
+            "result": {
+              "status": "passed",
+              "duration": 10000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 69000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-ui-›-the-chef-page",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "The chef page",
+    "tags": [
+      {
+        "name": "@e2e-parallel",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/chef/chef-page.feature"
+  },
+  {
+    "description": "  A member sees the season's dinners on the dinner page.",
+    "elements": [
+      {
+        "description": "",
+        "id": "the-dinner-page;on-a-desktop-with-the-view-none,-the-calendar-on-/dinner-is-open",
+        "keyword": "Scenario Outline",
+        "line": 16,
+        "name": "On a desktop with the view none, the calendar on /dinner is open",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 15000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 11,
+            "name": "the user opens /dinner on a desktop with the view none",
+            "result": {
+              "status": "passed",
+              "duration": 3261000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 12,
+            "name": "the calendar on /dinner is open",
+            "result": {
+              "status": "passed",
+              "duration": 103000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 14000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "the-dinner-page;on-a-phone-with-the-view-none,-the-calendar-on-/dinner-is-closed",
+        "keyword": "Scenario Outline",
+        "line": 17,
+        "name": "On a phone with the view none, the calendar on /dinner is closed",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 24000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 5000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 11,
+            "name": "the user opens /dinner on a phone with the view none",
+            "result": {
+              "status": "passed",
+              "duration": 2986000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 12,
+            "name": "the calendar on /dinner is closed",
+            "result": {
+              "status": "passed",
+              "duration": 41000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 17000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "the-dinner-page;on-a-desktop-with-the-view-closed,-the-calendar-on-/dinner-is-closed",
+        "keyword": "Scenario Outline",
+        "line": 18,
+        "name": "On a desktop with the view closed, the calendar on /dinner is closed",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 171000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 11,
+            "name": "the user opens /dinner on a desktop with the view closed",
+            "result": {
+              "status": "passed",
+              "duration": 2986000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 12,
+            "name": "the calendar on /dinner is closed",
+            "result": {
+              "status": "passed",
+              "duration": 37000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 19000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "the-dinner-page;on-a-phone-with-the-view-open,-the-calendar-on-/dinner-is-open",
+        "keyword": "Scenario Outline",
+        "line": 19,
+        "name": "On a phone with the view open, the calendar on /dinner is open",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 151000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 11,
+            "name": "the user opens /dinner on a phone with the view open",
+            "result": {
+              "status": "passed",
+              "duration": 3493000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 12,
+            "name": "the calendar on /dinner is open",
+            "result": {
+              "status": "passed",
+              "duration": 108000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 20000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-ui-›-the-dinner-page",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "The dinner page",
+    "tags": [
+      {
+        "name": "@e2e-parallel",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/dinner/dinner-page.feature"
+  },
+  {
+    "description": "  The user sees the text scale and the palette they save.",
+    "elements": [
+      {
+        "description": "",
+        "id": "appearance;the-text-turns-larger-from-the-text-scale-normal-to-large",
+        "keyword": "Scenario Outline",
+        "line": 14,
+        "name": "The text turns larger from the text scale normal to large",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user has the setting text scale normal",
+            "result": {
+              "status": "passed",
+              "duration": 46000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "the user saves the setting text scale large",
+            "result": {
+              "status": "passed",
+              "duration": 1275000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 10,
+            "name": "the user sees the text larger",
+            "result": {
+              "status": "passed",
+              "duration": 108000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@mode:serial",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "appearance;the-text-turns-larger-from-the-text-scale-large-to-larger",
+        "keyword": "Scenario Outline",
+        "line": 15,
+        "name": "The text turns larger from the text scale large to larger",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user has the setting text scale large",
+            "result": {
+              "status": "passed",
+              "duration": 42000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "the user saves the setting text scale larger",
+            "result": {
+              "status": "passed",
+              "duration": 1161000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 10,
+            "name": "the user sees the text larger",
+            "result": {
+              "status": "passed",
+              "duration": 104000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@mode:serial",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "appearance;the-text-turns-smaller-from-the-text-scale-larger-to-normal",
+        "keyword": "Scenario Outline",
+        "line": 16,
+        "name": "The text turns smaller from the text scale larger to normal",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 5000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user has the setting text scale larger",
+            "result": {
+              "status": "passed",
+              "duration": 40000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "the user saves the setting text scale normal",
+            "result": {
+              "status": "passed",
+              "duration": 1139000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 10,
+            "name": "the user sees the text smaller",
+            "result": {
+              "status": "passed",
+              "duration": 107000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@mode:serial",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "appearance;the-colours-change-from-the-palette-default-to-high-contrast",
+        "keyword": "Scenario Outline",
+        "line": 26,
+        "name": "The colours change from the palette default to high-contrast",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 19,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 5000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "the user has the setting palette default",
+            "result": {
+              "status": "passed",
+              "duration": 40000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 21,
+            "name": "the user saves the setting palette high-contrast",
+            "result": {
+              "status": "passed",
+              "duration": 1142000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 22,
+            "name": "the user sees the colours change",
+            "result": {
+              "status": "passed",
+              "duration": 56000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@mode:serial",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "appearance;the-colours-change-from-the-palette-high-contrast-to-colorblind",
+        "keyword": "Scenario Outline",
+        "line": 27,
+        "name": "The colours change from the palette high-contrast to colorblind",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 19,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "the user has the setting palette high-contrast",
+            "result": {
+              "status": "passed",
+              "duration": 39000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 21,
+            "name": "the user saves the setting palette colorblind",
+            "result": {
+              "status": "passed",
+              "duration": 1141000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 22,
+            "name": "the user sees the colours change",
+            "result": {
+              "status": "passed",
+              "duration": 54000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@mode:serial",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "appearance;the-colours-change-from-the-palette-colorblind-to-default",
+        "keyword": "Scenario Outline",
+        "line": 28,
+        "name": "The colours change from the palette colorblind to default",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 19,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "the user has the setting palette colorblind",
+            "result": {
+              "status": "passed",
+              "duration": 46000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 21,
+            "name": "the user saves the setting palette default",
+            "result": {
+              "status": "passed",
+              "duration": 1095000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 22,
+            "name": "the user sees the colours change",
+            "result": {
+              "status": "passed",
+              "duration": 61000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@e2e-parallel",
+            "line": 2
+          },
+          {
+            "name": "@mode:serial",
+            "line": 2
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-ui-›-appearance",
+    "line": 3,
+    "keyword": "Feature",
+    "name": "Appearance",
+    "tags": [
+      {
+        "name": "@e2e-parallel",
+        "line": 2
+      },
+      {
+        "name": "@mode:serial",
+        "line": 2
+      }
+    ],
+    "uri": "tests/e2e/features/user/appearance.feature"
+  }
+]

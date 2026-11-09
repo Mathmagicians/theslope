@@ -1,0 +1,460 @@
+[
+  {
+    "description": "  A household's bookings (ADR-016). The booking deadline closes the changes: the kitchen needs to know how many\n  portions to prepare and what its grocery budget is. Before the deadline a user books, changes and cancels the\n  household's tickets. After it, a user's cancellation releases the ticket, and a user's booking takes back the own\n  released ticket, buys a released ticket of another household, or joins the waiting list. A ticket of 0 portions\n  takes no portion from the kitchen, so a user can book and cancel it at any time. A dinner can't be booked while it\n  is cancelled; the chef can open it again.",
+    "elements": [
+      {
+        "description": "",
+        "id": "booking;a-ticket-of-0-portions-takes-no-portion-from-the-kitchen,-so-a-user-can-book-and-cancel-it-at-any-time;the-user-picks-dinein-for-the-baby-who-tastes-past-the-booking-deadline",
+        "keyword": "Scenario Outline",
+        "line": 27,
+        "name": "The user picks DINEIN for the baby who tastes past the booking deadline",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 88000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 11,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 8000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 13,
+            "name": "a season of its own is not active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 18,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 734000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 19,
+            "name": "0 tickets of the baby who tastes are BOOKED with the dinner mode DINEIN",
+            "result": {
+              "status": "passed",
+              "duration": 246000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 20,
+            "name": "the user picks the dinner mode DINEIN for the baby who tastes",
+            "result": {
+              "status": "passed",
+              "duration": 308000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 21,
+            "name": "1 tickets of the baby who tastes are BOOKED with the dinner mode DINEIN",
+            "result": {
+              "status": "passed",
+              "duration": 62000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 22,
+            "name": "the baby who tastes has 0 places on the waiting list",
+            "result": {
+              "status": "passed",
+              "duration": 38000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 23,
+            "name": "0 tickets are released",
+            "result": {
+              "status": "passed",
+              "duration": 32000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 13000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "booking;a-ticket-of-0-portions-takes-no-portion-from-the-kitchen,-so-a-user-can-book-and-cancel-it-at-any-time;the-user-picks-dinein-for-the-hungry-baby-past-the-booking-deadline",
+        "keyword": "Scenario Outline",
+        "line": 28,
+        "name": "The user picks DINEIN for the hungry baby past the booking deadline",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 11,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 5000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 13,
+            "name": "a season of its own is not active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 18,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 715000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 19,
+            "name": "0 tickets of the hungry baby are BOOKED with the dinner mode DINEIN",
+            "result": {
+              "status": "passed",
+              "duration": 247000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 20,
+            "name": "the user picks the dinner mode DINEIN for the hungry baby",
+            "result": {
+              "status": "passed",
+              "duration": 413000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 21,
+            "name": "0 tickets of the hungry baby are BOOKED with the dinner mode DINEIN",
+            "result": {
+              "status": "passed",
+              "duration": 29000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 22,
+            "name": "the hungry baby has 1 places on the waiting list",
+            "result": {
+              "status": "passed",
+              "duration": 36000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 23,
+            "name": "0 tickets are released",
+            "result": {
+              "status": "passed",
+              "duration": 29000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "booking;a-ticket-of-0-portions-takes-no-portion-from-the-kitchen,-so-a-user-can-book-and-cancel-it-at-any-time;the-user-picks-none-for-the-baby-who-tastes-past-the-booking-deadline",
+        "keyword": "Scenario Outline",
+        "line": 29,
+        "name": "The user picks NONE for the baby who tastes past the booking deadline",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 11,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 13,
+            "name": "a season of its own is not active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 18,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 686000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 19,
+            "name": "1 tickets of the baby who tastes are BOOKED with the dinner mode DINEIN",
+            "result": {
+              "status": "passed",
+              "duration": 620000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 20,
+            "name": "the user picks the dinner mode NONE for the baby who tastes",
+            "result": {
+              "status": "passed",
+              "duration": 296000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 21,
+            "name": "0 tickets of the baby who tastes are BOOKED with the dinner mode NONE",
+            "result": {
+              "status": "passed",
+              "duration": 29000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 22,
+            "name": "the baby who tastes has 0 places on the waiting list",
+            "result": {
+              "status": "passed",
+              "duration": 57000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 23,
+            "name": "0 tickets are released",
+            "result": {
+              "status": "passed",
+              "duration": 28000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-api-›-booking",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "Booking",
+    "tags": [
+      {
+        "name": "@api-parallel",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/booking/booking.feature"
+  },
+  {
+    "description": "  A test message proves the notification pipe: it is queued to the sender, which delivers it to the environment's\n  allowed address. Who it is addressed to is decided before the queue and checked in the unit spec.",
+    "elements": [
+      {
+        "description": "",
+        "id": "test-messages;the-user's-test-message-is-queued-to-the-sender",
+        "keyword": "Scenario",
+        "line": 6,
+        "name": "The user's test message is queued to the sender",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 6000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 8,
+            "name": "the user asks for a test message",
+            "result": {
+              "status": "passed",
+              "duration": 20000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 9,
+            "name": "a TEST email is queued to the sender",
+            "result": {
+              "status": "passed",
+              "duration": 1000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "test-messages;the-admin's-test-message-is-refused-to-the-user",
+        "keyword": "Scenario",
+        "line": 11,
+        "name": "The admin's test message is refused to the user",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 12,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 5000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 13,
+            "name": "the user asks for the admin's test message",
+            "result": {
+              "status": "passed",
+              "duration": 14000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 14,
+            "name": "the test message is refused as forbidden",
+            "result": {
+              "status": "passed",
+              "duration": 1000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-parallel",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-api-›-test-messages",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "Test messages",
+    "tags": [
+      {
+        "name": "@api-parallel",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/notifications/test-message.feature"
+  }
+]

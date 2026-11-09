@@ -1,0 +1,3246 @@
+[
+  {
+    "description": "  The DAILY_MAINTENANCE job consumes the past dinners, closes their orders with a transaction each, and sets the\n  inhabitants without dinner preferences to the dinner mode DINEIN on the cooking days.",
+    "elements": [
+      {
+        "description": "",
+        "id": "daily-maintenance;the-daily_maintenance-job-closes-the-inhabitant's-1-tickets-with-the-dinner-mode-dinein",
+        "keyword": "Scenario Outline",
+        "line": 20,
+        "name": "The DAILY_MAINTENANCE job closes the inhabitant's 1 tickets with the dinner mode DINEIN",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 81000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 17000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 11,
+            "name": "a dinner in the past month",
+            "result": {
+              "status": "passed",
+              "duration": 43000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the inhabitant has a ticket with the dinner mode DINEIN and 0 guest tickets",
+            "result": {
+              "status": "passed",
+              "duration": 512000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 13,
+            "name": "the DAILY_MAINTENANCE job runs",
+            "result": {
+              "status": "passed",
+              "duration": 3583000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 14,
+            "name": "the job reports success",
+            "result": {
+              "status": "passed",
+              "duration": 18000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "1 tickets of the inhabitant are CLOSED with the dinner mode DINEIN",
+            "result": {
+              "status": "passed",
+              "duration": 23000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "1 tickets of the inhabitant have a transaction",
+            "result": {
+              "status": "passed",
+              "duration": 103000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 5000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "daily-maintenance;the-daily_maintenance-job-closes-the-inhabitant's-2-tickets-with-the-dinner-mode-dinein",
+        "keyword": "Scenario Outline",
+        "line": 21,
+        "name": "The DAILY_MAINTENANCE job closes the inhabitant's 2 tickets with the dinner mode DINEIN",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 14000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 11,
+            "name": "a dinner in the past month",
+            "result": {
+              "status": "passed",
+              "duration": 39000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the inhabitant has a ticket with the dinner mode DINEIN and 1 guest tickets",
+            "result": {
+              "status": "passed",
+              "duration": 656000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 13,
+            "name": "the DAILY_MAINTENANCE job runs",
+            "result": {
+              "status": "passed",
+              "duration": 3533000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 14,
+            "name": "the job reports success",
+            "result": {
+              "status": "passed",
+              "duration": 13000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "2 tickets of the inhabitant are CLOSED with the dinner mode DINEIN",
+            "result": {
+              "status": "passed",
+              "duration": 18000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "2 tickets of the inhabitant have a transaction",
+            "result": {
+              "status": "passed",
+              "duration": 92000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "daily-maintenance;the-daily_maintenance-job-closes-the-inhabitant's-1-tickets-with-the-dinner-mode-takeaway",
+        "keyword": "Scenario Outline",
+        "line": 22,
+        "name": "The DAILY_MAINTENANCE job closes the inhabitant's 1 tickets with the dinner mode TAKEAWAY",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 12000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 11,
+            "name": "a dinner in the past month",
+            "result": {
+              "status": "passed",
+              "duration": 35000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the inhabitant has a ticket with the dinner mode TAKEAWAY and 0 guest tickets",
+            "result": {
+              "status": "passed",
+              "duration": 398000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 13,
+            "name": "the DAILY_MAINTENANCE job runs",
+            "result": {
+              "status": "passed",
+              "duration": 3518000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 14,
+            "name": "the job reports success",
+            "result": {
+              "status": "passed",
+              "duration": 15000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "1 tickets of the inhabitant are CLOSED with the dinner mode TAKEAWAY",
+            "result": {
+              "status": "passed",
+              "duration": 23000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "1 tickets of the inhabitant have a transaction",
+            "result": {
+              "status": "passed",
+              "duration": 65000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "daily-maintenance;the-daily_maintenance-job-sets-an-inhabitant-without-dinner-preferences-to-the-dinner-mode-dinein-on-the-cooking-days",
+        "keyword": "Scenario",
+        "line": 24,
+        "name": "The DAILY_MAINTENANCE job sets an inhabitant without dinner preferences to the dinner mode DINEIN on the cooking days",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 12000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 25,
+            "name": "an inhabitant without dinner preferences",
+            "result": {
+              "status": "passed",
+              "duration": 56000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 26,
+            "name": "the DAILY_MAINTENANCE job runs",
+            "result": {
+              "status": "passed",
+              "duration": 3672000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 27,
+            "name": "the inhabitant's dinner preferences are the dinner mode DINEIN on the cooking days",
+            "result": {
+              "status": "passed",
+              "duration": 42000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 10000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-api-serial-›-daily-maintenance",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "Daily maintenance",
+    "tags": [
+      {
+        "name": "@api-serial",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/jobs/daily-maintenance.feature"
+  },
+  {
+    "description": "  The monthly billing closes the past month's billing period with one invoice per household, holding the household's\n  PBS number and address. The accountant link opens the period and its CSV file without a login.",
+    "elements": [
+      {
+        "description": "",
+        "id": "monthly-billing;the-invoices-name-their-household,-add-up-their-transactions-and-are-ordered-by-address,-then-pbs-number",
+        "keyword": "Scenario",
+        "line": 12,
+        "name": "The invoices name their household, add up their transactions and are ordered by address, then PBS number",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 15000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 9,
+            "name": "the past month has unbilled orders in 2 households",
+            "result": {
+              "status": "passed",
+              "duration": 4426000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "the MONTHLY_BILLING job has run 1 time",
+            "result": {
+              "status": "passed",
+              "duration": 265000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 13,
+            "name": "each invoice of the period names its household and PBS number",
+            "result": {
+              "status": "passed",
+              "duration": 56000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the invoices of the period are ordered by address, then PBS number",
+            "result": {
+              "status": "passed",
+              "duration": 23000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "the transactions of each invoice add up to its amount",
+            "result": {
+              "status": "passed",
+              "duration": 66000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "monthly-billing;the-visitor-opens-the-period-and-its-csv-file-through-the-accountant-link",
+        "keyword": "Scenario",
+        "line": 17,
+        "name": "The visitor opens the period and its CSV file through the accountant link",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 40000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 9,
+            "name": "the past month has unbilled orders in 2 households",
+            "result": {
+              "status": "passed",
+              "duration": 4665000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "the MONTHLY_BILLING job has run 1 time",
+            "result": {
+              "status": "passed",
+              "duration": 149000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 18,
+            "name": "a visitor without a session",
+            "result": {
+              "status": "passed",
+              "duration": 3000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 19,
+            "name": "the visitor opens the period's accountant link",
+            "result": {
+              "status": "passed",
+              "duration": 76000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 20,
+            "name": "the visitor sees the period with its invoices",
+            "result": {
+              "status": "passed",
+              "duration": 26000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 21,
+            "name": "the period's CSV file downloads through the accountant link",
+            "result": {
+              "status": "passed",
+              "duration": 51000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 22,
+            "name": "the period page does not scroll sideways on a phone",
+            "result": {
+              "status": "passed",
+              "duration": 367000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 11000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "monthly-billing;an-unknown-accountant-link-is-refused",
+        "keyword": "Scenario",
+        "line": 24,
+        "name": "An unknown accountant link is refused",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 24000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 9,
+            "name": "the past month has unbilled orders in 2 households",
+            "result": {
+              "status": "passed",
+              "duration": 4653000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "the MONTHLY_BILLING job has run 1 time",
+            "result": {
+              "status": "passed",
+              "duration": 140000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 25,
+            "name": "a visitor without a session",
+            "result": {
+              "status": "passed",
+              "duration": 3000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 26,
+            "name": "the visitor opens an unknown accountant link",
+            "result": {
+              "status": "passed",
+              "duration": 24000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 27,
+            "name": "the read is refused as unknown",
+            "result": {
+              "status": "passed",
+              "duration": 1000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 9000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-api-serial-›-monthly-billing",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "Monthly billing",
+    "tags": [
+      {
+        "name": "@api-serial",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/jobs/monthly-billing.feature"
+  },
+  {
+    "description": "  The monthly billing job bills the past month into its billing period, archives the period's CSV and emails the\n  accountant, once per version of the period. An admin's re-send emails the accountant again. The archive and each\n  email write one delivery record.",
+    "elements": [
+      {
+        "description": "",
+        "id": "billing-notifications;the-monthly_billing-job-runs-after-0-monthly_billing-runs",
+        "keyword": "Scenario Outline",
+        "line": 21,
+        "name": "The MONTHLY_BILLING job runs after 0 MONTHLY_BILLING runs",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 8,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 9,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 27000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "the past month has unbilled orders",
+            "result": {
+              "status": "passed",
+              "duration": 4257000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 13,
+            "name": "the MONTHLY_BILLING job has run 0 times",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 14,
+            "name": "the MONTHLY_BILLING job runs",
+            "result": {
+              "status": "passed",
+              "duration": 143000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 15,
+            "name": "2 delivery records are in the database for the period",
+            "result": {
+              "status": "passed",
+              "duration": 97000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "1 CSV archives are uploaded for the period",
+            "result": {
+              "status": "passed",
+              "duration": 38000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "1 MONTHLY_BILLING emails are sent to the accountant",
+            "result": {
+              "status": "passed",
+              "duration": 115000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "billing-notifications;the-period-is-re-sent-by-the-admin-after-1-monthly_billing-runs",
+        "keyword": "Scenario Outline",
+        "line": 22,
+        "name": "The period is re-sent by the admin after 1 MONTHLY_BILLING runs",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 8,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 9,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 14000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "the past month has unbilled orders",
+            "result": {
+              "status": "passed",
+              "duration": 4388000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 13,
+            "name": "the MONTHLY_BILLING job has run 1 times",
+            "result": {
+              "status": "passed",
+              "duration": 140000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 14,
+            "name": "the period is re-sent by the admin",
+            "result": {
+              "status": "passed",
+              "duration": 61000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 15,
+            "name": "3 delivery records are in the database for the period",
+            "result": {
+              "status": "passed",
+              "duration": 36000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "1 CSV archives are uploaded for the period",
+            "result": {
+              "status": "passed",
+              "duration": 35000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "2 MONTHLY_BILLING emails are sent to the accountant",
+            "result": {
+              "status": "passed",
+              "duration": 58000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "billing-notifications;the-unknown-period-re-sent-by-the-admin-is-refused-as-unknown",
+        "keyword": "Scenario Outline",
+        "line": 31,
+        "name": "The unknown period re-sent by the admin is refused as unknown",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 8,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 9,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 13000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "the past month has unbilled orders",
+            "result": {
+              "status": "passed",
+              "duration": 4257000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 25,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 26,
+            "name": "the unknown period is re-sent by the admin",
+            "result": {
+              "status": "passed",
+              "duration": 21000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 27,
+            "name": "the re-send is refused as unknown",
+            "result": {
+              "status": "passed",
+              "duration": 1000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 5000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "billing-notifications;the-period-re-sent-by-the-user-is-refused-as-forbidden",
+        "keyword": "Scenario Outline",
+        "line": 32,
+        "name": "The period re-sent by the user is refused as forbidden",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 8,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 9,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 14000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "the past month has unbilled orders",
+            "result": {
+              "status": "passed",
+              "duration": 4333000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 25,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 3000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 26,
+            "name": "the period is re-sent by the user",
+            "result": {
+              "status": "passed",
+              "duration": 173000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 27,
+            "name": "the re-send is refused as forbidden",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 6000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "billing-notifications;the-invalid-period-re-sent-by-the-admin-is-refused-as-invalid",
+        "keyword": "Scenario Outline",
+        "line": 33,
+        "name": "The invalid period re-sent by the admin is refused as invalid",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 8,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 9,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 15000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "the past month has unbilled orders",
+            "result": {
+              "status": "passed",
+              "duration": 4404000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 25,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 26,
+            "name": "the invalid period is re-sent by the admin",
+            "result": {
+              "status": "passed",
+              "duration": 9000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 27,
+            "name": "the re-send is refused as invalid",
+            "result": {
+              "status": "passed",
+              "duration": 1000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 8000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-api-serial-›-billing-notifications",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "Billing notifications",
+    "tags": [
+      {
+        "name": "@api-serial",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/notifications/billing-notifications.feature"
+  },
+  {
+    "description": "  Past a dinner's booking deadline, the waiting list and the sales email the inhabitants they concern, once per version\n  of the subject. An email about an inhabitant goes to the inhabitant's closest user: the inhabitant's own user, else\n  the first user of the inhabitant's household. A delivery record is written per email sent; the DAILY_MAINTENANCE job\n  sends the unsent notifications of the dinners.",
+    "elements": [
+      {
+        "description": "",
+        "id": "booking-notifications;the-dinner-is-booked-before-the-deadline:-waitlist_joined-email-to-the-closest-user-of-the-inhabitant",
+        "keyword": "Scenario Outline",
+        "line": 24,
+        "name": "The dinner is booked before the deadline: WAITLIST_JOINED email to the closest user of the inhabitant",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 9,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "a season of its own is active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 13,
+            "name": "a dinner before its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 4306000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the seller has a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 540000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "an inhabitant without a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 374000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "0 inhabitants are on the waiting list",
+            "result": {
+              "status": "passed",
+              "duration": 1000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "0 tickets are for sale",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 18,
+            "name": "the dinner is booked",
+            "result": {
+              "status": "passed",
+              "duration": 203000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 19,
+            "name": "0 delivery records are in the database for the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 65000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "0 WAITLIST_JOINED emails are sent to the closest user of the inhabitant",
+            "result": {
+              "status": "passed",
+              "duration": 79000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "booking-notifications;the-dinner-is-booked-past-the-deadline:-waitlist_joined-email-to-the-closest-user-of-the-inhabitant",
+        "keyword": "Scenario Outline",
+        "line": 25,
+        "name": "The dinner is booked past the deadline: WAITLIST_JOINED email to the closest user of the inhabitant",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 9,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "a season of its own is active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 13,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 4083000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the seller has a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 465000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "an inhabitant without a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 314000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "0 inhabitants are on the waiting list",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "0 tickets are for sale",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 18,
+            "name": "the dinner is booked",
+            "result": {
+              "status": "passed",
+              "duration": 241000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 19,
+            "name": "1 delivery records are in the database for the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 64000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "1 WAITLIST_JOINED emails are sent to the closest user of the inhabitant",
+            "result": {
+              "status": "passed",
+              "duration": 94000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "booking-notifications;the-ticket-is-released-past-the-deadline:-ticket_sold-email-to-the-closest-user-of-the-seller",
+        "keyword": "Scenario Outline",
+        "line": 26,
+        "name": "The ticket is released past the deadline: TICKET_SOLD email to the closest user of the seller",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 9,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 1000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "a season of its own is active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 13,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 4343000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the seller has a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 499000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "an inhabitant without a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 409000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "1 inhabitants are on the waiting list",
+            "result": {
+              "status": "passed",
+              "duration": 439000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "0 tickets are for sale",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 18,
+            "name": "the ticket is released",
+            "result": {
+              "status": "passed",
+              "duration": 279000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 19,
+            "name": "3 delivery records are in the database for the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 75000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "1 TICKET_SOLD emails are sent to the closest user of the seller",
+            "result": {
+              "status": "passed",
+              "duration": 75000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "booking-notifications;the-ticket-is-released-past-the-deadline:-waitlist_ticket_assigned-email-to-the-closest-user-of-the-first-in-line",
+        "keyword": "Scenario Outline",
+        "line": 27,
+        "name": "The ticket is released past the deadline: WAITLIST_TICKET_ASSIGNED email to the closest user of the first in line",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 9,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "a season of its own is active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 13,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 4356000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the seller has a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 510000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "an inhabitant without a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 321000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "1 inhabitants are on the waiting list",
+            "result": {
+              "status": "passed",
+              "duration": 404000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "0 tickets are for sale",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 18,
+            "name": "the ticket is released",
+            "result": {
+              "status": "passed",
+              "duration": 230000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 19,
+            "name": "3 delivery records are in the database for the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 64000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "1 WAITLIST_TICKET_ASSIGNED emails are sent to the closest user of the first in line",
+            "result": {
+              "status": "passed",
+              "duration": 83000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "booking-notifications;the-dinner-is-booked-past-the-deadline:-ticket_sold-email-to-the-closest-user-of-the-seller",
+        "keyword": "Scenario Outline",
+        "line": 28,
+        "name": "The dinner is booked past the deadline: TICKET_SOLD email to the closest user of the seller",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 9,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "a season of its own is active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 13,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 4442000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the seller has a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 524000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "an inhabitant without a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 346000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "0 inhabitants are on the waiting list",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "1 tickets are for sale",
+            "result": {
+              "status": "passed",
+              "duration": 171000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 18,
+            "name": "the dinner is booked",
+            "result": {
+              "status": "passed",
+              "duration": 256000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 19,
+            "name": "2 delivery records are in the database for the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 64000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "1 TICKET_SOLD emails are sent to the closest user of the seller",
+            "result": {
+              "status": "passed",
+              "duration": 62000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "booking-notifications;the-dinner-is-booked-past-the-deadline:-ticket_bought-email-to-the-closest-user-of-the-inhabitant",
+        "keyword": "Scenario Outline",
+        "line": 29,
+        "name": "The dinner is booked past the deadline: TICKET_BOUGHT email to the closest user of the inhabitant",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 9,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "a season of its own is active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 13,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 4675000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the seller has a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 499000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "an inhabitant without a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 341000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "0 inhabitants are on the waiting list",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "1 tickets are for sale",
+            "result": {
+              "status": "passed",
+              "duration": 167000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 18,
+            "name": "the dinner is booked",
+            "result": {
+              "status": "passed",
+              "duration": 244000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 19,
+            "name": "2 delivery records are in the database for the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 56000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "1 TICKET_BOUGHT emails are sent to the closest user of the inhabitant",
+            "result": {
+              "status": "passed",
+              "duration": 79000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "booking-notifications;the-dinner-is-booked-past-the-deadline:-waitlist_buildup-email-to-the-closest-user-of-the-chef",
+        "keyword": "Scenario Outline",
+        "line": 30,
+        "name": "The dinner is booked past the deadline: WAITLIST_BUILDUP email to the closest user of the chef",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 9,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "a season of its own is active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 13,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 4494000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the seller has a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 519000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "an inhabitant without a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 324000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "2 inhabitants are on the waiting list",
+            "result": {
+              "status": "passed",
+              "duration": 825000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "0 tickets are for sale",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 18,
+            "name": "the dinner is booked",
+            "result": {
+              "status": "passed",
+              "duration": 240000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 19,
+            "name": "4 delivery records are in the database for the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 68000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "1 WAITLIST_BUILDUP emails are sent to the closest user of the chef",
+            "result": {
+              "status": "passed",
+              "duration": 67000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "booking-notifications;the-portion-is-added-past-the-deadline:-waitlist_extra_portion-email-to-the-closest-user-of-the-first-in-line",
+        "keyword": "Scenario Outline",
+        "line": 31,
+        "name": "The portion is added past the deadline: WAITLIST_EXTRA_PORTION email to the closest user of the first in line",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 9,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "a season of its own is active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 13,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 4466000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the seller has a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 525000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "an inhabitant without a ticket",
+            "result": {
+              "status": "passed",
+              "duration": 310000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 16,
+            "name": "3 inhabitants are on the waiting list",
+            "result": {
+              "status": "passed",
+              "duration": 1176000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 17,
+            "name": "0 tickets are for sale",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 18,
+            "name": "the portion is added",
+            "result": {
+              "status": "passed",
+              "duration": 191000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 19,
+            "name": "5 delivery records are in the database for the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 61000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 20,
+            "name": "1 WAITLIST_EXTRA_PORTION emails are sent to the closest user of the first in line",
+            "result": {
+              "status": "passed",
+              "duration": 73000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "booking-notifications;the-daily_maintenance-job-sends-the-unsent-notifications-of-the-dinners;the-daily_maintenance-job-sends-the-waitlist_joined-email-once-the-household-has-a-user",
+        "keyword": "Scenario",
+        "line": 40,
+        "name": "The DAILY_MAINTENANCE job sends the WAITLIST_JOINED email once the household has a user",
+        "steps": [
+          {
+            "keyword": "Before",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 3221000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 9,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "a season of its own is active",
+            "result": {
+              "status": "passed",
+              "duration": 1000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 36,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 3515000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 37,
+            "name": "an inhabitant of a household without a user is on the waiting list",
+            "result": {
+              "status": "passed",
+              "duration": 361000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 38,
+            "name": "the inhabitant's household gets a user",
+            "result": {
+              "status": "passed",
+              "duration": 174000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 41,
+            "name": "the DAILY_MAINTENANCE job runs",
+            "result": {
+              "status": "passed",
+              "duration": 3308000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 42,
+            "name": "1 WAITLIST_JOINED delivery record is in the database for the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 52000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 43,
+            "name": "1 WAITLIST_JOINED email is sent to the closest user of the inhabitant",
+            "result": {
+              "status": "passed",
+              "duration": 88000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 52000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "booking-notifications;the-daily_maintenance-job-sends-the-unsent-notifications-of-the-dinners;the-delivery-dry-run-counts-what-the-daily_maintenance-job-sends",
+        "keyword": "Scenario",
+        "line": 45,
+        "name": "The delivery dry run counts what the DAILY_MAINTENANCE job sends",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 9,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "a season of its own is active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 36,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 3539000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 37,
+            "name": "an inhabitant of a household without a user is on the waiting list",
+            "result": {
+              "status": "passed",
+              "duration": 382000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 38,
+            "name": "the inhabitant's household gets a user",
+            "result": {
+              "status": "passed",
+              "duration": 161000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 46,
+            "name": "the admin runs the delivery dry run of BOOKING_STATUS",
+            "result": {
+              "status": "passed",
+              "duration": 109000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 47,
+            "name": "the delivery dry run counts 1 WAITLIST_JOINED email to send to the closest user of the inhabitant",
+            "result": {
+              "status": "passed",
+              "duration": 17000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 48,
+            "name": "0 delivery records are in the database for the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 49000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-api-serial-›-booking-notifications",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "Booking notifications",
+    "tags": [
+      {
+        "name": "@api-serial",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/notifications/booking-notifications.feature"
+  },
+  {
+    "description": "  A chef's dinner has deadlines: the menu is published by the menu deadline, and the groceries are ordered by the\n  dinner. The DAILY_MAINTENANCE job emails the closest user of the chef while a deadline is missed, listing all the\n  dinner's deadlines. A dinner with all its deadlines met sends nothing.",
+    "elements": [
+      {
+        "description": "",
+        "id": "chef-deadline-notifications;the-daily_maintenance-job-emails-the-chef's-missed-deadlines-once",
+        "keyword": "Scenario",
+        "line": 11,
+        "name": "The DAILY_MAINTENANCE job emails the chef's missed deadlines once",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 8,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 9,
+            "name": "a season of its own is active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 12,
+            "name": "a dinner past its ANNOUNCED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 3634000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 13,
+            "name": "the dinner is in the state SCHEDULED",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 14,
+            "name": "the dinner has 0 expenses",
+            "result": {
+              "status": "passed",
+              "duration": 25000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 15,
+            "name": "the DAILY_MAINTENANCE job has run 1 time",
+            "result": {
+              "status": "passed",
+              "duration": 3461000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 16,
+            "name": "the DAILY_MAINTENANCE job runs",
+            "result": {
+              "status": "passed",
+              "duration": 3307000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 17,
+            "name": "1 CHEF_DINNER_DEADLINES delivery record is in the database for the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 57000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 18,
+            "name": "1 CHEF_DINNER_DEADLINES email is sent to the closest user of the chef",
+            "result": {
+              "status": "passed",
+              "duration": 42000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "chef-deadline-notifications;the-delivery-dry-run-counts-the-chef's-missed-deadline-email-before-the-job-sends-it",
+        "keyword": "Scenario",
+        "line": 20,
+        "name": "The delivery dry run counts the chef's missed-deadline email before the job sends it",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 8,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 9,
+            "name": "a season of its own is active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 21,
+            "name": "a dinner past its ANNOUNCED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 3600000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 22,
+            "name": "the dinner is in the state SCHEDULED",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 23,
+            "name": "the dinner has 0 expenses",
+            "result": {
+              "status": "passed",
+              "duration": 24000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 24,
+            "name": "the admin runs the delivery dry run of CHEF_DEADLINES",
+            "result": {
+              "status": "passed",
+              "duration": 78000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 25,
+            "name": "the delivery dry run counts 1 CHEF_DINNER_DEADLINES email to send to the closest user of the chef",
+            "result": {
+              "status": "passed",
+              "duration": 1000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 26,
+            "name": "0 delivery records are in the database for the dinner",
+            "result": {
+              "status": "passed",
+              "duration": 74000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-api-serial-›-chef-deadline-notifications",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "Chef deadline notifications",
+    "tags": [
+      {
+        "name": "@api-serial",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/notifications/chef-deadline-notifications.feature"
+  },
+  {
+    "description": "  Every user reads the delivery records of a subject: the billing period, the dinner.",
+    "elements": [
+      {
+        "description": "",
+        "id": "delivery-records;the-user-reads-the-period's-delivery-records",
+        "keyword": "Scenario",
+        "line": 9,
+        "name": "The user reads the period's delivery records",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 3455000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 10,
+            "name": "the past month has unbilled orders",
+            "result": {
+              "status": "passed",
+              "duration": 3928000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 11,
+            "name": "the MONTHLY_BILLING job has run 1 time",
+            "result": {
+              "status": "passed",
+              "duration": 134000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 3000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 13,
+            "name": "2 delivery records are in the database for the period",
+            "result": {
+              "status": "passed",
+              "duration": 56000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 18000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "delivery-records;a-read-of-a-period-without-delivery-records-answers-an-empty-list",
+        "keyword": "Scenario",
+        "line": 15,
+        "name": "A read of a period without delivery records answers an empty list",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 25000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 16,
+            "name": "the delivery records of a period without records are read",
+            "result": {
+              "status": "passed",
+              "duration": 10000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 17,
+            "name": "the read answers an empty list",
+            "result": {
+              "status": "passed",
+              "duration": 1000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 4000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "delivery-records;a-read-of-an-unknown-subject-is-refused",
+        "keyword": "Scenario",
+        "line": 19,
+        "name": "A read of an unknown subject is refused",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 6,
+            "name": "the admin is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 7,
+            "name": "a season is active",
+            "result": {
+              "status": "passed",
+              "duration": 10000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 20,
+            "name": "the delivery records of the unknown subject are read",
+            "result": {
+              "status": "passed",
+              "duration": 7000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 21,
+            "name": "the read is refused as invalid",
+            "result": {
+              "status": "passed",
+              "duration": 1000000
+            }
+          },
+          {
+            "keyword": "After",
+            "hidden": true,
+            "result": {
+              "status": "passed",
+              "duration": 7000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-api-serial-›-delivery-records",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "Delivery records",
+    "tags": [
+      {
+        "name": "@api-serial",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/notifications/delivery-records.feature"
+  },
+  {
+    "description": "  A user has settings: the channel the notifications go out on, the palette and the text scale. A save writes the\n  setting it carries; the booking emails go out on the user's channel.",
+    "elements": [
+      {
+        "description": "",
+        "id": "user-preferences;the-user-saves-the-palette-high-contrast-and-the-text-scale-large",
+        "keyword": "Scenario Outline",
+        "line": 17,
+        "name": "The user saves the palette high-contrast and the text scale large",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 3000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user has the setting channel EMAIL",
+            "result": {
+              "status": "passed",
+              "duration": 38000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "the user saves the setting palette high-contrast",
+            "result": {
+              "status": "passed",
+              "duration": 28000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "the user saves the setting text scale large",
+            "result": {
+              "status": "passed",
+              "duration": 27000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 11,
+            "name": "the user has the setting palette high-contrast",
+            "result": {
+              "status": "passed",
+              "duration": 7000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the user has the setting text scale large",
+            "result": {
+              "status": "passed",
+              "duration": 8000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 13,
+            "name": "the user has the setting channel EMAIL",
+            "result": {
+              "status": "passed",
+              "duration": 8000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "user-preferences;the-user-saves-the-palette-colorblind-and-the-text-scale-larger",
+        "keyword": "Scenario Outline",
+        "line": 18,
+        "name": "The user saves the palette colorblind and the text scale larger",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 7,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 2000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 8,
+            "name": "the user has the setting channel EMAIL",
+            "result": {
+              "status": "passed",
+              "duration": 30000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 9,
+            "name": "the user saves the setting palette colorblind",
+            "result": {
+              "status": "passed",
+              "duration": 28000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 10,
+            "name": "the user saves the setting text scale larger",
+            "result": {
+              "status": "passed",
+              "duration": 26000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 11,
+            "name": "the user has the setting palette colorblind",
+            "result": {
+              "status": "passed",
+              "duration": 7000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 12,
+            "name": "the user has the setting text scale larger",
+            "result": {
+              "status": "passed",
+              "duration": 12000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 13,
+            "name": "the user has the setting channel EMAIL",
+            "result": {
+              "status": "passed",
+              "duration": 8000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "user-preferences;the-user-with-the-setting-channel-email-is-sent-1-booking-emails",
+        "keyword": "Scenario Outline",
+        "line": 30,
+        "name": "The user with the setting channel EMAIL is sent 1 booking emails",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 21,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 2000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 22,
+            "name": "a season of its own is not active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 23,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 439000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 24,
+            "name": "the user saves the setting channel EMAIL",
+            "result": {
+              "status": "passed",
+              "duration": 28000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 25,
+            "name": "the dinner is booked for the user's inhabitant",
+            "result": {
+              "status": "passed",
+              "duration": 268000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 26,
+            "name": "1 WAITLIST_JOINED emails are sent to the closest user of the user's inhabitant",
+            "result": {
+              "status": "passed",
+              "duration": 59000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "user-preferences;the-user-with-the-setting-channel-none-is-sent-0-booking-emails",
+        "keyword": "Scenario Outline",
+        "line": 31,
+        "name": "The user with the setting channel none is sent 0 booking emails",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 21,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 3000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 22,
+            "name": "a season of its own is not active",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 23,
+            "name": "a dinner past its BOOKING_CLOSED deadline",
+            "result": {
+              "status": "passed",
+              "duration": 460000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 24,
+            "name": "the user saves the setting channel none",
+            "result": {
+              "status": "passed",
+              "duration": 32000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 25,
+            "name": "the dinner is booked for the user's inhabitant",
+            "result": {
+              "status": "passed",
+              "duration": 280000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 26,
+            "name": "0 WAITLIST_JOINED emails are sent to the closest user of the user's inhabitant",
+            "result": {
+              "status": "passed",
+              "duration": 51000000
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "user-preferences;the-setting-channel-sms-needs-a-phone-number",
+        "keyword": "Scenario",
+        "line": 33,
+        "name": "The setting channel SMS needs a phone number",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 34,
+            "name": "the user is signed in",
+            "result": {
+              "status": "passed",
+              "duration": 2000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "And ",
+            "line": 35,
+            "name": "the user has no phone number",
+            "result": {
+              "status": "passed",
+              "duration": 27000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 36,
+            "name": "the user saves the setting channel SMS",
+            "result": {
+              "status": "passed",
+              "duration": 21000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 37,
+            "name": "the save is refused as invalid",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      },
+      {
+        "description": "",
+        "id": "user-preferences;saving-a-setting-needs-a-session",
+        "keyword": "Scenario",
+        "line": 39,
+        "name": "Saving a setting needs a session",
+        "steps": [
+          {
+            "arguments": [],
+            "keyword": "Given ",
+            "line": 40,
+            "name": "a visitor without a session",
+            "result": {
+              "status": "passed",
+              "duration": 2000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "When ",
+            "line": 41,
+            "name": "the visitor saves the setting channel EMAIL",
+            "result": {
+              "status": "passed",
+              "duration": 8000000
+            }
+          },
+          {
+            "arguments": [],
+            "keyword": "Then ",
+            "line": 42,
+            "name": "the save is refused as unauthenticated",
+            "result": {
+              "status": "passed",
+              "duration": 0
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@api-serial",
+            "line": 1
+          }
+        ],
+        "type": "scenario"
+      }
+    ],
+    "id": "chromium-bdd-api-serial-›-user-preferences",
+    "line": 2,
+    "keyword": "Feature",
+    "name": "User preferences",
+    "tags": [
+      {
+        "name": "@api-serial",
+        "line": 1
+      }
+    ],
+    "uri": "tests/e2e/features/user/preferences.feature"
+  }
+]
