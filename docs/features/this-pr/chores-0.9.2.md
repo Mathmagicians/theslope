@@ -8,6 +8,10 @@ A chore release: the booking emails go on, and two bug fixes.
 
 | Delivery | Description or spec | Gherkin | Status |
 |---|---|---|---|
+| Release notes PDF removed | § Release notes PDF removed | – | done a4bc37d |
+| E2E suites fan out in CI | § E2E suites fan out in CI | – | done a4bc37d |
+| Build once, test locally, ship the artifact | § Build once, test locally, ship the artifact | – | done a4bc37d |
+| Icons ship in the client bundle | § Icons ship in the client bundle | – | done a4bc37d |
 
 ## In flight
 
@@ -17,11 +21,48 @@ A chore release: the booking emails go on, and two bug fixes.
 | Billing delivery report and interrupted job runs | `bug-fix-billing-delivery-report.md` | – | discovery |
 | Chef's available budget after the ticket deadline | `bug-fix-chef-budget-drift.md` | – | discovery |
 | Household lookup | § Household lookup | – | moved from 0.9.1 on 2026-11-02 |
-| Release notes PDF removed | § Release notes PDF removed | – | specified |
-| E2E suites fan out in CI | § E2E suites fan out in CI | – | specified |
-| Build once, test locally, ship the artifact | § Build once, test locally, ship the artifact | – | specified |
-| Icons ship in the client bundle | § Icons ship in the client bundle | – | specified |
 | npm audit | § npm audit | – | discovery |
+| Public billing checks at their level | § Public billing checks at their level | – | implemented |
+| Tab pages render their content on the server | § Tab pages render their content on the server | – | specified |
+
+## Tab pages render their content on the server
+
+### Problem
+
+`/admin/<tab>` and `/household/<name>/<tab>` pick the panel's component with `defineAsyncComponent` over a dynamic
+`import()`; the dev server renders that component into the HTML, the production build sends an empty panel and the
+browser fills it: a blank panel until the script runs, a hydration re-render, and two e2e checks red on the production
+build (the admin economy loading state without JavaScript, no hydration mismatch on the three booking views).
+
+### Solution
+
+The tab list carries Nuxt's lazy component (`LazyAdminEconomy` and its siblings from `#components`), which renders on
+the server and loads its chunk in the browser when the tab opens; the `defineAsyncComponent` map goes.
+
+### Affected
+
+`app/pages/admin/[tab].vue`, `app/pages/household/[shortname]/[tab].vue`, `docs/adr-compliance-frontend.md`.
+
+## Public billing checks at their level
+
+### Problem
+
+`PublicBilling.e2e.spec.ts` and the `public-billing` screen of `MobileViewport.e2e.spec.ts` look up the share token of
+a billing period that the api-serial suite's `monthly-billing.feature` leaves behind. In CI each suite runs on a D1 of
+its own, so the ui suite holds no billing period to open.
+
+### Solution
+
+The page's words for a link and a gone link are in the component spec `tests/component/pages/public-billing.nuxt.spec.ts`.
+`monthly-billing.feature` opens the period its scenario bills through the accountant link and measures the page on a
+phone, and refuses an unknown link as unknown (404). `expectNoHorizontalOverflow` (`tests/e2e/testHelpers.ts`) measures
+the app's screens in `MobileViewport.e2e.spec.ts` and the accountant link's page. `PublicBilling.e2e.spec.ts` is removed.
+
+### Affected
+
+`tests/e2e/ui/PublicBilling.e2e.spec.ts`, `tests/e2e/ui/MobileViewport.e2e.spec.ts`,
+`tests/e2e/features/jobs/monthly-billing.feature`, `tests/e2e/steps/billing.steps.ts`, `tests/e2e/testHelpers.ts`,
+`docs/testing.md`, `docs/adr-compliance-frontend.md`, `docs/adr-compliance-backend.md`.
 
 ## npm audit
 

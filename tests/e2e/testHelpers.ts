@@ -1,4 +1,4 @@
-import type {Browser, Page, BrowserContext, BrowserContextOptions, Locator, Response} from "@playwright/test"
+import type {Browser, Page, BrowserContext, BrowserContextOptions, Locator, Response, ViewportSize} from "@playwright/test"
 import {expect} from "@playwright/test"
 import {authFiles} from './config'
 import {expectApiError, guardContext} from './apiErrorGuard'
@@ -378,6 +378,74 @@ const readDateField = async (scope: Locator, field: 'start' | 'end'): Promise<Da
 // The phone every screen fits (iPhone X)
 const PHONE_VIEWPORT = {width: 375, height: 812}
 
+type WindowWithOverflow = Window & {__maxOverflow?: number, __overflowCulprit?: string, __stopOverflowSampler?: () => void}
+
+/**
+ * Samples the document overflow every animation frame from the first paint on, until the case stops it with a
+ * last measurement of the settled page. On the widest frame it names the outermost element that reaches past the
+ * layout's right edge, so a red case names its cause.
+ */
+const sampleOverflowEveryFrame = (page: Page) => page.addInitScript(() => {
+    const win: WindowWithOverflow = window
+    win.__maxOverflow = 0
+    // clientWidth and scrollWidth read the same layout; innerWidth follows the window before the layout catches up
+    const layoutWidth = () => document.documentElement.clientWidth
+    const pastLayout = (element: Element | null) => !!element && element.getBoundingClientRect().right > layoutWidth() + 0.5
+    // A box that clips or scrolls its content keeps that content out of the document's width
+    const clippedByAncestor = (element: Element) => {
+        for (let ancestor = element.parentElement; ancestor && ancestor !== document.body; ancestor = ancestor.parentElement) {
+            if (getComputedStyle(ancestor).overflowX !== 'visible') return true
+        }
+        return false
+    }
+    const describe = (element: Element) => {
+        const testid = element.closest('[data-testid]')?.getAttribute('data-testid') ?? 'no testid'
+        const slot = element.getAttribute('data-slot')
+        const classes = (element.getAttribute('class') ?? '').split(/\s+/).filter(Boolean).slice(0, 5).join('.')
+        return `${element.tagName.toLowerCase()}${slot ? `[data-slot=${slot}]` : ''}${classes ? `.${classes}` : ''} in ${testid}`
+    }
+    // The outermost overflowing elements sit in a parent that fits; the one reaching furthest sets the scroll width
+    const outermostCulprit = () => [...document.querySelectorAll('body, body *')]
+        .filter(element => pastLayout(element) && !pastLayout(element.parentElement) && !clippedByAncestor(element))
+        .sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right)[0]
+    const measure = () => {
+        const overflow = document.documentElement.scrollWidth - layoutWidth()
+        if (overflow <= (win.__maxOverflow ?? 0)) return
+        win.__maxOverflow = overflow
+        const culprit = outermostCulprit()
+        win.__overflowCulprit = culprit ? describe(culprit) : 'no element outside a clipping box'
+    }
+    let frame = 0
+    const sample = () => {
+        measure()
+        frame = requestAnimationFrame(sample)
+    }
+    frame = requestAnimationFrame(sample)
+    win.__stopOverflowSampler = () => {
+        cancelAnimationFrame(frame)
+        measure()
+    }
+})
+
+/**
+ * Opens `url` at the viewport, hydrated, and asserts softly that the document scrolled sideways in no frame from the
+ * first paint until `settle` resolves, the skeletons and loaders included: `settle` waits for the page's content and
+ * opens what it hides behind a control. The sampler stops on return, so a full-page screenshot after it, which resizes
+ * the window, is measured in no frame.
+ */
+const expectNoHorizontalOverflow = async (page: Page, url: string, viewport: ViewportSize, settle: (page: Page) => Promise<void>): Promise<void> => {
+    await page.setViewportSize(viewport)
+    await sampleOverflowEveryFrame(page)
+    await gotoHydrated(page, url)
+    await settle(page)
+    const {overflow, culprit} = await page.evaluate(() => {
+        const win: WindowWithOverflow = window
+        win.__stopOverflowSampler?.()
+        return {overflow: win.__maxOverflow ?? 0, culprit: win.__overflowCulprit}
+    })
+    expect.soft(overflow, `${url} scrolled horizontally by ${overflow}px in some frame: ${culprit}`).toBeLessThanOrEqual(0)
+}
+
 /** Runs every cleanup step, whatever another step does; the steps that fail fail the hook together */
 const attemptAll = async (what: string, steps: (() => Promise<unknown>)[]): Promise<void> => {
     const failures: unknown[] = []
@@ -396,6 +464,7 @@ const testHelpers = {
     saltedId,
     temporaryAndRandom,
     PHONE_VIEWPORT,
+    expectNoHorizontalOverflow,
     headers,
     openContext,
     validatedBrowserContext,

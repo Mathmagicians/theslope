@@ -449,6 +449,7 @@ await doScreenshot(page, 'admin/page', true)  // Docs: docs/screenshots/
 | `savePreferences(page, testIds)` | Rediger, clicks the controls of `testIds`, Gem; returns the response of `POST /api/user/preferences` |
 | `collectHydrationWarnings(page)` | Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation |
 | `expectHydratedWithoutMismatch(page, url)` | Navigates, waits for hydration and asserts Vue logged no hydration mismatch on the way |
+| `expectNoHorizontalOverflow(page, url, viewport, settle)` | Opens `url` at `viewport`, hydrated, and asserts softly that no frame scrolled sideways from the first paint until `settle` resolves; the message names the element that reached furthest |
 | `waitForApi(page, path, method, options?)` | The next response to a `method` request whose url contains `path`; attach it before the action that sends the request |
 | `pageCalendarToMonth(scope, shown, date)` | Pages a calendar from the month it shows to the month of `date` with Nuxt UI's month buttons, one click and one heading a month |
 | `isScaffoldSave`, `isExpectedRead` | Response predicates for `page.waitForResponse`: the save of the household's booking write (the POST), and a booking view's read of the expected bookings (the dry run's GET without orders) |
@@ -742,7 +743,8 @@ entry to silence a new failure — a new miss is a regression.
 **Do NOT assert design-token values.** `expect(ui.title).toContain('text-lg')` restates the design and guards nothing —
 the colour, size and padding of a token are the user's visual check. Architecture tests assert *usage*; component specs
 assert *behaviour* (text renders, CTA present or absent, events emitted); e2e asserts no horizontal overflow at 375px
-(`MobileViewport.e2e.spec.ts`). A getter that branches on `isMd` may get one case per branch.
+through `expectNoHorizontalOverflow`: the app's screens in `MobileViewport.e2e.spec.ts`, the accountant link's page in
+`monthly-billing.feature`. A getter that branches on `isMd` may get one case per branch.
 
 ---
 

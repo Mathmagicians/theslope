@@ -19,3 +19,9 @@ Feature: Monthly billing
     When the visitor opens the period's accountant link
     Then the visitor sees the period with its invoices
     And the period's CSV file downloads through the accountant link
+    And the period page does not scroll sideways on a phone
+
+  Scenario: An unknown accountant link is refused
+    Given a visitor without a session
+    When the visitor opens an unknown accountant link
+    Then the read is refused as unknown

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {ADMIN_WORDS} from '~/config/adminWords'
+import {LazyAdminPlanning, LazyAdminTeams, LazyAdminHouseholds, LazyAdminAllergies, LazyAdminUsers, LazyAdminEconomy, LazyAdminSystem} from '#components'
 
 const {ALERTS, COLOR, ICONS, COMPONENTS} = useTheSlopeDesignSystem()
 
@@ -42,23 +43,16 @@ watch([isPlanStoreErrored, planStoreError], ([errored, error]) => {
 })
 
 // UI - ITEMS
+// A tab's component is Nuxt's lazy component: rendered on the server, its chunk loaded in the browser when the tab opens
 const tabs = [
-  {key: 'planning', label: ADMIN_WORDS.tabs.planning, icon: ICONS.calendar, component: 'AdminPlanning'},
-  {key: 'teams', label: ADMIN_WORDS.tabs.teams, icon: ICONS.chef, component: 'AdminTeams'},
-  {key: 'households', label: ADMIN_WORDS.tabs.households, icon: ICONS.household, component: 'AdminHouseholds'},
-  {key: 'allergies', label: ADMIN_WORDS.tabs.allergies, icon: ICONS.allergy, component: 'AdminAllergies'},
-  {key: 'users', label: ADMIN_WORDS.tabs.users, icon: ICONS.users, component: 'AdminUsers'},
-  {key: 'economy', label: ADMIN_WORDS.tabs.economy, icon: ICONS.economy, component: 'AdminEconomy'},
-  {key: 'system', label: ADMIN_WORDS.tabs.system, icon: ICONS.settings, component: 'AdminSystem'}
+  {key: 'planning', label: ADMIN_WORDS.tabs.planning, icon: ICONS.calendar, component: LazyAdminPlanning},
+  {key: 'teams', label: ADMIN_WORDS.tabs.teams, icon: ICONS.chef, component: LazyAdminTeams},
+  {key: 'households', label: ADMIN_WORDS.tabs.households, icon: ICONS.household, component: LazyAdminHouseholds},
+  {key: 'allergies', label: ADMIN_WORDS.tabs.allergies, icon: ICONS.allergy, component: LazyAdminAllergies},
+  {key: 'users', label: ADMIN_WORDS.tabs.users, icon: ICONS.users, component: LazyAdminUsers},
+  {key: 'economy', label: ADMIN_WORDS.tabs.economy, icon: ICONS.economy, component: LazyAdminEconomy},
+  {key: 'system', label: ADMIN_WORDS.tabs.system, icon: ICONS.settings, component: LazyAdminSystem}
 ]
-
-
-const asyncComponents = Object.fromEntries(
-    tabs.map(tab => [
-      tab.key,
-      defineAsyncComponent(() => import(`~/components/admin/${tab.component}.vue`))
-    ])
-)
 
 // Tab items for UTabs component
 const tabItems = tabs.map(item => ({
@@ -138,7 +132,7 @@ useHead({
         <Loader v-else-if="!isPlanStoreReady && (activeTab === 'planning' || activeTab === 'teams')" :text="activeTab"/>
         <!-- Pass canEdit to components (allergies tab uses canMutateAllergies) -->
         <component
-          :is="asyncComponents[item.value]"
+          :is="item.component"
           v-else
           :can-edit="item.value === 'allergies' ? canMutateAllergies : canEdit"
         />

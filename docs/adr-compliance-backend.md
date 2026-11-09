@@ -132,8 +132,8 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/user/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the booking mails honour the saved `notificationChannels`; after the user's creation this save is the one write of `notificationChannels` and `appearance`; the session's user is replaced by the saved UserDetail, its `secure` data and sign-in time kept |
 | `/api/user/notifications/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ batched, 100 per call; the session user through `getRequiredUser` |
 | **Public** | | | | | |
-| `/api/public/billing/[token]/index.get.ts` | ✅ | ✅ | ❓ | ✅ ui | ❓ audit needed |
-| `/api/public/billing/[token]/csv.get.ts` | ✅ | ✅ | ❓ | ✅ ui | ❓ audit needed |
+| `/api/public/billing/[token]/index.get.ts` | ✅ | ✅ | ❓ | ✅ `monthly-billing.feature` | ❓ audit needed |
+| `/api/public/billing/[token]/csv.get.ts` | ✅ | ✅ | ❓ | ✅ `monthly-billing.feature` | ❓ audit needed |
 | `/api/public/health.get.ts` | ❌ | N/A | N/A | N/A | ⚠️ no return type |
 | **Other** | | | | | |
 | `/api/auth/login.post.ts` | ✅ | ✅ | N/A | ✅ unit | ✅ the session's `user` is the UserDetail and the Heynabo token goes to its server-only `secure` data; `/api/_auth/session` carries no token field (`authorization.e2e`) |
