@@ -138,7 +138,7 @@ jobs:
           npm run db:seed:local
           npx wrangler d1 execute theslope --command="SELECT * FROM User" --local
       # The suite runs on this build under wrangler's local runtime (playwright.config.ts webServer), the job env as its bindings
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: build
           path: .output
