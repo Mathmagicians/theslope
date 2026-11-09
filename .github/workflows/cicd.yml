@@ -17,63 +17,54 @@ on:
         required: false
         type: string
 
-# Test artifacts: a suite <s> uploads playwright-report-<s> (the html report) and playwright-results-<s>
-# (its json, written by the test:e2e:<s> script as $E2E_RESULTS_DIR/e2e-<s>-results.json); a BDD suite also uploads
-# bdd-<s> (its Cucumber json and html, $E2E_RESULTS_DIR/e2e-<s>-bdd.json and e2e-<s>-bdd/)
+# Stages: check (version, generated layer, lint, typecheck, unit tests) → e2e (a runner and a local D1 per suite) →
+# deploy; create-release, rollback and smoke-tests read the deploy outputs.
+# Test artifacts: a suite <s> uploads playwright-report-<s> (the html report) and bdd-<s> (its Cucumber json and html,
+# $BDD_RESULTS_DIR/e2e-<s>-bdd.json and e2e-<s>-bdd/, which the developer companion publishes)
 env:
   ARTIFACT_RETENTION_DAYS: 30
   E2E_RESULTS_DIR: test-results
   BDD_RESULTS_DIR: .output/bdd/reports
+  CI: true
 
 jobs:
-  CICD:
+  check:
     runs-on: ubuntu-latest
     environment: CLOUDFLARE_THESLOPE
     permissions:
-      contents: read  # Checkout only; deploy uses CLOUDFLARE_API_TOKEN, not GITHUB_TOKEN
+      contents: read
     outputs:
-      deployed_env: ${{ steps.target.outputs.env }}
-      deployed_url: ${{ steps.deploy.outputs.url }}
       release_version: ${{ steps.version.outputs.RELEASE_VERSION }}
       release_date: ${{ steps.version.outputs.RELEASE_DATE }}
+      commit_sha: ${{ steps.version.outputs.COMMIT_SHA }}
       is_release: ${{ steps.version.outputs.IS_RELEASE }}
-
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      HEY_NABO_USERNAME: ${{ secrets.HEY_NABO_USERNAME }}
-      HEY_NABO_PASSWORD: ${{ secrets.HEY_NABO_PASSWORD }}
-      HEY_NABO_EJ_ADMIN_USERNAME: ${{ secrets.HEY_NABO_EJ_ADMIN_USERNAME }}
-      NUXT_PUBLIC_HEY_NABO_API: ${{ vars.NUXT_PUBLIC_HEY_NABO_API }}
-      NUXT_SESSION_PASSWORD: ${{ secrets.NUXT_SESSION_PASSWORD }}
-      # Mails under nuxt dev land in the miniflare queue sink — the e2e job needs mailboxes, not real ones
-      NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL: accountant@example.com
-      NUXT_NOTIFICATIONS_ADMIN_EMAIL: admin@example.com
-      CI: true
-
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # Fetch all history for version calculation
           ref: ${{ inputs.rollback_to || github.sha }}
-      - run: ls -la
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: 'package.json'
-      - run: npm ci
+      - uses: ./.github/actions/setup
       - name: Calculate version
         id: version
+        # Expressions reach the script through env only: a value is data to the shell, never script text
+        env:
+          ROLLBACK_TO: ${{ inputs.rollback_to }}
+          RELEASE_VERSION_INPUT: ${{ inputs.release_version }}
         run: |
-          # The version lines go to the step outputs and to deployment.env, the record a deploying run hands on
-          version_info() { mkdir -p "$E2E_RESULTS_DIR"; RELEASE_VERSION="$1" make version-info | tee -a "$GITHUB_OUTPUT" > "$E2E_RESULTS_DIR/deployment.env"; }
-          if [ -n "${{ inputs.rollback_to }}" ]; then
-            echo "🔄 Rollback mode to commit: ${{ inputs.rollback_to }}"
+          # The version lines go to the step outputs.
+          # make writes the version into its recipe lines, so only a version number reaches it
+          version_info() {
+            if [ -n "$1" ] && ! [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$ ]]; then echo "❌ Not a version number: $1"; exit 1; fi
+            RELEASE_VERSION="$1" make version-info | tee -a "$GITHUB_OUTPUT"
+          }
+          if [ -n "$ROLLBACK_TO" ]; then
+            echo "🔄 Rollback mode to commit: $ROLLBACK_TO"
             version_info ""
-          elif [ -n "${{ inputs.release_version }}" ]; then
-            echo "🎉 Release mode (workflow_dispatch): ${{ inputs.release_version }}"
-            version_info "${{ inputs.release_version }}"
-          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            TAG_VERSION="${{ github.ref_name }}"
-            TAG_VERSION="${TAG_VERSION#v}"  # Strip 'v' prefix
+          elif [ -n "$RELEASE_VERSION_INPUT" ]; then
+            echo "🎉 Release mode (workflow_dispatch): $RELEASE_VERSION_INPUT"
+            version_info "$RELEASE_VERSION_INPUT"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"  # Strip 'v' prefix
             echo "🏷️ Release mode (git tag): $TAG_VERSION"
             version_info "$TAG_VERSION"
           else
@@ -94,92 +85,125 @@ jobs:
           echo "## ❌ Unit tests failed" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Vitest exited with an error: a failed test, or an unhandled error outside the tests (the Vitest table counts tests only). The annotations and the step log name it." >> "$GITHUB_STEP_SUMMARY"
-      - name: Install Playwright and browser friends
-        run: npx playwright install chromium
+      # The build the e2e rows run their suites on; its prerender of the OpenAPI pages runs through the guard, which
+      # needs the session secret
+      - run: npm run build
+        env:
+          NUXT_SESSION_PASSWORD: ${{ secrets.NUXT_SESSION_PASSWORD }}
+      # The Worker and its assets, the two paths wrangler.toml names; a path ending at the dot directory itself would be skipped as hidden
+      - uses: actions/upload-artifact@v7
+        with:
+          name: build
+          path: |
+            .output/server
+            .output/public
+          if-no-files-found: error
+          retention-days: 1
+
+  e2e:
+    name: e2e ${{ matrix.suite }}
+    needs: check
+    runs-on: ubuntu-latest
+    environment: CLOUDFLARE_THESLOPE
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { suite: api, gate: true }
+          - { suite: api-serial, gate: true }
+          - { suite: ui, gate: false }
+          - { suite: ui-serial, gate: false }
+    env:
+      SUITE: ${{ matrix.suite }}
+      HEY_NABO_USERNAME: ${{ secrets.HEY_NABO_USERNAME }}
+      HEY_NABO_PASSWORD: ${{ secrets.HEY_NABO_PASSWORD }}
+      HEY_NABO_EJ_ADMIN_USERNAME: ${{ secrets.HEY_NABO_EJ_ADMIN_USERNAME }}
+      NUXT_PUBLIC_HEY_NABO_API: ${{ vars.NUXT_PUBLIC_HEY_NABO_API }}
+      NUXT_SESSION_PASSWORD: ${{ secrets.NUXT_SESSION_PASSWORD }}
+      # Mails under nuxt dev land in the miniflare queue sink — the suites need mailboxes, not real ones
+      NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL: accountant@example.com
+      NUXT_NOTIFICATIONS_ADMIN_EMAIL: admin@example.com
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.rollback_to || github.sha }}
+      - uses: ./.github/actions/setup
+        with:
+          browsers: true
       - name: Prepare local D1 database for testing
         run: |
           npm run db:migrate:local
           npm run db:seed:local
           npx wrangler d1 execute theslope --command="SELECT * FROM User" --local
-      - name: Run e2e api tests
-        id: e2e_api_tests
-        run: npm run test:e2e:api
+      # The suite runs on this build under wrangler's local runtime (playwright.config.ts webServer), the job env as its bindings
+      - uses: actions/download-artifact@v7
+        with:
+          name: build
+          path: .output
+      - name: Run the suite
+        id: tests
+        # A row with gate false reports and lets the run go on
+        run: npm run "test:e2e:$SUITE"
+        continue-on-error: ${{ !matrix.gate }}
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
-          name: playwright-report-api
+          name: playwright-report-${{ matrix.suite }}
           path: playwright-report/
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
-          name: playwright-results-api
-          path: ${{ env.E2E_RESULTS_DIR }}/e2e-api-results.json
+          name: bdd-${{ matrix.suite }}
+          path: |
+            ${{ env.BDD_RESULTS_DIR }}/e2e-${{ matrix.suite }}-bdd.json
+            ${{ env.BDD_RESULTS_DIR }}/e2e-${{ matrix.suite }}-bdd/
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-      - name: E2E api test summary
-        if: ${{ !cancelled() && steps.e2e_api_tests.outcome != 'skipped' }}
-        run: make test-report report=$E2E_RESULTS_DIR/e2e-api-results.json title="E2E api tests" >> "$GITHUB_STEP_SUMMARY"
-      - name: Run e2e ui tests
-        id: e2e_ui_tests
-        run: npm run test:e2e:ui
-        continue-on-error: true
-      - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-report-ui
-          path: playwright-report/
-          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-      - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-results-ui
-          path: ${{ env.E2E_RESULTS_DIR }}/e2e-ui-results.json
-          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-      - name: E2E ui test summary
-        if: ${{ !cancelled() && steps.e2e_ui_tests.outcome != 'skipped' }}
-        run: make test-report report=$E2E_RESULTS_DIR/e2e-ui-results.json title="E2E ui tests" note="UI test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
-      - name: Run e2e ui serial tests
-        id: e2e_ui_serial_tests
-        run: npm run test:e2e:ui:serial
-        continue-on-error: true
-      - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-report-ui-serial
-          path: playwright-report/
-          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-      - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-results-ui-serial
-          path: ${{ env.E2E_RESULTS_DIR }}/e2e-ui-serial-results.json
-          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-      - name: E2E ui serial test summary
-        if: ${{ !cancelled() && steps.e2e_ui_serial_tests.outcome != 'skipped' }}
-        run: make test-report report=$E2E_RESULTS_DIR/e2e-ui-serial-results.json title="E2E ui serial tests" note="UI serial test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
-      # Every build renders docs/releases/*.md to one-page PDFs here, where Playwright is installed; create-release attaches them
-      - name: Release notes PDF
+      - name: Summary
+        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: make release-notes
-      - uses: actions/upload-artifact@v7
+          GATE: ${{ matrix.gate }}
+        run: |
+          note=""; [ "$GATE" = true ] || note="The $SUITE suite does not gate the pipeline — review before shipping"
+          make test-report report="$E2E_RESULTS_DIR/e2e-$SUITE-results.json" title="E2E $SUITE tests" note="$note" >> "$GITHUB_STEP_SUMMARY"
+          make bdd-report suite="$SUITE" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: [check, e2e]
+    runs-on: ubuntu-latest
+    environment: CLOUDFLARE_THESLOPE
+    permissions:
+      contents: read  # Checkout only; deploy uses CLOUDFLARE_API_TOKEN, not GITHUB_TOKEN
+    outputs:
+      deployed_env: ${{ steps.target.outputs.env }}
+      deployed_url: ${{ steps.deploy.outputs.url }}
+      release_version: ${{ needs.check.outputs.release_version }}
+      release_date: ${{ needs.check.outputs.release_date }}
+      is_release: ${{ needs.check.outputs.is_release }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      NUXT_SESSION_PASSWORD: ${{ secrets.NUXT_SESSION_PASSWORD }}  # the build's prerender runs through the guard
+    steps:
+      - uses: actions/checkout@v7
         with:
-          name: release-notes
-          path: docs/releases/*.pdf
-          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          fetch-depth: 0  # The deployment target reads the tag's ancestry
+          ref: ${{ inputs.rollback_to || github.sha }}
+      - uses: ./.github/actions/setup
       - name: Determine deployment target
         id: target
         run: |
-          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          if [ "$GITHUB_REF" == "refs/heads/main" ]; then
             echo "env=prod" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             # Tag push: tag on main → prod, tag elsewhere → dev (for release-flow testing)
             git fetch origin main
-            if git merge-base --is-ancestor ${{ github.sha }} origin/main; then
-              echo "🏷️ Tag ${{ github.ref_name }} on main → prod"
+            if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+              echo "🏷️ Tag $GITHUB_REF_NAME on main → prod"
               echo "env=prod" >> $GITHUB_OUTPUT
             else
-              echo "🏷️ Tag ${{ github.ref_name }} NOT on main → dev"
+              echo "🏷️ Tag $GITHUB_REF_NAME NOT on main → dev"
               echo "env=dev" >> $GITHUB_OUTPUT
             fi
           else
@@ -188,11 +212,12 @@ jobs:
       - name: Deploy to Cloudflare
         id: deploy
         env:
-          NUXT_PUBLIC_RELEASE_VERSION: ${{ steps.version.outputs.RELEASE_VERSION }}
-          NUXT_PUBLIC_RELEASE_DATE: ${{ steps.version.outputs.RELEASE_DATE }}
-          GITHUB_SHA: ${{ steps.version.outputs.COMMIT_SHA }}
+          NUXT_PUBLIC_RELEASE_VERSION: ${{ needs.check.outputs.release_version }}
+          NUXT_PUBLIC_RELEASE_DATE: ${{ needs.check.outputs.release_date }}
+          GITHUB_SHA: ${{ needs.check.outputs.commit_sha }}
+          DEPLOY_ENV: ${{ steps.target.outputs.env }}
         run: |
-          if [ "${{ steps.target.outputs.env }}" == "prod" ]; then
+          if [ "$DEPLOY_ENV" == "prod" ]; then
             OUTPUT=$(make deploy-prod 2>&1)
           else
             OUTPUT=$(make deploy-dev 2>&1)
@@ -200,11 +225,20 @@ jobs:
           echo "$OUTPUT"
           URL=$(echo "$OUTPUT" | grep 'DEPLOY_URL' | grep -oE 'https://[^")]+')
           echo "url=$URL" >> $GITHUB_OUTPUT
-          printf 'ENV=%s\nURL=%s\n' "${{ steps.target.outputs.env }}" "$URL" >> "$E2E_RESULTS_DIR/deployment.env"
+      - name: Record the deployment
+        # The artifact `deployment` hands the developer companion the run's version, target and URL, from the step outputs
+        env:
+          RELEASE_VERSION: ${{ needs.check.outputs.release_version }}
+          COMMIT_SHA: ${{ needs.check.outputs.commit_sha }}
+          DEPLOY_ENV: ${{ steps.target.outputs.env }}
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/deployment"
+          printf 'RELEASE_VERSION=%s\nCOMMIT_SHA=%s\nENV=%s\nURL=%s\n' "$RELEASE_VERSION" "$COMMIT_SHA" "$DEPLOY_ENV" "$URL" > "$RUNNER_TEMP/deployment/deployment.env"
       - uses: actions/upload-artifact@v7
         with:
           name: deployment
-          path: ${{ env.E2E_RESULTS_DIR }}/deployment.env
+          path: ${{ runner.temp }}/deployment/deployment.env
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       # The OpenAPI spec the build prerendered (nuxt.config.ts nitro.openAPI), for the developer companion's API reference
       - uses: actions/upload-artifact@v7
@@ -213,24 +247,33 @@ jobs:
           path: .output/public/_openapi.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: Deployment summary
+        env:
+          DEPLOY_ENV: ${{ steps.target.outputs.env }}
+          RELEASE_VERSION: ${{ needs.check.outputs.release_version }}
+          RELEASE_DATE: ${{ needs.check.outputs.release_date }}
+          IS_RELEASE: ${{ needs.check.outputs.is_release }}
+          DEPLOYED_URL: ${{ steps.deploy.outputs.url }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          echo "## 🚀 Deployed to ${{ steps.target.outputs.env }}" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Deployed to $DEPLOY_ENV" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Environment** | \`${{ steps.target.outputs.env }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Version** | \`${{ steps.version.outputs.RELEASE_VERSION }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Release Date** | ${{ steps.version.outputs.RELEASE_DATE }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Is Release** | ${{ steps.version.outputs.IS_RELEASE }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **URL** | ${{ steps.deploy.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit Message** | ${{ github.event.head_commit.message }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **PR Title** | ${{ github.event.pull_request.title }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`$DEPLOY_ENV\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | \`$RELEASE_VERSION\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Release Date** | $RELEASE_DATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Is Release** | $IS_RELEASE |" >> $GITHUB_STEP_SUMMARY
+          echo "| **URL** | $DEPLOYED_URL |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`$GITHUB_SHA\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`$GITHUB_REF_NAME\` |" >> $GITHUB_STEP_SUMMARY
+          # The first line of the message: a table cell holds one line
+          echo "| **Commit Message** | ${COMMIT_MESSAGE%%$'\n'*} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **PR Title** | $PR_TITLE |" >> $GITHUB_STEP_SUMMARY
 
   create-release:
-    needs: CICD
-    if: needs.CICD.outputs.is_release == 'true' && needs.CICD.outputs.deployed_env == 'prod'
+    needs: deploy
+    if: needs.deploy.outputs.is_release == 'true' && needs.deploy.outputs.deployed_env == 'prod'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -240,8 +283,8 @@ jobs:
         if: startsWith(github.ref, 'refs/heads/')  # Only for workflow_dispatch, not tag push
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.deploy.outputs.release_version }}
         run: |
-          VERSION="${{ needs.CICD.outputs.release_version }}"
           TAG="v${VERSION%%+*}"  # Strip +sha suffix for tag
           # Check if tag already exists
           if git ls-remote --tags origin | grep -q "refs/tags/$TAG"; then
@@ -253,90 +296,77 @@ jobs:
             git push origin "$TAG"
             echo "✅ Created tag $TAG"
           fi
-      # The PDFs the CICD job rendered (artifact release-notes), attached to the release
-      - uses: actions/download-artifact@v7
-        with:
-          name: release-notes
-          path: release-notes
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.deploy.outputs.release_version }}
+          RELEASE_DATE: ${{ needs.deploy.outputs.release_date }}
+          DEPLOYED_URL: ${{ needs.deploy.outputs.deployed_url }}
         run: |
-          VERSION="${{ needs.CICD.outputs.release_version }}"
           TAG="v${VERSION%%+*}"
-          PDF="release-${VERSION%%+*}.pdf"
-          # The body links this version's PDF when the artifact holds it
-          NOTES_LINE=""
-          if [ -f "release-notes/$PDF" ]; then NOTES_LINE=$'\n'"**Release notes:** https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$PDF"; fi
           # Check if release already exists
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "⏭️ Release $TAG already exists, skipping"
           else
             gh release create "$TAG" \
               --title "Release $TAG" \
-              --notes "**Deployed:** ${{ needs.CICD.outputs.release_date }}
+              --notes "**Deployed:** $RELEASE_DATE
 
           **Environment:** production
-          **URL:** ${{ needs.CICD.outputs.deployed_url }}
-          **Commit:** ${{ github.sha }}$NOTES_LINE
+          **URL:** $DEPLOYED_URL
+          **Commit:** $GITHUB_SHA
 
           Full version: \`$VERSION\`"
             echo "✅ Created release $TAG"
           fi
-          gh release upload "$TAG" release-notes/*.pdf --clobber
 
   rollback:
-    needs: CICD
+    needs: deploy
     if: github.event_name == 'workflow_dispatch' && inputs.rollback_to != ''
     runs-on: ubuntu-latest
     permissions:
-      contents: read  # Writes step summaries 
+      contents: read  # Writes step summaries
     steps:
       - name: Rollback summary
+        env:
+          ROLLBACK_TO: ${{ inputs.rollback_to }}
+          RELEASE_VERSION: ${{ needs.deploy.outputs.release_version }}
+          DEPLOYED_URL: ${{ needs.deploy.outputs.deployed_url }}
         run: |
           echo "## ⏮️ Rollback Completed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Rolled back to commit: \`${{ inputs.rollback_to }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "Version: \`${{ needs.CICD.outputs.release_version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "Deployed to: ${{ needs.CICD.outputs.deployed_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "Rolled back to commit: \`$ROLLBACK_TO\`" >> $GITHUB_STEP_SUMMARY
+          echo "Version: \`$RELEASE_VERSION\`" >> $GITHUB_STEP_SUMMARY
+          echo "Deployed to: $DEPLOYED_URL" >> $GITHUB_STEP_SUMMARY
 
   smoke-tests:
-    needs: CICD
-    if: needs.CICD.outputs.deployed_url != ''
+    needs: deploy
+    if: needs.deploy.outputs.deployed_url != ''
     runs-on: ubuntu-latest
-    environment: ${{ needs.CICD.outputs.deployed_env }}
+    environment: ${{ needs.deploy.outputs.deployed_env }}
     permissions:
       contents: read  # Checkout + run smoke tests against deployed URL
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: ./.github/actions/setup
         with:
-          node-version-file: 'package.json'
-      - run: npm ci
-      - name: Install Playwright
-        run: npx playwright install chromium
+          browsers: true
       - name: Run smoke tests
         id: smoke_tests
         env:
-          BASE_URL: ${{ needs.CICD.outputs.deployed_url }}
+          BASE_URL: ${{ needs.deploy.outputs.deployed_url }}
           HEY_NABO_USERNAME: ${{ secrets.HEY_NABO_USERNAME }}
           HEY_NABO_PASSWORD: ${{ secrets.HEY_NABO_PASSWORD }}
           HEY_NABO_EJ_ADMIN_USERNAME: ${{ secrets.HEY_NABO_EJ_ADMIN_USERNAME }}
           CLOUDFLARE_BYPASS_TOKEN: ${{ secrets.CLOUDFLARE_BYPASS_TOKEN }}
           SHOULD_NOT_MUTATE: true
-          EXPECTED_VERSION: ${{ needs.CICD.outputs.release_version }}
+          EXPECTED_VERSION: ${{ needs.deploy.outputs.release_version }}
         run: npm run test:e2e:smoke
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-smoke
           path: playwright-report/
-          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-      - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-results-smoke
-          path: ${{ env.E2E_RESULTS_DIR }}/e2e-smoke-results.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
@@ -348,8 +378,11 @@ jobs:
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       - name: Summary
         if: ${{ !cancelled() && steps.smoke_tests.outcome != 'skipped' }}
+        env:
+          DEPLOYED_URL: ${{ needs.deploy.outputs.deployed_url }}
+          RELEASE_VERSION: ${{ needs.deploy.outputs.release_version }}
         run: |
           make bdd-report suite=smoke >> "$GITHUB_STEP_SUMMARY"
           make bdd-steps summary=1 >> "$GITHUB_STEP_SUMMARY"
-          echo "Verified: ${{ needs.CICD.outputs.deployed_url }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Version: \`${{ needs.CICD.outputs.release_version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Verified: $DEPLOYED_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Version: \`$RELEASE_VERSION\`" >> "$GITHUB_STEP_SUMMARY"

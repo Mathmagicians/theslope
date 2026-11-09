@@ -107,7 +107,10 @@ export type JobStatus = (typeof JobStatus)[keyof typeof JobStatus]
 
 
 export const DeliverySubject = {
-  BILLING_PERIOD: 'BILLING_PERIOD'
+  BILLING_PERIOD: 'BILLING_PERIOD',
+  TICKET_WAITLIST: 'TICKET_WAITLIST',
+  ORDER: 'ORDER',
+  DINNER_EVENT: 'DINNER_EVENT'
 } as const
 
 export type DeliverySubject = (typeof DeliverySubject)[keyof typeof DeliverySubject]

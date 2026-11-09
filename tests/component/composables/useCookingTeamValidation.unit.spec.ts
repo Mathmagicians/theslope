@@ -1,14 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import { ZodError } from 'zod'
-import { useCookingTeamValidation, type CookingTeamDisplay, type CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
+import { useCookingTeamValidation, type CookingTeamAssignment, type SerializedCookingTeamDetail } from '~/composables/useCookingTeamValidation'
 import { useDutyValidation } from '~/composables/useDutyValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
+import { useBookingValidation } from '~/composables/useBookingValidation'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
-const { serializeWeekDayMap: serializeDinnerPreferences } = useCoreValidation()
+const { serializeWeekDayMap: serializeDinnerPreferences, createDefaultWeekdayMap: createDinnerPreferences } = useCoreValidation()
+const DinnerMode = useBookingValidation().DinnerModeSchema.enum
 
 describe('useCookingTeamValidation', () => {
   // Get validation utilities
@@ -41,25 +44,32 @@ describe('useCookingTeamValidation', () => {
   })
 
   describe('serialization and deserialization', () => {
-    const { serializeCookingTeam, deserializeCookingTeamDisplay, deserializeCookingTeamAssignment } = useCookingTeamValidation()
+    const { deserializeCookingTeamDisplay, deserializeCookingTeamAssignment } = useCookingTeamValidation()
     const { createDefaultWeekdayMap } = useWeekDayMapValidation()
+
+    // The row an assignment reads back from: its affinity as JSON and its inhabitant's row
+    const assignmentRow = (assignment: CookingTeamAssignment, affinity: string | null) => ({
+      ...assignment,
+      affinity,
+      inhabitant: { ...assignment.inhabitant, dinnerPreferences: null }
+    })
 
     describe('CookingTeamAssignment deserialization', () => {
       it.each([
         {
           name: 'assignment with affinity',
-          serialized: {
-            ...SeasonFactory.defaultCookingTeamAssignment({ id: 10, inhabitantId: 42, allocationPercentage: 75 }),
-            affinity: '{"mandag":true,"tirsdag":false,"onsdag":true,"torsdag":false,"fredag":false,"lørdag":false,"søndag":false}'
-          },
+          serialized: assignmentRow(
+            SeasonFactory.defaultCookingTeamAssignment({ id: 10, inhabitantId: 42, allocationPercentage: 75 }),
+            '{"mandag":true,"tirsdag":false,"onsdag":true,"torsdag":false,"fredag":false,"lørdag":false,"søndag":false}'
+          ),
           expectedAffinity: createDefaultWeekdayMap([true, false, true, false, false, false, false])
         },
         {
           name: 'assignment with null affinity',
-          serialized: {
-            ...SeasonFactory.defaultCookingTeamAssignment({ id: 12, cookingTeamId: 3, inhabitantId: 55, role: JUNIORHELPER, allocationPercentage: 50 }),
-            affinity: null
-          },
+          serialized: assignmentRow(
+            SeasonFactory.defaultCookingTeamAssignment({ id: 12, cookingTeamId: 3, inhabitantId: 55, role: JUNIORHELPER, allocationPercentage: 50 }),
+            null
+          ),
           expectedAffinity: undefined
         }
       ])('should deserialize $name', ({ serialized, expectedAffinity }) => {
@@ -74,15 +84,16 @@ describe('useCookingTeamValidation', () => {
       })
 
       it('should deserialize assignment with nested inhabitant (dinnerPreferences as JSON string)', () => {
-        // Use factory for inhabitant data (has dinnerPreferences as object)
-        const inhabitant = { ...HouseholdFactory.defaultInhabitantData(), id: 42 }
+        // Factory inhabitant with its dinnerPreferences as an object
+        const inhabitant = { ...HouseholdFactory.defaultInhabitantData(), id: 42, dinnerPreferences: createDinnerPreferences(DinnerMode.DINEIN) }
 
         // Simulate database response: assignment with serialized inhabitant
         const serialized = {
           ...SeasonFactory.defaultCookingTeamAssignment({ role: CHEF }),
+          affinity: null,
           inhabitant: {
             ...inhabitant,
-            dinnerPreferences: serializeDinnerPreferences(inhabitant.dinnerPreferences!)
+            dinnerPreferences: serializeDinnerPreferences(inhabitant.dinnerPreferences)
           }
         }
 
@@ -95,106 +106,64 @@ describe('useCookingTeamValidation', () => {
       })
     })
 
-    describe('CookingTeamDisplay aggregate root roundtrip', () => {
+    describe('CookingTeamDisplay aggregate root from its row', () => {
+      // Use the weekday map's real serializer for the JSON columns (ADR-010)
+      const { serializeWeekDayMap } = useWeekDayMapValidation()
+      const FRI_SAT = createDefaultWeekdayMap([false, false, false, false, true, true, false])
+      const MON_FRI = createDefaultWeekdayMap([true, true, true, true, true, false, false])
+      const MON_WED_FRI = createDefaultWeekdayMap([true, false, true, false, true, false, false])
+
       it.each([
         {
           name: 'team without affinity + assignment with affinity',
-          team: {
+          row: {
             id: 3,
             seasonId: 5,
-            name: "Team Gamma",
+            name: 'Team Gamma',
+            affinity: null,
             assignments: [
-              SeasonFactory.defaultCookingTeamAssignment({
-                id: 12,
-                cookingTeamId: 3,
-                inhabitantId: 55,
-                role: JUNIORHELPER,
-                allocationPercentage: 50,
-                affinity: createDefaultWeekdayMap([false, false, false, false, true, true, false]) // Fri, Sat
-              })
+              assignmentRow(SeasonFactory.defaultCookingTeamAssignment({ id: 12, cookingTeamId: 3, inhabitantId: 55, role: JUNIORHELPER, allocationPercentage: 50 }), serializeWeekDayMap(FRI_SAT))
             ]
-          } as CookingTeamDisplay,
+          },
           expectedTeamAffinity: undefined,
-          expectedAssignmentAffinity: createDefaultWeekdayMap([false, false, false, false, true, true, false])
+          expectedAssignmentAffinities: [FRI_SAT]
         },
         {
           name: 'team with affinity + multiple assignments (mixed affinities)',
-          team: {
+          row: {
             id: 5,
             seasonId: 5,
-            name: "Team Echo",
-            affinity: createDefaultWeekdayMap([true, true, true, true, true, false, false]), // Mon-Fri
+            name: 'Team Echo',
+            affinity: serializeWeekDayMap(MON_FRI),
             assignments: [
-              SeasonFactory.defaultCookingTeamAssignment({
-                id: 14,
-                cookingTeamId: 5,
-                inhabitantId: 20,
-                affinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]) // Mon, Wed, Fri
-              }),
-              SeasonFactory.defaultCookingTeamAssignment({
-                id: 15,
-                cookingTeamId: 5,
-                inhabitantId: 21,
-                role: COOK,
-                allocationPercentage: 50
-                // No affinity
-              })
+              assignmentRow(SeasonFactory.defaultCookingTeamAssignment({ id: 14, cookingTeamId: 5, inhabitantId: 20 }), serializeWeekDayMap(MON_WED_FRI)),
+              assignmentRow(SeasonFactory.defaultCookingTeamAssignment({ id: 15, cookingTeamId: 5, inhabitantId: 21, role: COOK, allocationPercentage: 50 }), null)
             ]
-          } as CookingTeamDisplay,
-          expectedTeamAffinity: createDefaultWeekdayMap([true, true, true, true, true, false, false]),
-          expectedAssignmentAffinity: createDefaultWeekdayMap([true, false, true, false, true, false, false])
+          },
+          expectedTeamAffinity: MON_FRI,
+          expectedAssignmentAffinities: [MON_WED_FRI, undefined]
         }
-      ])('should serialize and deserialize $name', ({ team, expectedTeamAffinity, expectedAssignmentAffinity }) => {
-        // Serialize aggregate root (team + nested assignments)
-        const serialized = serializeCookingTeam(team)
-
-        // Verify team affinity serialization
-        if (expectedTeamAffinity) {
-          expect(typeof serialized.affinity).toBe('string')
-        } else {
-          expect(serialized.affinity).toBeNull()
-        }
-
-        // Verify assignments affinity serialization
-        if (serialized.assignments && serialized.assignments.length > 0) {
-          serialized.assignments.forEach((assignment, index) => {
-            if (team.assignments[index]?.affinity) {
-              expect(typeof assignment.affinity).toBe('string')
-            } else {
-              expect(assignment.affinity).toBeNull()
-            }
-          })
-        }
-
-        // Deserialize aggregate root
-        const deserialized = deserializeCookingTeamDisplay(serialized)
+      ])('should deserialize $name', ({ row, expectedTeamAffinity, expectedAssignmentAffinities }) => {
+        const deserialized = deserializeCookingTeamDisplay(row)
 
         // Verify team base fields
-        expect(deserialized.id).toBe(team.id)
-        expect(deserialized.seasonId).toBe(team.seasonId)
-        expect(deserialized.name).toBe(team.name)
+        expect(deserialized.id).toBe(row.id)
+        expect(deserialized.seasonId).toBe(row.seasonId)
+        expect(deserialized.name).toBe(row.name)
 
         // Verify team affinity deserialization
         expect(deserialized.affinity).toEqual(expectedTeamAffinity)
 
         // Verify assignments deserialization
-        expect(deserialized.assignments).toHaveLength(team.assignments.length)
-
+        expect(deserialized.assignments).toHaveLength(row.assignments.length)
         deserialized.assignments.forEach((assignment: CookingTeamAssignment, index: number) => {
-          const originalAssignment = team.assignments[index]!
-          expect(assignment.id).toBe(originalAssignment.id)
-          expect(assignment.cookingTeamId).toBe(originalAssignment.cookingTeamId)
-          expect(assignment.inhabitantId).toBe(originalAssignment.inhabitantId)
-          expect(assignment.role).toBe(originalAssignment.role)
-          expect(assignment.allocationPercentage).toBe(originalAssignment.allocationPercentage)
-
-          // Verify assignment affinity
-          if (index === 0) {
-            expect(assignment.affinity).toEqual(expectedAssignmentAffinity)
-          } else {
-            // For additional assignments (index > 0), check against original
-            expect(assignment.affinity).toEqual(originalAssignment.affinity)
-          }
+          const assignmentRowAt = row.assignments[index]!
+          expect(assignment.id).toBe(assignmentRowAt.id)
+          expect(assignment.cookingTeamId).toBe(assignmentRowAt.cookingTeamId)
+          expect(assignment.inhabitantId).toBe(assignmentRowAt.inhabitantId)
+          expect(assignment.role).toBe(assignmentRowAt.role)
+          expect(assignment.allocationPercentage).toBe(assignmentRowAt.allocationPercentage)
+          expect(assignment.affinity).toEqual(expectedAssignmentAffinities[index])
         })
       })
     })
@@ -203,14 +172,14 @@ describe('useCookingTeamValidation', () => {
       const { deserializeCookingTeamDetail } = useCookingTeamValidation()
       const { serializeJokerSlot } = useDutyValidation()
       const slot = { ...SeasonFactory.defaultJokerSlot(), id: 5, cookingTeamId: 1, note: null, createdAt: new Date(2026, 9, 1), updatedAt: new Date(2026, 9, 1) }
-      const teamRow = (jokerSlots: unknown[]) => ({ ...serializeCookingTeam(SeasonFactory.defaultCookingTeamDisplay()), dinnerEvents: [], jokerSlots })
+      const teamRow = (jokerSlots: SerializedCookingTeamDetail['jokerSlots']) => ({ ...DinnerEventFactory.serializedCookingTeam(), dinnerEvents: [], jokerSlots })
 
       it('restores the stored joker slot rows to domain slots', () => {
         expect(deserializeCookingTeamDetail(teamRow([serializeJokerSlot(slot)])).jokerSlots).toEqual([slot])
       })
 
-      it('rejects a joker slot row that is not the stored shape', () => {
-        expect(() => deserializeCookingTeamDetail(teamRow([slot]))).toThrow(ZodError)
+      it('rejects a stored joker slot row that is no valid slot', () => {
+        expect(() => deserializeCookingTeamDetail(teamRow([{ ...serializeJokerSlot(slot), allocationPercentage: 0 }]))).toThrow(ZodError)
       })
     })
 
@@ -219,7 +188,7 @@ describe('useCookingTeamValidation', () => {
         { name: 'counted dinners and joker slots', _count: { dinners: 4, jokerSlots: 2 }, expected: { cookingDaysCount: 4, jokerSlotCount: 2 } },
         { name: 'no _count', _count: undefined, expected: { cookingDaysCount: 0, jokerSlotCount: 0 } }
       ])('should map $name onto the aggregates', ({ _count, expected }) => {
-        const deserialized = deserializeCookingTeamDisplay({ ...serializeCookingTeam(SeasonFactory.defaultCookingTeamDisplay()), _count })
+        const deserialized = deserializeCookingTeamDisplay({ ...DinnerEventFactory.serializedCookingTeam(), _count })
 
         expect(deserialized).toMatchObject(expected)
       })
@@ -272,15 +241,6 @@ describe('useCookingTeamValidation', () => {
 
         expect(typeof result.affinity).toBe('string')
         expect(() => JSON.parse(result.affinity as string)).not.toThrow()
-      })
-
-      it('should preserve assignments', () => {
-        const assignments = Array.from({ length: 3 }, (_, i) =>
-          SeasonFactory.defaultCookingTeamAssignment({ inhabitantId: i + 1 })
-        )
-        const result = fn(SeasonFactory.defaultCookingTeamDetail({ assignments }))
-
-        expect(result.assignments).toHaveLength(3)
       })
     })
 
@@ -351,6 +311,15 @@ describe('useCookingTeamValidation', () => {
     })
 
     describe('toPrismaUpdateData with CookingTeamUpdate input', () => {
+      it('should leave the members out: they change through the assignment endpoints', () => {
+        const assignments = Array.from({ length: 3 }, (_, i) =>
+          SeasonFactory.defaultCookingTeamAssignment({ inhabitantId: i + 1 })
+        )
+        const result = toPrismaUpdateData(SeasonFactory.defaultCookingTeamDetail({ assignments }))
+
+        expect(result).not.toHaveProperty('assignments')
+      })
+
       it('should handle partial update with only affinity', () => {
         const affinity = createDefaultWeekdayMap([true, true, false, false, false, false, false])
         const updateInput = {

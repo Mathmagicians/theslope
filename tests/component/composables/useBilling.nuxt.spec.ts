@@ -1,9 +1,12 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {isSameDay} from 'date-fns'
-import {useBilling, TICKET_COUNTS} from '~/composables/useBilling'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBilling} from '~/composables/useBilling'
 import type {InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {itemAt} from '~~/tests/component/listHelpers'
 
 describe('useBilling', () => {
     // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
@@ -13,7 +16,7 @@ describe('useBilling', () => {
     let getBillingPeriodForDate: Billing['getBillingPeriodForDate']
     let controlInvoices: Billing['controlInvoices']
     let controlTransactions: Billing['controlTransactions']
-    let formatTicketCounts: Billing['formatTicketCounts']
+    let groupByCostEntry: Billing['groupByCostEntry']
     let groupByHouseholdEntry: Billing['groupByHouseholdEntry']
     let decideBillingSideEffects: Billing['decideBillingSideEffects']
     let expenseNoteWords: Billing['expenseNoteWords']
@@ -25,15 +28,11 @@ describe('useBilling', () => {
             getBillingPeriodForDate,
             controlInvoices,
             controlTransactions,
-            formatTicketCounts,
+            groupByCostEntry,
             groupByHouseholdEntry,
             decideBillingSideEffects
         } = useBilling())
     })
-    const {TicketTypeSchema} = useBookingValidation()
-    const TicketType = TicketTypeSchema.enum
-    type TicketTypeValue = typeof TicketType[keyof typeof TicketType]
-
     // Cutoff day is 17 (from app.config.ts)
     // Period: 18th of month N to 17th of month N+1
 
@@ -110,13 +109,7 @@ describe('useBilling', () => {
     })
 
     describe('controlTransactions', () => {
-        const makeTx = (amount: number): TransactionDisplay => ({
-            id: 1, orderId: 1, amount, createdAt: new Date(), orderSnapshot: '{}',
-            dinnerEvent: {id: 1, date: new Date(), menuTitle: 'Test'},
-            inhabitant: {id: 1, name: 'Test', household: {id: 1, pbsId: 100, address: 'Test'}},
-            ticketType: TicketType.ADULT,
-            dinnerMode: null
-        })
+        const makeTx = (amount: number): TransactionDisplay => BillingFactory.defaultTransactionDisplay({amount})
 
         it.each([
             ['exact match', [5000, 3000, 2000], 10000, true],
@@ -133,18 +126,29 @@ describe('useBilling', () => {
 
     // ========== GROUPING TESTS ==========
 
-    describe('groupByHouseholdEntry', () => {
-        const makeTx = (householdId: number, pbsId: number, address: string, amount: number): TransactionDisplay => ({
-            id: householdId * 10, orderId: 1, amount, createdAt: new Date(), orderSnapshot: '{}',
-            dinnerEvent: {id: 1, date: new Date(), menuTitle: 'Test'},
-            inhabitant: {id: 1, name: 'Test', household: {id: householdId, pbsId, address}},
-            ticketType: TicketType.ADULT,
-            dinnerMode: null
+    describe('groupByCostEntry', () => {
+        const order = (id: number, dinnerEventId: number, priceAtBooking: number) => ({
+            ...OrderFactory.defaultOrder('cost-entry', {id, dinnerEventId, priceAtBooking}),
+            dinnerEvent: {...DinnerEventFactory.defaultDinnerEventDisplay('cost-entry'), id: dinnerEventId}
         })
+
+        it('GIVEN three orders on two dinners WHEN grouping by dinner THEN one entry per dinner, in the orders\' order, with its orders and their summed amount', () => {
+            const grouped = groupByCostEntry([order(1, 31, 4000), order(2, 32, 1700), order(3, 31, 4000)], o => o.priceAtBooking)
+
+            expect(grouped.map(entry => ({dinner: entry.dinnerEvent.id, orders: entry.items.map(o => o.id), total: entry.totalAmount})))
+                .toEqual([{dinner: 31, orders: [1, 3], total: 8000}, {dinner: 32, orders: [2], total: 1700}])
+        })
+    })
+
+    describe('groupByHouseholdEntry', () => {
+        const makeTx = (householdId: number, pbsId: number, address: string, amount: number): TransactionDisplay =>
+            BillingFactory.defaultTransactionDisplay({
+                id: householdId * 10, amount,
+                inhabitant: {id: 1, name: 'Test', household: {id: householdId, pbsId, address}}
+            })
 
         // Verifies grouped output is ordered by address, then pbsId as tiebreaker.
         it('GIVEN transactions pre-sorted by address then pbsId WHEN grouping THEN output is sorted by address then pbsId, one entry per household with summed totals', () => {
-            const grouper = groupByHouseholdEntry<TransactionDisplay>(tx => tx.inhabitant.household)
             const input = [
                 makeTx(1, 3000, 'Abbey Road 1', 4000),        // address "A" + lower pbs
                 makeTx(2, 7000, 'Abbey Road 1', 4000),        // same address, higher pbs → after 1
@@ -152,71 +156,12 @@ describe('useBilling', () => {
                 makeTx(4, 5000, 'Skråningen 31', 4000),
                 makeTx(1, 3000, 'Abbey Road 1', 1700)         // merged into first entry
             ]
-            const grouped = grouper(input, tx => tx.amount)
+            const grouped = groupByHouseholdEntry(input, tx => tx.amount, tx => tx.inhabitant.household)
 
             expect(grouped.map(g => g.address)).toEqual(['Abbey Road 1', 'Abbey Road 1', 'Penny Lane 4', 'Skråningen 31'])
             expect(grouped.map(g => g.pbsId)).toEqual([3000, 7000, 1000, 5000])
-            expect(grouped[0]!.totalAmount).toBe(5700)  // 4000 + 1700 merged
-            expect(grouped[0]!.computedTotal).toBe(5700)
-        })
-    })
-
-    // ========== FORMAT TICKET COUNTS TESTS ==========
-
-    describe('formatTicketCounts', () => {
-        const {ADULT, CHILD, BABY} = TicketType
-        const makeItem = (t: TicketTypeValue | null) => ({ticketType: t})
-
-        describe('with array input', () => {
-            it.each([
-                ['mixed types', [ADULT, ADULT, CHILD, BABY, BABY], '2V 1B 2b'],
-                ['empty array', [], '-'],
-                ['null ticketTypes ignored', [null, ADULT, null], '1V'],
-            ] as const)('%s → %s', (_, types, expected) => {
-                expect(formatTicketCounts(types.map(makeItem))).toBe(expected)
-            })
-        })
-
-        describe('with map input', () => {
-            it.each([
-                ['mixed types', {[ADULT]: 200, [CHILD]: 50, [BABY]: 1}, '200V 50B 1b'],
-                ['empty map', {}, '-'],
-                ['partial map', {[ADULT]: 100, [BABY]: 2}, '100V 2b'],
-            ] as const)('%s → %s', (_, counts, expected) => {
-                expect(formatTicketCounts(counts)).toBe(expected)
-            })
-        })
-    })
-
-    // One builder, three wordings of the same counts
-    describe('TICKET_COUNTS', () => {
-        const {ADULT, CHILD, BABY} = TicketType
-        const FULL = {[ADULT]: 8, [CHILD]: 1, [BABY]: 2}
-        const ZERO_TYPE = {[ADULT]: 2, [CHILD]: 0, [BABY]: 1}
-        const KITCHEN = {[ADULT]: 60, [CHILD]: 30, [BABY]: 10}
-        const EMPTY = {}
-
-        it.each([
-            {variant: 'compact', desc: 'full counts', counts: FULL, text: '8V 1B 2b'},
-            {variant: 'compact', desc: 'a zero type', counts: ZERO_TYPE, text: '2V 1b'},
-            {variant: 'compact', desc: 'no counts', counts: EMPTY, text: '-'},
-            {variant: 'sentence', desc: 'full counts', counts: FULL, text: '8 voksne, 1 barn, 2 babyer'},
-            {variant: 'sentence', desc: 'a zero type', counts: ZERO_TYPE, text: '2 voksne, 1 baby'},
-            {variant: 'sentence', desc: 'no counts', counts: EMPTY, text: ''},
-            {variant: 'labelled', desc: 'full counts', counts: KITCHEN, text: 'Voksen: 60 | Barn: 30 | Baby: 10'},
-            {variant: 'labelled', desc: 'a zero type', counts: ZERO_TYPE, text: 'Voksen: 2 | Barn: 0 | Baby: 1'},
-            {variant: 'labelled', desc: 'no counts', counts: EMPTY, text: 'Voksen: 0 | Barn: 0 | Baby: 0'}
-        ] as const)('$variant over $desc reads "$text"', ({variant, counts, text}) => {
-            expect(TICKET_COUNTS[variant].text(counts)).toBe(text)
-        })
-
-        it('names the ticket type of each part and holds its figure alone, so a list renders one part per type and draws its own separator', () => {
-            expect(TICKET_COUNTS.labelled.parts(ZERO_TYPE)).toEqual([
-                {ticketType: ADULT, text: 'Voksen: 2'},
-                {ticketType: CHILD, text: 'Barn: 0'},
-                {ticketType: BABY, text: 'Baby: 1'}
-            ])
-            expect(TICKET_COUNTS.compact.parts(ZERO_TYPE).map(part => part.ticketType)).toEqual([ADULT, BABY])
+            expect(itemAt(grouped, 0).totalAmount).toBe(5700)  // 4000 + 1700 merged
+            expect(itemAt(grouped, 0).computedTotal).toBe(5700)
         })
     })
 
@@ -232,14 +177,19 @@ describe('useBilling', () => {
     })
 
     describe('expenseNoteWords', () => {
-        const dinner = {date: new Date(2026, 3, 14, 18), menuTitle: 'Risotto', cookingTeam: {name: 'Madhold 2 - 08/25-06/26'}}
-        const payer = {email: 'anna@example.com', name: 'Anna H.'}
+        const dinner = {
+            ...DinnerEventFactory.defaultDinnerEventDetail(),
+            date: new Date(2026, 3, 14, 18),
+            menuTitle: 'Risotto',
+            cookingTeam: SeasonFactory.defaultCookingTeamDisplay({name: 'Madhold 2 - 08/25-06/26'})
+        }
+        const payer = {id: 1, email: 'anna@example.com', name: 'Anna H.'}
 
         it.each([
             {desc: 'a titled dinner with a team', dinner, payer, words: '"Risotto" 14/04/2026, Anna H. bestiller for Madhold 2'},
             {desc: 'a dinner without a team', dinner: {...dinner, cookingTeam: null}, payer, words: '"Risotto" 14/04/2026, Anna H. bestiller'},
             {desc: 'a dinner without a title', dinner: {...dinner, menuTitle: ''}, payer, words: '14/04/2026, Anna H. bestiller for Madhold 2'},
-            {desc: 'a payer without a name', dinner, payer: {email: 'anna@example.com'}, words: '"Risotto" 14/04/2026, anna@example.com bestiller for Madhold 2'}
+            {desc: 'a payer without a name', dinner, payer: {id: 1, email: 'anna@example.com'}, words: '"Risotto" 14/04/2026, anna@example.com bestiller for Madhold 2'}
         ])('GIVEN $desc WHEN building the words THEN they read as the ledger does', ({dinner: d, payer: p, words}) => {
             expect(expenseNoteWords(d, p)).toBe(words)
         })

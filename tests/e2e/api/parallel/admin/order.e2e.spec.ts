@@ -2,11 +2,13 @@ import { test, expect } from '@playwright/test'
 import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { useBookingValidation } from '~/composables/useBookingValidation'
-import type { TicketPrice } from '~/composables/useTicketPriceValidation'
+import { useTicket } from '~/composables/useTicket'
 import testHelpers from '~~/tests/e2e/testHelpers'
+import {itemAt, present} from '~~/tests/component/listHelpers'
 
 const { validatedBrowserContext, getSessionUserInfo } = testHelpers
-const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema } = useBookingValidation()
+const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema, OrderSortBySchema } = useBookingValidation()
+const { findTicketPriceByType } = useTicket()
 
 const testOrderIds: number[] = []
 const testSeasonIds: number[] = []
@@ -28,10 +30,10 @@ test.describe('Order API', () => {
     testInhabitantId = inhabitantId
 
     const season = await SeasonFactory.createSeason(context)
-    testSeasonId = season.id!
+    testSeasonId = present(season.id, 'season id')
     testSeasonIds.push(testSeasonId)
 
-    const adultTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.ADULT)
+    const adultTicketPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, season.ticketPrices)
 
     if (!adultTicketPrice?.id) {
       throw new Error('Season must have an ADULT ticket price with an id')
@@ -40,8 +42,8 @@ test.describe('Order API', () => {
     testAdultTicketPriceId = adultTicketPrice.id
     testAdultTicketPortions = adultTicketPrice.portions
 
-    const generatedEvents = await SeasonFactory.generateDinnerEventsForSeason(context, season.id!)
-    testDinnerEventId = generatedEvents.events[0]!.id
+    const generatedEvents = await SeasonFactory.generateDinnerEventsForSeason(context, testSeasonId)
+    testDinnerEventId = itemAt(generatedEvents.events, 0).id
   })
 
   // One regular order per inhabitant per dinner: every test starts with no order for the test inhabitant on the test dinner
@@ -68,21 +70,21 @@ test.describe('Order API', () => {
         ticketPriceId: testAdultTicketPriceId
       })]
     })
-    testOrderIds.push(...result!.createdIds)
+    const {householdId, createdIds} = present(result, 'created orders')
+    testOrderIds.push(...createdIds)
 
-    expect(result!.householdId).toBe(testHouseholdId)
-    expect(result!.createdIds).toHaveLength(1)
-    const orderId = result!.createdIds[0]!
+    expect(householdId).toBe(testHouseholdId)
+    expect(createdIds).toHaveLength(1)
+    const orderId = itemAt(createdIds, 0)
 
-    const retrievedOrder = await OrderFactory.getOrder(context, orderId)
+    const retrievedOrder = present(await OrderFactory.getOrder(context, orderId), `order ${orderId}`)
 
-    expect(retrievedOrder).toBeDefined()
-    expect(retrievedOrder!.id).toBe(orderId)
-    expect(retrievedOrder!.dinnerEventId).toBe(testDinnerEventId)
-    expect(retrievedOrder!.inhabitantId).toBe(testInhabitantId)
-    expect(retrievedOrder!.ticketType).toBe(TicketTypeSchema.enum.ADULT)
-    expect(retrievedOrder!.ticketPrice).toMatchObject({id: testAdultTicketPriceId, portions: testAdultTicketPortions})
-    expect(retrievedOrder!.createdAt).toBeDefined()
+    expect(retrievedOrder.id).toBe(orderId)
+    expect(retrievedOrder.dinnerEventId).toBe(testDinnerEventId)
+    expect(retrievedOrder.inhabitantId).toBe(testInhabitantId)
+    expect(retrievedOrder.ticketType).toBe(TicketTypeSchema.enum.ADULT)
+    expect(retrievedOrder.ticketPrice).toMatchObject({id: testAdultTicketPriceId, portions: testAdultTicketPortions})
+    expect(retrievedOrder.createdAt).toBeDefined()
   })
 
   test('GET should return 404 for a removed order', async ({ browser }) => {
@@ -95,8 +97,9 @@ test.describe('Order API', () => {
         ticketPriceId: testAdultTicketPriceId
       })]
     })
-    testOrderIds.push(...result!.createdIds)
-    const removedId = result!.createdIds[0]!
+    const {createdIds} = present(result, 'created orders')
+    testOrderIds.push(...createdIds)
+    const removedId = itemAt(createdIds, 0)
     await OrderFactory.deleteOrder(context, removedId)
 
     await OrderFactory.getOrder(context, removedId, 404)
@@ -105,7 +108,6 @@ test.describe('Order API', () => {
   test('GET with allHouseholds=true returns orders from all households', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    // Create and release an order
     const result = await OrderFactory.createOrder(context, {
       householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
@@ -114,26 +116,24 @@ test.describe('Order API', () => {
         ticketPriceId: testAdultTicketPriceId
       })]
     })
-    testOrderIds.push(...result!.createdIds)
-    const orderId = result!.createdIds[0]!
+    const {createdIds} = present(result, 'created orders')
+    testOrderIds.push(...createdIds)
+    const orderId = itemAt(createdIds, 0)
 
     // Release the order
     await OrderFactory.updateOrder(context, orderId, { dinnerMode: DinnerModeSchema.enum.NONE })
 
-    // Fetch with allHouseholds=true, state=RELEASED
     const orders = await OrderFactory.getOrders(context, {
       dinnerEventIds: testDinnerEventId,
       state: OrderStateSchema.enum.RELEASED,
       allHouseholds: true,
-      sortBy: 'releasedAt'
+      sortBy: OrderSortBySchema.enum.releasedAt
     })
 
-    // Should include the released order
-    const foundOrder = orders.find(o => o.id === orderId)
-    expect(foundOrder).toBeDefined()
-    expect(foundOrder!.state).toBe(OrderStateSchema.enum.RELEASED)
+    const foundOrder = present(orders.find(o => o.id === orderId), `released order ${orderId}`)
+    expect(foundOrder.state).toBe(OrderStateSchema.enum.RELEASED)
     // DATA INTEGRITY: RELEASED orders must have dinnerMode=NONE
-    expect(foundOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
+    expect(foundOrder.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
   })
 
   // ============================================================================
@@ -143,7 +143,6 @@ test.describe('Order API', () => {
   test('GET with householdId returns orders for that specific household only', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    // Create order for session user's household
     const myResult = await OrderFactory.createOrder(context, {
       householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
@@ -152,8 +151,9 @@ test.describe('Order API', () => {
         ticketPriceId: testAdultTicketPriceId
       })]
     })
-    testOrderIds.push(...myResult!.createdIds)
-    const myOrderId = myResult!.createdIds[0]!
+    const {createdIds} = present(myResult, 'created orders')
+    testOrderIds.push(...createdIds)
+    const myOrderId = itemAt(createdIds, 0)
 
     // GET without householdId → returns session user's household orders (default behavior)
     const defaultOrders = await OrderFactory.getOrders(context, {
@@ -181,7 +181,6 @@ test.describe('Order API', () => {
   test('GET with both householdId and allHouseholds=true returns 400', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    // Both params together should fail validation - use factory with expectedStatus=400
     await OrderFactory.getOrders(context, {
       dinnerEventIds: testDinnerEventId,
       householdId: testHouseholdId,
@@ -189,10 +188,9 @@ test.describe('Order API', () => {
     }, 400)
   })
 
-  test('GET with upcomingForSeason and includeDinnerContext returns the orders of upcoming dinners with their dinner', async ({ browser }) => {
+  test('GET with upcomingForSeason and includeCostContext returns each order of the upcoming dinners with its dinner and its eater, and without the flag neither', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    // Create order for the test dinner event
     const result = await OrderFactory.createOrder(context, {
       householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
@@ -201,28 +199,38 @@ test.describe('Order API', () => {
         ticketPriceId: testAdultTicketPriceId
       })]
     })
-    testOrderIds.push(...result!.createdIds)
+    const {createdIds} = present(result, 'created orders')
+    testOrderIds.push(...createdIds)
+    const orderId = itemAt(createdIds, 0)
 
-    // Fetch with upcomingForSeason (server computes upcoming dinner IDs from season)
-    const orders = await OrderFactory.getOrders(context, {
+    // The server computes the upcoming dinners from the season
+    const withContext = await OrderFactory.getOrders(context, {
       upcomingForSeason: testSeasonId,
       allHouseholds: true,
-      includeDinnerContext: true
+      includeCostContext: true
     })
+    const order = present(withContext.find(o => o.id === orderId), `upcoming order ${orderId} with its cost context`)
+    // The dinner as its Display, the cost from its expenses
+    expect(order.dinnerEvent).toMatchObject({id: testDinnerEventId, state: expect.any(String), totalCost: expect.any(Number)})
+    expect(order.inhabitant).toMatchObject({id: testInhabitantId, householdId: testHouseholdId})
 
-    const order = orders.find(o => o.id === result!.createdIds[0])
-    expect(order, 'The order on an upcoming dinner is returned').toBeDefined()
-    expect(order!.dinnerEvent).toMatchObject({id: testDinnerEventId})
-    expect(order!.dinnerEvent!.date).toBeDefined()
+    const withoutContext = await OrderFactory.getOrders(context, {
+      upcomingForSeason: testSeasonId,
+      allHouseholds: true
+    })
+    const bare = present(withoutContext.find(o => o.id === orderId), `upcoming order ${orderId}`)
+    expect(bare.dinnerEvent).toBeUndefined()
+    expect(bare.inhabitant).toBeUndefined()
   })
 
   test('GET with upcomingForSeason for a removed season returns 404', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
     const removedSeason = await SeasonFactory.createSeason(context)
-    await SeasonFactory.deleteSeason(context, removedSeason.id!, 200)
+    const removedSeasonId = present(removedSeason.id, 'removed season id')
+    await SeasonFactory.deleteSeason(context, removedSeasonId, 200)
 
     await OrderFactory.getOrders(context, {
-      upcomingForSeason: removedSeason.id!,
+      upcomingForSeason: removedSeasonId,
       allHouseholds: true
     }, 404)
   })

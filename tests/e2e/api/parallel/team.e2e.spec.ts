@@ -5,7 +5,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 
-const {validatedBrowserContext} = testHelpers
+const {validatedBrowserContext, attemptAll} = testHelpers
 const {TeamRoleSchema} = useCookingTeamValidation()
 
 const MY_TEAM_ENDPOINT = '/api/team/my'
@@ -24,7 +24,9 @@ test.describe('Team API - My Teams', () => {
     // The spec's own teams on the singleton go here; their assignments cascade, their dinners keep no team (SET NULL)
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        for (const id of createdTeamIds) await SeasonFactory.deleteCookingTeam(context, id)
+        await attemptAll('Team API - My Teams cleanup', [
+            ...createdTeamIds.map(id => () => SeasonFactory.deleteCookingTeam(context, id))
+        ]).finally(() => context.close())
     })
 
     test.describe('GET /api/team/my', () => {

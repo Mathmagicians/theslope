@@ -1,11 +1,16 @@
 import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {findByTestId, findAllByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {findByTestId, findAllByTestId, resetStores, setClock} from '~~/tests/component/testHelpers'
 import ChefDinnerCard from '~/components/chef/ChefDinnerCard.vue'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {nextTick} from 'vue'
+import {BOOKING_WORDS} from '~/config/bookingWords'
+
+const {ANNOUNCED: MENU, BOOKING_CLOSED: CANCELLATION, GROCERIES_DONE: GROCERIES, CONSUMED: DINING} = BOOKING_WORDS.deadlineLabels
+// The countdown's unit is the date locale's word
+const inDays = (prefix: string, days: number) => new RegExp(`${prefix}\\s+${days}\\s+dage`, 'i')
 
 enableAutoUnmount(afterEach)
 
@@ -21,14 +26,14 @@ describe('ChefDinnerCard', () => {
     let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
     beforeAll(() => {
         const {deadlinesForSeason} = useSeason()
-        defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+        defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason(), REFERENCE_TIME)
     })
 
     beforeEach(() => {
         resetStores()
         // Use fake timers for temporal consistency
         vi.useFakeTimers()
-        vi.setSystemTime(REFERENCE_TIME)
+        setClock(REFERENCE_TIME)
     })
 
     afterEach(() => {
@@ -70,8 +75,8 @@ describe('ChefDinnerCard', () => {
             expect(wrapper.text()).toContain('Spaghetti Carbonara')
             // Should show weekday and date (e.g., "tor. 25/12")
             expect(wrapper.text()).toContain('25/12')
-            expect(wrapper.text()).toContain('Menu')
-            expect(wrapper.text()).toContain('Framelding')
+            expect(wrapper.text()).toContain(MENU.label)
+            expect(wrapper.text()).toContain(CANCELLATION.label)
         })
 
         it('should show placeholder for unannounced menu', async () => {
@@ -89,34 +94,34 @@ describe('ChefDinnerCard', () => {
             {
                 name: 'SCHEDULED, far future (15 days)',
                 dinnerDate: new Date(2025, 0, 26, 18, 0),
-                expectedBadges: [/om\s+5\s+dage/i, /åben/i, /om\s+15\s+dage/i, /om\s+15\s+dage/i]
+                expectedBadges: [inDays(MENU.deadlinePrefix, 5), CANCELLATION.deadlinePrefix, inDays(GROCERIES.deadlinePrefix, 15), inDays(DINING.deadlinePrefix, 15)]
             },
             {
                 name: 'SCHEDULED, 9 days (menu deadline passed)',
                 dinnerDate: new Date(2025, 0, 20, 18, 0),
                 // Groceries independent: counts to dinner time
-                expectedBadges: [/mangler/i, /åben/i, /om\s+9\s+dage/i, /om\s+9\s+dage/i]
+                expectedBadges: [BOOKING_WORDS.stepOverdue, CANCELLATION.deadlinePrefix, inDays(GROCERIES.deadlinePrefix, 9), inDays(DINING.deadlinePrefix, 9)]
             },
             {
                 name: 'SCHEDULED, 6 days (both deadlines passed)',
                 dinnerDate: new Date(2025, 0, 17, 18, 0),
-                expectedBadges: [/mangler/i, /lukket/i, /om\s+6\s+dage/i, /om\s+6\s+dage/i]
+                expectedBadges: [BOOKING_WORDS.stepOverdue, BOOKING_WORDS.badge.closed, inDays(GROCERIES.deadlinePrefix, 6), inDays(DINING.deadlinePrefix, 6)]
             }
         ])('$name: the Menu, Framelding, Indkøb and Spisning badges', async ({ dinnerDate, expectedBadges }) => {
             const wrapper = await mountCard({ dinnerEvent: createDinnerEvent({ date: dinnerDate, state: DinnerState.SCHEDULED }) })
 
-            badgeTexts(wrapper, ['Menu', 'Framelding', 'Indkøb', 'Spisning'])
-                .forEach((text, index) => expect(text).toMatch(expectedBadges[index]!))
+            expect(badgeTexts(wrapper, [MENU.label, CANCELLATION.label, GROCERIES.label, DINING.label]))
+                .toEqual(expectedBadges.map(expected => expect.stringMatching(expected)))
         })
 
         // ANNOUNCED dinners: menu IS done; groceries shows countdown (NO cascade)
         it('ANNOUNCED, 9 days (menu done, groceries shows countdown): the Framelding, Indkøb and Spisning badges', async () => {
             const wrapper = await mountCard({ dinnerEvent: createDinnerEvent({ date: new Date(2025, 0, 20, 18, 0), state: DinnerState.ANNOUNCED }) })
 
-            const [framelding, groceries, dinner] = badgeTexts(wrapper, ['Framelding', 'Indkøb', 'Spisning'])
-            expect(framelding).toMatch(/åben/i)
-            expect(groceries).toMatch(/om\s+9\s+dage/i)
-            expect(dinner).toMatch(/om\s+9\s+dage/i)
+            const [framelding, groceries, dinner] = badgeTexts(wrapper, [CANCELLATION.label, GROCERIES.label, DINING.label])
+            expect(framelding).toContain(CANCELLATION.deadlinePrefix)
+            expect(groceries).toMatch(inDays(GROCERIES.deadlinePrefix, 9))
+            expect(dinner).toMatch(inDays(DINING.deadlinePrefix, 9))
         })
     })
 

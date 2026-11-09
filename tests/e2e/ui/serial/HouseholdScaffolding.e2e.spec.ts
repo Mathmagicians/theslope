@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect} from '~~/tests/e2e/uiTest'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -7,14 +7,13 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {isBeforeDeadline, getDinnerTimeRange, dateToWeekDay} from '~/utils/season'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
+import {dateToWeekDay} from '~/utils/season'
 import {formatDate} from '~/utils/date'
-
-// Hardcoded from app.config.ts (Nuxt auto-imports not available in Playwright)
-const DEFAULT_DINNER_START_HOUR = 18
+import {WEEKDAYS} from '~/types/dateTypes'
 
 const {memberUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated, waitForApi} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated, waitForApi, isBeforeDinnerDeadline, attemptAll} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -78,21 +77,18 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
 
         // Create dedicated season for scaffolding tests:
         // - ALL days cooking (Mon-Sun) for predictable event count regardless of day-of-week
-        // - 2-day deadline: tomorrow is always AFTER deadline (deadline was yesterday)
-        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 10, deadline: 2, cookingDays: 'all'})
+        // - 2-day deadline: tomorrow is always AFTER deadline (deadline was yesterday), the third day always before it
+        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 2, deadline: 2, cookingDays: 'all'})
         createdSeasonIds.push(testSeason.season.id!)
     })
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-
-        // Clean up inhabitants first (they reference households); an inhabitant already gone counts as removed
-        for (const inhabitantId of createdInhabitantIds) {
-            await HouseholdFactory.deleteInhabitant(context, inhabitantId)
-        }
-
-        // Clean up seasons (cascade deletes dinner events and orders)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        // An inhabitant already gone counts as removed; a season cascades its dinner events and orders
+        await attemptAll('Household Scaffolding cleanup', [
+            ...createdInhabitantIds.map(inhabitantId => () => HouseholdFactory.deleteInhabitant(context, inhabitantId)),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 
     test('CREATE bucket: GIVEN inhabitant with NONE prefs WHEN changing to DINEIN THEN orders created for before-deadline events', async ({page, browser}) => {
@@ -112,10 +108,7 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         expect(dinnerEvents.length, 'Should have dinner events').toBeGreaterThan(0)
 
         // Use same deadline logic as application (ADR-016) - pure utilities, no Nuxt auto-imports
-        const canModifyOrders = (dinnerEventDate: Date): boolean => {
-            const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, DEFAULT_DINNER_START_HOUR, 0).start
-            return isBeforeDeadline(testSeason.season.ticketIsCancellableDaysBefore, 0)(dinnerStartTime)
-        }
+        const canModifyOrders = isBeforeDinnerDeadline(testSeason.season.ticketIsCancellableDaysBefore)
         const beforeDeadlineEvents = dinnerEvents.filter(de => canModifyOrders(de.date))
 
         // Verify no orders initially
@@ -139,19 +132,17 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         // Wait for edit mode
         await pollUntil(
             async () => {
-                const button = page.getByTestId(`inhabitant-${inhabitant.id}-preferences-edit-mandag-DINEIN`)
+                const button = page.getByTestId(`inhabitant-${inhabitant.id}-preferences-edit-mandag-${DinnerMode.DINEIN}`)
                 return await button.count() > 0
             },
             (count) => count,
             10
         )
 
-        // Set all weekdays to DINEIN
-        await page.getByTestId(`inhabitant-${inhabitant.id}-preferences-edit-mandag-DINEIN`).click()
-        await page.getByTestId(`inhabitant-${inhabitant.id}-preferences-edit-tirsdag-DINEIN`).click()
-        await page.getByTestId(`inhabitant-${inhabitant.id}-preferences-edit-onsdag-DINEIN`).click()
-        await page.getByTestId(`inhabitant-${inhabitant.id}-preferences-edit-torsdag-DINEIN`).click()
-        await page.getByTestId(`inhabitant-${inhabitant.id}-preferences-edit-fredag-DINEIN`).click()
+        // Set every day of the week to DINEIN; the season cooks on all seven
+        for (const day of WEEKDAYS) {
+            await page.getByTestId(`inhabitant-${inhabitant.id}-preferences-edit-${day}-${DinnerMode.DINEIN}`).click()
+        }
 
         // Save
         const saved = waitForApi(page, `/api/household/inhabitants/${inhabitant.id}/preferences`, 'POST')
@@ -159,7 +150,7 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         await saved
 
         // THEN: the row collapses once the save lands (the toggle reads 'Luk' while open)
-        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer')
+        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', HOUSEHOLD_WORDS.preferences.edit)
 
         // THEN: Verify orders created only for before-deadline events via API
         const ordersAfter = await pollUntil(
@@ -187,11 +178,12 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         await DinnerEventFactory.createDinnerEventAloneOnDay(adminContext, testSeason.season, lockedDay, {menuTitle: salt('Frigivet', testSalt)})
         const inhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {
             name: salt('Anders', testSalt),
-            lastName: 'Frida Frigiver',
-            dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
+            lastName: 'Frida Frigiver'
         })
         createdInhabitantIds.push(inhabitant.id)
-        // The scaffold books the inhabitant while every dinner is open, as the nightly run does; the season's own deadline then closes the first
+        // The create stores no preferences, so the household's first scaffold here runs while every dinner is open and books
+        // its people, as the DAILY_MAINTENANCE job does; a run on the closed day would put them on its waiting list, first in line for
+        // the released ticket. The season's own deadline then closes the first day
         await SeasonFactory.updateSeason(adminContext, {...testSeason.season, ticketIsCancellableDaysBefore: 0})
         await HouseholdFactory.updateInhabitantPreferences(adminContext, inhabitant.id, createDinnerModeWeekdayMap(DinnerMode.DINEIN), 200, testSeason.season.id!, undefined, true)
         await SeasonFactory.updateSeason(adminContext, testSeason.season)
@@ -207,7 +199,7 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         const saved = waitForApi(page, `/api/household/inhabitants/${inhabitant.id}/preferences`, 'POST')
         await page.getByTestId('save-preferences').click()
         await saved
-        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer')
+        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', HOUSEHOLD_WORDS.preferences.edit)
 
         await page.getByRole('tab', {name: 'Tilmeldinger'}).click()
 

@@ -12,7 +12,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let dinnerEventData!: DinnerEventCreate
+    let dinnerEventData: DinnerEventCreate
     try {
         dinnerEventData = await readValidatedBody(event, DinnerEventCreateSchema.parse)
     } catch (error) {

@@ -1,10 +1,6 @@
 import {describe, it, expect, vi} from 'vitest'
 import {chunkArray, groupBy, linesBy, partition, pruneAndCreate, writeBatchOnce, writeBatchOrEach} from '~/utils/batchUtils'
-import {useBookingValidation} from '~/composables/useBookingValidation'
-
-const {OrderStateSchema, DinnerModeSchema} = useBookingValidation()
-const OrderState = OrderStateSchema.enum
-const DinnerMode = DinnerModeSchema.enum
+import {OrderState, DinnerMode} from '~/composables/useBookingValidation'
 
 describe('batchUtils', () => {
     describe('chunkArray', () => {
@@ -32,9 +28,9 @@ describe('batchUtils', () => {
     })
 
     describe('groupBy', () => {
-        interface Order { id: number; state: typeof OrderState[keyof typeof OrderState]; mode: typeof DinnerMode[keyof typeof DinnerMode] }
+        interface Order { id: number; state: OrderState; mode: DinnerMode }
 
-        const groupByState = groupBy<Order, string>(o => o.state)
+        const groupByState = groupBy<Order, OrderState>(o => o.state)
 
         it('empty array → empty map', () => {
             expect(groupByState([]).size).toBe(0)
@@ -116,6 +112,29 @@ describe('batchUtils', () => {
 
             expect(result.update).toHaveLength(1)
             expect(result.idempotent).toHaveLength(0)
+        })
+
+        // An incoming item keeps its key elsewhere than an existing one: each side reads its own
+        interface Wrapper { nested: Item }
+        interface Stored extends Item { storedAt: number }
+        const reconcileWrapped = pruneAndCreate<Wrapper, Item, number>(
+            wrapper => wrapper.nested.id,
+            (existing, incoming) => existing.nested.value === incoming.value,
+            item => item.id
+        )
+
+        it('GIVEN an incoming key of its own WHEN reconciling THEN each side matches by the key it holds', () => {
+            const result = reconcileWrapped([{nested: {id: 1, value: 'same'}}, {nested: {id: 2, value: 'gone'}}])([{id: 1, value: 'same'}, {id: 3, value: 'new'}])
+
+            expect(result).toEqual({create: [{id: 3, value: 'new'}], update: [], idempotent: [{id: 1, value: 'same'}], delete: [{nested: {id: 2, value: 'gone'}}]})
+        })
+
+        it('GIVEN one key for both sides WHEN its types differ THEN the key reads both', () => {
+            // @ts-expect-error a key of the existing side alone reads no incoming item
+            pruneAndCreate<Wrapper, Item, number>(wrapper => wrapper.nested.id)
+            const reconcileStored = pruneAndCreate<Stored, Item, number>(item => item.id)
+
+            expect(reconcileStored([{id: 1, value: 'kept', storedAt: 5}])([{id: 1, value: 'kept'}]).update).toEqual([{id: 1, value: 'kept'}])
         })
     })
 })

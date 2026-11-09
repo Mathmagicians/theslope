@@ -47,38 +47,39 @@
  *
  * For list displays (tabs, tables), use CookingTeamBadges component instead.
  *
- * ADR Compliance:
- * - ADR-001: Types from validation composables
- * - ADR-007/ADR-009: every mode reads the Detail the plan store holds for the selected team
- * - Mobile-first responsive design
- * - Uses UserListItem for consistent inhabitant display
+ * Visual check: at 375px and desktop with a role of seven members, the /dinner monitor face's role row and the
+ * /admin/teams edit header's faces show three and the overflow count on a phone, five from md; the names and the
+ * badges wrap under the faces inside the card and the page does not scroll sideways.
  */
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
-import type { TeamRole, CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
-import { ROLE_LABELS } from '~/composables/useCookingTeamValidation'
+import type { TeamRole, CookingTeamAssignment, CookingTeamDisplay } from '~/composables/useCookingTeamValidation'
 import type { JokerSlotCreate } from '~/composables/useDutyValidation'
+import { TEAM_WORDS } from '~/config/teamWords'
+import { BUTTON_WORDS } from '~/config/buttonWords'
+import { TEAM_CARD_MODES, type TeamCardMode } from '~/types/form'
 
-// Design system
 const { SIZES, ICONS, ALERTS, BUTTONS, TYPOGRAPHY, COMPONENTS, ROLE_ICONS, getRainbowBand, getCalendarCountBadge, getRandomEmptyMessage } = useTheSlopeDesignSystem()
-
-type DisplayMode = 'monitor' | 'regular' | 'edit'
+const WORDS = TEAM_WORDS.card
+const Role = useCookingTeamValidation().TeamRoleSchema.enum
 
 interface Props {
   teamId: number           // The team the mounting page selects in the plan store
   teamNumber: number       // Logical number 1..N in season (for display/color)
-  mode?: DisplayMode       // Display mode
+  mode?: TeamCardMode
   useShortName?: boolean   // If true, display "Madhold X" instead of full name with season
+  visiting?: boolean       // The viewer is not on the team: the monitor header carries "Ikke dit hold"
   // EDIT mode only props:
   seasonId?: number
   seasonCookingDays?: WeekDayMap | null
   seasonDates?: DateRange
   holidays?: DateRange[]
-  teams?: Array<{ id: number, name: string }>
+  teams?: CookingTeamDisplay[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  mode: 'regular',
+  mode: TEAM_CARD_MODES.REGULAR,
   useShortName: false,
+  visiting: false,
   seasonId: undefined,
   seasonCookingDays: undefined,
   seasonDates: undefined,
@@ -97,8 +98,8 @@ const emit = defineEmits<{
   'remove:jokerSlot': [slotId: number]
 }>()
 
-// The mounting page selects the team in the plan store (ADR-007); the store keeps the previous team while the
-// next one loads, so the card renders only the team it is mounted for
+// The mounting page selects the team in the plan store, and every face reads its Detail there; the store keeps the
+// previous team while the next one loads, so the card renders only the team it is mounted for
 const planStore = usePlanStore()
 const team = computed(() => planStore.selectedTeam?.id === props.teamId ? planStore.selectedTeam : null)
 const error = computed(() => planStore.selectedTeamError)
@@ -107,16 +108,15 @@ const isLoading = computed(() => planStore.isSelectedTeamLoading || planStore.se
 const isErrored = computed(() => planStore.isSelectedTeamErrored)
 const isNoTeam = computed(() => !isLoading.value && !isErrored.value && team.value === null)
 
-// All data from fetched team Detail entity
 const { getTeamShortName, countJokerSlotShifts, getTeamNumber } = useCookingTeam()
 const teamName = computed(() => {
-  const fullName = team.value?.name ?? `Madhold ${props.teamNumber}`
+  const fullName = team.value?.name ?? WORDS.fallbackName(props.teamNumber)
   return props.useShortName ? getTeamShortName(fullName) : fullName
 })
 const assignments = computed(() => team.value?.assignments ?? [])
 const affinity = computed(() => team.value?.affinity ?? null)
-const dinnerEvents = computed(() => team.value?.dinnerEvents ?? [])  // From Detail entity
-const cookingDaysCount = computed(() => team.value?.cookingDaysCount ?? 0)  // From aggregate
+const dinnerEvents = computed(() => team.value?.dinnerEvents ?? [])
+const cookingDaysCount = computed(() => team.value?.cookingDaysCount ?? 0)
 const jokerSlots = computed(() => team.value?.jokerSlots ?? [])
 const jokerLines = computed(() => {
   const cookingDates = dinnerEvents.value.map(event => event.date)
@@ -142,32 +142,19 @@ const editedName = computed({
 const startNameEdit = () => {
   draftName.value = teamName.value
 }
-// The team wears the rainbow stop of its number: fill and ink as classes, so a badge needs
-// no colour slot (ADR-018)
+// The team wears the rainbow stop of its number: fill and ink as classes, so a badge needs no colour slot
 const teamBand = computed(() => getRainbowBand(props.teamNumber - 1))
 
-// The monitor face names each group in the plural
-const MONITOR_HEADINGS: Record<TeamRole, string> = {
-  CHEF: 'Chefkokke',
-  COOK: 'Kokke',
-  JUNIORHELPER: 'Kokkespirer'
-}
-
+// The members per role, in the order the boxes show them
 const roleGroups = computed(() => {
-  const groups = {
-    CHEF: [] as CookingTeamAssignment[],
-    COOK: [] as CookingTeamAssignment[],
-    JUNIORHELPER: [] as CookingTeamAssignment[]
-  }
-
-  assignments.value.forEach(assignment => {
-    if (assignment.role in groups) {
-      groups[assignment.role].push(assignment)
-    }
-  })
-
-  return groups
+  const membersOf = (role: TeamRole): CookingTeamAssignment[] => assignments.value.filter(assignment => assignment.role === role)
+  return {
+    [Role.CHEF]: membersOf(Role.CHEF),
+    [Role.COOK]: membersOf(Role.COOK),
+    [Role.JUNIORHELPER]: membersOf(Role.JUNIORHELPER)
+  } satisfies Record<TeamRole, CookingTeamAssignment[]>
 })
+const chefCount = computed(() => roleGroups.value[Role.CHEF].length)
 
 const navigateToInhabitant = (inhabitantId: number) => {
   navigateTo(`/inhabitant/${inhabitantId}`)
@@ -183,14 +170,13 @@ const handleDelete = () => {
   emit('delete', props.teamId)
 }
 
-const isEditable = computed(() => props.mode === 'edit')
+const isEditable = computed(() => props.mode === TEAM_CARD_MODES.EDIT)
 const hasNoMembers = computed(() => assignments.value.length === 0)
 
-// Random fun empty state message from design system
-const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
+const now = useClock()
+const emptyStateMessage = getRandomEmptyMessage('cookingTeam', now.value)
 
-// ========== INHABITANT SELECTOR (EDIT mode) ==========
-
+// The finder on the edit face lists every inhabitant with the season's team assignments
 const {mergeInhabitantsWithAssignments} = useCookingTeam()
 const householdsStore = useHouseholdsStore()
 
@@ -231,8 +217,6 @@ const sortByStatusThenName = (rowA: {original: InhabitantDisplay}, rowB: {origin
       .localeCompare(`${rowB.original.name} ${rowB.original.lastName}`)
 }
 
-
-
 const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercentage: number, affinity: WeekDayMap | null) => {
   const existing = getCurrentAssignment(inhabitantId)
   if (existing?.id) {
@@ -244,13 +228,10 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
 </script>
 
 <template>
-  <!-- Loading state -->
   <Loader v-if="isLoading && !team" text="Henter madhold..." />
 
-  <!-- Error state -->
   <ViewError v-else-if="isErrored" :error="error?.statusCode" :cause="error" />
 
-  <!-- No team state (funny message) -->
   <UAlert
     v-else-if="isNoTeam"
     v-bind="ALERTS.emptyState"
@@ -264,28 +245,26 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
     </template>
   </UAlert>
 
-  <!-- MONITOR MODE: Large display for kitchen monitors -->
-  <div v-else-if="mode === 'monitor'" :class="COMPONENTS.teamCard.monitor">
-    <!-- Team name header (always visible) -->
+  <div v-else-if="mode === TEAM_CARD_MODES.MONITOR" :class="COMPONENTS.teamCard.monitor">
     <div :class="COMPONENTS.teamCard.monitorHeader">
       <CookingTeamBadges
         :team-number="teamNumber"
         :team-name="teamName"
-        :chef-count="roleGroups.CHEF.length"
+        :chef-count="chefCount"
         :member-count="assignments.length"
         :joker-slot-count="jokerSlots.length"
         :cooking-days-count="cookingDaysCount"
-        size="large"
+        :size="SIZES.large"
       />
+      <UBadge v-if="visiting" v-bind="COMPONENTS.visitBadge" :size="SIZES.small" :label="TEAM_WORDS.visit.badge" data-testid="team-card-visit-badge" />
     </div>
 
-    <!-- Members display OR empty state -->
     <div v-if="!hasNoMembers" :class="COMPONENTS.roleBox.monitorGrid">
       <template v-for="(members, role) in roleGroups" :key="role">
         <div v-if="members.length > 0" :class="COMPONENTS.roleBox.monitorRow" :data-testid="`team-role-group-${role}`">
           <div :class="COMPONENTS.roleBox.heading" :data-testid="`team-role-heading-${role}`">
             <UIcon :name="ROLE_ICONS[role]" :class="COMPONENTS.roleBox.glyph" />
-            <span>{{ MONITOR_HEADINGS[role] }}</span>
+            <span>{{ TEAM_WORDS.roles[role].plural }}</span>
           </div>
           <UserListItem
             :inhabitants="members.map(m => m.inhabitant)"
@@ -310,9 +289,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
   </div>
 
 
-  <!-- REGULAR/EDIT MODE: Full display with role sections -->
   <div v-else :class="COMPONENTS.teamCard.stack">
-    <!-- TEAM HEADER (for EDIT mode) -->
     <div
       v-if="isEditable"
       :class="COMPONENTS.teamCard.editHeader"
@@ -321,11 +298,11 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
         <UBadge :class="[teamBand, COMPONENTS.teamChip]" :size="SIZES.standard">
           <UIcon :name="ICONS.team" :size="SIZES.standardIconSize" />
         </UBadge>
-        <UFormField label="Holdnavn" :class="COMPONENTS.teamCard.nameField">
+        <UFormField :label="WORDS.nameField" :class="COMPONENTS.teamCard.nameField">
           <UInput
             v-model="editedName"
             data-testid="team-name-input"
-            placeholder="Holdnavn"
+            :placeholder="WORDS.nameField"
             v-bind="COMPONENTS.teamCard.nameInput"
             :trailing-icon="ICONS.edit"
             @focus="startNameEdit"
@@ -334,13 +311,12 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
           />
         </UFormField>
 
-        <!-- Compact team members view in header -->
-        <div :class="COMPONENTS.teamCard.memberSummary">
-          <UAvatarGroup :size="COMPONENTS.avatar.compact.size" :ui="{base: COMPONENTS.avatar.compact.fit}" :max="COMPONENTS.avatar.max">
+        <div :class="COMPONENTS.teamCard.memberSummary" data-testid="team-member-summary">
+          <UAvatarGroup v-bind="COMPONENTS.avatar.compact.group" :max="SIZES.avatarMax">
             <UTooltip
               v-for="assignment in assignments"
               :key="assignment.id"
-              :text="`${assignment.inhabitant?.name} ${assignment.inhabitant?.lastName} (${ROLE_LABELS[assignment.role]})`"
+              :text="`${assignment.inhabitant?.name} ${assignment.inhabitant?.lastName} (${TEAM_WORDS.roles[assignment.role].label})`"
             >
               <UAvatar
                 :src="assignment.inhabitant?.pictureUrl ?? undefined"
@@ -352,44 +328,41 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
           <CookingTeamBadges
             :team-number="teamNumber"
             :team-name="teamName"
-            :chef-count="roleGroups.CHEF.length"
+            :chef-count="chefCount"
             :member-count="assignments.length"
             :joker-slot-count="jokerSlots.length"
             :cooking-days-count="cookingDaysCount"
             :show-name="false"
-            size="large"
+            :size="SIZES.large"
           />
         </div>
       </div>
       <DangerButton
         data-testid="delete-team-button"
-        :label="`Slet ${teamName}`"
-        :confirm-label="`Tryk igen for at slette ${teamName}...`"
+        :label="WORDS.delete.label(teamName)"
+        :confirm-label="WORDS.delete.confirm(teamName)"
         :class="COMPONENTS.teamCard.deleteButton"
         @confirm="handleDelete"
       />
     </div>
 
-    <!-- VIEW MODE: Team name header -->
     <div v-else :class="COMPONENTS.teamCard.viewHeader">
       <CookingTeamBadges
         :team-number="teamNumber"
         :team-name="teamName"
-        :chef-count="roleGroups.CHEF.length"
+        :chef-count="chefCount"
         :member-count="assignments.length"
         :joker-slot-count="jokerSlots.length"
         :cooking-days-count="cookingDaysCount"
-        size="large"
+        :size="SIZES.large"
       />
     </div>
 
-    <!-- REGULAR/EDIT MODE: Shared two-row layout -->
     <div :class="COMPONENTS.teamCard.stack">
-      <!-- ROW 1: Team members (left) + Inhabitant finder (right, EDIT only) -->
+      <!-- The members, and on the edit face the finder beside them -->
       <div :class="COMPONENTS.teamCard.row">
-        <!-- LEFT: Team members -->
         <div :class="isEditable ? COMPONENTS.teamCard.halfColumn : COMPONENTS.teamCard.fullColumn">
-          <h4 :class="TYPOGRAPHY.sectionSubheading">Holdmedlemmer</h4>
+          <h4 :class="TYPOGRAPHY.sectionSubheading">{{ WORDS.members }}</h4>
           <div :class="COMPONENTS.teamCard.boxes">
             <div
               v-for="(members, role) in roleGroups"
@@ -399,7 +372,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             >
               <h5 :class="COMPONENTS.roleBox.heading" :data-testid="`team-role-heading-${role}`">
                 <UIcon :name="ROLE_ICONS[role]" :class="COMPONENTS.roleBox.glyph" />
-                <span>{{ ROLE_LABELS[role] }}</span>
+                <span>{{ TEAM_WORDS.roles[role].label }}</span>
               </h5>
 
               <div v-if="members.length > 0" :class="COMPONENTS.roleBox.memberList">
@@ -427,7 +400,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   <UButton
                     v-if="isEditable && member.id"
                     v-bind="BUTTONS.remove"
-                    :aria-label="`Fjern ${member.inhabitant?.name} ${member.inhabitant?.lastName} fra holdet`"
+                    :aria-label="WORDS.removeMember(`${member.inhabitant?.name} ${member.inhabitant?.lastName}`)"
                     :data-testid="`team-member-remove-${member.id}`"
                     @click="emit('remove:member', member.id)"
                   />
@@ -435,14 +408,14 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
               </div>
 
               <div v-else :class="COMPONENTS.roleBox.empty">
-                Ingen {{ ROLE_LABELS[role].toLowerCase() }}
+                Ingen {{ TEAM_WORDS.roles[role].label.toLowerCase() }}
               </div>
             </div>
 
             <div :class="COMPONENTS.roleBox.box" data-testid="team-joker-box">
               <h5 :class="COMPONENTS.roleBox.heading" data-testid="team-role-heading-JOKER">
                 <UIcon :name="ICONS.joker" :class="COMPONENTS.roleBox.glyph" />
-                <span>Jokere</span>
+                <span>{{ WORDS.jokers }}</span>
               </h5>
 
               <div v-if="jokerSlots.length > 0" :class="COMPONENTS.roleBox.list">
@@ -450,12 +423,12 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   <span>{{ formatDateRange({start: slot.startDate, end: slot.endDate}) }}</span>
                   <WeekDayMapDisplay :model-value="slot.affinity" compact disabled />
                   <UIcon :name="ROLE_ICONS[slot.role]" :class="COMPONENTS.roleBox.glyph" />
-                  <span>{{ ROLE_LABELS[slot.role] }}</span>
+                  <span>{{ TEAM_WORDS.roles[slot.role].label }}</span>
                   <span v-if="slot.note">{{ slot.note }}</span>
                   <UBadge
                     v-bind="getCalendarCountBadge(teamNumber)"
                     :size="SIZES.small"
-                    :aria-label="`${shifts} ${shifts === 1 ? 'vagt' : 'vagter'}`"
+                    :aria-label="WORDS.shifts(shifts)"
                     data-testid="team-joker-slot-shifts"
                   >
                     {{ shifts }}
@@ -463,7 +436,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   <UButton
                     v-if="isEditable"
                     v-bind="BUTTONS.remove"
-                    :aria-label="`Slet jokertjans ${formatDateRange({start: slot.startDate, end: slot.endDate})}`"
+                    :aria-label="WORDS.deleteJoker(formatDateRange({start: slot.startDate, end: slot.endDate}))"
                     :data-testid="`joker-slot-delete-${slot.id}`"
                     @click="emit('remove:jokerSlot', slot.id)"
                   />
@@ -478,22 +451,18 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
           </div>
         </div>
 
-        <!-- RIGHT: Inhabitant finder (EDIT mode only) -->
         <div v-if="isEditable" :class="COMPONENTS.teamCard.halfColumn">
-          <h4 :class="TYPOGRAPHY.sectionSubheading">Tilføj medlemmer</h4>
+          <h4 :class="TYPOGRAPHY.sectionSubheading">{{ WORDS.addMembers }}</h4>
           <InhabitantSelector
             v-if="teamId && seasonId"
             :inhabitants="inhabitantsWithAssignments"
             :sort-fn="sortByStatusThenName"
-            status-header="Status"
-            actions-header="Tilføj til hold"
-            search-placeholder="Søg efter navn..."
-            empty-text="Ingen beboere tilgængelige"
+            :actions-header="WORDS.addToTeam"
           >
-            <!-- Status: one badge per team assignment, or LEDIG -->
+            <!-- One badge per team assignment, or the free badge -->
             <template #status="{ row }">
               <div v-if="getAssignmentsFor(row.original.id).length === 0">
-                <UBadge v-bind="COMPONENTS.teamCard.freeBadge" :size="SIZES.small">LEDIG</UBadge>
+                <UBadge v-bind="COMPONENTS.teamCard.freeBadge" :size="SIZES.small">{{ WORDS.free }}</UBadge>
               </div>
               <div v-else :class="COMPONENTS.teamCard.statusList">
                 <div v-for="(a, idx) in getAssignmentsFor(row.original.id)" :key="idx" :class="COMPONENTS.teamCard.statusEntry">
@@ -505,7 +474,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
               </div>
             </template>
 
-            <!-- Actions: Tilføj or Rediger, both expand the form -->
+            <!-- Tilføj and Rediger both open the member form -->
             <template #actions="{ row }">
               <UButton
                 v-bind="BUTTONS.memberFinder"
@@ -514,11 +483,11 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                 <template #leading>
                   <UIcon :name="row.getIsExpanded() ? ICONS.chevronDown : isInThisTeam(row.original.id) ? ICONS.edit : ICONS.plusCircle" />
                 </template>
-                {{ row.getIsExpanded() ? 'Luk' : isInThisTeam(row.original.id) ? 'Rediger' : 'Tilføj' }}
+                {{ row.getIsExpanded() ? BUTTON_WORDS.close : isInThisTeam(row.original.id) ? BUTTON_WORDS.edit : BUTTON_WORDS.add }}
               </UButton>
             </template>
 
-            <!-- Expanded row: add/edit member form, pre-filled for existing members -->
+            <!-- The member form, filled with the assignment of a member already on the team -->
             <template #expanded="{ row }">
               <div :class="COMPONENTS.teamCard.memberForm">
                 <TeamMemberAddForm
@@ -536,16 +505,16 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             v-else
             v-bind="ALERTS.emptyStateCompact"
             :icon="ICONS.users"
-            title="Hold skal gemmes før medlemmer kan tilføjes"
+            :title="WORDS.unsaved"
           />
 
           <template v-if="seasonDates">
-            <h4 :class="TYPOGRAPHY.sectionSubheading">Tilføj jokere</h4>
+            <h4 :class="TYPOGRAPHY.sectionSubheading">{{ WORDS.addJokers }}</h4>
             <div>
               <div :class="COMPONENTS.teamCard.jokerAddRow" data-testid="joker-add-row">
                 <div :class="COMPONENTS.teamCard.jokerAddName">
                   <UAvatar :icon="ICONS.joker" :size="SIZES.sm" />
-                  <span :class="COMPONENTS.teamCard.jokerAddLabel">Joker · en plads uden navn</span>
+                  <span :class="COMPONENTS.teamCard.jokerAddLabel">{{ WORDS.jokerRow }}</span>
                 </div>
                 <UButton
                   v-bind="BUTTONS.memberFinder"
@@ -554,7 +523,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   data-testid="joker-slot-add"
                   @click="isJokerFormOpen = !isJokerFormOpen"
                 >
-                  {{ isJokerFormOpen ? 'Luk' : 'Tilføj' }}
+                  {{ isJokerFormOpen ? BUTTON_WORDS.close : BUTTON_WORDS.add }}
                 </UButton>
               </div>
               <div v-if="isJokerFormOpen" :class="COMPONENTS.teamCard.memberForm">
@@ -570,9 +539,8 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
         </div>
       </div>
 
-      <!-- ROW 2: Weekday assignments (left) + Calendar (right) -->
+      <!-- The cooking days, and the team's calendar beside them -->
       <div :class="COMPONENTS.teamCard.row">
-        <!-- LEFT: Team Affinity (compact in VIEW mode, editable checkboxes in EDIT mode) -->
         <div :class="COMPONENTS.teamCard.affinityColumn">
           <WeekDayMapDisplay
             :model-value="affinity"
@@ -580,12 +548,11 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             :disabled="!isEditable"
             :compact="!isEditable"
             hide-restricted
-            :label="isEditable ? 'Holdets madlavningsdage' : 'Madlavningsdage'"
+            :label="isEditable ? WORDS.cookingDays.edit : WORDS.cookingDays.view"
             @update:model-value="(value) => emit('update:affinity', value)"
           />
         </div>
 
-        <!-- RIGHT: Team Calendar -->
         <div :class="COMPONENTS.teamCard.calendarColumn">
           <TeamCalendarDisplay
             v-if="seasonDates && dinnerEvents.length > 0 && team"

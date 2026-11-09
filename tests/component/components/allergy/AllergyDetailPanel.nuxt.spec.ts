@@ -7,6 +7,7 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from './allergyTestIds'
 import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {FORM_MODES} from '~/types/form'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 // AllergyTypeCard reads the active season's ticket prices from the plan store - fake its HTTP (Rule 6)
 registerEndpoint('/api/admin/season/active', () => null)
@@ -43,9 +44,9 @@ describe('AllergyDetailPanel', () => {
         it('renders the selected allergy, with the edit entry as the pencil with an accessible name', async () => {
             const wrapper = await mountPanel()
 
-            expect(wrapper.text()).toContain(firstType!.name)
+            expect(wrapper.text()).toContain(firstType?.name)
             expect(wrapper.text()).toContain('Detaljer')
-            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).attributes('aria-label')).toBe('Rediger')
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).attributes('aria-label')).toBe(BUTTON_WORDS.edit)
         })
 
         it.each([
@@ -92,9 +93,7 @@ describe('AllergyDetailPanel', () => {
 
             await clickByTestId(wrapper, ALLERGY_TEST_IDS.save)
 
-            const emitted = wrapper.emitted('save')
-            expect(emitted).toBeTruthy()
-            expect(emitted![0]![0]).toMatchObject({name: firstType!.name})
+            expect(wrapper.emitted('save')?.[0]?.[0]).toMatchObject({name: firstType?.name})
         })
     })
 
@@ -104,8 +103,8 @@ describe('AllergyDetailPanel', () => {
 
             const confirmPanel = findByTestId(wrapper, ALLERGY_TEST_IDS.deleteConfirm)
             expect(confirmPanel.exists()).toBe(true)
-            expect(confirmPanel.text()).toContain(firstType!.name)
-            expect(confirmPanel.text()).toContain(String(firstType!.inhabitants!.length))
+            expect(confirmPanel.text()).toContain(firstType?.name)
+            expect(confirmPanel.text()).toContain(String(firstType?.inhabitants?.length))
         })
 
         it.each([

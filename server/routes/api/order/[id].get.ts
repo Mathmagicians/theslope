@@ -11,7 +11,7 @@ export default defineEventHandler(async (event):Promise<OrderDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    let id!: number
+    let id: number
     let order: OrderDetail | null
     try {
         ({id} = await getValidatedRouterParams(event, paramSchema.parse))

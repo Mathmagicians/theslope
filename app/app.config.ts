@@ -1,49 +1,19 @@
-// Import TicketType enum from generated Zod schemas (ADR-001 compliance)
-// Note: app.config.ts is a build-time file (typechecked by the node project, which has no ~~ alias),
-// so we import directly from the generated schemas by relative path
-import { TicketTypeSchema } from '../prisma/generated/zod'
 import { NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES } from './config/notificationTemplates'
-
-const TicketType = TicketTypeSchema.enum
+import { SEASON_CONFIG } from './config/season'
 
 export default defineAppConfig({
     theslope: {
-        defaultSeason: {
-            startWeek: 33,
-            endWeek: 26,
-            holidays: [8, 42, 52],
-            cookingDays: ['mandag', 'tirsdag', 'onsdag', 'torsdag'] ,
-            menuIsAnnouncedDaysBefore: 10,
-            ticketIsCancellableDaysBefore: 8,
-            diningModeIsEditableMinutesBefore: 90,
-            // A ticket weighs the portions of the default price with its type and price, else of its type's first default price
-            ticketPrices: [
-                { ticketType: TicketType.BABY, description: 'Spiser gratis smagsprøver fra forældrene', price: 0, maximumAgeLimit: 2, portions: 0 },
-                { ticketType: TicketType.BABY, description: 'Sulten baby - 1/4 kuvert', price: 900, maximumAgeLimit: 2, portions: 0.25 },
-                { ticketType: TicketType.CHILD, description: 'Barn', price: 1700, maximumAgeLimit: 12, portions: 0.5 },
-                { ticketType: TicketType.ADULT, description: 'Voksen', price: 4000, portions: 1 }],
-            consecutiveCookingDays: 2
-        },
-        defaultDinnerStartTime: 18,
-        defaultDinnerDurationMinutes: 60,
+        ...SEASON_CONFIG,
         holidayUrl: 'https://www.lejre.dk/borger/daginstitution-og-skole/skole/ferieplan-og-lukkedage',
-        cookingDeadlines: {
-            criticalHours: 24,  // Critical urgency: < 24h before dinner event (red)
-            warningHours: 72    // Warning urgency: 24-72h before dinner event (yellow)
-        },
         kitchen: {
             baseRatePercent: 5,  // Kitchen contribution: 5% of ticket revenue goes to common kitchen fund
             vatPercent: 25       // VAT rate: Used to calculate ex-VAT budget for grocery shopping
-        },
-        billing: {
-            cutoffDay: 17  // Day of month (1-31) when billing period closes for order imports
         },
         systemJobs: {
             heynaboImport: { cron: '0 1 * * *', description: 'Dagligt kl. 02:00' },
             dailyMaintenance: { cron: '0 2 * * *', description: 'Dagligt kl. 03:00' },
             monthlyBilling: { cron: '0 3 18 * *', description: 'D. 18. hver måned kl. 04:00 (dagen efter cutoff)' }
         },
-        prebookingWindowDays: 60,  // Rolling window: scaffold pre-bookings for dinners within next N days
         waitlistPlacingLeaseMinutes: 10,  // A run holds a queue entry it grabbed this long; an older grab is recovered
         waitlistBuildupThreshold: 3,  // Queue size at which the dinner's chef is asked to release portions
         notifications: {

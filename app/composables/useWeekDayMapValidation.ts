@@ -1,30 +1,18 @@
-import type { ZodType} from 'zod';
-import {z} from 'zod'
-import {
-    WEEKDAYS,
-    type WeekDayMap,
-    type WeekDay
-} from '~/types/dateTypes'
+import {z, type ZodType} from 'zod'
+import {WEEKDAYS, weekDayMapOf, type WeekDayMap} from '~/types/dateTypes'
 
 /**
  * Validation schemas and serialization for WeekDayMap objects
- * useWeekDayMapValidation<T = boolean>(options ? : {
- *     valueSchema? : z.ZodType<T>      // Zod schema for each day's value
- *     defaultValue? : T                 // Default value for createDefaultWeekdayMap
- *     isRequired? : (map: WeekDayMap<T>) => boolean  // Custom "at least one" validation
- *     requiredMessage? : string         // Error message for validation
- * })
+ * useWeekDayMapValidation()                            // a map of booleans, false by default
+ * useWeekDayMapValidation({valueSchema, defaultValue}) // a map of T: each day's schema, the value createDefaultWeekdayMap fills
  */
 export interface UseWeekDayMapValidationOptions<T> {
     valueSchema: z.ZodType<T>
     defaultValue: T
-    isRequired?: (map: WeekDayMap<T>) => boolean
-    requiredMessage?: string
 }
 
 export interface UseWeekDayMapValidationReturn<T> {
     WeekDayMapSchema: ZodType<WeekDayMap<T>>
-    WeekDayMapSchemaRequired: ZodType<WeekDayMap<T>> | undefined
     WeekDayMapSchemaOptional: ZodType<WeekDayMap<T>>
     serializeWeekDayMap: (map: WeekDayMap<T>) => string
     serializeWeekDayMapNullable: (map: WeekDayMap<T> | null) => string | null
@@ -43,30 +31,14 @@ export interface UseWeekDayMapValidationReturn<T> {
     ) => WeekDayMap<T>
 }
 
-const DEFAULT_BOOLEAN_OPTIONS: UseWeekDayMapValidationOptions<boolean> = {
+const BOOLEAN_OPTIONS: UseWeekDayMapValidationOptions<boolean> = {
     valueSchema: z.boolean(),
-    defaultValue: false,
-    isRequired: (map: WeekDayMap<boolean>) => Object.values(map).some(v => v),
-    requiredMessage: "Man skal lave mad mindst en dag om ugen"
+    defaultValue: false
 }
 
-export const useWeekDayMapValidation = <T = boolean>(
-    options: {
-        valueSchema: z.ZodType<T>,
-        defaultValue: T,
-        isRequired?: (map: WeekDayMap<T>) => boolean,
-        requiredMessage?: string
-    } = DEFAULT_BOOLEAN_OPTIONS as unknown as UseWeekDayMapValidationOptions<T>): UseWeekDayMapValidationReturn<T> => {
-    const {defaultValue, valueSchema, isRequired, requiredMessage} = options
+const weekDayMapValidation = <T>({valueSchema, defaultValue}: UseWeekDayMapValidationOptions<T>): UseWeekDayMapValidationReturn<T> => {
     // Base schema - validates structure (all 7 weekdays present)
-    const WeekDayMapSchema: z.ZodType<WeekDayMap<T>> = z.object(
-        Object.fromEntries(WEEKDAYS.map(day => [day, valueSchema]))
-    ) as unknown as z.ZodType<WeekDayMap<T>>
-
-    // With "at least one day selected" validation (for Season)
-    const WeekDayMapSchemaRequired = isRequired
-        ? WeekDayMapSchema.refine(isRequired, {message: requiredMessage || "Invalid selection"})
-        : undefined
+    const WeekDayMapSchema: ZodType<WeekDayMap<T>> = z.object(weekDayMapOf(() => valueSchema))
 
     // No days required (for CookingTeam/Inhabitant affinity)
     const WeekDayMapSchemaOptional = WeekDayMapSchema
@@ -84,33 +56,15 @@ export const useWeekDayMapValidation = <T = boolean>(
 
     /**
      * Create WeekDayMap with default values (for tests and utilities)
-     * @param value - Boolean or array of booleans for each weekday (Mon-Sun)
+     * @param value - One value for every weekday, or one per weekday (Mon-Sun); a short array leaves the rest at the default
      * @returns WeekDayMap with specified values
      */
-    const createDefaultWeekdayMap = (value: T | T[] = defaultValue): WeekDayMap<T> => {
-        if (Array.isArray(value)) {
-            return WEEKDAYS.reduce((acc, day, index) => ({
-                ...acc,
-                [day]: value[index] ?? defaultValue
-            }), {} as WeekDayMap<T>)
-        }
-        return WEEKDAYS.reduce((acc, day) => ({
-            ...acc,
-            [day]: value
-        }), {} as WeekDayMap<T>)
-    }
+    const createDefaultWeekdayMap = (value: T | T[] = defaultValue): WeekDayMap<T> =>
+        weekDayMapOf(day => Array.isArray(value) ? value[WEEKDAYS.indexOf(day)] ?? defaultValue : value)
 
-    const createWeekDayMapFromSelection = (selectedDays: string[], selectedValue: T, unselectedValue: T): WeekDayMap<T> => {
-        // Filter to only valid weekdays
-        const validSelectedDays = selectedDays.filter(day =>
-            WEEKDAYS.includes(day as WeekDay)
-        ) as WeekDay[]
-
-        return WEEKDAYS.reduce((acc, day) => ({
-            ...acc,
-            [day]: validSelectedDays.includes(day) ? selectedValue : unselectedValue
-        }), {} as WeekDayMap<T>)
-    }
+    // A string that names no weekday selects nothing
+    const createWeekDayMapFromSelection = (selectedDays: string[], selectedValue: T, unselectedValue: T): WeekDayMap<T> =>
+        weekDayMapOf(day => selectedDays.includes(day) ? selectedValue : unselectedValue)
 
     /**
      * Apply a boolean mask to transform a WeekDayMap.
@@ -123,14 +77,10 @@ export const useWeekDayMapValidation = <T = boolean>(
         defaultValue: T,
         maskedValue: T
     ): WeekDayMap<T> =>
-        WEEKDAYS.reduce((acc, day) => ({
-            ...acc,
-            [day]: mask[day] ? (source?.[day] ?? defaultValue) : maskedValue
-        }), {} as WeekDayMap<T>)
+        weekDayMapOf(day => mask[day] ? (source?.[day] ?? defaultValue) : maskedValue)
 
     return {
         WeekDayMapSchema,
-        WeekDayMapSchemaRequired,
         WeekDayMapSchemaOptional,
         createWeekDayMapFromSelection,
         createDefaultWeekdayMap,
@@ -139,4 +89,10 @@ export const useWeekDayMapValidation = <T = boolean>(
         serializeWeekDayMapNullable,
         deserializeWeekDayMap
     }
+}
+
+export function useWeekDayMapValidation(): UseWeekDayMapValidationReturn<boolean>
+export function useWeekDayMapValidation<T>(options: UseWeekDayMapValidationOptions<T>): UseWeekDayMapValidationReturn<T>
+export function useWeekDayMapValidation<T>(options?: UseWeekDayMapValidationOptions<T>): UseWeekDayMapValidationReturn<T> | UseWeekDayMapValidationReturn<boolean> {
+    return options ? weekDayMapValidation(options) : weekDayMapValidation(BOOLEAN_OPTIONS)
 }

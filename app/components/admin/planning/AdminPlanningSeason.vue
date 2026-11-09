@@ -21,17 +21,21 @@ VIEW (canEdit)                                    EDIT / CREATE
                                                    └────────────────────────────────────────────┘
 
 The season name lives in the title, so there is no read-only "Sæson" field. No 🗑 for the season.
+
+Visual check: /admin/planning in view, edit and create, phone and desktop.
 -->
 
 <script setup lang="ts">
 import type {Season} from "~/composables/useSeasonValidation"
 import type {FormMode} from "~/types/form"
 import {FORM_MODES} from "~/types/form"
-import type {WeekDayMap} from "~/types/dateTypes"
+import {BUTTON_WORDS} from "~/config/buttonWords"
+import {SEASON_WORDS} from '~/config/seasonWords'
 
-//COMPONENT DEPENDENCIES
 const {SeasonSchema, createSeasonName, computeCookingDates} = useSeason()
 const {BUTTONS, COLOR, COMPONENTS, ICONS, LAYOUTS, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
+const WORDS = SEASON_WORDS.editor
+const form = COMPONENTS.seasonForm
 
 // The sum of dinners the saved season scaffolds
 const cookingDayCount = computed(() => {
@@ -39,14 +43,11 @@ const cookingDayCount = computed(() => {
     if (!start || !end) return 0
     return computeCookingDates(model.value.cookingDays, model.value.seasonDates, model.value.holidays ?? []).length
 })
-const appConfig = useAppConfig()
-const {theslope} = appConfig  //some default values
+const {holidayUrl} = useAppConfig().theslope
 
-// Get loading state from store (ADR-007: store owns loading states)
 const planStore = usePlanStore()
 const {isSavingSeasonFlowInProgress: isSavingSeason} = storeToRefs(planStore)
 
-// COMPONENT DEFINITION
 const props = withDefaults(defineProps<{ mode: FormMode, canEdit?: boolean }>(), {
   canEdit: false
 })
@@ -59,32 +60,21 @@ const emit = defineEmits<{
 
 const isViewMode = computed(() => props.mode === FORM_MODES.VIEW)
 
-// Update shortName when seasonDates changes
 watch(() => model.value.seasonDates, (newDates) => {
   if (newDates) {
     model.value.shortName = createSeasonName(newDates)
   }
 }, {deep: true})
 
-// The title says what the form is doing (Redigerer); the edit control says what it does (Rediger)
-const SEASON_LABEL = 'fællesspisning sæson'
-const EDIT_VERB = 'Rediger'
-const TITLE_VERBS: Record<FormMode, string> = {
-  [FORM_MODES.VIEW]: '',
-  [FORM_MODES.EDIT]: 'Redigerer',
-  [FORM_MODES.CREATE]: 'Opretter'
-}
-
-// The season's name lives in the title (create shows it as soon as the dates are valid)
+// The title says what the form is doing (Redigerer); the edit control says what it does (Rediger). The season's name
+// lives in the title, and create shows it as soon as the dates are valid
 const formTitle = computed(() =>
-    capitalize([TITLE_VERBS[props.mode], SEASON_LABEL, model.value.shortName].filter(Boolean).join(' '))
+    capitalize([WORDS.titleVerbs[props.mode], WORDS.name, model.value.shortName].filter(Boolean).join(' '))
 )
 
-const editLabel = computed(() => `${EDIT_VERB} ${model.value.shortName}`)
+const editLabel = computed(() => `${BUTTON_WORDS.edit} ${model.value.shortName}`)
 
-// ACTIONS
 const onSubmitSeason = () => {
-  // Use model.value directly to ensure v-model changes are included
   emit('update', model.value)
 }
 </script>
@@ -92,22 +82,20 @@ const onSubmitSeason = () => {
 <template>
   <UForm id="seasonForm" :schema="SeasonSchema" :state="model" @submit="onSubmitSeason">
     <template #default="{ errors }">
-      <UCard
-          v-show="model"
-          class="w-full ring-none ring-0 shadow-none" padding="px-0">
+      <UCard v-show="model" :class="form.card">
         <template #header>
-          <div :class="LAYOUTS.cardActionRow" class="md:justify-between">
+          <div :class="[LAYOUTS.cardActionRow, form.headerRow]">
             <div>
-              <h2 class="text-lg font-semibold">{{ formTitle }}</h2>
-              <h3 class="text-sm">Vi følger folkeskolernes feriekalender i
-                <a :href="theslope.holidayUrl" :class="[TEXT.blue[500], 'underline']" target="_blank">Lejre Kommune.</a>
+              <h2 :class="TYPOGRAPHY.cardTitle">{{ formTitle }}</h2>
+              <h3 :class="TYPOGRAPHY.bodyTextSmall">{{ WORDS.holidayCalendar.lead }}
+                <a :href="holidayUrl" :class="[TEXT.blue[500], form.holidayLink]" target="_blank">{{ WORDS.holidayCalendar.link }}</a>
               </h3>
             </div>
             <div :class="COMPONENTS.statBox.box" data-testid="cooking-day-count">
               <UIcon :name="ICONS.dinner" :class="COMPONENTS.statBox.icon"/>
-              <div class="text-center">
-                <p class="font-semibold">{{ cookingDayCount }}</p>
-                <p class="text-xs text-muted">Madlavningsdage</p>
+              <div :class="COMPONENTS.statBox.figure">
+                <p :class="COMPONENTS.statBox.value">{{ cookingDayCount }}</p>
+                <p :class="COMPONENTS.statBox.unit">{{ WORDS.cookingDays }}</p>
               </div>
             </div>
             <UButton
@@ -124,30 +112,27 @@ const onSubmitSeason = () => {
         </template>
 
         <template #default>
-          <div class="flex flex-col-reverse xl:flex-row gap-2 md:gap-6">
-            <!-- Form Section - Below on mobile, Left on desktop -->
-            <div class="grow">
-              <div class="space-y-4">
-                <!-- Season date picker -->
+          <div :class="form.body">
+            <!-- The fields: below the calendar on the phone, left of it from xl -->
+            <div :class="form.formColumn">
+              <div :class="form.stack">
                 <CalendarDateRangePicker
                     v-model="model.seasonDates"
                     name="seasonDates"
-                    label="Fællesspisning sæsonens start - slut datoer"
+                    :label="WORDS.seasonDates"
                     :disabled="isViewMode"/>
 
-                <!-- Pick weekdays for cooking -->
                 <WeekDayMapDisplay
                     v-model="model.cookingDays"
                     name="cookingDays"
-                    label="Hvilke ugedage skal der være fællesspisning?"
+                    :label="WORDS.weekdays"
                     :disabled="isViewMode"
                 />
 
-                <!-- Pick holidays -->
                 <USeparator/>
-                <div class="space-y-2">
+                <div :class="form.section">
                   <h4 :class="[TYPOGRAPHY.bodyTextMedium, TEXT.ink]">
-                    Hvornår holder fællesspisning fri?
+                    {{ WORDS.holidays }}
                   </h4>
                   <CalendarDateRangeListPicker
                       v-model="model.holidays"
@@ -157,9 +142,7 @@ const onSubmitSeason = () => {
                   />
                 </div>
                 <USeparator/>
-                <UFormField
-                    label="Hvor mange dage før fællespisning, skal man kunne afbestille sin billet?"
-                    name="ticketIsCancellableDaysBefore">
+                <UFormField :label="WORDS.ticketIsCancellableDaysBefore" name="ticketIsCancellableDaysBefore">
                   <UInput
                       v-model="model.ticketIsCancellableDaysBefore"
                       name="ticketIsCancellableDaysBefore"
@@ -167,9 +150,7 @@ const onSubmitSeason = () => {
                       :disabled="isViewMode"/>
                 </UFormField>
 
-                <UFormField
-                    label="Hvor mange minutter før fællespisning, skal man kunne ændre mellem spisesal og takeaway?"
-                    name="diningModeIsEditableMinutesBefore">
+                <UFormField :label="WORDS.diningModeIsEditableMinutesBefore" name="diningModeIsEditableMinutesBefore">
                   <UInput
                       v-model="model.diningModeIsEditableMinutesBefore"
                       name="diningModeIsEditableMinutesBefore"
@@ -177,9 +158,7 @@ const onSubmitSeason = () => {
                       :disabled="isViewMode"/>
                 </UFormField>
 
-                <UFormField
-label="Hvor mange dage i træk laver madholdene mad?"
-                            name="consecutiveCookingDays">
+                <UFormField :label="WORDS.consecutiveCookingDays" name="consecutiveCookingDays">
                   <UInput
                       v-model="model.consecutiveCookingDays"
                       name="consecutiveCookingDays"
@@ -188,10 +167,9 @@ label="Hvor mange dage i træk laver madholdene mad?"
                 </UFormField>
                 <USeparator/>
 
-                <!-- Ticket prices -->
-                <div class="space-y-2">
+                <div :class="form.section">
                   <h4 :class="[TYPOGRAPHY.bodyTextMedium, TEXT.ink]">
-                    Billetpriser
+                    {{ WORDS.ticketPrices }}
                   </h4>
                   <TicketPriceListEditor
                       v-model="model.ticketPrices"
@@ -201,31 +179,31 @@ label="Hvor mange dage i træk laver madholdene mad?"
               </div>
             </div>
 
-            <!-- Calendar Section - Above on mobile, Right on desktop -->
-            <div class="min-w-1/2 lg:w-1/2 grow-0">
+            <!-- The calendar: above the fields on the phone, right of them from xl -->
+            <div :class="form.calendarColumn">
               <CalendarDisplay
-class="mx-auto"
-                               :season-dates="model.seasonDates"
-                               :cooking-days="model.cookingDays as WeekDayMap"
-                               :holidays="model.holidays"
-                               :dinner-events="model.dinnerEvents"/>
+                  :class="form.calendar"
+                  :season-dates="model.seasonDates"
+                  :cooking-days="model.cookingDays"
+                  :holidays="model.holidays"
+                  :dinner-events="model.dinnerEvents"/>
             </div>
           </div>
         </template>
 
         <template #footer>
-          <div v-if="!isViewMode" class="space-y-4">
-            <div v-if="errors.length > 0" :class="[TEXT.red[500], TYPOGRAPHY.bodyTextSmall, 'space-y-1']">
-              <div class="font-semibold">Formen indeholder fejl, som skal rettes:</div>
-              <ul class="list-disc list-inside">
+          <div v-if="!isViewMode" :class="form.stack">
+            <div v-if="errors.length > 0" :class="[TEXT.red[500], TYPOGRAPHY.bodyTextSmall, form.errors]">
+              <div :class="form.errorsTitle">{{ WORDS.errors }}</div>
+              <ul :class="form.errorList">
                 <li v-for="error in errors" :key="error.name">
-                  <span class="font-medium">{{ error.name }}:</span> {{ error.message }}
+                  <span :class="form.errorName">{{ error.name }}:</span> {{ error.message }}
                 </li>
               </ul>
             </div>
             <div :class="LAYOUTS.formButtonRow">
               <UButton v-bind="BUTTONS.cancel" data-testid="cancel-season" @click="emit('cancel')">
-                Annuller
+                {{ BUTTON_WORDS.cancel }}
               </UButton>
               <UButton
                   v-bind="BUTTONS.save"
@@ -233,7 +211,7 @@ class="mx-auto"
                   type="submit"
                   :loading="isSavingSeason"
                   :disabled="isSavingSeason">
-                Gem
+                {{ BUTTON_WORDS.save }}
               </UButton>
             </div>
           </div>

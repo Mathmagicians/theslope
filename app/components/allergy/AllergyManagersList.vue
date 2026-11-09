@@ -1,34 +1,37 @@
+<!--
+AllergyManagersList - the allergy managers' contact, in the alert kind the caller picks
+
+ [help icon] Spørgsmål om allergier?
+ From md:    Kontakt den allergiansvarlige, …    [face][face] Allergiansvarlige    ← each face ringed blue
+ Phone:      Kontakt den allergiansvarlige, …
+             [face][face] Allergiansvarlige                                       ← no ring
+
+Visual check: at 375px and desktop, the household Allergier tab and /admin/allergies (ALERTS.info) and the poster
+/admin/allergies/pdf (ALERTS.legend): the managers sit beside the message from md and below it on a phone; from md each
+manager's face rings blue, on a phone no face rings.
+-->
 <script setup lang="ts">
 import type {AlertKind} from '~/composables/useTheSlopeDesignSystem'
+import {ALLERGY_WORDS} from '~/config/allergyWords'
 
 const props = withDefaults(defineProps<{
-  /** Which ALERTS kind to wear - the poster wants the quiet neutral face (ADR-018) */
+  /** Which ALERTS kind to wear - the poster wants the quiet neutral face */
   kind?: AlertKind
   message?: string
 }>(), {
   kind: 'info',
-  message: 'Kontakt den allergiansvarlige, hvis du har brug for at snakke om allergier i din familie:'
+  message: ALLERGY_WORDS.managers.message
 })
 
-const {ALERTS, ICONS} = useTheSlopeDesignSystem()
-
-// The managers sit beside the message on desktop, below it on a phone - merged on top of
-// the kind so the wrap classes survive (a bare :ui would replace them)
-const alertUi = computed(() => ({
-  ...ALERTS[props.kind].ui,
-  description: `${ALERTS[props.kind].ui.description} flex flex-col md:flex-row md:items-center gap-3`
-}))
+const {ALERTS, ICONS, COMPONENTS} = useTheSlopeDesignSystem()
 
 const store = useUsersStore()
 const {allergyManagers, isAllergyManagersLoading} = storeToRefs(store)
+store.loadAllergyManagers()
 
-// Extract Inhabitant objects - they already match InhabitantLike interface
-const allergyManagerInhabitants = computed(() => {
-  if (!allergyManagers.value) return []
-  return allergyManagers.value
-    .filter(m => m.Inhabitant)
-    .map(m => m.Inhabitant!)
-})
+// An account without an inhabitant can hold the role; it has no face to show
+const allergyManagerInhabitants = computed(() =>
+  allergyManagers.value.flatMap(manager => manager.Inhabitant ? [manager.Inhabitant] : []))
 </script>
 
 <template>
@@ -37,15 +40,15 @@ const allergyManagerInhabitants = computed(() => {
     v-else
     v-bind="ALERTS[props.kind]"
     :icon="ICONS.help"
-    :ui="alertUi"
-    title="Spørgsmål om allergier?"
+    :ui="COMPONENTS.allergyManagersList.alertUi(ALERTS[props.kind].ui)"
+    :title="ALLERGY_WORDS.managers.title"
   >
     <template #description>
-      <p class="text-sm md:flex-1">{{ props.message }}</p>
+      <p :class="COMPONENTS.allergyManagersList.message">{{ props.message }}</p>
       <UserListItem
         :inhabitants="allergyManagerInhabitants"
-        label="Allergiansvarlige"
-        ring-color="ocean-500"
+        :label="ALLERGY_WORDS.managers.label"
+        ring="allergyManager"
       />
     </template>
   </UAlert>

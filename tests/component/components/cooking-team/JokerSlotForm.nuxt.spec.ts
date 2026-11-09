@@ -2,7 +2,7 @@
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {nextTick, type ComponentPublicInstance} from 'vue'
 import {enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, iconNamesIn, emittedPayload} from '~~/tests/component/testHelpers'
 import {JOKER_SLOT_IDS, toggleEveryWeekday, submitJokerSlotForm} from '~~/tests/component/components/cooking-team/jokerSlotForm'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import JokerSlotForm from '~/components/cooking-team/JokerSlotForm.vue'
@@ -10,12 +10,13 @@ import CalendarDateRangePicker from '~/components/calendar/CalendarDateRangePick
 import {ROLE_ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {useCookingTeamValidation, ALLOCATION_PERCENTAGE_OPTIONS} from '~/composables/useCookingTeamValidation'
 import {createDefaultWeekdayMap, WEEKDAYS} from '~/types/dateTypes'
+import {useDutyValidation} from '~/composables/useDutyValidation'
+import {DUTY_WORDS} from '~/config/dutyWords'
+import {DATE_WORDS} from '~/config/dateWords'
 
 const {TeamRoleSchema} = useCookingTeamValidation()
 const Role = TeamRoleSchema.enum
-
-type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
-type FieldWrapper = VueWrapper<ComponentPublicInstance<{name?: string}>>
+const WORDS = DUTY_WORDS.jokerSlot
 
 const roleGlyphs: string[] = Object.values(ROLE_ICONS)
 
@@ -36,27 +37,26 @@ const mountForm = () => mountWithTooltipProvider(JokerSlotForm, {
 })
 
 // The role glyphs on the trigger; the trigger also carries its chevron
-const roleTriggerGlyphs = (wrapper: VueWrapper) => {
-    const select = findByTestId(wrapper, JOKER_SLOT_IDS.roleSelect)
-    return (wrapper.findAllComponents({name: 'UIcon'}) as IconWrapper[])
-        .filter(icon => select.element.contains(icon.element))
-        .map(icon => icon.props('name'))
-        .filter(name => roleGlyphs.includes(name))
+const roleTriggerGlyphs = (wrapper: VueWrapper) =>
+    iconNamesIn(findByTestId(wrapper, JOKER_SLOT_IDS.roleSelect)).filter(name => roleGlyphs.includes(name))
+
+const fieldNamed = (wrapper: VueWrapper, name: string) => {
+    const field = wrapper.findAllComponents<ComponentPublicInstance<{name?: string}>>({name: 'UFormField'}).find(candidate => candidate.props('name') === name)
+    if (!field) throw new Error(`No field named ${name}`)
+    return field
 }
 
-const fieldNamed = (wrapper: VueWrapper, name: string) =>
-    (wrapper.findAllComponents({name: 'UFormField'}) as FieldWrapper[]).find(field => field.props('name') === name)
-
-const fullTimeLabel = ALLOCATION_PERCENTAGE_OPTIONS.find(option => option.value === 100)!.label
+const fullTime = ALLOCATION_PERCENTAGE_OPTIONS.find(option => option.value === 100)
+if (!fullTime) throw new Error('No full-time allocation option')
+const fullTimeLabel = fullTime.label
 
 describe('JokerSlotForm', () => {
     it('Tilføj emits the slot over the season period with a full-time allocation on the team days and no note by default', async () => {
         const wrapper = await mountForm()
         await submitJokerSlotForm(wrapper)
 
-        const emitted = wrapper.emitted('submit')
-        expect(emitted).toHaveLength(1)
-        const slot = emitted![0]![0]
+        expect(wrapper.emitted('submit')).toHaveLength(1)
+        const slot = emittedPayload(wrapper, 'submit', useDutyValidation().JokerSlotCreateSchema, 0)
         expect(slot).toEqual({
             role: Role.COOK,
             allocationPercentage: 100,
@@ -71,11 +71,11 @@ describe('JokerSlotForm', () => {
         const schemaPaths = ['endDate', 'affinity', 'role', 'allocationPercentage', 'note']
         const wrapper = await mountForm()
 
-        schemaPaths.forEach(path => expect(fieldNamed(wrapper, path), path).toBeDefined())
-        expect(fieldNamed(wrapper, 'allocationPercentage')!.text()).toContain(fullTimeLabel)
-        const weekdays = fieldNamed(wrapper, 'affinity')!.findAll('[role="checkbox"]')
+        schemaPaths.forEach(path => expect(fieldNamed(wrapper, path).exists(), path).toBe(true))
+        expect(fieldNamed(wrapper, 'allocationPercentage').text()).toContain(fullTimeLabel)
+        const weekdays = fieldNamed(wrapper, 'affinity').findAll('[role="checkbox"]')
         expect(weekdays.map(weekday => weekday.attributes('aria-checked'))).toEqual(teamWeekdays.map(() => 'true'))
-        expect(fieldNamed(wrapper, 'affinity')!.text()).toBe(`Ugedage${teamWeekdays.join('')}`)
+        expect(fieldNamed(wrapper, 'affinity').text()).toBe(`${WORDS.weekdays}${teamWeekdays.join('')}`)
     })
 
     it('an end before the start blocks Tilføj and shows the message on the period field', async () => {
@@ -88,7 +88,8 @@ describe('JokerSlotForm', () => {
         await submitJokerSlotForm(wrapper)
 
         expect(wrapper.emitted('submit')).toBeUndefined()
-        expect(fieldNamed(wrapper, 'endDate')!.find('[data-slot="error"]').text()).toMatch(/slutdato/i)
+        // The period field is the range picker's own: it checks the range it shows, and its rule names the error
+        expect(fieldNamed(wrapper, 'endDate').find('[data-slot="error"]').text()).toBe(DATE_WORDS.rules.endAfterStart)
     })
 
     // One template binds the glyph of the chosen role: one role stands for all
@@ -96,7 +97,8 @@ describe('JokerSlotForm', () => {
         const wrapper = await mountForm()
         const select = wrapper.findAllComponents({name: 'USelectMenu'})
             .find(menu => findByTestId(menu, JOKER_SLOT_IDS.roleSelect).exists())
-        select!.vm.$emit('update:modelValue', Role.CHEF)
+        if (!select) throw new Error('No role select')
+        select.vm.$emit('update:modelValue', Role.CHEF)
         await nextTick()
         expect(roleTriggerGlyphs(wrapper)).toEqual([ROLE_ICONS[Role.CHEF]])
     })

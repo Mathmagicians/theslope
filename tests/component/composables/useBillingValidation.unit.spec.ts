@@ -1,9 +1,11 @@
 import {describe, it, expect} from 'vitest'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useTicket} from '~/composables/useTicket'
-import {DinnerMode} from '~/composables/useBookingValidation'
+import {DinnerMode, type TicketType} from '~/composables/useBookingValidation'
+import {formatDate} from '~/utils/date'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
+import {itemAt} from '~~/tests/component/listHelpers'
 
 describe('useBillingValidation', () => {
     const {
@@ -31,6 +33,15 @@ describe('useBillingValidation', () => {
             expect(row).toContain(invoice.address)
             expect(row).toContain(String(convertPriceToDecimalFormat(invoice.amount)))
         })
+
+        it('GIVEN a period WHEN generating a row THEN the payment period runs from the payment date to the last day of its month, then the cutoff date and an empty note', () => {
+            const paymentDate = new Date(2026, 1, 1)
+            const cutoffDate = new Date(2026, 0, 17)
+            const summary = {...BillingFactory.defaultSummaryData('test'), paymentDate, cutoffDate}
+            const invoice = BillingFactory.defaultInvoiceData('test')
+
+            expect(generateCsvRow(invoice, summary)).toMatch(new RegExp(`,${formatDate(paymentDate)},${formatDate(new Date(2026, 1, 28))},${formatDate(cutoffDate)},$`))
+        })
     })
 
     describe('generateBillingCsv', () => {
@@ -41,7 +52,7 @@ describe('useBillingValidation', () => {
 
             expect(csv.startsWith(CSV_HEADER)).toBe(true)
             expect(lines.length).toBe(1 + summary.invoices.length)
-            expect(lines[1]).toContain(String(summary.invoices[0]!.pbsId))
+            expect(lines[1]).toContain(String(itemAt(summary.invoices, 0).pbsId))
         })
     })
 
@@ -73,20 +84,19 @@ describe('useBillingValidation', () => {
 
     describe('deserializeTransaction', () => {
         // Independent fallback: use live data where available, snapshot only for missing relations
-        it.each<['full' | 'noHousehold' | 'noTicketPrice' | 'noOrder', number, string]>([
+        it.each<['full' | 'noTicketPrice' | 'noOrder', number, number, string]>([
             // full: all live data available → use live household (1111) and live ticketType (ADULT)
-            ['full', 1111, TicketType.ADULT],
-            // noHousehold: household null → snapshot household (9999), but live ticketType (ADULT)
-            ['noHousehold', 9999, TicketType.ADULT],
+            ['full', 1111, 3, TicketType.ADULT],
             // noTicketPrice: ticketPrice null → live household (1111), snapshot ticketType (CHILD)
-            ['noTicketPrice', 1111, TicketType.CHILD],
-            // noOrder: order null → all snapshot (9999, CHILD)
-            ['noOrder', 9999, TicketType.CHILD]
-        ])('GIVEN liveData=%s WHEN deserializing THEN uses independent fallback (pbsId=%s, ticketType=%s)', (liveData, expectedPbsId, expectedTicketType) => {
+            ['noTicketPrice', 1111, 3, TicketType.CHILD],
+            // noOrder: order null → all snapshot (9999, CHILD); the snapshot's household reads id 0
+            ['noOrder', 9999, 0, TicketType.CHILD]
+        ])('GIVEN liveData=%s WHEN deserializing THEN uses independent fallback (pbsId=%s, household id=%s, ticketType=%s)', (liveData, expectedPbsId, expectedHouseholdId, expectedTicketType) => {
             const tx = BillingFactory.defaultPrismaTransaction('de-test', liveData)
             const result = deserializeTransaction(tx)
 
             expect(result.inhabitant.household.pbsId).toBe(expectedPbsId)
+            expect(result.inhabitant.household.id).toBe(expectedHouseholdId)
             expect(result.ticketType).toBe(expectedTicketType)
         })
 
@@ -186,12 +196,7 @@ describe('useBillingValidation', () => {
     // Billing Period Deserialization
     // ============================================================================
 
-    // Helper to create order snapshot JSON
-    const makeSnapshot = (dinnerEventId: number, ticketType: string | null) => JSON.stringify({
-        dinnerEvent: {id: dinnerEventId, date: new Date().toISOString(), menuTitle: 'Test'},
-        inhabitant: {id: 1, name: 'Test', household: {id: 1, pbsId: 100, address: 'Test'}},
-        ticketType
-    })
+    const makeSnapshot = (dinnerEventId: number, ticketType: TicketType | null) => BillingFactory.makeOrderSnapshot('stats', dinnerEventId, ticketType)
 
     // Mock ticket prices for resolving null ticketTypes
     const mockTicketPrices = BillingFactory.mockTicketPrices

@@ -7,13 +7,15 @@ import {
     fetchOrdersServingEntry, fetchWaitlistForDinners, grabWaitlistEntry, recordWaitlistPlacingOrder, releaseWaitlistEntry, removePlacedWaitlistEntry
 } from '~~/server/data/waitlistRepository'
 import {assignWaitlistPortions, joinWaitlist, sellTicketsToWaitlist} from '~~/server/utils/waitlistAssignment'
-import {useBookingValidation, OrderAuditAction} from '~/composables/useBookingValidation'
+import {useBookingValidation, OrderAuditAction, type TicketType} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import {useWaitlistValidation, type PlacementOrder} from '~/composables/useWaitlistValidation'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {present} from '~~/tests/component/listHelpers'
 
 const LEASE_MINUTES = 10
 // The server reads the placing lease from the app config, an auto-import of the Nitro scope the unit runtime lacks
@@ -49,8 +51,9 @@ vi.mock('~~/server/data/waitlistRepository', async importOriginal => ({
     fetchOrdersServingEntry: vi.fn()
 }))
 
-const {DinnerStateSchema, TicketTypeSchema, OrderAuditChangeSchema, createOrderAuditData} = useBookingValidation()
+const {DinnerStateSchema, TicketTypeSchema, OrderAuditChangeSchema, OrderAuditSourceSchema, createOrderAuditData} = useBookingValidation()
 const {TicketWaitlistCreateSchema, serializeTicketWaitlist} = useWaitlistValidation()
+const {findTicketPriceByType} = useTicket()
 const DinnerState = DinnerStateSchema.enum
 
 const d1Client = {} as D1Database
@@ -59,21 +62,25 @@ const SEASON_ID = 9
 const RELEASED_ORDER_ID = 501
 const CREATED_ORDER_ID = 77
 const ticketPrices = TicketFactory.defaultTicketPrices({seasonId: SEASON_ID})
-const priceIdOf = (ticketType: keyof typeof TicketTypeSchema.enum) => ticketPrices.find(price => price.ticketType === ticketType)!.id!
-const ADULT_PRICE_ID = priceIdOf(TicketTypeSchema.enum.ADULT)
+const priceOf = (ticketType: TicketType) => present(findTicketPriceByType(ticketType, ticketPrices), ticketType)
+const ADULT_PRICE = priceOf(TicketTypeSchema.enum.ADULT)
+const ADULT_PRICE_ID = present(ADULT_PRICE.id, 'adult price id')
 const portionDinner = {...DinnerEventFactory.defaultDinnerEventDetail(), id: DINNER_ID, seasonId: SEASON_ID}
 
 // Two regular entries in the dinner's adult line, first joined first, and one in its child line
-const [first, second, child] = [41, 42, 43].map((inhabitantId, index) => WaitlistFactory.defaultEntry({
-    id: index + 1, dinnerEventId: DINNER_ID, inhabitantId, ticketPriceId: index < 2 ? ADULT_PRICE_ID : priceIdOf(TicketTypeSchema.enum.CHILD),
+const lineEntry = (inhabitantId: number, index: number) => WaitlistFactory.defaultEntry({
+    id: index + 1, dinnerEventId: DINNER_ID, inhabitantId, ticketPrice: index < 2 ? ADULT_PRICE : priceOf(TicketTypeSchema.enum.CHILD),
     createdAt: new Date(2026, 9, 1, 12, index)
-}))
+})
+const first = lineEntry(41, 0)
+const second = lineEntry(42, 1)
+const child = lineEntry(43, 2)
 // A grab older than the lease is the trace of a run that stopped midway; a younger grab belongs to a run at work
 const STALE = subMinutes(new Date(), 3 * LEASE_MINUTES)
 const HELD = subMinutes(new Date(), 1)
 // The Order unique index answers a second regular order for an inhabitant on a dinner
 const uniqueViolation = () => createError({statusCode: 409, statusMessage: 'Conflict'})
-const sold = {order: {} as never, ticketPriceId: ADULT_PRICE_ID, sellerHouseholdId: 3, sellerInhabitantId: 30}
+const sold = {order: OrderFactory.defaultOrderDetail(), ticketPriceId: ADULT_PRICE_ID, sellerHouseholdId: 3, sellerInhabitantId: 30}
 
 // The protocol's writes in the order the run makes them
 const PROTOCOL = {
@@ -92,7 +99,7 @@ const assign = (portions: number) => assignWaitlistPortions(d1Client, portionDin
 beforeEach(() => {
     vi.resetAllMocks()
     vi.spyOn(console, 'info').mockImplementation(() => {})
-    vi.mocked(fetchWaitlistForDinners).mockResolvedValue([first!, second!])
+    vi.mocked(fetchWaitlistForDinners).mockResolvedValue([first, second])
     vi.mocked(fetchSeason).mockResolvedValue({...SeasonFactory.defaultSeason(), id: SEASON_ID, ticketPrices})
     vi.mocked(findReleasedOrderId).mockResolvedValue(null)
     vi.mocked(grabWaitlistEntry).mockResolvedValue(true)
@@ -101,15 +108,15 @@ beforeEach(() => {
 
 describe('joinWaitlist', () => {
     // The wishes of the dinner's adult line in join order, each with the snapshot its history row keeps
-    const joins = [first!, second!].map(({position: _position, ...entry}) => ({
+    const joins = [first, second].map(({position: _position, ...entry}) => ({
         entry: TicketWaitlistCreateSchema.parse(entry),
-        snapshot: OrderFactory.defaultOrderSnapshot({id: null, inhabitantId: entry.inhabitantId, dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID})
+        snapshot: OrderFactory.defaultOrderAuditSnapshot({id: null, inhabitantId: entry.inhabitantId, dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID})
     }))
     // The member who joins, as the join's history rows name them
     const audit = {action: OrderAuditAction.USER_BOOKED, performedByUserId: 7, seasonId: SEASON_ID}
 
     it('decides by the dinner it is handed and writes the entries and their QUEUE rows once each, reading neither a holder, the dinner nor its season; the entries come back in join order', async () => {
-        const entries = await joinWaitlist(d1Client, joins, {state: DinnerState.SCHEDULED}, audit)
+        const entries = await joinWaitlist(d1Client, joins, DinnerState.SCHEDULED, audit)
 
         expect(fakePrisma.ticketWaitlist.createManyAndReturn).toHaveBeenCalledTimes(1)
         expect(fakePrisma.ticketWaitlist.createManyAndReturn).toHaveBeenCalledWith({data: joins.map(({entry}) => serializeTicketWaitlist(entry))})
@@ -123,7 +130,7 @@ describe('joinWaitlist', () => {
     })
 
     it.each([DinnerState.CONSUMED, DinnerState.CANCELLED])('refuses a %s dinner and writes nothing', async (state) => {
-        await expect(joinWaitlist(d1Client, joins, {state}, audit)).rejects.toMatchObject({statusCode: 400})
+        await expect(joinWaitlist(d1Client, joins, state, audit)).rejects.toMatchObject({statusCode: 400})
         expect(fakePrisma.ticketWaitlist.createManyAndReturn).not.toHaveBeenCalled()
         expect(fakePrisma.orderHistory.createMany).not.toHaveBeenCalled()
     })
@@ -137,13 +144,16 @@ describe('sellTicketsToWaitlist', () => {
         const {waitlistTicketsSold: sales} = await sell()
 
         expect(sales).toEqual([{
-            dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID,
-            buyerInhabitantId: first!.inhabitantId, buyerHouseholdId: first!.order.householdId, sellerHouseholdId: 3, sellerInhabitantId: 30
+            dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID, orderId: RELEASED_ORDER_ID, dinnerMode: first.order.dinnerMode, isGuestTicket: first.isGuestTicket,
+            buyerInhabitantId: first.inhabitantId, buyerHouseholdId: first.order.householdId, sellerHouseholdId: 3, sellerInhabitantId: 30
         }])
         expect(protocolSteps()).toEqual(['grab', 'claim', 'remove'])
-        expect(grabWaitlistEntry).toHaveBeenCalledWith(d1Client, first!.id, expect.any(Date), RELEASED_ORDER_ID)
-        expect(claimReleasedOrder).toHaveBeenCalledWith(d1Client, RELEASED_ORDER_ID, first!.inhabitantId, first!.order.bookedByUserId, first!.order.dinnerMode, first!.isGuestTicket)
-        expect(removedIds()).toEqual([first!.id])
+        expect(grabWaitlistEntry).toHaveBeenCalledWith(d1Client, first.id, expect.any(Date), RELEASED_ORDER_ID)
+        expect(claimReleasedOrder).toHaveBeenCalledWith(
+            d1Client, RELEASED_ORDER_ID, first.inhabitantId, first.order.bookedByUserId, first.order.dinnerMode, first.isGuestTicket,
+            OrderAuditSourceSchema.enum['waitlist-assignment']
+        )
+        expect(removedIds()).toEqual([first.id])
     })
 
     it('hands the entry back to its place when another buyer takes the ticket first, then grabs it with the next ticket for sale', async () => {
@@ -157,33 +167,33 @@ describe('sellTicketsToWaitlist', () => {
     })
 
     it('stops a line at an entry another run grabbed since the read; the other ticket types sell on', async () => {
-        vi.mocked(fetchWaitlistForDinners).mockResolvedValue([first!, second!, child!])
+        vi.mocked(fetchWaitlistForDinners).mockResolvedValue([first, second, child])
         vi.mocked(findReleasedOrderId).mockResolvedValue(RELEASED_ORDER_ID)
         vi.mocked(grabWaitlistEntry).mockResolvedValueOnce(false).mockResolvedValue(true)
         vi.mocked(claimReleasedOrder).mockResolvedValue(sold)
 
         const {waitlistTicketsSold: sales} = await sell()
 
-        expect(sales.map(sale => sale.buyerInhabitantId)).toEqual([child!.inhabitantId])
-        expect(vi.mocked(grabWaitlistEntry).mock.calls.map(([, id]) => id)).toEqual([first!.id, child!.id])
+        expect(sales.map(sale => sale.buyerInhabitantId)).toEqual([child.inhabitantId])
+        expect(vi.mocked(grabWaitlistEntry).mock.calls.map(([, id]) => id)).toEqual([first.id, child.id])
     })
 })
 
 describe('assignWaitlistPortions', () => {
     it('grabs each entry that fits, writes its order, records the order on the entry, then removes the entry', async () => {
         vi.mocked(createOrders)
-            .mockResolvedValueOnce({householdId: first!.order.householdId, createdIds: [CREATED_ORDER_ID]})
-            .mockResolvedValueOnce({householdId: second!.order.householdId, createdIds: [CREATED_ORDER_ID + 1]})
+            .mockResolvedValueOnce({householdId: first.order.householdId, createdIds: [CREATED_ORDER_ID]})
+            .mockResolvedValueOnce({householdId: second.order.householdId, createdIds: [CREATED_ORDER_ID + 1]})
 
         const result = await assign(2)
 
         expect(result.assigned.map(({entryId, orderId}) => ({entryId, orderId}))).toEqual([
-            {entryId: first!.id, orderId: CREATED_ORDER_ID}, {entryId: second!.id, orderId: CREATED_ORDER_ID + 1}
+            {entryId: first.id, orderId: CREATED_ORDER_ID}, {entryId: second.id, orderId: CREATED_ORDER_ID + 1}
         ])
         expect(protocolSteps()).toEqual(['grab', 'create', 'record', 'remove', 'grab', 'create', 'record', 'remove'])
-        expect(grabWaitlistEntry).toHaveBeenCalledWith(d1Client, first!.id, expect.any(Date))
+        expect(grabWaitlistEntry).toHaveBeenCalledWith(d1Client, first.id, expect.any(Date))
         expect(vi.mocked(recordWaitlistPlacingOrder).mock.calls.map(([, id, orderId]) => ({id, orderId}))).toEqual([
-            {id: first!.id, orderId: CREATED_ORDER_ID}, {id: second!.id, orderId: CREATED_ORDER_ID + 1}
+            {id: first.id, orderId: CREATED_ORDER_ID}, {id: second.id, orderId: CREATED_ORDER_ID + 1}
         ])
     })
 
@@ -219,21 +229,21 @@ describe('an entry whose regular order is already placed', () => {
         const {waitlistTicketsSold: sales} = await sell()
 
         expect(sales).toEqual([{
-            dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID,
-            buyerInhabitantId: second!.inhabitantId, buyerHouseholdId: second!.order.householdId, sellerHouseholdId: 3, sellerInhabitantId: 30
+            dinnerEventId: DINNER_ID, ticketPriceId: ADULT_PRICE_ID, orderId: RELEASED_ORDER_ID, dinnerMode: second.order.dinnerMode, isGuestTicket: second.isGuestTicket,
+            buyerInhabitantId: second.inhabitantId, buyerHouseholdId: second.order.householdId, sellerHouseholdId: 3, sellerInhabitantId: 30
         }])
-        expect(removedIds()).toEqual([first!.id, second!.id])
+        expect(removedIds()).toEqual([first.id, second.id])
     })
 
     it('assignWaitlistPortions: the entry leaves the queue and is not assigned again; the next entry gets its order', async () => {
         vi.mocked(createOrders)
             .mockRejectedValueOnce(uniqueViolation())
-            .mockResolvedValueOnce({householdId: second!.order.householdId, createdIds: [CREATED_ORDER_ID]})
+            .mockResolvedValueOnce({householdId: second.order.householdId, createdIds: [CREATED_ORDER_ID]})
 
         const result = await assign(2)
 
-        expect(result.assigned.map(assigned => ({entryId: assigned.entryId, orderId: assigned.orderId}))).toEqual([{entryId: second!.id, orderId: CREATED_ORDER_ID}])
-        expect(removedIds()).toEqual([first!.id, second!.id])
+        expect(result.assigned.map(assigned => ({entryId: assigned.entryId, orderId: assigned.orderId}))).toEqual([{entryId: second.id, orderId: CREATED_ORDER_ID}])
+        expect(removedIds()).toEqual([first.id, second.id])
     })
 
     it.each([
@@ -256,7 +266,7 @@ describe('an entry whose regular order is already placed', () => {
 const writtenAfterGrab = subMinutes(new Date(), 2 * LEASE_MINUTES)
 const releasedBeforeGrab = subMinutes(new Date(), 6 * LEASE_MINUTES)
 const servingOrder = (createdAt: Date, overrides: Partial<PlacementOrder> = {}): PlacementOrder => ({
-    ...OrderFactory.defaultOrder(undefined, {id: CREATED_ORDER_ID, inhabitantId: first!.inhabitantId, ticketPriceId: ADULT_PRICE_ID, createdAt}),
+    ...OrderFactory.defaultOrder(undefined, {id: CREATED_ORDER_ID, inhabitantId: first.inhabitantId, ticketPriceId: ADULT_PRICE_ID, createdAt}),
     sellerHouseholdId: null,
     sellerInhabitantId: null,
     ...overrides
@@ -275,32 +285,32 @@ describe.each([
         return {sold: waitlistTicketsSold, assigned}
     }}
 ])('$path', ({place}) => {
-    const stopped = (placingOrderId: number | null) => ({...first!, placingAt: STALE, placingOrderId})
+    const stopped = (placingOrderId: number | null) => ({...first, placingAt: STALE, placingOrderId})
 
     it.each([
         {evidence: 'the recorded order is the stopped extra portion\'s', placingOrderId: CREATED_ORDER_ID, found: [servingOrder(writtenAfterGrab)],
-            steps: ['remove'], reported: {sold: [], assigned: [first!.id]}},
+            steps: ['remove'], reported: {sold: [], assigned: [first.id]}},
         {evidence: 'the search finds the order the stopped extra portion wrote', placingOrderId: null, found: [servingOrder(writtenAfterGrab)],
-            steps: ['record', 'remove'], reported: {sold: [], assigned: [first!.id]}},
+            steps: ['record', 'remove'], reported: {sold: [], assigned: [first.id]}},
         {evidence: 'the recorded released ticket went to the entry', placingOrderId: RELEASED_ORDER_ID,
             found: [servingOrder(releasedBeforeGrab, {id: RELEASED_ORDER_ID, sellerHouseholdId: 3, sellerInhabitantId: 30})],
-            steps: ['remove'], reported: {sold: [first!.inhabitantId], assigned: []}},
+            steps: ['remove'], reported: {sold: [first.inhabitantId], assigned: []}},
         {evidence: 'nothing serves the entry', placingOrderId: null, found: [], steps: ['release'], reported: {sold: [], assigned: []}}
     ])('recovers a grab older than the lease before it places, and reports what it finished: $evidence', async ({placingOrderId, found, steps, reported}) => {
-        vi.mocked(fetchWaitlistForDinners).mockResolvedValue([stopped(placingOrderId), second!])
+        vi.mocked(fetchWaitlistForDinners).mockResolvedValue([stopped(placingOrderId), second])
         vi.mocked(fetchOrdersServingEntry).mockResolvedValue(found)
 
         const outcomes = await place(false)
 
         expect(protocolSteps()).toEqual(steps)
         expect({sold: outcomes.sold.map(sale => sale.buyerInhabitantId), assigned: outcomes.assigned.map(placed => placed.entryId)}).toEqual(reported)
-        expect(vi.mocked(fetchOrdersServingEntry).mock.calls.map(([, entry]) => entry.id)).toEqual([first!.id])
+        expect(vi.mocked(fetchOrdersServingEntry).mock.calls.map(([, entry]) => entry.id)).toEqual([first.id])
         expect(vi.mocked(recordWaitlistPlacingOrder).mock.calls.map(([, id, orderId]) => ({id, orderId})))
-            .toEqual(steps.includes('record') ? [{id: first!.id, orderId: CREATED_ORDER_ID}] : [])
+            .toEqual(steps.includes('record') ? [{id: first.id, orderId: CREATED_ORDER_ID}] : [])
     })
 
     it('leaves a grab younger than the lease to its run, and the walk stops at it', async () => {
-        vi.mocked(fetchWaitlistForDinners).mockResolvedValue([{...first!, placingAt: HELD, placingOrderId: null}, second!])
+        vi.mocked(fetchWaitlistForDinners).mockResolvedValue([{...first, placingAt: HELD, placingOrderId: null}, second])
 
         await place(true)
 
@@ -312,19 +322,20 @@ describe.each([
 describe('the recovery\'s search for an order no entry records', () => {
     it('passes over the orders recorded on other entries and the orders it matched earlier in the pass', async () => {
         const guestEntry = (id: number) => WaitlistFactory.defaultEntry({
-            id, dinnerEventId: DINNER_ID, inhabitantId: first!.inhabitantId, isGuestTicket: true, ticketPriceId: ADULT_PRICE_ID, createdAt: new Date(2026, 9, 1, 13, id)
+            id, dinnerEventId: DINNER_ID, inhabitantId: first.inhabitantId, isGuestTicket: true, ticketPrice: ADULT_PRICE, createdAt: new Date(2026, 9, 1, 13, id)
         })
-        const [guest, secondGuest] = [5, 6].map(id => ({...guestEntry(id), placingAt: STALE}))
+        const guest = {...guestEntry(5), placingAt: STALE}
+        const secondGuest = {...guestEntry(6), placingAt: STALE}
         const servedElsewhere = {...guestEntry(7), placingAt: HELD, placingOrderId: CREATED_ORDER_ID}
         // The inhabitant's guest orders written since the grabs, the first of them recorded on the held entry
         const written = [CREATED_ORDER_ID, CREATED_ORDER_ID + 1, CREATED_ORDER_ID + 2].map(id => servingOrder(writtenAfterGrab, {id, isGuestTicket: true}))
-        vi.mocked(fetchWaitlistForDinners).mockResolvedValue([guest!, secondGuest!, servedElsewhere])
+        vi.mocked(fetchWaitlistForDinners).mockResolvedValue([guest, secondGuest, servedElsewhere])
         vi.mocked(fetchOrdersServingEntry).mockResolvedValue(written)
 
         await sell()
 
         expect(vi.mocked(recordWaitlistPlacingOrder).mock.calls.map(([, id, orderId]) => ({id, orderId}))).toEqual([
-            {id: guest!.id, orderId: CREATED_ORDER_ID + 1}, {id: secondGuest!.id, orderId: CREATED_ORDER_ID + 2}
+            {id: guest.id, orderId: CREATED_ORDER_ID + 1}, {id: secondGuest.id, orderId: CREATED_ORDER_ID + 2}
         ])
         expect(protocolSteps()).toEqual(['record', 'remove', 'record', 'remove'])
     })

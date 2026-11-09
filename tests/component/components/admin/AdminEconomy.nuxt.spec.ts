@@ -1,16 +1,23 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {nextTick, toValue} from 'vue'
-import {enableAutoUnmount} from '@vue/test-utils'
+import {nextTick, toValue, type ComponentPublicInstance} from 'vue'
+import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
 import AdminEconomy from '~/components/admin/AdminEconomy.vue'
+import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
+import {COLOR} from '~/composables/useTheSlopeDesignSystem'
 import {useBookingsStore} from '~/stores/bookings'
 import {usePlanStore} from '~/stores/plan'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {mountWithTooltipProvider, mountedStore, resetStores, registerEmptyStoreEndpoints, holdEndpoint, findAllLoadingRows, untilTrue, isTableLoading, findByTestId} from '~~/tests/component/testHelpers'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {mountWithTooltipProvider, mountedStore, resetStores, registerEmptyStoreEndpoints, registerScaffoldEndpoint, holdEndpoint, findAllLoadingRows, untilTrue, isTableLoading, findByTestId, findComponentByTestId, cellsByHeader, tableHeaders, itemAt, present} from '~~/tests/component/testHelpers'
+import type {StatBox} from '~/components/economy/CostEntry.vue'
+import {BOOKING_WORDS} from '~/config/bookingWords'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 // The test environment has no router to land a deep link on, and no session cookie
 const {mockRoute, mockNavigateTo, landNavigation, useRoute, session, useUserSession} = await vi.hoisted(async () => {
@@ -23,8 +30,10 @@ mockNuxtImport('useUserSession', () => useUserSession)
 mockNavigateTo.mockImplementation(landNavigation)
 
 const period = BillingFactory.defaultSummaryData('admin-economy')
-const invoice = period.invoices[0]!
+const invoice = itemAt(period.invoices, 0)
 registerEmptyStoreEndpoints()
+// The booking form of a correction reads its preview from the scaffold's dry run
+registerScaffoldEndpoint()
 registerEndpoint(`/api/admin/billing/periods/${period.id}`, () => period)
 registerEndpoint('/api/admin/billing/periods', () => [period])
 registerEndpoint(`/api/admin/billing/invoices/${invoice.id}`, () => [])
@@ -33,6 +42,22 @@ registerEndpoint(`/api/admin/billing/invoices/${invoice.id}`, () => [])
 enableAutoUnmount(afterEach)
 
 type Store = ReturnType<typeof useBookingsStore>
+type Wrapper = Awaited<ReturnType<typeof mountWithTooltipProvider>>
+
+// Opens the table row that reads `row` by its button `label`
+const open = async (wrapper: Wrapper, row: string, label: string) => {
+    await vi.waitFor(() => expect(wrapper.findAll('tr').some(tr => tr.text().includes(row))).toBe(true))
+    await present(wrapper.findAll('tr').find(tr => tr.text().includes(row)), row).find(`button[aria-label="${label}"]`).trigger('click')
+}
+
+// Each open cost entry's title and the labels of its boxes. CostEntry is generic over its entry: the spec hands the
+// accessors the entry the component renders
+type CostEntryProps = {entry: unknown, titleAccessor?: (entry: unknown) => string, statsAccessor?: (entry: unknown) => StatBox[]}
+const costEntriesOf = (wrapper: Wrapper) =>
+    wrapper.findAllComponents<ComponentPublicInstance<CostEntryProps>>({name: 'CostEntry'}).map(entry => ({
+        title: entry.props('titleAccessor')?.(entry.props('entry')),
+        stats: entry.props('statsAccessor')?.(entry.props('entry')).map(stat => stat.label)
+    }))
 
 describe('AdminEconomy - the billing selection in the URL', () => {
     beforeEach(() => {
@@ -57,7 +82,7 @@ describe('AdminEconomy - the billing selection in the URL', () => {
             await mountWithTooltipProvider(AdminEconomy)
 
             expect(select).toHaveBeenCalledTimes(1)
-            const choice = select.mock.calls[0]![0]
+            const [choice] = itemAt(select.mock.calls, 0)
             expect(toValue(choice)).toBe(id)
             await vi.waitFor(() => expect(selectedId(useBookingsStore())).toBe(id))
 
@@ -88,15 +113,10 @@ describe('AdminEconomy - an opened invoice while its transactions load', () => {
         held.unregister()
     })
 
-    const open = async (wrapper: Awaited<ReturnType<typeof mountWithTooltipProvider>>, row: string, label: string) => {
-        await vi.waitFor(() => expect(wrapper.findAll('tr').some(tr => tr.text().includes(row))).toBe(true))
-        await wrapper.findAll('tr').find(tr => tr.text().includes(row))!.find(`button[aria-label="${label}"]`).trigger('click')
-    }
-
     it('GIVEN the invoice\'s transactions are on the way THEN its breakdown shows the loading row, WHEN they land THEN the invoice\'s own answer', async () => {
         const wrapper = await mountWithTooltipProvider(AdminEconomy)
-        await open(wrapper, 'Afsluttet', 'Vis detaljer')
-        await open(wrapper, invoice.address, 'Vis transaktioner')
+        await open(wrapper, BOOKING_WORDS.billing.state.closed, BUTTON_WORDS.openDetails)
+        await open(wrapper, invoice.address, BOOKING_WORDS.billing.show.transactions)
 
         // The upcoming orders above load beside it: the invoice's breakdown is one of the page's loading rows
         await vi.waitFor(() => expect(findAllLoadingRows(wrapper).map(row => row.text())).toContainEqual(expect.stringContaining('Henter transaktioner...')))
@@ -107,26 +127,42 @@ describe('AdminEconomy - an opened invoice while its transactions load', () => {
     })
 })
 
-// The upcoming orders table binds its dataset's loading: a correction's re-read runs the loading bar while the rows stay
-describe('AdminEconomy - the upcoming orders while a correction re-reads them', () => {
-    const season = {...SeasonFactory.defaultSeason('admin-economy'), id: 7}
-    const dinnerEvent = {id: 31, date: new Date(2030, 0, 7), menuTitle: 'Lasagne'}
-    const upcoming = [OrderFactory.defaultOrder('admin-economy', {id: 501, dinnerEventId: dinnerEvent.id, dinnerEvent})]
-    type Wrapper = Awaited<ReturnType<typeof mountWithTooltipProvider>>
+describe('AdminEconomy - the upcoming orders', () => {
+    const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDisplay('admin-economy'), id: 31, date: new Date(2030, 0, 7), menuTitle: 'Lasagne'}
+    // The correction's booking form takes the dinner from the selected season
+    const season = {...SeasonFactory.defaultSeason('admin-economy'), id: 7, dinnerEvents: [dinnerEvent]}
+    // The households list loaded before the eater's name changed: the order carries the name of now
+    const household = HouseholdFactory.defaultHouseholdDetail('admin-economy')
+    const eater = {...itemAt(household.inhabitants, 0), name: 'Nyt navn'}
+    // The booking form of a correction reads the session user's own household, the allergy catalog and the poster notes
+    const user = UserFactory.defaultUserWithInhabitant('admin-economy')
+    const ownHousehold = present(user.Inhabitant?.household, 'the session user\'s household')
+    const upcoming = [OrderFactory.defaultOrder('admin-economy', {id: 501, dinnerEventId: dinnerEvent.id, inhabitantId: eater.id, dinnerEvent, inhabitant: eater})]
     const upcomingTable = (wrapper: Wrapper) =>
-        wrapper.findAllComponents({name: 'EconomyTable'}).find(table => table.props('loadingText') === 'Henter fremtidige bestillinger')!
+        present(wrapper.findAllComponents({name: 'EconomyTable'}).find(table => table.props('loadingText') === 'Henter fremtidige bestillinger'), 'the upcoming orders table')
     const dinnerRow = (wrapper: Wrapper) => findByTestId(wrapper, `future-orders-expand-${dinnerEvent.id}`)
+    const mountLoaded = async (props: Record<string, unknown> = {}) => {
+        const wrapper = await mountWithTooltipProvider(AdminEconomy, {props})
+        await untilTrue(() => mountedStore(usePlanStore).isPlanStoreReady && mountedStore(useBookingsStore).isUpcomingOrdersLoaded)
+        await nextTick()
+        return wrapper
+    }
     const unregister: Array<() => void> = []
 
     beforeEach(() => {
         resetStores()
-        session.user.value = UserFactory.defaultUserWithInhabitant('admin-economy')
+        session.user.value = user
         mockRoute.query = {}
+        useToast().clear()
         unregister.push(
+            registerEndpoint(`/api/admin/household/${ownHousehold.id}`, () => ({...household, id: ownHousehold.id})),
+            registerEndpoint('/api/admin/allergy-type', () => []),
+            registerEndpoint('/api/admin/setting/allergy-poster-notes', () => ({key: 'allergy-poster-notes', value: '', updatedAt: new Date('2026-09-18T10:00:00.000Z').toISOString(), updatedByUserId: 3})),
             registerEndpoint('/api/admin/season/active', () => season.id),
             registerEndpoint('/api/admin/season', () => [season]),
             registerEndpoint(`/api/admin/season/${season.id}`, () => season),
             registerEndpoint('/api/order', () => upcoming),
+            registerEndpoint('/api/admin/household', () => [household]),
             registerEndpoint('/api/household/order/scaffold', {method: 'POST', handler: () => OrderFactory.defaultScaffoldOrdersResponse()})
         )
         mountedStore(useBookingsStore).loadBillingOverview(() => true)
@@ -136,18 +172,102 @@ describe('AdminEconomy - the upcoming orders while a correction re-reads them', 
         unregister.splice(0).forEach(remove => remove())
     })
 
-    it('GIVEN the upcoming orders have loaded WHEN a correction saves THEN its re-read runs the table\'s loading bar while the dinner\'s row stays, until the orders land', async () => {
-        const wrapper = await mountWithTooltipProvider(AdminEconomy)
-        const store = mountedStore(useBookingsStore)
-        const plan = mountedStore(usePlanStore)
-        await untilTrue(() => plan.isPlanStoreReady && store.isUpcomingOrdersLoaded)
+    it('GIVEN the upcoming orders have loaded THEN the dinner\'s row reads the dinner\'s menu title under Menu', async () => {
+        const wrapper = await mountLoaded()
+
+        expect(cellsByHeader(upcomingTable(wrapper)).Menu).toBe(dinnerEvent.menuTitle)
+    })
+
+    // The first column of each table holds the row's expand button
+    it('GIVEN the upcoming orders have loaded WHEN a dinner opens THEN the table heads its columns and the dinner\'s boxes read its households, portions and total in the billing words', async () => {
+        const wrapper = await mountLoaded()
+        const {columns, stats} = BOOKING_WORDS.billing
+        // Read before the dinner opens: its households' table nests in the row
+        expect(tableHeaders(upcomingTable(wrapper))).toEqual(['', columns.date, columns.menu, stats.tickets, columns.amount])
+
+        await dinnerRow(wrapper).trigger('click')
         await nextTick()
+
+        expect(costEntriesOf(upcomingTable(wrapper)).map(entry => entry.stats)).toEqual([[stats.households, stats.tickets, stats.total]])
+    })
+
+    it('GIVEN an upcoming order WHEN its dinner and its household open THEN its line reads the name its order carries', async () => {
+        const wrapper = await mountLoaded()
+        await dinnerRow(wrapper).trigger('click')
+        await nextTick()
+
+        await vi.waitFor(() => expect(upcomingTable(wrapper).find(`button[aria-label="${BOOKING_WORDS.billing.show.orders}"]`).exists()).toBe(true))
+        await upcomingTable(wrapper).find(`button[aria-label="${BOOKING_WORDS.billing.show.orders}"]`).trigger('click')
+        await nextTick()
+
+        const line = upcomingTable(wrapper).findComponent({name: 'CostLine'}).text()
+        expect(line).toContain(eater.name)
+        expect(line).not.toContain(`#${eater.id}`)
+    })
+
+    // A failed correction shows the request's toast alone and leaves the booking form open for another try
+    it('GIVEN a household picked for a correction WHEN its save fails THEN one warning toast shows and the booking form stays open', async () => {
+        unregister.push(
+            registerEndpoint(`/api/admin/household/${household.id}`, () => household),
+            registerEndpoint('/api/household/order/scaffold', {method: 'POST', handler: () => {
+                throw createError({statusCode: 500})
+            }})
+        )
+        const wrapper = await mountLoaded({canEdit: true})
+        await dinnerRow(wrapper).trigger('click')
+        await nextTick()
+        findComponentByTestId(wrapper, 'DangerButton', 'admin-correction-btn').vm.$emit('confirm')
+        await nextTick()
+        const select = present(wrapper.findAllComponents({name: 'USelectMenu'}).find(menu => findByTestId(menu, 'admin-correction-household-select').exists()), 'the household select')
+        select.vm.$emit('update:modelValue', {label: `${household.address} · PBS ${household.pbsId}`, value: household.id})
+        await vi.waitFor(() => expect(wrapper.findComponent(DinnerBookingForm).exists()).toBe(true))
+
+        wrapper.findComponent(DinnerBookingForm).vm.$emit('saveBookings', [])
+        await untilTrue(() => useToast().toasts.value.length > 0)
+        await untilTrue(() => !mountedStore(useBookingsStore).isProcessingBookings)
+        await flushPromises()
+
+        expect(useToast().toasts.value.map(toast => toast.color)).toEqual([COLOR.warning])
+        expect(wrapper.findComponent(DinnerBookingForm).exists()).toBe(true)
+    })
+
+    it('GIVEN the billing periods have loaded WHEN a closed period opens THEN the table heads its columns and the period reads its title and its counts in the billing words', async () => {
+        const wrapper = await mountLoaded()
+        const {period, columns, stats, state} = BOOKING_WORDS.billing
+        await vi.waitFor(() => expect(wrapper.text()).toContain(state.closed))
+        const periodsTable = present(wrapper.findAllComponents({name: 'EconomyTable'}).find(table => table.text().includes(state.closed)), 'the billing periods table')
+        // Read before the period opens: its invoices' table nests in the row
+        expect(tableHeaders(periodsTable)).toEqual(['', columns.status, columns.period, stats.dinners, stats.tickets, stats.households, columns.revenue, columns.control, columns.share])
+
+        await open(wrapper, state.closed, BUTTON_WORDS.openDetails)
+
+        await vi.waitFor(() => expect(costEntriesOf(periodsTable)).toEqual([{title: period.settled, stats: [stats.households, stats.dinners, stats.tickets, stats.total]}]))
+    })
+
+    it('GIVEN the economy has loaded THEN the cards, the badges and the period search read the billing words, WHEN a dinner opens THEN its households\' search and toggles', async () => {
+        const wrapper = await mountLoaded()
+        const {titles, state, search, show} = BOOKING_WORDS.billing
+        await vi.waitFor(() => expect(wrapper.text()).toContain(state.closed))
+        expect([titles.future, titles.periods, state.running].filter(word => !wrapper.text().includes(word))).toEqual([])
+        expect(wrapper.findAllComponents({name: 'EconomyTable'}).map(table => table.props('searchPlaceholder'))).toContain(search.period)
+
+        await dinnerRow(wrapper).trigger('click')
+        await nextTick()
+
+        expect(upcomingTable(wrapper).find(`input[placeholder="${search.household}"]`).exists()).toBe(true)
+        expect(upcomingTable(wrapper).find(`button[aria-label="${show.orders}"]`).exists()).toBe(true)
+    })
+
+    // The upcoming orders table binds its dataset's loading: a correction's re-read runs the loading bar while the rows stay
+    it('GIVEN the upcoming orders have loaded WHEN a correction saves THEN its re-read runs the table\'s loading bar while the dinner\'s row stays, until the orders land', async () => {
+        const wrapper = await mountLoaded()
+        const store = mountedStore(useBookingsStore)
         expect(isTableLoading(upcomingTable(wrapper))).toBe(false)
         expect(dinnerRow(wrapper).exists()).toBe(true)
 
         const held = holdEndpoint('/api/order', upcoming)
         unregister.push(held.unregister)
-        const saved = store.processAdminCorrection(1, 1, [])
+        const saved = store.processAdminCorrection(1, 1, [], 1, {title: 'a correction'})
         try {
             await untilTrue(() => !store.isUpcomingOrdersLoaded)
             await nextTick()

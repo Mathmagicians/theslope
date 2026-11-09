@@ -1,5 +1,5 @@
 /**
- * Pure UI composable for the Bookings domain (ADR-017)
+ * Pure UI composable for the Bookings domain
  *
  * Client-only presentation of booking/dinner state: deadline badges, chef step
  * icons, order state badges, the action preview shown before a booking is saved
@@ -10,12 +10,16 @@
  * Domain logic (step machine, deadlines, bucket resolution) stays in useBooking.
  */
 import {
+    useBooking,
+    findRegularOrder,
     formatPlace,
     formatDinnerName,
     DINNER_STEP_MAP,
     DinnerStepState,
     DEADLINE_LABELS,
+    ALARM_LEVEL,
     type AlarmLevel,
+    type StepDeadlineResult,
     EMPTY_RELEASED_TICKET_COUNTS,
     ticketStateOf,
     supplyStateOf,
@@ -23,13 +27,14 @@ import {
 } from '~/composables/useBooking'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
 import {useOrder, type SpendingFigures} from '~/composables/useOrder'
-import {TICKET_COUNTS} from '~/composables/useBilling'
-import type {Expense} from '~/composables/useBillingValidation'
-import {useBookingValidation, DinnerMode as DinnerModeEnum, OrderState as OrderStateEnum, OrderAuditAction as OrderAuditActionEnum, TicketState as TicketStateEnum, SupplyState as SupplyStateEnum, BookingFailure as BookingFailureEnum, type OrderState, type SupplyState, type TicketState, type DinnerMode, type DinnerEventDisplay, type OrderDisplay, type OrderAuditAction, type BookingAction, type BookingOutcome, type BookingResult, type QueuePosition, type ScaffoldResult, type TicketChange, type TicketChangeKind, type TicketCounts, type TicketEvent, type TicketSale, type TicketType} from '~/composables/useBookingValidation'
-import {useTicket, ticketTypeLabel} from '~/composables/useTicket'
+import {CostLineKind, type CostLine, type Expense} from '~/composables/useBillingValidation'
+import {useBookingValidation, DinnerMode as DinnerModeEnum, OrderState as OrderStateEnum, OrderAuditAction as OrderAuditActionEnum, TicketState as TicketStateEnum, SupplyState as SupplyStateEnum, BookingFailure as BookingFailureEnum, type OrderState, type SupplyState, type TicketState, type DinnerMode, type DinnerEventDisplay, type OrderDisplay, type TicketOrder, type OrderAuditAction, type BookingAction, type BookingOutcome, type BookingResult, type QueuePosition, type ScaffoldResult, type TicketChange, type TicketChangeKind, type TicketCounts, type TicketEvent, type TicketSale, type TicketType} from '~/composables/useBookingValidation'
+import {useTicket, ticketTypeLabel, TICKET_COUNTS} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import type {TicketWaitlistDetail, WaitlistOrder} from '~/composables/useWaitlistValidation'
+import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 import {ICONS, COLOR, COMPONENTS, ALARM_TO_BADGE, BOOKING_LOCK_STATUS, ORDER_STATE_COLORS, TICKET_TYPE_COLORS, TICKET_TYPE_ICONS, type NuxtUIColor, type TicketTypeColor} from '~/composables/useTheSlopeDesignSystem'
-import {calculateCountdown, formatDate, formatDateRange, DATE_SETTINGS} from '~/utils/date'
+import {calculateCountdown, formatDate, formatDateRange, formatCompactWeekdayDate, DATE_SETTINGS} from '~/utils/date'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {groupBy, linesBy} from '~/utils/batchUtils'
 import {compareAsc} from 'date-fns'
@@ -39,10 +44,14 @@ import type {WatchSource} from 'vue'
 // Deadline Badges
 // ============================================================================
 
-export interface DeadlineBadgeData {
-    label: string
+// A badge's glyph and colour
+interface BadgeLook {
     icon: string
-    color: typeof COLOR.success | typeof COLOR.error | typeof COLOR.warning | typeof COLOR.neutral
+    color: typeof COLOR.success | typeof COLOR.error | typeof COLOR.warning | typeof COLOR.neutral | typeof COLOR.info
+}
+
+export interface DeadlineBadgeData extends BadgeLook {
+    label: string
     value: string       // Badge text
     helpText: string
     step?: number       // Chef stepper: which step this badge belongs to
@@ -86,15 +95,13 @@ export interface FormattedOrder {
     stateIcon: string
 }
 
-/** The order of a cost line: a live order carries its state; a billed line carries none, and the eating mode its order closed with */
-export type CostLineOrder = {state?: OrderState, dinnerMode?: DinnerMode | null, provenanceHousehold?: string | null, isGuestTicket?: boolean}
-
-/** A billed line carries no order state: the close settled its order */
-const isBilledLine = (line: Pick<CostLineOrder, 'state'>): boolean => line.state === undefined
-
 /** The eating mode a cost line shows beside the name: a live order's; on a billed line the mode only reads into its badge */
-export const costLineMode = (line: CostLineOrder): DinnerMode | undefined =>
-    isBilledLine(line) ? undefined : line.dinnerMode ?? undefined
+export const costLineMode = (line: CostLine): DinnerMode | undefined => {
+    switch (line.kind) {
+        case CostLineKind.ORDER: return line.order.dinnerMode
+        case CostLineKind.TRANSACTION: return undefined
+    }
+}
 
 // How a ticket shows: its label, a colour and a glyph (a ticket type's from the design system, or power mode's own)
 export interface TicketPresentation {
@@ -110,6 +117,10 @@ export const ticketTypePresentation = (ticketType: TicketType): TicketTypePresen
     color: TICKET_TYPE_COLORS[ticketType],
     icon: TICKET_TYPE_ICONS[ticketType]
 })
+
+// The presentation of a price row's ticket type; a row the season does not hold shows none
+export const ticketPricePresentation = (ticketPrice: TicketPrice | undefined): TicketTypePresentation | null =>
+    ticketPrice ? ticketTypePresentation(ticketPrice.ticketType) : null
 
 // The presentation of the ticket type a person or an order resolves to (useTicket.resolveTicketType)
 export const resolveTicketTypePresentation = (...args: Parameters<ReturnType<typeof useTicket>['resolveTicketType']>) =>
@@ -134,7 +145,7 @@ export const ticketPriceSelectItems = (ticketPrices: TicketPrice[], compact = fa
             ticketType: ticketPrice.ticketType,
             price: ticketPrice.price,
             presentation,
-            label: BOOKING_WORDS.ticketPrice.label(presentation.label, useTicket().formatPrice(ticketPrice.price)),
+            label: useTicket().formatTicketPrice(presentation.label, ticketPrice.price),
             description
         }
     })
@@ -149,34 +160,55 @@ export interface CookingRoundRow {
     spentGross: number
 }
 
-/** The words of a team's cooking round, shared by the Madbestilling hint and the Budget pane's round table */
-export interface CookingRoundWords { team: string; heading: string }
-export const cookingRoundWords = (teamShortName: string, first: Date, last: Date): CookingRoundWords => {
-    const team = BOOKING_WORDS.wholeTeam(teamShortName)
-    return {team, heading: BOOKING_WORDS.roundHeading(team, formatDateRange({start: first, end: last}, DATE_SETTINGS.DAY_MONTH_MASK))}
+/**
+ * The words of a team's cooking round: the team's short name and number for its badge and the round's period in the
+ * Budget pane's round table, and the Madbestilling hint's heading
+ */
+export interface CookingRoundWords { team: string; teamNumber: number; period: string; heading: string }
+export const cookingRoundWords = (teamShortName: string, teamNumber: number, first: Date, last: Date): CookingRoundWords => {
+    const range = formatDateRange({start: first, end: last}, DATE_SETTINGS.DAY_MONTH_MASK)
+    return {team: teamShortName, teamNumber, period: BOOKING_WORDS.roundPeriod(range), heading: BOOKING_WORDS.roundHeading(teamShortName, range)}
 }
 
+/** The kinds of the spending table: a fragment is this dinner's or the team's round; a row is a cooking day or a receipt */
+export const SPENDING_KIND = {dinner: 'dinner', receipt: 'receipt', team: 'team'} as const
+
 /**
- * A spending table fragment: a heading, the rows (a team's cooking days, or this dinner's receipts with the note
- * as the label) and a total row carrying the figures the rows add up to
+ * A spending table fragment: the rows (a team's cooking days, or this dinner's receipts with the note as the label)
+ * and a total row carrying its label and the figures the rows add up to. This dinner reads its heading as text; the
+ * team's round heads with its team's badge and its period
  */
 export type SpendingTableRow =
-    | ({kind: 'dinner'} & CookingRoundRow)
-    | {kind: 'receipt', id: string, date: Date, label: string, amount: number}
-export interface SpendingFragment {
-    heading: string
+    | ({kind: typeof SPENDING_KIND.dinner} & CookingRoundRow)
+    | {kind: typeof SPENDING_KIND.receipt, id: string, date: Date, label: string, amount: number}
+interface SpendingFragmentTable {
     rows: SpendingTableRow[]
     total: {label: string, figures: SpendingFigures}
 }
-export const dinnerSpendingFragment = (dinner: CookingRoundRow, receipts: Expense[]): SpendingFragment => ({
-    heading: `${formatDinnerName(dinner)}, ${formatDate(dinner.date, DATE_SETTINGS.DAY_MONTH_MASK)}`,
-    rows: receipts.map(receipt => ({kind: 'receipt', id: `receipt-${receipt.id}`, date: receipt.createdAt, label: receipt.description, amount: receipt.amount})),
-    total: {label: formatDinnerName(dinner), figures: {budgetGross: dinner.budgetGross, spentGross: dinner.spentGross}}
+export interface DinnerSpendingFragment extends SpendingFragmentTable {
+    kind: typeof SPENDING_KIND.dinner
+    heading: string
+}
+export interface TeamSpendingFragment extends SpendingFragmentTable {
+    kind: typeof SPENDING_KIND.team
+    team: string
+    teamNumber: number
+    period: string
+}
+export type SpendingFragment = DinnerSpendingFragment | TeamSpendingFragment
+export const dinnerSpendingFragment = (dinner: CookingRoundRow, receipts: Expense[]): DinnerSpendingFragment => ({
+    kind: SPENDING_KIND.dinner,
+    heading: `${formatDinnerName(dinner.menuTitle)}, ${formatDate(dinner.date, DATE_SETTINGS.DAY_MONTH_MASK)}`,
+    rows: receipts.map(receipt => ({kind: SPENDING_KIND.receipt, id: `receipt-${receipt.id}`, date: receipt.createdAt, label: receipt.description, amount: receipt.amount})),
+    total: {label: formatDinnerName(dinner.menuTitle), figures: {budgetGross: dinner.budgetGross, spentGross: dinner.spentGross}}
 })
-export const teamSpendingFragment = (rows: CookingRoundRow[], words: CookingRoundWords): SpendingFragment => ({
-    heading: words.heading,
-    rows: rows.map(row => ({kind: 'dinner', ...row})),
-    total: {label: words.team, figures: useOrder().spendingTotals(rows)}
+export const teamSpendingFragment = (rows: CookingRoundRow[], {team, teamNumber, period}: CookingRoundWords): TeamSpendingFragment => ({
+    kind: SPENDING_KIND.team,
+    team,
+    teamNumber,
+    period,
+    rows: rows.map(row => ({kind: SPENDING_KIND.dinner, ...row})),
+    total: {label: team, figures: useOrder().spendingTotals(rows)}
 })
 
 /**
@@ -211,8 +243,8 @@ export const STEP_ICONS: Record<DinnerStepState, string> = {
  * entry is booked at its frozen price when a ticket is assigned, so the household pays then
  */
 export const SUPPLY_WORDS = {
-    forSaleCount: ({formatted}: Pick<ReleasedTicketCounts, 'formatted'>) => BOOKING_WORDS.supply.forSale(formatted),
-    queuedCount: ({queuedFormatted}: Pick<ReleasedTicketCounts, 'queuedFormatted'>) => BOOKING_WORDS.supply.queued(queuedFormatted),
+    forSaleCount: BOOKING_WORDS.supply.forSale,
+    queuedCount: BOOKING_WORDS.supply.queued,
     chefAsk: BOOKING_WORDS.supply.chefAsk,
     householdReleased: BOOKING_WORDS.supply.householdReleased,
     householdQueued: BOOKING_WORDS.supply.householdQueued
@@ -221,9 +253,9 @@ export const SUPPLY_WORDS = {
 /** A closed dinner's supply as the Framelding badge's value line: "1B til salg, 8V på venteliste"; null with neither */
 export const lockedSupply = (counts: ReleasedTicketCounts): string | null => {
     switch (supplyStateOf(counts)) {
-        case SupplyStateEnum.FOR_SALE_AND_WAITLIST: return `${SUPPLY_WORDS.forSaleCount(counts)}, ${SUPPLY_WORDS.queuedCount(counts)}`
-        case SupplyStateEnum.FOR_SALE: return SUPPLY_WORDS.forSaleCount(counts)
-        case SupplyStateEnum.WAITLIST: return SUPPLY_WORDS.queuedCount(counts)
+        case SupplyStateEnum.FOR_SALE_AND_WAITLIST: return `${SUPPLY_WORDS.forSaleCount(useTicket().formatTicketCounts(counts.byType))}, ${SUPPLY_WORDS.queuedCount(useTicket().formatTicketCounts(counts.queuedByType))}`
+        case SupplyStateEnum.FOR_SALE: return SUPPLY_WORDS.forSaleCount(useTicket().formatTicketCounts(counts.byType))
+        case SupplyStateEnum.WAITLIST: return SUPPLY_WORDS.queuedCount(useTicket().formatTicketCounts(counts.queuedByType))
         case SupplyStateEnum.NONE: return null
     }
 }
@@ -232,7 +264,7 @@ export const lockedSupply = (counts: ReleasedTicketCounts): string | null => {
 export const ticketsForSale = (counts: ReleasedTicketCounts): string | null => {
     switch (supplyStateOf(counts)) {
         case SupplyStateEnum.FOR_SALE_AND_WAITLIST:
-        case SupplyStateEnum.FOR_SALE: return SUPPLY_WORDS.forSaleCount(counts)
+        case SupplyStateEnum.FOR_SALE: return SUPPLY_WORDS.forSaleCount(useTicket().formatTicketCounts(counts.byType))
         case SupplyStateEnum.WAITLIST:
         case SupplyStateEnum.NONE: return null
     }
@@ -268,7 +300,7 @@ export const moreTicketsAlert = (counts: ReleasedTicketCounts): {icon: string, t
 // The closed Framelding badge's glyph and colour by the dinner's supply: the tickets for sale lead, a waiting list alone
 // wears the queued order state, a dinner with neither reads closed
 const FOR_SALE_BADGE = {icon: ICONS.released, color: COLOR.warning}
-const CLOSED_BOOKING_BADGE: Record<SupplyState, Pick<DeadlineBadgeData, 'icon' | 'color'>> = {
+const CLOSED_BOOKING_BADGE: Record<SupplyState, BadgeLook> = {
     [SupplyStateEnum.FOR_SALE_AND_WAITLIST]: FOR_SALE_BADGE,
     [SupplyStateEnum.FOR_SALE]: FOR_SALE_BADGE,
     [SupplyStateEnum.WAITLIST]: {icon: ORDER_STATE_LABELS[TicketStateEnum.queued].icon, color: ORDER_STATE_LABELS[TicketStateEnum.queued].color},
@@ -279,7 +311,7 @@ const CLOSED_BOOKING_BADGE: Record<SupplyState, Pick<DeadlineBadgeData, 'icon' |
  * The Framelding badge: open while bookings can change; once closed, its look follows the dinner's supply
  * (`CLOSED_BOOKING_BADGE`), its value line the supply's words, else Lukket
  * @param isOpen - Whether booking is still open (canModifyOrders)
- * @param releasedCounts - The locked dinner's supply with its formatted breakdowns
+ * @param releasedCounts - The locked dinner's supply with its breakdowns by ticket type
  */
 export const createBookingBadge = (isOpen: boolean, releasedCounts: ReleasedTicketCounts = EMPTY_RELEASED_TICKET_COUNTS): DeadlineBadgeData => {
     const {label, openText} = DEADLINE_LABELS.BOOKING_CLOSED
@@ -320,14 +352,16 @@ export const createDiningModeBadge = (
 }
 
 /**
- * Create booking view badges (for DinnerBookingForm, BookingGridView)
+ * Create booking view badges (for DinnerBookingForm, GuestBookingForm)
+ * @param now - The page's clock (useClock), so the server and the browser count down from the same moment
  */
 export const createBookingBadges = (
     dinnerEvent: DinnerEventDisplay,
     deadlines: SeasonDeadlines,
+    now: Date,
     releasedCounts?: ReleasedTicketCounts
 ): { booking: DeadlineBadgeData; diningMode: DeadlineBadgeData } => {
-    const diningModeCountdown = calculateCountdown(deadlines.getDiningModeDeadlineTime(dinnerEvent.date))
+    const diningModeCountdown = calculateCountdown(deadlines.getDiningModeDeadlineTime(dinnerEvent.date), now)
     return {
         booking: createBookingBadge(deadlines.canModifyOrders(dinnerEvent.date), releasedCounts),
         diningMode: createDiningModeBadge(deadlines.canEditDiningMode(dinnerEvent.date), diningModeCountdown)
@@ -347,10 +381,12 @@ const LOCK_CHIPS: Record<SupplyState, (supply: ReleasedTicketCounts) => LockChip
  * The lock chip of a dinner past its booking deadline: the tickets for sale as a number, else the waiting list's
  * hourglass, else the closed chip alone. A released ticket goes to the first waiting for its ticket type, so a dinner
  * can hold both; the chip then shows the tickets for sale.
- * Null without supply: the dinner is open for booking.
+ * Null without supply, when the dinner is open for booking, and from the dinner's start (`now`).
  */
-export const lockChip = (supply: ReleasedTicketCounts | null | undefined): LockChip | null =>
-    supply ? LOCK_CHIPS[supplyStateOf(supply)](supply) : null
+export const lockChip = (dinner: DinnerEventDisplay, lockStatus: Map<number, ReleasedTicketCounts | null>, now: Date): LockChip | null => {
+    const supply = useSeason().isDinnerPast(dinner.date, now) ? null : lockStatus.get(dinner.id)
+    return supply ? LOCK_CHIPS[supplyStateOf(supply)](supply) : null
+}
 
 const MODE_LABELS = BOOKING_WORDS.modes
 /** The words of a dinner mode, once: DinnerModeSelector's glyph and label, and the mode a preview line names */
@@ -364,7 +400,7 @@ export const MODE_WORDS: Record<DinnerMode, {label: string, icon: string}> = {
 /** What a preview line names after the person: the mode's word */
 export type PreviewWords = {mode: string}
 
-const {BookingActionSchema, BookingOutcomeSchema, TicketChangeKindSchema, TicketTypeSchema} = useBookingValidation()
+const {BookingActionSchema, BookingOutcomeSchema, TicketChangeKindSchema} = useBookingValidation()
 const Action = BookingActionSchema.enum
 
 const ACTION_TEXTS = BOOKING_WORDS.actions
@@ -403,18 +439,37 @@ export const ticketChangeWord = (change: TicketChangeKind, reason?: TicketEvent[
 export const ticketChangeSeller = (seller: string): string => BOOKING_WORDS.ticketChange.seller(seller)
 
 /** A chip per ticket type in a count, in the type's colour, written as the compact ticket counts write it ("1V") */
-export const ticketChips = (counts: TicketCounts) => TicketTypeSchema.options
-    .filter(type => counts[type] > 0)
-    .map(type => ({type, color: ticketTypePresentation(type).color, text: TICKET_COUNTS.compact.text({[type]: counts[type]})}))
+export const ticketChips = (counts: TicketCounts) => TICKET_COUNTS.compact.parts(counts)
+    .map(({ticketType, text}) => ({type: ticketType, color: ticketTypePresentation(ticketType).color, text}))
 
 /** The chips of a ticket event: a ticket type change shows the tickets before it first, the close shows its word alone */
 export const ticketEventChipRuns = (event: TicketEvent) => event.change === TicketChangeKindSchema.enum.CLOSE
     ? []
     : [...(event.from ? [ticketChips(event.from)] : []), ticketChips(event.tickets)]
 
-/** Billetændringer's household: one by its short name; the system's line over several reads System, a user's the short names */
-export const ticketChangeHouseholds = ({households, bySystem}: Pick<TicketChange, 'households' | 'bySystem'>): string =>
-    households.length !== 1 && bySystem ? BOOKING_WORDS.ticketChange.bySystem : households.join(', ')
+/** The households a user's line names before its control folds the rest */
+const HOUSEHOLDS_BEFORE_FOLD = 2
+
+/** Billetændringer's Husstand: what the cell reads, and past the first households the control that opens or folds the rest */
+export type TicketChangeHouseholds = {names: string, toggle?: {label: string, ariaLabel: string}}
+
+/**
+ * Billetændringer's household: one by its short name; the system's line over several reads System; a user's line names
+ * its households in the line's order, past two of them the first two and a control counting the rest until opened
+ */
+export const ticketChangeHouseholds = ({households, bySystem}: TicketChange, open: boolean): TicketChangeHouseholds => {
+    const words = BOOKING_WORDS.ticketChange
+    if (households.length !== 1 && bySystem) return {names: words.bySystem}
+    if (households.length <= HOUSEHOLDS_BEFORE_FOLD) return {names: households.join(', ')}
+    const shown = open ? households : households.slice(0, HOUSEHOLDS_BEFORE_FOLD)
+    return {
+        names: shown.join(', '),
+        toggle: {
+            label: open ? words.households.fewer : words.households.more(households.length - shown.length),
+            ariaLabel: words.households.toggle(open, households.length)
+        }
+    }
+}
 
 const SAVE_WORDS = BOOKING_WORDS.save
 /** The booking form's save button words for each outcome */
@@ -434,7 +489,7 @@ const supplyOutcomeOf = (action: BookingAction): BookingOutcome | undefined => {
 }
 
 /** What the save does, read from its preview: the reply's first supply outcome; else a mode change */
-export const previewSaveOutcome = (result: Pick<ScaffoldResult, 'results'>): BookingOutcome =>
+export const previewSaveOutcome = (result: ScaffoldResult): BookingOutcome =>
     result.results.map(({action}) => supplyOutcomeOf(action)).find(outcome => outcome !== undefined) ?? Action.CHANGE_MODE
 
 /** The save button's label for an outcome */
@@ -443,27 +498,37 @@ export const bookingSaveLabel = (outcome: BookingOutcome): string => OUTCOME_WOR
 /** The guest form's button names the guests; its preview lines name the guests per outcome */
 export const guestSaveLabel = (count: number): string => BOOKING_WORDS.guests.save(count)
 
-/** The look of a toast that reports a booking result: the ticket, red as soon as one order failed, green otherwise; a line per day */
-export const scaffoldToastLook = (result: Pick<ScaffoldResult, 'errored'>) => ({
+/** The look of a booking result's toast: the ticket, red as soon as one order failed, green otherwise; a line per day */
+export const scaffoldToastLook = (result: ScaffoldResult) => ({
     color: result.errored > 0 ? COLOR.error : COLOR.success,
     icon: ICONS.ticket,
     ui: {description: COMPONENTS.bookingResult.lines}
 })
 
-/** A booker's guest tickets of one type, as the guest row badges them: "Barn", "Barn ×2"; the count alone when the type is gone */
-export const guestTicketsLabel = (label: string | undefined, count: number): string =>
+/** A booker's guest tickets of one kind in a preview line or a toast line: "Barn · 17 kr", "Barn · 17 kr ×2"; the count alone when the ticket's type is gone */
+const guestTicketsLabel = (label: string | undefined, count: number): string =>
     [label, count > 1 ? BOOKING_WORDS.guests.count(count) : undefined].filter(Boolean).join(' ')
 
-/** A booker's guests of one ticket type in a preview line or a toast line: "Gæst af Anna (Barn ×2)" */
-const guestGroupName = (bookerName: string, ticketType: TicketType | null | undefined, count: number): string => {
-    const tickets = guestTicketsLabel(ticketType ? ticketTypeLabel(ticketType) : undefined, count)
-    const guests = useOrder().formatGuestLabel(bookerName)
+/** A ticket's badge, in the day view and in the grid: its type and its price, then its guests: "Baby · 0 kr · 2 Gæster" */
+export const ticketBadgeLabel = (label: string, price: number, guestCount?: number): string =>
+    [
+        useTicket().formatTicketPrice(label, price),
+        guestCount === undefined ? undefined : BOOKING_WORDS.guests.label(guestCount)
+    ].filter(Boolean).join(' · ')
+
+/** A booker's guests of one ticket type and price in a preview line or a toast line: "Gæst af Anna (Baby · 0 kr ×2)" */
+const guestGroupName = ({inhabitantName, ticketType, priceAtBooking}: BookingResult, count: number): string => {
+    const ticket = ticketType && priceAtBooking !== null
+        ? useTicket().formatTicketPrice(ticketTypeLabel(ticketType), priceAtBooking)
+        : undefined
+    const tickets = guestTicketsLabel(ticket, count)
+    const guests = useOrder().formatGuestLabel(inhabitantName)
     return tickets ? `${guests} (${tickets})` : guests
 }
 
-/** The person a result names: the inhabitant, or a booker's guests of one ticket type */
-const personOf = ({inhabitantId, isGuestTicket, ticketType}: Pick<BookingResult, 'inhabitantId' | 'isGuestTicket' | 'ticketType'>): string =>
-    isGuestTicket ? `${inhabitantId}:guest:${ticketType}` : `${inhabitantId}`
+/** The person a result or a place names: the inhabitant, or a booker's guests of one ticket type and price */
+const personOf = ({inhabitantId, isGuestTicket, ticketType, priceAtBooking}: BookingResult | QueuePosition): string =>
+    isGuestTicket ? `${inhabitantId}:guest:${ticketType}:${priceAtBooking}` : `${inhabitantId}`
 
 /** Places on the waiting list ascending, each in the line of its ticket type: "Voksen #3" */
 const queuePlaces = (positions: QueuePosition[]): string[] =>
@@ -473,16 +538,34 @@ const queuePlaces = (positions: QueuePosition[]): string[] =>
 const withPlaces = (text: string, places: string[]): string => places.length > 0 ? `${text} (${places.join(', ')})` : text
 
 const CONFLICT_WORDS: Partial<Record<BookingAction, string>> = BOOKING_WORDS.result.conflict
-const conflictWordsOf = ({reason, action}: Pick<BookingResult, 'reason' | 'action'>): string | undefined =>
+const conflictWordsOf = ({reason, action}: BookingResult): string | undefined =>
     reason === BookingFailureEnum.CONFLICT ? CONFLICT_WORDS[action] : undefined
 
-/** A place on the waiting list of a sold-out dinner, in the line of its ticket type, rendered compact beside the name */
-export const createWaitlistBadge = (position: number, ticketType?: TicketType | null): DeadlineBadgeData => ({
-    label: BOOKING_WORDS.waitlistBadge.label,
-    icon: ORDER_STATE_LABELS.queued.icon,
-    color: ORDER_STATE_LABELS.queued.color,
-    value: formatPlace(position, ticketType),
-    helpText: BOOKING_WORDS.waitlistBadge.helpText
+// The look of a ticket's state: a released ticket wears its order state, a bought or queued one its ticket state
+const TICKET_STATE_LABELS = {
+    [TicketStateEnum.released]: ORDER_STATE_LABELS[OrderStateEnum.RELEASED],
+    [TicketStateEnum.claimed]: ORDER_STATE_LABELS[TicketStateEnum.claimed],
+    [TicketStateEnum.queued]: ORDER_STATE_LABELS[TicketStateEnum.queued]
+} satisfies Record<Exclude<TicketState, typeof TicketStateEnum.normal>, OrderDisplayConfig>
+
+/**
+ * A ticket's state as a badge, rendered compact beside the name: the detail is the seller of a bought ticket or the
+ * place in the line of a queued one (formatPlace); a normal ticket has none
+ */
+export const createTicketStateBadge = (ticketState: TicketState, detail = ''): DeadlineBadgeData | null => {
+    if (ticketState === TicketStateEnum.normal) return null
+    const {label, icon, color} = TICKET_STATE_LABELS[ticketState]
+    const {value, helpText} = BOOKING_WORDS.ticketStateBadge[ticketState]
+    return {label, icon, color, value: value(detail), helpText}
+}
+
+/** A person's first dinner at a new ticket type, rendered compact beside the name as the ticket-state badge: "Voksen fra 04/11" */
+export const createBirthdayBadge = (ticketType: TicketType, from: Date): DeadlineBadgeData => ({
+    label: BOOKING_WORDS.birthdayBadge.label,
+    icon: ICONS.birthday,
+    color: COLOR.neutral,
+    value: BOOKING_WORDS.birthdayBadge.from(ticketTypeLabel(ticketType), formatDate(from, DATE_SETTINGS.DAY_MONTH_MASK)),
+    helpText: BOOKING_WORDS.legend.birthday
 })
 
 // ============================================================================
@@ -504,8 +587,6 @@ export interface ActionPreviewDay {
     label: string
     lines: ActionPreviewItem[]
 }
-
-const previewDayLabel = (date: Date): string => `${formatDate(date, 'EEEEEE')} ${formatDate(date)}`
 
 // Each action's colour is the colour of the order state it leads to
 const ACTION_TO_STATE = {
@@ -529,25 +610,28 @@ const previewItem = (name: string, action: BookingAction, words: string, places:
     text: withPlaces(`${name} ${words}`, places)
 })
 
-/** A line of a result's day: an action's person, or a booker's guests of one ticket type, with the rows it names */
+/** A line of a result's day: an action's person, or a booker's guests of one ticket type and price, with the rows it names */
 type DayLine = {row: BookingResult, rows: BookingResult[], name: string, places: string[]}
 
 /** A dinner's part of a booking result: its lines and its failed orders, and the tickets sold on it, to the waiting list or to a claim */
 type ResultDay = {dinnerEventId: number, date: Date, lines: DayLine[], failed: DayLine[], soldToWaitlist: TicketSale[], sold: TicketSale[]}
 
 /** A row of a result's day: one order's result, one failed order, or one ticket sold */
-type DayRow = {dinnerEventId: number} & ({result: BookingResult} | {failed: BookingResult} | {sale: TicketSale, toWaitlist: boolean})
+type DayRow = {dinnerEventId: number} & (
+    | {result: BookingResult, failed?: never, sale?: never}
+    | {failed: BookingResult, result?: never, sale?: never}
+    | {sale: TicketSale, toWaitlist: boolean, result?: never, failed?: never})
 
 /**
  * The days of a booking result, one per dinner the run decided, ascending: the preview and the toast read their lines
  * from them. Within a day a line per action in the word table's order, then per person in the household's order, a
  * booker's guests after the booker; a person outside that order keeps the place the results first give them. A booker's
- * guests of one ticket type are one group, counted as the guest row counts them. A queue line carries its places on the
- * dinner
+ * guests of one ticket type and price are one group, counted as the guest row counts them. A queue line carries its
+ * places on the dinner
  */
-const resultDays = (result: Pick<ScaffoldResult, 'dinners' | 'results' | 'failed' | 'positions' | 'outcomes'>, householdOrder: number[]): ResultDay[] => {
+const resultDays = (result: ScaffoldResult, householdOrder: number[]): ResultDay[] => {
     const dateById = new Map(result.dinners.map(({id, date}) => [id, date]))
-    const placeKey = (place: Pick<QueuePosition, 'inhabitantId' | 'isGuestTicket' | 'ticketType' | 'dinnerEventId'>) => `${personOf(place)}:${place.dinnerEventId}`
+    const placeKey = (place: BookingResult | QueuePosition) => `${personOf(place)}:${place.dinnerEventId}`
     const placesBy = groupBy<QueuePosition, string>(placeKey)(result.positions)
     const personRank = ({inhabitantId}: BookingResult) => {
         const rank = householdOrder.indexOf(inhabitantId)
@@ -557,11 +641,11 @@ const resultDays = (result: Pick<ScaffoldResult, 'dinners' | 'results' | 'failed
     const linesOfDay = linesBy<BookingResult, DayLine, string>(
         row => `${row.action}:${personOf(row)}`,
         (rows) => {
-            const row = rows[0]!
+            const [row] = rows
             return {
                 row,
                 rows,
-                name: row.isGuestTicket ? guestGroupName(row.inhabitantName, row.ticketType, rows.length) : row.inhabitantName,
+                name: row.isGuestTicket ? guestGroupName(row, rows.length) : row.inhabitantName,
                 places: row.action === Action.QUEUE ? queuePlaces(placesBy.get(placeKey(row)) ?? []) : []
             }
         },
@@ -570,15 +654,15 @@ const resultDays = (result: Pick<ScaffoldResult, 'dinners' | 'results' | 'failed
             || Number(a.row.isGuestTicket) - Number(b.row.isGuestTicket)
     )
 
-    const days = linesBy<DayRow, ResultDay, number>(
+    const days = linesBy<DayRow & {date: Date}, ResultDay, number>(
         row => row.dinnerEventId,
         (dayRows, dinnerEventId) => {
-            const sales = dayRows.flatMap(row => 'sale' in row ? [row] : [])
+            const sales = dayRows.flatMap(row => row.sale ? [{sale: row.sale, toWaitlist: row.toWaitlist}] : [])
             return {
                 dinnerEventId,
-                date: dateById.get(dinnerEventId)!,
-                lines: linesOfDay(dayRows.flatMap(row => 'result' in row ? [row.result] : [])),
-                failed: linesOfDay(dayRows.flatMap(row => 'failed' in row ? [row.failed] : [])),
+                date: dayRows[0].date,
+                lines: linesOfDay(dayRows.flatMap(row => row.result ? [row.result] : [])),
+                failed: linesOfDay(dayRows.flatMap(row => row.failed ? [row.failed] : [])),
                 soldToWaitlist: sales.filter(({toWaitlist}) => toWaitlist).map(({sale}) => sale),
                 sold: sales.map(({sale}) => sale)
             }
@@ -592,7 +676,10 @@ const resultDays = (result: Pick<ScaffoldResult, 'dinners' | 'results' | 'failed
         ...result.failed.map((row): DayRow => ({dinnerEventId: row.dinnerEventId, failed: row})),
         ...waitlistTicketsSold.map((sale): DayRow => ({dinnerEventId: sale.dinnerEventId, sale, toWaitlist: true})),
         ...ticketsSold.map((sale): DayRow => ({dinnerEventId: sale.dinnerEventId, sale, toWaitlist: false}))
-    ].filter(row => dateById.has(row.dinnerEventId)))
+    ].flatMap(row => {
+        const date = dateById.get(row.dinnerEventId)
+        return date ? [{...row, date}] : []
+    }))
 }
 
 /**
@@ -600,7 +687,7 @@ const resultDays = (result: Pick<ScaffoldResult, 'dinners' | 'results' | 'failed
  * within a day. The tickets sold to the waiting list close their day in one line
  */
 export const formatPreviewLines = (
-    result: Pick<ScaffoldResult, 'dinners' | 'results' | 'failed' | 'positions' | 'outcomes'>,
+    result: ScaffoldResult,
     householdOrder: number[] = []
 ): ActionPreviewDay[] => {
     const wordsOf = (row: BookingResult) => ACTION_WORDS[row.action].preview({mode: MODE_WORDS[row.dinnerMode].label})
@@ -610,7 +697,7 @@ export const formatPreviewLines = (
         .map(({dinnerEventId, date, lines, soldToWaitlist}) => ({
             dinnerEventId,
             date,
-            label: previewDayLabel(date),
+            label: formatCompactWeekdayDate(date),
             lines: [...lines.map(line => previewItem(line.name, line.row.action, wordsOf(line.row), line.places)), ...saleLine(soldToWaitlist.length)]
         }))
         .filter(day => day.lines.length > 0)
@@ -683,9 +770,16 @@ export const formatResultLines = (result: ScaffoldResult, householdOrder: number
     return allLines.length > 0 ? allLines.join('\n') : RESULT_WORDS.nothingChanged
 }
 
-/** The toast that reports a booking result: the view's title, the result's lines in the result's look */
-export const scaffoldToast = (title: string, result: ScaffoldResult, householdOrder: number[] = []) =>
-    ({title, description: formatResultLines(result, householdOrder), ...scaffoldToastLook(result)})
+/**
+ * The text of a booking result's toast, handed from a caller to a store: the title names the view, the prefix stands before the result's
+ * lines (an admin's correction names the address), the suffix after them (a guest booking names the dinner), the
+ * household's order names its people
+ */
+export type ScaffoldToast = {title: string, prefix?: string, suffix?: string, householdOrder?: number[]}
+
+/** A booking result's toast: the view's title, the result's lines in the result's look */
+export const scaffoldToast = ({title, prefix = '', suffix = '', householdOrder}: ScaffoldToast, result: ScaffoldResult) =>
+    ({title, description: `${prefix}${formatResultLines(result, householdOrder)}${suffix}`, ...scaffoldToastLook(result)})
 
 /** A person's own cell on a dinner: the key of a grid cell's draft and of its expected booking */
 export const expectedBookingKey = (inhabitantId: number, dinnerEventId: number): string => `${inhabitantId}-${dinnerEventId}`
@@ -694,7 +788,7 @@ export const expectedBookingKey = (inhabitantId: number, dinnerEventId: number):
  * The bookings a dry run with no orders expects for the people's own cells: the eating mode the scaffold will book;
  * a person it leaves out, or books Ingen, has none
  */
-export const expectedBookings = (result: Pick<ScaffoldResult, 'results'> | null): Map<string, DinnerMode> => new Map(
+export const expectedBookings = (result: ScaffoldResult | null): Map<string, DinnerMode> => new Map(
     (result?.results ?? [])
         .filter(({isGuestTicket, dinnerMode}) => !isGuestTicket && dinnerMode !== DinnerModeEnum.NONE)
         .map(({inhabitantId, dinnerEventId, dinnerMode}) => [expectedBookingKey(inhabitantId, dinnerEventId), dinnerMode])
@@ -704,7 +798,7 @@ export const expectedBookings = (result: Pick<ScaffoldResult, 'results'> | null)
 const PREVIEW_DEBOUNCE_MS = 400
 
 /**
- * The server's dry run of a request, read component-local (ADR-007): on mount and on every change of the request while
+ * The server's dry run of a request, read component-local: on mount and on every change of the request while
  * one stands, after the last change when `debounced`, and again on a change of `refreshOn`. `result` answers the request
  * standing now, `pending` holds from the change until its reply lands; a null request reads nothing
  */
@@ -746,24 +840,104 @@ export const useScaffoldPreview = <Request>(
     }
 }
 
+/**
+ * The bookings the scaffold will make on a household's dinners that have not started: its dry run with no orders, read
+ * again once the orders change. Every viewer reads them, on the season's deadlines
+ */
+export const useExpectedBookings = (household: () => HouseholdDisplay | null | undefined, dinners: () => DinnerEventDisplay[], orders: () => OrderDisplay[]) => {
+    const now = useClock()
+    const {isDinnerPast} = useSeason()
+    const bookingsStore = useBookingsStore()
+    const request = computed(() => {
+        const householdId = household()?.id
+        const dinnerEventIds = dinners().filter(dinner => !isDinnerPast(dinner.date, now.value)).map(dinner => dinner.id)
+        return householdId !== undefined && dinnerEventIds.length > 0 ? {householdId, dinnerEventIds} : null
+    })
+    const {result, pending} = useScaffoldPreview(
+        () => request.value,
+        ({householdId, dinnerEventIds}) => bookingsStore.fetchExpectedBookings(householdId, dinnerEventIds),
+        {refreshOn: [orders]}
+    )
+    return {
+        expectedModes: computed(() => expectedBookings(result.value)),
+        isExpectedPending: pending
+    }
+}
+
+/** What a person holds on a dinner: the order, else the place on the waiting list; the plan shows while they hold neither */
+export type PersonOnDinner = {
+    order: OrderDisplay | null
+    waitlistEntry: TicketWaitlistDetail | undefined
+    expectedMode: DinnerMode | undefined
+    heldMode: DinnerMode
+    shownMode: DinnerMode
+}
+
+/**
+ * A person's ticket, place and plan on a dinner, from the household's orders, its places and the planned bookings.
+ * An order supersedes a place: the placement deletes the entry it served
+ */
+export const personOnDinner = (orders: OrderDisplay[], waitlistEntries: TicketWaitlistDetail[], expectedModes: Map<string, DinnerMode>) =>
+    (inhabitantId: number, dinnerEventId: number): PersonOnDinner => {
+        const order = findRegularOrder(orders, inhabitantId, dinnerEventId) ?? null
+        const waitlistEntry = order ? undefined : findRegularOrder(waitlistEntries, inhabitantId, dinnerEventId)
+        const expectedMode = order || waitlistEntry ? undefined : expectedModes.get(expectedBookingKey(inhabitantId, dinnerEventId))
+        const heldMode = order?.dinnerMode ?? waitlistEntry?.order.dinnerMode ?? DinnerModeEnum.NONE
+        return {order, waitlistEntry, expectedMode, heldMode, shownMode: expectedMode ?? heldMode}
+    }
+
+/** A guest row's tickets: a placed group's orders, or one queued guest's place; `held` is the first order or the place's order */
+export type GuestItem = {
+    id: string
+    orders: OrderDisplay[]
+    waitlistEntry: TicketWaitlistDetail | undefined
+    held: OrderDisplay | WaitlistOrder
+    ticketPrice: TicketPrice | undefined
+}
+
+/**
+ * The guest rows of the given orders and places: a placed group (booker, ticket type, price, dinner), then one row per
+ * queued guest. A guest has no birth date, so the price the orders or the place hold names the ticket type
+ */
+export const guestItemsOf = (orders: OrderDisplay[], waitlistEntries: TicketWaitlistDetail[], ticketPrices: TicketPrice[]): GuestItem[] => {
+    const {findTicketPriceById, resolveTicketPrice} = useTicket()
+    const placed = Object.entries(useBooking().groupGuestOrders(orders))
+        .map(([key, group]): GuestItem => ({
+            id: `guest-group-${key}`,
+            orders: group,
+            waitlistEntry: undefined,
+            held: group[0],
+            ticketPrice: resolveTicketPrice(null, group[0].priceAtBooking, ticketPrices)
+        }))
+    const queued = waitlistEntries
+        .filter(entry => entry.isGuestTicket)
+        .map((entry): GuestItem => ({
+            id: `guest-entry-${entry.id}`,
+            orders: [],
+            waitlistEntry: entry,
+            held: entry.order,
+            ticketPrice: findTicketPriceById(entry.order.ticketPriceId, ticketPrices)
+        }))
+    return [...placed, ...queued]
+}
+
 export const useBookingUi = () => {
     const {DinnerStateSchema} = useBookingValidation()
     const DinnerState = DinnerStateSchema.enum
     const {formatGuestLabel} = useOrder()
     const {getCookingDeadlineThresholds} = useSeason()
+    const {getChefDeadlines} = useBooking()
 
-    type FormattableOrder = Pick<OrderDisplay, 'state' | 'dinnerMode' | 'provenanceHousehold' | 'isGuestTicket'>
     // A ticket that is neither released nor bought reads its order's own state
-    const orderLabel = (order: FormattableOrder): OrderDisplayConfig => {
-        switch (ticketStateOf(order)) {
-            case TicketStateEnum.released: return ORDER_STATE_LABELS[OrderStateEnum.RELEASED]
-            case TicketStateEnum.claimed: return ORDER_STATE_LABELS[TicketStateEnum.claimed]
-            case TicketStateEnum.queued: return ORDER_STATE_LABELS[TicketStateEnum.queued]
+    const orderLabel = (order: TicketOrder): OrderDisplayConfig => {
+        const ticketState = ticketStateOf(order)
+        switch (ticketState) {
             case TicketStateEnum.normal: return ORDER_STATE_LABELS[order.state]
+            default: return TICKET_STATE_LABELS[ticketState]
         }
     }
 
-    const formatOrder = (order: FormattableOrder, bookerName?: string): FormattedOrder => {
+    const formatOrder = (order: TicketOrder, bookerName?: string): FormattedOrder => {
         const shown = orderLabel(order)
         return {
             guest: order.isGuestTicket ? {label: formatGuestLabel(bookerName), color: COLOR.info, icon: ICONS.userPlus} : null,
@@ -773,51 +947,55 @@ export const useBookingUi = () => {
         }
     }
 
-    // A billed line reads closed, or released when its order closed with Ingen; a snapshot without the mode reads closed
-    const formatCostLine = (line: CostLineOrder): FormattedOrder => formatOrder({
-        state: line.state ?? OrderStateEnum.CLOSED,
-        dinnerMode: line.dinnerMode ?? DinnerModeEnum.DINEIN,
-        provenanceHousehold: line.provenanceHousehold ?? undefined,
-        isGuestTicket: line.isGuestTicket ?? false
-    })
+    // A live order reads its own state. A billed line reads closed, or released when its order closed with Ingen; a
+    // snapshot without the mode reads closed
+    const formatCostLine = (line: CostLine): FormattedOrder => {
+        switch (line.kind) {
+            case CostLineKind.ORDER: return formatOrder(line.order)
+            case CostLineKind.TRANSACTION: return formatOrder({
+                state: OrderStateEnum.CLOSED,
+                dinnerMode: line.transaction.dinnerMode ?? DinnerModeEnum.DINEIN,
+                provenanceHousehold: line.transaction.provenanceHousehold ?? undefined,
+                isGuestTicket: line.transaction.isGuestTicket ?? false
+            })
+        }
+    }
 
     /**
      * Create chef workflow badges for a dinner event.
-     * Each badge uses countdown to its specific deadline (from SeasonDeadlines time getters).
+     * Each badge uses countdown to its specific deadline (from SeasonDeadlines time getters), counted from `now`, the
+     * page's clock (useClock), so the server and the browser count down from the same moment.
      */
     const createChefBadges = (
         dinnerEvent: DinnerEventDisplay,
         deadlines: SeasonDeadlines,
+        now: Date,
         releasedCounts?: ReleasedTicketCounts
     ): Map<number, DeadlineBadgeData> => {
         const thresholds = getCookingDeadlineThresholds()
 
         // Each badge counts to its specific deadline
-        const menuCountdown = calculateCountdown(deadlines.getMenuDeadlineTime(dinnerEvent.date))
-        const bookingCountdown = calculateCountdown(deadlines.getBookingDeadlineTime(dinnerEvent.date))
-        const dinnerCountdown = calculateCountdown(deadlines.getDinnerStartTime(dinnerEvent.date))
-
-        const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
-            (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
+        const bookingCountdown = calculateCountdown(deadlines.getBookingDeadlineTime(dinnerEvent.date), now)
+        const dinnerCountdown = calculateCountdown(deadlines.getDinnerStartTime(dinnerEvent.date), now)
+        const [menu, groceries] = getChefDeadlines(dinnerEvent, deadlines, now)
 
         const badge = (
             step: number,
             key: keyof typeof DEADLINE_LABELS,
-            state: DinnerStepState,
             done: boolean,
-            countdown: { hours: number; formatted: string }
+            result: StepDeadlineResult
         ): DeadlineBadgeData => {
-            const labels = DEADLINE_LABELS[key]
-            const result = DINNER_STEP_MAP[state].getDeadline(countdown, thresholds)
-            const alarm = done ? -1 : result.alarm
+            // A step without a label of its own reads none
+            const labels: {label?: string, openText: string, closedText: string} = DEADLINE_LABELS[key]
+            const alarm = done ? ALARM_LEVEL.neutral : result.alarm
             const b = ALARM_TO_BADGE[alarm]
             const text = done ? labels.closedText : labels.openText
             return {
                 step, alarm,
-                label: 'label' in labels ? labels.label : '',
+                label: labels.label ?? '',
                 icon: b.icon,
                 value: done ? '' : result.description,
-                color: b.color as DeadlineBadgeData['color'],
+                color: b.color,
                 helpText: text
             }
         }
@@ -830,15 +1008,16 @@ export const useBookingUi = () => {
         const bookingBadge: DeadlineBadgeData = {
             ...baseBadge,
             step: 2,
-            alarm: bookingOpen ? bookingResult.alarm : -1,
+            alarm: bookingOpen ? bookingResult.alarm : ALARM_LEVEL.neutral,
             value: bookingOpen ? bookingResult.description : baseBadge.value
         }
 
         return new Map([
-            [1, badge(1, 'ANNOUNCED', DinnerStepState.ANNOUNCED, menuDone, menuCountdown)],
+            [1, badge(1, 'ANNOUNCED', menu.met, menu)],
             [2, bookingBadge],
-            [3, badge(3, 'GROCERIES_DONE', DinnerStepState.GROCERIES_DONE, dinnerEvent.totalCost > 0, dinnerCountdown)],
-            [4, badge(4, 'CONSUMED', DinnerStepState.CONSUMED, dinnerEvent.state === DinnerState.CONSUMED, dinnerCountdown)]
+            [3, badge(3, 'GROCERIES_DONE', groceries.met, groceries)],
+            [4, badge(4, 'CONSUMED', dinnerEvent.state === DinnerState.CONSUMED,
+                DINNER_STEP_MAP[DinnerStepState.CONSUMED].getDeadline(dinnerCountdown, thresholds))]
         ])
     }
 
@@ -848,7 +1027,8 @@ export const useBookingUi = () => {
         createBookingBadge,
         createDiningModeBadge,
         createBookingBadges,
-        createWaitlistBadge,
+        createTicketStateBadge,
+        createBirthdayBadge,
         lockChip,
         bookingSaveLabel,
         guestSaveLabel,

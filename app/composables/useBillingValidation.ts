@@ -1,21 +1,29 @@
 import {z} from 'zod'
 import {TicketTypeSchema, DinnerModeSchema, OrderStateSchema, LedgerEntryTypeSchema} from '~~/prisma/generated/zod'
-import {parse as parseDate} from 'date-fns'
+import {endOfMonth} from 'date-fns'
 import {
     ExpenseFragmentSchema,
     SerializedExpenseFragmentSchema,
     PayerSnapshotSchema,
+    OrderSnapshotSchema,
     serializeExpense,
-    deserializeExpense
+    deserializeExpense,
+    type OrderSnapshot
 } from '~/composables/fragments/domainFragments'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, type TicketType} from '~/composables/useBookingValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 import {sumAmounts} from '~/utils/ledger'
-import type {DinnerEventInfo, DinnerMode} from '~/composables/useBookingValidation'
+import {formatDate, parseDate} from '~/utils/date'
 import {useTicket} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useNotificationValidation} from '~/composables/useNotificationValidation'
 
 const {SenderEmitResultSchema} = useNotificationValidation()
+
+// A line of the economy views: an order not billed yet, or a billed transaction
+const CostLineKindSchema = z.enum(['ORDER', 'TRANSACTION'])
+
+export const CostLineKind = CostLineKindSchema.enum
 
 /**
  * Validation schemas for Billing domain (CSV Import/Export, BillingPeriodSummary)
@@ -26,20 +34,21 @@ const {SenderEmitResultSchema} = useNotificationValidation()
  * - Row N+1: Voksne row (empty, empty, then counts per date)
  * - Row N+2: Børn (2-12 år) row (empty, empty, then counts per date)
  *
- * ADR-009 Compliance:
+ * Display and Detail:
  * - BillingPeriodSummaryDisplay: Index endpoints (lightweight)
  * - BillingPeriodSummaryDetail: Detail endpoints + mutations (comprehensive)
- * - ImportResponseSchema: Response for import operation
+ * - BillingImportResponseSchema: the import's response
  */
 export const useBillingValidation = () => {
     const TicketType = TicketTypeSchema.enum
     const DinnerMode = DinnerModeSchema.enum
     const OrderState = OrderStateSchema.enum
     const {convertPriceToDecimalFormat} = useTicket()
-    const {CreateOrdersResultSchema, TicketCountsSchema} = useBookingValidation()
+    const {CreateOrdersResultSchema, TicketCountsSchema, OrderDisplaySchema} = useBookingValidation()
+    const {InhabitantDisplaySchema} = useCoreValidation()
 
     // ============================================================================
-    // BillingPeriodSummary Schemas (ADR-009: Display vs Detail)
+    // BillingPeriodSummary Schemas: Display vs Detail
     // ============================================================================
 
     // Ticket counts by type from the repository; a type without tickets is absent
@@ -63,7 +72,7 @@ export const useBillingValidation = () => {
         cutoffDate: z.coerce.date(),
         paymentDate: z.coerce.date(),
         createdAt: z.coerce.date(),
-        version: z.number().int().min(1) // content version (ADR-015): bumped when catch-up billing changes the period
+        version: z.number().int().min(1) // content version: bumped when catch-up billing changes the period
     })
 
     /** What the monthly run reads to decide what a period still needs: its version and the versions delivered so far */
@@ -152,14 +161,15 @@ export const useBillingValidation = () => {
      */
     function parseCSV(csvContent: string): ParsedHouseholdOrder[] {
         const lines = csvContent.trim().split('\n')
+        const [headerLine] = lines
         const orders: ParsedHouseholdOrder[] = []
 
-        if (lines.length < 4) {
+        if (headerLine === undefined || lines.length < 4) {
             throw new Error('CSV must have at least 4 rows (header + address + voksne + børn)')
         }
 
         // Parse header row to extract dates
-        const headerCells = parseCSVLine(lines[0]!) // Safe: lines.length >= 4
+        const headerCells = parseCSVLine(headerLine)
         const dates: Date[] = []
 
         // First two columns are empty/total, dates start at index 2
@@ -167,7 +177,7 @@ export const useBillingValidation = () => {
             const dateStr = headerCells[i]?.trim()
             if (dateStr) {
                 // Parse DD/MM/YYYY format
-                const date = parseDate(dateStr, 'dd/MM/yyyy', new Date())
+                const date = parseDate(dateStr)
                 if (isNaN(date.getTime())) {
                     throw new Error(`Invalid date format in header column ${i + 1}: '${dateStr}'. Expected DD/MM/YYYY`)
                 }
@@ -219,21 +229,16 @@ export const useBillingValidation = () => {
             }
 
             // Parse counts for each date
-            for (let j = 0; j < dates.length; j++) {
+            dates.forEach((date, j) => {
                 const colIndex = j + 2 // Skip address and total columns
                 const adultCount = parseInt(voksneCells[colIndex] || '0', 10) || 0
                 const childCount = parseInt(bornCells[colIndex] || '0', 10) || 0
 
                 // Only add if there are actual orders
                 if (adultCount > 0 || childCount > 0) {
-                    orders.push({
-                        address,
-                        date: dates[j]!, // Safe: j < dates.length
-                        adultCount,
-                        childCount
-                    })
+                    orders.push({address, date, adultCount, childCount})
                 }
-            }
+            })
 
             i += 3
         }
@@ -277,10 +282,10 @@ export const useBillingValidation = () => {
     })
 
     // ============================================================================
-    // Household Billing Schemas (ADR-009)
+    // Household Billing Schemas
     // ============================================================================
 
-    // Expense - the ledger twin of Transaction: a cost paid from the kitchen's money (ADR-009: one shape, no Display/Detail split)
+    // Expense - the ledger twin of Transaction: a cost paid from the kitchen's money; one shape, no Display/Detail split
     const ExpenseSchema = ExpenseFragmentSchema
     const SerializedExpenseSchema = SerializedExpenseFragmentSchema
 
@@ -325,26 +330,20 @@ export const useBillingValidation = () => {
         amount: z.number().int(),
         createdAt: z.coerce.date(),
         orderSnapshot: z.string(),
-        dinnerEvent: z.object({
-            id: z.number().int(),
-            date: z.coerce.date(),
-            menuTitle: z.string()
-        }),
-        inhabitant: z.object({
-            id: z.number().int(),
-            name: z.string(),
-            household: z.object({
-                id: z.number().int(),
-                pbsId: z.number().int(),
-                address: z.string()
-            })
-        }),
-        ticketType: TicketTypeSchema.nullable(),
-        isGuestTicket: z.boolean().optional(),
-        provenanceHousehold: z.string().nullable().optional(),
+        dinnerEvent: OrderSnapshotSchema.shape.dinnerEvent,
+        inhabitant: OrderSnapshotSchema.shape.inhabitant,
+        ticketType: OrderSnapshotSchema.shape.ticketType,
+        isGuestTicket: OrderSnapshotSchema.shape.isGuestTicket,
+        provenanceHousehold: OrderSnapshotSchema.shape.provenanceHousehold,
         // The order's eating mode at the close; null for a snapshot written before the transaction kept it
         dinnerMode: DinnerModeSchema.nullable()
     })
+
+    // A line of the economy views: an order with its eater, or a billed transaction
+    const CostLineSchema = z.discriminatedUnion('kind', [
+        z.object({kind: z.literal(CostLineKind.ORDER), order: OrderDisplaySchema, inhabitant: InhabitantDisplaySchema}),
+        z.object({kind: z.literal(CostLineKind.TRANSACTION), transaction: TransactionDisplaySchema})
+    ])
 
     /**
      * Household Invoice - invoice with transactions for household view
@@ -380,7 +379,7 @@ export const useBillingValidation = () => {
     })
 
     // ============================================================================
-    // Monthly Billing Generation (ADR-015: Idempotent jobs)
+    // Monthly Billing Generation: idempotent jobs
     // ============================================================================
 
     const BillingPeriodSummaryCreateSchema = BillingPeriodSummaryDisplaySchema.omit({
@@ -413,7 +412,7 @@ export const useBillingValidation = () => {
     })
 
     /**
-     * State of one billing period's side effects after a monthly run (ADR-015: the run converges every period):
+     * State of one billing period's side effects after a monthly run (the run converges every period):
      * csvUploaded / emailSent tell whether the archive and the accountant mail match the period's current CSV;
      * archive / notification are present when this run did the work.
      */
@@ -451,22 +450,6 @@ export const useBillingValidation = () => {
     const CSV_HEADER = '"Kunde nr",Adresse,"Total DKK/måned","Opkrævning periode start","Opkrævning periode slut",Opgørelsesdato,Note'
 
     /**
-     * Format date for CSV export (DD/MM/YYYY)
-     */
-    const formatCsvDate = (date: Date): string => {
-        const day = date.getDate().toString().padStart(2, '0')
-        const month = (date.getMonth() + 1).toString().padStart(2, '0')
-        const year = date.getFullYear()
-        return `${day}/${month}/${year}`
-    }
-
-    /**
-     * Get last day of month for a given date
-     */
-    const getLastDayOfMonth = (date: Date): Date =>
-        new Date(date.getFullYear(), date.getMonth() + 1, 0)
-
-    /**
      * Generate CSV row for a single invoice
      * Uses denormalized pbsId/address (frozen at billing time)
      */
@@ -475,9 +458,9 @@ export const useBillingValidation = () => {
         summary: z.infer<typeof BillingPeriodSummaryDetailSchema>
     ): string => {
         const totalDKK = convertPriceToDecimalFormat(invoice.amount)
-        const paymentStart = formatCsvDate(summary.paymentDate)
-        const paymentEnd = formatCsvDate(getLastDayOfMonth(summary.paymentDate))
-        const cutoff = formatCsvDate(summary.cutoffDate)
+        const paymentStart = formatDate(summary.paymentDate)
+        const paymentEnd = formatDate(endOfMonth(summary.paymentDate))
+        const cutoff = formatDate(summary.cutoffDate)
 
         return `${invoice.pbsId},"${invoice.address}",${totalDKK},${paymentStart},${paymentEnd},${cutoff},`
     }
@@ -498,46 +481,13 @@ export const useBillingValidation = () => {
         `PBS-Opgørelse-Skråningen-${summary.billingPeriod}-v${summary.version}.csv`
 
     // ============================================================================
-    // Transaction Serialization (ADR-010)
+    // Transaction Serialization
     // ============================================================================
 
     /**
-     * Order snapshot schema - frozen billing data for immutability.
-     * Price is in Transaction.amount, not duplicated here.
+     * Serialize the order a transaction freezes into its snapshot column.
      */
-    const OrderSnapshotSchema = z.object({
-        dinnerEvent: z.object({
-            id: z.number().int(),
-            date: z.coerce.date(),
-            menuTitle: z.string()
-        }),
-        inhabitant: z.object({
-            id: z.number().int(),
-            name: z.string(),
-            household: z.object({
-                id: z.number().int(),
-                pbsId: z.number().int(),
-                address: z.string()
-            })
-        }),
-        ticketType: TicketTypeSchema.nullable(),
-        isGuestTicket: z.boolean().optional(),
-        provenanceHousehold: z.string().nullable().optional(),
-        dinnerMode: DinnerModeSchema.optional()
-    })
-
-    /**
-     * Serialize order data for transaction snapshot.
-     * ADR-010: Domain-driven serialization
-     */
-    const serializeTransaction = (order: {
-        dinnerEvent: DinnerEventInfo
-        inhabitant: {id: number, name: string, household: HouseholdInfo}
-        ticketType: string | null
-        isGuestTicket?: boolean
-        provenanceHousehold?: string | null
-        dinnerMode?: DinnerMode
-    }): string => JSON.stringify({
+    const serializeTransaction = (order: OrderSnapshot): string => JSON.stringify({
         dinnerEvent: order.dinnerEvent,
         inhabitant: {
             id: order.inhabitant.id,
@@ -551,10 +501,9 @@ export const useBillingValidation = () => {
     })
 
     /**
-     * Deserialize transaction from Prisma to domain type.
-     * Uses live data if ALL relations exist, otherwise uses frozen snapshot.
-     * Throws if snapshot is unparseable - caller should handle.
-     * ADR-010: Repository-layer deserialization
+     * Deserialize a transaction read with its order. Each part reads live where its row lives and from the snapshot
+     * where it is gone: the order (its dinner and its eater), the order's price row (its ticket type). A snapshot's
+     * household reads id 0. Throws on an unparseable snapshot; the caller handles it.
      */
     const deserializeTransaction = (tx: {
         id: number
@@ -563,44 +512,33 @@ export const useBillingValidation = () => {
         orderSnapshot: string
         order: {
             id: number
-            dinnerEvent: DinnerEventInfo
-            inhabitant: {id: number, name: string, household: HouseholdInfo | null}
-            ticketPrice: {ticketType: string} | null
-            isGuestTicket?: boolean
-            provenanceHousehold?: string | null  // Populated from OrderHistory USER_CLAIMED
-            dinnerMode?: DinnerMode
+            dinnerEvent: OrderSnapshot['dinnerEvent']
+            inhabitant: OrderSnapshot['inhabitant']
+            ticketPrice: {ticketType: TicketType} | null
+            isGuestTicket?: OrderSnapshot['isGuestTicket']
+            dinnerMode?: OrderSnapshot['dinnerMode']
         } | null
     }): z.infer<typeof TransactionDisplaySchema> => {
         const base = {id: tx.id, amount: tx.amount, createdAt: tx.createdAt, orderSnapshot: tx.orderSnapshot}
 
-        // Parse snapshot to get guest/provenance fields (may be absent in old snapshots)
+        // An older snapshot lacks the guest flag, the provenance and the eating mode
         const snapshot = OrderSnapshotSchema.parse(JSON.parse(tx.orderSnapshot))
-
-        // Check relations independently - use live data where available, snapshot as fallback
-        // This handles partial deletion (e.g., ticketPrice deleted but household still exists)
-        const hasOrder = tx.order !== null
-        const hasHousehold = tx.order?.inhabitant?.household != null
-        const hasTicketPrice = tx.order?.ticketPrice != null
-
-        // Build inhabitant: use live household if available (preserves valid householdId for billing)
-        const inhabitant = hasHousehold
-            ? tx.order!.inhabitant
-            : {...snapshot.inhabitant, household: {...snapshot.inhabitant.household, id: 0}}
+        const {order} = tx
 
         return TransactionDisplaySchema.parse({
             ...base,
-            orderId: hasOrder ? tx.order!.id : null,
-            dinnerEvent: hasOrder ? tx.order!.dinnerEvent : snapshot.dinnerEvent,
-            inhabitant,
-            ticketType: hasTicketPrice ? tx.order!.ticketPrice!.ticketType : snapshot.ticketType,
-            isGuestTicket: tx.order?.isGuestTicket ?? snapshot.isGuestTicket,
-            provenanceHousehold: tx.order?.provenanceHousehold ?? snapshot.provenanceHousehold,
-            dinnerMode: tx.order?.dinnerMode ?? snapshot.dinnerMode ?? null
+            orderId: order?.id ?? null,
+            dinnerEvent: order?.dinnerEvent ?? snapshot.dinnerEvent,
+            inhabitant: order?.inhabitant ?? {...snapshot.inhabitant, household: {...snapshot.inhabitant.household, id: 0}},
+            ticketType: order?.ticketPrice?.ticketType ?? snapshot.ticketType,
+            isGuestTicket: order?.isGuestTicket ?? snapshot.isGuestTicket,
+            provenanceHousehold: snapshot.provenanceHousehold,
+            dinnerMode: order?.dinnerMode ?? snapshot.dinnerMode ?? null
         })
     }
 
     /**
-     * Deserialize order snapshot from JSON string.
+     * Deserialize a transaction's snapshot column.
      */
     const deserializeOrderSnapshot = (orderSnapshot: string) =>
         OrderSnapshotSchema.parse(JSON.parse(orderSnapshot))
@@ -738,7 +676,7 @@ export const useBillingValidation = () => {
         DinnerMode,
         OrderState,
 
-        // BillingPeriodSummary Schemas (ADR-009)
+        // BillingPeriodSummary Schemas
         BillingPeriodSummaryDisplaySchema,
         BillingPeriodSummaryDetailSchema,
         TicketCountsByTypeSchema,
@@ -758,8 +696,6 @@ export const useBillingValidation = () => {
 
         // CSV Export Functions
         CSV_HEADER,
-        formatCsvDate,
-        getLastDayOfMonth,
         generateCsvRow,
         generateBillingCsv,
         generateCsvFilename,
@@ -782,7 +718,11 @@ export const useBillingValidation = () => {
         HouseholdInvoiceSchema,
         CurrentPeriodBillingSchema,
 
-        // Serialization (ADR-010)
+        // Economy views
+        CostLineKindSchema,
+        CostLineSchema,
+
+        // Serialization
         OrderSnapshotSchema,
         serializeTransaction,
         deserializeTransaction,
@@ -810,7 +750,7 @@ export const useBillingValidation = () => {
 // Type Exports
 // ============================================================================
 
-// BillingPeriodSummary types (ADR-009)
+// BillingPeriodSummary types
 export type BillingPeriodSummaryDisplay = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryDisplaySchema']>
 export type BillingPeriodSummaryDetail = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryDetailSchema']>
 export type TicketCountsByType = z.infer<ReturnType<typeof useBillingValidation>['TicketCountsByTypeSchema']>
@@ -838,6 +778,8 @@ export type MonthlyBillingResponse = z.infer<ReturnType<typeof useBillingValidat
 // Household Billing types
 export type HouseholdBillingResponse = z.infer<ReturnType<typeof useBillingValidation>['HouseholdBillingResponseSchema']>
 export type TransactionDisplay = z.infer<ReturnType<typeof useBillingValidation>['TransactionDisplaySchema']>
+export type CostLineKind = z.infer<ReturnType<typeof useBillingValidation>['CostLineKindSchema']>
+export type CostLine = z.infer<ReturnType<typeof useBillingValidation>['CostLineSchema']>
 export type TransactionCreateData = z.infer<ReturnType<typeof useBillingValidation>['TransactionCreateDataSchema']>
 
 // Expense types (ledger)
@@ -848,28 +790,6 @@ export type ExpenseCreateData = z.infer<ReturnType<typeof useBillingValidation>[
 export type VatMode = z.infer<ReturnType<typeof useBillingValidation>['VatModeSchema']>
 export type ExpenseLineForm = z.infer<ReturnType<typeof useBillingValidation>['ExpenseLineFormSchema']>
 export type PayerSnapshot = z.infer<ReturnType<typeof useBillingValidation>['PayerSnapshotSchema']>
+export type {OrderSnapshot}
 export type HouseholdInvoice = z.infer<ReturnType<typeof useBillingValidation>['HouseholdInvoiceSchema']>
 export type CurrentPeriodBilling = z.infer<ReturnType<typeof useBillingValidation>['CurrentPeriodBillingSchema']>
-
-// CostEntry/CostLine types (Economy views)
-// DEI = DinnerEventInfo context type, T = item type
-export type CostEntry<T, DEI> = {
-    dinnerEvent: DEI
-    items: T[]
-    totalAmount: number
-    ticketCounts: string
-}
-
-// HouseholdInfo - extracted household properties for grouping
-export type HouseholdInfo = { id: number, pbsId: number, address: string }
-
-// InhabitantInfo - extracted inhabitant properties with household for economy views
-export type InhabitantInfo = { id: number, name: string, household: HouseholdInfo }
-
-// HouseholdEntry - group by household for PBS/revisor view
-export type HouseholdEntry<T> = HouseholdInfo & {
-    items: T[]
-    totalAmount: number      // Stored/expected amount (invoice.amount or computed for virtual)
-    computedTotal: number    // Control sum: Σ item amounts
-    ticketCounts: string
-}

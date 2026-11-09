@@ -5,7 +5,7 @@ import type {ActionPreviewDay, ActionPreviewItem} from '~/composables/useBooking
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {BOOKING_WORDS} from '~/config/bookingWords'
 import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
-import {findByTestId, findAllByTestId} from '~~/tests/component/testHelpers'
+import {findByTestId, findAllByTestId, iconNamesIn} from '~~/tests/component/testHelpers'
 
 const Action = useBookingValidation().BookingActionSchema.enum
 
@@ -22,8 +22,8 @@ describe('ActionPreview', () => {
         ({dinnerEventId, date: new Date(2026, 9, 18 + dinnerEventId), label, lines})
 
     const TWO_DAYS = [
-        day(4, 'to 22/10/2026', [line({text: 'Anna ændrer spisemåde til Takeaway'}), line({name: 'Lars', text: 'Lars ændrer spisemåde til Takeaway'})]),
-        day(5, 'fr 23/10/2026', [line({text: 'Anna frigiver sin billet', action: Action.RELEASE, color: 'error'})])
+        day(4, 'tor. 22/10', [line({text: 'Anna ændrer spisemåde til Takeaway'}), line({name: 'Lars', text: 'Lars ændrer spisemåde til Takeaway'})]),
+        day(5, 'fre. 23/10', [line({text: 'Anna frigiver sin billet', action: Action.RELEASE, color: 'error'})])
     ]
 
     const mount = (props: {days: ActionPreviewDay[], title?: string, pending?: boolean}) => mountSuspended(ActionPreview, {props})
@@ -60,7 +60,7 @@ describe('ActionPreview', () => {
         const wrapper = await mount({days: TWO_DAYS.slice(1)})
         const badge = wrapper.findComponent({name: 'UBadge'})
         expect(badge.props('color')).toBe('error')
-        expect(badge.findComponent({name: 'UIcon'}).props('name')).toBe(ICONS.plusCircle)
+        expect(iconNamesIn(badge)).toEqual([ICONS.plusCircle])
     })
 
     it('while the preview is pending it shows the loader line with the spinning sync glyph in place of the lines', async () => {
@@ -68,7 +68,7 @@ describe('ActionPreview', () => {
 
         const loader = findByTestId(wrapper, 'action-preview-loading')
         expect(loader.text()).toBe(BOOKING_WORDS.preferencePreviewLoading)
-        expect(loader.findComponent({name: 'UIcon'}).props('name')).toBe(ICONS.sync)
+        expect(iconNamesIn(loader)).toEqual([ICONS.sync])
         expect(findByTestId(wrapper, 'action-preview').exists()).toBe(false)
     })
 })

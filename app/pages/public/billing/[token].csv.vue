@@ -9,7 +9,8 @@ definePageMeta({
 })
 
 const route = useRoute()
-const token = computed(() => route.params.token as string)
+const token = computed(() => String(route.params.token))
+const {COMPONENTS} = useTheSlopeDesignSystem()
 
 // Redirect to API endpoint for CSV download
 onMounted(() => {
@@ -18,7 +19,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center">
+  <div :class="COMPONENTS.publicBilling.csvRedirect">
     <p>Henter CSV fil...</p>
   </div>
 </template>

@@ -6,6 +6,10 @@ import {enableAutoUnmount} from '@vue/test-utils'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 import {mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
+import {BUTTON_WORDS} from '~/config/buttonWords'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
+
+const WORDS = HOUSEHOLD_WORDS.editPanel
 
 enableAutoUnmount(afterEach)
 
@@ -41,13 +45,18 @@ describe('HouseholdEditPanel', () => {
 
     const mount = (household: HouseholdDisplay = household1) =>
         mountWithTooltipProvider(HouseholdEditPanel, {props: {household, allHouseholds}, isMd: true})
+    const buttonReading = (wrapper: Awaited<ReturnType<typeof mount>>, label: string) => {
+        const button = wrapper.findAll('button').find(candidate => candidate.text().includes(label))
+        if (!button) throw new Error(`No button reading ${label}`)
+        return button
+    }
 
     it('shows the stamdata, the residens section, every inhabitant at the address with its place, and the delete naming the household', async () => {
         const stamdata = [
-            ['PBS-nummer', '100'],
-            ['Adresse', household1.address],
-            ['Heynabo-ID', String(household1.heynaboId)],
-            ['Forkortelse', 'S_31']
+            [WORDS.facts.pbs, '100'],
+            [WORDS.facts.address, household1.address],
+            [WORDS.facts.heynaboId, String(household1.heynaboId)],
+            [WORDS.facts.shortName, 'S_31']
         ]
         const wrapper = await mount()
         const text = wrapper.text()
@@ -56,29 +65,30 @@ describe('HouseholdEditPanel', () => {
             expect(text).toContain(label)
             expect(text).toContain(value)
         })
-        expect(text).toContain('Residens')
+        expect(text).toContain(WORDS.facts.title)
+        expect(text).toContain(BUTTON_WORDS.heynabo.name)
+        expect(text).toContain(WORDS.residency.title)
         // Own inhabitants read "I denne husstand", the sibling household's offer "Flyt hertil"
         expect(text).toContain('Emil')
         expect(text).toContain('Anna')
-        expect(text).toContain('I denne husstand')
-        expect(text).toContain('Flyt hertil')
-        expect(text).toContain('Slet S_31 (PBS 100)')
+        expect(text).toContain(WORDS.inhabitants.here)
+        expect(text).toContain(WORDS.inhabitants.moveHere)
+        expect(text).toContain(WORDS.inhabitants.householdBadge('S_32', 200))
+        expect(text).toContain(WORDS.delete.label('S_31', 100))
     })
 
     // ========== EMITS ==========
 
     it('emits move:inhabitant on Flyt hertil click', async () => {
         const wrapper = await mount()
-        const btn = wrapper.findAll('button').find(b => b.text().includes('Flyt hertil'))
-        await btn!.trigger('click')
+        await buttonReading(wrapper, WORDS.inhabitants.moveHere).trigger('click')
         await nextTick()
         expect(wrapper.emitted('move:inhabitant')).toBeTruthy()
     })
 
     it('emits close on Annuller click', async () => {
         const wrapper = await mount()
-        const btn = wrapper.findAll('button').find(b => b.text().includes('Annuller'))
-        await btn!.trigger('click')
+        await buttonReading(wrapper, BUTTON_WORDS.cancel).trigger('click')
         await nextTick()
         expect(wrapper.emitted('close')).toBeTruthy()
     })

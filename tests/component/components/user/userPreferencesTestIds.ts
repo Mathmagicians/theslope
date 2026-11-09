@@ -1,6 +1,6 @@
 /**
- * The `data-testid` contract of UserPreferencesCard, shared by its component spec and
- * the UserPreferences e2e spec so one rename lands in both.
+ * The `data-testid` contract of UserPreferencesCard, shared by the component specs and the e2e
+ * helpers and steps, so one rename lands in all of them.
  */
 export const PREF_TEST_IDS = {
     /** The ⚙ in the UserProfileCard header that reveals the card */
@@ -14,9 +14,3 @@ export const PREF_TEST_IDS = {
     palette: (palette: string) => `pref-palette-${palette}`,
     textScale: (textScale: string) => `pref-text-scale-${textScale}`
 } as const
-
-/** The contrast badge every palette with a verified level carries - the AA and the AAA one alike */
-export const PALETTE_BADGE_TEXT = 'EN 301 549 · Kontrast AA'
-
-/** The badge the colour-safe palette carries beside its contrast badge */
-export const COLOUR_SAFE_BADGE_TEXT = 'Nedsat farvesyn · Okabe–Ito'

@@ -13,7 +13,7 @@ export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    let id!: number
+    let id: number
     try {
         const params = await getValidatedRouterParams(event, paramSchema.parse)
         id = params.id

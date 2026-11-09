@@ -22,7 +22,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     }
 
     // Database operations try-catch - separate concerns
-    let dinnerEvent!: DinnerEventDetail | null
+    let dinnerEvent: DinnerEventDetail | null
     try {
         console.info(`🍽️ > DINNER_EVENT > [GET] Fetching dinner event ${id}`)
         dinnerEvent = await fetchDinnerEvent(d1Client, id)

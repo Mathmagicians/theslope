@@ -1,7 +1,7 @@
 # ADR Compliance - Backend
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-10-17
+**Last Updated:** 2026-10-25
 **History:** git and the feature plans under `docs/features/` (shipped plans in `docs/features/archived/`)
 
 One row per endpoint and per server module an ADR names, with its markers and its API spec. The handler, its repository
@@ -14,7 +14,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | Return type | an explicit `Promise<Type>` with the type from a validation composable (ADR-001, ADR-009) |
 | Validation | params, body and query read through `getValidatedRouterParams`, `readValidatedBody`, `getValidatedQuery` (ADR-002) |
 | Repository | the repository function parses its result with the schema (ADR-010) |
-| E2E | an API spec under `tests/e2e/api/` exercises it (ADR-003) |
+| E2E | an API spec under `tests/e2e/api/` or a scenario under `tests/e2e/features/` exercises it (ADR-003) |
 
 ⚠️ partial, the gap named in Status · ❌ non-compliant · ❓ not audited · N/A not applicable
 
@@ -23,59 +23,62 @@ function and the spec hold the detail; a row names a gap in a few words.
 | Endpoint | Return type | Validation | Repository | E2E | Status |
 |---|---|---|---|---|---|
 | **Orders** | | | | | |
-| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the sort from `OrderSortBySchema`; its three flags through `QueryFlagSchema`, `=false` reads false; `includeCostContext` returns each order with its dinner and its eater as Display types |
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/order/waitlist.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `server/utils/waitlistAssignment.ts` | ✅ | N/A | ✅ | ✅ serial; recovery unit | ✅ `joinWaitlist` joins a household's claims on a dinner as one batch, idempotent on a later run; a placement grabs, writes, records and removes; the recovery settles a grab past `waitlistPlacingLeaseMinutes` and reports the sale or extra portion it finishes |
+| `server/utils/sender/events/waitlist.ts` | ✅ | N/A | ✅ | ✅ serial; unit | ✅ the booking status sender event: a notification about an inhabitant goes to the closest user (`findClosestUserInHousehold`, `records.ts`), the buildup to the closest user of the dinner's chef; `sendNotifications` sends the notifications of the dinners past their booking deadline as they stand, through `deliverDesired`; the dinners, people, households and logins read once per kind; `notifyBookingOutcomes` and `notifyExtraPortions` leave out the outcomes of a dinner deleted since the action with a `console.warn`, and the action's other dinners notify |
+| `server/utils/sender/deliveries.ts` | ✅ | N/A | ✅ | unit | ✅ `deliverDesired`, the delivery step every sender event shares: the recorded rows read once per subject type (ADR-014), one emit, one write of the Delivery rows; a delivery goes to a user or to a configured mailbox; `deliverInBackground(event, name, work)` runs the work after the response as a promise, a synchronous throw included; its failure is one `console.error` line naming the work |
+| `server/utils/sender/events/monthly-billing.ts` | ✅ | N/A | ✅ | unit | ✅ the monthly billing sender event: `notificationsForAccountant`, a period's current version to the accountant's mailbox, cc the admin mailbox, the CSV attached; a missing accountant mailbox is an error line; sent through `deliverDesired` by the monthly run and the re-send |
+| `server/utils/sender/events/chef-deadlines.ts` | ✅ | N/A | ✅ | unit | ✅ the chef deadlines sender event (`sendChefDeadlines`): one notice a dinner a night to the chef's closest user while an alarm of the chef page (`getChefDeadlines`) is yellow, red or overdue, through `deliverDesired`; the active season's dinners and chefs read once |
+| `server/utils/sender/records.ts` | ✅ | N/A | ✅ | unit, through the sender events | ✅ the people reads every sender event shares (`readPeople`, `readNamed`) and `findClosestUserInHousehold` |
 | `server/data/waitlistRepository.ts` | ✅ | N/A | ✅ | ✅ | ✅ a leave or a change of an entry a run holds or has placed answers 409; `createWaitlistEntries` writes the entries and their QUEUE rows in two bulk writes |
 | **Admin - dinner events** | | | | | |
 | `/api/admin/dinner-event/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/dinner-event/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/dinner-event/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/dinner-event/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes its typed row (ADR-010 compliance 3) |
 | `/api/admin/dinner-event/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Admin - teams** | | | | | |
 | `/api/admin/team/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/team/index.put.ts` | ✅ | ⚠️ | ✅ | ✅ | ⚠️ raw body read beside the validated one |
-| `/api/admin/team/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/team/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/team/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes its typed row (ADR-010 compliance 3) |
+| `/api/admin/team/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ writes the team's columns; its members change through the assignment endpoints |
 | `/api/admin/team/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deleted id |
 | `/api/admin/team/[id]/joker-slot/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/team/[id]/joker-slot/[slotId].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deleted id |
 | `/api/admin/team/assignment/index.get.ts` | ❌ | N/A | N/A | N/A | ❌ stub |
 | `/api/admin/team/assignment/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/team/assignment/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/team/assignment/[id].post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec written, not run |
-| `/api/admin/team/assignment/[id].delete.ts` | ⚠️ | ✅ | ✅ | ✅ | ⚠️ returns the deleted count for a single delete (ADR-009 r7: the id) |
+| `/api/admin/team/assignment/[id].post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec written, not run; `updateTeamAssignment` takes `CookingTeamAssignmentUpdate` |
+| `/api/admin/team/assignment/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deleted id |
 | **Admin - users** | | | | | |
-| `/api/admin/users/index.get.ts` | ✅ | ⚠️ | ✅ | ✅ | ⚠️ raw query read |
+| `/api/admin/users/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the email query validated; deserializes through the typed schemas |
 | `/api/admin/users/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/users/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/users/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/users/by-role/[role].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/users/by-role/[role].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through the typed schemas |
 | **Admin - households** | | | | | |
-| `/api/admin/household/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/household/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/household/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/household/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/household/inhabitants/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/household/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through the typed schemas |
+| `/api/admin/household/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through the typed schemas |
+| `/api/admin/household/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through the typed schemas |
+| `/api/admin/household/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through the typed schemas |
+| `/api/admin/household/inhabitants/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through `deserializeInhabitantDetail` |
 | `/api/admin/household/inhabitants/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/household/inhabitants/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/household/inhabitants/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through `deserializeInhabitantDetail` |
+| `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes through `deserializeInhabitantDetail` |
 | `/api/admin/household/inhabitants/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Admin - seasons** | | | | | |
-| `/api/admin/season/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/season/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/season/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/season/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/season/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/season/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deserialized season, parsed once (ADR-010) |
+| `/api/admin/season/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deserialized season, parsed once (ADR-010) |
+| `/api/admin/season/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ deserializes its typed row (ADR-010 compliance 3) |
+| `/api/admin/season/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deserialized season, parsed once (ADR-010) |
+| `/api/admin/season/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deserialized season, parsed once (ADR-010) |
 | `/api/admin/season/active.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/season/active.post.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed; the activation's scaffold drops cancelled and consumed dinners |
 | `/api/admin/season/deactivate.post.ts` | ✅ | N/A | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/season/[id]/generate-dinner-events.post.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed |
-| `/api/admin/season/[id]/assign-cooking-teams.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/season/[id]/assign-team-affinities.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/season/[id]/scaffold-prebookings.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/season/import.post.ts` | ✅ | ✅ | ✅ | ✅ local | ✅ |
+| `/api/admin/season/import.post.ts` | ✅ | ✅ | ✅ | ✅ local | ✅ the job run triggered as `adminTrigger('season-import')` |
 | `server/utils/reconcileDinnerEvents.ts` | ✅ | N/A | ✅ | ✅ unit | ✅ |
 | **Admin - allergy types** | | | | | |
 | `/api/admin/allergy-type/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -94,43 +97,46 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/billing/periods/[id].get.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed |
 | `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec skipped, import replaced |
 | **Admin - maintenance and jobs** | | | | | |
-| `/api/admin/maintenance/daily.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial | ⚠️ raw body read; the scaffold step drops cancelled and consumed dinners |
-| `/api/admin/maintenance/monthly.post.ts` | ✅ | ⚠️ | ✅ | ✅ serial | ⚠️ raw body read |
+| `/api/admin/maintenance/daily.post.ts` | ✅ | ✅ | ❓ | ✅ serial; unit | ❓ the trigger query through `JobTriggerQuerySchema`; the scaffold step drops cancelled and consumed dinners; the run sends the notifications of the dinners (`sendNotifications`) and then the chef deadlines (`sendChefDeadlines`), counted per sender event in `notifications` (`BOOKING_STATUS`, `CHEF_DEADLINES`); the pending dinners read as `DinnerEventDate[]` (`fetchPendingDinnersInActiveSeason`); each notification step (booking status, chef deadlines) stands alone: a failed step logs `console.error`, the next step runs, and the run completes PARTIAL with the step's message and the result of each step that ran; a failed data step completes the run FAILED with its message and rethrows |
+| `/api/admin/maintenance/monthly.post.ts` | ✅ | ✅ | ✅ | ✅ serial; unit | ✅ the trigger query through `JobTriggerQuerySchema` |
 | `/api/admin/maintenance/job-run/index.get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/maintenance/job-run/[id].get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
-| `/api/admin/heynabo/import.get.ts` | ✅ | ⚠️ | ✅ | ✅ serial | ⚠️ raw query read |
+| `/api/admin/heynabo/import.post.ts` | ✅ | ✅ | ✅ | ✅ serial | The trigger query through `JobTriggerQuerySchema`; the import service links users to inhabitants in chunks of 50 (`chunkUserLinks`), as it saves households, inhabitants and users in chunks (`chunkSaves`); both chunkers live in `useHeynabo` |
 | **Admin - sender events** | | | | | |
 | `/api/admin/sender/event/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ batched, 100 per call |
-| `/api/admin/sender/event/monthly-billing.post.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ batched, 100 per call |
+| `/api/admin/sender/event/monthly-billing.post.ts` | ✅ | ✅ | ✅ | ✅ `billing-notifications.feature`; unit | ✅ the admin's re-send of a period's accountant notification through `deliverDesired` as the admin's override, logged with the admin |
+| `/api/admin/sender/delivery.get.ts` | ✅ | ✅ | ✅ | ✅ `delivery-records.feature`, `booking-notifications.feature` | ✅ the Delivery rows of the subjects in `subjectType=` and `subjectIds=`; `dryRun=BOOKING_STATUS` or `dryRun=CHEF_DEADLINES` is the delivery dry run of that sender event: per user what the DAILY_MAINTENANCE job sends, empty with no active season, an error with email off; every member reads (ADR-004) |
 | **Household** | | | | | |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save runs on the weekdays its draft changes, `?preview=true` runs the save dry on the same; past the deadline the path buys or queues (One intent path); `preferences.e2e` green in CI 2026-10-19 (8ed7e42) |
-| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save naming an order since bought by another household lists it in `failed`; that case's e2e is in 0.9.1 (`features/chores-0.9.1.md` § Scaffold: a save naming an order bought by another household). `?preview=true` runs the save dry, an empty draft answers the household's next run (One intent path); `?adminBypass=true` from an admin writes the run's history rows with the source `admin-correction`; the run drops cancelled and consumed dinners; `scaffold.e2e` green in CI 2026-10-19 (8ed7e42) |
+| `/api/household/inhabitants/[id]/preferences.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the save's dry run on the draft in `dinnerPreferences=` (`serializeWeekDayMap`); any member reads any household's (ADR-004); `allInhabitants=true` (`AllInhabitantsQuerySchema`) previews power mode: one run with the draft for every inhabitant of the household |
+| `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save runs on the weekdays its draft changes, its dry run is the GET; past the deadline the path buys or queues (One intent path); `allInhabitants=true` (`AllInhabitantsQuerySchema`) is power mode: the household's inhabitants read once, written one after another, one run on the weekdays the draft changes for any of them; `preferences.e2e` green in CI 2026-10-19 (8ed7e42), its power mode case unrun |
+| `/api/household/order/scaffold.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the save's dry run on the draft in `orders=` (`DesiredOrderQuerySchema`, a month's draft under 16 KB); no orders answers the household's next run on the season's deadlines (One intent path); `bypassDeadlines=true` lifts the deadlines for an admin only; any member reads any household's (ADR-004) |
+| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ✅ a save naming an order since bought by another household lists it in `failed` (`scaffoldPrebookings.unit.spec.ts:314`). Its dry run is the GET; `?adminBypass=true` from an admin writes the run's history rows with the source `admin-correction`; the run drops cancelled and consumed dinners; `scaffold.e2e` green in CI 2026-10-19 (8ed7e42); a ticket of 0 portions past the deadline: `features/booking/booking.feature` |
 | `/api/household/allergy/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/household/allergy/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/household/allergy/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the inhabitant's household changes it; `?adminBypass=true` from an admin or the allergy manager (`requireHouseholdAccess`, ADR-004) |
 | `/api/household/allergy/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/household/allergy/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/household/allergy/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/household/allergy/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the allergy's household changes it; `?adminBypass=true` from an admin or the allergy manager (`requireHouseholdAccess`, ADR-004) |
+| `/api/household/allergy/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the allergy's household removes it; `?adminBypass=true` from an admin or the allergy manager (`requireHouseholdAccess`, ADR-004) |
 | **Chef** | | | | | |
-| `/api/chef/dinner/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/chef/dinner/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the Heynabo sync acts with the chef's token from the session's `secure` data (`getRequiredHeynaboToken`, 401 without it, ADR-013) |
 | `/api/chef/dinner/[id]/expenses/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/[expenseId].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/chef/dinner/[id]/order-history.get.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a line names its actor (`performedByName`, from the history read's performer select with the inhabitant's name); an admin's correction carries its reason from the row's source (`admin-correction`), a row without a source that deletes after the booking deadline by inference; the buyers' households come from `fetchHouseholdsByInhabitantIds`; the audit rows read through `readOrderAudit`, "?" for a ticket it cannot attribute (One audit format); `orderHistory` e2e green in CI 2026-10-19 (8ed7e42) |
+| `/api/chef/dinner/[id]/order-history.get.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a line names its actor (`performedByName`, from the history read's performer select with the inhabitant's name); an admin's correction carries its reason from the row's source (`admin-correction`), a row without a source that deletes after the booking deadline by inference; the buyers' households come from `fetchHouseholdsByInhabitantIds`; the reads go one after another (ADR-014); the audit rows read through `readOrderAudit`, "?" for a ticket it cannot attribute (One audit format); `orderHistory` e2e green in CI 2026-10-19 (8ed7e42) |
 | `/api/chef/dinner/[id]/extra-portions.post.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ |
 | **Teams** | | | | | |
 | `/api/team/my.get.ts` | ✅ | N/A | ✅ | ✅ | ✅ |
-| `/api/team/cooking/[id]/assign-role.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/team/cooking/[id]/assign-role.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ a takeover of an announced dinner that keeps the menu reads the taker's token (`getRequiredHeynaboToken`) before the old event goes, 401 without it (ADR-013) |
 | `/api/team/cooking/[id]/remove-role.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **User** | | | | | |
-| `/api/user/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the booking mails honour the saved `notificationChannels` |
-| `/api/user/notifications/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ batched, 100 per call |
+| `/api/user/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ the booking mails honour the saved `notificationChannels`; after the user's creation this save is the one write of `notificationChannels` and `appearance`; the session's user is replaced by the saved UserDetail, its `secure` data and sign-in time kept |
+| `/api/user/notifications/test.post.ts` | ✅ | N/A | N/A | ✅ | ✅ batched, 100 per call; the session user through `getRequiredUser` |
 | **Public** | | | | | |
 | `/api/public/billing/[token]/index.get.ts` | ✅ | ✅ | ❓ | ✅ ui | ❓ audit needed |
 | `/api/public/billing/[token]/csv.get.ts` | ✅ | ✅ | ❓ | ✅ ui | ❓ audit needed |
 | `/api/public/health.get.ts` | ❌ | N/A | N/A | N/A | ⚠️ no return type |
 | **Other** | | | | | |
-| `/api/auth/login.post.ts` | ❌ | ✅ | N/A | ✅ | ⚠️ no return type |
+| `/api/auth/login.post.ts` | ✅ | ✅ | N/A | ✅ unit | ✅ the session's `user` is the UserDetail and the Heynabo token goes to its server-only `secure` data; `/api/_auth/session` carries no token field (`authorization.e2e`) |
 | `/api/billing/index.get.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed |
 | `/api/calendar/index.get.ts` | ❌ | ⚠️ | ❓ | ❌ | ❌ raw query read, no spec |
 | `/api/calendar/feed.ts` | ✅ | N/A | ❓ | ❌ | ⚠️ no spec |
@@ -138,8 +144,9 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `server/integration/github/githubClient.ts` | ✅ | ✅ | N/A | ❌ | ⚠️ no spec |
 | `/api/test/heynabo/*` | N/A | N/A | N/A | N/A | N/A test support |
 | **Authorization** | | | | | |
+| `server/middleware/1.guard.ts` | N/A | N/A | N/A | ✅ unit | ✅ a protected route without a signed-in session answers 401 (API) or the login page with `?redirect`; a session without the Heynabo token in its `secure` data, or with a user `UserDetailSchema` rejects (`getSessionUser`, one `console.warn` without the user's data), is cleared first; the log line carries the masked mail and the roles |
 | `server/middleware/2.authorize.ts` | N/A | N/A | N/A | ✅ | ✅ |
-| `server/utils/authorizationHelper.ts` | N/A | N/A | N/A | ✅ | ✅ |
+| `server/utils/authorizationHelper.ts` | N/A | N/A | N/A | ✅ unit | ✅ `getRequiredHeynaboToken`: the session's Heynabo token or 401 |
 
 ## Checklist
 

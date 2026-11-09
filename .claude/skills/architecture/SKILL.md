@@ -20,26 +20,50 @@ description: Use before proposing or briefing a change to an endpoint, a reposit
   `Inhabitant.dinnerPreferences`, `server/routes/api/household/order/scaffold.post.ts` takes desired orders. Both call
   `scaffoldPrebookings` (`server/utils/scaffoldPrebookings.ts`); neither writes the other's column.
 - A server utility is called with an option before a second utility is written (`ScaffoldOptions.preview`, not a
-  `previewPrebookings`); an endpoint takes a query flag before a new route is added (`?preview=true`, `?adminBypass=true`).
+  `previewPrebookings`); an endpoint takes a query flag before a new route is added (`?adminBypass=true`, `?bypassDeadlines=true`).
+  A preview is a read, Logging and Security Standards (ADR-004); its draft travels in the query (`orders=`, `dinnerPreferences=`).
 - The server decides, the browser renders: `app/components/**` send a draft (`DesiredOrder[]`, `WeekDayMap<DinnerMode>`)
   and format the `ScaffoldResult` that comes back; `app/composables/useBooking.ts` is the one generator, imported by
   `server/utils/scaffoldPrebookings.ts` (ADR-017).
-- Words users read live in `app/config/*.ts` (`bookingWords.ts`, `notificationTemplates.ts`); a composable formats, a
-  store reads and writes through `useApiHandler`, a component binds tokens (ADR-007, ADR-017, ADR-018).
+- Where words, formatting, store reads and writes, and tokens live: SSR-Friendly Store Pattern (ADR-007), Isomorphic
+  Composables (ADR-017), Design System Owns Shared UI Patterns (ADR-018).
 
 ## Reads and writes over a list
 
-- A read over a list of ids is one chunked query (`fetchHouseholdsByIds` in `server/data/prismaRepository.ts`), never one
-  query per item; a step that scales with the rows of a run (the scaffold's claims, the mails of its outcomes) reads once
-  and works from maps. Writes go through `createManyAndReturn` and `writeBatchOrEach` (ADR-014).
-- D1 allows six simultaneous connections per invocation, 1,000 queries and 100 bound parameters per statement: the
-  chunks of a read run one after another or in one `batch()`; a `Promise.all` over rows or chunks against D1 is a fault.
+- Batch Operations and Utility Functions (ADR-014) owns the D1 limits, the chunk size per record and the read and write
+  patterns over a list; a proposal over a list of rows names the ADR-014 line it follows.
 
 ## One of each
 
 - One generator (`resolveDesiredOrdersToBuckets`), one line builder (`previewLines` in `useBookingUi.ts`), one audit
   format (`createOrderAuditData` / `readOrderAudit`), one word table (`BOOKING_WORDS`). A proposal that adds a second
   names the first and removes it in the same package (`/dry`).
+
+## Code rules
+
+The user's review rules. A breach is a finding in the report, never a shortcut.
+
+1. Unit tests never drive production code. A signature, an optional field, a union parameter or a widened type exists
+   for production callers only; a spec adapts to it (`emitted?` kept optional for a `toEqual`, a parameter taking
+   `T[] | () => Promise<T[]>` because a spec passes lists, `kind: string` because a spec passes `'NOPE'`).
+2. A result is computed from the data in every path, never hardcoded inside a branch (`if (dryRun) return {counts: {sent: 0}}`).
+3. Filter once, early, and pass the filtered list on. A helper receives the list it reports on, never the whole list
+   plus a set to filter inside.
+4. Exit early on a precondition before any load or read (the channel off before the sender event loads its data).
+5. A dry run is the same code path stopped before the execution; it reports exactly what the execution does, and nothing
+   beside it.
+6. No magic strings where a type exists: enum members (`SenderEventSchema.enum.MONTHLY_BILLING`, in LOG tags too),
+   `z.literal(Enum.enum.X)` to narrow, a zod transform to an enum plus a `switch` to discriminate, never `'x' in obj`.
+7. No state the data model cannot produce: trace it through `prisma/schema.prisma` and the import first. A null guard
+   on impossible data narrows silently; it gets no counter, field, log line or word.
+8. A missing required setting (the accountant mailbox) is an error, not a warning.
+9. Names in the domain's words: `notificationsForAccountant`, `notificationsOnSeason`, a sender event sends, a
+   notification tells. No invented terms (owe, rerun, hand-over, unaddressed); email names the channel only.
+10. Use the repo's helper over a hand-rolled check (`getRequiredUser`, not a session read and a 401 branch); follow the
+    sibling's pattern before writing a new one.
+11. A refactor keeps behaviour and recorded data as they are; the new code adapts to them.
+12. A change to behaviour or to a signed spec is presented as before/after snippets and waits for the user's yes; a
+    deviation from the brief stops the work and goes in the report.
 
 ## Trace before you claim
 

@@ -11,8 +11,8 @@ export default defineEventHandler<Promise<InhabitantDetail>>(async (event) => {
     const d1Client = cloudflare.env.DB
 
     // Input validation try-catch - FAIL EARLY
-    let inhabitantData!: InhabitantCreate
-    let householdId!: number
+    let inhabitantData: InhabitantCreate
+    let householdId: number
     try {
         const {InhabitantCreateSchema} = useCoreValidation()
         inhabitantData = await readValidatedBody(event, InhabitantCreateSchema.parse)

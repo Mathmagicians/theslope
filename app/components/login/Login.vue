@@ -26,13 +26,13 @@
 import {hasProtocol} from 'ufo'
 import type {FormSubmitEvent} from '#ui/types'
 import type {LoginCredentials} from '~/composables/useCoreValidation'
-import {LOGIN_FAILED_MESSAGE} from '~/stores/auth'
+import {USER_WORDS} from '~/config/userWords'
 
 const authStore = useAuthStore()
 const {loggedIn, greeting} = storeToRefs(authStore)
 const {signIn} = authStore
 const {LoginSchema} = useCoreValidation()
-const {TYPOGRAPHY, LAYOUTS, BG, ICONS, ALERTS, COLOR} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, LAYOUTS, BG, ICONS, ALERTS, COLOR, COMPONENTS} = useTheSlopeDesignSystem()
 
 const householdShortName = computed(() => authStore.user?.Inhabitant?.household?.shortName || null)
 const householdPbsId = computed(() => authStore.user?.Inhabitant?.household?.pbsId || null)
@@ -66,7 +66,7 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
     }
   } catch (error: unknown) {
     console.error('🔑 Login mislykkedes:', error)
-    loginError.value = LOGIN_FAILED_MESSAGE
+    loginError.value = USER_WORDS.login.failed
   } finally {
     isLoading.value = false
   }
@@ -76,39 +76,39 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
 <template>
   <div >
     <!-- LOGIN FORM (not logged in) -->
-    <div v-if="!loggedIn" class="flex items-center justify-center py-12">
-      <div class="max-w-md w-full px-4">
-        <UForm :state="state" :schema="LoginSchema" class="space-y-6" @submit="handleSubmit">
+    <div v-if="!loggedIn" :class="COMPONENTS.login.formPage">
+      <div :class="COMPONENTS.login.formColumn">
+        <UForm :state="state" :schema="LoginSchema" :class="COMPONENTS.login.form" @submit="handleSubmit">
           <UCard>
             <template #header>
-              <h2 :class="TYPOGRAPHY.cardTitle">Log ind</h2>
+              <h2 :class="TYPOGRAPHY.cardTitle">{{ USER_WORDS.login.signIn }}</h2>
             </template>
 
             <UAlert
               v-if="loginError"
               v-bind="ALERTS.error"
               :icon="ICONS.robotDead"
-              class="mb-4"
+              :class="COMPONENTS.login.failedAlert"
             >
-              <template #title>Login mislykkedes</template>
+              <template #title>{{ USER_WORDS.login.failedTitle }}</template>
               <template #description>{{ loginError }}</template>
             </UAlert>
 
-            <div class="space-y-4">
-              <UFormField label="Email" name="email">
+            <div :class="COMPONENTS.login.fields">
+              <UFormField :label="USER_WORDS.login.email.label" name="email">
                 <UInput
                   v-model="state.email"
                   type="email"
-                  placeholder="Indtast den email, du er oprettet i Heynabo med"
+                  :placeholder="USER_WORDS.login.email.placeholder"
                 />
               </UFormField>
 
-              <UFormField label="Adgangskode" name="password">
+              <UFormField :label="USER_WORDS.login.password.label" name="password">
                 <UInput
                   v-model="state.password"
                   :color="COLOR.secondary"
                   type="password"
-                  placeholder="Indtast din Heynabo adgangskode"
+                  :placeholder="USER_WORDS.login.password.placeholder"
                 />
               </UFormField>
             </div>
@@ -120,7 +120,7 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
                 :loading="isLoading"
                 block
               >
-                Log ind
+                {{ USER_WORDS.login.signIn }}
               </UButton>
             </template>
           </UCard>
@@ -129,9 +129,9 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
     </div>
 
     <!-- DASHBOARD (logged in) -->
-    <div v-else class="py-6 px-4 md:px-8 max-w-5xl mx-auto space-y-6">
+    <div v-else :class="COMPONENTS.login.dashboard">
       <!-- Welcome Title -->
-      <h1 :class="[TYPOGRAPHY.sectionSubheadingLight, 'text-2xl md:text-3xl']">Hej {{ greeting }}! 👋</h1>
+      <h1 :class="[TYPOGRAPHY.sectionSubheadingLight, COMPONENTS.login.greeting]">{{ USER_WORDS.login.greeting(greeting) }}</h1>
 
       <!-- Install guidance: capability is a browser fact, so SSR renders nothing -->
       <ClientOnly>
@@ -151,40 +151,40 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
       <UserPreferencesCard v-if="authStore.user && preferencesOpen" />
 
       <!-- Section header -->
-      <h2 :class="[TYPOGRAPHY.sectionSubheadingLight, 'pt-4']">Hvad vil du lave i dag?</h2>
+      <h2 :class="[TYPOGRAPHY.sectionSubheadingLight, COMPONENTS.login.waysIn]">{{ USER_WORDS.login.waysIn }}</h2>
 
       <!-- Action Cards Grid -->
       <div :class="LAYOUTS.gridThreeCol">
         <!-- Dinner Card -->
         <ActionCard
           :icon="ICONS.dinner"
-          title="Fællesspisning"
-          description="Se menuer og bestil billetter til kommende middage"
+          :title="USER_WORDS.login.dinner.title"
+          :description="USER_WORDS.login.dinner.description"
           :color="COLOR.peach"
           :header-bg="BG.peach[50]"
-          button-label="Se kalender"
+          :button-label="USER_WORDS.login.dinner.open"
           to="/dinner"
         />
 
         <!-- Household Card -->
         <ActionCard
-          icon="i-heroicons-home"
-          title="Min husstand"
-          description="Administrer madpræferencer og allergier for din familie"
+          :icon="ICONS.household"
+          :title="USER_WORDS.login.household.title"
+          :description="USER_WORDS.login.household.description"
           :color="COLOR.secondary"
           :header-bg="BG.pink[50]"
-          button-label="Gå til husstand"
-          :to="householdShortName && householdPbsId ? getHouseholdUrl(householdShortName, householdPbsId) : '/household'"
+          :button-label="USER_WORDS.login.household.open"
+          :to="householdShortName && householdPbsId ? getHouseholdUrl(householdShortName, householdPbsId, HOUSEHOLD_TAB.bookings) : '/household'"
         />
 
         <!-- Cooking Team Card -->
         <ActionCard
           :icon="ICONS.chef"
-          title="Mit madhold"
-          description="Se hvornår du skal lave mad og koordiner med dit hold"
+          :title="USER_WORDS.login.team.title"
+          :description="USER_WORDS.login.team.description"
           :color="COLOR.ocean"
           :header-bg="BG.ocean[50]"
-          button-label="Se madhold"
+          :button-label="USER_WORDS.login.team.open"
           to="/chef"
         />
       </div>

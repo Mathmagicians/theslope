@@ -186,19 +186,29 @@ export const leafClasses = (path: string): string => {
  * this token's rendered pair. Several per channel, because `text-sm text-gray-700` names
  * the channel twice and only one of them is a colour.
  */
-export const referencesFor = (classes: string, mode: Mode): Partial<Record<Channel, string[]>> => {
-    const found: Partial<Record<Channel, string[]>> = {}
+const prefixedReferences = <Prefix extends string>(
+    classes: string, mode: Mode, prefixes: readonly Prefix[]
+): Partial<Record<Prefix, string[]>> => {
+    const found: Partial<Record<Prefix, string[]>> = {}
     for (const className of classes.split(/\s+/).filter(Boolean)) {
         const dark = className.startsWith('dark:')
         if (dark && mode !== 'dark') continue
         const bare = dark ? className.slice(5) : className
         if (bare.includes(':')) continue
-        const channel = CHANNELS.find(candidate => bare.startsWith(`${candidate}-`))
-        if (!channel) continue
-        found[channel] = [...found[channel] ?? [], bare.slice(channel.length + 1)]
+        const prefix = prefixes.find(candidate => bare.startsWith(`${candidate}-`))
+        if (!prefix) continue
+        found[prefix] = [...found[prefix] ?? [], bare.slice(prefix.length + 1)]
     }
     return found
 }
+
+export const referencesFor = (classes: string, mode: Mode): Partial<Record<Channel, string[]>> =>
+    prefixedReferences(classes, mode, CHANNELS)
+
+/** The colour stops of a gradient (`from-red-900 to-red-600`) */
+const GRADIENT_STOPS = ['from', 'via', 'to'] as const
+
+const gradientReferences = (classes: string, mode: Mode) => prefixedReferences(classes, mode, GRADIENT_STOPS)
 
 // ---------------------------------------------------------------------------
 // The pair inventory - data, derived from the design system
@@ -224,8 +234,8 @@ export const SURFACES = [
 const EDGE_SURFACES = SURFACES.filter(surface => surface.name === 'page' || surface.name === 'BG.panel')
 
 /**
- * `TEXT.gray[500]` is a rung of a palette scale, not a pair: docs/ui.md calls `BG`, `TEXT`,
- * `BORDER` and `RING` "low-level builders", and a text rung carries no dark face, so measuring
+ * `TEXT.gray[500]` is a rung of a palette scale, not a pair: `BG`, `TEXT`, `BORDER` and `RING`
+ * are low-level builders, and a text rung carries no dark face, so measuring
  * it against a dark surface measures something nobody renders. A text rung is measured where a
  * token pairs it with a fill. Border and ring rungs stay in the edge group - being visible
  * against an unknown surface is the whole contract of an edge.
@@ -242,7 +252,8 @@ const FILL_INK = [
     'TYPOGRAPHY.footerText', 'COMPONENTS.pageFooter.iconButtonUi', 'CALENDAR.countdown', 'CHEF_CALENDAR.countdown',
     'DINNER_CALENDAR.countdown', 'COMPONENTS.heroPanel', 'COMPONENTS.kitchenPanel', 'COMPONENTS.ribbon',
     'COMPONENTS.wantedPoster.lettering', 'COMPONENTS.wantedPoster.role', 'COMPONENTS.wantedPoster.avatar.ui.icon',
-    'COMPONENTS.wantedPoster.hatOnFrame'
+    'COMPONENTS.wantedPoster.hatOnFrame', 'TEXT.onFill', 'COMPONENTS.dangerButton.danger.armed',
+    'COMPONENTS.dangerButton.undo.armed'
 ]
 
 const isFillInk = (path: string) => FILL_INK.some(prefix => path === prefix || path.startsWith(`${prefix}.`))
@@ -265,6 +276,12 @@ const PAIRED_INK = [
     {ink: 'COMPONENTS.wantedPoster.role', fill: 'COMPONENTS.wantedPoster.frame'},
     {ink: 'COMPONENTS.wantedPoster.avatar.ui.icon', fill: 'COMPONENTS.wantedPoster.avatar.class'},
     {ink: 'COMPONENTS.wantedPoster.hatOnFrame', fill: 'COMPONENTS.wantedPoster.frame'}
+] as const
+
+/** Ink drawn on a gradient: it has to read on every stop of the gradient in the mode */
+const INK_ON_GRADIENT = [
+    {ink: 'COMPONENTS.dangerButton.danger.armed', fill: 'COMPONENTS.dangerButton.danger.countdown'},
+    {ink: 'COMPONENTS.dangerButton.undo.armed', fill: 'COMPONENTS.dangerButton.undo.countdown'}
 ] as const
 
 /** The Nuxt UI semantic slots the app maps in `app.config.ts` */
@@ -352,10 +369,10 @@ const KITCHEN_INK: PlacedInk[] = [
  * A cooking team wears the stop of its number on `UBadge`s, and the label is Nuxt UI's badge face:
  * `text-[10px]` at `sm`, `text-xs` at `md`, `text-sm` at `lg`. Every one of them is body text, and
  * `TYPOGRAPHY.bodyTextSmall` (`text-sm`) is the design-system face that grades it: 1.4.3 has one
- * bar below large scale. Drawn by CookingTeamBadges.vue:54, CookingTeamCard.vue:321 and :502
- * and TeamCalendarDisplay.vue:134
+ * bar below large scale. Drawn by CookingTeamBadges.vue:56, CookingTeamCard.vue:298, :388 and :469
+ * and TeamCalendarDisplay.vue:104
  */
-const TEAM_BADGE: PlacedInk[] = [{ink: 'TYPOGRAPHY.bodyTextSmall', at: 'CookingTeamBadges.vue:54'}]
+const TEAM_BADGE: PlacedInk[] = [{ink: 'TYPOGRAPHY.bodyTextSmall', at: 'CookingTeamBadges.vue:56'}]
 
 /**
  * The typography a component actually places on a fill. 1.4.3 grades a pair by the size of the
@@ -385,8 +402,8 @@ const INK_ON_FILL: Record<string, PlacedInk[]> = {
     'BACKGROUNDS.hero.orange': [...SECTION_TITLE, ...KITCHEN_INK],
     'BACKGROUNDS.hero.ocean': [...SECTION_TITLE, ...KITCHEN_INK],
     'BACKGROUNDS.hero.bonbon': SECTION_TITLE,
-    // The countdown fill is drawn through `BACKGROUNDS.hero` by no component today and is graded by
-    // the typography docs/ui.md pairs it with; as a team stop it is `RAINBOW[4]`, graded above
+    // The countdown fill is drawn through `BACKGROUNDS.hero` by no component and is graded by the
+    // hero title it pairs with; as a team stop it is `RAINBOW[4]`, graded above
     'BACKGROUNDS.hero.peach': [{ink: 'TYPOGRAPHY.heroTitle', at: 'docs/ui.md "The brand rainbow"'}],
     // app/components/landing/Hero.vue:7
     'BACKGROUNDS.landing.titleBar': [{ink: 'TYPOGRAPHY.heroTitle', at: 'Hero.vue:7'}],
@@ -487,14 +504,20 @@ const NEUTRAL_COMPONENT_FACES = [
     {face: 'alert', ink: 'highlighted', fill: 'elevated/50'}
 ] as const
 
+/** The last of the references that names a colour (`sm`, `gray-700` → grey) */
+const lastColour = (
+    resolve: ReturnType<typeof createResolver>, references: string[], channel: Channel, mode: Mode
+): Sourced | null =>
+    references
+        .map(reference => resolve(reference, channel, mode))
+        .filter((resolved): resolved is Sourced => resolved !== null)
+        .at(-1) ?? null
+
 /** The last reference on this channel that names a colour (`text-sm text-gray-700` → grey) */
 export const pickColour = (
     resolve: ReturnType<typeof createResolver>, classes: string, channel: Channel, mode: Mode
 ): Sourced | null =>
-    (referencesFor(classes, mode)[channel] ?? [])
-        .map(reference => resolve(reference, channel, mode))
-        .filter((resolved): resolved is Sourced => resolved !== null)
-        .at(-1) ?? null
+    lastColour(resolve, referencesFor(classes, mode)[channel] ?? [], channel, mode)
 
 export const buildPairs = (override: PaletteOverride, level: Level): Pair[] => {
     const pairs: Pair[] = []
@@ -596,6 +619,24 @@ export const buildPairs = (override: PaletteOverride, level: Level): Pair[] => {
             const bg = surfaceOf(fillLeaf.classes, mode)
             if (ink && bg) add('paired token', `${inkPath} on ${fillPath}`,
                 `${mode}|${inkPath}|${fillPath}`, ink, bg, textThreshold(inkLeaf.classes))
+        }
+
+        // 1d - ink on a gradient: each stop the mode paints, laid on the page
+        for (const {ink: inkPath, fill: fillPath} of INK_ON_GRADIENT) {
+            const inkLeaf = leafByPath.get(inkPath)
+            const fillLeaf = leafByPath.get(fillPath)
+            const page = surfaceOf('bg-default', mode)
+            if (!inkLeaf || !fillLeaf || !page) continue
+            const ink = pick(inkLeaf.classes, 'text', mode)
+            if (!ink) continue
+            const stops = gradientReferences(fillLeaf.classes, mode)
+            for (const stop of GRADIENT_STOPS) {
+                const colour = lastColour(resolve, stops[stop] ?? [], 'bg', mode)
+                if (!colour) continue
+                add('paired token', `${inkPath} on ${fillPath} (${stop} stop)`, `${mode}|${inkPath}|${fillPath}|${stop}`, ink,
+                    {colour: composite(colour.colour, page.colour), source: colour.source, alpha: colour.colour.alpha, ground: page.colour},
+                    textThreshold(inkLeaf.classes))
+            }
         }
 
         // 2 - borders, rings and outlines against the surface they sit on (1.4.11).

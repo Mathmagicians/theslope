@@ -15,7 +15,7 @@ export default defineEventHandler(async (event): Promise<UserDetail> => {
     const {UserCreateSchema} = useCoreValidation()
 
     // Validate input - fail early on invalid data
-    let userFromBody!: UserCreate
+    let userFromBody: UserCreate
     try {
         userFromBody = await readValidatedBody(event, UserCreateSchema.parse)
     } catch (error) {

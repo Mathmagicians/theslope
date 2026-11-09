@@ -2,8 +2,8 @@
  * POST /api/user/preferences - the session user's own notification channels and appearance.
  *
  * One save writes both columns of the logged-in user; there is no id in the path, so no other
- * user can be reached. The session snapshot is replaced with the saved user (keeping the Heynabo
- * token in passwordHash, as login.post.ts builds it) so the appearance applies on the next render.
+ * user can be reached. The session snapshot is replaced with the saved user (keeping its secure
+ * data and sign-in time, as login.post.ts writes them) so the appearance applies on the next render.
  *
  * ADR Compliance:
  * - ADR-002: separate try-catch for validation (400) and business logic (500)
@@ -13,9 +13,10 @@
  */
 import {defineEventHandler, readValidatedBody, createError, setResponseStatus} from 'h3'
 import {fetchUser, saveUser} from '~~/server/data/prismaRepository'
-import {useCoreValidation, type UserCreate, type UserDetail, type UserSession} from '~/composables/useCoreValidation'
+import type {UserCreate, UserDetail} from '~/composables/useCoreValidation'
 import {UserPreferencesUpdateSchema, type UserPreferencesUpdate} from '~/composables/useUserPreferenceValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
+import {getRequiredUser} from '~~/server/utils/authorizationHelper'
 
 const {throwH3Error} = eventHandlerHelper
 const LOG = '⚙️ > PREFERENCES > [POST]'
@@ -25,12 +26,10 @@ export default defineEventHandler(async (event): Promise<UserDetail> => {
     const d1Client = cloudflare.env.DB
 
     // Session - 401 before anything else (the guard middleware answers first in practice)
-    const session = await requireUserSession(event)
-    const sessionUser = session.user as unknown as UserSession
-    const userId = sessionUser.id
+    const {id: userId} = await getRequiredUser(event)
 
     // Validation - FAIL EARLY (400)
-    let body!: UserPreferencesUpdate
+    let body: UserPreferencesUpdate
     try {
         body = await readValidatedBody(event, UserPreferencesUpdateSchema.parse)
     } catch (error) {
@@ -62,9 +61,8 @@ export default defineEventHandler(async (event): Promise<UserDetail> => {
             throw createError({statusCode: 404, message: 'Bruger ikke fundet'})
         }
 
-        const {UserSessionSchema} = useCoreValidation()
-        const refreshed = UserSessionSchema.parse({...updated, passwordHash: sessionUser.passwordHash})
-        await replaceUserSession(event, {user: refreshed, loggedInAt: session.loggedInAt ?? new Date()})
+        const {secure, loggedInAt} = await getUserSession(event)
+        await replaceUserSession(event, {user: updated, secure, loggedInAt: loggedInAt ?? new Date()})
 
         console.info(`${LOG} Saved preferences for user id=${userId} fields=[${Object.keys(delta).join(',')}]`)
         setResponseStatus(event, 200)

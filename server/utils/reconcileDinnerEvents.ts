@@ -20,7 +20,7 @@ export async function reconcileDinnerEventsForSeason(
     const {generateDinnerEventDataForSeason, reconcileDinnerEvents} = useSeason()
 
     const existingEvents = await fetchDinnerEvents(d1Client, {seasonId: season.id!})
-    const desiredEvents = generateDinnerEventDataForSeason(season)
+    const desiredEvents = generateDinnerEventDataForSeason(season, new Date())
     const reconciliation = reconcileDinnerEvents(existingEvents)(desiredEvents)
 
     console.info(`${log} Reconciliation: create=${reconciliation.create.length}, idempotent=${reconciliation.idempotent.length}, delete=${reconciliation.delete.length}`)

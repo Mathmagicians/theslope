@@ -9,9 +9,8 @@
  * - sortBy: 'createdAt' (default) or 'releasedAt' (FIFO for claim queue)
  * - allHouseholds: false (default) = filter by session user's household
  *                  true = return orders from all households
- *
- * ADR-002: Separate try-catch for validation and business logic
- * ADR-004: Logging standards
+ * - includeProvenance: each bought ticket with the household it was bought from and its allergies
+ * - includeCostContext: each order with its dinner and its eater, as their Display types, for the economy views
  */
 import {fetchOrders} from "~~/server/data/financesRepository"
 import {fetchSeason} from "~~/server/data/prismaRepository"
@@ -20,21 +19,21 @@ import {useSeason} from "~/composables/useSeason"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 import type { OrderDisplay } from '~/composables/useBookingValidation'
-import type { UserDetail } from '~/composables/useCoreValidation'
+import {QueryFlagSchema} from '~/composables/useCoreValidation'
 
-const {throwH3Error} = eventHandlerHelper
-const {OrderStateSchema, IdOrIdsSchema} = useBookingValidation()
+const {throwH3Error, getSessionUser} = eventHandlerHelper
+const {OrderStateSchema, OrderSortBySchema, IdOrIdsSchema} = useBookingValidation()
 
-const sortBySchema = z.enum(['createdAt', 'releasedAt']).default('createdAt')
+const sortBySchema = OrderSortBySchema.default(OrderSortBySchema.enum.createdAt)
 
 const querySchema = z.object({
     dinnerEventIds: IdOrIdsSchema,
     upcomingForSeason: z.coerce.number().int().positive().optional(),
     state: OrderStateSchema.optional(),
     sortBy: sortBySchema.optional(),
-    allHouseholds: z.coerce.boolean().optional().default(false),
-    includeProvenance: z.coerce.boolean().optional().default(false),
-    includeDinnerContext: z.coerce.boolean().optional().default(false),
+    allHouseholds: QueryFlagSchema,
+    includeProvenance: QueryFlagSchema,
+    includeCostContext: QueryFlagSchema,
     householdId: z.coerce.number().int().positive().optional()
 }).refine(
     (data) => !(data.householdId && data.allHouseholds),
@@ -65,8 +64,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
         householdId = query.householdId
     } else if (!query.allHouseholds) {
         // Default: filter by session user's household
-        const session = await getUserSession(event)
-        const user = session?.user as UserDetail | undefined
+        const user = await getSessionUser(event)
         householdId = user?.Inhabitant?.householdId
 
         if (!householdId) {
@@ -89,7 +87,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
             }
 
             const {splitDinnerEvents} = useSeason()
-            const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents ?? [])
+            const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents ?? [], new Date())
             eventIds = [
                 ...(nextDinner ? [nextDinner.id] : []),
                 ...futureDinners.map(e => e.id)
@@ -103,7 +101,7 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
             eventIds = query.dinnerEventIds
         }
 
-        const orders = await fetchOrders(d1Client, eventIds, householdId, query.state, query.sortBy, query.includeProvenance, query.includeDinnerContext)
+        const orders = await fetchOrders(d1Client, eventIds, householdId, query.state, query.sortBy, query.includeProvenance, query.includeCostContext)
         console.info(`${LOG} Fetched ${orders.length} orders${householdId ? ` for household ${householdId}` : ' (all households)'}`)
         setResponseStatus(event, 200)
         return orders

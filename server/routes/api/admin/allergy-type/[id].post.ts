@@ -16,8 +16,8 @@ export default defineEventHandler(async (event): Promise<AllergyTypeDisplay> => 
     const {AllergyTypeUpdateSchema} = useAllergyValidation()
 
     // Input validation - FAIL EARLY
-    let id!: number
-    let requestData!: AllergyTypeUpdate
+    let id: number
+    let requestData: AllergyTypeUpdate
     try {
         const params = await getValidatedRouterParams(event, paramSchema.parse)
         id = params.id

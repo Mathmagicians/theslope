@@ -1,18 +1,22 @@
 import type {Season, SeasonUpdateResponse} from '~/composables/useSeasonValidation'
-import {ROLE_LABELS, type CookingTeamDetail, type CookingTeamAssignment, type CookingTeamCreate, type CookingTeamUpdate, type CookingTeamAssignmentCreate, type CookingTeamAssignmentUpdate, type CreateTeamsResponse, type TeamRole} from '~/composables/useCookingTeamValidation'
+import type {CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate, CookingTeamAssignmentUpdate, CreateTeamsResponse, TeamRole} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDetail, MenuSwapStrategy} from '~/composables/useBookingValidation'
 import type {JokerSlot, JokerSlotCreate} from '~/composables/useDutyValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
+import {SEASON_WORDS} from '~/config/seasonWords'
+import {TEAM_WORDS} from '~/config/teamWords'
 
 export const usePlanStore = defineStore("Plan", () => {
         // DEPENDENCIES
         const {storeAsyncData, loadOrThrow, apiRequest, toastSaved, notFoundToast} = useApiHandler()
-        const {SeasonSchema, SeasonUpdateResponseSchema, ActiveSeasonIdSchema} = useSeasonValidation()
+        const now = useClock()
+        const {SeasonSchema, SeasonUpdateResponseSchema, SeasonDeactivationResponseSchema, ActiveSeasonIdSchema} = useSeasonValidation()
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
+        const usersStore = useUsersStore()
 
         // ========================================
-        // State (ADR-007)
+        // State
         // ========================================
 
         const activeSeasonIdDataset = storeAsyncData('plan-store-active-season-id', '/api/admin/season/active', {
@@ -40,7 +44,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 return activeSeasonId.value
             } else if (seasons.value.length > 0) {
                 const {sortSeasonsByActivePriority} = useSeason()
-                const sortedSeasons = sortSeasonsByActivePriority(seasons.value)
+                const sortedSeasons = sortSeasonsByActivePriority(seasons.value, now.value)
                 const firstId = sortedSeasons[0]?.id ?? null
                 console.info(`${LOG_CTX} 🗓️ > No active season, using first sorted season ID: ${firstId}`)
                 return firstId
@@ -49,7 +53,7 @@ export const usePlanStore = defineStore("Plan", () => {
             return null
         }
 
-        // The page names the season it shows (ADR-007 rule 9); a shortName resolves once the seasons have loaded,
+        // The page names the season it shows; a shortName resolves once the seasons have loaded,
         // and a choice that resolves to no season falls back to the default
         const seasonChoice = shallowRef<() => string | number | null>(() => null)
         const selectSeason = (choice: MaybeRefOrGetter<string | number | null>) => {
@@ -68,7 +72,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 default: () => null,
                 enabled: () => !!selectedSeasonId.value,
                 dependsOn: [seasonsDataset, activeSeasonIdDataset],
-                errorMessage: 'Kunne ikke hente sæson',
+                errorMessage: SEASON_WORDS.failed.season,
                 // The page's getter keeps driving the choice; the gone season re-derives through getDefaultSeasonId
                 notFound: {
                     recover: async () => {
@@ -76,8 +80,8 @@ export const usePlanStore = defineStore("Plan", () => {
                         await Promise.all([refreshSeasons(), refreshActiveSeasonId()])
                     },
                     retries: 1,
-                    toast: notFoundToast(seasons, selectedSeasonId, 'sæsonen'),
-                    message: () => getRandomEmptyMessageText('seasonGone')
+                    toast: notFoundToast(seasons, selectedSeasonId, SEASON_WORDS.notFound),
+                    message: () => getRandomEmptyMessageText('seasonGone', now.value)
                 }
             }
         )
@@ -86,13 +90,14 @@ export const usePlanStore = defineStore("Plan", () => {
             isLoading: isSelectedSeasonFetching, isErrored: isSelectedSeasonErrored, isInitialized: isSelectedSeasonFetched
         } = selectedSeasonDataset
 
-        const {CookingTeamDetailSchema, CreateTeamsResponseSchema, AssignTeamAffinitiesResponseSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
-        const {DeletedCountSchema, IdSchema} = useCoreValidation()
-        const {DinnerEventDetailSchema, AssignCookingTeamsResponseSchema} = useBookingValidation()
+        const {CookingTeamDetailSchema, CreateTeamsResponseSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
+        const {IdSchema} = useCoreValidation()
+        const {DinnerEventDetailSchema} = useBookingValidation()
         const {JokerSlotSchema} = useDutyValidation()
         const {formatRoleClaimedTitle} = useCookingTeam()
 
-        // The mounting page selects the team (ADR-007 rule 9); GET under /api/admin/ is open to every member
+        // The mounting page selects the team; GET under /api/admin/ is open to every member. A page's default team reads
+        // the season's dinners and the person's own teams, so the server render resolves the team after both
         const teamChoice = shallowRef<() => number | null>(() => null)
         const selectTeam = (choice: MaybeRefOrGetter<number | null>) => {
             teamChoice.value = () => toValue(choice)
@@ -104,9 +109,9 @@ export const usePlanStore = defineStore("Plan", () => {
             {
                 schema: CookingTeamDetailSchema.nullable(),
                 default: () => null,
-                errorMessage: 'Kunne ikke hente hold',
+                errorMessage: TEAM_WORDS.admin.failed,
                 enabled: () => !!selectedTeamId.value,
-                dependsOn: [seasonsDataset]
+                dependsOn: [selectedSeasonDataset, usersStore.myTeamsDataset]
             }
         )
         const {
@@ -126,16 +131,16 @@ export const usePlanStore = defineStore("Plan", () => {
         const isSavingSeason = ref(false)
         const isActivatingSeason = ref(false)
 
-        // Toast descriptions report what a save set in motion (ADR-009 operation results)
+        // Toast descriptions report what a save set in motion
         const formatSeasonUpdate = (result: SeasonUpdateResponse): string => {
             const {created, deleted} = result.reconciliation
-            const sentences = [`${created} datoer tilføjet, ${deleted} fjernet.`]
-            if (result.scaffold) sentences.push('Forudbestillinger er opdateret.')
-            if (created > 0) sentences.push('Husk at tildele madhold til nye datoer.')
+            const sentences = [SEASON_WORDS.toasts.updated.reconciled(created, deleted)]
+            if (result.scaffold) sentences.push(SEASON_WORDS.toasts.updated.scaffolded)
+            if (created > 0) sentences.push(SEASON_WORDS.toasts.updated.assignTeams)
             return sentences.join(' ')
         }
         const formatCreateTeams = ({teams, eventsAssigned}: CreateTeamsResponse): string =>
-            `${teams.length} madhold oprettet · ${eventsAssigned} madlavninger tildelt`
+            TEAM_WORDS.admin.created.description(teams.length, eventsAssigned)
 
         const toast = useToast()
 
@@ -229,28 +234,11 @@ export const usePlanStore = defineStore("Plan", () => {
             if (created === null) return null
 
             await loadSeasons()
-            toastSaved('Sæson oprettet')
+            toastSaved(SEASON_WORDS.toasts.created)
             return created
         }
 
-        const assignTeamAffinitiesAndEvents = async (seasonId: number) => {
-            // Step 1: Assign affinities to teams
-            const affinityResult = await apiRequest(`/api/admin/season/${seasonId}/assign-team-affinities`, {method: 'POST', schema: AssignTeamAffinitiesResponseSchema, action: 'assignTeamAffinitiesAndEvents'})
-            console.info(`👥 > PLAN_STORE > Assigned affinities to ${affinityResult.teamCount} teams for season ${seasonId}`)
-
-            // Step 2: Assign teams to dinner events
-            const assignmentResult = await apiRequest(`/api/admin/season/${seasonId}/assign-cooking-teams`, {method: 'POST', schema: AssignCookingTeamsResponseSchema, action: 'assignTeamAffinitiesAndEvents'})
-            console.info(`🍽️ > PLAN_STORE > Assigned teams to ${assignmentResult.eventCount} dinner events for season ${seasonId}`)
-
-            // Refresh selected season to get updated teams with affinities and event assignments
-            await settleSeason()
-            return {
-                teamCount: affinityResult.teamCount,
-                eventCount: assignmentResult.eventCount
-            }
-        }
-
-        // Returns the operation envelope (ADR-009) so callers can report what the save changed
+        // Returns the operation envelope so callers can report what the save changed
         const updateSeason = async (season: Season): Promise<SeasonUpdateResponse | null> => {
             const result = await saveSeason(() => apiRequest(`/api/admin/season/${season.id}`, {
                 method: 'POST',
@@ -262,19 +250,19 @@ export const usePlanStore = defineStore("Plan", () => {
 
             await loadSeasons()
             await settleSeason()
-            toastSaved('Sæson opdateret', formatSeasonUpdate(result))
+            toastSaved(SEASON_WORDS.toasts.updated.title, formatSeasonUpdate(result))
             return result
         }
 
         // Shared implementation for activate/deactivate
-        // Resolves the season the server activated or deactivated; null when the request fails
-        const executeSeasonActivation = async (seasonId: number | null): Promise<Season | null> => {
+        // Resolves the season the server activated or deactivated, shown in its toast once the seasons have re-read; null when the
+        // request fails. A deactivation with no season active resolves null too, so a landed write shows its toast here, never by
+        // its result
+        const executeSeasonActivation = async <T extends Season | null>(request: () => Promise<T>, showToast: (season: T) => void): Promise<T | null> => {
             isActivatingSeason.value = true
-            let season: Season | null
+            let season: T
             try {
-                season = await (seasonId
-                    ? apiRequest('/api/admin/season/active', {method: 'POST', body: {seasonId}, schema: SeasonSchema, action: 'seasonActivation'})
-                    : apiRequest('/api/admin/season/deactivate', {method: 'POST', schema: SeasonSchema.nullable(), action: 'seasonActivation'}))
+                season = await request()
             } catch {
                 return null
             } finally {
@@ -283,31 +271,41 @@ export const usePlanStore = defineStore("Plan", () => {
 
             await loadActiveSeason()
             await loadSeasons()
+            showToast(season)
             return season
         }
 
-        const activateSeason = async (seasonId: number): Promise<Season | null> => {
+        const activateSeason = (seasonId: number): Promise<Season | null> => {
             console.info(`🌞 > PLAN_STORE > Activating season ${seasonId}`)
-            const activated = await executeSeasonActivation(seasonId)
-            console.info(`🌞 > PLAN_STORE > Successfully activated season ${seasonId}`)
-            return activated
+            return executeSeasonActivation(
+                () => apiRequest('/api/admin/season/active', {method: 'POST', body: {seasonId}, schema: SeasonSchema, action: 'seasonActivation'}),
+                ({shortName}) => {
+                    console.info(`🌞 > PLAN_STORE > Successfully activated season ${seasonId}`)
+                    toastSaved(SEASON_WORDS.toasts.activated.title, SEASON_WORDS.toasts.activated.description(shortName))
+                }
+            )
         }
 
         const deactivateSeason = async (): Promise<Season | null> => {
             console.info(`🌞 > PLAN_STORE > Deactivating season`)
-            const deactivated = await executeSeasonActivation(null)
+            const deactivated = await executeSeasonActivation(
+                () => apiRequest('/api/admin/season/deactivate', {method: 'POST', schema: SeasonDeactivationResponseSchema, action: 'seasonActivation'}),
+                () => {
+                    console.info(`🌞 > PLAN_STORE > Successfully deactivated season`)
+                    toastSaved(SEASON_WORDS.toasts.deactivated.title, SEASON_WORDS.toasts.deactivated.description)
+                }
+            )
             await settleSeason()
-            console.info(`🌞 > PLAN_STORE > Successfully deactivated season`)
             return deactivated
         }
 
-        // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
+        // COOKING TEAM ACTIONS - Part of Season aggregate
         const createTeam = async (teamOrTeams: CookingTeamCreate | CookingTeamCreate[]): Promise<CreateTeamsResponse> => {
             const teams = Array.isArray(teamOrTeams) ? teamOrTeams : [teamOrTeams]
 
             isCreatingTeams.value = true
             try {
-                // ADR-009 operation result: teams created + dinner events the assignment touched
+                // The operation result: the teams created and the dinner events the assignment touched
                 const created = await apiRequest('/api/admin/team', {
                     method: 'PUT',
                     body: teams,
@@ -317,7 +315,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 console.info(`👥 > PLAN_STORE > Created ${created.teams.length} team(s), assigned ${created.eventsAssigned} dinner event(s)`)
 
                 await settleSeason()
-                toastSaved('Madhold oprettet', formatCreateTeams(created))
+                toastSaved(TEAM_WORDS.admin.created.title, formatCreateTeams(created))
                 return created
             } finally {
                 isCreatingTeams.value = false
@@ -334,7 +332,7 @@ export const usePlanStore = defineStore("Plan", () => {
             })
             console.info(`👥 > PLAN_STORE > Updated team "${updated.name}"`)
             await refreshTeamAggregates()
-            if (team.affinity !== undefined) toastSaved('Madlavningsdage for teams opdateret')
+            if (team.affinity !== undefined) toastSaved(TEAM_WORDS.admin.affinityUpdated)
             return updated
         }
 
@@ -348,11 +346,11 @@ export const usePlanStore = defineStore("Plan", () => {
             // A deleted team has no Detail to refresh: the choice skips it and keeps following the page's getter
             skipGoneId(teamChoice, teamId)
             await refreshTeamAggregates()
-            toastSaved('Madhold slettet')
+            toastSaved(TEAM_WORDS.admin.deleted)
             return deletedId
         }
 
-        // TEAM MEMBER AND JOKER SLOT ACTIONS - Part of Team aggregate (ADR-005); the refresh carries the season and the team
+        // TEAM MEMBER AND JOKER SLOT ACTIONS - Part of Team aggregate; the refresh carries the season and the team
         const addTeamMember = async (assignment: CookingTeamAssignmentCreate): Promise<CookingTeamAssignment> => {
             const created = await apiRequest('/api/admin/team/assignment', {
                 method: 'PUT',
@@ -362,7 +360,7 @@ export const usePlanStore = defineStore("Plan", () => {
             })
             console.info(`👥🔗 > PLAN_STORE > Added member ${assignment.inhabitantId} to team ${assignment.cookingTeamId} as ${assignment.role}`)
             await refreshTeamAggregates()
-            toastSaved('Medlem tilføjet til hold', `${created.inhabitant.name} ${created.inhabitant.lastName}`)
+            toastSaved(TEAM_WORDS.admin.memberAdded, `${created.inhabitant.name} ${created.inhabitant.lastName}`)
             return created
         }
 
@@ -375,20 +373,20 @@ export const usePlanStore = defineStore("Plan", () => {
             })
             console.info(`👥🔗 > PLAN_STORE > Updated team member assignment ${assignmentId}`)
             await refreshTeamAggregates()
-            toastSaved('Medlem opdateret', `${updated.inhabitant.name} ${updated.inhabitant.lastName}`)
+            toastSaved(TEAM_WORDS.admin.memberUpdated, `${updated.inhabitant.name} ${updated.inhabitant.lastName}`)
             return updated
         }
 
         const removeTeamMember = async (assignmentId: number): Promise<number> => {
-            const deleted = await apiRequest(`/api/admin/team/assignment/${assignmentId}`, {
+            const deletedId = await apiRequest(`/api/admin/team/assignment/${assignmentId}`, {
                 method: 'DELETE',
-                schema: DeletedCountSchema,
+                schema: IdSchema,
                 action: 'removeTeamMember'
             })
             console.info(`👥🔗 > PLAN_STORE > Removed team member assignment ${assignmentId}`)
             await refreshTeamAggregates()
-            toastSaved('Medlem fjernet fra hold')
-            return deleted
+            toastSaved(TEAM_WORDS.admin.memberRemoved)
+            return deletedId
         }
 
         const createJokerSlot = async (teamId: number, slot: JokerSlotCreate): Promise<JokerSlot> => {
@@ -400,7 +398,7 @@ export const usePlanStore = defineStore("Plan", () => {
             })
             console.info(`🃏 > PLAN_STORE > Added ${slot.role} joker slot to team ${teamId}`)
             await refreshTeamAggregates()
-            toastSaved('Joker tilføjet', ROLE_LABELS[created.role])
+            toastSaved(TEAM_WORDS.admin.jokerAdded, TEAM_WORDS.roles[created.role].label)
             return created
         }
 
@@ -412,13 +410,13 @@ export const usePlanStore = defineStore("Plan", () => {
             })
             console.info(`🃏 > PLAN_STORE > Removed joker slot ${slotId} from team ${teamId}`)
             await refreshTeamAggregates()
-            toastSaved('Joker fjernet')
+            toastSaved(TEAM_WORDS.admin.jokerRemoved)
             return deletedId
         }
 
         // DINNER EVENT ACTIONS
         const isRoleUpdating = ref(false)
-        const assignRoleToDinner = async (dinnerEventId: number, inhabitantId: number, role: CookingTeamAssignment['role'], menuStrategy?: MenuSwapStrategy): Promise<DinnerEventDetail> => {
+        const assignRoleToDinner = async (dinnerEventId: number, inhabitantId: number, role: TeamRole, menuStrategy?: MenuSwapStrategy): Promise<DinnerEventDetail> => {
             isRoleUpdating.value = true
             try {
                 const updated = await apiRequest(`/api/team/cooking/${dinnerEventId}/assign-role`, {
@@ -431,8 +429,8 @@ export const usePlanStore = defineStore("Plan", () => {
                 // Refresh selected detail LAST: on /chef the page watchEffect re-derives the
                 // selected dinner id from myTeams/season, so settle those first or its re-run
                 // reloads stale detail over the fresh fetch.
-                await settleSeason()
-                await useUsersStore().loadMyTeams()
+                await refreshTeamAggregates()
+                await usersStore.refreshMyTeams()
                 await useBookingsStore().refreshSelectedDinnerEventDetail()
                 return updated
             } finally {
@@ -457,7 +455,7 @@ export const usePlanStore = defineStore("Plan", () => {
         /**
          * Withdraw the current user from a role on a dinner ("Meld afbud").
          * Clears chef + menu + allergens server-side; 207 means the Heynabo event
-         * could not be deleted (best-effort, ADR-013). Returns null on error.
+         * could not be deleted (best-effort). Returns null on error.
          */
         const resignRoleForMe = async (dinnerEvent: DinnerEventDetail, role: TeamRole): Promise<DinnerEventDetail | null> => {
             const inhabitantId = authStore.inhabitantId
@@ -476,14 +474,14 @@ export const usePlanStore = defineStore("Plan", () => {
                 // Refresh selected detail LAST: on /chef the page watchEffect re-derives the
                 // selected dinner id from myTeams/season, so settle those first or its re-run
                 // reloads stale detail over the fresh fetch.
-                await settleSeason()
-                await useUsersStore().loadMyTeams()
+                await refreshTeamAggregates()
+                await usersStore.refreshMyTeams()
                 await useBookingsStore().refreshSelectedDinnerEventDetail()
-                toastSaved('Du har meldt afbud. Tjansen som chefkok er nu ledig.')
+                toastSaved(TEAM_WORDS.toasts.resigned.title)
                 if (heynaboSyncDegraded) {
                     toast.add({
-                        title: 'Heynabo-synkronisering fejlede',
-                        description: 'Tjansen er fjernet, men Heynabo-begivenheden kunne ikke slettes. Tjek Heynabo.',
+                        title: TEAM_WORDS.toasts.resigned.heynaboFailed.title,
+                        description: TEAM_WORDS.toasts.resigned.heynaboFailed.description,
                         color: COLOR.error
                     })
                 }
@@ -505,6 +503,7 @@ export const usePlanStore = defineStore("Plan", () => {
             selectedSeasonDataset: markRaw(selectedSeasonDataset),
             selectedTeam,
             selectedTeamId,
+            selectedTeamDataset: markRaw(selectedTeamDataset),
             selectedTeamError,
             seasons,
             // computed state
@@ -539,7 +538,6 @@ export const usePlanStore = defineStore("Plan", () => {
             updateSeason,
             activateSeason,
             deactivateSeason,
-            assignTeamAffinitiesAndEvents,
             createTeam,
             updateTeam,
             deleteTeam,

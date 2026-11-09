@@ -1,5 +1,5 @@
 import type {Page} from '@playwright/test'
-import {test, expect} from '@playwright/test'
+import {test, expect} from '~~/tests/e2e/uiTest'
 import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {INSTALL_TEST_IDS} from '~~/tests/component/components/installPromptTestIds'

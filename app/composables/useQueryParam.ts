@@ -42,7 +42,7 @@ export interface UseQueryParamOptions<T> {
  * const {value: date} = useQueryParam('date', {
  *   serialize: formatDate,
  *   deserialize: parseDate,
- *   defaultValue: () => new Date(),
+ *   defaultValue: () => now.value,
  *   syncWhen: () => store.isReady && events.value.length > 0
  * })
  */

@@ -1,9 +1,9 @@
 import {defineEventHandler, setResponseStatus, readValidatedBody} from 'h3'
 import {z} from 'zod'
-import {isSameDay} from 'date-fns'
-import {parseCalendarCSV, parseTeamsCSV} from '~~/server/utils/csvImport'
+import {formatDate} from '~/utils/date'
+import {parseCalendarCSV, parseTeamsCSV, type ParsedTeam} from '~~/server/utils/csvImport'
 import {fetchSeasons, createSeason, updateSeason, fetchInhabitants, createTeam, fetchTeams, createTeamAssignment, updateTeam} from '~~/server/data/prismaRepository'
-import {dateToWeekDay} from '~/utils/season'
+import {dateToWeekDay, getDinnerOnDate} from '~/utils/season'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {pruneAndCreate} from '~/utils/batchUtils'
 import {assignCookingTeamToDinnerEvent, fetchDinnerEvents} from '~~/server/data/financesRepository'
@@ -14,11 +14,12 @@ import {useHousehold} from '~/composables/useHousehold'
 import {useCookingTeam} from '~/composables/useCookingTeam'
 import {useMaintenanceValidation, type SeasonImportResponse} from '~/composables/useMaintenanceValidation'
 import type {Season} from '~/composables/useSeasonValidation'
+import {IdSchema} from '~/composables/useCoreValidation'
 import type {CookingTeamCreate, CookingTeamDisplay, CookingTeamAssignment} from '~/composables/useCookingTeamValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const {throwH3Error} = eventHandlerHelper
-const {JobType, JobStatus, SeasonImportResponseSchema} = useMaintenanceValidation()
+const {JobType, JobStatus, SeasonImportResponseSchema, adminTrigger} = useMaintenanceValidation()
 
 /**
  * Request schema for season import
@@ -41,8 +42,7 @@ const SeasonImportRequestSchema = z.object({
  * 5. Create cooking teams with assignments
  * 6. Assign cooking teams to dinner events based on calendar mapping
  *
- * ADR-002: Separate validation vs business logic
- * ADR-015: Idempotent operations
+ * A re-run with the same files changes nothing
  */
 export default defineEventHandler(async (event): Promise<SeasonImportResponse> => {
     const {cloudflare} = event.context
@@ -64,14 +64,14 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
     // Business logic with job tracking
     const jobRun = await createJobRun(d1Client, {
         jobType: JobType.MAINTENANCE_IMPORT,
-        triggeredBy: 'ADMIN:season-import'
+        triggeredBy: adminTrigger('season-import')
     })
 
     try {
         // Step 1: Parse calendar CSV
         console.info(`${LOG} Parsing calendar CSV`)
         const parsedCalendar = parseCalendarCSV(calendarCsv)
-        console.info(`${LOG} Calendar parsed: ${parsedCalendar.teamDateMapping.size} teams, dates ${parsedCalendar.seasonDates.start.toISOString().split('T')[0]} to ${parsedCalendar.seasonDates.end.toISOString().split('T')[0]}`)
+        console.info(`${LOG} Calendar parsed: ${parsedCalendar.teamDateMapping.size} teams, dates ${formatDate(parsedCalendar.seasonDates.start)} to ${formatDate(parsedCalendar.seasonDates.end)}`)
 
         // Step 2: Parse teams CSV with inhabitant matching
         console.info(`${LOG} Parsing teams CSV`)
@@ -87,7 +87,7 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
         // Step 3: Build season data from defaults + CSV
         const {getDefaultSeason, createSeasonName} = useSeason()
 
-        const defaultSeason = getDefaultSeason()
+        const defaultSeason = getDefaultSeason(new Date())
         const seasonFromCsv: Partial<Season> = {
             shortName: createSeasonName(parsedCalendar.seasonDates),
             seasonDates: parsedCalendar.seasonDates,
@@ -120,14 +120,16 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
             isNew = true
             console.info(`${LOG} Created season ID: ${savedSeason.id}`)
         }
+        // A Season's id is optional until it is saved; the saved one carries it
+        const seasonId = IdSchema.parse(savedSeason.id)
 
-        // Step 5: Reconcile dinner events (idempotent - ADR-015)
+        // Step 5: Reconcile dinner events (idempotent)
         const reconciliation = await reconcileDinnerEventsForSeason(d1Client, savedSeason, LOG)
         dinnerEventsCreated = reconciliation.created
 
-        // Step 6: Create cooking teams with assignments (idempotent - ADR-015)
-        const dinnerEvents = await fetchDinnerEvents(d1Client, {seasonId: savedSeason.id!})
-        const existingTeams = await fetchTeams(d1Client, savedSeason.id!)
+        // Step 6: Create cooking teams with assignments (idempotent)
+        const dinnerEvents = await fetchDinnerEvents(d1Client, {seasonId})
+        const existingTeams = await fetchTeams(d1Client, seasonId)
         const {createDefaultTeamName, extractTeamNumber} = useCookingTeam()
 
         // Build desired teams from CALENDAR team numbers (not just teams CSV)
@@ -137,36 +139,34 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
         const calendarTeamNumbers = Array.from(parsedCalendar.teamDateMapping.keys()).sort((a, b) => a - b)
 
         // Map CSV team name → parsed team (for member lookup)
-        const csvTeamByNumber = new Map(
-            parsedTeams.teams.map(t => [extractTeamNumber(t.name), t] as const)
-                .filter((entry): entry is [number, typeof parsedTeams.teams[0]] => entry[0] !== null)
-        )
+        const csvTeamByNumber = new Map(parsedTeams.teams.flatMap((t): [number, ParsedTeam][] => {
+            const teamNumber = extractTeamNumber(t.name)
+            return teamNumber === null ? [] : [[teamNumber, t]]
+        }))
 
         // Count team assignments per inhabitant for allocation percentage
         const teamCountByInhabitant = parsedTeams.teams
             .flatMap(t => t.members)
-            .filter(m => m.inhabitantId !== null)
-            .reduce((acc, m) => acc.set(m.inhabitantId!, (acc.get(m.inhabitantId!) ?? 0) + 1), new Map<number, number>())
+            .flatMap(m => m.inhabitantId === null ? [] : [m.inhabitantId])
+            .reduce((acc, inhabitantId) => acc.set(inhabitantId, (acc.get(inhabitantId) ?? 0) + 1), new Map<number, number>())
 
         // Build desired team for each calendar team number
         const desiredTeams: DesiredTeam[] = calendarTeamNumbers.map(teamNumber => {
             const csvTeam = csvTeamByNumber.get(teamNumber)
             const assignments = csvTeam
-                ? csvTeam.members
-                    .filter(m => m.inhabitantId !== null)
-                    .map(m => ({
-                        inhabitantId: m.inhabitantId!,
-                        role: m.role,
-                        allocationPercentage: Math.round(100 / (teamCountByInhabitant.get(m.inhabitantId!) ?? 1)),
-                        affinity: m.affinity
-                    }))
+                ? csvTeam.members.flatMap(m => m.inhabitantId === null ? [] : [{
+                    inhabitantId: m.inhabitantId,
+                    role: m.role,
+                    allocationPercentage: Math.round(100 / (teamCountByInhabitant.get(m.inhabitantId) ?? 1)),
+                    affinity: m.affinity
+                }])
                 : []
 
             return {
                 teamNumber,
                 teamCreate: {
-                    seasonId: savedSeason.id!,
-                    name: createDefaultTeamName(savedSeason.shortName!, teamNumber),
+                    seasonId,
+                    name: createDefaultTeamName(savedSeason.shortName, teamNumber),
                     affinity: null,
                     assignments
                 }
@@ -174,12 +174,10 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
         })
 
         // Reconcile teams using pruneAndCreate
-        const getTeamNumber = (item: CookingTeamDisplay | DesiredTeam): number | undefined =>
-            'teamNumber' in item ? item.teamNumber : extractTeamNumber(item.name) ?? undefined
-
         const reconcileTeams = pruneAndCreate<CookingTeamDisplay, DesiredTeam, number>(
-            getTeamNumber,
-            () => true // Same team number = same team (don't update)
+            team => extractTeamNumber(team.name) ?? undefined,
+            () => true, // Same team number = same team (don't update)
+            desired => desired.teamNumber
         )
         const teamReconciliation = reconcileTeams(existingTeams)(desiredTeams)
 
@@ -206,7 +204,7 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
 
             const createdAssignments = await Promise.all(
                 assignmentReconciliation.create.map(a => createTeamAssignment(d1Client, {
-                    cookingTeamId: existingTeam.id!,
+                    cookingTeamId: existingTeam.id,
                     inhabitantId: a.inhabitantId,
                     role: a.role,
                     allocationPercentage: a.allocationPercentage,
@@ -224,11 +222,10 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
 
         // Step 7: Assign cooking teams to dinner events based on calendar mapping
         const allTeams = [...existingTeams, ...newTeams]
-        const teamNumberToId = new Map(
-            allTeams
-                .map(t => [extractTeamNumber(t.name), t.id] as const)
-                .filter((entry): entry is [number, number] => entry[0] !== null && entry[1] !== undefined)
-        )
+        const teamNumberToId = new Map(allTeams.flatMap((t): [number, number][] => {
+            const teamNumber = extractTeamNumber(t.name)
+            return teamNumber === null ? [] : [[teamNumber, t.id]]
+        }))
 
         let dinnerTeamAssignments = 0
         for (const [teamNum, dates] of parsedCalendar.teamDateMapping) {
@@ -239,10 +236,10 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
             }
 
             for (const date of dates) {
-                const dinnerEvent = dinnerEvents.find(de => isSameDay(de.date, date))
-                // Skip if already assigned to correct team (idempotent - ADR-015)
+                const dinnerEvent = getDinnerOnDate(dinnerEvents)(date)
+                // Skip if already assigned to correct team (idempotent)
                 if (dinnerEvent && dinnerEvent.cookingTeamId !== cookingTeamId) {
-                    await assignCookingTeamToDinnerEvent(d1Client, dinnerEvent.id!, cookingTeamId)
+                    await assignCookingTeamToDinnerEvent(d1Client, dinnerEvent.id, cookingTeamId)
                     dinnerTeamAssignments++
                 }
             }
@@ -268,10 +265,10 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
         }
         console.info(`${LOG} Derived affinities for ${affinitiesUpdated} teams from calendar`)
 
-        // Build and validate response through schema (ADR-001)
+        // Build and validate response through schema
         const response = SeasonImportResponseSchema.parse({
-            seasonId: savedSeason.id!,
-            seasonShortName: savedSeason.shortName!,
+            seasonId,
+            seasonShortName: savedSeason.shortName,
             isNew,
             teamsCreated,
             dinnerEventsCreated,

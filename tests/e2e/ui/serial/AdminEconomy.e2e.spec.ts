@@ -1,16 +1,20 @@
-import {test, expect, type BrowserContext} from '@playwright/test'
+import {test, expect, type BrowserContext} from '~~/tests/e2e/uiTest'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {getHouseholdUrl} from '~/utils/household'
+import {getHouseholdUrl, HOUSEHOLD_TAB} from '~/utils/household'
+import {ADMIN_WORDS} from '~/config/adminWords'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated, temporaryAndRandom, salt} = testHelpers
+const {openContext, validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated, temporaryAndRandom, salt, attemptAll} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
+const {findTicketPriceByType} = useTicket()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
 const {createDefaultWeekdayMap: createDinnerModeWeekdayMap} = useWeekDayMapValidation({
@@ -34,6 +38,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
     let householdEconomyUrl: string
     const testSalt = temporaryAndRandom()
     const createdSeasonIds: number[] = []
+    const createdInhabitantIds: number[] = []
 
     test.use({storageState: adminUIFile})
 
@@ -47,10 +52,12 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
             name: salt('Anders', testSalt), lastName: 'Korrektion'
         })
         testInhabitantId = person.id
+        createdInhabitantIds.push(person.id)
         await HouseholdFactory.updateInhabitant(adminContext, testInhabitantId, {dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)})
 
-        // The spec's own season, open at activation: its cases correct an upcoming order and read no deadline
-        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 14, deadline: 0})
+        // The spec's own season, open at activation: its cases correct an upcoming order and read no deadline, so its one
+        // dinner is tomorrow's
+        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 0, deadline: 0, cookingDays: 'all'})
         createdSeasonIds.push(testSeason.season.id!)
 
         expect(testSeason.dinnerEvents.length, 'Test season should have dinner events').toBeGreaterThan(0)
@@ -62,14 +69,18 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
             .filter(e => new Date(e.date) >= today)
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-        expect(futureDinners.length).toBeGreaterThan(0)
-        testDinnerEventId = futureDinners[0]!.id
-        const testTicketPriceId = testSeason.season.ticketPrices!.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!.id!
+        const [firstDinner] = futureDinners
+        if (!firstDinner) throw new Error('The test season has no dinner from today')
+        testDinnerEventId = firstDinner.id
+        const adultPrice = findTicketPriceByType(TicketTypeSchema.enum.ADULT, testSeason.season.ticketPrices)
+        if (!adultPrice) throw new Error('The test season has no adult ticket price')
+        const testTicketPriceId = adultPrice.id!
 
-        const household = (await HouseholdFactory.getAllHouseholds(adminContext)).find(h => h.id === testHouseholdId)!
+        const household = (await HouseholdFactory.getAllHouseholds(adminContext)).find(h => h.id === testHouseholdId)
+        if (!household) throw new Error(`The admin's household ${testHouseholdId} is not among the households`)
         householdAddress = household.address
         householdPbsId = household.pbsId
-        householdEconomyUrl = getHouseholdUrl(household.shortName, household.pbsId, 'economy')
+        householdEconomyUrl = getHouseholdUrl(household.shortName, household.pbsId, HOUSEHOLD_TAB.economy)
 
         const result = await OrderFactory.createOrder(adminContext, {
             householdId: testHouseholdId,
@@ -85,14 +96,16 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        await HouseholdFactory.deleteInhabitant(context, testInhabitantId)
-        // Deleting the season cascades its dinners and the order on them
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        // The admin's household stays; the spec's inhabitant goes, with its orders, and the season with its dinners
+        await attemptAll('AdminEconomy cleanup', [
+            ...createdInhabitantIds.map(id => () => HouseholdFactory.deleteInhabitant(context, id)),
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        ]).finally(() => context.close())
     })
 
     test('GIVEN an upcoming order WHEN /admin/economy is server-rendered THEN the future orders table shows its loading state, and once hydrated the order row appears', async ({browser, page}) => {
         // The economy data loads in the browser only: a context without JavaScript sees the page as the server sent it
-        const serverContext = await browser.newContext({storageState: adminUIFile, javaScriptEnabled: false})
+        const serverContext = await openContext(browser, {storageState: adminUIFile, javaScriptEnabled: false})
         const serverPage = await serverContext.newPage()
         await serverPage.goto('/admin/economy')
         const serverTable = serverPage.getByTestId('future-orders-table')
@@ -108,7 +121,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         const html = await adminContext.request.get(householdEconomyUrl).then(r => r.text())
 
         expect(html).toContain('data-testid="household-economy"')
-        expect(html).toContain('Faktureringsperioder')
+        expect(html).toContain(BOOKING_WORDS.billing.titles.periods)
         expect(html).not.toContain('Ingen kommende bestillinger')
     })
 
@@ -132,7 +145,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         const orderFetchPromise = page.waitForResponse(
             (r) => r.url().includes('/api/order') && r.url().includes('upcomingForSeason')
         )
-        await page.getByRole('tab', {name: 'Økonomi'}).click()
+        await page.getByRole('tab', {name: ADMIN_WORDS.tabs.economy}).click()
         await expect(page.getByTestId('admin-economy')).toBeVisible()
 
         // Wait for the upcoming orders to arrive
@@ -150,8 +163,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         const correctionBtn = page.getByTestId('admin-correction-btn')
         await expect(correctionBtn).toBeVisible()
         await correctionBtn.click()
-        // Wait for button to show confirm state (text changes to "Klik igen for at rette")
-        await expect(correctionBtn).toContainText('Klik igen')
+        await expect(correctionBtn).toContainText(BOOKING_WORDS.billing.correction.confirm)
         await correctionBtn.click()
 
         const householdSelect = page.getByTestId('admin-correction-household-select')

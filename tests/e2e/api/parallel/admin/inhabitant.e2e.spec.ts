@@ -9,12 +9,12 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 const Action = useBookingValidation().BookingActionSchema.enum
 
-const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, attemptAll} = testHelpers
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
 // Variables to store IDs for cleanup
-// Only track household - CASCADE will delete all inhabitants (ADR-005)
+// Only the household is tracked: deleting it cascades its inhabitants
 // BUT users have SET NULL relationship - must track and cleanup separately
 let testHouseholdId: number
 const createdHouseholdIds: number[] = []
@@ -252,8 +252,10 @@ test.describe('Admin Inhabitant API', () => {
 
         test.afterAll(async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-            await HouseholdFactory.deleteHousehold(context, scaffoldTestHouseholdIds)
-            await SeasonFactory.cleanupSeasons(context, scaffoldTestSeasonIds)
+            await attemptAll('Preference Re-scaffolding cleanup', [
+                () => HouseholdFactory.deleteHousehold(context, scaffoldTestHouseholdIds),
+                () => SeasonFactory.cleanupSeasons(context, scaffoldTestSeasonIds)
+            ]).finally(() => context.close())
         })
 
         // Test NONE→DINEIN: needs events BEFORE deadline so scaffold can CREATE
@@ -507,8 +509,10 @@ test.describe('Admin Inhabitant API', () => {
 
         test.afterAll(async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-            await HouseholdFactory.deleteHousehold(context, moveTestHouseholdIds)
-            await SeasonFactory.cleanupSeasons(context, moveTestSeasonIds)
+            await attemptAll('Move Inhabitant (householdId update) cleanup', [
+                () => HouseholdFactory.deleteHousehold(context, moveTestHouseholdIds),
+                () => SeasonFactory.cleanupSeasons(context, moveTestSeasonIds)
+            ]).finally(() => context.close())
         })
 
         test('GIVEN inhabitant in household A WHEN moved to household B THEN householdId updated and scaffoldResult returned', async ({browser}) => {
@@ -630,14 +634,13 @@ test.describe('Admin Inhabitant API', () => {
     // Cleanup after all tests
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-
-        // Clean up seasons created in individual tests (CASCADE deletes teams and assignments per ADR-005)
-        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
-
-        // Clean up the test households (CASCADE deletes all inhabitants automatically per ADR-005)
-        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
-
-        // Clean up users created via createInhabitantWithUser (SET NULL means they survive inhabitant deletion)
-        await UserFactory.cleanupUsers(context, createdUserIds)
+        await attemptAll('Admin Inhabitant API cleanup', [
+            // Clean up seasons created in individual tests (CASCADE deletes their teams and assignments)
+            () => SeasonFactory.cleanupSeasons(context, createdSeasonIds),
+            // Clean up the test households (CASCADE deletes their inhabitants)
+            () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds),
+            // Clean up users created via createInhabitantWithUser (SET NULL means they survive inhabitant deletion)
+            () => UserFactory.cleanupUsers(context, createdUserIds)
+        ]).finally(() => context.close())
     })
 })

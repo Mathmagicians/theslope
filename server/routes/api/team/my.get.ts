@@ -16,16 +16,16 @@
  */
 import {fetchMyTeams, fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import type {CookingTeamDetail} from '~~/app/composables/useCookingTeamValidation'
-import type {UserDetail} from '~~/app/composables/useCoreValidation'
+import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
+
+const {getSessionUser} = eventHandlerHelper
 
 export default defineEventHandler(async (event): Promise<CookingTeamDetail[]> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
     // Get authenticated user's inhabitant ID from session
-    const session = await getUserSession(event)
-    // Type cast: Module augmentation doesn't expand UserDetail properties (see types/auth.d.ts)
-    const user = session?.user as UserDetail | undefined
+    const user = await getSessionUser(event)
     const inhabitantId = user?.Inhabitant?.id
 
     if (!inhabitantId) {

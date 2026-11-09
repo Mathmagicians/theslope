@@ -1,13 +1,17 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
-import {enableAutoUnmount} from '@vue/test-utils'
+import {DOMWrapper, enableAutoUnmount} from '@vue/test-utils'
 import {addDays, addMonths, endOfMonth, startOfMonth} from 'date-fns'
 import DinnerCalendarDisplay from '~/components/calendar/DinnerCalendarDisplay.vue'
-import {EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {DEADLINE_LABELS, type ReleasedTicketCounts} from '~/composables/useBooking'
+import CalendarLegend from '~/components/calendar/CalendarLegend.vue'
+import CountdownTimer, {COUNTDOWN_PALETTE} from '~/components/calendar/CountdownTimer.vue'
+import {BOOKING_WORDS} from '~/config/bookingWords'
+import {DATE_WORDS} from '~/config/dateWords'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
-import {findAllByTestId, findByTestId, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
+import {findAllByTestId, findByTestId, iconNamesIn, lockedDinnerSupply, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
 import {CALENDAR, ICONS} from '~/composables/useTheSlopeDesignSystem'
-import {DinnerState} from '~/composables/useBookingValidation'
+import {DinnerState, useBookingValidation} from '~/composables/useBookingValidation'
 import {WAITLIST_TEST_IDS} from '~~/tests/component/components/dinner/waitlistTestIds'
 
 enableAutoUnmount(afterEach)
@@ -22,7 +26,8 @@ const MONTH = startOfMonth(addMonths(new Date(), 2))
 describe('DinnerCalendarDisplay lock chips', () => {
     const dinnerOn = (id: number, dayOfMonth: number) =>
         ({...DinnerEventFactory.defaultDinnerEventDisplay(), id, date: addDays(MONTH, dayOfMonth - 1)})
-    const supply = (total: number, queued: number): ReleasedTicketCounts => ({...EMPTY_RELEASED_TICKET_COUNTS, total, formatted: total > 0 ? `${total}V` : '-', queued, queuedFormatted: queued > 0 ? `${queued}V` : '-'})
+    const {ADULT} = useBookingValidation().TicketTypeSchema.enum
+    const supply = (total: number, queued: number): ReleasedTicketCounts => lockedDinnerSupply({[ADULT]: total}, {[ADULT]: queued})
 
     const FOR_SALE = dinnerOn(1, 10)
     const QUEUED = dinnerOn(2, 11)
@@ -55,8 +60,6 @@ describe('DinnerCalendarDisplay lock chips', () => {
     // UChip hands its attributes to the day circle, so the chip's indicator sits beside the circle
     const chipOf = (wrapper: Mounted, date: Date): Element | null =>
         findByTestId(wrapper, `calendar-dinner-date-${date.getDate()}`).element.parentElement?.querySelector('[data-slot="base"]') ?? null
-    const glyphsIn = (wrapper: Mounted, element: Element | null): string[] =>
-        wrapper.findAllComponents({name: 'UIcon'}).filter(icon => element?.contains(icon.element)).map(icon => icon.props('name') as string)
 
     it('each dinner past its deadline wears the chip of its supply, and a dinner open for booking wears none', async () => {
         const chips = [
@@ -69,7 +72,7 @@ describe('DinnerCalendarDisplay lock chips', () => {
         chips.forEach(({desc, dinner, text, glyphs}) => {
             const chip = chipOf(wrapper, dinner.date)
             expect(chip?.textContent?.trim(), desc).toBe(text)
-            expect(glyphsIn(wrapper, chip), desc).toEqual(glyphs)
+            expect(iconNamesIn(new DOMWrapper(chip)), desc).toEqual(glyphs)
         })
         expect(chipOf(wrapper, OPEN.date)).toBeNull()
 
@@ -80,9 +83,9 @@ describe('DinnerCalendarDisplay lock chips', () => {
 
     it('the legend explains each chip', async () => {
         const legend = [
-            {label: 'Lukket for framelding', text: '', glyphs: []},
-            {label: 'Billetter til salg', text: '1', glyphs: []},
-            {label: 'Venteliste, ingen billetter til salg', text: '', glyphs: [ICONS.waitlist]}
+            {label: DEADLINE_LABELS.BOOKING_CLOSED.closedText, text: '', glyphs: []},
+            {label: BOOKING_WORDS.calendarLegend.forSale, text: '1', glyphs: []},
+            {label: BOOKING_WORDS.calendarLegend.waitlist, text: '', glyphs: [ICONS.waitlist]}
         ]
         const wrapper = await mountCalendar()
 
@@ -90,7 +93,7 @@ describe('DinnerCalendarDisplay lock chips', () => {
             const entry = findAllByTestId(wrapper, 'calendar-legend-entry').find(candidate => candidate.text().includes(label))
             const chip = entry?.find('[data-slot="base"]').element ?? null
             expect(chip?.textContent?.trim(), label).toBe(text)
-            expect(glyphsIn(wrapper, chip), label).toEqual(glyphs)
+            expect(iconNamesIn(new DOMWrapper(chip)), label).toEqual(glyphs)
         })
     })
 })
@@ -122,9 +125,66 @@ describe('DinnerCalendarDisplay cancelled dinners', () => {
         expect(day.classes()).toEqual(expect.arrayContaining([...CALENDAR.day.past.split(' '), ...CALENDAR.day.cancelled.split(' ')]))
     })
 
-    it('the legend explains a cancelled dinner as "Aflyst fællesspisning"', async () => {
+    it('the legend names each day the calendar draws: the dinner circles, the cancelled dinner and the holiday, then the lock chips', async () => {
+        const words = BOOKING_WORDS.calendarLegend
         const wrapper = await mountCalendar()
 
-        expect(findAllByTestId(wrapper, 'calendar-legend-entry').some(entry => entry.text().includes('Aflyst fællesspisning'))).toBe(true)
+        expect(wrapper.findComponent(CalendarLegend).props('items')?.map(item => item.label)).toEqual([
+            words.next, DATE_WORDS.calendarLegend.selected, words.planned, words.past, BOOKING_WORDS.cancelledDinner.legend,
+            DATE_WORDS.calendarLegend.holiday, DEADLINE_LABELS.BOOKING_CLOSED.closedText, words.forSale, words.waitlist
+        ])
+    })
+})
+
+// The server renders the circles before the layout measures the viewport, so the circle's size steps at lg in its own
+// classes: a circle reads alike whatever the md breakpoint says, and the browser picks the size per screen
+describe('DinnerCalendarDisplay day circles', () => {
+    const DINNER = {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 6, date: addDays(MONTH, 9)}
+
+    beforeEach(() => {
+        resetStores()
+    })
+
+    const circleClasses = async (isMd: boolean | null) => {
+        const wrapper = await mountWithTooltipProvider(DinnerCalendarDisplay, {
+            props: {
+                seasonDates: {start: MONTH, end: endOfMonth(MONTH)},
+                holidays: [],
+                dinnerEvents: [DINNER],
+                selectedDate: MONTH,
+                numberOfMonths: 1
+            },
+            isMd
+        })
+        return findByTestId(wrapper, `calendar-dinner-date-${DINNER.date.getDate()}`).classes()
+    }
+
+    it('a dinner circle binds the calendar circle size, alike on a phone, from md and before the layout measures', async () => {
+        const phone = await circleClasses(false)
+
+        expect(phone).toEqual(expect.arrayContaining(CALENDAR.day.size.split(' ')))
+        expect(await circleClasses(true)).toEqual(phone)
+        expect(await circleClasses(null)).toEqual(phone)
+    })
+})
+
+describe('DinnerCalendarDisplay words', () => {
+    beforeEach(() => {
+        resetStores()
+    })
+
+    it('the countdown reads the next dinner\'s words in the dinner palette, and the accordion its title', async () => {
+        const wrapper = await mountWithTooltipProvider(DinnerCalendarDisplay, {
+            props: {seasonDates: {start: MONTH, end: endOfMonth(MONTH)}, holidays: [], showCountdown: true, selectedDate: MONTH},
+            isMd: true
+        })
+
+        expect(wrapper.findComponent(CountdownTimer).props()).toMatchObject({
+            title: BOOKING_WORDS.calendar.countdownTitle,
+            timeLabel: BOOKING_WORDS.calendar.countdownTimeLabel,
+            emptyText: DATE_WORDS.countdown.none,
+            palette: COUNTDOWN_PALETTE.dinner
+        })
+        expect(wrapper.text()).toContain(BOOKING_WORDS.calendar.title)
     })
 })

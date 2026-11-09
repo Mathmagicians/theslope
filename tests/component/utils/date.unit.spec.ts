@@ -18,16 +18,24 @@ import {
     isCalendarDateInDateList,
     toDate,
     calculateCountdown,
+    formatWeekRange,
     createDateInTimezone,
+    formatDateInTimezone,
+    formatCompactWeekdayDate,
+    formatFullWeekdayDate,
+    isSameDayInTimezone,
+    formatTimeSince,
     areSameWeek,
     getPeriodBoundary,
-    type PeriodView,
+    PERIOD_DIRECTION,
+    type PeriodDirection,
     DATE_SETTINGS
 } from "~/utils/date"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {isValid, isSameDay} from "date-fns"
-import type {DateRange} from "~/types/dateTypes"
+import {PERIOD_VIEWS, type DateRange, type PeriodView} from "~/types/dateTypes"
 import {CalendarDate} from '@internationalized/date'
+import {DATE_WORDS} from '~/config/dateWords'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 
@@ -170,9 +178,9 @@ describe('copyPartialDateRange', () => {
 })
 
 describe('formatDateRange', () => {
-    it('should format undefined range as ?->?', () => {
+    it('reads no range as the no-range word', () => {
         const result = formatDateRange(undefined)
-        expect(result).toBe('?->?')
+        expect(result).toBe(DATE_WORDS.noRange)
     })
 
     it('should format date range correctly with default mask', () => {
@@ -574,6 +582,14 @@ describe('calculateCountdown', () => {
             expectedFormatted: '45M'
         },
         {
+            description: 'target is 3 days away from a given moment, not from the real now',
+            currentDate: new Date(2025, 0, 12, 18, 0, 0),
+            targetDate: new Date(2025, 0, 15, 18, 0, 0),
+            expectedHours: 72,
+            expectedMinutes: 0,
+            expectedFormatted: '3 DAGE'
+        },
+        {
             description: 'target is exactly now (same time)',
             currentDate: new Date(2025, 0, 15, 18, 0, 0),
             targetDate: new Date(2025, 0, 15, 18, 0, 0),
@@ -599,6 +615,12 @@ describe('calculateCountdown', () => {
             expect(result.minutes).toBe(expectedMinutes)
             expect(result.formatted).toBe(expectedFormatted)
         })
+    })
+})
+
+describe('formatWeekRange', () => {
+    it('GIVEN a week WHEN formatted THEN it reads its ISO week number and its first and last day', () => {
+        expect(formatWeekRange(new Date(2026, 0, 12), new Date(2026, 0, 18))).toBe('Uge 3: 12/01-18/01')
     })
 })
 
@@ -644,6 +666,51 @@ describe('createDateInTimezone', () => {
     })
 })
 
+// A moment reads as Copenhagen's clock shows it, in a runtime of any zone: the server runs in UTC
+describe('formatDateInTimezone', () => {
+    it.each([
+        {moment: '18:00 in winter (CET)', date: new Date(2030, 0, 15), hour: 18, expected: '15/01/2030 18:00'},
+        {moment: '18:00 in summer (CEST)', date: new Date(2030, 6, 15), hour: 18, expected: '15/07/2030 18:00'},
+        {moment: 'midnight in winter, the evening before in UTC', date: new Date(2030, 0, 15), hour: 0, expected: '15/01/2030 00:00'}
+    ])('GIVEN $moment in Copenhagen WHEN formatted with the date and time mask THEN it reads $expected', ({date, hour, expected}) => {
+        expect(formatDateInTimezone(createDateInTimezone(date, hour), DATE_SETTINGS.DATE_TIME_MASK)).toBe(expected)
+    })
+})
+
+// A date with its weekday reads the weekday compact or full, then the day and month padded
+describe('formatCompactWeekdayDate and formatFullWeekdayDate', () => {
+    it.each([
+        {format: formatCompactWeekdayDate, width: 'compact', expected: 'tir. 15/01'},
+        {format: formatFullWeekdayDate, width: 'full', expected: 'tirsdag 15/01'}
+    ])('GIVEN Tuesday 15 January WHEN formatted with the $width weekday THEN it reads $expected', ({format, expected}) => {
+        expect(format(new Date(2030, 0, 15))).toBe(expected)
+    })
+})
+
+// Two moments share a day as Copenhagen's calendar reads it, in a runtime of any zone: the server runs in UTC
+describe('isSameDayInTimezone', () => {
+    const day = new Date(2030, 0, 15)
+    const nextDay = new Date(2030, 0, 16)
+    it.each([
+        {moments: '00:30 and 23:30 of one Copenhagen day, two days in UTC', a: createDateInTimezone(day, 0, 30), b: createDateInTimezone(day, 23, 30), same: true},
+        {moments: '23:30 and 00:30 of the next Copenhagen day, one day in UTC', a: createDateInTimezone(day, 23, 30), b: createDateInTimezone(nextDay, 0, 30), same: false}
+    ])('GIVEN $moments WHEN compared THEN they share a day: $same', ({a, b, same}) => {
+        expect(isSameDayInTimezone(a, b)).toBe(same)
+    })
+})
+
+// The time since a moment in the words of the Danish locale
+describe('formatTimeSince', () => {
+    const now = new Date(2030, 0, 15, 18, 0)
+    it.each([
+        {since: 'two days', moment: new Date(2030, 0, 13, 18, 0), expected: '2 dage siden'},
+        {since: 'a day', moment: new Date(2030, 0, 14, 18, 0), expected: '1 dag siden'},
+        {since: 'five hours', moment: new Date(2030, 0, 15, 13, 0), expected: '5 timer siden'}
+    ])('GIVEN a moment $since before now WHEN formatted THEN it reads $expected', ({moment, expected}) => {
+        expect(formatTimeSince(moment, now)).toBe(expected)
+    })
+})
+
 describe('areSameWeek', () => {
     it.each([
         // Same week (Mon-Sun)
@@ -669,32 +736,33 @@ describe('getPeriodBoundary', () => {
     const sun = new Date(2025, 0, 19, 10, 30) // Sun — week-end edge
     const jan1 = new Date(2025, 0, 1, 10, 30)  // Month-start edge
     const jan31 = new Date(2025, 0, 31, 10, 30) // Month-end edge
+    const [day, week, month] = PERIOD_VIEWS
 
-    it.each([
+    it.each<{input: Date, view: PeriodView, direction: PeriodDirection, expected: Date, desc: string}>([
         // Core {view × direction} matrix from interior (Wed)
-        {input: wed, view: 'day' as PeriodView, direction: 1 as const,
+        {input: wed, view: day, direction: PERIOD_DIRECTION.next,
             expected: atEndOfDay(wed), desc: 'day forward from interior = endOfDay'},
-        {input: wed, view: 'day' as PeriodView, direction: -1 as const,
+        {input: wed, view: day, direction: PERIOD_DIRECTION.prev,
             expected: atStartOfDay(wed), desc: 'day backward from interior = startOfDay'},
-        {input: wed, view: 'week' as PeriodView, direction: 1 as const,
+        {input: wed, view: week, direction: PERIOD_DIRECTION.next,
             expected: atEndOfDay(new Date(2025, 0, 19)), desc: 'week forward from interior = Sun 19 end-of-day'},
-        {input: wed, view: 'week' as PeriodView, direction: -1 as const,
+        {input: wed, view: week, direction: PERIOD_DIRECTION.prev,
             expected: atStartOfDay(new Date(2025, 0, 13)), desc: 'week backward from interior = Mon 13 start-of-day'},
-        {input: wed, view: 'month' as PeriodView, direction: 1 as const,
+        {input: wed, view: month, direction: PERIOD_DIRECTION.next,
             expected: atEndOfDay(new Date(2025, 0, 31)), desc: 'month forward from interior = Jan 31 end-of-day'},
-        {input: wed, view: 'month' as PeriodView, direction: -1 as const,
+        {input: wed, view: month, direction: PERIOD_DIRECTION.prev,
             expected: atStartOfDay(new Date(2025, 0, 1)), desc: 'month backward from interior = Jan 1 start-of-day'},
 
         // Monday-start week edges
-        {input: mon, view: 'week' as PeriodView, direction: -1 as const,
+        {input: mon, view: week, direction: PERIOD_DIRECTION.prev,
             expected: atStartOfDay(new Date(2025, 0, 13)), desc: 'week backward from Monday = Monday itself start-of-day'},
-        {input: sun, view: 'week' as PeriodView, direction: 1 as const,
+        {input: sun, view: week, direction: PERIOD_DIRECTION.next,
             expected: atEndOfDay(new Date(2025, 0, 19)), desc: 'week forward from Sunday = Sunday itself end-of-day'},
 
         // Month edges
-        {input: jan1, view: 'month' as PeriodView, direction: -1 as const,
+        {input: jan1, view: month, direction: PERIOD_DIRECTION.prev,
             expected: atStartOfDay(new Date(2025, 0, 1)), desc: 'month backward from 1st = 1st itself start-of-day'},
-        {input: jan31, view: 'month' as PeriodView, direction: 1 as const,
+        {input: jan31, view: month, direction: PERIOD_DIRECTION.next,
             expected: atEndOfDay(new Date(2025, 0, 31)), desc: 'month forward from last = last itself end-of-day'}
     ])('$desc', ({input, view, direction, expected}) => {
         const boundary = getPeriodBoundary(input, view, direction)

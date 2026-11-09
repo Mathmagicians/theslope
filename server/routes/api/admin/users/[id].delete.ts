@@ -14,7 +14,7 @@ export default defineEventHandler(async (event): Promise<UserDetail> => {
     const d1Client = cloudflare.env.DB
 
     // Validate input - fail early on invalid data
-    let userId!: number
+    let userId: number
     try {
         const { id } = await getValidatedRouterParams(event, paramSchema.parse)
         userId = id

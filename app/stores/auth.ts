@@ -1,30 +1,30 @@
-import type {UserDetail} from '~/composables/useCoreValidation'
 import type {SenderEmitResult} from '~/composables/useNotificationValidation'
 import type {FeedbackCreate, FeedbackIssue} from '~/composables/useFeedbackValidation'
 import {DEFAULT_NOTIFICATION_CHANNELS, readAppearance, type Appearance, type NotificationChannel, type UserPreferencesUpdate} from '~/composables/useUserPreferenceValidation'
-
-/** The toast and the login form both show it when a sign-in fails */
-export const LOGIN_FAILED_MESSAGE = 'Vi kunne ikke logge dig på, prøv igen. Du skal bruge dit Heynabo brugernavn og password.'
+import {USER_WORDS} from '~/config/userWords'
 
 export const useAuthStore = defineStore("Auth", () => {
     const {loggedIn, user: _user, session, clear, fetch} = useUserSession()
     const permissions = usePermissions()
     const {apiRequest, toastSaved} = useApiHandler()
     const {FeedbackIssueSchema} = useFeedbackValidation()
+    const {UserDetailSchema} = useCoreValidation()
+    const {SenderEmitResultSchema} = useNotificationValidation()
 
-    const user = computed(() => _user.value as UserDetail | null)
+    // nuxt-auth-utils hands the session user out untyped, as the session's JSON: the schema reads it as the domain's user
+    const user = computed(() => _user.value ? UserDetailSchema.parse(_user.value) : null)
 
     const signIn = async (email: string, password: string) => {
         await apiRequest('/api/auth/login', {
             method: 'POST',
             body: {email, password},
             action: 'login',
-            errorMessage: LOGIN_FAILED_MESSAGE
+            errorMessage: USER_WORDS.login.failed
         })
         await fetch()
     }
 
-    const greeting = computed(() => user.value?.Inhabitant?.name || 'Ukendt bruger')
+    const greeting = computed(() => user.value?.Inhabitant?.name || USER_WORDS.unknownUser)
 
     const inhabitantId = computed(() => user.value?.Inhabitant?.id ?? null)
     const avatar = computed(() => user.value?.Inhabitant?.pictureUrl)
@@ -52,7 +52,7 @@ export const useAuthStore = defineStore("Auth", () => {
     const savePreferences = async (update: UserPreferencesUpdate) => {
         await apiRequest('/api/user/preferences', {method: 'POST', body: update, action: 'savePreferences'})
         await fetch()
-        toastSaved('Indstillinger gemt')
+        toastSaved(USER_WORDS.preferences.saved)
     }
 
     /**
@@ -60,9 +60,9 @@ export const useAuthStore = defineStore("Auth", () => {
      * The toast carries `dedupeKey` — the id one grep finds in the producer log and the sender log.
      */
     const sendTestNotification = async (): Promise<SenderEmitResult> => {
-        const result = await apiRequest<SenderEmitResult>('/api/user/notifications/test', {method: 'POST', action: 'sendTestNotification'})
-        if (result.degraded) useToast().add({title: 'Notifikationer er ikke sat op i dette miljø', description: result.dedupeKey, color: COLOR.warning})
-        else toastSaved('Testbesked afsendt – tjek din indbakke/telefon', result.dedupeKey)
+        const result = await apiRequest('/api/user/notifications/test', {method: 'POST', schema: SenderEmitResultSchema, action: 'sendTestNotification'})
+        if (result.degraded) useToast().add({title: USER_WORDS.preferences.testUnavailable, description: result.dedupeKey, color: COLOR.warning})
+        else toastSaved(USER_WORDS.preferences.testSent, result.dedupeKey)
         return result
     }
 

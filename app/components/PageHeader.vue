@@ -1,34 +1,38 @@
 <script setup lang="ts">
 import type {NavigationMenuItem} from '@nuxt/ui'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 /**
- * PageHeader - Main navigation header
+ * PageHeader - the main navigation
  *
- * Business Rules:
- * - Non-admin links always visible (icons only on mobile)
- * - Admin link and user menu in burger/drawer
- * - Active state shown for current route
- * - Only login button shown when not logged in
+ * - Signed in: the links to the dinners, the household and the team, icons only on a phone; the admin link and the
+ *   person's own link in the drawer. From md the areas sit in the centre with their names, the person's links on the right
+ * - Signed out: the sign-in link alone
+ * - The link of the current route reads active
+ * - The menus take their places by CSS breakpoint, so the server render stands as the browser shows it
+ * - The drawer closes once the window is md or wider
  *
- * ADR Compliance:
- * - Uses design system icons (ICONS)
- * - Responsive with isMd breakpoint
- * - Mobile-first design
+ * Visual check: any page signed in and signed out, phone and desktop: the sticky bar with the logo, the links with their
+ * labels from md, the burger and its drawer on a phone, the active link; the first paint on a desktop shows the desktop
+ * arrangement; a drawer opened at phone width closes once the window is md or wider, and the page scrolls again.
  */
 
-// Navigation item type extending NuxtUI's type
 type NavItem = NavigationMenuItem & { active: boolean }
 
 const route = useRoute()
 const {loggedIn, greeting, avatar} = storeToRefs(useAuthStore())
 const {myHousehold} = storeToRefs(useHouseholdsStore())
-const {ICONS, NAVIGATION, BACKGROUNDS} = useTheSlopeDesignSystem()
+const {ICONS, NAVIGATION, COMPONENTS, ORIENTATIONS, breakpoint} = useTheSlopeDesignSystem()
 
-// Check if route is active
+const isMenuOpen = ref(false)
+// From md the drawer is hidden by CSS; left open, it would keep the page's scroll lock and focus trap
+watch(breakpoint.isMd, isMd => {
+  if (isMd) isMenuOpen.value = false
+})
+
 const isActive = (to: string): boolean => route.path.startsWith(to)
 
-// Main navigation links (always visible when logged in)
-const mainLinks = computed((): NavItem[] => loggedIn.value ? [
+const areaLinks = computed((): NavItem[] => loggedIn.value ? [
   {
     label: 'Fællesspisning',
     to: '/dinner',
@@ -38,7 +42,7 @@ const mainLinks = computed((): NavItem[] => loggedIn.value ? [
   {
     label: 'Husstand',
     to: myHousehold.value
-        ? getHouseholdUrl(myHousehold.value.shortName, myHousehold.value.pbsId, 'bookings')
+        ? getHouseholdUrl(myHousehold.value.shortName, myHousehold.value.pbsId, HOUSEHOLD_TAB.bookings)
         : '/household',
     icon: ICONS.household,
     active: isActive('/household')
@@ -49,86 +53,68 @@ const mainLinks = computed((): NavItem[] => loggedIn.value ? [
     icon: ICONS.chef,
     active: isActive('/chef')
   }
-] : [{
+] : [])
+
+const personLinks = computed((): NavItem[] => loggedIn.value ? [
+  {label: 'Admin', to: '/admin', icon: ICONS.admin, active: isActive('/admin')},
+  {label: greeting.value, to: '/login', avatar: {src: avatar.value ?? undefined, icon: ICONS.user}, active: isActive('/login')}
+] : [])
+
+const signInLinks = computed((): NavItem[] => [{
   label: 'LOGIN',
   to: '/login',
   icon: ICONS.login,
   active: isActive('/login')
 }])
-
-
-// Drawer menu items (admin + user)
-const drawerLinks = computed((): NavItem[] => [
-  {label: 'Admin', to: '/admin', icon: ICONS.admin, active: isActive('/admin')},
-  {label: greeting.value, to: '/login', avatar: {src: avatar.value ?? undefined, icon: ICONS.user}, active: isActive('/login')}
-])
-
-// Swap links based on breakpoint: on desktop drawer links go to main nav
-const visibleMainLinks = computed((): NavItem[] => {
-  if (!loggedIn.value) return mainLinks.value
-  return NAVIGATION.shouldSwapDrawerWithMain
-    ? drawerLinks.value
-    : mainLinks.value
-})
-
-const visibleDrawerLinks = computed((): NavItem[] => {
-  if (!loggedIn.value) return []
-  return NAVIGATION.shouldSwapDrawerWithMain
-    ? mainLinks.value
-    : drawerLinks.value
-})
-
 </script>
 
 <template>
-  <div class="sticky top-0 md:top-4 z-30 flex items-center justify-center">
-    <UHeader
-        :ui="{
-          root: `${BACKGROUNDS.header} shadow-sm md:rounded-lg`,
-          toggle: 'md:hidden',
-          left: 'md:flex-1',
-          center: 'hidden md:flex',
-          right: 'flex items-center justify-end md:flex-1 gap-1.5'
-        }"
-    >
-      <template #toggle="{ open, toggle }">
-        <UButton
-            class="md:hidden"
-            :icon="ICONS.menu"
-            :color="open ? NAVIGATION.link.activeColor : NAVIGATION.link.color"
-            :variant="open ? NAVIGATION.link.activeVariant : NAVIGATION.link.variant"
-            @click="toggle"
-        />
-      </template>
-      <template #left>
-        <NuxtLink to="/" class="shrink-0 w-16 md:w-32">
-          <Logo/>
-        </NuxtLink>
-      </template>
-      <template #right>
-        <!-- Main navigation - swaps with drawer on desktop -->
+  <UHeader
+      v-model:open="isMenuOpen"
+      title="Skråningen"
+      :toggle="NAVIGATION.toggle(isMenuOpen)"
+      :ui="COMPONENTS.pageHeader.ui"
+  >
+    <template #title>
+      <Logo/>
+    </template>
+    <template #right>
+      <template v-if="loggedIn">
         <UNavigationMenu
-            :items="visibleMainLinks"
-            orientation="horizontal"
-            :ui="{ linkLabel: 'hidden md:inline' }"
+            :items="areaLinks"
+            :orientation="ORIENTATIONS.horizontal"
+            :class="COMPONENTS.pageHeader.areaIcons"
+            :ui="COMPONENTS.pageHeader.mainMenuUi"
         />
-        <HelpButton/>
+        <UNavigationMenu
+            :items="personLinks"
+            :orientation="ORIENTATIONS.horizontal"
+            :class="COMPONENTS.pageHeader.personLinks"
+            :ui="COMPONENTS.pageHeader.mainMenuUi"
+        />
       </template>
-
-      <!-- Default slot - drawer links shown horizontally on desktop -->
       <UNavigationMenu
-          :items="visibleDrawerLinks"
-          orientation="horizontal"
+          v-else
+          :items="signInLinks"
+          :orientation="ORIENTATIONS.horizontal"
+          :ui="COMPONENTS.pageHeader.mainMenuUi"
       />
+      <HelpButton/>
+    </template>
 
-      <!-- Drawer content - only on mobile -->
-      <template #body>
-        <UNavigationMenu
-            :items="visibleDrawerLinks"
-            orientation="vertical"
-        />
-        <HelpButton/>
-      </template>
-    </UHeader>
-  </div>
+    <!-- UHeader's centre, shown from md -->
+    <UNavigationMenu
+        :items="areaLinks"
+        :orientation="ORIENTATIONS.horizontal"
+    />
+
+    <!-- The drawer the burger opens on a phone -->
+    <template #body>
+      <UNavigationMenu
+          :items="personLinks"
+          :orientation="ORIENTATIONS.vertical"
+      />
+      <HelpButton :label="BUTTON_WORDS.help"/>
+    </template>
+  </UHeader>
 </template>

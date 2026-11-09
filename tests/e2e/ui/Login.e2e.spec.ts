@@ -1,9 +1,10 @@
 import type {Page} from '@playwright/test'
-import {test, expect} from '@playwright/test'
+import {test, expect} from '~~/tests/e2e/uiTest'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {testCredentials} from '~~/tests/e2e/config'
+import {present} from '~~/tests/component/listHelpers'
 
-const {waitForHydration} = testHelpers
+const {waitForHydration, expectApiError} = testHelpers
 const {adminUserName, password} = testCredentials
 
 const DEEP_LINK = '/admin/planning'
@@ -33,9 +34,8 @@ test.describe('Login flow', () => {
         await page.waitForURL(new RegExp(`${DEEP_LINK}$`))
 
         // AND: the session cookie expires, at most a day out
-        const sessionCookie = (await page.context().cookies()).find(cookie => cookie.name === 'nuxt-session')
-        expect(sessionCookie, 'the session cookie exists').toBeDefined()
-        const lifetime = sessionCookie!.expires - Date.now() / 1000
+        const sessionCookie = present((await page.context().cookies()).find(cookie => cookie.name === 'nuxt-session'), 'the session cookie')
+        const lifetime = sessionCookie.expires - Date.now() / 1000
         expect(lifetime, 'the cookie expires').toBeGreaterThan(0)
         expect(lifetime, 'the cookie lives at most a day').toBeLessThanOrEqual(DAY_SECONDS)
     })
@@ -46,6 +46,7 @@ test.describe('Login flow', () => {
         await page.waitForURL(url => url.pathname === DEEP_LINK)
         await waitForHydration(page)
         await page.context().clearCookies()
+        expectApiError(page.context(), 401, '/api/')
 
         // A client-side navigation: the page's datasets answer 401 and the login page loads with the page as redirect
         await page.getByRole('banner').getByRole('link', {name: 'Fællesspisning', exact: true}).click()

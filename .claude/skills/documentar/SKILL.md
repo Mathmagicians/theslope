@@ -112,8 +112,9 @@ A gap goes to the user with `file:line`.
 - A feature doc whose packages are done moves to `docs/features/archived/` (`feature-proposal-<name>.md` →
   `archived/feature-<name>.md`); its relative links and the references across `docs/` follow
   (`grep -rn "<old path>" docs`).
-- The release spec moves to archived when its packages are done and each peer session confirms its work in it is
-  complete (`SendMessage`, wait for the answers).
+- The release spec and its qa, defects and feature docs move to `archived/release-x.y.z/` when the release is feature
+  complete and each peer session confirms its work in it is complete (`SendMessage`, wait for the answers); the doc
+  compacts to a Done table with commits and a Ship table with the open steps, and every pointer under `docs/` follows.
 
 ## Shared files
 
@@ -125,8 +126,9 @@ A gap goes to the user with `file:line`.
 
 Sections: title, spec pointer, Migration, Highlights (grouped by area), Tests, Deferred, QA with human eyes.
 
-- Compact facts: names as in code, endpoints, commands. CI gates and `pre:all` stay out; so does an "open" section.
-- Tests: one line per package, `v 719/719, pw-e2e household/scaffold 27/27`, one-off misses named.
+- Compact facts: names as in code, endpoints, commands. Test counts, CI gates and `pre:all` stay out: the CI gate
+  reports the test status; so does an "open" section.
+- Tests: the suites and features the release adds or ports, named, no counts.
 - Deferred: the items the next-release docs hold, each pointing to its doc.
 - QA: route, then what to see; a fix to a flow updates its QA line.
 
@@ -144,7 +146,7 @@ gh api repos/Mathmagicians/theslope/pulls/<n> -q .body | grep -c '<new text>'   
 - A UI term in a guide is the app's own word (badge, legend, button, help text): `grep` the label in `app/` and copy it.
 - A symbol is the real icon as an image, from its `ICONS` entry:
   `![Venteliste](https://api.iconify.design/hugeicons/hourglass.svg?height=20&color=%23737373)`; a badge without an icon
-  renders as its shape (`mdi:circle` in the badge colour); `curl -s <url> | head -c 60` shows `<svg`.
+  renders as its shape (`mdi:circle` in the badge colour).
 - Sync check: per user-visible change in `git log main..HEAD`, the guide's flow, labels and statuses are read against
   the component; the `Sidst opdateret` line names the topics; anchors resolve after a heading changes.
 

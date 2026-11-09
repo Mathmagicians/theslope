@@ -3,7 +3,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {HouseholdDisplay, InhabitantDisplay} from '~/composables/useCoreValidation'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, saltedId, salt} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, saltedId, salt, attemptAll} = testHelpers
 
 // Variables to store IDs for cleanup
 const testHouseholdIds: number[] = []
@@ -263,11 +263,10 @@ test.describe('Household /api/admin/household CRUD operations', () => {
     // Cleanup after all tests
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-
-        // Seeded households get their name back
-        await Promise.all(renamedHouseholds.map(({id, name}) => HouseholdFactory.updateHousehold(context, id, {name}, 200, true)))
-
-        // Clean up all created households
-        await HouseholdFactory.deleteHousehold(context, testHouseholdIds)
+        await attemptAll('Household /api/admin/household CRUD operations cleanup', [
+            // Seeded households get their name back
+            ...renamedHouseholds.map(({id, name}) => () => HouseholdFactory.updateHousehold(context, id, {name}, 200, true)),
+            () => HouseholdFactory.deleteHousehold(context, testHouseholdIds)
+        ]).finally(() => context.close())
     })
 })

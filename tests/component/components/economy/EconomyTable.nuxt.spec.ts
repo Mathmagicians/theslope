@@ -2,9 +2,10 @@
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, resetStores, findLoadingRow, isTableLoading} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, resetStores, findLoadingRow, isTableLoading, itemAt} from '~~/tests/component/testHelpers'
 import EconomyTableGeneric from '~/components/economy/EconomyTable.vue'
 import {nextTick, ref, type DefineComponent} from 'vue'
+import {rowIdOf} from '~/utils/utils'
 
 // A generic component's type is a function; the mount helper keys on a constructor
 const EconomyTable = EconomyTableGeneric as unknown as DefineComponent
@@ -45,19 +46,20 @@ describe('EconomyTable', () => {
         {accessorKey: 'totalAmount', header: 'Beløb'}
     ]
 
-    // Required dateAccessor for EconomyTable (typed as unknown for mount compatibility)
-    const dateAccessor = (item: unknown) => (item as TestRow).date
+    const dateAccessor = (item: TestRow) => item.date
 
     beforeEach(() => {
         resetStores()
     })
 
     const createWrapper = (props: Record<string, unknown> = {}) => mountWithTooltipProvider(EconomyTable, {
-        props: {data: createTestData(), columns: defaultColumns, rowKey: 'date', dateAccessor, pageSize: 5, ...props},
+        props: {data: createTestData(), columns: defaultColumns, getRowId: rowIdOf, dateAccessor, pageSize: 5, ...props},
         isMd: true
     })
 
     type WrapperType = Awaited<ReturnType<typeof createWrapper>>
+
+    const vmOf = (wrapper: WrapperType) => wrapper.vm as unknown as EconomyTableVm
 
     const getSearchInput = (wrapper: WrapperType) =>
         wrapper.find('input[type="text"]')
@@ -70,7 +72,7 @@ describe('EconomyTable', () => {
             const wrapper = await createWrapper()
             expect(getSearchInput(wrapper).exists()).toBe(true)
             expect(getSortButton(wrapper).exists()).toBe(true)
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
             expect(vm.filteredData.length).toBe(6)
         })
 
@@ -85,11 +87,11 @@ describe('EconomyTable', () => {
     describe('Sorting', () => {
         it('sorts descending when defaultSortDesc=true', async () => {
             const wrapper = await createWrapper({defaultSortDesc: true})
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
 
             // First item should be latest date (Feb 15)
-            expect(vm.filteredData[0]!.date.getDate()).toBe(15)
-            expect(vm.filteredData[0]!.date.getMonth()).toBe(1) // February
+            expect(itemAt(vm.filteredData, 0).date.getDate()).toBe(15)
+            expect(itemAt(vm.filteredData, 0).date.getMonth()).toBe(1) // February
         })
 
         it('toggles to descending on click', async () => {
@@ -99,29 +101,29 @@ describe('EconomyTable', () => {
             await sortButton.trigger('click')
             await nextTick()
 
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
             // First item should be latest date (Feb 15)
-            expect(vm.filteredData[0]!.date.getDate()).toBe(15)
-            expect(vm.filteredData[0]!.date.getMonth()).toBe(1) // February
+            expect(itemAt(vm.filteredData, 0).date.getDate()).toBe(15)
+            expect(itemAt(vm.filteredData, 0).date.getMonth()).toBe(1) // February
         })
     })
 
     describe('Pagination', () => {
         it('shows pagination when data exceeds pageSize', async () => {
             const wrapper = await createWrapper({data: createTestData(), pageSize: 5})
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
             expect(vm.showPagination).toBe(true)
         })
 
         it('hides pagination when data equals pageSize', async () => {
             const wrapper = await createWrapper({data: createTestData().slice(0, 5), pageSize: 5})
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
             expect(vm.showPagination).toBe(false)
         })
 
         it('handles page change', async () => {
             const wrapper = await createWrapper()
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
 
             vm.handlePageChange(2)
             await nextTick()
@@ -134,7 +136,7 @@ describe('EconomyTable', () => {
     describe('Loading State', () => {
         // Slots go through the root mount alone
         const mountEmpty = (loading: boolean) => mountSuspended(EconomyTable, {
-            props: {data: [], columns: defaultColumns, rowKey: 'date', dateAccessor, loading, loadingText: 'Henter fremtidige bestillinger'},
+            props: {data: [], columns: defaultColumns, getRowId: rowIdOf, dateAccessor, loading, loadingText: 'Henter fremtidige bestillinger'},
             slots: {empty: '<div data-testid="custom-empty">No data</div>'},
             global: {provide: {isMd: ref(true)}}
         })
@@ -174,12 +176,12 @@ describe('EconomyTable', () => {
             await searchInput.setValue('/01/')
             await nextTick()
 
-            const vm = wrapper.vm as unknown as EconomyTableVm
+            const vm = vmOf(wrapper)
             // Should have 3 January items, default is ascending (10, 15, 20)
             expect(vm.filteredData.length).toBe(3)
-            expect(vm.filteredData[0]!.date.getDate()).toBe(10)
-            expect(vm.filteredData[1]!.date.getDate()).toBe(15)
-            expect(vm.filteredData[2]!.date.getDate()).toBe(20)
+            expect(itemAt(vm.filteredData, 0).date.getDate()).toBe(10)
+            expect(itemAt(vm.filteredData, 1).date.getDate()).toBe(15)
+            expect(itemAt(vm.filteredData, 2).date.getDate()).toBe(20)
         })
     })
 })

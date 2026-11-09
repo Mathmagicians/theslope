@@ -8,6 +8,7 @@
  */
 import type {TeamRole} from '~/composables/useCookingTeamValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 interface Props {
   teamAffinity?: WeekDayMap | null
@@ -23,7 +24,7 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-const {SIZES, BUTTONS, ICONS, LAYOUTS, COMPONENTS} = useTheSlopeDesignSystem()
+const {BUTTONS, ICONS, LAYOUTS, COMPONENTS} = useTheSlopeDesignSystem()
 const {TeamRoleSchema} = useCookingTeamValidation()
 const Role = TeamRoleSchema.enum
 
@@ -57,12 +58,12 @@ const handleSubmit = () => {
     />
 
     <div :class="LAYOUTS.formButtonRow">
-      <UButton v-bind="BUTTONS.cancel" :size="SIZES.small" @click="emit('cancel')">
-        Annuller
+      <UButton v-bind="BUTTONS.cancel" @click="emit('cancel')">
+        {{ BUTTON_WORDS.cancel }}
       </UButton>
-      <UButton v-bind="BUTTONS.save" :size="SIZES.small" @click="handleSubmit">
+      <UButton v-bind="BUTTONS.save" @click="handleSubmit">
         <template #leading><UIcon :name="isEditMode ? ICONS.check : ICONS.plusCircle" /></template>
-        {{ isEditMode ? 'Gem' : 'Tilføj' }}
+        {{ isEditMode ? BUTTON_WORDS.save : BUTTON_WORDS.add }}
       </UButton>
     </div>
   </div>

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { useHousehold, isHouseholdActiveOnDay, getResidencyStatus, buildResolvedHouseholdMap } from '~/composables/useHousehold'
+import { useHousehold, isHouseholdActiveOnDay, getResidencyStatus, buildResolvedHouseholdMap, ResidencyStatus } from '~/composables/useHousehold'
+import { HOUSEHOLD_WORDS } from '~/config/householdWords'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
@@ -31,19 +32,19 @@ describe('isHouseholdActiveOnDay', () => {
 
 describe('getResidencyStatus', () => {
   const date = (y: number, m: number, d: number) => new Date(y, m - 1, d)
-  const REF = date(2026, 3, 1) // Fixed reference date: 2026-03-01
+  const REF = date(2026, 3, 1)
 
   it.each([
     { scenario: 'moved in on reference date, no move-out',
-      movedIn: REF, moveOut: null, expected: 'active' },
+      movedIn: REF, moveOut: null, expected: ResidencyStatus.active },
     { scenario: 'not yet moved in (future movedInDate)',
-      movedIn: date(2026, 6, 1), moveOut: null, expected: 'pending' },
+      movedIn: date(2026, 6, 1), moveOut: null, expected: ResidencyStatus.pending },
     { scenario: 'not yet moved in, with future move-out',
-      movedIn: date(2026, 6, 1), moveOut: date(2027, 1, 1), expected: 'pending' },
+      movedIn: date(2026, 6, 1), moveOut: date(2027, 1, 1), expected: ResidencyStatus.pending },
     { scenario: 'move-out date on reference date (still leaving)',
-      movedIn: date(2020, 1, 1), moveOut: REF, expected: 'leaving' },
+      movedIn: date(2020, 1, 1), moveOut: REF, expected: ResidencyStatus.leaving },
     { scenario: 'move-out date in the past',
-      movedIn: date(2020, 1, 1), moveOut: date(2025, 12, 1), expected: 'moved-out' },
+      movedIn: date(2020, 1, 1), moveOut: date(2025, 12, 1), expected: ResidencyStatus['moved-out'] },
   ])('$scenario → $expected', ({ movedIn, moveOut, expected }) => {
     expect(getResidencyStatus(movedIn, moveOut, REF)).toBe(expected)
   })
@@ -71,6 +72,8 @@ describe('useHousehold', () => {
 
   describe('computeAggregatedPreferences', () => {
     const { computeAggregatedPreferences } = useHousehold()
+    const inhabitantWith = (dinnerPreferences: InhabitantDetail['dinnerPreferences']): InhabitantDetail =>
+      ({ ...HouseholdFactory.defaultInhabitantData(), id: 1, dinnerPreferences })
 
     describe('edge cases', () => {
       it('returns all DINEIN for empty inhabitants array', () => {
@@ -82,10 +85,7 @@ describe('useHousehold', () => {
       })
 
       it('returns default (DINEIN) when all inhabitants have null preferences', () => {
-        const inhabitants: Pick<InhabitantDetail, 'dinnerPreferences'>[] = [
-          { dinnerPreferences: null },
-          { dinnerPreferences: null }
-        ]
+        const inhabitants = [inhabitantWith(null), inhabitantWith(null)]
 
         const result = computeAggregatedPreferences(inhabitants)
 
@@ -103,10 +103,7 @@ describe('useHousehold', () => {
         const prefs2Base = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
         const prefs2 = {...prefs2Base, mandag: null as unknown as typeof DinnerMode.DINEIN}
 
-        const inhabitants = [
-          { dinnerPreferences: prefs1 },
-          { dinnerPreferences: prefs2 }
-        ]
+        const inhabitants = [inhabitantWith(prefs1), inhabitantWith(prefs2)]
 
         const result = computeAggregatedPreferences(inhabitants)
 
@@ -143,9 +140,7 @@ describe('useHousehold', () => {
           expected: [D,D,T,T,N,N,D]
         }
       ])('$scenario: aggregates preferences correctly', ({ prefs, expected }) => {
-        const inhabitants = prefs.map(p =>
-          ({ dinnerPreferences: p ? createDefaultWeekdayMap(p) : null })
-        )
+        const inhabitants = prefs.map(p => inhabitantWith(p ? createDefaultWeekdayMap(p) : null))
 
         const result = computeAggregatedPreferences(inhabitants)
 
@@ -160,7 +155,7 @@ describe('useHousehold', () => {
     const { matchInhabitantByNameWithInitials, createInhabitantMatcher } = useHousehold()
 
     // Obfuscated test data based on production patterns
-    const testInhabitants: Pick<InhabitantDisplay, 'id' | 'name' | 'lastName'>[] = [
+    const testInhabitants: InhabitantDisplay[] = [
       { id: 4, name: 'Signe', lastName: 'Dalby Madsen' },
       { id: 12, name: 'Signe', lastName: 'Hansen' },
       { id: 3, name: 'Erik', lastName: 'Anders Hansen' },
@@ -179,7 +174,7 @@ describe('useHousehold', () => {
       // Single initial with multi-part lastName (Strategy 2b)
       { id: 202, name: 'Orion', lastName: 'Nebula Star' },     // ambiguous with id 203
       { id: 203, name: 'Orion', lastName: 'Nova Prime' }       // ambiguous: both "Orion N."
-    ]
+    ].map(names => ({ ...HouseholdFactory.defaultInhabitantData(), ...names }))
 
     describe('exact match', () => {
       it('matches "Signe Hansen" exactly, apart from the other Signe', () => {
@@ -278,11 +273,11 @@ describe('useHousehold', () => {
     it.each([
       { inhabitants: [{ lastName: '' }], expected: null, scenario: 'empty lastName' },
       { inhabitants: [{ lastName: 'Hansen' }], expected: 'Hansen', scenario: 'single person' },
-      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Hansen' }], expected: 'Familien Hansen', scenario: 'same lastName' },
-      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }], expected: 'Familien Hansen & Jensen', scenario: 'two lastNames' },
-      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }, { lastName: 'Larsen' }], expected: 'Familien Hansen & Jensen m.fl.', scenario: '3+ lastNames' }
+      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Hansen' }], expected: HOUSEHOLD_WORDS.familyName('Hansen', undefined, false), scenario: 'same lastName' },
+      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }], expected: HOUSEHOLD_WORDS.familyName('Hansen', 'Jensen', false), scenario: 'two lastNames' },
+      { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Jensen' }, { lastName: 'Larsen' }], expected: HOUSEHOLD_WORDS.familyName('Hansen', 'Jensen', true), scenario: '3+ lastNames' }
     ])('$scenario → $expected', ({ inhabitants, expected }) => {
-      expect(formatHouseholdFamilyName(inhabitants)).toBe(expected)
+      expect(formatHouseholdFamilyName(inhabitants.map((names, index) => ({ ...HouseholdFactory.defaultInhabitantData(), id: index + 1, ...names })))).toBe(expected)
     })
   })
 })

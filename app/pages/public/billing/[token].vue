@@ -8,8 +8,10 @@
  * Route: /public/billing/[token]
  * Data: GET /api/public/billing/[token]
  */
+import type {TableColumn} from '@nuxt/ui'
 import {formatDate} from '~/utils/date'
 import type {InvoiceDisplay} from '~/composables/useBillingValidation'
+import {BOOKING_WORDS} from '~/config/bookingWords'
 
 // Page config - no auth required, no layout
 definePageMeta({
@@ -18,10 +20,11 @@ definePageMeta({
 })
 
 const route = useRoute()
-const token = computed(() => route.params.token as string)
+const token = computed(() => String(route.params.token))
 
-const {formatPrice} = useTicket()
-const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY, BG} = useTheSlopeDesignSystem()
+const {formatKroner} = useTicket()
+const {ALERTS, COMPONENTS, ICONS, SIZES, TYPOGRAPHY, BG} = useTheSlopeDesignSystem()
+const {publicBilling} = COMPONENTS
 const {BillingPeriodSummaryDetailSchema} = useBillingValidation()
 const {storeAsyncData} = useApiHandler()
 
@@ -31,7 +34,7 @@ const {data: billing, status, error} = storeAsyncData(
     {
         schema: BillingPeriodSummaryDetailSchema.nullable(),
         default: () => null,
-        errorMessage: 'Kunne ikke hente fakturaoversigt'
+        errorMessage: BOOKING_WORDS.billing.failed.invoices
     }
 )
 
@@ -40,83 +43,83 @@ const isErrored = computed(() => status.value === 'error')
 const isNotFound = computed(() => error.value?.statusCode === 404)
 
 // Invoice columns
-const columns = [
-    {accessorKey: 'pbsId', header: 'PBS ID'},
-    {accessorKey: 'address', header: 'Adresse'},
-    {accessorKey: 'amount', header: 'Beløb'}
+const columns: TableColumn<InvoiceDisplay>[] = [
+    {accessorKey: 'pbsId', header: BOOKING_WORDS.billing.columns.pbsId},
+    {accessorKey: 'address', header: BOOKING_WORDS.billing.columns.address},
+    {accessorKey: 'amount', header: BOOKING_WORDS.billing.columns.amount}
 ]
 </script>
 
 <template>
-  <div :class="['min-h-screen py-8', BG.invoiceGround]" data-testid="public-billing">
-    <div class="max-w-6xl mx-auto px-4">
+  <div :class="[publicBilling.page, BG.invoiceGround]" data-testid="public-billing">
+    <div :class="publicBilling.column">
       <!-- Error States -->
-      <UCard v-if="isNotFound" class="text-center">
-        <UIcon :name="ICONS.exclamationCircle" class="text-6xl text-warning-500 mb-4"/>
-        <h1 :class="TYPOGRAPHY.cardTitle">Link ikke fundet</h1>
-        <p :class="TYPOGRAPHY.bodyTextMuted">Dette link er ugyldigt eller udløbet.</p>
-      </UCard>
+      <UAlert
+          v-if="isNotFound"
+          v-bind="ALERTS.warning"
+          :title="BOOKING_WORDS.billing.publicPage.notFound.title"
+          :description="BOOKING_WORDS.billing.publicPage.notFound.description"/>
 
-      <ViewError v-else-if="isErrored" :error="error?.statusCode" message="Kunne ikke hente fakturaoversigt"/>
+      <ViewError v-else-if="isErrored" :error="error?.statusCode" :message="BOOKING_WORDS.billing.failed.invoices"/>
       <Loader v-else-if="isLoading" text="Henter fakturaoversigt..."/>
 
       <!-- Billing Data -->
       <template v-else-if="billing">
         <!-- Header -->
-        <UCard class="mb-6">
+        <UCard :class="publicBilling.header">
           <template #header>
-            <div class="flex items-center gap-3">
+            <div :class="publicBilling.headerRow">
               <UIcon :name="ICONS.shoppingCart" :size="SIZES.largeIconSize"/>
               <div>
-                <h1 :class="TYPOGRAPHY.cardTitle">PBS Fakturaoversigt</h1>
-                <p :class="TYPOGRAPHY.bodyTextMuted">Skrååningen Fællesspisning</p>
+                <h1 :class="TYPOGRAPHY.cardTitle">{{ BOOKING_WORDS.billing.publicPage.title }}</h1>
+                <p :class="TYPOGRAPHY.bodyTextMuted">{{ BOOKING_WORDS.billing.publicPage.community }}</p>
               </div>
             </div>
           </template>
 
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div :class="['text-center p-4 rounded-lg', BG.invoiceStat]">
-              <p :class="TYPOGRAPHY.bodyTextMuted">Forbrugsperiode</p>
+          <div :class="publicBilling.facts">
+            <div :class="[publicBilling.fact, BG.invoiceStat]">
+              <p :class="TYPOGRAPHY.bodyTextMuted">{{ BOOKING_WORDS.billing.summary.billingPeriod }}</p>
               <p :class="TYPOGRAPHY.cardTitle">{{ billing.billingPeriod.replace('-', ' - ') }}</p>
             </div>
-            <div :class="['text-center p-4 rounded-lg', BG.invoiceStat]">
-              <p :class="TYPOGRAPHY.bodyTextMuted">Opgørelsesdato</p>
+            <div :class="[publicBilling.fact, BG.invoiceStat]">
+              <p :class="TYPOGRAPHY.bodyTextMuted">{{ BOOKING_WORDS.billing.summary.cutoffDate }}</p>
               <p :class="TYPOGRAPHY.cardTitle">{{ formatDate(billing.cutoffDate) }}</p>
             </div>
-            <div :class="['text-center p-4 rounded-lg', BG.invoiceStat]">
-              <p :class="TYPOGRAPHY.bodyTextMuted">PBS opkræves</p>
-              <p :class="TYPOGRAPHY.cardTitle">{{ formatDate(billing.paymentDate, 'MMMM yyyy') }}</p>
+            <div :class="[publicBilling.fact, BG.invoiceStat]">
+              <p :class="TYPOGRAPHY.bodyTextMuted">{{ BOOKING_WORDS.billing.summary.paymentDate }}</p>
+              <p :class="TYPOGRAPHY.cardTitle">{{ formatMonthYear(billing.paymentDate) }}</p>
             </div>
-            <div :class="['text-center p-4 rounded-lg', BG.invoiceStat]">
-              <p :class="TYPOGRAPHY.bodyTextMuted">Total</p>
-              <p :class="TYPOGRAPHY.cardTitle">{{ formatPrice(billing.totalAmount) }} kr</p>
+            <div :class="[publicBilling.fact, BG.invoiceStat]">
+              <p :class="TYPOGRAPHY.bodyTextMuted">{{ BOOKING_WORDS.billing.stats.total }}</p>
+              <p :class="TYPOGRAPHY.cardTitle">{{ formatKroner(billing.totalAmount) }}</p>
             </div>
           </div>
 
           <template #footer>
-            <div class="flex justify-end">
+            <div :class="publicBilling.footer">
               <ShareLinksPopover :share-token="token" hide-external-link prominent/>
             </div>
           </template>
         </UCard>
 
         <!-- Stats tiles -->
-        <div class="grid grid-cols-2 gap-4 mb-6">
+        <div :class="publicBilling.tiles">
           <UCard>
-            <div class="flex items-center gap-4">
-              <UIcon :name="ICONS.household" class="text-4xl text-primary-500"/>
+            <div :class="publicBilling.tile">
+              <UIcon :name="ICONS.household" :class="publicBilling.tileIcon"/>
               <div>
                 <p :class="TYPOGRAPHY.cardTitle">{{ billing.householdCount }}</p>
-                <p :class="TYPOGRAPHY.bodyTextMuted">Husstande</p>
+                <p :class="TYPOGRAPHY.bodyTextMuted">{{ BOOKING_WORDS.billing.stats.households }}</p>
               </div>
             </div>
           </UCard>
           <UCard>
-            <div class="flex items-center gap-4">
-              <UIcon :name="ICONS.dinner" class="text-4xl text-primary-500"/>
+            <div :class="publicBilling.tile">
+              <UIcon :name="ICONS.dinner" :class="publicBilling.tileIcon"/>
               <div>
                 <p :class="TYPOGRAPHY.cardTitle">{{ billing.ticketCount }}</p>
-                <p :class="TYPOGRAPHY.bodyTextMuted">Kuverter</p>
+                <p :class="TYPOGRAPHY.bodyTextMuted">{{ BOOKING_WORDS.billing.stats.tickets }}</p>
               </div>
             </div>
           </UCard>
@@ -125,7 +128,7 @@ const columns = [
         <!-- Invoices Table -->
         <UCard>
           <template #header>
-            <h2 :class="TYPOGRAPHY.cardTitle">Fakturaer</h2>
+            <h2 :class="TYPOGRAPHY.cardTitle">{{ BOOKING_WORDS.billing.titles.invoices }}</h2>
           </template>
 
           <UTable
@@ -134,13 +137,13 @@ const columns = [
               :ui="COMPONENTS.table.ui"
           >
             <template #amount-cell="{ row }">
-              <div class="text-right">{{ formatPrice((row.original as InvoiceDisplay).amount) }} kr</div>
+              <div :class="publicBilling.amount">{{ formatKroner(row.original.amount) }}</div>
             </template>
           </UTable>
 
           <template #footer>
-            <div class="flex justify-end">
-              <span :class="TYPOGRAPHY.cardTitle">Total: {{ formatPrice(billing.totalAmount) }} kr</span>
+            <div :class="publicBilling.footer">
+              <span :class="TYPOGRAPHY.cardTitle">{{ BOOKING_WORDS.billing.sums.total }} {{ formatKroner(billing.totalAmount) }}</span>
             </div>
           </template>
         </UCard>

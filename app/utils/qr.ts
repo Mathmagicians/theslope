@@ -14,9 +14,9 @@ type QrPath = {
  */
 export const encodeQrPath = (
     value: string,
-    {ecc = 'M', border = 1}: Pick<QrCodeGenerateOptions, 'ecc' | 'border'> = {}
+    {ecc = 'M', border = 1, ...options}: QrCodeGenerateOptions = {}
 ): QrPath => {
-    const {size, data} = encode(value, {ecc, border})
+    const {size, data} = encode(value, {...options, ecc, border})
 
     return {
         size,

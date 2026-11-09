@@ -1,12 +1,15 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, resetStores, findLoadingRow} from '~~/tests/component/testHelpers'
-import {nextTick, h, defineComponent} from 'vue'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, findLoadingRow, findOpenRows} from '~~/tests/component/testHelpers'
+import {nextTick, h, defineComponent, shallowReactive} from 'vue'
 import AllergyCatalogTable from '~/components/allergy/AllergyCatalogTable.vue'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
+import {rowIdOf} from '~/utils/utils'
+import {ALLERGY_TEST_IDS} from './allergyTestIds'
 
 const mockAllergyTypes = AllergyFactory.createMockAllergyTypesWithInhabitants()
+const [milk, peanuts, gluten] = mockAllergyTypes
 
 enableAutoUnmount(afterEach)
 
@@ -36,13 +39,6 @@ const mountTable = async (props: Record<string, unknown> = {}, slots: Record<str
     return wrapper
 }
 
-type Wrapper = Awaited<ReturnType<typeof mountTable>>
-
-const clickName = async (wrapper: Wrapper, name: string) => {
-    const cell = wrapper.findAll('[data-testid^="allergy-row-"]').find(c => c.text().includes(name))
-    await cell!.trigger('click')
-    await nextTick()
-}
 
 describe('AllergyCatalogTable', () => {
     describe.each(['single', 'multi'] as const)('%s mode', (mode) => {
@@ -66,7 +62,7 @@ describe('AllergyCatalogTable', () => {
             const wrapper = await mountTable({mode: 'single'})
             expect(wrapper.find('[role="checkbox"]').exists()).toBe(false)
 
-            await clickName(wrapper, 'Jordnødder')
+            await clickByTestId(wrapper, ALLERGY_TEST_IDS.row(peanuts!.id))
 
             const table = wrapper.findComponent(AllergyCatalogTable)
             const emitted = table.emitted('update:modelValue')
@@ -87,7 +83,7 @@ describe('AllergyCatalogTable', () => {
             const wrapper = await mountTable({mode: 'multi', modelValue: [1]})
             expect(wrapper.findAll('[role="checkbox"]')).toHaveLength(mockAllergyTypes.length)
 
-            await clickName(wrapper, 'Gluten')
+            await clickByTestId(wrapper, ALLERGY_TEST_IDS.row(gluten!.id))
 
             const table = wrapper.findComponent(AllergyCatalogTable)
             const emitted = table.emitted('update:modelValue')
@@ -97,7 +93,7 @@ describe('AllergyCatalogTable', () => {
         it('emits the toggled id removed from the selection', async () => {
             const wrapper = await mountTable({mode: 'multi', modelValue: [1, 3]})
 
-            await clickName(wrapper, 'Gluten')
+            await clickByTestId(wrapper, ALLERGY_TEST_IDS.row(gluten!.id))
 
             const table = wrapper.findComponent(AllergyCatalogTable)
             const emitted = table.emitted('update:modelValue')
@@ -107,7 +103,7 @@ describe('AllergyCatalogTable', () => {
         it('emits nothing when readonly', async () => {
             const wrapper = await mountTable({mode: 'multi', modelValue: [], readonly: true})
 
-            await clickName(wrapper, 'Gluten')
+            await clickByTestId(wrapper, ALLERGY_TEST_IDS.row(gluten!.id))
 
             const table = wrapper.findComponent(AllergyCatalogTable)
             expect(table.emitted('update:modelValue')).toBeFalsy()
@@ -115,13 +111,20 @@ describe('AllergyCatalogTable', () => {
     })
 
     describe('expanded slot forwarding', () => {
-        it('renders the #expanded slot for the expanded row only', async () => {
-            const wrapper = await mountTable(
-                {mode: 'single', modelValue: 2, expanded: {1: true}},
-                {expanded: () => h('div', {'data-testid': 'docked-detail'}, 'DETAIL HERE')}
-            )
+        // The expanded model is keyed by the row's id (rowIdOf); Jordnødder's id differs from its row's position
+        it.each([
+            {when: 'as mounted', mounted: mockAllergyTypes},
+            {when: 'after a type arrives above its row', mounted: [peanuts!, gluten!]}
+        ])('GIVEN the expanded model keyed by Jordnødder\'s id THEN the #expanded slot renders under Jordnødder\'s row only, $when', async ({mounted}) => {
+            const props = shallowReactive<Record<string, unknown>>({mode: 'single', modelValue: peanuts!.id, allergyTypes: mounted, expanded: {[rowIdOf(peanuts!)]: true}})
+            const wrapper = await mountTable(props, {expanded: () => h('div', {'data-testid': 'docked-detail'})})
 
-            expect(findAllByTestId(wrapper, 'docked-detail')).toHaveLength(1)
+            props.allergyTypes = [milk!, peanuts!, gluten!]
+            await nextTick()
+
+            const open = findOpenRows(wrapper)
+            expect(open.map(({row}) => findByTestId(row, ALLERGY_TEST_IDS.row(peanuts!.id)).exists())).toEqual([true])
+            expect(findAllByTestId(open[0]!.detail, 'docked-detail')).toHaveLength(1)
         })
 
         it('renders no expanded content when nothing is expanded', async () => {

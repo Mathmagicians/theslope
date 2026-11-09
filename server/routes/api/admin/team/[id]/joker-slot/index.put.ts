@@ -20,8 +20,8 @@ export default defineEventHandler(async (event): Promise<JokerSlot> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    let teamId!: number
-    let slot!: JokerSlotCreate
+    let teamId: number
+    let slot: JokerSlotCreate
     try {
         ({id: teamId} = await getValidatedRouterParams(event, paramSchema.parse))
         slot = await readValidatedBody(event, JokerSlotCreateSchema.parse)

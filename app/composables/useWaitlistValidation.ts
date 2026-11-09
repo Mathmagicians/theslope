@@ -1,5 +1,5 @@
 import {z} from 'zod'
-import {useBookingValidation, type AuditContext, type BookingOutcomes} from '~/composables/useBookingValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 import {IdSchema} from '~/composables/useCoreValidation'
 
 // What a recovery does with an entry a stopped run grabbed: finish its placement, or hand it back to its line
@@ -9,10 +9,12 @@ export const PlacementRecovery = PlacementRecoverySchema.enum
 
 /**
  * Waiting list schemas: an entry holds an unplaced order in its create shape, the queue reads FIFO by `createdAt`,
- * and the operation results report what a release or a sweep did (ADR-009 operation result types).
+ * and the operation results report what a release or a sweep did.
  */
 export const useWaitlistValidation = () => {
-    const {OrderCreateWithPriceSchema, OrderDisplaySchema, TicketTypeSchema, TicketSaleSchema, WaitlistAssignedSchema} = useBookingValidation()
+    const {
+        OrderCreateWithPriceSchema, OrderDisplaySchema, TicketTypeSchema, TicketSaleSchema, WaitlistAssignedSchema, AuditContextSchema, BookingOutcomesSchema
+    } = useBookingValidation()
 
     // The order an entry holds: the shape `createOrders` places, plus the guest's allergies
     const WaitlistOrderSchema = OrderCreateWithPriceSchema.extend({
@@ -33,18 +35,29 @@ export const useWaitlistValidation = () => {
 
     const TicketWaitlistCreateSchema = TicketWaitlistDisplaySchema.omit({id: true, createdAt: true, placingAt: true, placingOrderId: true})
 
+    // The audit of a write to an entry: the history row it writes, with no order
+    const WaitlistAuditContextSchema = AuditContextSchema.pick({action: true, performedByUserId: true, seasonId: true})
+
     // The order a placement claimed or wrote, as the recovery reads it; a claim names the household and the inhabitant it bought from
     const PlacementOrderSchema = OrderDisplaySchema.pick({id: true, state: true, inhabitantId: true, isGuestTicket: true, ticketPriceId: true, createdAt: true})
         .extend({sellerHouseholdId: IdSchema.nullable(), sellerInhabitantId: IdSchema.nullable()})
 
-    // Database row: the order travels as JSON (ADR-010)
+    // A ticket for sale: a released order, its inhabitant and the household that sells it
+    const TicketForSaleSchema = OrderDisplaySchema.pick({id: true, dinnerEventId: true, ticketPriceId: true, releasedAt: true, inhabitantId: true})
+        .extend({householdId: IdSchema})
+
+    // Database row: the order travels as JSON
     const SerializedTicketWaitlistSchema = TicketWaitlistDisplaySchema.extend({
         order: z.string()
     })
 
-    const serializeTicketWaitlist = <T extends {order: z.infer<typeof WaitlistOrderSchema>}>(entry: T): Omit<T, 'order'> & {order: string} =>
+    type WaitlistOrder = z.infer<typeof WaitlistOrderSchema>
+    type TicketWaitlistDisplay = z.infer<typeof TicketWaitlistDisplaySchema>
+    type SerializedTicketWaitlist = z.infer<typeof SerializedTicketWaitlistSchema>
+
+    const serializeTicketWaitlist = <T extends {order: WaitlistOrder}>(entry: T): Omit<T, 'order'> & {order: string} =>
         ({...entry, order: JSON.stringify(entry.order)})
-    const deserializeTicketWaitlist = (row: z.infer<typeof SerializedTicketWaitlistSchema>): z.infer<typeof TicketWaitlistDisplaySchema> =>
+    const deserializeTicketWaitlist = (row: SerializedTicketWaitlist): TicketWaitlistDisplay =>
         TicketWaitlistDisplaySchema.parse({...row, order: WaitlistOrderSchema.parse(JSON.parse(row.order))})
 
     // An entry with its place in the dinner's queue
@@ -56,7 +69,8 @@ export const useWaitlistValidation = () => {
         portions: z.number().positive().max(100)
     })
 
-    // A dinner's queue: its size, its portion need and its lines, one per ticket type in ticket type order, each in join order
+    // A dinner's queue: its size, its portion need, its count per ticket type, and its lines, one per ticket type in ticket
+    // type order, each in join order
     const WaitlistQueueSummarySchema = z.object({
         dinnerEventId: IdSchema,
         entries: z.number().int().nonnegative(),
@@ -64,7 +78,8 @@ export const useWaitlistValidation = () => {
         lines: z.object({
             ticketType: TicketTypeSchema,
             entries: TicketWaitlistDisplaySchema.array()
-        }).array()
+        }).array(),
+        queuedByType: z.partialRecord(TicketTypeSchema, z.number().int().nonnegative())
     })
 
     // A release of extra portions: the entries assigned, and the sales of another run's stopped placements it finished
@@ -77,6 +92,9 @@ export const useWaitlistValidation = () => {
         waitlistTicketsSold: z.array(TicketSaleSchema)
     })
 
+    // What a placement walk finished: the tickets sold and the extra portions assigned, each with its dinner
+    const WaitlistPlacementOutcomesSchema = BookingOutcomesSchema.pick({waitlistTicketsSold: true, waitlistPortionsAssigned: true})
+
     return {
         WaitlistOrderSchema,
         TicketWaitlistDisplaySchema,
@@ -87,7 +105,10 @@ export const useWaitlistValidation = () => {
         WaitlistQueueSummarySchema,
         WaitlistAssignedSchema,
         WaitlistAssignmentResultSchema,
+        WaitlistPlacementOutcomesSchema,
+        WaitlistAuditContextSchema,
         PlacementOrderSchema,
+        TicketForSaleSchema,
         PlacementRecoverySchema,
         serializeTicketWaitlist,
         deserializeTicketWaitlist
@@ -103,9 +124,8 @@ export type WaitlistQueueSummary = z.infer<ReturnType<typeof useWaitlistValidati
 export type WaitlistAssigned = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistAssignedSchema']>
 export type WaitlistAssignmentResult = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistAssignmentResultSchema']>
 export type PlacementOrder = z.infer<ReturnType<typeof useWaitlistValidation>['PlacementOrderSchema']>
+export type TicketForSale = z.infer<ReturnType<typeof useWaitlistValidation>['TicketForSaleSchema']>
 export type PlacementRecovery = z.infer<typeof PlacementRecoverySchema>
 export type GrabbedWaitlistEntry = TicketWaitlistDisplay & {placingAt: Date}
-// What a placement walk finished: the tickets sold and the extra portions assigned, each with its dinner
-export type WaitlistPlacementOutcomes = Pick<BookingOutcomes, 'waitlistTicketsSold' | 'waitlistPortionsAssigned'>
-// The audit of a write to an entry: the history row it writes, with no order
-export type WaitlistAuditContext = Pick<AuditContext, 'action' | 'performedByUserId' | 'seasonId'>
+export type WaitlistPlacementOutcomes = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistPlacementOutcomesSchema']>
+export type WaitlistAuditContext = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistAuditContextSchema']>

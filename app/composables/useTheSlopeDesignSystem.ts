@@ -1,9 +1,12 @@
 import {computed} from 'vue'
 import type {WeekDay} from '~/types/dateTypes'
-import type {AlertProps, AvatarProps, ButtonProps, BadgeProps, ChipProps} from '@nuxt/ui'
-import {SEASON_STATUS} from '~/composables/useSeasonValidation'
-import type {TicketState} from '~/composables/useBookingValidation'
-import type {SeasonStatusValue} from '~/utils/season'
+import type {AlertProps, AvatarProps, ButtonProps, BadgeProps, ChipProps, FieldGroupProps} from '@nuxt/ui'
+import {SEASON_STATUS} from '~/config/seasonWords'
+import {HOUSEHOLD_WORDS} from '~/config/householdWords'
+import {BOOKING_WORDS} from '~/config/bookingWords'
+import type {DinnerState, TicketState} from '~/composables/useBookingValidation'
+import {TEMPORAL_CATEGORY, type SeasonStatusValue, type TemporalCategory} from '~/utils/season'
+import {ResidencyStatus} from '~/composables/useHousehold'
 
 // NuxtUI size types extracted from component props
 export type NuxtUISize = NonNullable<ButtonProps['size']>
@@ -12,6 +15,7 @@ export type NuxtUIChipSize = NonNullable<ChipProps['size']>
 export type NuxtUIBadgeColor = NonNullable<BadgeProps['color']>
 export type NuxtUIBadgeVariant = NonNullable<BadgeProps['variant']>
 export type NuxtUIButtonVariant = NonNullable<ButtonProps['variant']>
+export type NuxtUIOrientation = NonNullable<FieldGroupProps['orientation']>
 
 /**
  * Color System - TheSlope Design System
@@ -37,8 +41,6 @@ export type NuxtUIButtonVariant = NonNullable<ButtonProps['variant']>
  *    ```ts
  *    const heroClass = `${BG.mocha[500]} ${TEXT.mocha[50]}`
  *    ```
- *
- * See docs/ui.md for full color usage guidelines.
  */
 
 // ============================================================================
@@ -201,6 +203,8 @@ export const BG = {
     // Surface depth - how deep a surface sits under the card it belongs to. One token carries
     // exactly one rendered value (light and dark), so a surface that has always drawn its own
     // pair keeps its own token rather than being folded into a neighbour.
+    /** The page: white in light, Nuxt UI's `--ui-bg` in dark; the `page` surface of the contrast gate */
+    page: 'bg-default',
     /** Recessed: an expanded table row and the detail panel under it */
     panel: 'bg-neutral-50 dark:bg-neutral-900',
     /** One step up: a block that has to read above a panel (the economy tree's nested breakdown) */
@@ -279,7 +283,7 @@ export const TEXT = {
     },
     neutral: {
         400: 'text-neutral-400',  // Economy tree - the "no value" dash
-        500: 'text-neutral-500'   // Household edit panel labels, chef menu placeholder
+        500: 'text-neutral-500'   // Household edit panel labels
     },
     blue: {
         500: 'text-blue-500',     // External link
@@ -291,6 +295,8 @@ export const TEXT = {
         900: 'text-red-900'
     },
     white: 'text-white',
+    /** Ink on a fill that is deep in light mode and pale in dark mode: white on the deep face, black on the pale one */
+    onFill: 'text-white dark:text-black',
 
     /**
      * Dark ink for a vibrant fill. `ink` cannot serve here: its `dark:text-white` face would
@@ -395,7 +401,15 @@ export const RING = {
     },
     orange: {
         200: 'ring-orange-200'     // Selected item in a segmented control
-    }
+    },
+
+    // A face's ring in a semantic colour, on the light/dark pair TEXT.success and TEXT.error use
+    /** The household's faces on the power row */
+    warning: 'ring-warning-700 dark:ring-warning-400',
+    /** An inhabitant's face */
+    primary: 'ring-primary-700 dark:ring-primary-400',
+    /** The allergy managers' faces */
+    ocean: 'ring-ocean-700 dark:ring-ocean-400'
 } as const
 
 // ============================================================================
@@ -413,7 +427,7 @@ export const TYPOGRAPHY = {
     sectionTitle: 'text-xl md:text-3xl font-bold uppercase',
     cardTitle: 'text-lg font-semibold',
     sectionSubheading: `text-sm font-semibold ${TEXT.strong}`,
-    sectionSubheadingLight: 'text-md font-semibold text-amber-50 dark:text-amber-100',
+    sectionSubheadingLight: 'font-semibold text-amber-50 dark:text-amber-100',
     sectionIconLight: 'text-2xl text-amber-50 dark:text-amber-100',
 
     // Body text
@@ -461,12 +475,16 @@ export const LAYOUTS = {
     gridTwoCol: 'grid grid-cols-1 md:grid-cols-2 gap-4',
     gridThreeCol: 'grid grid-cols-1 md:grid-cols-3 gap-4',
 
-    // Master-detail page layout (for UPage :ui prop)
-    // 1/4 master (left), 3/4 detail (center) on desktop, stacked on mobile
+    /**
+     * Master-detail page, in UPage's slots (`root`, `left`, `center`): stacked on a phone, master on top. From md the
+     * master takes a third of the row, at least a week of 24px day circles, and the detail the rest, never wider than
+     * its column. The lg: classes repeat the md ones: tailwind-merge keeps an md: class beside UPage's own lg grid,
+     * which would win from lg.
+     */
     masterDetailPage: {
-        root: 'flex flex-col md:grid md:grid-cols-12 gap-2',
-        left: 'md:col-span-3',
-        center: 'md:col-span-9'
+        root: 'flex flex-col gap-2 md:grid md:gap-4 md:grid-cols-[minmax(245px,1fr)_minmax(0,2fr)] lg:grid-cols-[minmax(245px,1fr)_minmax(0,2fr)] lg:gap-4',
+        left: 'min-w-0 lg:col-span-1',
+        center: 'min-w-0 lg:col-span-1'
     },
 
     // Responsive card rounding: no rounding on mobile (full-bleed), rounded on desktop
@@ -654,6 +672,10 @@ const TABLE_CELL_WRAP = 'whitespace-normal'
 const TABLE_CELL_PADDING = 'px-2 py-1 md:px-4 md:py-2'
 /** A data table's cell, the one `table.ui` gives every td and a sum row binds through `table.sumCell` */
 const TABLE_CELL = `${TABLE_CELL_PADDING} ${TABLE_CELL_WRAP}`
+/** The allergy poster's column head: a bold label on the grey band, framed like the body cells */
+const POSTER_HEAD_CELL = `border-2 p-3 text-left font-bold ${BORDER.gray[700]} ${BG.gray[100]}`
+/** A data table's cells: `table.ui`, and the tables that add to it */
+const TABLE_UI = {th: 'px-2 md:px-4', td: TABLE_CELL} as const
 
 /** Compact tables with many narrow columns */
 const TABLE_DENSE_UI = {th: 'px-1 py-1 md:px-4 md:py-3', td: `px-1 md:px-4 ${TABLE_CELL_WRAP}`} as const
@@ -692,6 +714,13 @@ const CANCELLED_STRIKE = 'line-through decoration-2 decoration-amber-900'
 
 // The lock chip that carries the waiting-list hourglass: a step above SIZES.lockChip, so the glyph sits with a small inset
 const QUEUE_LOCK_CHIP = {ui: {base: 'h-3.5 min-w-3.5 md:h-4.5 md:min-w-4.5'}, icon: 'size-2.5 md:size-3.5'} as const
+
+// The box a corner ribbon is clipped to (`COMPONENTS.ribbon.container`, the household page's card root)
+const RIBBON_CONTAINER = 'relative overflow-hidden'
+
+// An inhabitant avatar size (`COMPONENTS.avatar`): `size` everywhere, `fit` the step up from md on each `UAvatar`, and
+// `group` for a `UAvatarGroup`, whose `ui.base` carries the fit to its faces and the overflow count
+const avatarFace = (size: NuxtUIAvatarSize, fit: string) => ({size, fit, group: {size, ui: {base: fit}}})
 
 export const COMPONENTS = {
     // The turn of an open-panel chevron on a button whose own icon carries it; BUTTONS.flipOpen turns a trailing chevron
@@ -862,8 +891,38 @@ export const COMPONENTS = {
         headerActions: 'flex items-center gap-2',
         toolbar: 'mb-4',
         createDock: 'mb-2',
-        column: 'min-w-0',
-        stickyDetail: 'min-w-0 flex justify-center items-start md:sticky md:top-4 self-start'
+        stickyDetail: 'flex justify-center items-start md:sticky md:top-4 self-start'
+    },
+
+    /**
+     * The allergy poster (`/admin/allergies/pdf`): the sheet on the page surface, the controls and the title block, the
+     * row that sets the allergy table beside the QR code with its caption, the table's head and body cells and their
+     * lines, and the gaps above the notes and the managers. The page renders in light mode, so the sheet prints white
+     */
+    allergyPoster: {
+        sheet: `min-h-screen ${BG.page}`,
+        frame: 'max-w-5xl mx-auto p-8',
+        controls: 'mb-6 flex justify-between items-center',
+        header: 'mb-6',
+        title: `${TYPOGRAPHY.sectionTitle} mb-2`,
+        row: 'flex flex-col md:flex-row gap-6 mb-6',
+        tableColumn: 'flex-1',
+        table: 'w-full border-collapse',
+        headCell: {
+            allergen: `w-1/3 ${POSTER_HEAD_CELL}`,
+            person: `w-2/3 ${POSTER_HEAD_CELL}`
+        },
+        bodyCell: `border-2 p-3 align-top ${BORDER.gray[700]}`,
+        allergyName: `${TYPOGRAPHY.cardTitle} mb-2`,
+        description: `${TYPOGRAPHY.bodyTextMuted} whitespace-pre-line`,
+        members: 'space-y-2',
+        comment: `${TYPOGRAPHY.finePrint} ${TEXT.toned}`,
+        counts: `${TYPOGRAPHY.bodyTextMedium} mt-2`,
+        qrColumn: 'shrink-0',
+        qrFrame: `border-2 ${BORDER.gray[300]}`,
+        qrCaption: `${TYPOGRAPHY.caption} ${TEXT.toned} mt-2 text-center`,
+        notes: 'mt-4',
+        managers: 'mt-6'
     },
 
     // The admin economy page (AdminEconomy): its sections, the admin's correction under a dinner, the invoice breakdown
@@ -905,6 +964,24 @@ export const COMPONENTS = {
         orderList: 'space-y-2 max-h-64 md:max-h-96 overflow-y-auto'
     },
 
+    // The accountant's public billing page: the page and its column, the gone link's card and icon, the header card and
+    // its row, the summary's facts, the stat tiles with their icons, a card's footer row, an invoice's amount; the CSV
+    // link's redirect page
+    publicBilling: {
+        page: 'min-h-screen py-8',
+        column: 'max-w-6xl mx-auto px-4',
+        header: 'mb-6',
+        headerRow: 'flex items-center gap-3',
+        facts: 'grid grid-cols-2 md:grid-cols-4 gap-4',
+        fact: 'text-center p-4 rounded-lg',
+        tiles: 'grid grid-cols-2 gap-4 mb-6',
+        tile: 'flex items-center gap-4',
+        tileIcon: 'text-4xl text-primary',
+        footer: 'flex justify-end',
+        amount: 'text-right',
+        csvRedirect: 'min-h-screen flex items-center justify-center'
+    },
+
     // HelpButton: the help popover below the button, its card, and the feedback form that unfolds in the card's footer
     helpButton: {
         popoverContent: {side: 'bottom', align: 'start'},
@@ -921,7 +998,13 @@ export const COMPONENTS = {
         formButtons: 'gap-2 md:gap-3'
     },
 
-    // The season form's ticket price editor (TicketPriceListEditor): the card that adds a price and the list of prices
+    // The season form's lists, the holidays and the ticket prices: the list, and the line of a list without entries
+    seasonFormList: {
+        list: 'mt-4 space-y-2',
+        empty: 'mx-auto'
+    },
+
+    // The season form's ticket price editor (TicketPriceListEditor): the card that adds a price
     ticketPriceEditor: {
         addCard: 'mb-4',
         addTitle: 'text-sm font-semibold',
@@ -931,15 +1014,13 @@ export const COMPONENTS = {
         descriptionField: 'w-full',
         typeSelectUi: {content: 'min-w-fit'},
         descriptionUi: {root: 'w-full'},
-        addFooter: 'flex justify-end',
-        list: 'mt-4 space-y-2',
-        empty: 'text-md mx-auto'
+        addFooter: 'flex justify-end'
     },
 
     // The allergy type card (AllergyTypeCard): its edit form, its compact catalog row and its full detail
     allergyTypeCard: {
         form: 'w-full max-w-2xl space-y-4',
-        formTitle: 'text-md font-semibold',
+        formTitle: 'font-semibold',
         field: 'w-full',
         compact: 'flex items-center gap-3 p-3',
         compactGlyph: 'flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 flex-shrink-0',
@@ -977,40 +1058,60 @@ export const COMPONENTS = {
     rowIconClass: 'size-4 md:size-6',
 
     /**
-     * Inhabitant avatars (`UserListItem`): the server renders before the breakpoint is known, so
-     * `size` is one value everywhere, `max` too but for the compact household list item (`listItemMax`) and the
-     * power rows (`powerRowMax`), and `fit` steps the avatar up a size from md.
-     * `fit` goes on each `UAvatar` and on the group's `ui.base`, which reaches the overflow count.
+     * Inhabitant avatars (`UserListItem`): the server renders before the breakpoint is known, so `size` is one
+     * value everywhere and `fit` steps the avatar up a size from md. A group's default face count is the responsive
+     * `SIZES.avatarMax`; the compact household list item (`listItemMax`) and the power rows (`powerRowMax`) show three everywhere.
+     * `fit` goes on each `UAvatar`; a `UAvatarGroup` binds the size's `group` (`avatarFace`).
      */
     avatar: {
-        max: 5,
         // The compact household list item shows three faces before the overflow count
         listItemMax: 3,
         // A power row (the household preferences, the booking form) shows three faces before the overflow count, so its table fits a phone
         powerRowMax: 3,
-        regular: {size: 'md' as const, fit: 'md:size-9 md:text-lg'},
-        compact: {size: 'sm' as const, fit: 'md:size-8 md:text-base'}
+        regular: avatarFace('md', 'md:size-9 md:text-lg'),
+        compact: avatarFace('sm', 'md:size-8 md:text-base')
     },
 
     /**
      * UserListItem: the `group` stack and its `groupRow` of faces beside the names or the count, the `single` row and
      * its `nameStack`, a face's profile `link` (`singleLink` keeps the single face from shrinking), the regular `name`,
-     * and a face's `ring` from md in the caller's colour
+     * and a face's `ring` from md, one per surface the faces sit on. The group shrinks with the grid or flex cell that
+     * holds it and its row wraps the names under the faces, so a long list never widens the page.
      */
     userListItem: {
-        group: 'flex flex-col gap-1',
-        groupRow: 'flex items-center gap-2',
+        group: 'flex flex-col gap-1 min-w-0',
+        groupRow: 'flex flex-wrap items-center gap-2',
         link: 'hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block',
         singleLink: 'hover:scale-110 hover:rotate-3 transition-transform duration-200 inline-block flex-shrink-0',
         single: 'flex items-start gap-3',
         nameStack: 'flex flex-col gap-1',
         name: 'font-semibold',
-        ring: (color: string) => `md:ring-2 md:ring-${color}`
+        // The width alone starts at md; the colour stays unprefixed, where the contrast gate measures it
+        ring: {
+            household: `md:ring-2 ${RING.warning}`,
+            inhabitant: `md:ring-2 ${RING.primary}`,
+            allergyManager: `md:ring-2 ${RING.ocean}`
+        }
+    },
+
+    /**
+     * AllergyManagersList: the alert's description sets the `message` beside the managers from md and above them on a
+     * phone. `alertUi` lays that row over the kind's own `ui`, since a bare `:ui` replaces the kind's wrap classes
+     */
+    allergyManagersList: {
+        message: 'text-sm md:flex-1',
+        alertUi: (kindUi: AlertUi): AlertUi =>
+            ({...kindUi, description: `${kindUi.description} flex flex-col md:flex-row md:items-center gap-3`})
     },
 
     // The selected item in a segmented control (form mode, booking view) - a ring, not a fill,
     // so the item's own colour still reads through
     segmentedActive: `ring-2 border-2 ${RING.orange[200]} shadow-md`,
+
+    /** The booking view switcher: a view's word beside its glyph from md, the glyph alone on a phone */
+    bookingViewSwitcher: {
+        label: 'hidden md:block'
+    },
 
     /**
      * A choice control inside a form section (`URadioGroup`, `USwitch`): `v-bind` a shape so an
@@ -1076,25 +1177,34 @@ export const COMPONENTS = {
         }
     },
 
-    /** MyTeamSelector tab body: the team icon above the badge on phone, beside it on desktop */
+    /** "Ikke dit hold" on a team the person is not on, the visiting tab and the visited team's card; its size is the responsive SIZES.small */
+    visitBadge: {color: COLOR.neutral, variant: NOISE.subtle},
+
+    /**
+     * MyTeamSelector tab body: the team icon above the name's line on phone, beside it on desktop. The line holds
+     * the team badge and, on a visit, "Ikke dit hold" after it
+     */
     myTeamSelector: {
         tab: 'flex flex-col items-center gap-1 md:flex-row md:gap-2',
-        icon: 'shrink-0'
+        icon: 'shrink-0',
+        nameLine: 'flex items-center gap-2',
+        visitBadge: 'shrink-0'
     },
 
-    /** TeamCalendarDisplay days: a selectable day rings on hover, the selected dinner's day rings in primary */
+    /** TeamCalendarDisplay days: a day without a team's dinner */
     teamCalendar: {
-        selectableDay: 'cursor-pointer hover:ring-2 hover:ring-offset-1',
-        selectedDay: 'ring-2 ring-primary ring-offset-1',
         plainDay: 'text-sm'
     },
 
-    /** AdminTeams: the card, the header's season selector, the create face, and around `masterDetail` the dock's stack, the detail header row, the md pane and the overview calendar */
+    /**
+     * AdminTeams: the card, the header's season selector, the create face, and around `masterDetail` the dock's stack,
+     * the detail header row, and the md pane and the overview calendar in the detail slot of `LAYOUTS.masterDetailPage`
+     */
     adminTeams: {
         dockStack: 'space-y-2',
         detailHeaderRow: 'flex items-center justify-between gap-2',
-        pane: 'md:w-2/3 space-y-4 self-start',
-        overviewCalendar: 'w-full md:w-2/3 self-start',
+        pane: 'space-y-4 self-start',
+        overviewCalendar: 'w-full self-start',
         card: 'w-full px-0',
         seasonSelector: 'w-full md:w-auto',
         // The create face: the team count row over the preview grid (LAYOUTS.gridTwoCol), and its footer
@@ -1104,10 +1214,8 @@ export const COMPONENTS = {
         previewTeam: 'p-4 border rounded',
         previewName: 'font-semibold',
         createFooter: 'flex gap-2',
-        // The view and edit face: the master column beside the detail region
-        viewFace: 'px-4 pb-4 space-y-6',
-        masterDetailRow: 'flex flex-col md:flex-row gap-6 md:gap-3',
-        master: 'w-full md:w-1/3'
+        // The view and edit face around the master table and its detail
+        viewFace: 'px-4 pb-4 space-y-6'
     },
 
     /** PageFooter: the centre row, and the footer's icon buttons inked like its text */
@@ -1116,12 +1224,47 @@ export const COMPONENTS = {
         iconButtonUi: {leadingIcon: TYPOGRAPHY.footerText}
     },
 
+    /**
+     * PageHeader: UHeader's slots collapse at md instead of the framework's lg, the drawer's content and overlay with
+     * them, so a drawer opened on a phone leaves with the burger. The bar is as wide as its content, centred, sticky
+     * with the md offset; the title, a block, holds the logo's width (the SVG has no size of its own, and as a flex item
+     * Firefox gives it none). On the right, the areas' icons for a phone and the person's links from md, each menu's
+     * labels shown from md
+     */
+    pageHeader: {
+        ui: {
+            root: `${BACKGROUNDS.header} shadow-sm md:rounded-lg md:top-4 w-fit mx-auto`,
+            toggle: 'md:hidden',
+            left: 'md:flex-1',
+            center: 'hidden md:flex',
+            right: 'flex items-center justify-end md:flex-1 gap-1.5',
+            title: 'block w-16 md:w-32',
+            content: 'md:hidden',
+            overlay: 'md:hidden'
+        },
+        areaIcons: 'md:hidden',
+        personLinks: 'hidden md:flex',
+        mainMenuUi: {linkLabel: 'hidden md:inline'}
+    },
+
     /** SeasonSelector: the select keeps room for the longest season name */
     seasonSelector: {select: 'min-w-48'},
     // The season status glyph beside a season name, the size of the text
     seasonStatus: {
         discUi: {base: 'size-3 rounded-full p-0 align-middle'},
         sproutUi: {base: 'p-0 align-middle', leadingIcon: 'size-4'}
+    },
+
+    /**
+     * HouseholdListItem: the `compact` row of faces beside the name badges (wrapping the badges under the faces from md),
+     * the wrapping `names`, and the card face's `inhabitants` stack, one `inhabitant` line each and the `empty` line
+     */
+    householdListItem: {
+        compact: 'flex flex-col md:flex-row md:flex-wrap md:items-center gap-3',
+        names: 'flex flex-wrap gap-1',
+        inhabitants: 'space-y-2',
+        inhabitant: 'flex items-center gap-2 p-2 rounded',
+        empty: 'italic'
     },
 
     /**
@@ -1172,18 +1315,38 @@ export const COMPONENTS = {
         noPlansIcon: 'text-warning-700 dark:text-warning-400'
     },
 
-    /** HouseholdBookings: the calendar column beside the booking panel from md, stacked on a phone */
+    /**
+     * The admin page (`pages/admin/[tab].vue`): the `root` frame, the read-only `banner` over the tabs, and the `tabs`
+     * whose labels show from md and whose list sticks under the header
+     */
+    adminPage: {
+        root: 'md:py-2 lg:p-4 min-h-screen',
+        banner: 'mb-4',
+        tabs: {class: 'mb-1 md:mb-4', ui: {label: 'hidden md:inline', list: 'sticky top-12 md:top-16 z-20 rounded-none md:rounded-lg'}}
+    },
+
+    /**
+     * The household page (`pages/household/[shortname]/[tab].vue`): the `card`, full-bleed on a phone, whose root clips
+     * the residency ribbon; the `header` stack over the banners, the `title` row with its `titleIcon`, and the `tabs`
+     * whose labels show from md
+     */
+    householdPage: {
+        card: {class: `w-full px-0 ${LAYOUTS.cardResponsive}`, ui: {root: RIBBON_CONTAINER, body: 'px-0 py-2 md:px-4 md:py-6'}},
+        header: 'flex flex-col gap-2',
+        title: 'flex items-center gap-1 md:gap-2',
+        titleIcon: 'text-2xl',
+        tabs: {class: 'mt-1 mb-1 md:mt-0 md:mb-4', ui: {label: 'hidden md:inline'}}
+    },
+
+    /** HouseholdBookings: the booking panel's header row and title */
     householdBookings: {
-        layout: 'flex flex-col md:flex-row gap-6',
-        calendar: 'md:basis-1/3',
-        panel: 'flex-1',
         panelHeader: 'flex items-center justify-between mb-4',
         panelTitle: 'text-sm font-semibold'
     },
 
     /**
      * AdminSystem: the job cards (coloured header, icon, title, description, stats or skeletons) and the panels'
-     * headers, the job history table and its expanded details
+     * headers, the job history table
      */
     adminSystem: {
         root: 'space-y-6',
@@ -1192,6 +1355,8 @@ export const COMPONENTS = {
         jobHeader: 'rounded-t-lg -mx-4 -mt-4 px-4 py-6 md:py-8 flex flex-col items-center justify-center gap-2',
         jobIcon: 'text-5xl md:text-6xl opacity-80',
         jobIconRunning: MOTION_SPIN,
+        // A service's logo in place of the job icon, at the icon's size: 3xl is size-12 (text-5xl), md:size-15 is text-6xl
+        jobLogo: {size: '3xl', class: 'md:size-15'},
         jobTitle: `${TYPOGRAPHY.cardTitle} mb-2`,
         // A fixed height keeps the cards' footers level
         jobDescription: `${TYPOGRAPHY.bodyTextMuted} mb-4 min-h-[3rem]`,
@@ -1209,9 +1374,7 @@ export const COMPONENTS = {
         panelTitle: 'font-semibold',
         historyTable: 'w-full',
         statusBadge: 'gap-1',
-        statusIcon: 'text-xs',
-        details: `p-4 space-y-1 ${BG.panel}`,
-        detailLabel: 'font-semibold'
+        statusIcon: 'text-xs'
     },
 
     /**
@@ -1228,9 +1391,28 @@ export const COMPONENTS = {
         emptyIcon: 'w-8 h-8'
     },
 
+    householdCreateForm: {
+        // The households already at the chosen address, below the new household's fields
+        prevOwners: 'flex flex-col gap-4 pt-2',
+        // One household at the address: its name over its move-out field on a phone, beside it from md
+        prevOwner: 'grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 md:items-center'
+    },
+    householdEditPanel: {
+        // The panel under the household's row: its sections stacked on the panel surface
+        root: `p-4 md:p-6 space-y-6 ${BG.panel}`,
+        sectionTitle: `${TYPOGRAPHY.cardTitle} mb-3`,
+        // The facts: two to a row on a phone, four from md, each label over its value
+        facts: 'grid grid-cols-2 md:grid-cols-4 gap-3 text-sm',
+        factValue: 'font-medium',
+        householdBadge: 'w-fit',
+        // The delete under the cancel on a phone, the two at the row's ends from md; LAYOUTS.panelDivider draws its rule
+        footer: 'flex flex-col-reverse md:flex-row md:justify-between gap-2 pt-4'
+    },
+
     /**
      * AdminUsers: the card, its header and search row, the table with its loading bar, a user's role badges, and the
-     * expanded row's detail
+     * expanded row's detail in its `expandedPanel`: the expanded row spans every column, so where the table scrolls
+     * sideways in its box the panel keeps to the part in view, sticky at the cell's inset and no wider than the box
      */
     adminUsers: {
         card: 'w-full px-0',
@@ -1240,7 +1422,58 @@ export const COMPONENTS = {
         loadingBar: {loadingColor: COLOR.secondary, loadingAnimation: 'carousel' as const},
         roles: 'flex gap-1 flex-wrap',
         roleIcon: 'mr-1',
-        detail: 'p-4'
+        detail: 'p-4',
+        // The inset follows the cell padding of `table.adminUsersUi.td` (px-2 md:px-4); the cap, the box less that padding, binds on a phone
+        expandedPanel: 'sticky left-2 md:left-4 max-w-[calc(100cqw-1rem)] overflow-x-auto'
+    },
+
+    userProfileCard: {
+        // The header: the user over the action buttons on a phone, beside them from md
+        header: 'flex flex-col md:flex-row md:items-start md:justify-between gap-4',
+        // The role badges under the name and in the role section's view face
+        roleBadges: 'flex flex-wrap gap-2',
+        // The action buttons: they wrap on a phone, one row at the header's end from md
+        actions: 'flex flex-wrap items-center gap-2 md:gap-4 md:flex-nowrap md:shrink-0 md:ml-auto',
+        // The household link in the contact lines
+        householdLink: 'underline hover:no-underline hover:text-primary transition-colors',
+        // The role section's title row with its edit, save and cancel buttons
+        rolesHeader: 'flex items-center justify-between mb-3',
+        // The role section's edit face: the toggle rows over the note
+        roleToggles: 'space-y-3',
+        // A toggle row: the role's icon and label, its switch at the end
+        roleToggle: 'flex items-center justify-between',
+        // The role's icon and label in a toggle row
+        roleLabel: 'flex items-center gap-2',
+        // The icon and label of a role Heynabo owns, whose switch is disabled
+        roleDisabled: 'opacity-40',
+        // The note's list under the toggles
+        roleNotes: 'list-disc list-inside space-y-1 mt-1'
+    },
+
+    /**
+     * UserPreferencesCard: the header row, the view face's setting lines and its send-test row, the edit face's
+     * sections with their headings, the channel switches' rows and the SMS hint under them
+     */
+    userPreferencesCard: {
+        header: 'flex items-center justify-between gap-2',
+        view: 'space-y-3',
+        // The notification line aligns at the top, so the badges that wrap start under the heading's line
+        notificationRow: 'flex items-start gap-2 flex-wrap',
+        // The view face's notification glyph, level with the heading's line in a row whose items align at the top
+        notificationIcon: 'mt-1',
+        // A setting's line and a line of badges: glyph, heading, value and badges, wrapping on a narrow card
+        line: 'flex items-center gap-2 flex-wrap',
+        badgeIcon: 'mr-1',
+        sendTestRow: 'flex md:justify-end',
+        edit: 'space-y-5',
+        section: 'space-y-2',
+        sectionHeading: 'flex items-center gap-2',
+        channelRow: 'flex items-center justify-between gap-3',
+        // The channel's glyph, name and address; the address gives way first on a narrow card
+        channelLabel: 'flex items-center gap-2 min-w-0',
+        channelTarget: `${TYPOGRAPHY.bodyTextMuted} truncate`,
+        // Indented under the channel names, past the glyph column
+        smsHint: `${TYPOGRAPHY.finePrint} pl-6`
     },
 
     /** InhabitantSelector: the stack of search row and table, the name cell, and the table's empty state */
@@ -1305,7 +1538,7 @@ export const COMPONENTS = {
     // Power mode - family-wide bulk editing pattern
     powerMode: {
         color: 'warning' as const,
-        icon: 'i-fluent-emoji-high-contrast-woman-superhero',
+        icon: 'i-heroicons-bolt',
         buttonIcon: 'i-heroicons-bolt',
         // The 600 rung, so the 500 the second rainbow stop fills with stays free
         iconClass: 'size-4 md:size-6 text-warning-600 dark:text-warning-400',
@@ -1380,15 +1613,22 @@ export const COMPONENTS = {
     },
 
     /**
+     * DeadlineBadge: the badge above its help text (`root`), the help text in fine print (`helpText`)
+     */
+    deadlineBadge: {
+        root: 'flex flex-col items-start',
+        helpText: `${TYPOGRAPHY.finePrint} ${TEXT.muted} mt-0.5`
+    },
+
+    /**
      * DinnerBookingForm: the ticket under the name on a phone (`ticketPhone`) and in its own column from md
-     * (`ticketDesktop`), the `provenance` badge row in an inhabitant's name cell and `guestProvenance` under a guest
-     * order's booker, the `guestOf` row with its `guestOfLabel`, and the expanded row's `allergyLine` (`ICONS.allergy`, then the allergy types)
+     * (`ticketDesktop`), `guestProvenance` under a guest order's booker, the `guestOf` row with its `guestOfLabel`, and
+     * the expanded row's `allergyLine` (`ICONS.allergy`, then the allergy types)
      */
     bookingForm: {
         ticketPhone: 'mt-2 md:hidden',
         ticketDesktop: 'hidden md:block',
-        provenance: 'flex flex-wrap items-center gap-1',
-        // Indent = the guestOf disc (avatar.compact: sm, size-7, md:size-8) plus guestOf's gap-3, so "fra X" starts under "Gæst af"
+        // Indent = the guestOf disc (avatar.compact: sm, size-7, md:size-8) plus guestOf's gap-3, so a guest's badge starts under "Gæst af"
         guestProvenance: 'flex flex-wrap items-center gap-1 mt-1 ml-10 md:ml-11',
         // A guest order's name cell: the add-guest row's disc, label and gap, so both rows share their x
         guestOf: 'flex items-center gap-3',
@@ -1406,7 +1646,7 @@ export const COMPONENTS = {
         powerName: 'flex flex-col gap-0.5',
         // The expanded row's edit card: wide content scrolls inside it
         editCard: {class: 'max-w-full overflow-x-auto', ui: {body: 'p-4 flex flex-col gap-4', footer: 'p-4', header: 'p-4'}},
-        editTitle: 'text-md font-semibold text-balance',
+        editTitle: 'font-semibold text-balance',
         editDeadlines: 'flex flex-col md:flex-row md:justify-between gap-2',
         history: 'mt-2',
         editFooter: 'flex flex-col gap-2',
@@ -1425,8 +1665,12 @@ export const COMPONENTS = {
         /** The cells of a sum row in the body-bottom slot: a label cell, and an amount cell aligned with the amount column */
         sumCell: TABLE_CELL,
         sumAmountCell: `${TABLE_CELL} text-right`,
-        /** The arrow before the name of the dinner on view */
+        /** The dot before the name of the dinner on view */
         currentMarker: 'inline-block size-4 mr-1 align-middle',
+        /** A dinner's name on one line in a cell that wraps */
+        dinnerLabel: 'whitespace-nowrap',
+        /** The dinner on view: its dot and its name in bold, on one line */
+        currentDinnerLabel: 'whitespace-nowrap font-bold',
         /** A receipt sub-row under a dinner: indented, in the muted ink */
         receiptLabel: `pl-4 ${TEXT.muted}`,
         /** A spacer row between two groups of bottom rows */
@@ -1436,14 +1680,16 @@ export const COMPONENTS = {
         /** The sync glyph of the loading row, spinning */
         loadingSpinner: MOTION_SPIN,
         /**
-         * THE table cell styling (ADR-018): every UTable binds one of these three
+         * THE table cell styling: every UTable binds one of these three
          * (`designSystemUsage.unit.spec.ts` rejects a table without).
          * Cells wrap between words on every viewport (Nuxt UI's theme cell is `whitespace-nowrap`); a word stays whole.
          * A data table wider than a phone scrolls inside its own box, the page never does (MobileViewport.e2e).
          */
-        ui: {th: 'px-2 md:px-4', td: TABLE_CELL},
+        ui: TABLE_UI,
+        /** The users table: `ui`'s cells; on a phone the scroll box is the size container `adminUsers.expandedPanel` measures its width against */
+        adminUsersUi: {...TABLE_UI, root: '@container md:@container-normal'},
         /** A history table (Billetændringer): `ui`'s padding, every row on one line, so on a phone the table scrolls sideways */
-        historyUi: {th: 'px-2 md:px-4', td: `${TABLE_CELL_PADDING} whitespace-nowrap`},
+        historyUi: {...TABLE_UI, td: `${TABLE_CELL_PADDING} whitespace-nowrap`},
         /** A cell a row's spanning cell covers (a column's `meta.class.td`): out of the row's layout */
         spannedCell: 'hidden',
         /** The household allergies: the dense cells, an expanded inhabitant row tinted */
@@ -1494,7 +1740,8 @@ export const COMPONENTS = {
         eventHeader: 'flex flex-col items-center',
         eventHeaderDisabled: TEXT.muted,
         chipSlot: 'h-6 flex items-center justify-center',
-        lockChip: {size: '3xl', position: 'bottom-left', standalone: true},
+        // Inset: Nuxt UI shifts a chip that is not inset by half its size toward its corner, standalone too; inset it centres in `chipSlot`
+        lockChip: {size: '3xl', standalone: true, inset: true},
         weekBoundary: 'border-l-2 border-primary',
         powerName: 'flex items-center gap-2',
         inhabitantName: 'flex items-center gap-1',
@@ -1530,19 +1777,26 @@ export const COMPONENTS = {
     },
 
     /**
-     * GuestBookingForm: the info `card` (soft, its body a stack), the `header` row with its `headerIcon` and `title`,
-     * the `deadlines` row, the two `columns` (ticket | allergies) with the left `fieldStack`, a ticket type `option`
-     * in the select (`optionBadge`, `optionNote`), the `footer` stack, the `errors` block and an `error` line with its `errorIcon`
+     * A form that adds a thing inline, GuestBookingForm's guests and HouseholdCreateForm's household: the info `card`
+     * (soft, its body a stack), the `header` row with its `headerIcon` and `title`, and a `select` spanning its field
      */
-    guestBookingForm: {
+    addCard: {
         card: {variant: NOISE.soft, ui: {body: 'p-4 flex flex-col gap-4', footer: 'p-4'}},
         header: 'flex items-center gap-2',
         headerIcon: 'size-5 text-info',
-        title: 'text-md font-semibold',
+        title: 'font-semibold',
+        select: 'w-full'
+    },
+
+    /**
+     * GuestBookingForm on its `addCard`: the `deadlines` row, the two `columns` (ticket | allergies) with the left
+     * `fieldStack`, a ticket type `option` in the select (`optionBadge`, `optionNote`), the `footer` stack, the `errors`
+     * block and an `error` line with its `errorIcon`
+     */
+    guestBookingForm: {
         deadlines: 'flex flex-col md:flex-row md:justify-between gap-2',
         columns: LAYOUTS.gridTwoCol,
         fieldStack: 'flex flex-col gap-4',
-        select: 'w-full',
         option: 'flex flex-col gap-0.5',
         optionBadge: 'uppercase w-fit',
         optionNote: TYPOGRAPHY.finePrintMuted,
@@ -1623,7 +1877,10 @@ export const COMPONENTS = {
     // A framed summary: an icon beside a bold count over its label; the frame measures at the 3:1 edge rung
     statBox: {
         box: `flex items-center gap-2 px-3 py-2 w-fit rounded-md border ${BORDER.gray[500]}`,
-        icon: 'text-xl text-primary'
+        icon: 'text-xl text-primary',
+        figure: 'text-center',
+        value: 'font-semibold',
+        unit: TYPOGRAPHY.finePrintMuted
     },
 
     // The typed date field (UInputDate) renders the house mask dd/MM/yyyy: en-GB gives the
@@ -1639,11 +1896,46 @@ export const COMPONENTS = {
         }
     },
 
-    // The period field (CalendarDateRangePicker): its padded form field, and the read-only face's input,
-    // as wide as the range text and never narrower than the field
+    // The date pickers' padded form field: one date (CalendarDatePicker) and a period (CalendarDateRangePicker)
+    datePickerField: 'p-2',
+
+    // The period field's read-only face (CalendarDateRangePicker): an input as wide as the range text and never
+    // narrower than the field
     dateRangeField: {
-        field: 'p-2',
         viewUi: {base: 'w-fit min-w-full'}
+    },
+
+    /**
+     * The holiday list (CalendarDateRangeListPicker): the add row, stacked on the phone and side by side from md; the
+     * add button's bottom margin from md, which lines it up with the period field with and without the field's error
+     * line; a holiday's row. The list and its empty line are the season form's (`seasonFormList`)
+     */
+    holidayListPicker: {
+        addRow: 'flex flex-col md:flex-row items-center md:items-end space-x-2 md:space-x-4',
+        addButton: {withError: 'md:mb-8', plain: 'md:mb-1'},
+        row: 'flex items-center gap-2'
+    },
+
+    /**
+     * The admin's season form (AdminPlanningSeason): the borderless card, the header row spread from md, the holiday
+     * calendar's link, the body with the calendar above the fields on the phone and beside them from xl, the fields'
+     * column, the stacked fields and footer, a titled section, the calendar's column and the calendar centred in it,
+     * and the error list: its block, title, bullets and a field's name
+     */
+    seasonForm: {
+        card: 'w-full ring-0 shadow-none',
+        headerRow: 'md:justify-between',
+        holidayLink: 'underline',
+        body: 'flex flex-col-reverse xl:flex-row gap-2 md:gap-6',
+        formColumn: 'grow',
+        stack: 'space-y-4',
+        section: 'space-y-2',
+        calendarColumn: 'min-w-1/2 lg:w-1/2 grow-0',
+        calendar: 'mx-auto',
+        errors: 'space-y-1',
+        errorsTitle: 'font-semibold',
+        errorList: 'list-disc list-inside',
+        errorName: 'font-medium'
     },
 
     // Shared UCalendar root: Monday-first, no padding weeks, and other-month days both disabled
@@ -1662,6 +1954,19 @@ export const COMPONENTS = {
         }
     },
 
+    calendarDateNav: {
+        row: 'flex items-center justify-center gap-1',
+        // The date in the toggle keeps the surrounding ink, not the button's colour
+        toggle: '!text-[inherit]'
+    },
+
+    weekDayMapDisplay: {
+        compactDays: 'flex flex-wrap gap-1',
+        day: 'capitalize',
+        noDays: 'text-lg',
+        checkboxes: 'flex flex-col gap-3'
+    },
+
     // An ALERTS.legend panel (CalendarLegend, DinnerModeLegend's rows in its slot) is one `list`, one entry per row:
     // the sample in a fixed-width column (`sample`) beside its name (`entry`), so every name starts on one vertical
     // line; a team badge sample is the calendar's size
@@ -1676,6 +1981,14 @@ export const COMPONENTS = {
         iconChip: QUEUE_LOCK_CHIP,
         // The operating hint under the entries, in the design system's muted text (AA on every surface)
         hint: `mt-2 ${TEXT.muted}`
+    },
+
+    shareLinks: {
+        actions: 'flex gap-1',
+        panel: 'p-3 space-y-3 min-w-72',
+        linkLabel: `${TYPOGRAPHY.bodyTextMuted} mb-1 text-xs`,
+        linkRow: 'flex gap-2',
+        linkInput: 'flex-1 font-mono text-xs'
     },
 
     // Economy table hierarchy - ready-to-grab classes for each nesting level
@@ -1717,7 +2030,7 @@ export const COMPONENTS = {
     // Diagonal corner ribbon - top-right status overlay (cancelled dinners, move-out, move-in)
     ribbon: {
         base: 'absolute top-8 -right-10 z-10 text-white text-xs font-bold py-1 pl-14 pr-12 rotate-45 shadow-md',
-        container: 'relative overflow-hidden',
+        container: RIBBON_CONTAINER,
         colors: {
             cancel: 'bg-red-600',
             past: BG.gray[500],
@@ -1767,11 +2080,48 @@ export const COMPONENTS = {
 
     // Danger zone - bordered region inside a "More"/overflow panel for destructive actions.
     // Spatially separates rare + destructive actions from routine controls (see ChefMenuCard).
-    // Reusable: hosts DangerButton commits; designed to grow with more items.
+    // Hosts DangerButton commits.
     dangerZone: {
         container: 'rounded-lg border border-error-300 dark:border-error-800 ' +
                    'bg-error-50 dark:bg-error-950/40 p-4 space-y-3',
         heading: `text-xs font-bold uppercase tracking-wide ${TEXT.error} flex items-center gap-1.5`
+    },
+
+    /**
+     * The two-click button (DangerButton): its root, the boundary of the click-outside check; the variable that places
+     * the countdown wipe; and per mode (a destructive action, an undo) the armed button's colour, its ring and ink, and
+     * its countdown, the strong colour shrinking off the pale one at the wipe. Each mode's ink reads on both colours of
+     * its countdown in both modes
+     */
+    dangerButton: {
+        root: 'inline-block',
+        // The countdown classes spell it out: Tailwind generates a class only from its literal text
+        wipePosition: '--wipe',
+        danger: {
+            color: COLOR.error,
+            armed: `ring-2 ${RING.red[500]} ${TEXT.onFill}`,
+            countdown: 'bg-linear-to-r from-(length:--wipe) to-(length:--wipe) from-red-900 to-red-600 dark:from-red-500 dark:to-red-300'
+        },
+        undo: {
+            color: COLOR.success,
+            armed: `ring-2 ${RING.green[500]} ${TEXT.onFill}`,
+            countdown: 'bg-linear-to-r from-(length:--wipe) to-(length:--wipe) from-green-900 to-green-700 dark:from-green-500 dark:to-green-300'
+        }
+    },
+
+    /**
+     * The sign-in page (Login): the form centred in its column, its failure alert and fields; once signed in, the
+     * dashboard's column, the greeting's size over the light section heading, and the space above the ways in
+     */
+    login: {
+        formPage: 'flex items-center justify-center py-12',
+        formColumn: 'max-w-md w-full px-4',
+        form: 'space-y-6',
+        failedAlert: 'mb-4',
+        fields: 'space-y-4',
+        dashboard: 'py-6 px-4 md:px-8 max-w-5xl mx-auto space-y-6',
+        greeting: 'text-2xl md:text-3xl',
+        waysIn: 'pt-4'
     },
 
     /**
@@ -1812,7 +2162,7 @@ export const COMPONENTS = {
      */
     teamCard: {
         monitor: 'py-4 md:py-6',
-        monitorHeader: 'mb-3 md:mb-4 px-3 md:px-4',
+        monitorHeader: 'flex flex-wrap items-center gap-2 mb-3 md:mb-4 px-3 md:px-4',
         stack: 'space-y-4',
         viewHeader: 'p-4 border',
         editHeader: 'flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 py-2 px-0 md:px-4 border-y-2 md:border-2 border-dashed',
@@ -1820,7 +2170,8 @@ export const COMPONENTS = {
         nameField: 'flex-1 min-w-fit',
         // The end padding holds the trailing pencil (ICONS.edit, bound at the site)
         nameInput: {class: 'w-1/2', ui: {base: 'pe-11', trailing: 'me-3'}},
-        memberSummary: 'flex items-center gap-2',
+        // The edit header's faces beside the team badges, wrapping the badges under the faces in a narrow header
+        memberSummary: 'flex flex-wrap items-center gap-2 min-w-0',
         deleteButton: 'w-full md:w-auto',
         row: 'flex flex-col md:flex-row gap-2 md:gap-4',
         fullColumn: 'w-full space-y-4',
@@ -1880,6 +2231,16 @@ export const COMPONENTS = {
         boxUnit: TYPOGRAPHY.finePrintMuted,
         summaryDeduction: `${TYPOGRAPHY.bodyTextMedium} ${TEXT.muted}`,
         boxLine: `flex items-center justify-between gap-2 whitespace-nowrap ${TYPOGRAPHY.bodyTextSmall}`,
+        /**
+         * The team's round heading line: the badge and the period on the left, kept on one line, the unit words on the
+         * right, below them on a narrow box
+         */
+        roundHeadingLine: `flex flex-wrap items-center justify-between gap-x-2 gap-y-1 whitespace-nowrap ${TYPOGRAPHY.bodyTextSmall}`,
+        /** This dinner's heading line: a title longer than the box wraps, the unit words on a line of their own on the right */
+        dinnerHeadingLine: `flex flex-wrap items-center justify-between gap-x-2 gap-y-1 ${TYPOGRAPHY.bodyTextSmall}`,
+        headingUnits: `ml-auto ${TYPOGRAPHY.finePrintMuted}`,
+        /** The team's round heading: the team's badge, then the period */
+        roundHeading: 'flex items-center gap-2',
         section: 'border-t p-4 space-y-2'
     },
 
@@ -1928,6 +2289,10 @@ export const COMPONENTS = {
         title: 'inline-flex items-center gap-1',
         // A run of chips sits on the middle of the row's text line, beside the plain-text cells
         chips: 'inline-flex flex-wrap items-center gap-1 align-middle',
+        // Husstand wraps inside a capped width, against the history's one-line cells, so an opened list never widens the table
+        households: 'inline-block max-w-56 md:max-w-xs whitespace-normal',
+        // The "+N" control after the first households: a link that reads in the line of names
+        householdsToggle: {color: COLOR.primary, variant: NOISE.link, ui: {base: 'p-0'}},
         moreRow: 'flex justify-center py-2'
     },
 
@@ -1949,6 +2314,55 @@ export const COMPONENTS = {
         editor: 'space-y-4',
         editorHead: 'flex flex-col gap-2 md:flex-row md:items-center',
         editorTitle: `${TYPOGRAPHY.sectionSubheading} md:flex-1`
+    },
+
+    /**
+     * ChefDinnerCard in the chef calendar's agenda: the card (`selected` adds the chef calendar's selection outline), the
+     * stack of date, menu title and badges, the date chip (struck through when cancelled), the title and its placeholder
+     */
+    chefDinnerCard: {
+        ui: (selected: boolean) => ({
+            root: `cursor-pointer transition-shadow duration-200 hover:shadow-lg w-full ${selected ? CHEF_CALENDAR.selection : ''}`,
+            body: 'p-1.5 md:p-3 w-full'
+        }),
+        stack: 'space-y-0.5 md:space-y-1 w-full',
+        dateRow: 'text-center',
+        date: 'text-sm font-semibold rounded-md px-2 py-0.5 inline-block',
+        dateCancelled: 'line-through',
+        menuTitle: `${TYPOGRAPHY.bodyTextMedium} line-clamp-2 text-balance text-center`,
+        menuPlaceholder: `italic ${TEXT.muted}`,
+        badges: 'pt-0.5 md:pt-1 space-y-0.5'
+    },
+
+    // DinnerStatusStepper: the step descriptions in fine print, each with its deadline badge centred below
+    dinnerStatusStepper: {
+        ui: {description: TYPOGRAPHY.finePrint},
+        description: 'flex flex-col items-center',
+        badge: 'mt-1'
+    },
+
+    /**
+     * The dinner page's header bar (DinnerDetailHeader) on the hero's mocha: stacked on the phone and spread from md, the
+     * state badge's column, the Heynabo link's column, and the link's text in the bar's colour
+     */
+    dinnerDetailHeader: {
+        root: `flex flex-col md:flex-row md:justify-between items-center gap-2 px-4 py-3 ${BACKGROUNDS.hero.mocha}`,
+        badgeColumn: 'flex items-center gap-2',
+        linkColumn: 'flex items-center md:justify-end',
+        heynaboLink: '!text-[inherit]'
+    },
+
+    /**
+     * DinnerDetailPanel: the page body's spacing, the hero with the menu picture as its background and the shade over
+     * its edges, the section cards below it, and the loader boxes at the height of the team card and the kitchen stats
+     */
+    dinnerDetailPanel: {
+        body: '!mt-0 !space-y-2 md:!space-y-8',
+        heroUi: {root: 'relative bg-cover bg-center min-h-[300px] md:min-h-[400px] overflow-hidden'},
+        heroShade: 'absolute inset-0 pointer-events-none bg-radial from-transparent from-80% to-black/60',
+        section: `mt-1 md:mt-4 ${LAYOUTS.cardResponsive}`,
+        teamLoader: 'flex items-center justify-center min-h-[150px] md:min-h-[180px]',
+        statsLoader: 'flex items-center justify-center min-h-[180px] md:min-h-[220px]'
     },
 
     /**
@@ -2014,6 +2428,9 @@ export function getKitchenPanelClasses(
     return COMPONENTS.kitchenPanel[mode]
 }
 
+/** The surface a UserListItem's faces sit on, which picks their ring */
+export type UserListItemRing = keyof typeof COMPONENTS.userListItem.ring
+
 /** Get combined ribbon classes for a ribbon type */
 export type RibbonType = keyof typeof COMPONENTS.ribbon.colors
 export const getRibbonClasses = (type: RibbonType): string =>
@@ -2051,6 +2468,8 @@ export const ICONS = {
     agenda: 'i-heroicons-list-bullet',
     calendarDays: 'i-heroicons-calendar-days',
     user: 'i-heroicons-user',
+    /** A person's first dinner at a new ticket type */
+    birthday: 'i-heroicons-cake',
     search: 'i-heroicons-magnifying-glass',
     /** The child ticket type */
     userCircle: 'i-heroicons-user-circle',
@@ -2078,11 +2497,11 @@ export const ICONS = {
     allergy: 'i-mdi-food-allergy-off-outline',
     economy: 'i-heroicons-currency-dollar',
     login: 'i-guidance-entry',
-    logout: 'i-tdesign-wave-bye',
+    logout: 'i-hugeicons-waving-hand-01',
     moveIn: 'i-guidance-entry',
     moveOut: 'i-guidance-exit',
     noMoveOutPlans: 'i-heroicons-sun',
-    admin: 'i-pajamas-admin',
+    admin: 'i-heroicons-wrench-screwdriver',
     menu: 'i-heroicons-bars-3',
     help: 'i-heroicons-question-mark-circle',
 
@@ -2110,6 +2529,7 @@ export const ICONS = {
     warning: 'i-heroicons-exclamation-triangle',
     jobFailed: 'i-heroicons-x-circle',
     ellipsis: 'i-heroicons-ellipsis-horizontal',
+    dot: 'i-mdi-circle-medium',
     xMark: 'i-heroicons-x-mark',
     arrowRight: 'i-heroicons-arrow-right',
     arrowLeft: 'i-heroicons-arrow-left',
@@ -2119,6 +2539,8 @@ export const ICONS = {
     shoppingCart: 'i-heroicons-shopping-cart',
     released: 'i-heroicons-arrow-up-tray',
     claim: 'i-heroicons-arrows-right-left',
+    /** A duty swapped between two members (WorkAssignment) */
+    swap: 'i-heroicons-arrows-right-left',
     /** A place in the queue for a sold-out dinner */
     waitlist: 'i-hugeicons-hourglass',
     archive: 'i-heroicons-archive-box',
@@ -2130,17 +2552,19 @@ export const ICONS = {
     // Empty states & system feedback
     robotDead: 'i-mage-robot-dead',
     robotHappy: 'i-mage-robot-happy',
+    /** The error page's second figure, between the dead robots */
+    confusedFace: 'i-fluent-emoji-high-contrast-confused-face',
 
     // Danger/delete confirmations
-    dangerConfirm: 'i-healthicons-death-alt',
+    dangerConfirm: 'i-hugeicons-skull',
 
     // Descriptive
     mail: 'i-guidance-mail',
     phone: 'i-guidance-phone',
     identification: 'i-heroicons-identification',
+    notification: 'i-heroicons-bell',
 
     // Own settings (Mine indstillinger)
-    notification: 'i-heroicons-bell',
     palette: 'i-lucide-palette',
     textScale: 'i-lucide-a-large-small',
 
@@ -2152,6 +2576,8 @@ export const ICONS = {
     info: 'i-heroicons-information-circle',
 
     // Status/state
+    /** Look, don't touch: the visitor banner on another household, the admin pages for a non-admin */
+    viewOnly: 'i-heroicons-eye',
     lockOpen: 'i-heroicons-lock-open',
     lockClosed: 'i-heroicons-lock-closed',
     authorize: 'i-heroicons-shield-check',
@@ -2204,16 +2630,16 @@ export const getCalendarCountBadge = (teamNumber: number) => ({class: getRainbow
 export type ResidencyAlertKind = Extract<AlertKind, 'success' | 'error' | 'neutral'>
 
 /** Residency status → display config (ribbon, alert, badge). null = active, no display needed */
-export const RESIDENCY_CONFIG: Record<import('~/composables/useHousehold').ResidencyStatus, { type: RibbonType, prefix: string, description: string, icon: string, color: ResidencyAlertKind, dateField: 'movedInDate' | 'moveOutDate' } | null> = {
-    'pending':   { type: 'new',    prefix: 'Indflytter',  description: 'Familien flytter ind d.',    icon: ICONS.moveIn,  color: COLOR.success, dateField: 'movedInDate' },
-    'leaving':   { type: 'cancel', prefix: 'Fraflytter',  description: 'Familien fraflytter d.',     icon: ICONS.moveOut, color: COLOR.error,   dateField: 'moveOutDate' },
-    'moved-out': { type: 'past',   prefix: 'Fraflyttet',  description: 'Familien er fraflyttet d.',  icon: ICONS.moveOut, color: COLOR.neutral, dateField: 'moveOutDate' },
-    'active':    null
+export const RESIDENCY_CONFIG: Record<ResidencyStatus, { type: RibbonType, prefix: string, description: string, icon: string, color: ResidencyAlertKind, dateField: 'movedInDate' | 'moveOutDate' } | null> = {
+    [ResidencyStatus.pending]:     { type: 'new',    ...HOUSEHOLD_WORDS.residency.status[ResidencyStatus.pending],     icon: ICONS.moveIn,  color: COLOR.success, dateField: 'movedInDate' },
+    [ResidencyStatus.leaving]:     { type: 'cancel', ...HOUSEHOLD_WORDS.residency.status[ResidencyStatus.leaving],     icon: ICONS.moveOut, color: COLOR.error,   dateField: 'moveOutDate' },
+    [ResidencyStatus['moved-out']]: { type: 'past',   ...HOUSEHOLD_WORDS.residency.status[ResidencyStatus['moved-out']], icon: ICONS.moveOut, color: COLOR.neutral, dateField: 'moveOutDate' },
+    [ResidencyStatus.active]:      null
 }
 
-/** Resolve residency display data for a household. Returns null for active households. */
-export const getResidencyDisplay = (movedInDate: Date, moveOutDate: Date | null) => {
-    const config = RESIDENCY_CONFIG[getResidencyStatus(movedInDate, moveOutDate)]
+/** Resolve residency display data for a household on `now`. Returns null for active households. */
+export const getResidencyDisplay = (movedInDate: Date, moveOutDate: Date | null, now: Date) => {
+    const config = RESIDENCY_CONFIG[getResidencyStatus(movedInDate, moveOutDate, now)]
     if (!config) return null
     const date = config.dateField === 'movedInDate' ? movedInDate : moveOutDate
     const dateText = `${config.description} ${formatDate(date!)}`
@@ -2221,8 +2647,8 @@ export const getResidencyDisplay = (movedInDate: Date, moveOutDate: Date | null)
         ...config,
         dateText,
         badgeText: `${config.prefix} ${formatDate(date!)}`,
-        alertTitle: 'Fællesspisning er for beboere',
-        alertDescription: `Familien skal bo her, for at kunne bestille. ${dateText}.`
+        alertTitle: HOUSEHOLD_WORDS.residency.alert.title,
+        alertDescription: HOUSEHOLD_WORDS.residency.alert.description(dateText)
     }
 }
 
@@ -2245,7 +2671,7 @@ export const IMG = {
     heynabo: '/heynabo.jpeg',
     /**
      * Default dinner picture for heroes without custom menu pictures
-     * Located in public/ folder (ADR-013), accessible from root URL
+     * In public/, served from the root URL
      */
     defaultDinnerPicture: '/fællesspisning_0.jpeg'
 } as const
@@ -2286,10 +2712,8 @@ export const createResponsiveSizes = (isMd: Ref<boolean | null>) => ({
     get smallIconSize(): string {
         return isMd.value ? '16' : '12'
     },
-    // Badge icon class for small badges (inline icons in UBadge)
-    get smallBadgeIcon(): string {
-        return isMd.value ? 'size-4 mr-1' : 'size-3 mr-1'
-    },
+    // Badge icon class for small badges (inline icons in UBadge); the step at md lives in the classes
+    smallBadgeIcon: 'size-3 mr-1 md:size-4',
 
     // Large responsive: lg on mobile, xl on desktop
     get large(): NuxtUISize {
@@ -2309,13 +2733,13 @@ export const createResponsiveSizes = (isMd: Ref<boolean | null>) => ({
         return isMd.value ? 3 : 1
     },
 
-    // Calendar day circle: w-8 h-8 on desktop, w-6 h-6 on mobile
-    get calendarCircle(): string {
-        return isMd.value ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-xs'
-    },
-
     // Agenda page size: 3 on mobile, 5 on desktop
     get agendaPageSize(): number {
+        return isMd.value ? 5 : 3
+    },
+
+    // An avatar group's faces before the overflow count: 3 on mobile, 5 on desktop
+    get avatarMax(): number {
         return isMd.value ? 5 : 3
     },
 
@@ -2340,11 +2764,6 @@ export const createResponsiveSizes = (isMd: Ref<boolean | null>) => ({
     // The season selector's USelect
     get seasonSelect(): NuxtUISize {
         return isMd.value ? 'lg' : 'sm'
-    },
-
-    // A card's action UFieldGroup (the household card's preference actions)
-    get cardFieldGroup(): NuxtUISize {
-        return isMd.value ? 'md' : 'sm'
     },
 
     // Static sizes (for when you need non-responsive)
@@ -2549,7 +2968,7 @@ const alertUi = (extra: Partial<AlertUi> = {}): AlertUi => ({
 })
 
 /**
- * createResponsiveAlerts - THE alert pattern (ADR-018)
+ * createResponsiveAlerts - THE alert pattern
  *
  * `v-bind` a kind and pass only domain props: `:title`, `:description`, an `:icon` override,
  * `:avatar`, `data-testid`, a margin `class`. Colour and variant belong to the kind, never to
@@ -2664,7 +3083,7 @@ const createOrientations = (isMd: Ref<boolean | null>) => ({
      * @param count - Number of items
      * @param threshold - Max count for always-horizontal (default: 2)
      */
-    forItemCount: (count: number, threshold = 2): 'horizontal' | 'vertical' => {
+    forItemCount: (count: number, threshold = 2): NuxtUIOrientation => {
         if (count <= threshold) return 'horizontal'
         return isMd.value ? 'vertical' : 'horizontal'
     }
@@ -2708,7 +3127,11 @@ const createWeekdayDisplay = (isMd: Ref<boolean | null>) => ({
      * Badge/button content size for dinner mode icons
      * Mobile: size-4 (16px), Desktop: size-8 (32px)
      */
-    badgeContentSize: 'size-4 md:size-8'
+    badgeContentSize: 'size-4 md:size-8',
+
+    /** The weekday preferences in edit mode (WeekDayMapDinnerModeDisplay): the days wrap in a row, each a column of its label over its selector */
+    editRow: 'flex gap-2 md:gap-4 flex-wrap',
+    editDay: 'flex flex-col items-center gap-2'
 })
 
 /**
@@ -2737,32 +3160,25 @@ const createPagination = (isMd: Ref<boolean | null>) => ({
     siblingCount: computed(() => isMd.value ? 1 : 0)
 })
 
+const navigationLink = {
+    color: 'neutral' as const,
+    variant: 'link' as const,
+    activeColor: 'primary' as const,
+    activeVariant: 'soft' as const
+}
+
 /**
- * createNavigation - Responsive navigation configuration
- *
- * Provides navigation link styling and responsive behavior for header menus.
- * On desktop (md+), drawer links swap to main nav since drawer toggle is hidden.
- *
- * @param isMd - Responsive breakpoint ref
- * @returns Navigation configuration
+ * The header's controls: a link's colours, neutral at rest and primary soft while active as UNavigationMenu draws
+ * them, and the burger's face by its open state, the menu icon in both
  */
-const createNavigation = (isMd: Ref<boolean | null>) => ({
-    // Link styling - matches UNavigationMenu: neutral (sky/blue) default, primary (amber/brown) soft when active
-    link: {
-        color: 'neutral' as const,
-        variant: 'link' as const,
-        activeColor: 'primary' as const,
-        activeVariant: 'soft' as const
-    },
-    /**
-     * Whether to swap drawer content with main nav
-     * - Desktop (isMd): true - drawer links should be in main nav (toggle is hidden)
-     * - Mobile (!isMd): false - drawer links stay in drawer
-     */
-    get shouldSwapDrawerWithMain(): boolean {
-        return isMd.value === true
-    }
-})
+export const NAVIGATION = {
+    link: navigationLink,
+    toggle: (open: boolean): ButtonProps => ({
+        icon: ICONS.menu,
+        color: open ? navigationLink.activeColor : navigationLink.color,
+        variant: open ? navigationLink.activeVariant : navigationLink.variant
+    })
+}
 
 /**
  * useTheSlopeDesignSystem Composable
@@ -2770,8 +3186,7 @@ const createNavigation = (isMd: Ref<boolean | null>) => ({
  * TheSlope's centralized design system - single source of truth for colors, typography,
  * layouts, backgrounds, components, and responsive sizing patterns.
  *
- * Provides curated design decisions based on Pantone Color of the Year 2025 (Mocha Mousse)
- * and TheSlope's vibrant color palette.
+ * Its colours build on Pantone's Color of the Year 2025 (Mocha Mousse) and TheSlope's own palette.
  *
  * @example
  * ```ts
@@ -2792,41 +3207,31 @@ const createNavigation = (isMd: Ref<boolean | null>) => ({
  * ```
  */
 /**
- * DINNER_STATE_BADGES - Shared dinner state badge configuration
- *
- * Used for consistent dinner state display across:
- * - TeamCalendarDisplay (agenda view)
- * - ChefDinnerCard (master view)
- * - DinnerEvent components
- *
- * Colors follow feature proposal:
- * - SCHEDULED: mocha (warm - "ready to plan")
- * - ANNOUNCED: success (green - "published, bookable")
- * - CONSUMED: neutral (gray - "done, archived")
- * - CANCELLED: neutral (black/dark - NOT red, red is for deadline warnings)
+ * The dinner state's badge, one per dinner state: its label, colour and glyph. A cancelled dinner reads neutral, not
+ * red, since red marks the deadlines
  */
 export const DINNER_STATE_BADGES = {
     SCHEDULED: {
-        label: 'Planlagt',
+        label: BOOKING_WORDS.dinnerStates.SCHEDULED,
         color: COLOR.mocha,
-        icon: 'i-heroicons-clipboard-document-list'
+        icon: ICONS.clipboard
     },
     ANNOUNCED: {
-        label: 'Annonceret',
+        label: BOOKING_WORDS.dinnerStates.ANNOUNCED,
         color: COLOR.success,
-        icon: 'i-heroicons-megaphone'
+        icon: ICONS.megaphone
     },
     CANCELLED: {
-        label: 'Aflyst',
+        label: BOOKING_WORDS.dinnerStates.CANCELLED,
         color: COLOR.neutral,
-        icon: 'i-heroicons-x-circle'
+        icon: ICONS.noDinner
     },
     CONSUMED: {
-        label: 'Afholdt',
+        label: BOOKING_WORDS.dinnerStates.CONSUMED,
         color: COLOR.neutral,
-        icon: 'i-heroicons-check-circle'
+        icon: ICONS.checkCircle
     }
-} as const
+} as const satisfies Record<DinnerState, {label: string, color: NuxtUIColor, icon: string}>
 
 /**
  * PLANNING_CALENDAR - Pink palette accent colors
@@ -2852,6 +3257,9 @@ export const PLANNING_CALENDAR = {
  */
 export const CALENDAR = {
     day: {
+        // 24px below lg, 32px from lg, where a master column holds a week of the larger circle. The step lives in the
+        // classes, so the server renders each screen's circle before the layout measures
+        size: 'w-6 h-6 text-xs lg:w-8 lg:h-8 lg:text-sm',
         shape: 'rounded-full flex items-center justify-center cursor-pointer hover:opacity-90',
         past: `font-medium ${PAST_DAY_COLORS}`,
         // A cancelled dinner: the past circle, struck through
@@ -2859,11 +3267,17 @@ export const CALENDAR = {
     },
     countdown: {
         container: 'bg-amber-950 text-amber-50 py-6 md:py-8 border-b-2',
+        clickable: 'cursor-pointer hover:ring-2 hover:ring-opacity-50 transition-all',
+        content: 'text-center space-y-2',
         title: 'text-xs md:text-sm font-semibold tracking-widest uppercase opacity-90 text-amber-50',
         date: 'text-sm font-medium uppercase',
         number: 'text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight',
         numberPrefix: 'opacity-75 text-amber-50',
+        numberValue: 'ml-2',
+        timeRow: 'flex items-baseline justify-center gap-2',
         timeLabel: 'text-xs md:text-sm',
+        // The time label again, invisible, so the time sits centred
+        timeSpacer: 'text-xs md:text-sm invisible',
         timeValue: 'text-xl md:text-2xl font-medium',
         dot: 'w-3 h-3 rounded-full animate-pulse'
     },
@@ -2888,30 +3302,15 @@ export const CALENDAR = {
      * selected and range fill out of the way (variant names from `.nuxt/ui/calendar.ts`).
      */
     pickerCell: 'data-[selected]:bg-transparent data-[selected]:text-default data-[highlighted]:bg-transparent data-[highlighted]:text-default',
-    // Base selection behaviour - combine with palette-specific color
     selection: {
-        base: 'ring-2 md:ring-4',
         // Card behaviors for selectable items (agenda, list views)
         card: {
-            base: 'cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg',
-            // Helper to generate selected state with color
-            selected: (ringColor: string) => `ring-2 md:ring-4 ${ringColor}`
+            base: 'cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg'
         }
     }
 } as const
 
 export type CalendarPickerSelection = keyof typeof CALENDAR.picker
-
-/**
- * UTable column visibility by breakpoint: `hiddenOnPhone` columns hide on a phone, `hiddenFromMd` columns hide from md.
- * The content of a column hidden on a phone lives in the row's expanded panel; its expand column is `hiddenFromMd`
- * when every column fits from md.
- * @example <UTable :column-visibility="columnVisibility(['id', 'phone'])" />
- * @example <UTable :column-visibility="columnVisibility(['durationMs'], ['expand'])" />
- */
-export const createColumnVisibility = (isMd: Ref<boolean | null>) =>
-    (hiddenOnPhone: readonly string[], hiddenFromMd: readonly string[] = []): Record<string, boolean> =>
-        Object.fromEntries((isMd.value ? hiddenFromMd : hiddenOnPhone).map(column => [column, false]))
 
 // A column whose header and cells render from md: a column carries it in its `meta`, which UTable reads
 const TABLE_COLUMN_FROM_MD = {class: {th: 'hidden md:table-cell', td: 'hidden md:table-cell'}}
@@ -2924,7 +3323,7 @@ const TABLE_COLUMN_FROM_MD = {class: {th: 'hidden md:table-cell', td: 'hidden md
 export const createTableColumns = (isMd: Ref<boolean | null>) => ({
     // On a phone the booking form's name column carries each inhabitant's tickets inline
     get bookingFormName(): {header: string} {
-        return {header: isMd.value ? 'Beboer' : 'Billetter'}
+        return {header: isMd.value ? HOUSEHOLD_WORDS.inhabitant : BOOKING_WORDS.bookingForm.ticketsColumn}
     },
     bookingFormTicket: {meta: TABLE_COLUMN_FROM_MD},
     get householdMemberName(): {header: string | undefined} {
@@ -2956,13 +3355,15 @@ export const createBreakpoint = (isMd: Ref<boolean | null>) => ({
 })
 
 /**
- * The shared calendar day circle: responsive size + shape + the variant the surface adds
+ * The shared calendar day circle: size + shape + the variant the surface adds
  * (CALENDAR.holiday, PLANNING_CALENDAR.day.generated, CHEF_CALENDAR.day.next, …).
- * Exposed from the composable because the size depends on `isMd`.
  */
-export const createDayCircleClasses = (isMd: Ref<boolean | null>) =>
-    (...variants: (string | false | null | undefined)[]): string[] =>
-        [createResponsiveSizes(isMd).calendarCircle, CALENDAR.day.shape, ...variants.filter((variant): variant is string => Boolean(variant))]
+export const dayCircleClasses = (...variants: (string | false | null | undefined)[]): string[] =>
+    [CALENDAR.day.size, CALENDAR.day.shape, ...variants.filter((variant): variant is string => Boolean(variant))]
+
+/** A dinner day's colour by its temporal category: next and future from the calendar's palette, the past shared */
+export const dayColorClass = (palette: typeof CHEF_CALENDAR | typeof DINNER_CALENDAR, category: TemporalCategory): string =>
+    category === TEMPORAL_CATEGORY.past ? CALENDAR.day.past : palette.day[category]
 
 /**
  * Props for a date picker's UCalendar: the shared grid token with the cell-fill
@@ -2981,8 +3382,10 @@ export const calendarPickerProps = () => ({
  */
 export const CHEF_CALENDAR = {
     day: {
-        next: `text-white dark:text-black font-bold ${BG.ocean[400]}`,
-        future: `font-medium ${BG.ocean[200]} ${TEXT.ocean[800]}`
+        next: `${TEXT.onFill} font-bold ${BG.ocean[400]}`,
+        future: `font-medium ${BG.ocean[200]} ${TEXT.ocean[800]}`,
+        // Another team's dinner: a plain outlined circle, without the team on view's colours
+        otherTeam: `font-medium border ${BORDER.gray[500]}`
     },
     countdown: {
         border: 'border-ocean-400',
@@ -3000,7 +3403,7 @@ export const CHEF_CALENDAR = {
  */
 export const DINNER_CALENDAR = {
     day: {
-        next: `text-white dark:text-black font-bold ${BG.peach[400]}`,
+        next: `${TEXT.onFill} font-bold ${BG.peach[400]}`,
         future: `font-medium ${BG.peach[200]} ${TEXT.peach[800]}`
     },
     countdown: {
@@ -3186,11 +3589,11 @@ export const EMPTY_STATE_MESSAGES = {
     noAllergens: [
         { emoji: '🍀', text: 'Allergenerne fik ikke plads på menuen i dag' },
         { emoji: '😋', text: 'Ingen allergener på menuen - spis løs!' },
-        { emoji: '🧑‍🍳', text: 'Kokken har ikke købt noget med allergener i' }
+        { emoji: '🧑‍🍳', text: 'Chefkokken har fundet på noget helt uden allergener i' }
     ],
     seasonGone: [
         { emoji: '📅', text: 'Sæsonen er pakket sammen og sat op på loftet' },
-        { emoji: '🍂', text: 'Denne sæson er måske blæst væk med bladene' },
+        { emoji: '🍂', text: 'Denne sæson er måske blæst væk, med efterårsblæsten og bladene' },
         { emoji: '🗓️', text: 'Kalenderen har vendt bladet, sæsonen er væk' }
     ],
     noTicketsSold: [
@@ -3198,17 +3601,17 @@ export const EMPTY_STATE_MESSAGES = {
         { emoji: '⏳', text: 'Billetterne er på vej, husstandene skal lige vågne' }
     ],
     noReceipts: [
-        { emoji: '🛒', text: 'Indkøbsvognen er tom, kvitteringerne er ikke kommet endnu' },
-        { emoji: '🧾', text: 'Kvitteringerne gemmer sig stadig i jakkelommen' }
+        { emoji: '🛒', text: 'Indkøbsvognen er tom, mon vi skal have noget at spise?' },
+        { emoji: '🧾', text: 'Tænk på madvarer, der drømmer om at blive købt' }
     ],
     noTicketChanges: [
-        { emoji: '🧘', text: 'Billetterne har holdt sig i ro' },
-        { emoji: '📭', text: 'Postkassen er tom, ingen billetter er flyttet' }
+        { emoji: '🧘', text: 'Hmm, her er vist ingen billetter, kig under sengen' },
+        { emoji: '📭', text: 'Postkassen er tom, ingen billetter fundet' }
     ]
 } as const
 
-/** Pick a random message from a context - seeded by UTC date so SSR and client agree */
-export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES, today: Date = new Date()) => {
+/** Pick a random message from a context - seeded by the UTC date of `today` so SSR and client agree */
+export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES, today: Date) => {
     const messages = EMPTY_STATE_MESSAGES[context]
     // UTC parts: local date parts diverge between a UTC server and a Danish browser
     // in the evening, giving each side a different "random" message (hydration mismatch)
@@ -3218,8 +3621,8 @@ export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES
 }
 
 /** The day's empty message as one line of text, emoji first */
-export const getRandomEmptyMessageText = (context: keyof typeof EMPTY_STATE_MESSAGES) => {
-    const {emoji, text} = getRandomEmptyMessage(context)
+export const getRandomEmptyMessageText = (context: keyof typeof EMPTY_STATE_MESSAGES, today: Date) => {
+    const {emoji, text} = getRandomEmptyMessage(context, today)
     return `${emoji} ${text}`
 }
 
@@ -3234,8 +3637,6 @@ export const SEASON_STATUS_GLYPHS: Record<SeasonStatusValue, BadgeProps & {class
 export const useTheSlopeDesignSystem = () => {
     // Inject responsive breakpoint from layout
     const isMd = inject<Ref<boolean | null>>('isMd', ref(null))
-    const dayCircleClasses = createDayCircleClasses(isMd)
-    const columnVisibility = createColumnVisibility(isMd)
 
     return {
         // The layout's breakpoint, for behaviour that needs the ref; a rendered value binds a responsive token
@@ -3251,7 +3652,7 @@ export const useTheSlopeDesignSystem = () => {
         CALENDAR,
         calendarPickerProps,
         dayCircleClasses,
-        columnVisibility,
+        dayColorClass,
         CHEF_CALENDAR,
         DINNER_CALENDAR,
         PLANNING_CALENDAR,
@@ -3291,7 +3692,7 @@ export const useTheSlopeDesignSystem = () => {
         PAGINATION: createPagination(isMd),
 
         // Navigation configuration
-        NAVIGATION: createNavigation(isMd),
+        NAVIGATION,
 
         // Responsive icons
         RESPONSIVE_ICONS: createResponsiveIcons(isMd),
@@ -3302,7 +3703,7 @@ export const useTheSlopeDesignSystem = () => {
         // Responsive buttons (standardized button configs with sizing)
         BUTTONS: createResponsiveButtons(isMd),
 
-        // Responsive alerts (ADR-018: v-bind a kind, never raw color/variant)
+        // Responsive alerts: a site v-binds a kind, never a raw color or variant
         ALERTS: createResponsiveAlerts(isMd),
 
         // Low-level builders (only if you need custom combinations)

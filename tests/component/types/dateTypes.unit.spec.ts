@@ -1,8 +1,14 @@
 import {describe, it, expect} from 'vitest'
-import {changedWeekdays, createDefaultWeekdayMap, WEEKDAYS, type WeekDay, type WeekDayMap} from '~/types/dateTypes'
+import {changedWeekdays, createDefaultWeekdayMap, weekDayMapOf, WEEKDAYS, type WeekDay, type WeekDayMap} from '~/types/dateTypes'
 import {useBookingValidation, type DinnerMode} from '~/composables/useBookingValidation'
 
 describe('dateTypes - WeekDayMap factory functions', () => {
+    describe('weekDayMapOf', () => {
+        it('GIVEN a value of each weekday WHEN building the map THEN it holds every weekday with its own value, in the order of WEEKDAYS', () => {
+            expect(Object.entries(weekDayMapOf(day => `${day}:${WEEKDAYS.indexOf(day)}`))).toEqual(WEEKDAYS.map((day, index) => [day, `${day}:${index}`]))
+        })
+    })
+
     describe('createDefaultWeekdayMap', () => {
         it.each([
             {
@@ -25,17 +31,18 @@ describe('dateTypes - WeekDayMap factory functions', () => {
         })
     })
 
-    // A preference save scopes its run to the weekdays its draft changes
+    // A preference save scopes its run to the weekdays its draft changes for any of the inhabitants it applies to
     describe('changedWeekdays', () => {
         const Mode = useBookingValidation().DinnerModeSchema.enum
-        const dineIn = Object.fromEntries(WEEKDAYS.map(day => [day, Mode.DINEIN])) as WeekDayMap<DinnerMode>
+        const dineIn: WeekDayMap<DinnerMode> = weekDayMapOf(() => Mode.DINEIN)
 
-        it.each<{change: string, stored: WeekDayMap<DinnerMode> | null, draft: WeekDayMap<DinnerMode>, expected: WeekDay[]}>([
-            {change: 'Monday to Ingen', stored: dineIn, draft: {...dineIn, mandag: Mode.NONE}, expected: ['mandag']},
-            {change: 'Wednesday to takeaway and Friday to Ingen', stored: dineIn, draft: {...dineIn, onsdag: Mode.TAKEAWAY, fredag: Mode.NONE}, expected: ['onsdag', 'fredag']},
-            {change: 'nothing', stored: dineIn, draft: {...dineIn}, expected: []},
-            {change: 'every weekday over no stored map', stored: null, draft: dineIn, expected: [...WEEKDAYS]}
-        ])('GIVEN a draft changing $change WHEN compared with the stored map THEN it names the weekdays that differ', ({stored, draft, expected}) => {
+        it.each<{change: string, stored: (WeekDayMap<DinnerMode> | null)[], draft: WeekDayMap<DinnerMode>, expected: WeekDay[]}>([
+            {change: 'Monday to Ingen', stored: [dineIn], draft: {...dineIn, mandag: Mode.NONE}, expected: ['mandag']},
+            {change: 'Wednesday to takeaway and Friday to Ingen', stored: [dineIn], draft: {...dineIn, onsdag: Mode.TAKEAWAY, fredag: Mode.NONE}, expected: ['onsdag', 'fredag']},
+            {change: 'nothing', stored: [dineIn], draft: {...dineIn}, expected: []},
+            {change: 'every weekday over no stored map', stored: [null], draft: dineIn, expected: [...WEEKDAYS]},
+            {change: 'Monday for one inhabitant and Friday for the other', stored: [{...dineIn, mandag: Mode.NONE}, {...dineIn, fredag: Mode.TAKEAWAY}], draft: dineIn, expected: ['mandag', 'fredag']}
+        ])('GIVEN a draft changing $change WHEN compared with the stored maps THEN it names the weekdays that differ in any', ({stored, draft, expected}) => {
             expect(changedWeekdays(stored, draft)).toEqual(expected)
         })
     })

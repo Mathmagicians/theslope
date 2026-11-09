@@ -3,8 +3,8 @@
  *
  * `User.notificationChannels` is a JSON array of the generated NotificationChannel enum; `User.appearance`
  * is the JSON object typed by AppearanceSchema. Isomorphic (ADR-017): explicit imports only, no Vue, Pinia
- * or NuxtUI, because the preferences endpoint imports it. Danish labels and badge wording belong to the
- * component; the registry here carries only the level a preset is verified at.
+ * or NuxtUI, because the preferences endpoint imports it. The palette registry carries the level each preset is
+ * verified at; the labels and badges users read are in `USER_WORDS.preferences` (app/config/userWords.ts).
  */
 import {z} from 'zod'
 import {NotificationChannelSchema} from '~~/prisma/generated/zod'

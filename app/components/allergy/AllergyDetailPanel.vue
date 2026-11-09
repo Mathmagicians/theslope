@@ -13,6 +13,7 @@ panel stays layout-agnostic and prop-driven (no store access).
 <script setup lang="ts">
 import type {AllergyTypeCreate, AllergyTypeDetail} from '~/composables/useAllergyValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
+import {BUTTON_WORDS} from '~/config/buttonWords'
 
 const props = withDefaults(defineProps<{
   /** Absent in create mode and when nothing is selected */
@@ -82,7 +83,7 @@ const affectedInhabitantCount = computed(() => props.allergyType?.inhabitants?.l
           data-testid="cancel-delete-allergy-type"
           @click="emit('cancel-delete')"
       >
-        Annuller
+        {{ BUTTON_WORDS.cancel }}
       </UButton>
       <UButton
           v-bind="BUTTONS.save"
@@ -92,7 +93,7 @@ const affectedInhabitantCount = computed(() => props.allergyType?.inhabitants?.l
           data-testid="confirm-delete-allergy-type"
           @click="emit('confirm-delete')"
       >
-        Slet
+        {{ BUTTON_WORDS.remove }}
       </UButton>
     </div>
   </div>
@@ -113,13 +114,13 @@ const affectedInhabitantCount = computed(() => props.allergyType?.inhabitants?.l
       <div v-if="canEdit" :class="COMPONENTS.allergyDetailPanel.actions">
         <UButton
             v-bind="BUTTONS.edit"
-            aria-label="Rediger"
+            :aria-label="BUTTON_WORDS.edit"
             data-testid="edit-allergy-type"
             @click="emit('edit')"
         />
         <UButton
             v-bind="BUTTONS.remove"
-            aria-label="Slet"
+            :aria-label="BUTTON_WORDS.remove"
             data-testid="delete-allergy-type"
             @click="emit('delete')"
         />

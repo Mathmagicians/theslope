@@ -17,11 +17,18 @@ import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {deleteWaitlistForConsumedDinners} from '~~/server/data/waitlistRepository'
 import type {DailyMaintenanceResult} from '~/composables/useBookingValidation'
+import {useDeliveryValidation, type SenderEvent} from '~/composables/useDeliveryValidation'
 import {useBooking} from '~/composables/useBooking'
+import {errorMessage} from '~~/workers/common/error'
+import type {EmailChannel} from '~~/server/utils/sender/config'
+import type {DeliveryResult} from '~~/server/utils/sender/deliveries'
+import {sendNotifications} from '~~/server/utils/sender/events/waitlist'
+import {sendChefDeadlines} from '~~/server/utils/sender/events/chef-deadlines'
 
 const LOG = '🔧 > DAILY > [MAINTENANCE]'
+const {BOOKING_STATUS, CHEF_DEADLINES} = useDeliveryValidation().SenderEventSchema.enum
 
-export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: string): Promise<DailyMaintenanceResult> {
+export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: string, email: EmailChannel): Promise<DailyMaintenanceResult> {
     const {JobType, JobStatus} = useMaintenanceValidation()
 
     console.info(`${LOG} Starting daily maintenance (triggeredBy=${triggeredBy})`)
@@ -53,6 +60,21 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
         const activeSeasonId = await fetchActiveSeasonId(d1Client)
         let initPrefsResult = {initialized: 0}
         let scaffoldResult = null
+        const notifications: DailyMaintenanceResult['notifications'] = {}
+        const failures: string[] = []
+        // A notification step stands alone: the data steps have landed, so its failure is logged and the run goes on to
+        // complete PARTIAL
+        const notify = async (senderEvent: SenderEvent, send: () => Promise<DeliveryResult>): Promise<void> => {
+            try {
+                const {counts} = await send()
+                notifications[senderEvent] = counts
+                console.info(`${LOG} notifications: ${senderEvent} sent ${counts.sent}`)
+            } catch (error) {
+                const message = errorMessage(error)
+                console.error(`${LOG} notifications: ${senderEvent} failed: ${message}`)
+                failures.push(`${senderEvent}: ${message}`)
+            }
+        }
 
         if (activeSeasonId) {
             initPrefsResult = await clipPreferences(d1Client, activeSeasonId)
@@ -60,8 +82,14 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
 
             scaffoldResult = await scaffoldPrebookings(d1Client, {seasonId: activeSeasonId})
             console.info(`${LOG} scaffold: ${useBooking().formatScaffoldResult(scaffoldResult)}`)
+
+            // The dinners as they stand after the scaffold send the notifications of its outcomes too
+            await notify(BOOKING_STATUS, () => sendNotifications(d1Client, email, activeSeasonId, {jobRunId: jobRun.id}))
+
+            // The chef hears the deadlines as the scaffold left the dinners
+            await notify(CHEF_DEADLINES, () => sendChefDeadlines(d1Client, email, activeSeasonId, {jobRunId: jobRun.id}))
         } else {
-            console.info(`${LOG} initPrefs/scaffold skipped: no active season`)
+            console.info(`${LOG} initPrefs/scaffold/notifications skipped: no active season`)
         }
 
         const result: DailyMaintenanceResult = {
@@ -71,13 +99,15 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             transact: transactResult,
             clearWaitlist,
             initPrefs: initPrefsResult,
-            scaffold: scaffoldResult
+            scaffold: scaffoldResult,
+            notifications
         }
 
-        // Complete job run with success
-        await completeJobRun(d1Client, jobRun.id, JobStatus.SUCCESS, result)
+        const failed = failures.join('; ')
+        if (failed) await completeJobRun(d1Client, jobRun.id, JobStatus.PARTIAL, result, failed)
+        else await completeJobRun(d1Client, jobRun.id, JobStatus.SUCCESS, result)
 
-        console.info(`${LOG} Daily maintenance complete (jobRunId=${jobRun.id})`)
+        console.info(`${LOG} Daily maintenance complete (jobRunId=${jobRun.id}${failed ? `, partial: ${failed}` : ''})`)
         return result
     } catch (error) {
         // Complete job run with failure
@@ -86,7 +116,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             jobRun.id,
             JobStatus.FAILED,
             undefined,
-            error instanceof Error ? error.message : 'Unknown error'
+            errorMessage(error)
         )
         throw error
     }

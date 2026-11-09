@@ -11,7 +11,7 @@ import {enableAutoUnmount, flushPromises, type VueWrapper} from '@vue/test-utils
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import KitchenPreparation from '~/components/dinner/KitchenPreparation.vue'
 import AllergyTypeDisplayComponent from '~/components/allergy/AllergyTypeDisplay.vue'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, iconNamesIn} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
@@ -199,9 +199,7 @@ describe('KitchenPreparation TIL SALG box', () => {
 
     // A waiting-list row as the other boxes' household rows read: household, ticket count, each person with the place in its line
     const householdRowsIn = (lines: ReturnType<typeof findByTestId>) =>
-        lines.findAll('[data-testid="kitchen-waitlist-household"]').map(row => row.findAll('span').map(segment => segment.text()))
-    const iconsIn = (element: ReturnType<typeof findByTestId>) =>
-        (element.findAllComponents({name: 'UIcon'}) as VueWrapper<ComponentPublicInstance<{name: string}>>[]).map(icon => icon.props('name'))
+        findAllByTestId(lines, 'kitchen-waitlist-household').map(row => row.findAll('span').map(segment => segment.text()))
 
     it('GIVEN one adult and two children waiting THEN TIL SALG carries the waiting-list part with the queue\'s kuverter and its ticket count, and each part its icon beside its kuverter: the released icon, the hourglass', async () => {
         const wrapper = await mountWith(QUEUE)
@@ -215,8 +213,8 @@ describe('KitchenPreparation TIL SALG box', () => {
         // The line that reads exactly the kuverter: an icon renders no text, as the allergy line does
         const kuverterLine = (element: ReturnType<typeof findByTestId>, kuverter: string) =>
             element.findAll('div').find(line => line.text() === kuverter)!
-        expect(iconsIn(kuverterLine(box, '0 kuv.'))).toEqual([ICONS.released])
-        expect(iconsIn(kuverterLine(findByTestId(box, WAITLIST_PART), '2 kuv.'))).toEqual([ICONS.waitlist])
+        expect(iconNamesIn(kuverterLine(box, '0 kuv.'))).toEqual([ICONS.released])
+        expect(iconNamesIn(kuverterLine(findByTestId(box, WAITLIST_PART), '2 kuv.'))).toEqual([ICONS.waitlist])
     })
 
     it.each([

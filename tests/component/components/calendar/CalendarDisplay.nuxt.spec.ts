@@ -1,12 +1,12 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
-import {ref, defineComponent} from 'vue'
+import {defineComponent} from 'vue'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {da} from '@nuxt/ui/locale'
 import {UApp} from '#components'
 import {enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
 import CalendarDisplay from '~/components/calendar/CalendarDisplay.vue'
-import {CALENDAR, PLANNING_CALENDAR, createDayCircleClasses} from '~/composables/useTheSlopeDesignSystem'
+import {CALENDAR, PLANNING_CALENDAR, dayCircleClasses} from '~/composables/useTheSlopeDesignSystem'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {mountWithTooltipProvider, expectSharedCalendarGrid, resetStores} from '~~/tests/component/testHelpers'
@@ -14,7 +14,6 @@ import {mountWithTooltipProvider, expectSharedCalendarGrid, resetStores} from '~
 enableAutoUnmount(afterEach)
 
 const IS_MD = true
-const dayCircleClasses = createDayCircleClasses(ref(IS_MD))
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 
 // January 2025 starts on a Wednesday, so its Mondays are the 6th, 13th, 20th and 27th

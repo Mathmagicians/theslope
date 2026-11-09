@@ -1,4 +1,3 @@
-
 type TabNavigationConfig = {
     tabs: string[]  //  tab name to be matched from the url, /basepath/:tab, param has to be named [tab]
     basePath: string
@@ -19,22 +18,24 @@ export function useTabNavigation(config: TabNavigationConfig) {
         additionalParams = []
     } = config
 
-    if (tabs.length === 0) throw new Error('useTabNavigation requires at least one tab to be defined in the tabs object')
-    const defaultTabValue: string = tabs[0]!
+    const [defaultTabValue] = tabs
+    if (defaultTabValue === undefined) throw new Error('useTabNavigation requires at least one tab to be defined in the tabs object')
 
-    const isValidTab = (tab?: string): boolean => !!tab &&  tabs.includes(tab.toLowerCase())
+    const isValidTab = (tab?: string): boolean => !!tab && tabs.includes(tab.toLowerCase())
 
     const route = useRoute()
     const {write} = useUrlQueryWriter()
 
     const getSafeTab = (tab?: string): string => tab && isValidTab(tab) ? tab.toLowerCase() : defaultTabValue
 
+    // A route param's value; a param that holds several segments gives its first
+    const firstSegment = (paramValue: string | string[] | undefined): string | undefined =>
+        Array.isArray(paramValue) ? paramValue[0] : paramValue
+
     // constructs an url /basepath/param_0/../param_n/tab
     const constructUrlForTab = (tab: string, routeParams: Record<string, string | string[] | undefined> = {}) => {
         const paramSegments = additionalParams.map(paramName => {
-            const paramValue = routeParams[paramName]
-            // Handle both string and array params (arrays take first value)
-            const value = Array.isArray(paramValue) ? paramValue[0] : paramValue
+            const value = firstSegment(routeParams[paramName])
             return value ? `/${value}` : ''
         }).join('')
         return `${basePath}${paramSegments}/${tab}`
@@ -49,8 +50,7 @@ export function useTabNavigation(config: TabNavigationConfig) {
 
     const activeTab = computed({
         get() {
-            const tabParam = route.params.tab as string | undefined
-            return getSafeTab(tabParam)
+            return getSafeTab(firstSegment(route.params.tab))
         },
         async set(tabKey: string) {
             await updateRouteParamFromTab(tabKey)
@@ -59,14 +59,14 @@ export function useTabNavigation(config: TabNavigationConfig) {
 
     // signal - should url be fixed
     const shouldSyncActiveTab = computed(() => {
-        const tabParam = route.params.tab as string | undefined
+        const tabParam = firstSegment(route.params.tab)
         const safeTab = getSafeTab(tabParam)
         return tabParam !== safeTab
     })
 
     // autosync when signal is true, ie route param is out of sync, or invalid, then  set to safe tab (it normalizes invalids)
     watchPostEffect(() => {
-        if (shouldSyncActiveTab.value) activeTab.value = getSafeTab(route.params.tab as string | undefined)
+        if (shouldSyncActiveTab.value) activeTab.value = getSafeTab(firstSegment(route.params.tab))
     })
 
 

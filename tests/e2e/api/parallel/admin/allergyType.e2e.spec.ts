@@ -4,7 +4,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 
-const {validatedBrowserContext, salt} = testHelpers
+const {validatedBrowserContext, salt, attemptAll} = testHelpers
 
 // Variables to store IDs for cleanup
 const createdAllergyTypeIds: number[] = []
@@ -158,7 +158,7 @@ test.describe('AllergyType API - CRUD Operations', () => {
                     inhabitantId: inhabitant.id,
                     allergyTypeId: allergyType.id,
                     inhabitantComment: inhabitantsData[index]!.comment
-                })
+                }, 201, true)
             )
         )
 
@@ -206,6 +206,8 @@ test.describe('AllergyType API - Validation', () => {
 // Cleanup after all tests: a household cascades to its inhabitants and their allergies (ADR-005)
 test.afterAll(async ({browser}) => {
     const context = await validatedBrowserContext(browser)
-    await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
-    await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
+    await attemptAll('AllergyType API cleanup', [
+        () => HouseholdFactory.deleteHousehold(context, createdHouseholdIds),
+        () => AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
+    ]).finally(() => context.close())
 })

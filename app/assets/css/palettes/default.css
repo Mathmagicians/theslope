@@ -54,6 +54,7 @@ html:not([data-palette]) {
 
 html.dark:not([data-palette]) {
     --color-amber-300: #d3b8a0;
+    --color-amber-400: #ae8a71;
     --color-amber-500: #835a46;
     --color-amber-600: #b48375;
     --color-blue-400: #48cedc;

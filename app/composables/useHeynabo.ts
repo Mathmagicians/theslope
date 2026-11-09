@@ -15,6 +15,15 @@ const HEYNABO_ID_BATCH_SIZE = 90
 // Curried chunk function for heynaboId arrays (used for batch deletes)
 export const chunkHeynaboIds = chunkArray<number>(HEYNABO_ID_BATCH_SIZE)
 
+// D1 limit: 100 bound parameters per query, Household ~10 fields = max 8 per batch
+const SAVE_BATCH_SIZE = 8
+
+// A user link binds two parameters, the user's id and the inhabitant's heynaboId: 50 links per chunk
+const USER_LINK_BATCH_SIZE = 50
+
+export const chunkSaves = <T>(items: T[]): T[][] => chunkArray<T>(SAVE_BATCH_SIZE)(items)
+export const chunkUserLinks = <T>(items: T[]): T[][] => chunkArray<T>(USER_LINK_BATCH_SIZE)(items)
+
 // ========================================================================
 // EQUALITY FUNCTIONS - Named for testability (not exported)
 // ========================================================================
@@ -160,47 +169,19 @@ export const mergeHouseholdForUpdate = (incoming: HouseholdCreate, existing: Hou
 })
 
 /**
- * Heynabo Integration Composable
- *
- * Provides utilities for integrating with the Heynabo platform:
- * - User profile links
- * - Event creation (future)
- * - Message posting (future)
+ * The link to a resident's Heynabo profile, from the Heynabo API address
+ * @example
+ * // getUserUrl('https://skraaningeni.spaces.heynabo.com/api')(48)
+ * // Returns: https://skraaningeni.spaces.heynabo.com/desktop/users/residents/48
  */
+export const getUserUrl = (apiUrl: string) => (heynaboId: number): string =>
+    apiUrl.replace('/api', `/desktop/users/residents/${heynaboId}`)
 
-export function useHeynabo() {
-    const config = useRuntimeConfig()
-
-    /**
-     * Construct URL to a Heynabo user profile
-     * @param heynaboId - The Heynabo user ID
-     * @returns Full URL to user profile in Heynabo, or null if no ID provided
-     * @example
-     * // Input: heynaboId = 48
-     * // API URL: https://skraaningeni.spaces.heynabo.com/api
-     * // Returns: https://skraaningeni.spaces.heynabo.com/desktop/users/residents/48
-     */
-    const getUserUrl = (heynaboId: number): string  => {
-        const apiUrl = config.public.HEY_NABO_API
-        return apiUrl.replace('/api', `/desktop/users/residents/${heynaboId}`)
-    }
-
-    /**
-     * Construct URL to a Heynabo event page
-     * @param heynaboEventId - The Heynabo event ID
-     * @returns Full URL to event page in Heynabo
-     * @example
-     * // Input: heynaboEventId = 123
-     * // API URL: https://skraaningeni.spaces.heynabo.com/api
-     * // Returns: https://skraaningeni.spaces.heynabo.com/desktop/calendar/detail/123/info
-     */
-    const getEventUrl = (heynaboEventId: number): string => {
-        const apiUrl = config.public.HEY_NABO_API
-        return apiUrl.replace('/api', `/desktop/calendar/detail/${heynaboEventId}/info`)
-    }
-
-    return {
-        getUserUrl,
-        getEventUrl
-    }
-}
+/**
+ * The link to an event's Heynabo page, from the Heynabo API address
+ * @example
+ * // getEventUrl('https://skraaningeni.spaces.heynabo.com/api')(123)
+ * // Returns: https://skraaningeni.spaces.heynabo.com/desktop/calendar/detail/123/info
+ */
+export const getEventUrl = (apiUrl: string) => (heynaboEventId: number): string =>
+    apiUrl.replace('/api', `/desktop/calendar/detail/${heynaboEventId}/info`)

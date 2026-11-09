@@ -1,7 +1,8 @@
 ---
 name: senior-architect
 description: Senior Architect responsible for design discussions, technology choices, and architectural consistency through deep thinking and analysis
-model: opus
+model: fable
+color: pink
 ---
 
 # Senior Architect

@@ -1,18 +1,19 @@
-import {fetchOrders, createOrders, deleteOrder, recordCancellation, updateOrdersBatch, claimOrder, countReleasedTicketsByType, orderSnapshotOf, type Cancellation, type OrderBatchUpdate, fetchUserIntentKeys} from "~~/server/data/financesRepository"
+import {fetchOrders, createOrders, deleteOrder, recordCancellation, updateOrdersBatch, claimOrder, countReleasedTicketsByType, orderAuditSnapshotOf, type Cancellation, type OrderBatchUpdate, fetchUserIntentKeys} from "~~/server/data/financesRepository"
 import {fetchHouseholds, fetchHouseholdsByInhabitantIds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 import {useSeason, type BookingDeadlines} from "~/composables/useSeason"
-import {useBookingValidation, OrderState, type ScaffoldResult, type DesiredOrder, type DinnerMode, type OrderAuditAction, type OrderSnapshot, type QueuePosition, type BookingOutcomes, type BookingAction, type BookingResult, type OrderDisplay, type TicketType, OrderAuditAction as AuditActions, BookingFailure} from "~/composables/useBookingValidation"
+import {useBookingValidation, OrderState, type ScaffoldResult, type DesiredOrder, type DinnerMode, type DinnerState, type OrderAuditAction, type OrderAuditSnapshot, type QueuePosition, type BookingOutcomes, type BookingAction, type BookingResult, type OrderDisplay, type TicketType, OrderAuditAction as AuditActions, BookingFailure} from "~/composables/useBookingValidation"
 import type {HouseholdDisplay} from "~/composables/useCoreValidation"
 import type {TicketPrice} from "~/composables/useTicketPriceValidation"
-import type {TicketWaitlistDisplay, WaitlistAuditContext, WaitlistOrder, WaitlistPlacementOutcomes} from "~/composables/useWaitlistValidation"
+import type {TicketForSale, TicketWaitlistCreate, TicketWaitlistDisplay, WaitlistAuditContext, WaitlistOrder, WaitlistPlacementOutcomes} from "~/composables/useWaitlistValidation"
 import type {WeekDay, WeekDayMap} from "~/types/dateTypes"
 import {dateToWeekDay} from "~/utils/season"
 import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets, bookingOutcomes, actionOfUpdate, countTotals} from "~/composables/useBooking"
 import {groupBy, partition, writeBatchOnce, writeBatchOrEach} from "~/utils/batchUtils"
-import {sellTicketsToWaitlist, joinWaitlist, previewJoinWaitlist, isClosedDinner, type DinnerForWaitlist} from "~~/server/utils/waitlistAssignment"
+import {sellTicketsToWaitlist, joinWaitlist, previewJoinWaitlist, isClosedDinner} from "~~/server/utils/waitlistAssignment"
 import {fetchWaitlistForDinners, deleteWaitlistEntries, updateWaitlistEntryOrders, type WaitlistJoin} from "~~/server/data/waitlistRepository"
-import {useWaitlist, byTimeThenId, type TicketForSale} from "~/composables/useWaitlist"
+import {useWaitlist, byTimeThenId} from "~/composables/useWaitlist"
 import {isHouseholdActiveOnDay} from "~/composables/useHousehold"
+import {useTicket} from "~/composables/useTicket"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {getSystemUserId} from "~~/server/utils/systemUser"
 
@@ -64,11 +65,11 @@ export type ScaffoldOptions = {
     adminCorrection?: boolean
 }
 
-/** A ticket a claim bought: the price row it keeps and the household and the inhabitant that sold it */
-type BoughtTicket = {ticketPriceId: number, sellerHouseholdId: number, sellerInhabitantId: number}
+/** A ticket a claim bought: the order, the price row it keeps and the household and the inhabitant that sold it */
+type BoughtTicket = {orderId: number, ticketPriceId: number, sellerHouseholdId: number, sellerInhabitantId: number}
 
 // The key a written queue entry pairs with its join by: its person, its dinner and its guest flag
-const entryKeyOf = ({inhabitantId, dinnerEventId, isGuestTicket}: Pick<TicketWaitlistDisplay, 'inhabitantId' | 'dinnerEventId' | 'isGuestTicket'>): string =>
+const entryKeyOf = ({inhabitantId, dinnerEventId, isGuestTicket}: TicketWaitlistCreate): string =>
     `${inhabitantId}-${dinnerEventId}-${isGuestTicket}`
 
 /**
@@ -81,7 +82,7 @@ type Supply = {
     forSale: (dinnerEventId: number) => Promise<Map<TicketType, number>>
     buy: (claim: DesiredOrder, ticketType: TicketType) => Promise<BoughtTicket | null>
     /** The joins of a dinner in one write; the entries in join order */
-    join: (joins: WaitlistJoin[], dinner: Pick<DinnerForWaitlist, 'state'>, audit: WaitlistAuditContext) => Promise<TicketWaitlistDisplay[]>
+    join: (joins: WaitlistJoin[], dinnerState: DinnerState, audit: WaitlistAuditContext) => Promise<TicketWaitlistDisplay[]>
     /** The ticket an order leaves for sale after the run's write to it, null when it leaves none */
     orderWritten: (orderId: number, forSale: TicketForSale | null) => void
     entryLeft: (entryId: number) => void
@@ -92,8 +93,11 @@ type Supply = {
 const databaseSupply = (d1Client: D1Database, payerUserId: number, ticketPrices: TicketPrice[]): Supply => ({
     queueOf: dinnerEventIds => fetchWaitlistForDinners(d1Client, dinnerEventIds),
     forSale: dinnerEventId => countReleasedTicketsByType(d1Client, dinnerEventId),
-    buy: (claim, ticketType) => claimOrder(d1Client, claim.dinnerEventId, ticketType, claim.inhabitantId, payerUserId, claim.dinnerMode, claim.isGuestTicket),
-    join: (joins, dinner, audit) => joinWaitlist(d1Client, joins, dinner, audit),
+    buy: async (claim, ticketType) => {
+        const claimed = await claimOrder(d1Client, claim.dinnerEventId, ticketType, claim.inhabitantId, payerUserId, claim.dinnerMode, claim.isGuestTicket)
+        return claimed && {orderId: claimed.order.id, ticketPriceId: claimed.ticketPriceId, sellerHouseholdId: claimed.sellerHouseholdId, sellerInhabitantId: claimed.sellerInhabitantId}
+    },
+    join: (joins, dinnerState, audit) => joinWaitlist(d1Client, joins, dinnerState, audit),
     orderWritten: () => undefined,
     entryLeft: () => undefined,
     entryRequeued: () => undefined,
@@ -101,13 +105,13 @@ const databaseSupply = (d1Client: D1Database, payerUserId: number, ticketPrices:
 })
 
 const previewSupply = (d1Client: D1Database, ticketPrices: TicketPrice[], ticketsForSale: TicketForSale[]): Supply => {
-    const {previewSale} = useWaitlist()
+    const {previewSale, ticketTypeOfPrice} = useWaitlist()
     const tickets = new Map(ticketsForSale.map(ticket => [ticket.id, ticket]))
     const joined: TicketWaitlistDisplay[] = []
     const left = new Set<number>()
     const requeued = new Map<number, WaitlistOrder>()
     const runStart = new Date()
-    const typeOfPrice = (ticketPriceId: number | null) => ticketPrices.find(price => price.id === ticketPriceId)?.ticketType
+    const typeOfPrice = ticketTypeOfPrice(ticketPrices)
     const onDinner = (dinnerEventId: number) => [...tickets.values()].filter(ticket => ticket.dinnerEventId === dinnerEventId)
     // The type's tickets on a dinner in the order a claim buys them: first released first
     const ofType = (dinnerEventId: number, ticketType: TicketType) => onDinner(dinnerEventId)
@@ -129,13 +133,13 @@ const previewSupply = (d1Client: D1Database, ticketPrices: TicketPrice[], ticket
             const [oldest] = ofType(claim.dinnerEventId, ticketType)
             if (!oldest?.ticketPriceId) return null
             tickets.delete(oldest.id)
-            return {ticketPriceId: oldest.ticketPriceId, sellerHouseholdId: oldest.householdId, sellerInhabitantId: oldest.inhabitantId}
+            return {orderId: oldest.id, ticketPriceId: oldest.ticketPriceId, sellerHouseholdId: oldest.householdId, sellerInhabitantId: oldest.inhabitantId}
         },
         // The entries the preview joins line up after the stored ones, in the order they join
-        join: async (joins, dinner) => {
+        join: async (joins, dinnerState) => {
             const requests = joins.map(({entry}) => entry)
-            const entries = previewJoinWaitlist(await queueOf([...new Set(requests.map(request => request.dinnerEventId))]), requests, dinner, index => ({
-                id: -(joined.length + index + 1), createdAt: new Date(runStart.getTime() + joined.length + index)
+            const entries = previewJoinWaitlist(await queueOf([...new Set(requests.map(request => request.dinnerEventId))]), requests, dinnerState, (request, index) => ({
+                ...request, id: -(joined.length + index + 1), createdAt: new Date(runStart.getTime() + joined.length + index), placingAt: null, placingOrderId: null
             }))
             joined.push(...entries)
             return entries
@@ -150,7 +154,7 @@ const previewSupply = (d1Client: D1Database, ticketPrices: TicketPrice[], ticket
         entryRequeued: (entryId, order) => {
             requeued.set(entryId, order)
         },
-        sell: async dinnerEventIds => ({...previewSale(await queueOf(dinnerEventIds), [...tickets.values()], ticketPrices), waitlistPortionsAssigned: []})
+        sell: async dinnerEventIds => ({waitlistTicketsSold: previewSale(await queueOf(dinnerEventIds), [...tickets.values()], ticketPrices), waitlistPortionsAssigned: []})
     }
 }
 
@@ -261,10 +265,12 @@ export async function scaffoldPrebookings(
     }
 
     // The audit's user and the payer of every order, purchase and place the run books: the given user, else the system account
-    // ADR-013: System operations use getSystemUserId() (cached) to ensure valid FK
+    // System operations use getSystemUserId() (cached) to ensure valid FK
     const effectiveUserId = options.userId ?? await getSystemUserId(d1Client)
     // A write to a place on the waiting list records the act it is, by the run's user
     const auditOf = (action: BookingAction): WaitlistAuditContext => ({action: getAuditAction(isUserTriggered, action), performedByUserId: effectiveUserId, seasonId: effectiveSeasonId})
+    // One moment for the run: its window, its deadlines and its preference decisions
+    const now = new Date()
 
     // Filter dinner events: user mode uses IDs from desiredOrders, system uses rolling window. A cancelled dinner is
     // closed to every run, a consumed one to every run but an admin's correction; the run leaves a closed dinner's
@@ -274,16 +280,16 @@ export async function scaffoldPrebookings(
     const stateOf = new Map(allDinnerEvents.map(de => [de.id, de.state]))
     const isOpen = (dinnerEventId: number) => {
         const state = stateOf.get(dinnerEventId)
-        return state === undefined || !isClosedDinner({state})
+        return state === undefined || !isClosedDinner(state)
     }
     const isBookable = (dinnerEventId: number) => isOpen(dinnerEventId)
         || (options.adminCorrection === true && stateOf.get(dinnerEventId) === DinnerStateSchema.enum.CONSUMED)
     const desiredOrders = options.desiredOrders?.filter(desired => isBookable(desired.dinnerEventId))
-    const dinnerEventIds = (isUserMode
-        ? [...new Set(desiredOrders!.map(o => o.dinnerEventId))]
+    const dinnerEventIds = (desiredOrders
+        ? [...new Set(desiredOrders.map(o => o.dinnerEventId))]
         : (options.dinnerEventIds
             ? options.dinnerEventIds
-            : getScaffoldableDinnerEvents(allDinnerEvents).filter(onWeekdays).map(e => e.id)))
+            : getScaffoldableDinnerEvents(allDinnerEvents, now).filter(onWeekdays).map(e => e.id)))
         .filter(isBookable)
     const dinnerEvents = allDinnerEvents.filter(de => dinnerEventIds.includes(de.id))
 
@@ -298,7 +304,7 @@ export async function scaffoldPrebookings(
     const execute = preview ? landsUnwritten : writeBatchOrEach
     const executeOnce = preview ? landsUnwritten : writeBatchOnce
 
-    // The dinners' orders and queue entries and the user intent keys, one read after another (ADR-014); the repositories
+    // The dinners' orders and queue entries and the user intent keys, one read after another; the repositories
     // chunk the dinner ids
     const existingOrders = await fetchOrders(d1Client, dinnerEventIds)
     const existingEntries = await fetchWaitlistForDinners(d1Client, dinnerEventIds)
@@ -307,9 +313,19 @@ export async function scaffoldPrebookings(
         ? previewSupply(d1Client, season.ticketPrices, await ticketsForSaleOf(d1Client, existingOrders, households))
         : databaseSupply(d1Client, effectiveUserId, season.ticketPrices)
     const entryById = new Map(existingEntries.map(entry => [entry.id, entry]))
+    const existingOrderById = new Map(existingOrders.map(order => [order.id, order]))
     // The season's prices: the frozen price of a booking, the ticket type of a claim and of a waiting entry
     const ticketPriceById = new Map(season.ticketPrices.map(tp => [tp.id, tp]))
     const ticketTypeOf = ticketTypeOfEntry(season.ticketPrices)
+    // The price a result names: a held order or place keeps its frozen price unless the run moves it to another of the
+    // season's price rows; a new ticket takes its price row's
+    const priceOf = ({orderId, waitlistEntryId, ticketPriceId}: DesiredOrder): number | null => {
+        const held = orderId !== undefined ? existingOrderById.get(orderId) : waitlistEntryId !== undefined ? entryById.get(waitlistEntryId)?.order : undefined
+        const priceRow = ticketPriceById.get(ticketPriceId)
+        return held && (held.ticketPriceId === ticketPriceId || !priceRow) ? held.priceAtBooking : priceRow?.price ?? null
+    }
+
+    const takesNoPortion = useTicket().takesNoPortionOf(season.ticketPrices)
 
     console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode${preview ? ' (preview)' : ''}: ${households.length} household(s), ${dinnerEvents.length} events, ${existingEntries.length} queue entries`)
 
@@ -322,7 +338,7 @@ export async function scaffoldPrebookings(
     let totalUnchanged = 0
     let processedHouseholds = 0
     let erroredHouseholds = 0
-    // What wrote the run's order rows: an admin's correction, a member's booking, a preference change, the nightly run
+    // What wrote the run's order rows: an admin's correction, a member's booking, a preference change, the DAILY_MAINTENANCE job
     const source = options.adminCorrection
         ? Source['admin-correction']
         : isUserMode ? Source['user-booking'] : (options.householdId ? Source['preference-update'] : Source['scaffold-prebookings'])
@@ -348,23 +364,23 @@ export async function scaffoldPrebookings(
                 householdId: household.id
             }
         }
-        // The person a history row without an order names (orderSnapshotOf), with the household the run holds; none for a
+        // The person a history row without an order names (orderAuditSnapshotOf), with the household the run holds; none for a
         // person outside the household
         const holderOf = (inhabitantId: number) => {
             const inhabitant = household.inhabitants.find(candidate => candidate.id === inhabitantId)
             return inhabitant && {...inhabitant, householdId: household.id, household: {address: household.address}}
         }
         // A place on the waiting list as its history row keeps it: its person, its dinner and the wish it holds
-        const placeSnapshotOf = (entry: TicketWaitlistDisplay, order: WaitlistOrder): OrderSnapshot => {
+        const placeSnapshotOf = (entry: TicketWaitlistDisplay, order: WaitlistOrder): OrderAuditSnapshot => {
             const holder = holderOf(entry.inhabitantId)
             if (!holder) throw new Error(`${LOG} Data integrity: queue entry ${entry.id} of inhabitant ${entry.inhabitantId} outside household ${household.id}`)
-            return orderSnapshotOf({...order, id: null, inhabitantId: entry.inhabitantId, dinnerEventId: entry.dinnerEventId, isGuestTicket: entry.isGuestTicket}, holder)
+            return orderAuditSnapshotOf({...order, id: null, inhabitantId: entry.inhabitantId, dinnerEventId: entry.dinnerEventId, isGuestTicket: entry.isGuestTicket}, holder)
         }
         // One result per order; a failed one is logged with the person and the dinner
         const nameOf = (inhabitantId: number): string => household.inhabitants.find(inhabitant => inhabitant.id === inhabitantId)?.name ?? ''
         const resultOf = (desired: DesiredOrder, action: BookingAction): BookingResult => ({
             inhabitantId: desired.inhabitantId, inhabitantName: nameOf(desired.inhabitantId), isGuestTicket: desired.isGuestTicket,
-            ticketType: ticketPriceById.get(desired.ticketPriceId)?.ticketType ?? null,
+            ticketType: ticketPriceById.get(desired.ticketPriceId)?.ticketType ?? null, priceAtBooking: priceOf(desired),
             dinnerEventId: desired.dinnerEventId, dinnerMode: desired.dinnerMode, action
         })
         const landedAs = (action: BookingAction) => (orders: {desired: DesiredOrder}[]) => landed.push(...orders.map(({desired}) => resultOf(desired, action)))
@@ -394,19 +410,20 @@ export async function scaffoldPrebookings(
             // Build lookup: orderId → existing order (for updates)
             const orderById = new Map(householdOrders.map(o => [o.id, o]))
             const dinnerEventById = new Map(householdDinnerEvents.map(de => [de.id, de]))
-            const {canModifyOrders, canEditDiningMode} = options.deadlines ?? deadlinesForSeason(season)
+            const {canModifyOrders, canEditDiningMode} = options.deadlines ?? deadlinesForSeason(season, now)
             const run = householdRunOf(household)
             const {toOrderCreate, holderOf, placeSnapshotOf, resultOf, landedAs, failedAs} = run
 
 
             // Resolve desired orders to buckets
-            const result = isUserMode
+            const result = desiredOrders
                 ? resolveDesiredOrdersToBuckets(
-                    desiredOrders!,
+                    desiredOrders,
                     householdOrders,
                     dinnerEventById,
                     canModifyOrders,
                     canEditDiningMode,
+                    takesNoPortion,
                     DinnerModeSchema.enum,
                     OrderStateSchema.enum,
                     householdEntries
@@ -417,11 +434,12 @@ export async function scaffoldPrebookings(
                     householdOrders,
                     confirmedKeys,
                     cancelledKeys,
-                    householdEntries
+                    householdEntries,
+                    now
                 )
 
             // The generator skips an order the household no longer holds (bought by another household, or deleted); the save lists it as failed
-            const staleOrders = isUserMode ? desiredOrders!.filter(desired => desired.orderId !== undefined && !orderById.has(desired.orderId)) : []
+            const staleOrders = (desiredOrders ?? []).filter(desired => desired.orderId !== undefined && !orderById.has(desired.orderId))
             failed.push(...staleOrders.map(stale => resultOf(stale, actionOfUpdate(stale, undefined))))
 
             // Create new orders; a failed batch is written order by order
@@ -435,11 +453,12 @@ export async function scaffoldPrebookings(
                 }), landedAs(Action.BOOK), failedAs(() => Action.BOOK))
             }
 
-            // Updates: each carries its action (release, reclaim, price, mode); ADR-014 groups them by signature
+            // Updates: each carries its action (release, reclaim, price, mode); the batch update groups them by signature
             const updates: {desired: DesiredOrder, update: OrderBatchUpdate, action: BookingAction}[] = []
+            const existingOf = (desired: DesiredOrder) => desired.orderId ? orderById.get(desired.orderId) : undefined
             for (const incoming of result.update) {
                 // Generator contract: an update names an order among the household's
-                const existing = incoming.orderId ? orderById.get(incoming.orderId) : undefined
+                const existing = existingOf(incoming)
                 if (!incoming.orderId || !existing) {
                     throw new Error(`${LOG} Data integrity: update bucket order ${incoming.orderId} not among the household's orders for inhabitant ${incoming.inhabitantId} dinnerEvent ${incoming.dinnerEventId}`)
                 }
@@ -468,23 +487,23 @@ export async function scaffoldPrebookings(
                 }})
             }
             const executeBatchUpdates = updateOrdersBatch(90)
-            const actionOf = (desired: DesiredOrder) => updates.find(entry => entry.desired === desired)!.action
+            const actionOf = (desired: DesiredOrder) => actionOfUpdate(desired, existingOf(desired))
             // A released order stays for sale at its price; a new release goes on sale now
             const forSaleAfter = (desired: DesiredOrder, action: BookingAction): TicketForSale | null => {
-                const existing = orderById.get(desired.orderId!)!
-                return desired.state === OrderState.RELEASED
+                const existing = existingOf(desired)
+                return existing && desired.state === OrderState.RELEASED
                     ? {id: existing.id, dinnerEventId: existing.dinnerEventId, ticketPriceId: desired.ticketPriceId, releasedAt: action === Action.RELEASE ? new Date() : existing.releasedAt, inhabitantId: existing.inhabitantId, householdId: household.id}
                     : null
             }
             await execute(updates, entries => executeBatchUpdates(d1Client, entries.map(({update}) => update)),
                 entries => {
-                    for (const {desired, action} of entries) {
+                    for (const {desired, action, update} of entries) {
                         landed.push(resultOf(desired, action))
-                        supply.orderWritten(desired.orderId!, forSaleAfter(desired, action))
+                        supply.orderWritten(update.orderId, forSaleAfter(desired, action))
                     }
                 },
                 failedAs(actionOf))
-            // Cancel: an order before the deadline is deleted, chunked to respect D1's 100 param limit (ADR-014), a failed
+            // Cancel: an order before the deadline is deleted, chunked to respect D1's 100 param limit, a failed
             // chunk order by order; a cancellation of nothing booked is recorded alone. Each lands as CANCEL
             // Pass null for system-triggered cancellations → SYSTEM_DELETED audit (recordCancellation contract: null = system)
             // Pass effectiveUserId for user-triggered ones → USER_CANCELLED audit (respected by scaffolder)
@@ -503,7 +522,7 @@ export async function scaffoldPrebookings(
                 if (holder) {
                     const cancellation: Cancellation = {
                         orderId: null, inhabitantId: desired.inhabitantId, dinnerEventId: desired.dinnerEventId, seasonId: effectiveSeasonId, performedByUserId: cancelledBy, source,
-                        snapshot: orderSnapshotOf({...toOrderCreate(desired), id: null}, holder)
+                        snapshot: orderAuditSnapshotOf({...toOrderCreate(desired), id: null}, holder)
                     }
                     return [{desired, cancellation}]
                 }
@@ -520,11 +539,11 @@ export async function scaffoldPrebookings(
                 else failedAs(() => Action.QUEUE)({desired: claim}, new Error(`${LOG} Missing ticket price ${claim.ticketPriceId} for claim`))
             }
 
-            // The household's places on the waiting list: the leaves are one write per chunk within D1's parameters (ADR-014)
+            // The household's places on the waiting list: the leaves are one write per chunk within D1's parameters
             // in one attempt, the new wishes one write retried place by place; each place's history row names the person
             // and the household the run holds
             const placeOf = (desired: DesiredOrder): TicketWaitlistDisplay => {
-                const entry = entryById.get(desired.waitlistEntryId!)
+                const entry = desired.waitlistEntryId ? entryById.get(desired.waitlistEntryId) : undefined
                 if (!entry) throw new Error(`${LOG} Data integrity: queue entry ${desired.waitlistEntryId} of inhabitant ${desired.inhabitantId} not read`)
                 return entry
             }
@@ -582,8 +601,11 @@ export async function scaffoldPrebookings(
         // A ticket type with a line sells nothing to a claim
         const forSaleOf = (ticketType: TicketType): number => waiting.has(ticketType) ? 0 : released.get(ticketType) ?? 0
         const typeOf = new Map(claims.map(({claim, ticketType}) => [claim, ticketType]))
-        const settled = bookingOutcomes(Bucket.claim, claims.map(({claim}) => claim), claim => ({ticketType: typeOf.get(claim), ticketsForSale: forSaleOf(typeOf.get(claim)!)}))
-        return {line, settled: settled.map(({outcome}, index) => ({pending: claims[index]!, outcome}))}
+        const settled = bookingOutcomes(Bucket.claim, claims.map(({claim}) => claim), claim => {
+            const ticketType = typeOf.get(claim)
+            return {ticketType, ticketsForSale: ticketType ? forSaleOf(ticketType) : 0}
+        })
+        return {line, settled: claims.flatMap((pending, index) => settled.slice(index, index + 1).map(({outcome}) => ({pending, outcome})))}
     }
     for (const [dinnerEventId, claims] of groupBy<PendingClaim, number>(({claim}) => claim.dinnerEventId)(pendingClaims)) {
         const read = await readSupply(dinnerEventId, claims).catch((error: unknown) => {
@@ -602,7 +624,7 @@ export async function scaffoldPrebookings(
                 const bought = outcome === Action.BUY && !lineTypes.has(ticketType) ? await supply.buy(claim, ticketType) : null
                 if (bought) {
                     outcomes.ticketsSold.push({
-                        dinnerEventId, ticketPriceId: bought.ticketPriceId,
+                        dinnerEventId, ticketPriceId: bought.ticketPriceId, orderId: bought.orderId, dinnerMode: claim.dinnerMode, isGuestTicket: claim.isGuestTicket,
                         buyerInhabitantId: claim.inhabitantId, buyerHouseholdId: run.household.id, sellerHouseholdId: bought.sellerHouseholdId,
                         sellerInhabitantId: bought.sellerInhabitantId
                     })
@@ -616,7 +638,7 @@ export async function scaffoldPrebookings(
             }
         }
 
-        // The joins of a dinner are one write across the households (ADR-014) in one attempt: a refused write lists each of
+        // The joins of a dinner are one write across the households in one attempt: a refused write lists each of
         // its joins failed. A join's history row keeps the name and the household its run holds; any other person's claim
         // fails alone
         const joins = toJoin.flatMap(pending => {
@@ -625,15 +647,16 @@ export async function scaffoldPrebookings(
             if (holder) {
                 const order = {...run.toOrderCreate(claim), state: OrderStateSchema.enum.BOOKED, allergyTypeIds: claim.allergyTypeIds}
                 const entry = {dinnerEventId, inhabitantId: claim.inhabitantId, isGuestTicket: claim.isGuestTicket, order}
-                return [{pending, join: {entry, snapshot: orderSnapshotOf({...order, id: null}, holder)}}]
+                return [{pending, join: {entry, snapshot: orderAuditSnapshotOf({...order, id: null}, holder)}}]
             }
             run.failedAs(() => Action.QUEUE)({desired: claim}, new Error(`${LOG} Claim for inhabitant ${claim.inhabitantId} outside household ${run.household.id}`))
             return []
         })
         const joined: {pending: PendingClaim, entry: TicketWaitlistDisplay}[] = []
-        const dinner = {state: dinnerEvents.find(dinnerEvent => dinnerEvent.id === dinnerEventId)!.state}
+        const dinner = dinnerEvents.find(dinnerEvent => dinnerEvent.id === dinnerEventId)
+        if (!dinner) throw new Error(`${LOG} Data integrity: dinner ${dinnerEventId} not among the run's dinners`)
         await writeBatchOnce(joins, async batch => {
-            const entries = await supply.join(batch.map(({join}) => join), dinner, auditOf(Action.BOOK))
+            const entries = await supply.join(batch.map(({join}) => join), dinner.state, auditOf(Action.BOOK))
             // Each join takes the first entry written for its person, dinner and guest flag: two guest tickets of one person
             // pair in insert order
             const written = groupBy<TicketWaitlistDisplay, string>(entryKeyOf)(entries)
@@ -646,11 +669,13 @@ export async function scaffoldPrebookings(
 
         // The places count the line as read, then the joins in join order
         const places = joinedOf(read.line, joined.map(({entry}) => entry), season.ticketPrices, effectiveUserId)
-        for (const [index, {pending: {claim, run}}] of joined.entries()) {
-            const {position, joined: event} = places[index]!
+        for (const [index, {pending: {claim, run}, entry}] of joined.entries()) {
+            const place = places[index]
+            if (!place) throw new Error(`${LOG} No place counted for inhabitant ${claim.inhabitantId} on dinner ${dinnerEventId}`)
+            const {position, joined: event} = place
             outcomes.joined.push(event)
             landed.push(run.resultOf(claim, Action.QUEUE))
-            positions.push({inhabitantId: claim.inhabitantId, dinnerEventId, isGuestTicket: claim.isGuestTicket, position, ticketType: event.ticketType})
+            positions.push({inhabitantId: claim.inhabitantId, dinnerEventId, isGuestTicket: claim.isGuestTicket, position, ticketType: event.ticketType, priceAtBooking: entry.order.priceAtBooking})
         }
     }
 

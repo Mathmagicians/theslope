@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect} from '~~/tests/e2e/uiTest'
 import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {AllergyFactory} from '../testDataFactories/allergyFactory'
@@ -114,7 +114,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
             inhabitantId,
             allergyTypeId: allergyType.id,
             inhabitantComment: null
-        })
+        }, 201, true)
 
         await navigateToAllergiesTab(page)
         await expandInhabitantRow(page)
@@ -148,7 +148,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
             inhabitantId,
             allergyTypeId: allergyType.id,
             inhabitantComment: null
-        })
+        }, 201, true)
 
         await navigateToAllergiesTab(page)
         await expandInhabitantRow(page)

@@ -4,14 +4,11 @@ import { mountSuspended } from "@nuxt/test-utils/runtime"
 import { enableAutoUnmount } from '@vue/test-utils'
 import CalendarDatePicker from '~/components/calendar/CalendarDatePicker.vue'
 import { ref } from 'vue'
-import { openPopover, expectSharedCalendarGrid, findDateSegments, typeIntoSegment, calendarDay, resetStores } from '~~/tests/component/testHelpers'
+import { openPopover, expectSharedCalendarGrid, findDateSegments, dateSegment, typeIntoSegment, calendarDay, resetStores, emittedPayload } from '~~/tests/component/testHelpers'
+import { dateSchema } from '~/composables/useDateRangeValidation'
+import { DATE_WORDS } from '~/config/dateWords'
 
 const JAN_1 = new Date(2025, 0, 1)
-
-type PickerVm = {
-  errors: Map<string, string[]>
-  updateDate: (date: Date | null) => boolean
-}
 
 enableAutoUnmount(afterEach)
 
@@ -29,9 +26,9 @@ describe('CalendarDatePicker', () => {
 
   it('renders the model date in typed day/month/year segments under the default label, and a calendar on the shared grid token', async () => {
     const wrapper = await mountPicker(JAN_1)
-    expect(findDateSegments(wrapper, 'day')[0]!.attributes('aria-valuenow')).toBe('1')
-    expect(findDateSegments(wrapper, 'year')[0]!.attributes('aria-valuenow')).toBe('2025')
-    expect(wrapper.html()).toContain('Dato')
+    expect(dateSegment(wrapper, 'day').attributes('aria-valuenow')).toBe('1')
+    expect(dateSegment(wrapper, 'year').attributes('aria-valuenow')).toBe('2025')
+    expect(wrapper.html()).toContain(DATE_WORDS.picker.date)
 
     await openPopover(wrapper)
     expectSharedCalendarGrid(wrapper)
@@ -50,27 +47,17 @@ describe('CalendarDatePicker', () => {
 
   it('typing digits in the segments updates the model', async () => {
     const wrapper = await mountPicker(JAN_1)
-    await typeIntoSegment(findDateSegments(wrapper, 'day')[0]!, ['1', '5'])
-    await typeIntoSegment(findDateSegments(wrapper, 'month')[0]!, ['0', '6'])
-    await typeIntoSegment(findDateSegments(wrapper, 'year')[0]!, ['2', '0', '2', '5'])
+    await typeIntoSegment(dateSegment(wrapper, 'day'), ['1', '5'])
+    await typeIntoSegment(dateSegment(wrapper, 'month'), ['0', '6'])
+    await typeIntoSegment(dateSegment(wrapper, 'year'), ['2', '0', '2', '5'])
 
-    const emitted = wrapper.emitted('update:modelValue')
-    expect(emitted).toBeTruthy()
-    expect(calendarDay(emitted!.at(-1)![0] as Date)).toBe('2025-06-15')
+    expect(calendarDay(emittedPayload(wrapper, 'update:modelValue', dateSchema))).toBe('2025-06-15')
   })
 
-  it('updateDate rejects an invalid Date and reports errors', async () => {
+  it('clearing a typed segment clears the model to null', async () => {
     const wrapper = await mountPicker(JAN_1)
-    const vm = wrapper.vm as unknown as PickerVm
-    expect(vm.updateDate(new Date(Number.NaN))).toBe(false)
-    expect(vm.errors.size).toBeGreaterThan(0)
-  })
+    await typeIntoSegment(dateSegment(wrapper, 'day'), ['Backspace'])
 
-  it('updateDate clears the model to null', async () => {
-    const wrapper = await mountPicker(JAN_1)
-    const vm = wrapper.vm as unknown as PickerVm
-    expect(vm.updateDate(null)).toBe(true)
-    expect(vm.errors.size).toBe(0)
-    expect(wrapper.emitted('update:modelValue')!.at(-1)![0]).toBeNull()
+    expect(emittedPayload(wrapper, 'update:modelValue', dateSchema.nullable())).toBeNull()
   })
 })

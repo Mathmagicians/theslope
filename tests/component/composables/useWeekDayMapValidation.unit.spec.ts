@@ -1,31 +1,15 @@
 import {describe, it, expect} from 'vitest'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
-import {useBookingValidation, type DinnerMode as DinnerModeType} from '~/composables/useBookingValidation'
+import {WEEKDAYS} from '~/types/dateTypes'
+import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
 describe('useWeekDayMapValidation - boolean (backward compatibility)', () => {
     const composable = useWeekDayMapValidation()
-    const { WeekDayMapSchema, WeekDayMapSchemaRequired, WeekDayMapSchemaOptional, serializeWeekDayMap, deserializeWeekDayMap, createWeekDayMapFromSelection, createDefaultWeekdayMap } = composable
-
-    describe('WeekDayMapSchemaRequired', () => {
-        it('should accept map with at least one selected value', () => {
-            const validMap = createDefaultWeekdayMap([true, false, false, false, false, false, false])
-            const result = WeekDayMapSchemaRequired!.safeParse(validMap)
-            expect(result.success).toBe(true)
-        })
-
-        it('should reject map with all unselected values', () => {
-            const allUnselected = createDefaultWeekdayMap(false)
-            const result = WeekDayMapSchemaRequired!.safeParse(allUnselected)
-            expect(result.success).toBe(false)
-            if (!result.success) {
-                expect(result.error.issues[0]?.message).toBe('Man skal lave mad mindst en dag om ugen')
-            }
-        })
-    })
+    const { WeekDayMapSchema, WeekDayMapSchemaOptional, serializeWeekDayMap, deserializeWeekDayMap, createWeekDayMapFromSelection, createDefaultWeekdayMap } = composable
 
     describe('WeekDayMapSchemaOptional', () => {
         it('should accept map with all unselected', () => {
@@ -81,19 +65,33 @@ describe('useWeekDayMapValidation - DinnerMode preferences', () => {
             expect(validationResult.data).toEqual(original)
         }
     })
+
+    // The schema of the preference write's body
+    const {WeekDayMapSchemaOptional: PreferencesSchema, createDefaultWeekdayMap: createPreferences} = useCoreValidation()
+
+    it.each([
+        {
+            getData: () => ({...createPreferences(DinnerMode.DINEIN), [WEEKDAYS[0]]: 'INVALID_MODE'}),
+            description: 'invalid DinnerMode value'
+        },
+        {
+            getData: () => {
+                const {[WEEKDAYS[2]]: _wednesday, [WEEKDAYS[3]]: _thursday, ...map} = createPreferences(DinnerMode.DINEIN)
+                return map
+            },
+            description: 'incomplete WeekDayMap (missing days)'
+        }
+    ])('should reject dinnerPreferences with $description', ({getData}) => {
+        expect(PreferencesSchema.safeParse(getData()).success).toBe(false)
+    })
 })
 
 describe('maskWeekDayMap', () => {
-    const {maskWeekDayMap} = useWeekDayMapValidation({
+    const {maskWeekDayMap, createDefaultWeekdayMap: createPrefs} = useWeekDayMapValidation({
         valueSchema: DinnerModeSchema,
         defaultValue: DinnerMode.DINEIN
     })
-
-    const createMask = (pattern: boolean[]): WeekDayMap<boolean> =>
-        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: pattern[i]!}), {} as WeekDayMap<boolean>)
-
-    const createPrefs = (values: DinnerModeType[]): WeekDayMap<DinnerModeType> =>
-        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]!}), {} as WeekDayMap<DinnerModeType>)
+    const {createDefaultWeekdayMap: createMask} = useWeekDayMapValidation()
 
     it('should create defaults when source is null', () => {
         const mask = createMask([true, false, true, false, true, false, false]) // Mon, Wed, Fri

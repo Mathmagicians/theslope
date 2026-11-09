@@ -5,8 +5,10 @@ import {mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {useBookingView, useDinnerDateParam, useCalendarOpenParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 import {defineComponent, h, type Ref} from 'vue'
 import {mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
+import {PERIOD_DIRECTION, type PeriodDirection} from '~/utils/date'
 
 const {day, week, month} = BookingViewSchema.enum
+const {prev, next} = PERIOD_DIRECTION
 
 /**
  * Unit tests for useBookingView composable (curried pattern)
@@ -123,32 +125,32 @@ describe('useBookingView', () => {
       desc: string
       date: Date
       view: BookingView
-      direction: 1 | -1
+      direction: PeriodDirection
       dinnerDates: Date[]
       expected: Date | null
     }[] = [
       // DAY view
       {desc: 'day +1 from Wed 15 → Fri 17',
-        date: wed15, view: day, direction: 1, dinnerDates: allDinners, expected: fri17},
+        date: wed15, view: day, direction: next, dinnerDates: allDinners, expected: fri17},
       {desc: 'day -1 from Wed 15 → Mon 13',
-        date: wed15, view: day, direction: -1, dinnerDates: allDinners, expected: mon13},
+        date: wed15, view: day, direction: prev, dinnerDates: allDinners, expected: mon13},
       // No dinner on that side → the arrow is blocked
       {desc: 'day +1 from last dinner (Mar 3) → null (no-op)',
-        date: mar3, view: day, direction: 1, dinnerDates: allDinners, expected: null},
+        date: mar3, view: day, direction: next, dinnerDates: allDinners, expected: null},
       {desc: 'day -1 from first dinner (Mon 13) → null (no-op)',
-        date: mon13, view: day, direction: -1, dinnerDates: allDinners, expected: null},
+        date: mon13, view: day, direction: prev, dinnerDates: allDinners, expected: null},
 
       // WEEK view — skips the empty week of Mon 20.
       {desc: 'week +1 from Wed 15 skips empty week-of-20 → Wed 29',
-        date: wed15, view: week, direction: 1, dinnerDates: allDinners, expected: wed29},
+        date: wed15, view: week, direction: next, dinnerDates: allDinners, expected: wed29},
       {desc: 'week -1 from Wed 29 skips empty week-of-20 → Fri 17',
-        date: wed29, view: week, direction: -1, dinnerDates: allDinners, expected: fri17},
+        date: wed29, view: week, direction: prev, dinnerDates: allDinners, expected: fri17},
 
       // MONTH view — skips empty February.
       {desc: 'month +1 from January skips empty Feb → Mar 3',
-        date: wed15, view: month, direction: 1, dinnerDates: allDinners, expected: mar3},
+        date: wed15, view: month, direction: next, dinnerDates: allDinners, expected: mar3},
       {desc: 'month -1 from March skips empty Feb → Wed 29',
-        date: mar3, view: month, direction: -1, dinnerDates: allDinners, expected: wed29}
+        date: mar3, view: month, direction: prev, dinnerDates: allDinners, expected: wed29}
     ]
 
     it.each(cases)('$desc', async ({date, view, direction, dinnerDates, expected}) => {
@@ -159,7 +161,7 @@ describe('useBookingView', () => {
       })
 
       // Directional flag must agree with adjacency lookup.
-      const flag = direction === 1 ? hasNext.value : hasPrev.value
+      const flag = direction === next ? hasNext.value : hasPrev.value
       expect(flag).toBe(expected !== null)
 
       await navigate(direction)

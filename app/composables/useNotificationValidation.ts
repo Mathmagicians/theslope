@@ -37,7 +37,7 @@ export const deploymentFromUrl = (url: string): {environment: NotificationEnviro
     const {host, hostname} = new URL(url)
     const label = EnvironmentSchema.safeParse(hostname.split('.')[0])
     const isLocalHost = !hostname.includes('.') || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)
-    return {environment: isLocalHost ? 'local' : label.success ? label.data : 'prod', site: host}
+    return {environment: isLocalHost ? EnvironmentSchema.enum.local : label.success ? label.data : EnvironmentSchema.enum.prod, site: host}
 }
 
 /** The NUXT_NOTIFICATIONS_* variable behind each configured mailbox, for the log line when one is unset */

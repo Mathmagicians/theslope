@@ -19,15 +19,13 @@ export type CalendarEventList = {
         label?: string            // Display text (e.g., "Hold 1", "Anna")
         metadata?: unknown        // Domain-specific data
     }>
-    renderStyle: 'badge' | 'chip' | 'ring' | 'background'
-    color?: string | number     // Business knowledge (team colorIndex)
+    band?: number               // The rainbow band the list's days wear (a team's band index)
 }
 
 // Event list for a specific day (includes list metadata + events for that day)
 export type DayEventList = {
     listId: string
-    renderStyle: 'badge' | 'chip' | 'ring' | 'background'
-    color?: string | number
+    band?: number
     events: CalendarEvent[]
 }
 
@@ -35,10 +33,9 @@ export const useCalendarEvents = () => {
     const createEventList = (
         dates: Date[],
         listId: string,
-        renderStyle: 'badge' | 'chip' | 'ring' | 'background',
         options?: {
             label?: string
-            color?: string | number
+            band?: number
             metadata?: unknown
         }
     ): CalendarEventList => {
@@ -49,8 +46,7 @@ export const useCalendarEvents = () => {
                 label: options?.label,
                 metadata: options?.metadata
             })),
-            renderStyle,
-            color: options?.color
+            band: options?.band
         }
     }
 
@@ -98,16 +94,9 @@ export const useCalendarEvents = () => {
             const sourceList = eventLists.find(list => list.listId === event.listId)
             if (!sourceList) return
 
-            if (!listMap.has(event.listId)) {
-                listMap.set(event.listId, {
-                    listId: sourceList.listId,
-                    renderStyle: sourceList.renderStyle,
-                    color: sourceList.color,
-                    events: []
-                })
-            }
-
-            listMap.get(event.listId)!.events.push(event)
+            const dayList: DayEventList = listMap.get(event.listId) ?? {listId: sourceList.listId, band: sourceList.band, events: []}
+            dayList.events.push(event)
+            listMap.set(event.listId, dayList)
         })
 
         return Array.from(listMap.values())

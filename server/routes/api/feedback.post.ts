@@ -26,7 +26,7 @@ export default defineEventHandler(async (event): Promise<FeedbackIssue> => {
     }
 
     // Validation - FAIL EARLY (400)
-    let body!: FeedbackCreate
+    let body: FeedbackCreate
     try {
         body = await readValidatedBody(event, FeedbackCreateSchema.parse)
     } catch (error) {

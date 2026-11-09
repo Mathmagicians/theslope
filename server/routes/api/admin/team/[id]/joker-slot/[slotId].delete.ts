@@ -18,8 +18,8 @@ export default defineEventHandler(async (event): Promise<number> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    let teamId!: number
-    let slotId!: number
+    let teamId: number
+    let slotId: number
     try {
         ({id: teamId, slotId} = await getValidatedRouterParams(event, paramSchema.parse))
     } catch (error) {

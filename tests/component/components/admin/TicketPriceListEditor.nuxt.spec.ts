@@ -1,13 +1,14 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
-import {reactive} from 'vue'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {findByTestId, clickByTestId, resetStores, itemAt, emittedPayload} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import TicketPriceListEditor from '~/components/admin/planning/TicketPriceListEditor.vue'
 import {ticketPriceSelectItems} from '~/composables/useBookingUi'
+import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {SEASON_WORDS} from '~/config/seasonWords'
 
 enableAutoUnmount(afterEach)
 
@@ -18,8 +19,7 @@ describe('TicketPriceListEditor', () => {
     })
 
     const mount = async (disabled = false) => {
-        // reactive so an in-place splice by the component re-renders the list
-        const modelValue = reactive(TicketFactory.defaultTicketPrices())
+        const modelValue = TicketFactory.defaultTicketPrices()
         const wrapper = await mountSuspended(TicketPriceListEditor, {props: {modelValue, disabled}})
         return {wrapper, modelValue}
     }
@@ -28,27 +28,25 @@ describe('TicketPriceListEditor', () => {
         const {wrapper, modelValue} = await mount()
         const addButton = findByTestId(wrapper, PLANNING_TEST_IDS.ticketAdd)
         expect(addButton.exists()).toBe(true)
-        expect(addButton.text()).toContain('Tilføj billet')
+        expect(addButton.text()).toContain(SEASON_WORDS.ticketPriceEditor.add)
 
         const rows = wrapper.findAll('li')
         expect(rows).toHaveLength(modelValue.length)
         ticketPriceSelectItems(modelValue).forEach((item, index) => {
-            expect(rows[index]!.text()).toContain(item.label)
-            expect(rows[index]!.text()).toContain(item.description)
+            expect(itemAt(rows, index).text()).toContain(item.label)
+            expect(itemAt(rows, index).text()).toContain(item.description)
             expect(findByTestId(wrapper, PLANNING_TEST_IDS.ticketRemove(index)).exists()).toBe(true)
         })
     })
 
-    it('removing a row drops it from the model', async () => {
+    it('removing a row emits the prices without it and leaves the bound list as it was', async () => {
         const {wrapper, modelValue} = await mount()
-        const removed = modelValue[0]
-        const before = modelValue.length
+        const before = [...modelValue]
 
         await clickByTestId(wrapper, PLANNING_TEST_IDS.ticketRemove(0))
 
-        expect(modelValue).toHaveLength(before - 1)
-        expect(modelValue).not.toContain(removed)
-        expect(findByTestId(wrapper, PLANNING_TEST_IDS.ticketRemove(before - 1)).exists()).toBe(false)
+        expect(emittedPayload(wrapper, 'update:modelValue', useTicketPriceValidation().TicketPriceSchema.array())).toEqual(before.slice(1))
+        expect(modelValue).toEqual(before)
     })
 
     it('disabled hides both the add and the remove controls', async () => {

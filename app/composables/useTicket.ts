@@ -1,12 +1,14 @@
-import {useBookingValidation, type TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, type TicketType, type OrderDisplay} from '~/composables/useBookingValidation'
 import type {TicketPrice, PortionTicket} from '~/composables/useTicketPriceValidation'
 import {calculateAgeOnDate} from '~/utils/date'
+import {SEASON_CONFIG} from '~/config/season'
+import {PRICE_WORDS} from '~/config/priceWords'
 
 const {TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
 
 // The words a ticket type goes by: its label, its letter in a ticket count ("2V 1B"), and its noun for one and for many;
-// its colour and glyph live in useBookingUi (ADR-017)
+// its colour and glyph live in useBookingUi
 const ticketTypeWords: Record<TicketType, {label: string, letter: string, one: string, many: string}> = {
     [TicketType.ADULT]: {label: 'Voksen', letter: 'V', one: 'voksen', many: 'voksne'},
     [TicketType.CHILD]: {label: 'Barn', letter: 'B', one: 'barn', many: 'børn'},
@@ -23,6 +25,31 @@ export const ticketTypeLetter = (type: TicketType): string => ticketTypeWords[ty
 export const ticketTypeCount = (type: TicketType, count: number): string =>
     `${count} ${count === 1 ? ticketTypeWords[type].one : ticketTypeWords[type].many}`
 
+type TicketTypeCounts = Partial<Record<TicketType, number>>
+type TicketWord = (type: TicketType, count: number) => string
+
+/**
+ * Ticket counts in words, curried over the wording: each ticket type's word in the order of the types, joined by the
+ * separator; a type without tickets is left out unless `withZero`, and no parts read `empty`. `parts` keeps each
+ * type's word apart for a list that renders one element per type and draws the separator itself
+ */
+const ticketCountText = ({word, separator, withZero = false, empty = ''}: {word: TicketWord, separator: string, withZero?: boolean, empty?: string}) => {
+    const parts = (counts: TicketTypeCounts): {ticketType: TicketType, text: string}[] => TicketTypeSchema.options
+        .filter(type => withZero || counts[type])
+        .map(type => ({ticketType: type, text: word(type, counts[type] ?? 0)}))
+    return {parts, text: (counts: TicketTypeCounts): string => parts(counts).map(part => part.text).join(separator) || empty}
+}
+
+/** The separator between the kitchen box's labelled counts in running text; a rendered list draws COMPONENTS.pipe */
+const PIPE = ' | '
+
+/** The wordings of a ticket count, one builder each: "2V 1B", "2 voksne, 1 barn", and the kitchen box's "Voksen: 60 | Barn: 30" */
+export const TICKET_COUNTS = {
+    compact: ticketCountText({word: (type, count) => `${count}${ticketTypeLetter(type)}`, separator: ' ', empty: '-'}),
+    sentence: ticketCountText({word: ticketTypeCount, separator: ', '}),
+    labelled: ticketCountText({word: (type, count) => `${ticketTypeLabel(type)}: ${count}`, separator: PIPE, withZero: true})
+}
+
 /**
  * Business logic for working with tickets and ticket types
  *
@@ -33,13 +60,10 @@ export const ticketTypeCount = (type: TicketType, count: number): string =>
  */
 export const useTicket = () => {
     /**
-     * Get default ticket prices from app config
+     * The season config's default ticket prices
      * Used as fallback when no season ticket prices are available
      */
-    const getDefaultTicketPrices = (): TicketPrice[] => {
-        const appConfig = useAppConfig()
-        return appConfig.theslope?.defaultSeason?.ticketPrices ?? []
-    }
+    const getDefaultTicketPrices = (): TicketPrice[] => SEASON_CONFIG.defaultSeason.ticketPrices
 
     // The default price with the ticket's type and price names its portions, else its type's first default price
     const portionsOf = ({ticketType, price}: PortionTicket): number => {
@@ -49,6 +73,12 @@ export const useTicket = () => {
 
     // A price row read from the database, with the portions the row does not store
     const withPortions = <T extends PortionTicket>(ticketPrice: T): T & {portions: number} => ({...ticketPrice, portions: portionsOf(ticketPrice)})
+
+    // The price rows whose ticket takes no portion from the kitchen, asked by price row id
+    const takesNoPortionOf = (ticketPrices: TicketPrice[]): (ticketPriceId: number) => boolean => {
+        const noPortion = new Set(ticketPrices.filter(ticketPrice => ticketPrice.portions === 0).map(ticketPrice => ticketPrice.id))
+        return ticketPriceId => noPortion.has(ticketPriceId)
+    }
 
     /**
      * Determine ticket type based on age and season ticket prices
@@ -66,14 +96,14 @@ export const useTicket = () => {
      *
      * @param birthDate - Date of birth (null/undefined → ADULT)
      * @param ticketPrices - Season ticket prices with age limits (falls back to defaults if not provided)
-     * @param referenceDate - Date to calculate age on (default: today)
+     * @param referenceDate - Date to calculate age on (a dinner's date, or now)
      * @returns Ticket type enum value
      */
     const determineTicketType = (
         birthDate: Date | null | undefined,
-        ticketPrices?: TicketPrice[],
-        referenceDate: Date = new Date()
-    ): typeof TicketType[keyof typeof TicketType] => {
+        ticketPrices: TicketPrice[] | undefined,
+        referenceDate: Date
+    ): TicketType => {
         // Default to ADULT if no birthDate
         if (!birthDate) return TicketType.ADULT
 
@@ -83,19 +113,12 @@ export const useTicket = () => {
 
         const age = calculateAgeOnDate(birthDate, referenceDate)
 
-        // Sort by age limit (ascending) and find first match
-        const sorted = [...prices]
-            .filter(tp => tp.maximumAgeLimit !== null && tp.maximumAgeLimit !== undefined)
-            .sort((a, b) => a.maximumAgeLimit! - b.maximumAgeLimit!)
-
-        for (const price of sorted) {
-            if (age < price.maximumAgeLimit!) {
-                return price.ticketType
-            }
-        }
-
-        // No match → ADULT (over all age limits)
-        return TicketType.ADULT
+        // The age limits ascending: the first the person is under names the ticket type, past them all ADULT
+        const limits = prices
+            .flatMap(({ticketType, maximumAgeLimit}) =>
+                maximumAgeLimit === null || maximumAgeLimit === undefined ? [] : [{ticketType, limit: maximumAgeLimit}])
+            .sort((a, b) => a.limit - b.limit)
+        return limits.find(({limit}) => age < limit)?.ticketType ?? TicketType.ADULT
     }
 
     /**
@@ -103,13 +126,13 @@ export const useTicket = () => {
      *
      * @param birthDate - Date of birth (preferred for inhabitants)
      * @param ticketPrices - Season ticket prices
-     * @param referenceDate - Date to calculate age on (default: today)
+     * @param referenceDate - Date to calculate age on (a dinner's date, or now)
      * @param priceAtBooking - Frozen price from order (fallback for guests/orphans)
      */
     const resolveTicketType = (
         birthDate: Date | null,
-        ticketPrices?: TicketPrice[],
-        referenceDate?: Date,
+        ticketPrices: TicketPrice[] | undefined,
+        referenceDate: Date,
         priceAtBooking?: number | null
     ): TicketType => {
         const resolved = resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
@@ -126,8 +149,8 @@ export const useTicket = () => {
      */
     const groupInhabitantsByTicketCategory = <T extends {birthDate?: Date | null}>(
         inhabitants: T[],
-        ticketPrices?: TicketPrice[],
-        referenceDate?: Date
+        ticketPrices: TicketPrice[] | undefined,
+        referenceDate: Date
     ) => {
         const classified = inhabitants.map(inhabitant => ({
             ...inhabitant,
@@ -152,12 +175,16 @@ export const useTicket = () => {
      * @returns Matching TicketPrice or undefined if not found
      */
     const findTicketPriceByType = (
-        ticketType: typeof TicketType[keyof typeof TicketType],
+        ticketType: TicketType,
         ticketPrices?: TicketPrice[]
     ): TicketPrice | undefined => {
         if (!ticketPrices?.length) return undefined
         return ticketPrices.find(tp => tp.ticketType === ticketType)
     }
+
+    // The season's price row an order or a place on the waiting list holds
+    const findTicketPriceById = (ticketPriceId: number | null, ticketPrices: TicketPrice[]): TicketPrice | undefined =>
+        ticketPrices.find(ticketPrice => ticketPrice.id === ticketPriceId)
 
     /**
      * Resolve a TicketPrice using available information in priority order:
@@ -174,7 +201,7 @@ export const useTicket = () => {
      * @param birthDate - Date of birth (preferred, determines ticket type by age)
      * @param priceAtBooking - Frozen price from existing order (fallback when no birthDate)
      * @param ticketPrices - Season ticket prices to search (must be sorted by price asc)
-     * @param referenceDate - Date to calculate age on (default: today)
+     * @param referenceDate - Date to calculate age on; without it the price decides
      * @returns Matching TicketPrice or undefined if no prices available
      */
     const resolveTicketPrice = (
@@ -186,7 +213,7 @@ export const useTicket = () => {
         if (!ticketPrices?.length) return undefined
 
         // Priority 1: birthDate → ticketType → cheapest price for type
-        if (birthDate) {
+        if (birthDate && referenceDate) {
             const ticketType = determineTicketType(birthDate, ticketPrices, referenceDate)
             const match = findTicketPriceByType(ticketType, ticketPrices)
             if (match) return match
@@ -203,6 +230,27 @@ export const useTicket = () => {
     }
 
     /**
+     * The price row a person holds on a dinner: a booked order's own row whatever the person's age (by its id, else by
+     * its frozen price when the row is gone), else the row for the person's age on the dinner's date, as the save prices it
+     */
+    const resolveTicketPriceOn = (
+        birthDate: Date | null,
+        order: OrderDisplay | null | undefined,
+        ticketPrices: TicketPrice[],
+        dinnerDate: Date
+    ): TicketPrice | undefined => order
+        ? findTicketPriceById(order.ticketPriceId, ticketPrices) ?? resolveTicketPrice(null, order.priceAtBooking, ticketPrices)
+        : resolveTicketPrice(birthDate, undefined, ticketPrices, dinnerDate)
+
+    /** The first of the sorted dinners at another ticket type than the dinner before it: the birthday crosses an age limit */
+    const ticketTypeChangeOf = (birthDate: Date | null | undefined, ticketPrices: TicketPrice[]) =>
+        (dinnerDates: Date[]): {date: Date, ticketType: TicketType} | null => {
+            if (!birthDate) return null
+            const days = dinnerDates.map(date => ({date, ticketType: determineTicketType(birthDate, ticketPrices, date)}))
+            return days.find((day, index) => index > 0 && day.ticketType !== days[index - 1]?.ticketType) ?? null
+        }
+
+    /**
      * Convert price from øre to DKK (integer)
      * @param dkkFraction - Price in øre (100 øre = 1 kr)
      * @returns Price in DKK as integer
@@ -216,15 +264,46 @@ export const useTicket = () => {
      */
     const formatPrice = (dkkFraction: number): string => convertPriceToDecimalFormat(dkkFraction).toLocaleString('da-DK')
 
+    /** A price in whole kroner with its unit: "1.500 kr" for 150000 øre */
+    const formatKroner = (dkkFraction: number): string => PRICE_WORDS.kroner(formatPrice(dkkFraction))
+
+    /** A ticket type and its price: "Barn · 17 kr" */
+    const formatTicketPrice = (label: string, price: number): string => `${label} · ${formatKroner(price)}`
+
+    // How many items carry each ticket type
+    const countTicketTypes = <T extends { ticketType: TicketType | null }>(items: T[]): Partial<Record<TicketType, number>> =>
+        items.reduce<Partial<Record<TicketType, number>>>((acc, item) => {
+            if (item.ticketType) acc[item.ticketType] = (acc[item.ticketType] ?? 0) + 1
+            return acc
+        }, {})
+
+    /**
+     * Format ticket counts for display (e.g., "2V 1B")
+     * Accepts either:
+     * - Array of items with ticketType (TransactionDisplay, OrderDisplay, etc.)
+     * - Pre-computed counts map from repository { ADULT: 200, CHILD: 50, BABY: 1 }
+     */
+    const formatTicketCounts = <T extends { ticketType: TicketType | null }>(
+        input: T[] | Partial<Record<TicketType, number>>
+    ): string => TICKET_COUNTS.compact.text(Array.isArray(input) ? countTicketTypes(input) : input)
+
     return {
         determineTicketType,
         resolveTicketType,
         groupInhabitantsByTicketCategory,
         findTicketPriceByType,
+        findTicketPriceById,
         resolveTicketPrice,
+        resolveTicketPriceOn,
+        ticketTypeChangeOf,
         portionsOf,
         withPortions,
+        takesNoPortionOf,
         convertPriceToDecimalFormat,
-        formatPrice
+        formatPrice,
+        formatKroner,
+        formatTicketPrice,
+        countTicketTypes,
+        formatTicketCounts
     }
 }

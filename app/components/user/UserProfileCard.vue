@@ -48,10 +48,16 @@
 │ - AdminUsers.vue (expanded row, showActions=false)                          │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
+
+Visual check: /login signed in (the member's own card) and /admin/users (an expanded row with the role manager in view
+and edit), phone and desktop.
 -->
 <script setup lang="ts">
-import type {UserDetail, UserDisplay} from '~/composables/useCoreValidation'
+import type {SystemRole, UserDetail, UserDisplay} from '~/composables/useCoreValidation'
+import {ROLE_OWNERSHIP, RoleOwner} from '~/composables/useUserRoles'
 import {FORM_MODES, type FormMode} from '~/types/form'
+import {BUTTON_WORDS} from '~/config/buttonWords'
+import {USER_WORDS} from '~/config/userWords'
 
 interface Props {
   user: UserDetail | UserDisplay
@@ -69,59 +75,41 @@ const props = withDefaults(defineProps<Props>(), {
   preferencesOpen: false
 })
 
-const {TYPOGRAPHY, SIZES, ICONS, IMG, BUTTONS, ALERTS, COLOR, NOISE} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, SIZES, ICONS, IMG, BUTTONS, ALERTS, COLOR, NOISE, LAYOUTS, COMPONENTS} = useTheSlopeDesignSystem()
 const {roleLabels} = useUserRolesUi()
-const {getUserUrl} = useHeynabo()
+const heynaboUserUrl = getUserUrl(useRuntimeConfig().public.HEY_NABO_API)
 const authStore = useAuthStore()
+const {SystemRoleSchema, UserDetailSchema} = useCoreValidation()
 
-// Type guard to check if user has full detail with household
-const hasHousehold = (user: UserDetail | UserDisplay): user is UserDetail =>
-  user.Inhabitant !== null && 'household' in (user.Inhabitant || {})
-
-// Extract user data from nested structure
 const inhabitant = computed(() => props.user.Inhabitant)
 const email = computed(() => props.user.email)
 const phone = computed(() => props.user.phone || null)
 const systemRoles = computed(() => props.user.systemRoles || [])
-const householdShortName = computed(() => hasHousehold(props.user) ? props.user.Inhabitant!.household.shortName : null)
-const householdPbsId = computed(() => hasHousehold(props.user) ? props.user.Inhabitant!.household.pbsId : null)
-const householdAddress = computed(() => hasHousehold(props.user) ? props.user.Inhabitant!.household.address : null)
-const heynaboProfileUrl = computed(() => inhabitant.value ? getUserUrl(inhabitant.value.heynaboId) : null)
+// A display user's inhabitant carries no household: the detail schema tells the two apart
+const household = computed(() => UserDetailSchema.shape.Inhabitant.safeParse(props.user.Inhabitant).data?.household ?? null)
+const heynaboProfileUrl = computed(() => inhabitant.value ? heynaboUserUrl(inhabitant.value.heynaboId) : null)
 
-// Get visible roles using roleLabels from composable
 const visibleRoles = computed(() =>
   systemRoles.value.filter(role => roleLabels[role] !== undefined)
 )
 
-// Check if this is the logged-in user
-const isCurrentUser = computed(() => {
-  return authStore.user?.id === props.user.id
-})
-
-// Only show actions if it's the current user
-const shouldShowActions = computed(() => {
-  return props.showActions && isCurrentUser.value
-})
+const isCurrentUser = computed(() => authStore.user?.id === props.user.id)
+const shouldShowActions = computed(() => props.showActions && isCurrentUser.value)
 
 const handleLogout = () => {
   authStore.clear()
 }
 
-// =============================================================================
-// Role Management (when showRoleManager=true)
-// =============================================================================
-const {SystemRoleSchema} = useCoreValidation()
 const allRoles = Object.values(SystemRoleSchema.enum)
 
 const usersStore = useUsersStore()
 const roleFormMode = ref<FormMode>(FORM_MODES.VIEW)
 const isSavingRoles = ref(false)
-const draftRoles = ref<Set<string>>(new Set())
+const draftRoles = ref<Set<SystemRole>>(new Set())
 
-// ADMIN is HN-owned, read-only in this UI
-const isRoleDisabled = (role: string) => role === 'ADMIN'
+// The import writes a role Heynabo owns, so it is read-only here
+const isRoleDisabled = (role: SystemRole) => ROLE_OWNERSHIP[role] === RoleOwner.HN
 
-// Only admins can edit roles
 const canEditRoles = computed(() => authStore.isAdmin)
 
 const startEditingRoles = () => {
@@ -134,7 +122,7 @@ const cancelEditingRoles = () => {
   roleFormMode.value = FORM_MODES.VIEW
 }
 
-const toggleRole = (role: string) => {
+const toggleRole = (role: SystemRole) => {
   if (isRoleDisabled(role)) return
   if (draftRoles.value.has(role)) {
     draftRoles.value.delete(role)
@@ -163,10 +151,8 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
 
 <template>
   <UCard>
-    <!-- Header: User info + buttons -->
     <template #header>
-      <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <!-- Left: UserListItem with role badges in slot -->
+      <div :class="COMPONENTS.userProfileCard.header">
         <UserListItem
           v-if="inhabitant"
           :inhabitants="inhabitant"
@@ -175,47 +161,45 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           :link-to-profile="false"
         >
           <template #badge>
-            <div v-if="visibleRoles.length > 0" class="flex flex-wrap gap-2">
+            <div v-if="visibleRoles.length > 0" :class="COMPONENTS.userProfileCard.roleBadges">
               <UBadge
                 v-for="role in visibleRoles"
                 :key="role"
-                :color="roleLabels[role]?.color || 'neutral'"
+                :color="roleLabels[role]?.color || COLOR.neutral"
                 :variant="NOISE.subtle"
                 :size="SIZES.small"
               >
-                <UIcon :name="roleLabels[role]?.icon || 'i-heroicons-user'" class="mr-1" />
+                <UIcon :name="roleLabels[role]?.icon || ICONS.user" :class="COMPONENTS.adminUsers.roleIcon" />
                 {{ roleLabels[role]?.label || role }}
               </UBadge>
             </div>
           </template>
         </UserListItem>
 
-        <!-- Right: action buttons - one outline shape; they wrap on a phone, one row from md -->
-        <div class="flex flex-wrap items-center gap-2 md:gap-4 md:flex-nowrap md:shrink-0 md:ml-auto">
+        <!-- The action buttons: one outline shape; they wrap on a phone, one row from md -->
+        <div :class="COMPONENTS.userProfileCard.actions">
           <!-- Own settings: reveals UserPreferencesCard under this card -->
           <UButton
             v-if="shouldShowActions"
             v-bind="{...BUTTONS.settings, ...BUTTONS.flipOpen(preferencesOpen)}"
-            aria-label="Indstillinger"
+            :aria-label="USER_WORDS.profile.settings"
             data-testid="pref-toggle"
             @click="emit('toggle-preferences')"
           />
 
-          <!-- Heynabo profile link -->
           <UButton
             v-if="heynaboProfileUrl"
             v-bind="BUTTONS.secondaryAction"
             :color="COLOR.primary"
             :to="heynaboProfileUrl"
             target="_blank"
-            :avatar="{src: IMG.heynabo, alt: 'Heynabo'}"
+            :avatar="{src: IMG.heynabo, alt: BUTTON_WORDS.heynabo.name}"
             :trailing-icon="ICONS.arrowRight"
             data-testid="heynabo-profile-link"
           >
-            Heynabo
+            {{ BUTTON_WORDS.heynabo.name }}
           </UButton>
 
-          <!-- Logout button -->
           <UButton
             v-if="shouldShowActions"
             v-bind="BUTTONS.secondaryAction"
@@ -225,50 +209,43 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
             data-testid="logout-button"
             @click="handleLogout"
           >
-            Log ud
+            {{ USER_WORDS.profile.logout }}
           </UButton>
         </div>
       </div>
     </template>
 
-    <!-- Body: Contact info -->
-    <div class="space-y-2">
-      <!-- Email -->
-      <div class="flex items-center gap-2">
-        <UIcon :name="ICONS.mail" class="opacity-60" />
+    <div :class="COMPONENTS.householdSettings.facts">
+      <div :class="COMPONENTS.householdSettings.fact">
+        <UIcon :name="ICONS.mail" :class="COMPONENTS.householdSettings.factIcon" />
         <span :class="TYPOGRAPHY.bodyTextMuted">{{ email }}</span>
       </div>
 
-      <!-- Phone -->
-      <div v-if="phone" class="flex items-center gap-2">
-        <UIcon :name="ICONS.phone" class="opacity-60" />
+      <div v-if="phone" :class="COMPONENTS.householdSettings.fact">
+        <UIcon :name="ICONS.phone" :class="COMPONENTS.householdSettings.factIcon" />
         <span :class="TYPOGRAPHY.bodyTextMuted">{{ phone }}</span>
       </div>
 
-      <!-- Household -->
-      <div v-if="householdShortName && householdPbsId" class="flex items-center gap-2">
-        <UIcon :name="ICONS.household" class="opacity-60" />
+      <div v-if="household?.shortName && household.pbsId" :class="COMPONENTS.householdSettings.fact">
+        <UIcon :name="ICONS.household" :class="COMPONENTS.householdSettings.factIcon" />
         <NuxtLink
-          :to="getHouseholdUrl(householdShortName, householdPbsId)"
-          :class="[TYPOGRAPHY.bodyTextMuted, 'underline hover:no-underline hover:text-primary transition-colors']"
+          :to="getHouseholdUrl(household.shortName, household.pbsId, HOUSEHOLD_TAB.bookings)"
+          :class="[TYPOGRAPHY.bodyTextMuted, COMPONENTS.userProfileCard.householdLink]"
         >
-          {{ householdShortName }}
+          {{ household.shortName }}
         </NuxtLink>
-        <template v-if="householdAddress">
+        <template v-if="household.address">
           <span :class="TYPOGRAPHY.bodyTextMuted">·</span>
-          <span :class="TYPOGRAPHY.bodyTextMuted">{{ householdAddress }}</span>
+          <span :class="TYPOGRAPHY.bodyTextMuted">{{ household.address }}</span>
         </template>
       </div>
 
     </div>
 
-    <!-- Role Management Section (footer) -->
     <template v-if="showRoleManager" #footer>
-      <!-- Header: Title + Edit/Save/Cancel buttons -->
-      <div class="flex items-center justify-between mb-3">
-        <span :class="TYPOGRAPHY.bodyTextMedium">Systemroller</span>
+      <div :class="COMPONENTS.userProfileCard.rolesHeader">
+        <span :class="TYPOGRAPHY.bodyTextMedium">{{ USER_WORDS.profile.roles.title }}</span>
 
-        <!-- View mode: Edit button (admin only) -->
         <UButton
           v-if="isViewMode && canEditRoles"
           :icon="ICONS.edit"
@@ -278,67 +255,58 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           data-testid="edit-roles-btn"
           @click="startEditingRoles"
         >
-          Rediger
+          {{ BUTTON_WORDS.edit }}
         </UButton>
 
-        <!-- Edit mode: Save/Cancel buttons -->
-        <div v-if="isEditMode" class="flex gap-2">
+        <div v-if="isEditMode" :class="LAYOUTS.formButtonRow">
           <UButton
-            :icon="ICONS.check"
-            :color="COLOR.primary"
-            :variant="NOISE.soft"
-            :size="SIZES.sm"
-            :loading="isSavingRoles"
-            data-testid="save-roles-btn"
-            @click="saveRoles"
-          >
-            Gem
-          </UButton>
-          <UButton
-            :icon="ICONS.xMark"
-            :color="COLOR.neutral"
-            :variant="NOISE.quiet"
-            :size="SIZES.sm"
+            v-bind="BUTTONS.cancel"
             :disabled="isSavingRoles"
             data-testid="cancel-roles-btn"
             @click="cancelEditingRoles"
           >
-            Annuller
+            {{ BUTTON_WORDS.cancel }}
+          </UButton>
+          <UButton
+            v-bind="BUTTONS.save"
+            :loading="isSavingRoles"
+            data-testid="save-roles-btn"
+            @click="saveRoles"
+          >
+            {{ BUTTON_WORDS.save }}
           </UButton>
         </div>
       </div>
 
-      <!-- View mode: Role badges -->
-      <div v-if="isViewMode" class="flex flex-wrap gap-2">
+      <div v-if="isViewMode" :class="COMPONENTS.userProfileCard.roleBadges">
         <UBadge
           v-for="role in visibleRoles"
           :key="role"
-          :color="roleLabels[role]?.color || 'neutral'"
+          :color="roleLabels[role]?.color || COLOR.neutral"
           :variant="NOISE.soft"
           :size="SIZES.md"
         >
-          <UIcon :name="roleLabels[role]?.icon || 'i-heroicons-user'" class="mr-1" />
+          <UIcon :name="roleLabels[role]?.icon || ICONS.user" :class="COMPONENTS.adminUsers.roleIcon" />
           {{ roleLabels[role]?.label || role }}
         </UBadge>
         <span v-if="visibleRoles.length === 0" :class="TYPOGRAPHY.bodyTextMuted">Ingen roller</span>
       </div>
 
-      <!-- Edit mode: Role toggles -->
-      <div v-if="isEditMode" class="space-y-3">
+      <div v-if="isEditMode" :class="COMPONENTS.userProfileCard.roleToggles">
         <div
           v-for="role in allRoles"
           :key="role"
-          class="flex items-center justify-between"
+          :class="COMPONENTS.userProfileCard.roleToggle"
         >
-          <div class="flex items-center gap-2">
+          <div :class="COMPONENTS.userProfileCard.roleLabel">
             <UIcon
-              :name="roleLabels[role]?.icon || 'i-heroicons-user'"
-              :class="isRoleDisabled(role) ? 'opacity-40' : ''"
+              :name="roleLabels[role]?.icon || ICONS.user"
+              :class="isRoleDisabled(role) ? COMPONENTS.userProfileCard.roleDisabled : ''"
             />
-            <span :class="[TYPOGRAPHY.bodyText, isRoleDisabled(role) ? 'opacity-40' : '']">
+            <span :class="[TYPOGRAPHY.bodyText, isRoleDisabled(role) ? COMPONENTS.userProfileCard.roleDisabled : '']">
               {{ roleLabels[role]?.label || role }}
             </span>
-            <span v-if="isRoleDisabled(role)" :class="TYPOGRAPHY.bodyTextMuted">(Heynabo)</span>
+            <span v-if="isRoleDisabled(role)" :class="TYPOGRAPHY.bodyTextMuted">{{ USER_WORDS.profile.roles.heynaboOwned }}</span>
           </div>
           <USwitch
             :model-value="draftRoles.has(role)"
@@ -348,16 +316,14 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           />
         </div>
 
-        <!-- Info alert -->
         <UAlert
           v-bind="ALERTS.info"
           :icon="ICONS.authorize"
-          title="Om systemroller"
+          :title="USER_WORDS.profile.roles.helpTitle"
         >
           <template #description>
-            <ul class="list-disc list-inside space-y-1 mt-1">
-              <li><strong>Admin</strong> - Synkroniseres fra Heynabo, kan ikke ændres her</li>
-              <li><strong>Allergichef</strong> - Giver adgang til at administrere allergidata</li>
+            <ul :class="COMPONENTS.userProfileCard.roleNotes">
+              <li v-for="role in allRoles" :key="role"><strong>{{ roleLabels[role]?.label }}</strong> - {{ USER_WORDS.profile.roles.help[role] }}</li>
             </ul>
           </template>
         </UAlert>

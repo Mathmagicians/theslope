@@ -34,8 +34,8 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
-    let id!: number
-    let body!: z.infer<typeof RemoveRoleRequestSchema>
+    let id: number
+    let body: z.infer<typeof RemoveRoleRequestSchema>
     try {
         ({id} = await getValidatedRouterParams(event, paramSchema.parse))
         body = await readValidatedBody(event, RemoveRoleRequestSchema.parse)

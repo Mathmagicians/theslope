@@ -4,6 +4,7 @@ import {useSeason} from '~/composables/useSeason'
 import {useCookingTeam} from '~/composables/useCookingTeam'
 import type {CookingTeamCreate, CookingTeamUpdate, CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
+import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 export interface TeamOperationResult {
     teams: CookingTeamDetail[]
@@ -63,7 +64,6 @@ export async function updateTeamWithAssignments(
 
 /**
  * Assign team affinities from member affinities, then assign teams to dinner events
- * Core logic extracted from assign-team-affinities.post.ts and assign-cooking-teams.post.ts
  */
 export async function assignAffinitiesAndEvents(
     d1Client: D1Database,
@@ -86,9 +86,14 @@ export async function assignAffinitiesAndEvents(
     const teamsWithAffinities = assignAffinitiesToTeams(season)
     const affinityBatches = chunkTeamAffinities(teamsWithAffinities)
 
+    // A team deleted by a parallel request since the season was read has no affinity to save
     for (const batch of affinityBatches) {
         await Promise.all(
-            batch.map(team => updateTeam(d1Client, team.id!, {id: team.id!, affinity: team.affinity}))
+            batch.map(team => updateTeam(d1Client, team.id, {id: team.id, affinity: team.affinity})
+                .catch((error: unknown) => {
+                    if (eventHandlerHelper.h3eFromCatch(LOG, error).statusCode !== 404) throw error
+                    console.warn(`${LOG} Team ${team.id} deleted since the season was read, affinity skipped`)
+                }))
         )
     }
     console.info(`${LOG} Assigned affinities to ${teamsWithAffinities.length} teams`)
@@ -101,17 +106,10 @@ export async function assignAffinitiesAndEvents(
 
     // Step 2: Compute and save team-to-event assignments
     console.info(`${LOG} Assigning teams to dinner events for season ${seasonId}`)
-    const eventsWithAssignments = assignTeamsToEvents(updatedSeason)
-        .filter(event => event.id && event.cookingTeamId)
-
-    const eventBatches = chunkTeamAssignments(eventsWithAssignments)
+    const assignments = assignTeamsToEvents(updatedSeason).flatMap(({id, cookingTeamId}) => cookingTeamId ? [{id, cookingTeamId}] : [])
     const updatedEvents: DinnerEventDisplay[] = []
-
-    for (const batch of eventBatches) {
-        const batchResults = await Promise.all(
-            batch.map(event => assignCookingTeamToDinnerEvent(d1Client, event.id!, event.cookingTeamId!))
-        )
-        updatedEvents.push(...batchResults)
+    for (const batch of chunkTeamAssignments(assignments)) {
+        updatedEvents.push(...await Promise.all(batch.map(({id, cookingTeamId}) => assignCookingTeamToDinnerEvent(d1Client, id, cookingTeamId))))
     }
 
     console.info(`${LOG} Assigned teams to ${updatedEvents.length} dinner events`)

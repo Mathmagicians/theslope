@@ -38,6 +38,21 @@ const sendFeedback = async (description: string) => {
     return wrapper
 }
 
+// The button reads its label where one is given, as in the header's drawer, and its icon alone in the bar; its
+// accessible name is the help word either way
+describe('HelpButton - the button', () => {
+    it.each([
+        {face: 'the icon alone', props: {}, text: ''},
+        {face: 'its label beside the icon', props: {label: 'Hjælp'}, text: 'Hjælp'}
+    ])('GIVEN $face THEN the button reads "$text" and is named Hjælp', async ({props, text}) => {
+        const wrapper = await mountWithTooltipProvider(HelpButton, {props})
+        const button = wrapper.findComponent({name: 'UButton'})
+
+        expect(button.text()).toBe(text)
+        expect(button.attributes('aria-label')).toBe('Hjælp')
+    })
+})
+
 describe('HelpButton - feedback', () => {
     beforeEach(() => {
         resetStores()
@@ -71,6 +86,6 @@ describe('HelpButton - feedback', () => {
         await vi.waitFor(() => expect(toastTitles()).toHaveLength(1))
         await flushPromises()
         expect(page().text()).not.toContain('Kunne ikke sende feedback')
-        expect((findByTestId(page(), TEST_IDS.description).element as HTMLTextAreaElement).value).toBe('Knappen gør ingenting')
+        expect(findByTestId<HTMLTextAreaElement>(page(), TEST_IDS.description).element.value).toBe('Knappen gør ingenting')
     })
 })

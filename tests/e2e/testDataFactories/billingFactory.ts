@@ -48,7 +48,7 @@ export class BillingFactory {
     /**
      * Create order snapshot JSON for test transactions
      */
-    private static readonly makeOrderSnapshot = (testSalt: string, dinnerEventId: number, ticketType: TicketPrice['ticketType']) =>
+    static readonly makeOrderSnapshot = (testSalt: string, dinnerEventId: number, ticketType: TicketPrice['ticketType'] | null) =>
         serializeTransaction({
             dinnerEvent: {id: dinnerEventId, date: new Date('2025-11-10'), menuTitle: salt('Test Menu', testSalt)},
             inhabitant: {id: 1, name: salt('Test Person', testSalt), household: {id: 1, pbsId: 2053, address: salt('Testgade 42', testSalt)}},
@@ -110,6 +110,20 @@ export class BillingFactory {
         ...overrides
     })
 
+    /** A transaction as the household billing view reads it, for component tests: an adult ticket of a live order, in the default current period */
+    static readonly defaultTransactionDisplay = (overrides: Partial<TransactionDisplay> = {}): TransactionDisplay => ({
+        id: 1,
+        orderId: 1,
+        amount: 4000,
+        createdAt: new Date(2025, 9, 20),
+        orderSnapshot: '{}',
+        dinnerEvent: {id: 1, date: new Date(2025, 9, 20), menuTitle: 'Test'},
+        inhabitant: {id: 1, name: 'Test', household: {id: 1, pbsId: 100, address: 'Test'}},
+        ticketType: TicketType.ADULT,
+        dinnerMode: null,
+        ...overrides
+    })
+
     /** HouseholdBillingResponse data for component tests (no API call): an empty current period, no past invoices */
     static readonly defaultHouseholdBilling = (householdId: number = 1): HouseholdBillingResponse => ({
         householdId,
@@ -133,7 +147,7 @@ export class BillingFactory {
      */
     static readonly defaultSerializeInput = (
         testSalt: string = 'default',
-        ticketType: string | null = TicketType.ADULT,
+        ticketType: TicketPrice['ticketType'] | null = TicketType.ADULT,
         options?: {isGuestTicket?: boolean, provenanceHousehold?: string | null, dinnerMode?: DinnerMode}
     ) => ({
         dinnerEvent: {id: 1, date: new Date('2025-01-15'), menuTitle: salt('Test Dinner', testSalt)},
@@ -146,12 +160,12 @@ export class BillingFactory {
 
     /**
      * Simulated Prisma transaction result for deserializeTransaction
-     * @param liveData - 'full' = all relations, 'noHousehold' = household deleted, 'noTicketPrice' = ticketPrice deleted, 'noOrder' = order deleted
+     * @param liveData - 'full' = all relations, 'noTicketPrice' = ticketPrice deleted, 'noOrder' = order deleted
      * @param options - Optional isGuestTicket/provenanceHousehold for testing guest/claimed tickets
      */
     static readonly defaultPrismaTransaction = (
         testSalt: string = 'default',
-        liveData: 'full' | 'noHousehold' | 'noTicketPrice' | 'noOrder' = 'full',
+        liveData: 'full' | 'noTicketPrice' | 'noOrder' = 'full',
         options?: {
             snapshotIsGuestTicket?: boolean,
             snapshotProvenance?: string | null,
@@ -189,7 +203,6 @@ export class BillingFactory {
 
         switch (liveData) {
             case 'noOrder': return {...base, order: null}
-            case 'noHousehold': return {...base, order: {...liveOrder, inhabitant: {...liveOrder.inhabitant, household: null}}}
             case 'noTicketPrice': return {...base, order: {...liveOrder, ticketPrice: null}}
             default: return {...base, order: liveOrder}
         }

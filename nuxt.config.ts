@@ -103,13 +103,14 @@ export default defineNuxtConfig({
     },
 
     icon: {
-        // Server-side bundling (icons embedded in the build); the collections are the installed @iconify-json/* packages (package.json)
-        serverBundle: {},
-        // Client-side settings - automatic tree-shaking; Nuxt UI 4.10+ pre-bundles its own internal icons
+        // Every icon the app names ships in the client bundle: the design system is the one file that names them, and
+        // the scan reads it (Nuxt UI adds its own). The Worker packs no collection; a name the scan does not see is
+        // fetched from the Iconify CDN at runtime
+        serverBundle: 'remote',
         clientBundle: {
-            scan: true  // Only bundle icons actually used in components
+            scan: { globInclude: ['**/useTheSlopeDesignSystem.ts'] }
         },
-        provider: 'server'  // Use server-side icon provider
+        provider: 'server'
     },
 
 
