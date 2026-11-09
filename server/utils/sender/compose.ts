@@ -1,7 +1,7 @@
 /**
  * One e-mail from one template: fills the kind's template with the event's values plus the built-ins
- * (site, environment, dedupeKey), appends the signature, encodes text attachments, sets the admin mailbox
- * as Reply-To — a complete, contract-valid message for the SENDER queue.
+ * (site, environment, dedupeKey, settingsUrl), appends the signature and the settings footer, encodes text
+ * attachments, sets the admin mailbox as Reply-To — a complete, contract-valid message for the SENDER queue.
  */
 import {fillTemplate, templatePlaceholders} from '~/utils/template'
 import {maskEmail} from '~~/workers/common/mask'
@@ -37,6 +37,9 @@ const toBase64 = (utf8: string): string => Buffer.from(utf8, 'utf8').toString('b
 // A link into the deployment the mail comes from; `path` starts with a slash
 export const siteUrl = (config: NotificationConfig, path: string): string => `https://${config.site}${path}`
 
+// The member's own settings (notification channels) open from the profile card on the login page
+const SETTINGS_PATH = '/login'
+
 /** The variable an event is missing before it can send (its recipient's mailbox), or null */
 export const missingAddress = (config: NotificationConfig, recipient: 'adminEmail' | 'accountantEmail'): string | null =>
     config[recipient] ? null : NOTIFICATION_ADDRESS_VARS[recipient]
@@ -46,14 +49,14 @@ export const composeEmail = (config: NotificationConfig, input: ComposeInput): E
     const template = config.templates[kind]
     if (!template) throw new Error(`No notification template for kind ${kind}`)
 
-    const placeholders = new Set([template.subject, template.text, config.signature].flatMap(templatePlaceholders))
+    const placeholders = new Set([template.subject, template.text, config.signature, config.footer].flatMap(templatePlaceholders))
     const unused = Object.keys(values).filter(name => !placeholders.has(name))
     if (unused.length > 0) throw new Error(`Template ${kind} has no placeholder for: ${unused.join(', ')}`)
 
     // {kind}:{channel}:{maskedRecipient}:{messageId}, the recipient led by user-{id}/ for a mail to a login — one grep on
     // the masked address finds every send to that mailbox
     const dedupeKey = `${deliveryReferencePrefix(kind, EMAIL, userId ?? null)}${maskEmail(to)}:${crypto.randomUUID()}`
-    const allValues = {...values, senderName: NOTIFICATION_SENDER_NAME, site: config.site, environment: config.environment, dedupeKey}
+    const allValues = {...values, senderName: NOTIFICATION_SENDER_NAME, site: config.site, environment: config.environment, dedupeKey, settingsUrl: siteUrl(config, SETTINGS_PATH)}
 
     return {
         v: 1,
@@ -64,7 +67,7 @@ export const composeEmail = (config: NotificationConfig, input: ComposeInput): E
         fromName: config.fromName,
         ...(config.adminEmail ? {replyTo: config.adminEmail} : {}),
         subject: fillTemplate(template.subject, allValues),
-        text: `${fillTemplate(template.text, allValues)}\n\n${fillTemplate(config.signature, allValues)}`,
+        text: [template.text, config.signature, config.footer].map(part => fillTemplate(part, allValues)).join('\n\n'),
         attachments: attachments.map(({filename, contentType, content}) => ({filename, contentType, contentBase64: toBase64(content)})),
         meta: {
             kind,

@@ -94,7 +94,7 @@ local runtime, which takes the server's variables from the Playwright process's 
 
 ### Templates
 
-One e-mail template per notification kind in `app/config/notificationTemplates.ts` (spread into `app.config.ts` `theslope.notifications`): `subject` and `text` with `{{placeholders}}`, filled by the event that raises the notification; `{{senderName}}` (`NOTIFICATION_SENDER_NAME`), `{{site}}`, `{{environment}}` and `{{dedupeKey}}` are filled for every kind and the signature `De bedste hilsner fra — {{senderName}} · {{site}}` is appended. A placeholder without a value, or a value without a placeholder, throws — the unit tests catch a template edit that breaks an event.
+One e-mail template per notification kind in `app/config/notificationTemplates.ts` (spread into `app.config.ts` `theslope.notifications`): `subject` and `text` with `{{placeholders}}`, filled by the event that raises the notification; `{{senderName}}` (`NOTIFICATION_SENDER_NAME`), `{{site}}`, `{{environment}}`, `{{dedupeKey}}` and `{{settingsUrl}}` (the login page, where the member's own settings open from the profile card) are filled for every kind; every mail ends with the signature `De bedste hilsner fra — {{senderName}} · {{site}}` and the footer `Er du træt af at få mails fra Skrånerappen, så kan du ændre dine indstillinger her: {{settingsUrl}}`. A placeholder without a value, or a value without a placeholder, throws — the unit tests catch a template edit that breaks an event.
 
 | Kind | Event | Recipient |
 |------|-------|-----------|

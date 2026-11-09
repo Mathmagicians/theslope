@@ -1,8 +1,9 @@
 # 0.9.2 chores
 
-**Status:** Proposed | **Date:** 2026-10-25 | **Builds on:** release 0.9.1 (`../archived/release-0.9.1/chores-0.9.1.md`)
+**Status:** Shipping | **Date:** 2026-10-25 | **Updated:** 2026-11-09 | **Builds on:** release 0.9.1 (`../archived/release-0.9.1/chores-0.9.1.md`)
 
-A chore release: the booking emails go on, and two bug fixes.
+A chore release: the booking emails go on with a footer to the member's settings, the pipeline builds once and fans the
+e2e suites out on the build, the icons ship in the client bundle, and the tab pages render on the server.
 
 ## Delivered
 
@@ -12,206 +13,61 @@ A chore release: the booking emails go on, and two bug fixes.
 | E2E suites fan out in CI | § E2E suites fan out in CI | – | done a4bc37d |
 | Build once, test locally, ship the artifact | § Build once, test locally, ship the artifact | – | done a4bc37d |
 | Icons ship in the client bundle | § Icons ship in the client bundle | – | done a4bc37d |
+| Public billing checks at their level | § Public billing checks at their level | `monthly-billing.feature` | done 61523a0 |
+| Tab pages render their content on the server | § Tab pages render their content on the server | – | done d1cfb01 |
 
 ## In flight
 
 | Delivery | Description or spec | Gherkin | Status |
 |---|---|---|---|
-| Booking emails on | § Booking emails on | – | specified |
-| Billing delivery report and interrupted job runs | `bug-fix-billing-delivery-report.md` | – | discovery |
-| Chef's available budget after the ticket deadline | `bug-fix-chef-budget-drift.md` | – | discovery |
+| Booking emails on | § Booking emails on | – | dry run, flag on for dev and prod, guides 2026-11-09 · open: the first mails on dev and on prod |
+| Notification settings footer | § Notification settings footer | – | ordered 2026-11-09 · sender specs green |
 | Household lookup | § Household lookup | – | moved from 0.9.1 on 2026-11-02 |
 | npm audit | § npm audit | – | discovery |
-| Public billing checks at their level | § Public billing checks at their level | – | implemented |
-| Tab pages render their content on the server | § Tab pages render their content on the server | – | specified |
-
-## Tab pages render their content on the server
-
-### Problem
-
-`/admin/<tab>` and `/household/<name>/<tab>` pick the panel's component with `defineAsyncComponent` over a dynamic
-`import()`; the dev server renders that component into the HTML, the production build sends an empty panel and the
-browser fills it: a blank panel until the script runs, a hydration re-render, and two e2e checks red on the production
-build (the admin economy loading state without JavaScript, no hydration mismatch on the three booking views).
-
-### Solution
-
-The tab list carries Nuxt's lazy component (`LazyAdminEconomy` and its siblings from `#components`), which renders on
-the server and loads its chunk in the browser when the tab opens; the `defineAsyncComponent` map goes.
-
-### Affected
-
-`app/pages/admin/[tab].vue`, `app/pages/household/[shortname]/[tab].vue`, `docs/adr-compliance-frontend.md`.
-
-## Public billing checks at their level
-
-### Problem
-
-`PublicBilling.e2e.spec.ts` and the `public-billing` screen of `MobileViewport.e2e.spec.ts` look up the share token of
-a billing period that the api-serial suite's `monthly-billing.feature` leaves behind. In CI each suite runs on a D1 of
-its own, so the ui suite holds no billing period to open.
-
-### Solution
-
-The page's words for a link and a gone link are in the component spec `tests/component/pages/public-billing.nuxt.spec.ts`.
-`monthly-billing.feature` opens the period its scenario bills through the accountant link and measures the page on a
-phone, and refuses an unknown link as unknown (404). `expectNoHorizontalOverflow` (`tests/e2e/testHelpers.ts`) measures
-the app's screens in `MobileViewport.e2e.spec.ts` and the accountant link's page. `PublicBilling.e2e.spec.ts` is removed.
-
-### Affected
-
-`tests/e2e/ui/PublicBilling.e2e.spec.ts`, `tests/e2e/ui/MobileViewport.e2e.spec.ts`,
-`tests/e2e/features/jobs/monthly-billing.feature`, `tests/e2e/steps/billing.steps.ts`, `tests/e2e/testHelpers.ts`,
-`docs/testing.md`, `docs/adr-compliance-frontend.md`, `docs/adr-compliance-backend.md`.
-
-## npm audit
-
-### Problem
-
-Dependabot opens weekly version pull requests (`.github/dependabot.yml`); no step reads npm's advisories, so a known
-vulnerability in an installed package shows only to a developer who reads the summary `npm ci` prints.
-
-### Solution
-
-`make audit` runs `npm audit` at the agreed level and fails on a finding; the check job runs it after `npm ci`, and
-`pre:all` runs it locally. An accepted finding is recorded with its advisory id and the date it is reviewed again.
-
-OPEN: the level that fails (`high`, or `moderate`); the scope (production dependencies alone, or the dev dependencies
-the build runs on too); where an accepted finding is recorded (the runbook, or a tool with an ignore list); a scheduled
-run on main beside Dependabot, or the pull-request gate alone.
-
-### Affected
-
-`Makefile`, `package.json`, `.github/workflows/cicd.yml`, `docs/ops-runbook.md`, `.claude/skills/prepare-to-ship/SKILL.md`.
-
-## Icons ship in the client bundle
-
-### Problem
-
-The icon module's scan reads templates only, while the app names its icons in the design system and the UI
-composables, so the client bundle holds none of them: every page fetches its icons from the Worker, which packs every
-installed collection whole, most of its size, and a component spec, with no Worker to answer, logs one warning per
-icon per mount.
-
-### Solution
-
-The design system is the one file that names icons, and the scan reads that file, so every icon the app names ships in
-the browser bundle and renders with the page; a component binds a token, never a name. The Worker packs no collection;
-a name the scan does not see is fetched from the Iconify CDN at runtime. Four icons
-that stood alone in their collection take a glyph from a collection the app draws on: the power row's alert carries
-the bolt of its button, the logout button a waving hand, the armed delete button a skull, the admin entry a wrench. The
-team badge keeps its icon. The four icon names written in components bind tokens (`ICONS.swap`, `ICONS.arrowRight`
-through a computed default, `ICONS.robotDead`, `ICONS.confusedFace`), and the architecture spec fails an icon name
-outside the design system and an installed collection no token names (ADR-018, compliance 5).
-
-### Decisions
-
-- 2026-11-08: the client bundle from a scan over templates and `.ts`; the server bundle is remote, so a missed name
-  still renders and the Worker carries no icons.
-- 2026-11-08: `powerMode.icon` is `i-heroicons-bolt`, `ICONS.logout` `i-hugeicons-waving-hand-01`,
-  `ICONS.dangerConfirm` `i-hugeicons-skull`, `ICONS.admin` `i-heroicons-wrench-screwdriver`; `ICONS.team` stays
-  `i-fluent-mdl2-team-favorite`.
-- 2026-11-08: `@iconify-json/material-symbols`, `streamline`, `healthicons`, `pajamas` and `tdesign` leave
-  `package.json`; `fluent-emoji-high-contrast` stays for the error page's confused face (`ViewError.vue`).
-
-### Affected
-
-`nuxt.config.ts`, `app/composables/useTheSlopeDesignSystem.ts`, `package.json`, `ViewError.vue`, `ActionCard.vue`,
-`WorkAssignment.vue`, `tests/component/architecture/designSystemUsage.unit.spec.ts`, `docs/adr.md` (ADR-018),
-`docs/testing.md`, `docs/ui.md`.
-
-## Build once, test locally, ship the artifact
-
-### Problem
-
-Every e2e runner starts the dev server from scratch after installing, and the deploy stage builds the app again: four
-cold builds test code that a fifth build ships.
-
-### Solution
-
-The check stage builds the app once and keeps the build as the run's artifact. An e2e row takes the build and runs its
-suite against it under wrangler's local runtime on the runner (localhost, the local D1); the runtime takes the server's
-variables and the local address from the row's environment, nothing is written to disk. The deploy stage builds and ships. Smoke tests run on the deployed address.
-
-Locally the same run is `npm run build && CI=true npm run test:e2e`: `CI` picks the built app under the local runtime on
-port 3000, one worker and two retries, and a dev server on that port stops it with a clear message; without it the
-suites run on the dev server, or reuse the one already up. The pre-ship gate runs that sequence.
-
-### Decisions
-
-- 2026-11-08: the e2e suites run on the build artifact in CI; the check stage builds it, the deploy stage keeps its build.
-- 2026-11-08: `CI` is the switch locally too; no new variable, no new command.
-
-### Affected
-
-`.github/workflows/cicd.yml`, `playwright.config.ts`, `docs/testing.md`, `docs/ops-runbook.md`,
-`.claude/skills/prepare-to-ship/SKILL.md`.
-
-## E2E suites fan out in CI
-
-### Problem
-
-The pipeline is one job: the api, ui and ui serial suites run one after another on one runner and one D1, after the
-unit tests. The serial projects depend on the parallel ones, so the ui serial script runs with `--no-deps` and takes
-its login state from the ui run before it.
-
-### Solution
-
-Three stages: `check` (version, generated layer, lint, typecheck, unit tests), `e2e` (a matrix of four suites on a
-runner and a local D1 each: api, api-serial, ui, ui-serial; the api rows gate, the ui rows report) and `deploy`;
-create-release, rollback and smoke-tests read the deploy outputs. A serial project depends on the setup projects and
-caps itself at one worker, so each suite runs alone, locally in the `test:e2e` chain and on CI. `playwright.config.ts`
-names the json and Cucumber reports after `BDD_SUITE`; on CI its web server waits 180 s for the cold `nuxt dev` and
-pipes the server's output into the step log. Artifacts per suite: `playwright-report-<suite>` and
-`bdd-<suite>`; the developer companion downloads `bdd-*` by pattern. One composite action installs Node, the
-dependencies and Chromium.
-
-### Affected
-
-`.github/workflows/cicd.yml`, `.github/workflows/developer.yml`, `.github/actions/setup/action.yml`,
-`playwright.config.ts`, `package.json`, `Makefile`, `docs/testing.md`, `.claude/skills/prepare-to-ship/SKILL.md`,
-`docs/features/release-1.0.0/chores-1.0.0.md`.
-
-## Release notes PDF removed
-
-### Problem
-
-`make release-notes` renders `docs/releases/*.md` to a one-page PDF; `cicd.yml` runs it after the e2e suites and
-`create-release` attaches the PDFs. The notes live in `docs/release-notes/`, so the guard on the poster head fails the
-pipeline at the end of every run.
-
-### Solution
-
-A release's notes and their poster live with the release, `docs/features/archived/release-0.9.0/release-notes-0.9.0/`
-(markdown and PDF); `create-release` writes the release's one-line body. Removed: the target, its CI step, the artifact
-`release-notes`, the release attachment and `poster.head.html`.
-
-### Affected
-
-`Makefile`, `.github/workflows/cicd.yml`, `docs/features/archived/release-0.9.0/`.
 
 ## Booking emails on
 
 The booking emails go out from this release (`../archived/release-0.9.1/feature-notification-delivery.md`).
 `SHOULD_SEND_BOOKING_EMAILS_FLAG` gates the two sender events they come from, booking status and chef deadlines
-(`../../ops-runbook.md` § Booking emails flag); off, the events send and record nothing.
+(`../../ops-runbook.md` § Booking emails flag); off, the events send and record nothing. The flag is `"true"` in
+`wrangler.toml` `[env.dev.vars]` and `[env.prod.vars]`; the pull request's pipeline deploys dev, the merge to main
+deploys prod (`../../ops-runbook.md` § Deployment Routing Table).
 
 ### Steps
 
 1. **See what goes out before anything is sent.** `make theslope-sender-dry-run-booking-emails-dev`, then
    `make theslope-sender-dry-run-booking-emails-prod`: per user, the booking status and chef deadline mails the next
    DAILY_MAINTENANCE job sends; nothing is sent or recorded. The list names the people and dinners expected.
-2. **Enable on dev.** `wrangler.toml` `[env.dev.vars]`: `SHOULD_SEND_BOOKING_EMAILS_FLAG = "true"`. The pull request's
-   pipeline deploys dev.
+2. **Enable on dev.** `[env.dev.vars]`: `SHOULD_SEND_BOOKING_EMAILS_FLAG = "true"`.
 3. **Verify on dev.** A booking on dev past its deadline (a waiting-list join, a sold ticket) lands a mail in the dev test
    mailbox; `make logs-sender-dev` shows `📮 > SENDER > [EMAIL] delivered`; `make queues-info-dev` shows an empty backlog;
    `GET /api/admin/sender/delivery` lists the delivery records.
-4. **Enable on prod.** `[env.prod.vars]`: `SHOULD_SEND_BOOKING_EMAILS_FLAG = "true"`. The merge to main deploys prod
-   (`../../ops-runbook.md` § Deployment Routing Table).
+4. **Enable on prod.** `[env.prod.vars]`: `SHOULD_SEND_BOOKING_EMAILS_FLAG = "true"`.
 5. **Verify on prod.** After the first night's DAILY_MAINTENANCE (02:00 UTC): `make logs-sender-prod`,
    `make queues-info-prod`, the delivery records.
 6. **Guides.** `user-guide.md` names the mails a ticket from the waiting list and a sold ticket send; `chef-guide.md` the
    mail the portions Frigiv gives to the first in line send.
+
+## Notification settings footer
+
+### Problem
+
+A member who gets the booking mails reads nothing in them about where the mails are turned off.
+
+### Solution
+
+Every mail ends with the signature and a footer: "Er du træt af at få mails fra Skrånerappen, så kan du ændre dine
+indstillinger her:" and the link to the member's own settings, the profile card on the login page
+(`NOTIFICATION_FOOTER`, `app/config/notificationTemplates.ts`). `composeEmail` fills the link as `{{settingsUrl}}` from
+the deployment's site, like `{{site}}`; the footer rides the config beside the signature (`app.config.ts`
+`theslope.notifications.footer`, `NotificationConfigSchema`).
+
+### Affected
+
+`app/config/notificationTemplates.ts`, `app/app.config.ts`, `app/composables/useNotificationValidation.ts`,
+`server/utils/sender/compose.ts`, `server/utils/sender/config.ts`, `tests/e2e/testDataFactories/notificationFactory.ts`,
+`tests/component/utils/sender/compose.unit.spec.ts`, `tests/component/utils/sender/config.unit.spec.ts`,
+`docs/ops-runbook.md` § Templates.
 
 ## Household lookup
 
@@ -234,3 +90,55 @@ waiting-list entry names only its inhabitant.
 `server/data/financesRepository.ts`, `app/composables/useBookingValidation.ts`, `app/stores/bookings.ts`,
 `app/components/admin/AdminEconomy.vue`, `app/components/admin/HouseholdEditPanel.vue`; `order.e2e.spec.ts`,
 `AdminEconomy.nuxt.spec.ts`, `HouseholdEditPanel.nuxt.spec.ts`, `bookings.nuxt.spec.ts`.
+
+## npm audit
+
+### Problem
+
+Dependabot opens weekly version pull requests (`.github/dependabot.yml`); no step reads npm's advisories, so a known
+vulnerability in an installed package shows only to a developer who reads the summary `npm ci` prints.
+
+### Solution
+
+`make audit` runs `npm audit` at the agreed level and fails on a finding; the check job runs it after `npm ci`, and
+`pre:all` runs it locally. An accepted finding is recorded with its advisory id and the date it is reviewed again.
+
+OPEN: the level that fails (`high`, or `moderate`); the scope (production dependencies alone, or the dev dependencies
+the build runs on too); where an accepted finding is recorded (the runbook, or a tool with an ignore list); a scheduled
+run on main beside Dependabot, or the pull-request gate alone.
+
+### Affected
+
+`Makefile`, `package.json`, `.github/workflows/cicd.yml`, `docs/ops-runbook.md`, `.claude/skills/prepare-to-ship/SKILL.md`.
+
+## Tab pages render their content on the server
+
+`app/pages/admin/[tab].vue` and `app/pages/household/[shortname]/[tab].vue` render each tab's panel from Nuxt's lazy
+component (`LazyAdminEconomy` and its siblings from `#components`), so the production build sends the panel's HTML and
+the browser hydrates it (`docs/adr-compliance-frontend.md`).
+
+## Public billing checks at their level
+
+The accountant link's page and the refusal of an unknown link: `tests/e2e/features/jobs/monthly-billing.feature`; the
+phone-width measure `expectNoHorizontalOverflow` (`tests/e2e/testHelpers.ts`) in `MobileViewport.e2e.spec.ts`; the
+page's words in `tests/component/pages/public-billing.nuxt.spec.ts` (`docs/testing.md`).
+
+## Icons ship in the client bundle
+
+ADR-018 (icons, compliance 5), `docs/ui.md`; the tokens in `app/composables/useTheSlopeDesignSystem.ts`, the scan in
+`nuxt.config.ts`, the rules in `tests/component/architecture/designSystemUsage.unit.spec.ts`.
+
+## Build once, test locally, ship the artifact
+
+`docs/testing.md` (suites and runs), `.claude/skills/prepare-to-ship/SKILL.md` (gates), `docs/ops-runbook.md` § App
+config .env (`CLOUDFLARE_INCLUDE_PROCESS_ENV`); `.github/workflows/cicd.yml`, `playwright.config.ts`.
+
+## E2E suites fan out in CI
+
+`.github/workflows/cicd.yml` (the `e2e` matrix), `.github/actions/setup/action.yml`, `docs/testing.md` (suites and
+runs); the ui rows gate in `../release-1.0.0/chores-1.0.0.md`.
+
+## Release notes PDF removed
+
+A release's notes and their poster live with the release: `../archived/release-0.9.0/release-notes-0.9.0/`;
+`create-release` writes the release's one-line body.

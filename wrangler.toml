@@ -51,7 +51,7 @@ routes = [
 [env.dev.vars]
 DEPLOY_URL = "https://dev.skraaningen.dk"
 NUXT_PUBLIC_HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
-SHOULD_SEND_BOOKING_EMAILS_FLAG = "false"
+SHOULD_SEND_BOOKING_EMAILS_FLAG = "true"
 
 [[env.dev.d1_databases]]
 binding = "DB"
@@ -82,7 +82,7 @@ routes = [
 [env.prod.vars]
 DEPLOY_URL = "https://www.skraaningen.dk"
 NUXT_PUBLIC_HEY_NABO_API = "https://skraaningeni.spaces.heynabo.com/api"
-SHOULD_SEND_BOOKING_EMAILS_FLAG = "false"
+SHOULD_SEND_BOOKING_EMAILS_FLAG = "true"
 
 [[env.prod.d1_databases]]
 binding = "DB"

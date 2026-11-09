@@ -1,6 +1,6 @@
 # 0.9.3 features
 
-**Status:** Proposed | **Date:** 2026-10-16 | **Updated:** 2026-10-25 | **Builds on:** release 0.9 (`../archived/release-0.9.0.md` § One booking path, end to end), release 0.9.2 (`../release-0.9.2/chores-0.9.2.md`)
+**Status:** Proposed | **Date:** 2026-10-16 | **Updated:** 2026-10-25 | **Builds on:** release 0.9 (`../archived/release-0.9.0.md` § One booking path, end to end), release 0.9.2 (`../this-pr/chores-0.9.2.md`)
 
 ## Delivered
 
@@ -11,6 +11,8 @@
 
 | Delivery | Description or spec | Gherkin | Status |
 |---|---|---|---|
+| Billing delivery report and interrupted job runs | `bug-fix-billing-delivery-report.md` | – | discovery |
+| Chef's available budget after the ticket deadline | `bug-fix-chef-budget-drift.md` | – | discovery |
 | Ticket price portions | § Ticket price portions | – | specified |
 | Billing import in the export format | § Billing import in the export format | – | specified |
 | Write-failure dashboard | § Write-failure dashboard | – | discovery |

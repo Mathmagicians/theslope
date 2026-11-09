@@ -2,8 +2,9 @@
  * E-mail templates per notification kind — theslope's config (spread into app.config `theslope.notifications`).
  *
  * `{{placeholder}}` values come from the event that raises the notification (server/utils/sender/events/*);
- * `senderName`, `site`, `environment` and `dedupeKey` are filled by composeEmail for every kind. The signature is appended
- * to every text. Plain module (not app.config itself) so unit tests can import the real templates.
+ * `senderName`, `site`, `environment`, `dedupeKey` and `settingsUrl` are filled by composeEmail for every kind. The
+ * signature and the footer are appended to every text. Plain module (not app.config itself) so unit tests can import
+ * the real templates.
  */
 import type {SenderEvent} from '~/composables/useDeliveryValidation'
 import {useNotificationValidation, type NotificationEnvironment} from '~/composables/useNotificationValidation'
@@ -22,6 +23,9 @@ export const senderAddress = (environment: NotificationEnvironment): string =>
 export const senderDisplayName = (environment: NotificationEnvironment): string => `${NOTIFICATION_SENDER_NAME} ${environment}`
 
 export const NOTIFICATION_SIGNATURE = 'De bedste hilsner fra — {{senderName}} · {{site}}'
+
+/** Under the signature of every mail: where the member turns the mails off ({{settingsUrl}}, the member's own settings) */
+export const NOTIFICATION_FOOTER = 'Er du træt af at få mails fra Skrånerappen, så kan du ændre dine indstillinger her: {{settingsUrl}}'
 
 /** A ticket that became the person's, bought from the waiting list or directly: one mail reads both */
 const TICKET_RECEIVED = {
