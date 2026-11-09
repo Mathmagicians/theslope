@@ -192,22 +192,26 @@ A release's notes and their poster live with the release, `docs/features/archive
 
 ## Booking emails on
 
-The booking emails go out from this release (`../archived/release-0.9.1/feature-notification-delivery.md`, the booking emails flag).
+The booking emails go out from this release (`../archived/release-0.9.1/feature-notification-delivery.md`).
+`SHOULD_SEND_BOOKING_EMAILS_FLAG` gates the two sender events they come from, booking status and chef deadlines
+(`../../ops-runbook.md` § Booking emails flag); off, the events send and record nothing.
 
-1. The delivery dry run on prod: `make theslope-sender-dry-run-booking-status-prod` lists per user the booking emails the first
-   run sends.
-2. `wrangler.toml`:
+### Steps
 
-```toml
-[env.dev.vars]
-SHOULD_SEND_BOOKING_EMAILS_FLAG = "true"
-[env.prod.vars]
-SHOULD_SEND_BOOKING_EMAILS_FLAG = "true"
-```
-
-3. The pull request deploys dev, the merge to main deploys prod (`../../ops-runbook.md` § Deployment Routing Table).
-4. The guides name the booking mails: in `user-guide.md` a ticket from the waiting list and a sold ticket send a mail,
-   in `chef-guide.md` the portions Frigiv gives to the first in line send them a mail.
+1. **See what goes out before anything is sent.** `make theslope-sender-dry-run-booking-emails-dev`, then
+   `make theslope-sender-dry-run-booking-emails-prod`: per user, the booking status and chef deadline mails the next
+   DAILY_MAINTENANCE job sends; nothing is sent or recorded. The list names the people and dinners expected.
+2. **Enable on dev.** `wrangler.toml` `[env.dev.vars]`: `SHOULD_SEND_BOOKING_EMAILS_FLAG = "true"`. The pull request's
+   pipeline deploys dev.
+3. **Verify on dev.** A booking on dev past its deadline (a waiting-list join, a sold ticket) lands a mail in the dev test
+   mailbox; `make logs-sender-dev` shows `📮 > SENDER > [EMAIL] delivered`; `make queues-info-dev` shows an empty backlog;
+   `GET /api/admin/sender/delivery` lists the delivery records.
+4. **Enable on prod.** `[env.prod.vars]`: `SHOULD_SEND_BOOKING_EMAILS_FLAG = "true"`. The merge to main deploys prod
+   (`../../ops-runbook.md` § Deployment Routing Table).
+5. **Verify on prod.** After the first night's DAILY_MAINTENANCE (02:00 UTC): `make logs-sender-prod`,
+   `make queues-info-prod`, the delivery records.
+6. **Guides.** `user-guide.md` names the mails a ticket from the waiting list and a sold ticket send; `chef-guide.md` the
+   mail the portions Frigiv gives to the first in line send.
 
 ## Household lookup
 

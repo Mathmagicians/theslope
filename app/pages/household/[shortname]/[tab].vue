@@ -159,7 +159,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
                :message="HOUSEHOLD_WORDS.failed.householdPage(shortname)" :cause="selectedHouseholdError"/>
     <Loader v-else-if="!isHouseholdsStoreReady" :text="`Henter husstanden ${shortname}`"/>
     <UAlert v-else-if="isNoHouseholds" v-bind="ALERTS.emptyState" :title="HOUSEHOLD_WORDS.page.noHouseholds"/>
-    <UCard v-else v-bind="COMPONENTS.householdPage.card">
+    <UCard v-else-if="selectedHousehold" v-bind="COMPONENTS.householdPage.card">
       <!-- Household status ribbon -->
       <div
         v-if="ribbon"
